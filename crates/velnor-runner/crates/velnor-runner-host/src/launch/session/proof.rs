@@ -16,6 +16,11 @@ pub(crate) struct CompletedHeaderPoll {
 }
 
 impl CompletedHeaderPoll {
+    #[cfg(test)]
+    pub(crate) const fn for_test(attempt: HeaderPollAttempt) -> Self {
+        Self { attempt }
+    }
+
     pub(in crate::launch) fn after_response(
         attempt: HeaderPollAttempt,
         allocation: &HeaderAllocation,
