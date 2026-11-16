@@ -89,6 +89,8 @@ printf "maintenance-phase: native-image-inventory\n"
 python3 scripts/test-native-image-candidate-inventory.py
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
+printf "maintenance-phase: tag-ruleset-drift\n"
+bun test ./scripts/tag-ruleset-drift.test.ts
 printf "maintenance-phase: diagnostics-build\n"
 ARTIFACT_MESSAGES="$(mktemp)"
 trap 'rm -f "$ARTIFACT_MESSAGES"' EXIT
