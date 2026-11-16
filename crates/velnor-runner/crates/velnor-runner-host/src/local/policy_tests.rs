@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use velnor_resource_probe::job_hook::Challenge;
 
 use super::{Policy, Side};
+use crate::config::ApprovedJobAuthorityPolicy;
 use crate::launch::execution_authorization::ExecutionSourceRequest;
 use crate::local::authority::RunAnswer;
 use crate::local::decide::{Facts, Reason, judge};
@@ -27,6 +28,15 @@ fn entry(job: &str, contexts: &[Value]) -> Value {
 }
 
 fn document(calls: &Value, jobs: &[Value]) -> Value {
+    let mut value = unsealed(calls, jobs);
+    let mut parsed: ApprovedJobAuthorityPolicy =
+        serde_json::from_value(value.clone()).expect("document");
+    parsed.canonicalize();
+    value["policy_sha256"] = json!(parsed.expected_policy_sha256());
+    value
+}
+
+fn unsealed(calls: &Value, jobs: &[Value]) -> Value {
     json!({
         "schema_version": 1, "connection_id": "local", "binding_sha256": CONTENT,
         "generation": 1, "policy_sha256": CONTENT,
@@ -130,13 +140,22 @@ fn a_fork_pull_request_is_never_approved_and_other_branches_are_refused() {
 #[test]
 fn a_workflow_that_calls_others_is_refused_because_the_called_files_are_not_hashed() {
     let call = json!([{"repository_id": 7, "path": ".github/workflows/lib.yml", "content_sha256": CONTENT}]);
-    let policy = policy(&document(
+    let mut value = unsealed(
         &call,
         &[entry(
             "ci",
             &[context("push", &["refs/heads/main"], &json!([]))],
         )],
-    ));
+    );
+    let mut lib = value["workflows"][0].clone();
+    lib["path"] = json!(".github/workflows/lib.yml");
+    lib["calls"] = json!([]);
+    lib["jobs"] = json!([]);
+    value["workflows"] = json!([lib, value["workflows"][0].clone()]);
+    let mut parsed: ApprovedJobAuthorityPolicy = serde_json::from_value(value.clone()).expect("d");
+    parsed.canonicalize();
+    value["policy_sha256"] = json!(parsed.expected_policy_sha256());
+    let policy = Policy::parse(value.to_string().as_bytes()).expect("loads");
     assert!(!policy.approves(&push(), Side::Trusted, Some(CONTENT)));
 }
 
@@ -249,4 +268,42 @@ fn a_policy_file_that_is_missing_unreadable_empty_or_unparsable_does_not_load() 
         document(&json!([]), &[]).to_string().as_bytes(),
     );
     assert!(Policy::load(state.path(), "good.json").is_ok());
+}
+
+#[test]
+fn a_policy_with_a_bad_digest_or_cross_wired_entries_does_not_load() {
+    let ci = entry("ci", &[context("push", &["refs/heads/main"], &json!([]))]);
+    let mut stale = document(&json!([]), std::slice::from_ref(&ci));
+    stale["policy_sha256"] = json!(CONTENT);
+    assert!(Policy::parse(stale.to_string().as_bytes()).is_err());
+
+    let mut foreign = ci.clone();
+    foreign["workflow_path"] = json!(".github/workflows/other.yml");
+    let wired = document(&json!([]), &[foreign]);
+    assert!(Policy::parse(wired.to_string().as_bytes()).is_err());
+
+    let mut writes = ci;
+    writes["permissions"] = json!({"contents": "write"});
+    let writer = document(&json!([]), &[writes]);
+    assert!(Policy::parse(writer.to_string().as_bytes()).is_err());
+}
+
+#[test]
+fn a_merge_group_job_is_never_approved_even_with_its_queue_ref_listed() {
+    let queue = "refs/heads/gh-readonly-queue/main/pr-2-aaaa";
+    let policy = policy(&document(
+        &json!([]),
+        &[entry("ci", &[context("merge_group", &[queue], &json!([]))])],
+    ));
+    let group = request("merge_group", queue, "ci", false);
+    assert!(!policy.approves(&group, Side::Trusted, Some(CONTENT)));
+}
+
+#[test]
+fn a_request_with_another_repository_id_than_the_policy_names_is_refused() {
+    let mut other = serde_json::to_value(push()).expect("value");
+    other["repository_id"] = json!(8);
+    let other: ExecutionSourceRequest = serde_json::from_value(other).expect("request");
+    assert!(approved().approves(&push(), Side::Trusted, Some(CONTENT)));
+    assert!(!approved().approves(&other, Side::Trusted, Some(CONTENT)));
 }

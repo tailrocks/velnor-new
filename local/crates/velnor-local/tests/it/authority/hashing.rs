@@ -75,10 +75,10 @@ async fn the_answer_carries_the_sha256_of_the_workflow_file_at_the_run_commit() 
     let repo = temp_dir("authority-hashing-repo");
     git(&repo, &["init", "-q", "-b", "main"]);
     let approved = commit(&repo, "name: ci\non: push\n");
-    let changed = commit(&repo, "name: ci\non: push\n# edited by a fork\n");
     let runners = FakeRunners::default();
     let first = answered(&runners, Some(&repo), &approved, 1).await;
     assert_eq!(first["workflow_sha256"], sha256("name: ci\non: push\n"));
+    let changed = commit(&repo, "name: ci\non: push\n# edited by a fork\n");
     let second = answered(&FakeRunners::default(), Some(&repo), &changed, 2).await;
     assert_eq!(
         second["workflow_sha256"],
@@ -117,4 +117,21 @@ async fn only_a_full_lowercase_commit_id_is_hashed_never_an_abbreviation() {
     assert!(upper["workflow_sha256"].is_null(), "{upper}");
     let whole = answered(&FakeRunners::default(), Some(&repo), &full, 8).await;
     assert_eq!(whole["workflow_sha256"], sha256("name: ci\n"));
+}
+
+#[tokio::test]
+async fn a_workflow_the_checkout_changed_since_the_commit_is_not_hashed() {
+    let repo = temp_dir("authority-hashing-dirty");
+    git(&repo, &["init", "-q", "-b", "main"]);
+    let sha = commit(&repo, "name: ci\non: push\n");
+    let file = repo.join(".github/workflows/ci.yml");
+    std::fs::write(&file, "name: ci\non: push\n# dirty\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let dirty = answered(&FakeRunners::default(), Some(&repo), &sha, 9).await;
+    assert!(dirty["workflow_sha256"].is_null(), "{dirty}");
+    std::fs::remove_file(&file).unwrap_or_else(|e| unreachable!("{e}"));
+    let deleted = answered(&FakeRunners::default(), Some(&repo), &sha, 10).await;
+    assert!(deleted["workflow_sha256"].is_null(), "{deleted}");
+    git(&repo, &["checkout", "-q", "--", "."]);
+    let clean = answered(&FakeRunners::default(), Some(&repo), &sha, 11).await;
+    assert_eq!(clean["workflow_sha256"], sha256("name: ci\non: push\n"));
 }

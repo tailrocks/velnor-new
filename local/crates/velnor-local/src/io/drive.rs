@@ -292,6 +292,7 @@ impl Driver<'_> {
         Repository {
             full_name: &self.args.repository,
             default_branch: &self.args.environment.default_branch,
+            id: self.args.repository_id,
         }
     }
 

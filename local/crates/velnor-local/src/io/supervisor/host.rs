@@ -161,7 +161,7 @@ impl Pairs {
 pub(super) const POLICY: &str = "policy.json";
 const MAX_POLICY_BYTES: u64 = 256 * 1024;
 
-pub(super) async fn copy_policy(state: &Path, file: &Path) -> io::Result<()> {
+pub(super) async fn read_policy(file: &Path) -> io::Result<String> {
     let meta = fs::symlink_metadata(file).await?;
     if !meta.is_file() || meta.len() == 0 || meta.len() > MAX_POLICY_BYTES {
         return Err(io::Error::other(format!(
@@ -169,8 +169,11 @@ pub(super) async fn copy_policy(state: &Path, file: &Path) -> io::Result<()> {
             file.display()
         )));
     }
-    let text = fs::read_to_string(file).await?;
-    write_private(&state.join(POLICY), &text).await
+    fs::read_to_string(file).await
+}
+
+pub(super) async fn store_policy(state: &Path, text: &str) -> io::Result<()> {
+    write_private(&state.join(POLICY), text).await
 }
 
 pub async fn write_plan(state: &Path, planned: &str) -> io::Result<()> {

@@ -112,6 +112,12 @@ impl Decision {
     }
 }
 
+#[must_use]
+pub fn refused_among(all: &[Decision], trusted: bool, runs: &[u64]) -> bool {
+    all.iter()
+        .any(|line| !line.allow && runs.iter().any(|run| line.of(*run, trusted)))
+}
+
 pub fn decisions(text: &str) -> Result<Vec<Decision>, String> {
     text.lines()
         .filter(|line| !line.trim().is_empty())

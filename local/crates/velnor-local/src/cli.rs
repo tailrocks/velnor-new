@@ -242,6 +242,12 @@ pub struct RunArgs {
     pub repository: String,
     #[arg(
         long,
+        value_parser = clap::value_parser!(u64).range(1..),
+        help = "GitHub's numeric id of the repository, which the --policy file names; events carry it instead of the id derived from --repository"
+    )]
+    pub repository_id: Option<u64>,
+    #[arg(
+        long,
         default_value = "velnor-ci",
         help = "velnor-ci program that writes the metrics file of each run"
     )]

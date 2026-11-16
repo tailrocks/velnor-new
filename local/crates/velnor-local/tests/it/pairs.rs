@@ -6,7 +6,7 @@ use velnor_local::cli::{Cli, Command, EnvironmentArgs, RunnerMode};
 use velnor_local::images::{HOST_BINARY, HOST_BUILD, RELEASE_IDENTITY};
 use velnor_local::io::env::Environment;
 use velnor_local::io::supervisor::write_plan;
-use velnor_local::pairs::{Decision, PlanInput, decisions, listening, plan, slots};
+use velnor_local::pairs::{Decision, PlanInput, decisions, listening, plan, refused_among, slots};
 use velnor_local::scenario::Outcome;
 use velnor_local::side::Side;
 use velnor_local::verdict::{Check, conclude, verdict};
@@ -256,6 +256,7 @@ fn every_event_names_a_positive_repository_id_for_the_job_start_hook() {
     let repository = |full_name| Repository {
         full_name,
         default_branch: "main",
+        id: None,
     };
     let push = Push {
         branch: "main",
@@ -324,4 +325,23 @@ async fn the_plan_file_holding_the_authority_token_is_private_to_its_owner() {
         std::fs::read_to_string(dir.join("plan.json")).unwrap_or_default(),
         "{}"
     );
+}
+
+#[test]
+fn a_refusal_counts_only_for_the_runs_the_event_created_on_its_side() {
+    let line = |side: &str, run: u64, allow: bool| Decision {
+        pair: format!("{side}-1"),
+        side: side.to_owned(),
+        allow,
+        reason: (!allow).then(|| "policy".to_owned()),
+        ledger: None,
+        run_id: Some(run),
+        job: Some("ci".to_owned()),
+    };
+    let all = [line("trusted", 4, false), line("untrusted", 9, false)];
+    assert!(refused_among(&all, true, &[4, 5]));
+    assert!(!refused_among(&all, true, &[5, 6]));
+    assert!(!refused_among(&all, true, &[9]));
+    assert!(refused_among(&all, false, &[9]));
+    assert!(!refused_among(&[line("trusted", 5, true)], true, &[5]));
 }

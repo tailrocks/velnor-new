@@ -42,6 +42,12 @@ impl Policy {
         let mut policy: ApprovedJobAuthorityPolicy =
             serde_json::from_slice(bytes).map_err(|_| HostError::Config)?;
         policy.canonicalize();
+        let repository_id = policy
+            .workflow_sources()
+            .next()
+            .ok_or(HostError::Config)?
+            .repository_id();
+        policy.validate_structure(repository_id)?;
         Ok(Self(policy))
     }
 
@@ -51,7 +57,7 @@ impl Policy {
         side: Side,
         workflow_sha256: Option<&str>,
     ) -> bool {
-        if side == Side::Untrusted {
+        if side == Side::Untrusted || request.event_name() == "merge_group" {
             return false;
         }
         let Ok(repository_id) = i64::try_from(request.repository_id()) else {
@@ -65,12 +71,14 @@ impl Policy {
         let Some(content) = workflow_sha256 else {
             return false;
         };
-        let standalone = self.0.workflow_sources().any(|source| {
+        let Some(source) = self.0.workflow_sources().find(|source| {
             source.repository_id() == repository_id
                 && source.path() == root
                 && source.content_sha256() == content
                 && source.calls().next().is_none()
-        });
+        }) else {
+            return false;
+        };
         let Ok(event) =
             serde_json::from_value::<WorkflowEvent>(Value::String(request.event_name().to_owned()))
         else {
@@ -95,7 +103,7 @@ impl Policy {
             },
             pull_request: pull_request.as_ref(),
         };
-        standalone && self.0.entry(&lookup).is_some()
+        source.entry(&lookup).is_some()
     }
 }
 

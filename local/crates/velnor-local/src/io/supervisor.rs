@@ -31,7 +31,7 @@ use super::run::accept;
 use crate::cli::SuperviseArgs;
 use crate::pairs::DECISIONS;
 use crate::side::Side;
-use host::{LOG, PID, PLAN, POLICY, copy_policy, runner_dir};
+use host::{LOG, PID, PLAN, POLICY, read_policy, runner_dir, store_policy};
 
 const START_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(120);
@@ -146,6 +146,10 @@ async fn launch(
     repo: &Path,
 ) -> io::Result<Endpoint> {
     stop(dir).await?;
+    let staged = match pairs.and_then(|pairs| pairs.policy.as_deref()) {
+        Some(file) => Some(read_policy(file).await?),
+        None => None,
+    };
     let authority = authority_dir(dir);
     private_folder(&authority).await?;
     private_folder(&dir.join("keys")).await?;
@@ -155,9 +159,9 @@ async fn launch(
     for file in [DECISIONS, LOG, PID, PLAN, POLICY] {
         forget(&runner_dir(dir).join(file)).await?;
     }
-    if let Some(file) = pairs.and_then(|pairs| pairs.policy.as_deref()) {
+    if let Some(text) = &staged {
         private_folder(&runner_dir(dir)).await?;
-        copy_policy(&runner_dir(dir), file).await?;
+        store_policy(&runner_dir(dir), text).await?;
     }
     let token = keys::fresh(&dir.join("keys/authority")).await?;
     let log = std::fs::File::create(authority.join("supervise.log"))?;

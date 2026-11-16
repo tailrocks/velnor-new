@@ -66,12 +66,11 @@ impl Driver<'_> {
         };
         client.extend(call.args());
         let log = self.env.dir.join(format!("logs/{name}.log"));
-        let before = self.refusals().await;
         let finished = self.env.client(payload, &client, &log);
         tokio::pin!(finished);
         let succeeded = tokio::select! {
             done = &mut finished => done?,
-            () = self.refused_after(before) => {
+            () = self.refused_after(side, event, &known) => {
                 self.cancel_unfinished(side, &known).await;
                 tokio::time::timeout(CANCEL_GRACE, finished)
                     .await

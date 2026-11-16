@@ -133,6 +133,14 @@ impl<B: Backend> Authority<B> {
             last_diff: Mutex::new(None),
         };
         let content = git.run(&["show", &format!("{sha}:{workflow}")]).await?;
+        if !is_plain_relative(workflow) {
+            return None;
+        }
+        let path = git.repo.join(workflow);
+        let metadata = tokio::fs::symlink_metadata(&path).await.ok()?;
+        if !metadata.is_file() || tokio::fs::read(&path).await.ok()? != content {
+            return None;
+        }
         let digest = ring::digest::digest(&ring::digest::SHA256, &content);
         Some(digest.as_ref().iter().fold(String::new(), |mut hex, byte| {
             let _ = write!(hex, "{byte:02x}");
@@ -275,6 +283,14 @@ impl<B: Backend> Authority<B> {
             &json!({"name": name, "deleted": deleted}),
         ))
     }
+}
+
+fn is_plain_relative(path: &str) -> bool {
+    !path.is_empty()
+        && !path.starts_with('/')
+        && path
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..")
 }
 
 pub async fn mint_or_retire<B: Backend>(

@@ -125,6 +125,21 @@ async fn a_policy_that_is_empty_too_large_a_link_or_missing_stops_the_start() {
     }
 }
 
+#[tokio::test]
+async fn restarting_with_the_copied_policy_as_the_source_keeps_it() {
+    let dir = temp_dir("policy-restart");
+    let copied = dir.join("runner/policy.json");
+    std::fs::create_dir_all(dir.join("runner")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(&copied, "{\"schema_version\":1}").unwrap_or_else(|e| unreachable!("{e}"));
+    start(&dir, Some(&copied))
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        std::fs::read_to_string(&copied).unwrap_or_default(),
+        "{\"schema_version\":1}"
+    );
+}
+
 #[test]
 fn the_plan_names_the_policy_file_only_when_one_is_given() {
     let sides = [(Side::Trusted, "n".to_owned(), 1)];

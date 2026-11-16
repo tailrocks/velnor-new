@@ -70,6 +70,7 @@ fn assert_like_github(leg: &str, payload: &Value) {
 const REPOSITORY: Repository<'static> = Repository {
     full_name: "tailrocks/velnor-lab",
     default_branch: "main",
+    id: None,
 };
 
 #[test]
