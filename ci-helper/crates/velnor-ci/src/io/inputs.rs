@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
+use velnor_rust::{INPUTS_LOCK, METADATA_PATH, detect, parse_inputs_lock};
 
 use crate::error::CiError;
 use crate::inputs::{
@@ -151,7 +151,15 @@ fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
         Err(e) if e.kind() == ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(CiError::new(format!("cannot read {INPUTS_LOCK}: {e}"))),
     };
-    Ok(Scope::new(prefix.trim_end_matches(['\n', '\r']), listed))
+    let prefix = prefix.trim_end_matches(['\n', '\r']);
+    let mut scope = Scope::new(prefix, listed);
+    if top.join(METADATA_PATH.as_str()).exists() {
+        let checkout =
+            velnor_gen::io::read_recorded_checkout(top).map_err(|e| CiError::new(e.to_string()))?;
+        let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
+        scope.include_packages(&facts, &format!("{prefix}Cargo.toml"));
+    }
+    Ok(scope)
 }
 
 fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
