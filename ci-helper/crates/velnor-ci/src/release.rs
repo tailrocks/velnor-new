@@ -122,6 +122,11 @@ pub fn check_cargo_discovery(
     entries: &[CargoPathEntry],
     publishes_to_crates_io: bool,
 ) -> Result<(), CiError> {
+    let exists = |path: &str| {
+        entries
+            .iter()
+            .any(|entry| entry.path == path && entry.text.is_some())
+    };
     for entry in entries {
         if entry.symlink {
             return Err(CiError::new(format!(
@@ -130,15 +135,24 @@ pub fn check_cargo_discovery(
             )));
         }
         if let Some(text) = &entry.text {
-            velnor_release::refuse_cargo_config(&entry.path, text, publishes_to_crates_io)
-                .map_err(CiError::new)?;
+            velnor_release::refuse_cargo_config(
+                &entry.path,
+                text,
+                publishes_to_crates_io,
+                velnor_release::shadowed_by_extensionless_config(&entry.path, exists),
+            )
+            .map_err(CiError::new)?;
         }
     }
     Ok(())
 }
 
-pub fn publishes_to_crates_io(root: &str, text: &str) -> Result<bool, CiError> {
-    velnor_release::root_publishes_to_crates_io(root, text).map_err(CiError::new)
+pub fn publishes_to_crates_io(
+    root: &str,
+    text: &str,
+    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+) -> Result<bool, CiError> {
+    velnor_release::root_publishes_to_crates_io(root, text, metadata).map_err(CiError::new)
 }
 
 pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {
@@ -178,6 +192,13 @@ pub fn check_manifests(
     files: &[(String, String)],
     metadata: &BTreeMap<RepoPath, RustMetadata>,
     manifests: &BTreeMap<String, String>,
+    versions: Option<&velnor_release::Versions>,
 ) -> Result<(), CiError> {
-    velnor_release::check_release_manifests(files, metadata, manifests).map_err(CiError::new)
+    velnor_release::check_release_manifests(files, metadata, manifests).map_err(CiError::new)?;
+    match versions {
+        Some(versions) => {
+            velnor_release::check_release_versions(files, metadata, versions).map_err(CiError::new)
+        }
+        None => Ok(()),
+    }
 }

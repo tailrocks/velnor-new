@@ -11,6 +11,7 @@ use velnor_model::{
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
+use crate::target_dir::target_dir;
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
@@ -113,6 +114,7 @@ fn root(
     members.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(RustRoot {
         manifest: manifest.clone(),
+        target_dir: target_dir(view, manifest)?,
         members,
         depends_on: depends_on.into_iter().collect(),
         external_dependencies: external_dependencies.into_iter().collect(),
@@ -249,6 +251,12 @@ fn patches(
 }
 
 pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
+    let mut segments = resolve(base, relative)?;
+    segments.push("Cargo.toml");
+    Some(segments.join("/"))
+}
+
+pub(crate) fn resolve<'a>(base: Option<&'a RepoPath>, relative: &'a str) -> Option<Vec<&'a str>> {
     let mut segments: Vec<&str> =
         base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
     for segment in relative.split('/') {
@@ -260,8 +268,7 @@ pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> 
             other => segments.push(other),
         }
     }
-    segments.push("Cargo.toml");
-    Some(segments.join("/"))
+    Some(segments)
 }
 
 fn member(
