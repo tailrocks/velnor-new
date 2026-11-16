@@ -87,6 +87,10 @@ pub(crate) fn condition(
                 parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
             }
         }
+        When::SavingRun => {
+            parts.push(ON_DEFAULT_BRANCH.to_owned());
+            parts.push(SAVING_EVENTS.to_owned());
+        }
         When::SaveToolsOnDefaultBranch => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));

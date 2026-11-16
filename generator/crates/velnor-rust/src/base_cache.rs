@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, FullRun, HelperCommand, Host, Job, JobId, OnMain,
-    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, When,
+    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -16,7 +16,7 @@ const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
 
 pub(crate) fn writes_base(facts: &RepoFacts, lane: &Lane) -> bool {
-    lane.from_source || has_saving_helper(facts)
+    facts.private_sources.is_none() && (lane.from_source || has_saving_helper(facts))
 }
 
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
@@ -31,7 +31,8 @@ pub(crate) fn expiry(facts: &RepoFacts, lane: &Lane) -> BaseExpiry {
         return BaseExpiry::Never;
     }
     match (facts.config.on_main, &facts.config.full_run) {
-        (OnMain::Affected, FullRun::Off) | (OnMain::Everything, _) => BaseExpiry::OnDefaultBranch,
+        (OnMain::Everything, _) => BaseExpiry::OnDefaultBranch,
+        (OnMain::Affected, FullRun::Off) => BaseExpiry::OnDispatch,
         (OnMain::Affected, _) => BaseExpiry::OnDefaultBranchExceptPush,
     }
 }
@@ -89,34 +90,19 @@ pub(crate) fn save_steps(
         .collect()
 }
 
-fn trim_helper(facts: &RepoFacts, from_source: bool) -> Option<Step> {
-    match &facts.helper {
-        Some(release) if has_saving_helper(facts) => {
-            Some(step(StepKind::InstallHelper(release.clone())))
-        }
-        _ => from_source.then(|| step(StepKind::HelperFromArtifact)),
-    }
-}
-
-pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job], from_source: bool) -> Option<Job> {
-    let lanes: Vec<JobId> = jobs
-        .iter()
-        .filter(|lane| {
-            lane.steps
-                .iter()
-                .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
-        })
-        .map(|lane| lane.id.clone())
-        .collect();
-    if lanes.is_empty() {
+pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
+    let release = facts.helper.as_ref().filter(|_| has_saving_helper(facts))?;
+    let trims: Vec<Step> = jobs.iter().flat_map(lane_trims).collect();
+    if trims.is_empty() {
         return None;
     }
-    let steps = std::iter::once(trim_helper(facts, from_source)?)
-        .chain(
-            lanes
-                .iter()
-                .map(|lane| step(StepKind::CacheTrim { lane: lane.clone() })),
-        )
+    let lanes: Vec<JobId> = jobs
+        .iter()
+        .filter(|lane| lane.steps.iter().any(is_decide))
+        .map(|lane| lane.id.clone())
+        .collect();
+    let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
+        .chain(trims)
         .collect();
     Some(Job {
         needs: lanes,
@@ -126,4 +112,28 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job], from_source: bool) -> Op
         steps,
         ..job(facts, TRIM_JOB)
     })
+}
+
+fn is_decide(step: &Step) -> bool {
+    matches!(step.kind, StepKind::CacheDecide { .. })
+}
+
+fn lane_trims(lane: &Job) -> Vec<Step> {
+    let family = |family| {
+        step(StepKind::CacheTrim {
+            lane: lane.id.clone(),
+            family,
+        })
+    };
+    let saves_sources = lane
+        .steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Sources { .. })));
+    lane.steps
+        .iter()
+        .any(is_decide)
+        .then(|| family(TrimFamily::Target))
+        .into_iter()
+        .chain(saves_sources.then(|| family(TrimFamily::Sources)))
+        .collect()
 }
