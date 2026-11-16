@@ -229,12 +229,6 @@ name = "default"
 features = ["default"]
 target = "host"
 
-[[stacks.rust.configurations]]
-name = "local-mode"
-features = ["local-mode"]
-target = "host"
-packages = ["velnor-runner-host"]
-
 [stacks.rust.release]
 enabled = false
 manifest_path = "Cargo.toml"
