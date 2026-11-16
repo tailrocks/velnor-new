@@ -28,10 +28,32 @@ async fn a_timed_out_restore_releases_its_claim_before_retry() -> TestResult<()>
     }
     let temp = tempfile::tempdir()?;
     let curl = temp.path().join("curl");
-    let bun = Command::new("bun")
-        .args(["-p", "process.execPath"])
+    let config: toml::Table = toml::from_str(&fs::read_to_string(
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../../../mise.toml"),
+    )?)?;
+    let version = config
+        .get("tools")
+        .and_then(|tools| tools.get("bun"))
+        .and_then(toml::Value::as_str)
+        .ok_or("repository Bun pin")?;
+    let bun = Command::new("mise")
+        .args([
+            "--no-config",
+            "--no-env",
+            "--no-hooks",
+            "which",
+            "bun",
+            "--tool",
+            &format!("bun@{version}"),
+        ])
         .output()?;
-    assert!(bun.status.success());
+    assert!(
+        bun.status.success(),
+        "Bun resolution failed with {}\n{}\n{}",
+        bun.status,
+        String::from_utf8_lossy(&bun.stdout),
+        String::from_utf8_lossy(&bun.stderr),
+    );
     let bun = String::from_utf8(bun.stdout)?;
     let (_, script) = include_str!("restore_curl.ts")
         .split_once('\n')
