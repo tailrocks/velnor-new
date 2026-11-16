@@ -148,3 +148,24 @@ fn an_inactive_branch_or_excluding_ruleset_does_not_cover() {
 fn an_unreadable_listing_fails_closed() {
     assert!(check(&Fake(BTreeMap::new()), "app-v{{ version }}").is_err());
 }
+
+#[test]
+fn a_covering_ruleset_on_the_second_page_is_found() {
+    let filler: Vec<(u64, String, String)> = (1..=100)
+        .map(|id| ruleset(id, "branch", "active", &ALL, &["refs/heads/*"], &[]))
+        .collect();
+    let cover = ruleset(101, "tag", "active", &ALL, &["refs/tags/app-v*"], &[]);
+    let mut github = live(&filler);
+    let page = |sets: &[&(u64, String, String)]| {
+        let listed: Vec<&str> = sets.iter().map(|(_, l, _)| l.as_str()).collect();
+        format!("[{}]", listed.join(","))
+    };
+    github.0.insert(
+        "/repos/o/r/rulesets?per_page=100&page=2".to_owned(),
+        page(&[&cover]),
+    );
+    github
+        .0
+        .insert("/repos/o/r/rulesets/101".to_owned(), cover.2.clone());
+    assert!(check(&github, "app-v{{ version }}").is_ok());
+}
