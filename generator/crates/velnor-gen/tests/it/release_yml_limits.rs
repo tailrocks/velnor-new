@@ -81,7 +81,7 @@ fn the_tag_job_is_sized_for_the_registry_check_and_the_publish_of_every_publishe
 -> TestResult {
     let (_, default) = render(&[PUBLISHING], Some("roots = [\".\"]\n"))?;
     assert_eq!(minutes(&default)?.as_deref(), Some("40"));
-    for (value, total) in [("10m", "50"), ("20m", "70"), ("90s", "34")] {
+    for (value, total) in [("10m", "50"), ("20m", "70"), ("90s", "33")] {
         let tree = with_timeout(value)??;
         assert_eq!(minutes(&tree)?.as_deref(), Some(total), "{value}");
     }
@@ -180,10 +180,47 @@ fn a_publish_timeout_that_is_not_a_duration_is_refused() -> TestResult {
 }
 
 #[test]
-fn a_release_workflow_above_the_github_file_size_limit_is_refused() -> TestResult {
-    // Every root and package adds to the check-config and tag-pattern runs, which
-    // are capped at 2000 characters, so many roots hit that cap before they reach
-    // the file limit. The trigger's `after` list grows the file without a run.
+fn a_publish_timeout_in_the_full_humantime_grammar_is_budgeted_to_the_millisecond() -> TestResult {
+    for value in ["4.2s", "32ms", "1h 30m", "1m30s", "1.5h", "0"] {
+        assert!(
+            !matches!(
+                with_timeout(value)?.err(),
+                Some(GenerateError::Release(
+                    ReleaseError::InvalidPublishTimeout { .. }
+                ))
+            ),
+            "{value}"
+        );
+    }
+    assert_eq!(outlives(with_timeout("1.5h")?), Some(180));
+    assert!(with_timeout("24m 59s")?.is_ok());
+    assert_eq!(outlives(with_timeout("25m 1s")?), Some(51));
+    Ok(())
+}
+
+#[test]
+fn many_sub_minute_timeouts_are_summed_in_seconds_and_rounded_up_once() -> TestResult {
+    let names: Vec<String> = (0..25).map(|index| format!("member{index}")).collect();
+    let entries: Vec<(&str, &str)> = std::iter::once(("app", ""))
+        .chain(names.iter().map(|name| (name.as_str(), "")))
+        .collect();
+    let members: Vec<&str> = names.iter().map(String::as_str).collect();
+    let text = packages("publish_timeout = \"1s\"\n", &entries);
+    let tree = with_packages(&text, &members)??;
+    assert_eq!(minutes(&tree)?.as_deref(), Some("31"));
+    Ok(())
+}
+
+#[test]
+fn a_publish_timeout_too_large_to_add_up_is_refused_instead_of_wrapping() -> TestResult {
+    let result = with_timeout("307445734561825860m")?;
+    assert!(outlives(result).is_some_and(|minutes| minutes > 50));
+    Ok(())
+}
+
+#[test]
+fn a_release_workflow_grown_past_the_github_file_size_limit_by_its_after_list_is_refused()
+-> TestResult {
     let names: Vec<String> = (0..100)
         .map(|index| format!("Workflow {index:03} {}", "w".repeat(6000)))
         .collect();

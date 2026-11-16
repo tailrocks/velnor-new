@@ -27,9 +27,9 @@ pub(crate) struct RootConfig {
     entries: BTreeMap<String, bool>,
     unreleased: BTreeSet<String>,
     unlisted_publish: bool,
-    pub(crate) listed_minutes: u64,
-    pub(crate) unlisted_publish_minutes: u64,
-    pub(crate) unlisted_check_minutes: u64,
+    pub(crate) listed_nanos: u128,
+    pub(crate) unlisted_publish_nanos: u128,
+    pub(crate) unlisted_check_nanos: u128,
 }
 
 impl RootConfig {
@@ -58,7 +58,7 @@ fn check_package(
     settings: &Settings,
 ) -> Result<(), ReleaseError> {
     if let Some(value) = &settings.publish_timeout
-        && timeout::minutes(value).is_none()
+        && !timeout::is_duration(value)
     {
         return Err(ReleaseError::InvalidPublishTimeout {
             root: root.to_owned(),
@@ -260,17 +260,17 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         .filter(|entry| entry.settings.over(workspace).release == Some(false))
         .map(|entry| entry.name.clone())
         .collect();
-    let listed_minutes = released
+    let listed_nanos = released
         .iter()
-        .map(|(_, settings)| settings.registry_check_and_publish_minutes())
-        .sum();
+        .map(|(_, settings)| settings.registry_check_and_publish_nanos())
+        .fold(0u128, u128::saturating_add);
     Ok(RootConfig {
-        listed_minutes,
-        unlisted_publish_minutes: workspace.publish_minutes(),
-        unlisted_check_minutes: if workspace.release != Some(false)
+        listed_nanos,
+        unlisted_publish_nanos: workspace.publish_nanos(),
+        unlisted_check_nanos: if workspace.release != Some(false)
             && workspace.publishes_to_crates_io()
         {
-            workspace.publish_minutes()
+            workspace.publish_nanos()
         } else {
             0
         },

@@ -52,16 +52,16 @@ impl Settings {
         self.publish != Some(false) && self.git_only != Some(true)
     }
 
-    pub(crate) fn publish_minutes(&self) -> u64 {
+    pub(crate) fn publish_nanos(&self) -> u128 {
         self.publish_timeout
             .as_deref()
-            .and_then(crate::timeout::minutes)
-            .unwrap_or(crate::timeout::DEFAULT_PUBLISH_MINUTES)
+            .and_then(crate::timeout::nanos)
+            .unwrap_or_else(crate::timeout::default_publish_nanos)
     }
 
-    pub(crate) fn registry_check_and_publish_minutes(&self) -> u64 {
+    pub(crate) fn registry_check_and_publish_nanos(&self) -> u128 {
         if self.publishes_to_crates_io() {
-            self.publish_minutes().saturating_mul(2)
+            self.publish_nanos().saturating_mul(2)
         } else {
             0
         }

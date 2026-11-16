@@ -44,7 +44,7 @@ pub struct RootPlan {
     pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
     pub inherited: Vec<String>,
-    pub publish_budget_minutes: u64,
+    pub publish_budget_nanos: u128,
     pub workspace_tags: Vec<TagPattern>,
 }
 
@@ -265,17 +265,25 @@ fn plan_binaries(
     Ok(binaries)
 }
 
-fn publish_budget(config: &RootConfig, inherited: &[String]) -> u64 {
+fn publish_budget(config: &RootConfig, inherited: &[String]) -> u128 {
     let publishing = inherited
         .iter()
         .filter(|package| config.publishes(package))
         .count();
     let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
-    let publishing = publishing.max(usize::from(none_known)) as u64;
+    let publishing = publishing.max(usize::from(none_known)) as u128;
     config
-        .listed_minutes
-        .saturating_add(publishing.saturating_mul(config.unlisted_check_minutes))
-        .saturating_add(publishing.saturating_mul(config.unlisted_publish_minutes))
+        .listed_nanos
+        .saturating_add(publishing.saturating_mul(config.unlisted_check_nanos))
+        .saturating_add(publishing.saturating_mul(config.unlisted_publish_nanos))
+}
+
+#[must_use]
+pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
+    let nanos = roots.iter().fold(0u128, |total, root| {
+        total.saturating_add(root.publish_budget_nanos)
+    });
+    crate::timeout::minutes_ceil(nanos)
 }
 
 fn plan_roots(
@@ -289,7 +297,7 @@ fn plan_roots(
             let budget = publish_budget(&config, &inherited);
             RootPlan {
                 inherited,
-                publish_budget_minutes: budget,
+                publish_budget_nanos: budget,
                 root: config.root,
                 pr_branch_prefix: config.pr_branch_prefix,
                 publishes_to_crates_io: config.publishes_to_crates_io,
@@ -302,13 +310,12 @@ fn plan_roots(
             }
         })
         .collect();
-    let publishing: u64 = roots.iter().map(|root| root.publish_budget_minutes).sum();
-    let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
-    if publishing > limit {
-        return Err(ReleaseError::PublishBudgetOutlivesToken {
-            minutes: publishing,
-            limit,
-        });
+    if metadata.is_some() {
+        let minutes = publish_budget_minutes(&roots);
+        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+        if minutes > limit {
+            return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
+        }
     }
     Ok(roots)
 }

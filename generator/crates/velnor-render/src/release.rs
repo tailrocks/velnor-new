@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
-use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES};
+use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
@@ -248,11 +248,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             })
             .collect(),
         timeout_minutes: u16::try_from(
-            plan.roots
-                .iter()
-                .fold(u64::from(TAG_JOB_BASE_MINUTES), |total, root| {
-                    total.saturating_add(root.publish_budget_minutes)
-                }),
+            u64::from(TAG_JOB_BASE_MINUTES).saturating_add(publish_budget_minutes(&plan.roots)),
         )
         .unwrap_or(u16::MAX),
         steps,
