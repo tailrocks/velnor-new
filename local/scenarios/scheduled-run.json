@@ -1,0 +1,6 @@
+{
+  "description": "Push to the default branch, so a job can schedule a second run through runner.server that the driver never sent.",
+  "steps": [
+    {"push": "{default}"}
+  ]
+}

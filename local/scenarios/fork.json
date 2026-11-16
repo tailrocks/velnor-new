@@ -1,0 +1,9 @@
+{
+  "description": "Open a pull request from the repository and one from a fork, so the same job runs on a trusted pair and on an untrusted pair.",
+  "steps": [
+    {"commit": {"branch": "same", "append": "docs/fork-notes.md", "line": "- from the repository"}},
+    {"open_pull_request": {"head": "same", "base": "{default}"}},
+    {"commit": {"branch": "patch", "append": "docs/fork-notes.md", "line": "- from a fork"}},
+    {"open_pull_request": {"head": "patch", "base": "{default}", "fork": true}}
+  ]
+}

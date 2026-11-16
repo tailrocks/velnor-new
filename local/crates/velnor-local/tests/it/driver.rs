@@ -70,6 +70,7 @@ fn assert_like_github(leg: &str, payload: &Value) {
 const REPOSITORY: Repository<'static> = Repository {
     full_name: "tailrocks/velnor-lab",
     default_branch: "main",
+    id: None,
 };
 
 #[test]
@@ -195,6 +196,8 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
         [
             "cold",
             "docs",
+            "fork",
+            "hello",
             "hub",
             "leaf",
             "lock",
@@ -206,10 +209,14 @@ fn every_shipped_scenario_parses_and_the_story_runs_in_the_order_the_issue_gives
             "probe-event-payload",
             "probe-needs-result",
             "probe-token",
+            "scheduled-run",
             "story",
             "warm"
         ]
     );
+    let fork =
+        Scenario::parse(&read("scenarios/fork.json")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(fork.has_fork());
     let story = Scenario::parse(&read("scenarios/story.json"))
         .unwrap_or_else(|e| unreachable!("{e}"))
         .on_default_branch("main");
