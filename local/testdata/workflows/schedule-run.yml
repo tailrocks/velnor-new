@@ -1,0 +1,29 @@
+name: schedule run
+on: [push]
+jobs:
+  schedule:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Schedule a run through runner.server
+        run: |
+          mkdir -p /tmp/child
+          cat > /tmp/child/child.yml <<'CHILD'
+          name: child
+          on: [push]
+          jobs:
+            child:
+              runs-on: ubuntu-latest
+              steps:
+                - run: echo the child job ran
+          CHILD
+          cat > /tmp/child/event.json <<EVENT
+          {"sender":{"login":"runnerclient","id":976638,"type":"user"},"head_commit":{"message":"","id":"${GITHUB_SHA}","added":[],"removed":[],"modified":[]},"commits":[],"pusher":{"login":"runnerclient","id":976638,"type":"user"},"before":"0000000000000000000000000000000000000000","ref":"${GITHUB_REF}","after":"${GITHUB_SHA}","repository":{"id":4242,"owner":{"login":"tailrocks","name":"tailrocks","id":976639,"type":"user"},"default_branch":"main","name":"check","full_name":"${GITHUB_REPOSITORY}"}}
+          EVENT
+          printf "system.runner.server.parameters: '{}'\n" > /tmp/child/vars
+          curl -sS -m 90 -X POST \
+            -H 'X-GitHub-Event: push' \
+            -F ".github/workflows/child.yml=@/tmp/child/child.yml;filename=.github/workflows/child.yml" \
+            -F "event=@/tmp/child/event.json;type=text/plain" \
+            -F "actions-environment-variables=@/tmp/child/vars;filename=.vars;type=text/plain" \
+            "http://runner-server/_apis/v1/Message/schedule2?Ref=${GITHUB_REF}&Sha=${GITHUB_SHA}&Repository=${GITHUB_REPOSITORY}" > /tmp/child/answer || true
+          echo "answer bytes: $(wc -c < /tmp/child/answer)"

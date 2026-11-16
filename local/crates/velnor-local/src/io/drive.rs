@@ -25,6 +25,7 @@ use crate::verdict::{Check, conclude, verdict};
 
 mod outcome;
 mod pulls;
+mod refusal;
 mod send;
 mod steps;
 
@@ -158,7 +159,12 @@ async fn run_one(
     let kept = keeps_environment(args.keep, interrupted, replayed.is_err(), outcomes.len());
     let stopped = if kept { Ok([0; 3]) } else { env.down().await };
     let check = job_start_check(&env.dir, pairs.is_some()).await?;
-    print!("{}", verdict(tag, &outcomes, (up_at, up_seconds), &check));
+    let warning =
+        crate::authority::warning(pairs.as_ref().is_some_and(|pairs| pairs.policy.is_some()));
+    print!(
+        "{}",
+        verdict(tag, &outcomes, (up_at, up_seconds), &check, warning)
+    );
     if kept {
         println!(
             "velnor-local {tag}: {} is kept up; `velnor-local down --dir {}` removes it",
@@ -201,7 +207,7 @@ async fn session<'a>(
         Ok(addresses) => addresses,
         Err(error) => return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error)),
     };
-    let authority = match super::supervisor::start_with(&env.dir, pairs).await {
+    let authority = match super::supervisor::start_with(&env.dir, pairs, &repo).await {
         Ok(authority) => {
             for pair in &authority.pairs {
                 println!("velnor-local {tag}: pair {pair} listening");
@@ -286,6 +292,7 @@ impl Driver<'_> {
         Repository {
             full_name: &self.args.repository,
             default_branch: &self.args.environment.default_branch,
+            id: self.args.repository_id,
         }
     }
 
