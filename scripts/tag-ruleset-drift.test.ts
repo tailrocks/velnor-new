@@ -23,15 +23,16 @@ if (typeof inputs.script !== "string") throw new Error("Drift script is missing"
 const execute = new Function("github", "context", "process", `return (async () => {${inputs.script}\n})();`);
 type Ruleset = Omit<typeof recorded, "bypass_actors" | "conditions"> & { conditions: { ref_name: { include: string[]; exclude: string[] } }; bypass_actors?: unknown[] };
 const baseline = (): Ruleset => structuredClone(recorded), actor = { actor_id: 5762496, actor_type: "Integration", bypass_mode: "always" };
+const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", rules: [{ type: "creation" }], bypass_actors: [{ ...actor }] });
 type Scenario = { rulesets?: Ruleset[]; token?: string; failure?: "" | "list" | "detail" };
-async function run({ rulesets = [baseline()], token = "admin-read-token", failure = "" }: Scenario = {}) {
+async function run({ rulesets = [baseline(), release()], token = "admin-read-token", failure = "" }: Scenario = {}) {
   const detailed: number[] = [];
   const github = {
     async paginate(route: string, parameters: unknown) {
       expect(route).toBe("GET /repos/{owner}/{repo}/rulesets");
       expect(parameters).toEqual({ owner: "tailrocks", repo: "velnor-new", per_page: 100 });
       if (failure === "list") throw new Error("List unavailable");
-      return rulesets.map(({ id, target }) => ({ id, target }));
+      return rulesets.map(({ id, name, target }) => ({ id, name, target }));
     },
     async request(route: string, parameters: { owner: string; repo: string; ruleset_id: number }) {
       expect({ route, owner: parameters.owner, repo: parameters.repo }).toEqual({ route: "GET /repos/{owner}/{repo}/rulesets/{ruleset_id}", owner: "tailrocks", repo: "velnor-new" });
@@ -45,32 +46,61 @@ async function run({ rulesets = [baseline()], token = "admin-read-token", failur
   await execute(github, { repo: { owner: "tailrocks", repo: "velnor-new" } }, { env: { TAG_RULESET_ADMIN_READ_TOKEN: token } });
   return detailed;
 }
-test("the recorded admin response proves tag immutability", async () => {
-  expect(await run()).toEqual([recorded.id]);
+test("the recorded protection and pinned release app prove the expected tag policy", async () => {
+  expect(await run()).toEqual([recorded.id, recorded.id + 1]);
 });
 test("a bypass actor added to the recorded immutability ruleset fails", async () => {
   const rule = baseline();
   rule.bypass_actors = [actor];
-  await expect(run({ rulesets: [rule] })).rejects.toThrow("tag immutability bypass actors detected");
+  await expect(run({ rulesets: [rule, release()] })).rejects.toThrow("tag immutability bypass actors detected");
 });
 test("an unreadable bypass list cannot prove tag immutability", async () => {
   const rule = baseline();
   delete rule.bypass_actors;
-  await expect(run({ rulesets: [rule] })).rejects.toThrow("bypass_actors unreadable");
+  await expect(run({ rulesets: [rule, release()] })).rejects.toThrow("bypass_actors unreadable");
+});
+test.each([
+  ["an extra owner", [actor, { actor_id: 139017, actor_type: "User", bypass_mode: "always" }]],
+  ["a duplicate release app", [actor, actor]],
+  ["a missing release app", []],
+  ["a wrong app ID", [{ ...actor, actor_id: 139017 }]],
+  ["a wrong actor type", [{ ...actor, actor_type: "User" }]],
+  ["a wrong bypass mode", [{ ...actor, bypass_mode: "pull_request" }]],
+])("release-tags rejects %s", async (_name, actors) => {
+  await expect(run({ rulesets: [baseline(), { ...release(), bypass_actors: actors }] })).rejects.toThrow("release-tags: tag immutability bypass actors detected");
+});
+test("an unreadable release bypass list cannot prove the pinned release app", async () => {
+  const rule = release();
+  delete rule.bypass_actors;
+  await expect(run({ rulesets: [baseline(), rule] })).rejects.toThrow("release-tags: bypass_actors unreadable");
+});
+test("missing, duplicated or inactive release protection fails", async () => {
+  for (const rulesets of [
+    [baseline()],
+    [baseline(), release(), { ...release(), id: 1 }],
+    [baseline(), release(), { ...release(), id: 1, target: "branch" }],
+    [baseline(), { ...release(), target: "branch" }],
+    [baseline(), { ...release(), enforcement: "disabled" }],
+  ]) {
+    await expect(run({ rulesets })).rejects.toThrow("release-tags must be exactly one active tag ruleset");
+  }
 });
 test("all paginated tag details are checked while branch rulesets are excluded", async () => {
   const rulesets = Array.from({ length: 101 }, (_, id) => ({
     ...baseline(), id, name: `creation-${id}`, rules: [{ type: "creation" }], bypass_actors: [actor],
   }));
   const branch = { ...baseline(), id: 102, name: "branch", target: "branch", bypass_actors: [actor] };
-  const all = [...rulesets, baseline(), branch];
-  expect(await run({ rulesets: all })).toEqual([...rulesets.map(rule => rule.id), recorded.id]);
-  const additional = { ...baseline(), id: 103, name: "additional", enforcement: "disabled", rules: [{ type: "deletion" }], bypass_actors: [actor] };
-  await expect(run({ rulesets: [...all, additional] })).rejects.toThrow("additional: tag immutability bypass actors detected");
+  const all = [...rulesets, release(), baseline(), branch];
+  expect(await run({ rulesets: all })).toEqual([...rulesets.map(rule => rule.id), recorded.id + 1, recorded.id]);
+  for (const type of ["update", "deletion"]) {
+    const additional = { ...baseline(), id: 103, name: "additional", enforcement: "disabled", rules: [{ type }], bypass_actors: [actor] };
+    await expect(run({ rulesets: [...all, additional] })).rejects.toThrow("additional: tag immutability bypass actors detected");
+  }
 });
 test("missing, duplicated or weakened baseline protection fails", async () => {
-  await expect(run({ rulesets: [] })).rejects.toThrow("protect-tags must actively prevent");
-  await expect(run({ rulesets: [baseline(), { ...baseline(), id: 1 }] })).rejects.toThrow("protect-tags must actively prevent");
+  await expect(run({ rulesets: [release()] })).rejects.toThrow("protect-tags must actively prevent");
+  await expect(run({ rulesets: [baseline(), { ...baseline(), id: 1 }, release()] })).rejects.toThrow("protect-tags must actively prevent");
+  await expect(run({ rulesets: [baseline(), { ...baseline(), id: 1, target: "branch" }, release()] })).rejects.toThrow("protect-tags must actively prevent");
   for (const rule of [
     { ...baseline(), enforcement: "disabled" },
     { ...baseline(), target: "branch" },
@@ -79,7 +109,7 @@ test("missing, duplicated or weakened baseline protection fails", async () => {
     { ...baseline(), conditions: { ref_name: { include: ["refs/tags/v*"], exclude: [] } } },
     { ...baseline(), conditions: { ref_name: { include: ["~ALL"], exclude: ["refs/tags/v*"] } } },
   ]) {
-    await expect(run({ rulesets: [rule] })).rejects.toThrow("protect-tags must actively prevent");
+    await expect(run({ rulesets: [rule, release()] })).rejects.toThrow("protect-tags must actively prevent");
   }
 });
 test("API failures and absent owner credentials fail the check", async () => {
