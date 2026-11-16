@@ -55,6 +55,10 @@ pub fn configuration(argv: &[String]) -> String {
         let (flag, inline) = word
             .split_once('=')
             .map_or((word.as_str(), None), |(flag, value)| (flag, Some(value)));
+        let (flag, inline) = flag
+            .strip_prefix("-F")
+            .filter(|value| !value.is_empty())
+            .map_or((flag, inline), |value| ("-F", Some(value)));
         match flag {
             "--features" | "-F" | "--target" | "--profile" | "--config" => {
                 let Some(value) = inline.or_else(|| words.next().map(String::as_str)) else {
@@ -75,7 +79,7 @@ pub fn configuration(argv: &[String]) -> String {
                     }
                 }
             }
-            "--release" => {
+            "--release" | "-r" => {
                 options.insert("--profile", "release");
             }
             "--all-features" | "--no-default-features" => {

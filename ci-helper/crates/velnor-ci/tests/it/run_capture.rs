@@ -235,3 +235,37 @@ fn assert_recorded_settings(
         "{name}"
     );
 }
+
+#[cfg(unix)]
+#[test]
+fn unrelated_non_unicode_environment_preserves_the_child_result_and_record() {
+    use std::os::unix::ffi::OsStringExt;
+
+    let temp = std::env::temp_dir().join(format!("velnor-non-unicode-{}", std::process::id()));
+    let program = fixture(&temp, true, false).expect("fixture");
+    fs::write(
+        &program,
+        "#!/bin/sh\ntest \"$UNRELATED\" = \"$(printf '\\377')\" || exit 91\ncat events\n",
+    )
+    .expect("program");
+    let argv = [program.to_str().expect("path"), "test"];
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["run", "--"])
+        .args(argv)
+        .current_dir(&temp)
+        .env("RUNNER_TEMP", &temp)
+        .env("UNRELATED", std::ffi::OsString::from_vec(vec![255]))
+        .env(std::ffi::OsString::from_vec(vec![b'U', 255]), "unrelated")
+        .output()
+        .expect("run helper");
+    assert!(output.status.success(), "{output:?}");
+    let text = fs::read_to_string(temp.join("velnor-invocations.jsonl")).expect("sidecar");
+    let invocation: serde_json::Value = serde_json::from_str(text.trim()).expect("record");
+    assert_eq!(invocation["argv"], serde_json::json!(argv));
+    assert_eq!(invocation["capture_complete"], true);
+    assert_eq!(
+        invocation["artifacts"].as_array().expect("artifacts").len(),
+        1
+    );
+    fs::remove_dir_all(temp).expect("cleanup");
+}

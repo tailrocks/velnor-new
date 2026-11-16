@@ -13,13 +13,15 @@ fn temp(file: &str) -> std::path::PathBuf {
 }
 
 pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
+    let execution = execution(argv);
     Ok(Invocation {
         argv: argv.to_vec(),
         root: super::current_dir()?.to_string_lossy().into_owned(),
         configuration: format!(
             "{} {:?}",
             configuration(argv),
-            std::env::vars()
+            execution
+                .iter()
                 .filter(|(key, _)| [
                     "RUSTUP_TOOLCHAIN",
                     "RUSTFLAGS",
@@ -41,7 +43,7 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         capture_complete: false,
         tests: Vec::new(),
         rejected: 0,
-        execution: execution(argv),
+        execution,
         target_directory: target_directory(argv)?,
     })
 }
@@ -78,10 +80,11 @@ fn target_directory(argv: &[String]) -> Result<Option<String>, CiError> {
 }
 
 fn execution(argv: &[String]) -> BTreeMap<String, String> {
-    let mut settings: BTreeMap<String, String> = std::env::vars()
-        .filter(|(key, _)| {
-            matches!(
-                key.as_str(),
+    let mut settings: BTreeMap<String, String> = std::env::vars_os()
+        .filter_map(|(key, value)| {
+            let key = key.to_str()?;
+            let recognized = matches!(
+                key,
                 "RUSTUP_TOOLCHAIN"
                     | "RUSTFLAGS"
                     | "RUSTDOCFLAGS"
@@ -92,10 +95,11 @@ fn execution(argv: &[String]) -> BTreeMap<String, String> {
                     | "RUSTC_BOOTSTRAP"
             ) || key.starts_with("CARGO_PROFILE_")
                 || (key.starts_with("CARGO_TARGET_") && key != "CARGO_TARGET_DIR")
-                || matches!(
-                    key.as_str(),
-                    "CARGO_BUILD_TARGET" | "CARGO_ENCODED_RUSTFLAGS"
-                )
+                || matches!(key, "CARGO_BUILD_TARGET" | "CARGO_ENCODED_RUSTFLAGS");
+            if !recognized {
+                return None;
+            }
+            Some((key.to_owned(), value.into_string().ok()?))
         })
         .collect();
     settings.insert(

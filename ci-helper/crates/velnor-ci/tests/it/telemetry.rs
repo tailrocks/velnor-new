@@ -101,3 +101,32 @@ fn configuration_ignores_test_arguments_after_the_separator() {
         assert_eq!(configuration(&base), configuration(&test));
     }
 }
+
+#[test]
+fn configuration_normalizes_short_release_and_attached_features() {
+    for (short, long, different) in [
+        ("-r", vec!["--release"], vec!["--profile", "dev"]),
+        (
+            "-Fextra",
+            vec!["--features", "extra"],
+            vec!["--features", "other"],
+        ),
+        (
+            "-F=extra",
+            vec!["--features=extra"],
+            vec!["--features=other"],
+        ),
+    ] {
+        let configuration_for = |options: &[&str]| {
+            configuration(
+                &[vec!["cargo", "test"], options.to_vec()]
+                    .concat()
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect::<Vec<_>>(),
+            )
+        };
+        assert_eq!(configuration_for(&[short]), configuration_for(&long));
+        assert_ne!(configuration_for(&[short]), configuration_for(&different));
+    }
+}
