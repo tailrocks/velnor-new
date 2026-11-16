@@ -162,6 +162,7 @@ fn authority(dir: &std::path::Path) -> Authority {
     let canonical = std::fs::canonicalize(dir).unwrap_or_else(|e| unreachable!("{e}"));
     let child = std::process::Command::new("/usr/bin/yes")
         .arg0(BINARY)
+        .env("POSIXLY_CORRECT", "1")
         .args(["supervise", "--dir"])
         .arg(canonical)
         .stdin(std::process::Stdio::null())
