@@ -10,11 +10,14 @@ use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
     toolchain_path,
 };
-use crate::members::{check_inventory, check_registries, inherited_tag, owner, settle_publishing};
+use crate::members::{
+    check_inventory, check_registries, inherited_packages, inherited_tag, owner, settle_publishing,
+};
 use crate::mise;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
+use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
 use crate::velnor_config::{VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
@@ -40,6 +43,8 @@ pub struct RootPlan {
     pub pr_branch_prefix: String,
     pub publishes_to_crates_io: bool,
     pub packages: Vec<(String, TagPattern)>,
+    pub inherited: Vec<String>,
+    pub publish_budget_nanos: u128,
     pub workspace_tags: Vec<TagPattern>,
 }
 
@@ -260,6 +265,61 @@ fn plan_binaries(
     Ok(binaries)
 }
 
+fn publish_budget(config: &RootConfig, inherited: &[String]) -> u128 {
+    let publishing = inherited
+        .iter()
+        .filter(|package| config.publishes(package))
+        .count();
+    let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
+    let publishing = publishing.max(usize::from(none_known)) as u128;
+    config
+        .listed_nanos
+        .saturating_add(publishing.saturating_mul(config.unlisted_check_nanos))
+        .saturating_add(publishing.saturating_mul(config.unlisted_publish_nanos))
+}
+
+#[must_use]
+pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
+    let nanos = roots.iter().fold(0u128, |total, root| {
+        total.saturating_add(root.publish_budget_nanos)
+    });
+    crate::timeout::minutes_ceil(nanos)
+}
+
+fn plan_roots(
+    configs: Vec<RootConfig>,
+    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+) -> Result<Vec<RootPlan>, ReleaseError> {
+    let roots: Vec<RootPlan> = configs
+        .into_iter()
+        .map(|config| {
+            let inherited = inherited_packages(&config, metadata);
+            let budget = publish_budget(&config, &inherited);
+            RootPlan {
+                inherited,
+                publish_budget_nanos: budget,
+                root: config.root,
+                pr_branch_prefix: config.pr_branch_prefix,
+                publishes_to_crates_io: config.publishes_to_crates_io,
+                packages: config
+                    .packages
+                    .into_iter()
+                    .map(|package| (package.name, package.tag_pattern))
+                    .collect(),
+                workspace_tags: config.workspace_tags,
+            }
+        })
+        .collect();
+    if metadata.is_some() {
+        let minutes = publish_budget_minutes(&roots);
+        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+        if minutes > limit {
+            return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
+        }
+    }
+    Ok(roots)
+}
+
 impl ReleasePlan {
     pub fn read(files: &ReleaseFiles) -> Result<ReleasePlan, ReleaseError> {
         let config = parse(files.release_toml.as_deref())?;
@@ -321,21 +381,9 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let binaries = plan_binaries(&config, &configs, files)?;
+        let roots = plan_roots(configs, files.rust_metadata.as_ref())?;
         Ok(ReleasePlan {
-            roots: configs
-                .into_iter()
-                .map(|config| RootPlan {
-                    root: config.root,
-                    pr_branch_prefix: config.pr_branch_prefix,
-                    publishes_to_crates_io: config.publishes_to_crates_io,
-                    packages: config
-                        .packages
-                        .into_iter()
-                        .map(|package| (package.name, package.tag_pattern))
-                        .collect(),
-                    workspace_tags: config.workspace_tags,
-                })
-                .collect(),
+            roots,
             after: config.after,
             binaries,
             release_plz_version: release_plz.version,

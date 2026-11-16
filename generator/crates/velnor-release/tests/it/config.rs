@@ -154,6 +154,30 @@ fn the_locked_version_must_equal_the_configured_one() {
 }
 
 #[test]
+fn a_release_plz_that_cannot_fetch_without_persisted_credentials_is_refused() {
+    for (version, refused) in [
+        ("0.3.167", true),
+        ("0.2.99", true),
+        ("0.3.168", false),
+        ("0.3.1000", false),
+        ("0.4.0", false),
+        ("1.0.0", false),
+    ] {
+        let mut files = files();
+        files.mise_tomls = vec![format!("[tools]\nrelease-plz = \"{version}\"\n")];
+        files.mise_lock = locked("release-plz", version);
+        assert_eq!(
+            matches!(
+                refusal(&files),
+                Some(ReleaseError::ReleasePlzVersionTooOld { minimum, .. }) if minimum == "0.3.168"
+            ),
+            refused,
+            "{version}"
+        );
+    }
+}
+
+#[test]
 fn release_config_with_an_empty_after_or_unknown_platform_is_refused() {
     let mut files = files();
     files.release_toml = Some("after = []\n".to_owned());

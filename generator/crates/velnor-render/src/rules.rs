@@ -27,6 +27,7 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
+pub(crate) const MAX_WORKFLOW_BYTES: usize = 500_000;
 pub const MAX_CACHE_KEY_CHARACTERS: usize = 512;
 
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
@@ -45,6 +46,7 @@ pub struct RenderedStep {
     pub id: Option<String>,
     pub name: String,
     pub condition: Option<String>,
+    pub continue_on_error: bool,
     pub uses: Option<String>,
     pub uses_comment: Option<String>,
     pub with: Vec<(String, Value)>,
@@ -95,6 +97,7 @@ pub enum Rule {
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
     TokenJobRunnerNotX64(String),
+    WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
 }
 
@@ -107,6 +110,12 @@ pub struct RuleViolation {
 
 impl fmt::Display for RuleViolation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Rule::WorkflowTooLarge(bytes) = &self.rule {
+            return write!(
+                f,
+                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
+            );
+        }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
         match &self.rule {
             Rule::MultiLineRun => f.write_str("a run value has more than one line"),
@@ -134,6 +143,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
+            Rule::WorkflowTooLarge(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
