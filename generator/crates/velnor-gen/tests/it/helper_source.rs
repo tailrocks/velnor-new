@@ -60,10 +60,13 @@ fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() ->
 fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() -> TestResult {
     let mut view = sample(None)?;
     let mise = path("mise.toml")?;
-    view.files
-        .get_mut(&mise)
-        .ok_or("mise missing")?
-        .extend_from_slice(b"\ncargo-machete = \"0.9.1\"\n");
+    let tools = String::from_utf8(view.files.get(&mise).ok_or("mise missing")?.clone())?;
+    view.files.insert(
+        mise,
+        tools
+            .replace("[tools]\n", "[tools]\ncargo-machete = \"0.9.1\"\n")
+            .into_bytes(),
+    );
     let text = text_of(&view)?;
     assert!(job_ids(&text).contains(&"policy"));
     let jobs = job_ids(&text);
