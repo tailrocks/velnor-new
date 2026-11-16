@@ -18,7 +18,7 @@ pub fn break_time_ties(root: &Path) -> Result<String, CiError> {
             _ => {}
         }
     }
-    let moved = break_ties(&files);
+    let moved = break_ties(&files)?;
     for (path, time) in &moved {
         set_modified_ns(&top.join(path), *time)?;
     }

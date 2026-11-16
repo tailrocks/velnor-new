@@ -158,8 +158,16 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
     let repo = Repo::new("nested");
     repo.write("rust/src/lib.rs", "pub fn one() {}\n");
     repo.write("shared/src/lib.rs", "pub fn shared() {}\n");
+    repo.write("other/src/lib.rs", "pub fn other() {}\n");
+    repo.write(".velnor/rust-inputs.lock", "shared\trust-app\n");
     let workspace = repo.root().join("rust");
-    let paths = [".gitignore", "rust/src/lib.rs", "shared/src/lib.rs"];
+    let paths = [
+        ".gitignore",
+        "rust/src/lib.rs",
+        "shared/src/lib.rs",
+        "other/src/lib.rs",
+        ".velnor/rust-inputs.lock",
+    ];
     let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
     for path in paths {
         repo.set_mtime(path, built);
@@ -175,13 +183,45 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
     assert!(workspace.join("target/.velnor/inputs.tsv").is_file());
     assert_eq!(repo.mtime("rust/src/lib.rs"), built);
     assert_eq!(repo.mtime("shared/src/lib.rs"), built);
+    assert_eq!(repo.mtime("other/src/lib.rs"), checkout);
+    assert_eq!(repo.mtime(".gitignore"), checkout);
     assert_eq!(
         (saved.as_str(), report.as_str()),
         (
-            "saved 3 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
-            "restored the modification time of 3 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
+            "saved 2 tracked files and 0 symlinks to target/.velnor/inputs.tsv; left out: 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n",
+            "restored the modification time of 2 unchanged files; 0 changed, 0 new, 0 deleted, 0 not in the worktree, 0 with a path the file cannot hold, 0 submodules not checked out\n"
         )
     );
+}
+
+#[test]
+fn two_roots_restored_from_different_snapshots_each_keep_their_own_times() {
+    let repo = Repo::new("two-roots");
+    repo.write("one/src/lib.rs", "pub fn one() {}\n");
+    repo.write("two/src/lib.rs", "pub fn two() {}\n");
+    let paths = ["one/src/lib.rs", "two/src/lib.rs"];
+    let (first, second) = (
+        UNIX_EPOCH + Duration::new(1_700_000_000, 0),
+        UNIX_EPOCH + Duration::new(1_700_000_500, 0),
+    );
+    for path in paths {
+        repo.set_mtime(path, first);
+    }
+    save_inputs(&repo.root().join("one")).unwrap_or_else(|e| unreachable!("{e}"));
+    for path in paths {
+        repo.set_mtime(path, second);
+    }
+    save_inputs(&repo.root().join("two")).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, checkout);
+    }
+    for root in ["one", "two"] {
+        restore_inputs(&repo.root().join(root)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    assert_eq!(repo.mtime("one/src/lib.rs"), first);
+    assert_eq!(repo.mtime("two/src/lib.rs"), second);
 }
 
 #[test]

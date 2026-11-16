@@ -21,6 +21,7 @@ pub mod platform;
 pub mod publish;
 pub mod release;
 pub mod rulesets;
+pub mod scope;
 pub mod setup;
 pub mod stream;
 pub mod tests_run;

@@ -7,11 +7,14 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
+
 use crate::error::CiError;
 use crate::inputs::{
     INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
     parse_ls_files, plan_restore, with_worktree_blobs,
 };
+use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
@@ -115,16 +118,35 @@ fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
             .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
             .trim_end_matches(['\n', '\r']),
     );
-    let tracked = top_level_files(&top)?;
+    let tracked = top_level_files(&top, &scope_of(root, &top)?)?;
     Ok((top, tracked))
 }
 
-fn top_level_files(root: &Path) -> Result<Tracked, CiError> {
-    let index = parse_ls_files(&git(
+fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
+    let prefix = git(root, &["rev-parse", "--show-prefix"], None)?;
+    let prefix = String::from_utf8(prefix)
+        .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?;
+    let listed = match fs::read(top.join(INPUTS_LOCK.as_str())) {
+        Ok(bytes) => parse_inputs_lock(&bytes)
+            .map_err(|e| CiError::new(e.to_string()))?
+            .into_keys()
+            .flatten()
+            .map(|path| path.as_str().to_owned())
+            .collect(),
+        Err(e) if e.kind() == ErrorKind::NotFound => Vec::new(),
+        Err(e) => return Err(CiError::new(format!("cannot read {INPUTS_LOCK}: {e}"))),
+    };
+    Ok(Scope::new(prefix.trim_end_matches(['\n', '\r']), listed))
+}
+
+fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
+    let mut index = parse_ls_files(&git(
         root,
         &["ls-files", "-s", "-z", "--recurse-submodules"],
         None,
     )?);
+    index.files.retain(|file| scope.contains(&file.path));
+    index.links.retain(|link| scope.contains(&link.path));
     let mut present = Vec::with_capacity(index.files.len());
     let mut absent = Vec::new();
     for file in index.files {
