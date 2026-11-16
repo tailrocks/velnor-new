@@ -10,6 +10,7 @@ mod git;
 mod index_file;
 mod keys;
 pub mod pair;
+mod probe;
 mod proxy;
 mod reply;
 mod run;

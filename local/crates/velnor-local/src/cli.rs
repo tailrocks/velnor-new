@@ -144,10 +144,9 @@ pub struct EnvironmentArgs {
     pub runner: RunnerMode,
     #[arg(
         long,
-        default_value = "crates/velnor-runner/target/release/velnor-host",
-        help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it"
+        help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it. Default: the one built in the checkout that holds this executable, never one from the working directory"
     )]
-    pub velnor_host: PathBuf,
+    pub velnor_host: Option<PathBuf>,
 }
 
 impl EnvironmentArgs {

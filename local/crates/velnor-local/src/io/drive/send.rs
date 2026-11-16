@@ -8,7 +8,8 @@ use serde_json::{Value, json};
 use tokio::fs;
 
 use super::Driver;
-use crate::io::env::{STANDIN_IMAGE, request, words};
+use crate::io::env::{STANDIN_IMAGE, words};
+use crate::io::probe::request;
 use crate::side::Side;
 use crate::standin;
 
