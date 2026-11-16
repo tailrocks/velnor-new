@@ -100,3 +100,34 @@ fn workspace_format_outcome_emitter_keeps_native_mise_admission() {
             if problem == "format_without_mise"
     ));
 }
+
+#[test]
+fn two_configurations_emit_one_format_task_and_keep_other_tasks_per_configuration()
+-> Result<(), Box<dyn Error>> {
+    let config = "schema = 1\n[workflow]\nname = \"CI\"\ndefault_branch = \"testmain\"\n\n[[stacks.rust.configurations]]\nname = \"default\"\nfeatures = [\"default\"]\nall_features = false\ntarget = \"host\"\n\n[[stacks.rust.configurations]]\nname = \"extra\"\nfeatures = [\"default\"]\nall_features = false\ntarget = \"host\"\n";
+    let repo = workflow_configuration_fixture::make_repo(config)?;
+    let prepared = prepare(repo.path())?;
+    let count = |kind: &str, configuration: &str| {
+        prepared
+            .discovery
+            .proposals
+            .iter()
+            .filter(|task| {
+                task.stack_id == "rust"
+                    && task.task_kind == kind
+                    && task.configuration == configuration
+            })
+            .count()
+    };
+    assert_eq!(count("fmt", "default") + count("fmt", "extra"), 1);
+    for kind in ["clippy", "doc", "doctest"] {
+        assert_eq!(count(kind, "default"), 1, "{kind}");
+        assert_eq!(count(kind, "extra"), 1, "{kind}");
+    }
+    let rendered = render_staged_tree(&prepared)?;
+    let workflow = rendered
+        .get(WORKFLOW_PATH)
+        .ok_or("rendered workflow is missing")?;
+    assert_eq!(workflow.matches("name: Format").count(), 1);
+    Ok(())
+}

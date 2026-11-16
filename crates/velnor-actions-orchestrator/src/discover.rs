@@ -285,6 +285,7 @@ fn derive_all(
             fallbacks.extend(narrowed);
         }
     }
+    crate::derive_groups::keep_first_format(&mut groups);
     let mut proposals = Vec::with_capacity(groups.len());
     for group in &groups {
         let task = propose_task(group)?;

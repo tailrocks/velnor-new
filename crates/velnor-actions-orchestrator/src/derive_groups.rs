@@ -53,6 +53,14 @@ pub(crate) fn declared_union(
     union
 }
 
+pub(crate) fn keep_first_format(groups: &mut Vec<TaskGroup>) {
+    let mut seen = BTreeSet::new();
+    groups.retain(|group| {
+        group.kind != TaskKind::Fmt
+            || seen.insert((group.manifest_key.clone(), group.package_name.clone()))
+    });
+}
+
 pub(crate) fn derive_for_config(
     config: &VelnorConfig,
     index: &FileIndex,
