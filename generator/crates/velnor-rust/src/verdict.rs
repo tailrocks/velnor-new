@@ -4,7 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, RootSlug, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+    GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
 const SCHEDULE: &str = "schedule";
@@ -43,10 +44,69 @@ impl JobResult {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PackageCounts {
+    pub run: u64,
+    pub listed: u64,
+}
+
+pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 32_768;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestCounts {
     pub run: u64,
     pub listed: u64,
+    pub packages: BTreeMap<String, PackageCounts>,
+}
+
+#[must_use]
+pub fn encode_package_counts(packages: &BTreeMap<String, PackageCounts>) -> Option<String> {
+    let mut parts = Vec::with_capacity(packages.len());
+    for (name, counts) in packages {
+        if !package_token(name) || counts.run > counts.listed {
+            return None;
+        }
+        parts.push(format!("{name}={}/{}", counts.run, counts.listed));
+    }
+    let text = parts.join(" ");
+    (text.len() <= PACKAGE_COUNTS_LIMIT).then_some(text)
+}
+
+fn parse_package_counts(text: &str) -> Option<BTreeMap<String, PackageCounts>> {
+    if text.len() > PACKAGE_COUNTS_LIMIT {
+        return None;
+    }
+    let mut packages = BTreeMap::new();
+    if text.is_empty() {
+        return Some(packages);
+    }
+    for token in text.split(' ') {
+        let (name, counts) = token.split_once('=')?;
+        let (run, listed) = counts.split_once('/')?;
+        if !package_token(name) {
+            return None;
+        }
+        let run = number(run)?;
+        let listed = number(listed)?;
+        if run > listed
+            || packages
+                .insert(name.to_owned(), PackageCounts { run, listed })
+                .is_some()
+        {
+            return None;
+        }
+    }
+    let encoded = encode_package_counts(&packages)?;
+    (encoded == text).then_some(packages)
+}
+
+fn package_token(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    match bytes.next() {
+        Some(byte) if byte.is_ascii_alphanumeric() || byte == b'_' => {}
+        _ => return false,
+    }
+    bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -228,23 +288,26 @@ pub fn verdict(
         let counts: Vec<Option<TestCounts>> = jobs
             .iter()
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
-            .map(|job| tests.get(job).copied().flatten())
+            .map(|job| tests.get(job).cloned().flatten())
             .collect();
         if counts.is_empty() {
             out.problems.push(format!(
-                "no scheduled job reports {TESTS_RUN_OUTPUT} and {TESTS_LISTED_OUTPUT} for {slug}, whose selected packages have tests"
+                "no scheduled job reports {TESTS_BY_PACKAGE_OUTPUT} for {slug}, whose selected packages have tests"
             ));
         } else if counts.contains(&None) {
             out.problems.push(format!(
-                "{TESTS_RUN_OUTPUT} or {TESTS_LISTED_OUTPUT} is missing or not a number in a test job of {slug}"
+                "{TESTS_BY_PACKAGE_OUTPUT} is missing or malformed in a test job of {slug}"
             ));
         } else {
-            let run: u64 = counts.iter().flatten().map(|c| c.run).sum();
-            let listed: u64 = counts.iter().flatten().map(|c| c.listed).sum();
-            if listed > 0 && run == 0 {
-                out.problems.push(format!(
-                    "{listed} tests were listed for {slug} and none ran, so a test filter matches nothing"
-                ));
+            for job in counts.iter().flatten() {
+                for (name, package) in &job.packages {
+                    if package.listed > 0 && package.run == 0 {
+                        out.problems.push(format!(
+                            "package {name} of {slug} listed {} tests and ran none",
+                            package.listed
+                        ));
+                    }
+                }
             }
         }
     }
@@ -289,14 +352,30 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
 
 fn counts(need: Option<&Need>) -> Option<TestCounts> {
     let need = need?;
+    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
+    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
+    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
+    let summed_run = packages
+        .values()
+        .try_fold(0u64, |total, package| total.checked_add(package.run))?;
+    let summed_listed = packages
+        .values()
+        .try_fold(0u64, |total, package| total.checked_add(package.listed))?;
+    if run != summed_run || listed != summed_listed {
+        return None;
+    }
     Some(TestCounts {
-        run: number(need.outputs.get(TESTS_RUN_OUTPUT)?)?,
-        listed: number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?,
+        run,
+        listed,
+        packages,
     })
 }
 
 fn number(text: &str) -> Option<u64> {
-    if text.is_empty() || !text.bytes().all(|byte| byte.is_ascii_digit()) {
+    if text.is_empty()
+        || (text.len() > 1 && text.starts_with('0'))
+        || !text.bytes().all(|byte| byte.is_ascii_digit())
+    {
         return None;
     }
     text.parse().ok()

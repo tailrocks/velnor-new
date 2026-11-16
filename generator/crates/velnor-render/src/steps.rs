@@ -3,7 +3,7 @@
 
 use velnor_model::{
     CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
 use crate::cache::{path_text, render_key};
@@ -75,7 +75,11 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                     .any(|step| {
                         matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
                     })
-                    .then_some([TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT])
+                    .then_some([
+                        TESTS_RUN_OUTPUT,
+                        TESTS_LISTED_OUTPUT,
+                        TESTS_BY_PACKAGE_OUTPUT,
+                    ])
                     .into_iter()
                     .flatten()
                     .map(|name| {

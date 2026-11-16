@@ -40,6 +40,7 @@ struct Run {
     results: Vec<(&'static str, &'static str)>,
     count: Option<&'static str>,
     listed: Option<&'static str>,
+    packages: Option<String>,
     event: Option<&'static str>,
 }
 
@@ -56,6 +57,7 @@ fn passing() -> Run {
         ],
         count: Some("12"),
         listed: Some("12"),
+        packages: None,
         event: Some("pull_request"),
     }
 }
@@ -89,6 +91,15 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
                 if let Some(value) = value {
                     need.outputs.insert(name.to_owned(), value.to_owned());
                 }
+            }
+            if let Some(packages) = &run.packages {
+                need.outputs
+                    .insert("tests_by_package".to_owned(), packages.clone());
+            } else if let (Some(count), Some(listed)) = (run.count, run.listed) {
+                need.outputs.insert(
+                    "tests_by_package".to_owned(),
+                    format!("pkg={count}/{listed}"),
+                );
             }
         }
         needs.insert(JobId::new(*job)?, need);
@@ -177,7 +188,11 @@ fn tests_that_were_listed_but_none_ran_fails_and_a_lane_with_no_tests_passes() -
         run.count = Some("0");
         run.listed = Some("3");
     });
-    expect(&run, false, "3 tests were listed for root and none ran")?;
+    expect(
+        &run,
+        false,
+        "package pkg of root listed 3 tests and ran none",
+    )?;
     let run = with(passing(), |run| {
         run.count = Some("0");
         run.listed = Some("0");
@@ -187,7 +202,17 @@ fn tests_that_were_listed_but_none_ran_fails_and_a_lane_with_no_tests_passes() -
         run.count = Some("2");
         run.listed = Some("9");
     });
-    expect(&run, true, "Required: pass")
+    expect(&run, true, "Required: pass")?;
+    let run = with(passing(), |run| {
+        run.count = Some("2");
+        run.listed = Some("6");
+        run.packages = Some("other=0/4 ran=2/2".to_owned());
+    });
+    expect(
+        &run,
+        false,
+        "package other of root listed 4 tests and ran none",
+    )
 }
 
 #[test]
@@ -221,16 +246,45 @@ fn a_missing_empty_or_garbled_tests_run_or_tests_listed_fails() -> TestResult {
         expect(
             &run,
             false,
-            "tests_run or tests_listed is missing or not a number in a test job of root",
+            "tests_by_package is missing or malformed in a test job of root",
         )?;
         let run = with(passing(), |run| run.listed = bad);
         expect(
             &run,
             false,
-            "tests_run or tests_listed is missing or not a number in a test job of root",
+            "tests_by_package is missing or malformed in a test job of root",
         )?;
     }
-    Ok(())
+    let overlong = "p".repeat(40_000);
+    for packages in [
+        "other=0/4 ran=2/2",
+        "ran=2/2",
+        "pkg=2/1",
+        "pkg=02/2",
+        "pkg=2/2 extra",
+        "-pkg=1/1",
+        "pkg=1/1 pkg=1/1",
+        "${{oops}}=1/1",
+        "pkg=1/1 ",
+        overlong.as_str(),
+    ] {
+        let run = with(passing(), |run| run.packages = Some(packages.to_owned()));
+        expect(
+            &run,
+            false,
+            "tests_by_package is missing or malformed in a test job of root",
+        )?;
+    }
+    let run = with(passing(), |run| {
+        run.count = Some("2");
+        run.listed = Some("6");
+        run.packages = Some("ran=2/2 other=0/4".to_owned());
+    });
+    expect(
+        &run,
+        false,
+        "tests_by_package is missing or malformed in a test job of root",
+    )
 }
 
 #[test]

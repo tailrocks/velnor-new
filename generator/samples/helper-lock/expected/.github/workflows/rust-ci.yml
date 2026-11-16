@@ -31,6 +31,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -121,7 +123,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.plan.outputs.rust_root_test_filter }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter --status-level skip -E "$TEST_FILTER" --no-tests=pass'
       - name: Doctests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_doctests == ''run'' && steps.plan.outputs.rust_root_package_args != '''' }}'
         env:

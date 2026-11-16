@@ -9,9 +9,19 @@ use crate::support::fresh_dir;
 const SPEC: &str =
     "--plan rust-plan --job rust-plan=always --job rust-test=lane:root --tests rust-test=root";
 
+fn canonical(text: &str) -> bool {
+    !(text.is_empty() || text.len() > 1 && text.starts_with('0'))
+        && text.bytes().all(|byte| byte.is_ascii_digit())
+}
+
 fn needs(plan_result: &str, test_result: &str, tests_run: &str, listed: &str) -> String {
+    let packages = if canonical(tests_run) && canonical(listed) {
+        format!(r#","tests_by_package":"pkg={tests_run}/{listed}""#)
+    } else {
+        String::new()
+    };
     format!(
-        r#"{{"rust-plan":{{"result":"{plan_result}","outputs":{{"rust_root_mode":"some","rust_root_tests":"run"}}}},"rust-test":{{"result":"{test_result}","outputs":{{"tests_run":"{tests_run}","tests_listed":"{listed}"}}}}}}"#
+        r#"{{"rust-plan":{{"result":"{plan_result}","outputs":{{"rust_root_mode":"some","rust_root_tests":"run"}}}},"rust-test":{{"result":"{test_result}","outputs":{{"tests_run":"{tests_run}","tests_listed":"{listed}"{packages}}}}}}}"#
     )
 }
 
@@ -66,17 +76,17 @@ fn every_fail_closed_case_exits_1_and_names_the_reason() {
         (
             "zero",
             needs("success", "success", "0", "3"),
-            "3 tests were listed for root and none ran",
+            "package pkg of root listed 3 tests and ran none",
         ),
         (
             "no-listed",
             needs("success", "success", "7", ""),
-            "missing or not a number",
+            "tests_by_package is missing or malformed",
         ),
         (
             "empty",
             needs("success", "success", "", ""),
-            "missing or not a number",
+            "tests_by_package is missing or malformed",
         ),
         (
             "not-json",

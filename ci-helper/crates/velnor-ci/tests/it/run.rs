@@ -499,7 +499,10 @@ mod tests_run {
         let script = "echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped' >&2";
         let (output, written, _) = run_with_output("tests-run-zero", script, &NEXTEST_RUN);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(written, "existing=1\ntests_run=0\ntests_listed=0\n");
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=0\ntests_listed=0\ntests_by_package=\n"
+        );
     }
 
     #[test]
@@ -548,6 +551,91 @@ mod tests_run {
                 run_with_output(&format!("tests-run-no-{name}"), script, &command);
             assert_eq!(written, "existing=1\n", "{name}");
         }
+    }
+
+    #[test]
+    fn run_reports_each_package_from_the_status_lines_printed_before_the_summary() {
+        let script = r"cat >&2 <<'END'
+        SKIP [         ] (───) ignored tests::hidden
+        SKIP [         ] (───) skipped tests::one
+        SKIP [         ] (───) skipped tests::two
+        PASS [   0.010s] (1/5) ran tests::alpha
+        PASS [   0.010s] (2/5) binonly::bin/binonly tests::bin_test
+        PASS [   0.010s] (3/5) hyphen-ated tests::unit_ok
+        PASS [   0.011s] (4/5) hyphen-ated::extra integration_ok
+        PASS [   0.011s] (5/5) ran tests::beta
+     Summary [   0.011s] 5 tests run: 5 passed, 3 skipped
+END";
+        let (output, written, _) = run_with_output("tests-run-packages", script, &NEXTEST_RUN);
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=5\ntests_listed=8\ntests_by_package=binonly=1/1 hyphen-ated=2/2 ignored=0/1 ran=2/2 skipped=0/2\n"
+        );
+    }
+
+    #[test]
+    fn run_counts_a_failure_once_when_nextest_prints_it_again_after_the_summary() {
+        let script = r"cat >&2 <<'END'
+        FAIL [   0.007s] (1/1) ran tests::boom
+     Summary [   0.007s] 1 test run: 0 passed, 1 failed, 0 skipped
+        FAIL [   0.007s] (1/1) ran tests::boom
+     Summary [   0.007s] 1 test run: 0 passed, 1 failed, 0 skipped
+END";
+        let (output, written, _) = run_with_output("tests-run-fail-once", script, &NEXTEST_RUN);
+        assert_eq!(output.status.code(), Some(0), "{output:?}");
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=ran=1/1\n"
+        );
+    }
+
+    #[test]
+    fn run_splits_a_package_that_only_skipped_from_one_that_ran() {
+        let script = r"cat >&2 <<'END'
+        SKIP [         ] (───) left tests::one
+        SKIP [         ] (───) left tests::two
+        PASS [   0.010s] (1/2) right tests::a
+        PASS [   0.010s] (2/2) right tests::b
+     Summary [   0.010s] 2 tests run: 2 passed, 2 skipped
+END";
+        let (_, written, _) = run_with_output("tests-run-split-packages", script, &NEXTEST_RUN);
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=2\ntests_listed=4\ntests_by_package=left=0/2 right=2/2\n"
+        );
+    }
+
+    #[test]
+    fn run_omits_the_package_map_when_the_lines_do_not_reconcile() {
+        let short = r"cat >&2 <<'END'
+        PASS [   0.010s] (1/2) ran tests::alpha
+     Summary [   0.010s] 2 tests run: 2 passed, 0 skipped
+END";
+        let (_, written, _) = run_with_output("tests-run-short", short, &NEXTEST_RUN);
+        assert_eq!(written, "existing=1\ntests_run=2\ntests_listed=2\n");
+        let hostile = r"cat >&2 <<'END'
+        PASS [nope] (1/1) ran tests::t
+     Summary [   0.010s] 1 test run: 1 passed, 0 skipped
+END";
+        let (_, written, _) = run_with_output("tests-run-hostile", hostile, &NEXTEST_RUN);
+        assert_eq!(written, "existing=1\ntests_run=1\ntests_listed=1\n");
+        let named = r"cat >&2 <<'END'
+        PASS [   0.010s] (1/1) bad=name tests::t
+     Summary [   0.010s] 1 test run: 1 passed, 0 skipped
+END";
+        let (_, written, _) = run_with_output("tests-run-bad-name", named, &NEXTEST_RUN);
+        assert_eq!(written, "existing=1\ntests_run=1\ntests_listed=1\n");
+        let prose = r"cat >&2 <<'END'
+PASS the exam
+        PASS [   0.010s] (1/1) ran tests::alpha
+     Summary [   0.010s] 1 test run: 1 passed, 0 skipped
+END";
+        let (_, written, _) = run_with_output("tests-run-prose", prose, &NEXTEST_RUN);
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=ran=1/1\n"
+        );
     }
 
     #[test]

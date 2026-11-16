@@ -172,6 +172,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -257,7 +259,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter --status-level skip -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
         env:
@@ -355,6 +357,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -447,7 +451,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_ci_helper_test_filter }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter --status-level skip -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' && needs.rust-plan.outputs.rust_ci_helper_docs == ''run'' && needs.rust-plan.outputs.rust_ci_helper_package_args != '''' }}'
         working-directory: ci-helper
@@ -482,6 +486,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -574,7 +580,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_test_filter }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter --status-level skip -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' && needs.rust-plan.outputs.rust_crates_velnor_runner_docs == ''run'' && needs.rust-plan.outputs.rust_crates_velnor_runner_package_args != '''' }}'
         working-directory: crates/velnor-runner
@@ -651,6 +657,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -743,7 +751,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_generator_test_filter }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter --status-level skip -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_generator_mode != ''none'' && needs.rust-plan.outputs.rust_generator_docs == ''run'' && needs.rust-plan.outputs.rust_generator_package_args != '''' }}'
         working-directory: generator
@@ -796,6 +804,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -888,7 +898,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_local_test_filter }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter --status-level skip -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_local_mode != ''none'' && needs.rust-plan.outputs.rust_local_docs == ''run'' && needs.rust-plan.outputs.rust_local_package_args != '''' }}'
         working-directory: local

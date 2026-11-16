@@ -43,7 +43,7 @@ fn words(line: &str, flag: &str) -> Vec<String> {
 fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> TestResult {
     let text = released("0.1.81", &["Cargo.toml", "lab/Cargo.toml"])?;
     let job = required(&text)?;
-    assert!(job.contains("    if: '${{ always() }}'\n"));
+    assert!(job.contains(" && (always()) }}"));
     assert!(!job.contains("Check out"));
     assert!(!job.contains("Fail when a Rust job failed or was cancelled"));
     assert_eq!(job.matches("      - name: ").count(), 2);
@@ -63,7 +63,7 @@ fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> 
 fn a_helper_without_gate_keeps_the_old_verdict_step() -> TestResult {
     let text = released("0.1.80", &["Cargo.toml", "lab/Cargo.toml"])?;
     let job = required(&text)?;
-    assert!(job.contains("    if: '${{ !cancelled() }}'\n"));
+    assert!(job.contains(" && (!cancelled()) }}"));
     assert!(job.contains("Fail when a Rust job failed or was cancelled"));
     assert!(!job.contains("velnor-ci gate"));
     assert!(!text.contains("_tests"));
@@ -89,6 +89,9 @@ fn one_job_exports_its_own_plan_flag_and_the_gate_reads_it_from_that_job() -> Te
     assert!(text.contains("      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'\n"));
     assert!(text.contains("      tests_run: '${{ steps.test.outputs.tests_run }}'\n"));
     assert!(text.contains("      tests_listed: '${{ steps.test.outputs.tests_listed }}'\n"));
+    assert!(text.contains(
+        "      # jactionlint ignore=unused-job-output\n      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'\n"
+    ));
     Ok(())
 }
 
