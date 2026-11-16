@@ -82,3 +82,27 @@ fn scoped_configuration_with_a_blank_or_repeated_package_is_refused() -> Result<
     }
     Ok(())
 }
+
+#[test]
+fn scoped_configuration_adds_nothing_for_a_workspace_without_its_packages()
+-> Result<(), Box<dyn Error>> {
+    let repo = feature_toggle_repo(false, false)?;
+    let tool = repo.path().join("tools/standalone");
+    fs::create_dir_all(tool.join("src"))?;
+    fs::write(
+        tool.join("Cargo.toml"),
+        "[package]\nname = \"standalone\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+    )?;
+    fs::write(tool.join("src/lib.rs"), "")?;
+    write_config(repo.path(), "packages = [\"maintenance\"]\n")?;
+    let prepared = prepare(repo.path())?;
+    let scoped: BTreeSet<&str> = prepared
+        .discovery
+        .proposals
+        .iter()
+        .filter(|task| task.stack_id == "rust" && task.configuration == "scoped")
+        .map(|task| task.identity.unit_path.as_str())
+        .collect();
+    assert_eq!(scoped, BTreeSet::from(["crates/maintenance/Cargo.toml"]));
+    Ok(())
+}

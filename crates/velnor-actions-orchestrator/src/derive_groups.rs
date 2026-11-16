@@ -100,6 +100,14 @@ pub(crate) fn derive_for_config(
         .rust
         .as_ref()
         .is_some_and(|rust| rust.allow_empty_test_suite);
+    if !rust_config.packages.is_empty()
+        && !record
+            .packages
+            .iter()
+            .any(|package| rust_config.applies_to(&package.name))
+    {
+        return Ok((Vec::new(), Vec::new()));
+    }
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {

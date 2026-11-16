@@ -339,15 +339,13 @@ impl RustStackConfig {
                     ));
                 }
             }
-            let mut scoped = BTreeSet::new();
-            for package in &config.packages {
-                if package.trim().is_empty() || !scoped.insert(package.as_str()) {
-                    return Err(ContractError::config(
-                        file,
-                        "stacks.rust.configurations.packages",
-                        format!("bad_package:{}:{package}", config.name),
-                    ));
-                }
+            let scoped: BTreeSet<&str> = config.packages.iter().map(String::as_str).collect();
+            if scoped.len() != config.packages.len() || scoped.iter().any(|p| p.trim().is_empty()) {
+                return Err(ContractError::config(
+                    file,
+                    "stacks.rust.configurations.packages",
+                    format!("bad_package_list:{}", config.name),
+                ));
             }
             let default_features = config.features.is_empty() || config.features == ["default"];
             if config.all_features && !default_features {
