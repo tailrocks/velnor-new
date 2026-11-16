@@ -135,13 +135,13 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         fs::write(checkout.join(".cargo/config.toml"), text)
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
-    let hide =
-        |ok: bool, op: std::io::Result<()>| ok.then(|| op.unwrap_or_else(|e| unreachable!("{e}")));
-    hide(
-        setup.ignored,
-        fs::write(checkout.join(".gitignore"), ".cargo/\n"),
-    );
-    hide(setup.plain, fs::remove_dir_all(checkout.join(".git")));
+    if setup.ignored {
+        fs::write(checkout.join(".gitignore"), ".cargo/\n")
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    if setup.plain {
+        fs::remove_dir_all(checkout.join(".git")).unwrap_or_else(|e| unreachable!("{e}"));
+    }
     record_default_root(&checkout);
     if let Some(populate) = &setup.populate {
         populate(&checkout);
