@@ -17,6 +17,11 @@ impl TagPattern {
     }
 
     #[must_use]
+    pub(crate) fn instantiate(&self, package: &str) -> TagPattern {
+        TagPattern(self.0.replace(PACKAGE_WILDCARD, package))
+    }
+
+    #[must_use]
     pub(crate) fn may_collide(&self, other: &TagPattern) -> bool {
         let (first, second) = (self.as_str(), other.as_str());
         let prefix = |text: &str| text.split(VERSION).next().unwrap_or_default().to_owned();
