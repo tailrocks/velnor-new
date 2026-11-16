@@ -13,6 +13,12 @@ const KEY: &str = "build.target-dir";
 type Found<'v> = (&'v RepoPath, Option<RepoPath>, toml::Value);
 
 pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPath, DetectError> {
+    if let Some((file, ..)) = nearest(view, manifest, "build-dir")? {
+        return Err(DetectError::invalid(
+            file,
+            Reason::BuildDirKey("build.build-dir"),
+        ));
+    }
     let Some((file, base, value)) = nearest(view, manifest, "target-dir")? else {
         return Ok(manifest.sibling(&DEFAULT));
     };
@@ -26,7 +32,7 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
         )
     })?;
     let outside = || DetectError::invalid(file, Reason::TargetDirOutside(text.clone()));
-    if text.starts_with('/') {
+    if text.starts_with(['/', '~']) || text.contains(['{', '}']) {
         return Err(outside());
     }
     let segments = resolve(base.as_ref(), &text).ok_or_else(outside)?;

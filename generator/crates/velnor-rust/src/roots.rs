@@ -134,6 +134,13 @@ pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
     })
 }
 
+fn shadowed(view: &RepoView, file: &RepoPath) -> bool {
+    file.as_str()
+        .strip_suffix(".toml")
+        .and_then(|name| RepoPath::new(name).ok())
+        .is_some_and(|name| view.files.contains_key(&name))
+}
+
 pub(crate) fn patch_files<'v>(
     view: &'v RepoView,
     manifest: &RepoPath,
@@ -145,7 +152,7 @@ pub(crate) fn patch_files<'v>(
             if file == manifest {
                 return Some((file, bytes.as_slice(), folder.clone()));
             }
-            if !is_cargo_config(file) {
+            if !is_cargo_config(file) || shadowed(view, file) {
                 return None;
             }
             let base = file.parent().and_then(|cargo| cargo.parent());
