@@ -247,3 +247,28 @@ async fn a_cancelled_start_stops_the_authority_process_it_spawned() {
     }
     assert!(gone, "process {pid} outlived the cancelled start");
 }
+
+#[tokio::test]
+async fn down_keeps_every_record_when_ps_cannot_tell_whether_the_pid_is_the_authority() {
+    let dir = temp_dir("supervisor-ps-fails");
+    std::fs::create_dir_all(dir.join("authority")).unwrap_or_else(|e| unreachable!("{e}"));
+    for (name, content) in [
+        ("pid", "4294967295"),
+        ("binary", "/opt/velnor/bin/velnor-local"),
+        ("address", "127.0.0.1:9"),
+    ] {
+        std::fs::write(dir.join("authority").join(name), content)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let env = Environment::at(&dir, Silent)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let down = env.down().await;
+    assert!(down.is_err(), "{down:?}");
+    for name in ["pid", "binary", "address"] {
+        assert!(
+            dir.join("authority").join(name).exists(),
+            "{name} was deleted"
+        );
+    }
+}

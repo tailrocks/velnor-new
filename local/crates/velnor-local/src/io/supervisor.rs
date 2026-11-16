@@ -139,14 +139,31 @@ async fn launch(dir: &Path, binary: &Path, pairs: Option<&Pairs>) -> io::Result<
     }
 }
 
-async fn ours(pid: &str, dir: &Path, binary: &str) -> bool {
+async fn command_of(pid: &str) -> io::Result<Option<String>> {
+    let output = Command::new("ps")
+        .args(["-p", pid, "-o", "command="])
+        .stdin(Stdio::null())
+        .output()
+        .await?;
+    if output.status.success() {
+        let line = String::from_utf8_lossy(&output.stdout);
+        return Ok(Some(line.trim().to_owned()));
+    }
+    if output.status.code() == Some(1) && output.stderr.is_empty() {
+        return Ok(None);
+    }
+    let error = String::from_utf8_lossy(&output.stderr);
+    Err(io::Error::other(format!(
+        "ps -p {pid} -o command=: {}",
+        error.trim()
+    )))
+}
+
+async fn ours(pid: &str, dir: &Path, binary: &str) -> io::Result<bool> {
     let expected = format!("{binary} supervise --dir {}", dir.display());
-    let command = program("ps", &["-p", pid, "-o", "command="], None).await;
-    command.is_ok_and(|bytes| {
-        let line = String::from_utf8_lossy(&bytes);
-        let line = line.trim();
+    Ok(command_of(pid).await?.is_some_and(|line| {
         line == expected || line.starts_with(&format!("{expected} --velnor-host "))
-    })
+    }))
 }
 
 async fn stop_host(dir: &Path) -> io::Result<Option<String>> {
@@ -160,8 +177,10 @@ async fn stop_host(dir: &Path) -> io::Result<Option<String>> {
         return Ok(None);
     };
     let expected = format!(" --state {} local", runner.display());
-    let listed = program("ps", &["-p", &pid, "-o", "command="], None).await;
-    if listed.is_ok_and(|bytes| String::from_utf8_lossy(&bytes).trim().ends_with(&expected)) {
+    if command_of(&pid)
+        .await?
+        .is_some_and(|line| line.ends_with(&expected))
+    {
         program("kill", &["-KILL", &pid], None).await?;
     }
     forget(&runner.join(PID)).await?;
@@ -187,16 +206,16 @@ fn alive(pid: &str) -> bool {
 
 async fn terminate(dir: &Path, pid: &str, binary: &str) -> io::Result<()> {
     for signal in ["-TERM", "-KILL"] {
-        if !ours(pid, dir, binary).await {
+        if !ours(pid, dir, binary).await? {
             break;
         }
         program("kill", &[signal, pid], None).await?;
         let deadline = tokio::time::Instant::now() + STOP_TIMEOUT;
-        while ours(pid, dir, binary).await && tokio::time::Instant::now() < deadline {
+        while ours(pid, dir, binary).await? && tokio::time::Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(100)).await;
         }
     }
-    if ours(pid, dir, binary).await {
+    if ours(pid, dir, binary).await? {
         return Err(io::Error::other(format!(
             "the authority, process {pid}, did not stop"
         )));
