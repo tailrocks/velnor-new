@@ -5,6 +5,7 @@ use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
+pub(crate) const CACHE_DEBUG_ON: &str = "vars.VELNOR_CACHE_DEBUG == '1'";
 const NOT_CANCELLED: &str = "!cancelled()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
@@ -50,6 +51,13 @@ pub(crate) fn condition(
         When::Success => {}
         When::NotCancelled => {
             parts.push(NOT_CANCELLED.to_owned());
+            if after_setup {
+                parts.push(SETUP_DONE.to_owned());
+            }
+        }
+        When::CacheDebug => {
+            parts.push(NOT_CANCELLED.to_owned());
+            parts.push(CACHE_DEBUG_ON.to_owned());
             if after_setup {
                 parts.push(SETUP_DONE.to_owned());
             }

@@ -60,6 +60,24 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             &Lane::policy(single, helper_root.is_some()),
         ));
     }
+    for job in &mut jobs {
+        if job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
+        {
+            let gate = job
+                .steps
+                .iter()
+                .find(|step| step.kind == StepKind::Helper(HelperCommand::Restored))
+                .and_then(|step| step.gate.clone());
+            job.steps.push(Step {
+                when: When::CacheDebug,
+                gate,
+                ..step(StepKind::UploadCargoLog)
+            });
+        }
+    }
     let draft_guard = facts
         .config
         .skip_draft_pull_requests
@@ -246,6 +264,10 @@ pub(crate) fn setup_roots(
         ]);
     }
     toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
+    toolchain.extend(roots.iter().map(|root| Step {
+        directory: root.manifest.parent(),
+        ..step(StepKind::Helper(HelperCommand::InputsRestore))
+    }));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step

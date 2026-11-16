@@ -5,9 +5,11 @@ use velnor_model::{
     CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind, TargetName,
 };
 
+use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
+const FINGERPRINT_LOG: &str = "cargo::core::compiler::fingerprint=info";
 const DOC_RUN: &str = "cargo doc $PACKAGE_ARGS --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
@@ -81,6 +83,15 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
     } else {
         RUN
     };
+    let env = env
+        .into_iter()
+        .chain([(
+            "CARGO_LOG".to_owned(),
+            Value::Expr(format!(
+                "${{{{ {CACHE_DEBUG_ON} && '{FINGERPRINT_LOG}' || '' }}}}"
+            )),
+        )])
+        .collect();
     RenderedStep {
         name,
         id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),

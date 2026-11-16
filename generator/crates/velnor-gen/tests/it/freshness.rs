@@ -1,0 +1,137 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use velnor_gen::notes;
+use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
+use velnor_rust::silent_build_scripts;
+
+use crate::facts::TestResult;
+use crate::pipeline::{view, workflow};
+
+const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::core::compiler::fingerprint=info'' || '''' }}'";
+
+fn steps(text: &str) -> Vec<&str> {
+    text.split("\n      - ").skip(1).collect()
+}
+
+fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
+    steps(text)
+        .into_iter()
+        .filter(|step| {
+            step.lines()
+                .any(|line| line.trim_start_matches("- ").trim() == format!("name: {name}"))
+        })
+        .collect()
+}
+
+fn names_of(lane: &str) -> Vec<&str> {
+    lane.lines()
+        .filter(|line| line.starts_with("      - ") || line.starts_with("        name: "))
+        .filter_map(|line| {
+            let line = line.trim().trim_start_matches("- ");
+            line.strip_prefix("name: ")
+        })
+        .collect()
+}
+
+#[test]
+fn every_lane_restores_the_file_times_of_its_root_right_after_the_caches() -> TestResult {
+    let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    for lane in ["rust-root", "rust-lab"] {
+        let header = format!("  {lane}:\n");
+        let from = text.find(&header).ok_or("lane missing")? + header.len();
+        let rest = &text[from..];
+        let end = rest
+            .find("\n  rust-")
+            .or_else(|| rest.find("\n  required:"));
+        let order = names_of(end.map_or(rest, |end| &rest[..end]));
+        let restored = order
+            .iter()
+            .position(|name| *name == "velnor-ci restored")
+            .ok_or("no restored step")?;
+        assert_eq!(order[restored - 1], "Restore the target cache", "{lane}");
+        assert_eq!(order[restored + 1], "velnor-ci inputs restore", "{lane}");
+        assert_eq!(order[restored + 2], "Format", "{lane}");
+    }
+    let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
+    let audited = named(audit, "velnor-ci inputs restore");
+    assert_eq!(audited.len(), 2, "{audit}");
+    assert!(
+        audited
+            .iter()
+            .any(|s| s.contains("working-directory: lab\n"))
+    );
+    assert!(audited.iter().any(|s| !s.contains("working-directory")));
+    Ok(())
+}
+
+#[test]
+fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
+    let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    let cargo: Vec<&str> = steps(&text)
+        .into_iter()
+        .filter(|step| step.contains("run: velnor-ci run -- cargo"))
+        .collect();
+    assert!(!cargo.is_empty());
+    for step in cargo {
+        assert!(step.contains(DEBUG_LOG), "{step}");
+    }
+    let upload = named(&text, "Upload the cargo fingerprint log");
+    assert_eq!(upload.len(), 1, "{text}");
+    assert!(upload[0].contains("vars.VELNOR_CACHE_DEBUG == ''1''"));
+    assert!(upload[0].contains("path: '${{ runner.temp }}/velnor-run.log'"));
+    assert!(upload[0].contains("name: 'velnor-cargo-log-${{ github.job }}'"));
+    Ok(())
+}
+
+fn with_build_script(
+    source: &str,
+    text: Option<&str>,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    let path = RepoPath::new(source)?;
+    for metadata in repo.rust_metadata.values_mut() {
+        for member in &mut metadata.members {
+            member.targets.push(Target {
+                name: TargetName::new("build-script-build")?,
+                kinds: vec![TargetKind::BuildScript],
+                tests: false,
+                doctest: false,
+                source: Some(path.clone()),
+                requires_features: false,
+            });
+        }
+    }
+    if let Some(text) = text {
+        repo.files.insert(path, text.as_bytes().to_vec());
+    }
+    Ok(repo)
+}
+
+#[test]
+fn a_build_script_without_a_rerun_directive_is_reported_with_the_line_to_add() -> TestResult {
+    let silent = with_build_script(
+        "build.rs",
+        Some("fn main() { println!(\"cargo:rustc-env=A=1\"); }"),
+    )?;
+    let found = silent_build_scripts(&silent);
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].source.as_str(), "build.rs");
+    let printed = notes(&silent)?;
+    assert_eq!(printed.len(), 1);
+    assert!(
+        printed[0].contains("build.rs of package package-0"),
+        "{printed:?}"
+    );
+    assert!(printed[0].contains("println!(\"cargo:rerun-if-changed=build.rs\");"));
+    for declared in [
+        "fn main() { println!(\"cargo:rerun-if-changed=build.rs\"); }",
+        "fn main() { println!(\"cargo::rerun-if-changed=build.rs\"); }",
+        "fn main() { println!(\"cargo:rerun-if-env-changed=PROTOC\"); }",
+    ] {
+        let fine = with_build_script("build.rs", Some(declared))?;
+        assert!(silent_build_scripts(&fine).is_empty(), "{declared}");
+        assert!(notes(&fine)?.is_empty());
+    }
+    Ok(())
+}

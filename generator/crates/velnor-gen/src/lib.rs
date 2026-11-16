@@ -18,7 +18,10 @@ use std::io::Write;
 
 use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
 use velnor_render::render;
-use velnor_rust::{METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan};
+use velnor_rust::{
+    METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
+    silent_build_scripts,
+};
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
@@ -45,6 +48,11 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
     Ok(blind
         .then(|| NO_FULL_RUN_NOTE.to_owned())
         .into_iter()
+        .chain(
+            silent_build_scripts(view)
+                .iter()
+                .map(|script| script.note()),
+        )
         .collect())
 }
 

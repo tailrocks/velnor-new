@@ -307,10 +307,8 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         "{audit}"
     );
     assert!(audit.contains("working-directory: lab"), "{audit}");
-    assert!(
-        audit.trim_end().ends_with("run: velnor-ci inputs audit"),
-        "{audit}"
-    );
+    assert!(audit.trim_end().ends_with("overwrite: true"), "{audit}");
+    assert!(audit.contains("run: velnor-ci inputs audit\n"), "{audit}");
     Ok(())
 }
 

@@ -79,7 +79,7 @@ fn without_the_helper_key_no_job_builds_or_downloads_the_helper() -> TestResult 
     let text = text_of(&sample(Some("exclude = [\"fixtures/**\"]\n"))?)?;
     assert!(!job_ids(&text).contains(&"rust-helper"));
     assert!(!text.contains("Download velnor-ci"));
-    assert!(!text.contains("upload-artifact"));
+    assert!(!text.contains("Upload velnor-ci"));
     assert!(!text.contains("cargo build -p"));
     assert!(text.matches("Install velnor-ci").count() > 2);
     Ok(())

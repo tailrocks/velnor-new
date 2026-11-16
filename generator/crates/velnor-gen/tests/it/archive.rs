@@ -66,7 +66,7 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             block(&format!("rust-test-default-{slug}")),
         );
         let artifact = format!("          name: nextest-archive-{slug}\n");
-        assert_eq!(build.matches("uses: actions/upload-artifact@").count(), 1);
+        assert_eq!(build.matches("name: Upload the tests\n").count(), 1);
         assert_eq!(run.matches("uses: actions/download-artifact@").count(), 1);
         assert!(build.contains(&artifact), "{build}");
         assert!(run.contains(&artifact), "{run}");
@@ -108,10 +108,7 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
     ] {
         let jobs = rendered(config)?;
         let text: String = jobs.iter().map(|(_, block)| block.as_str()).collect();
-        assert_eq!(
-            text.matches("uses: actions/upload-artifact@").count(),
-            archives
-        );
+        assert_eq!(text.matches("name: Upload the tests\n").count(), archives);
         assert_eq!(
             text.matches("uses: actions/download-artifact@").count(),
             archives

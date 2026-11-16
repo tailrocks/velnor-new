@@ -169,6 +169,7 @@ pub enum When {
     NotCancelled,
     Scheduled,
     ScheduledOrPush,
+    CacheDebug,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -201,6 +202,7 @@ pub enum StepKind {
     },
     FailWhenANeedFailed,
     FailOnDraftRun,
+    UploadCargoLog,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
