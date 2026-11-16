@@ -11,8 +11,6 @@ use velnor_model::{
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
 pub(crate) const MISE: &str = "[tools]\nrust = \"1.99.1\"\n";
-pub(crate) const MISE_LOCK: &str =
-    "[[tools.rust]]\nversion = \"1.99.1\"\nbackend = \"core:rust\"\n";
 
 pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error>> {
     let mise_lock = path("mise.lock")?;
@@ -40,14 +38,14 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
                 .map(|(name, _)| name.trim().trim_matches('"').to_owned()),
         );
     }
-    let lock: String = names
-        .iter()
-        .map(|name| {
-            format!(
-                "[[tools.\"{name}\"]]\nversion = \"1\"\n\n[tools.\"{name}\".\"platforms.linux-x64\"]\nurl = \"https://example.invalid/{name}\"\n\n[tools.\"{name}\".\"platforms.macos-arm64\"]\nurl = \"https://example.invalid/{name}\"\n\n"
-            )
-        })
-        .collect();
+    let mut lock = String::new();
+    for name in &names {
+        for platform in ["linux-x64", "macos-arm64"] {
+            lock.push_str(&format!(
+                "[[tools.\"{name}\"]]\nversion = \"1\"\n\n[tools.\"{name}\".\"platforms.{platform}\"]\nurl = \"https://example.invalid/{name}\"\n\n"
+            ));
+        }
+    }
     if lock.is_empty() {
         return Ok(());
     }
