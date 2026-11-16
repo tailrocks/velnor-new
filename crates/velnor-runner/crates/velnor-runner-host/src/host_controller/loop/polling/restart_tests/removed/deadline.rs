@@ -55,9 +55,21 @@ fn run(stall: bool, name: &str) -> TestResult<()> {
             .block_on(exercise(stall));
     }
     let dir = tempfile::tempdir()?;
-    let bun = Command::new("bun")
-        .args(["--print", "process.execPath"])
-        .output()?;
+    let mut command = match std::env::var("VELNOR_TOOL_BUN") {
+        Ok(version) => {
+            let mut command = Command::new("mise");
+            command
+                .args(["--no-config", "--no-env", "--no-hooks", "exec"])
+                .arg(format!("bun@{version}"))
+                .args(["--", "bun"])
+                .env("MISE_AUTO_INSTALL", "false")
+                .env("MISE_EXEC_AUTO_INSTALL", "false");
+            command
+        }
+        Err(std::env::VarError::NotPresent) => Command::new("bun"),
+        Err(error) => return Err(error.into()),
+    };
+    let bun = command.args(["--print", "process.execPath"]).output()?;
     assert!(
         bun.status.success(),
         "{}",
