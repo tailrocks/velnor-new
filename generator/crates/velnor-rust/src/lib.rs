@@ -58,7 +58,9 @@ pub use error::{DetectError, Reason};
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
-pub use metadata_file::{METADATA_PATH, MetadataFileError, metadata_file, recorded_metadata};
+pub use metadata_file::{
+    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
+};
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
 pub use plan::{check_required_check, plan};
