@@ -69,6 +69,11 @@ impl SummaryTap {
     }
 
     #[must_use]
+    pub const fn counts(&self) -> Option<TestCounts> {
+        self.counts
+    }
+
+    #[must_use]
     pub fn finish(mut self) -> Option<TestCounts> {
         self.end_line();
         self.counts
