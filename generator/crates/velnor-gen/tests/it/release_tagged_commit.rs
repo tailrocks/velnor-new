@@ -30,9 +30,9 @@ fn binaries(helper: &str) -> Result<Node, Box<dyn Error>> {
     render_with(helper, &[APP, TOOLS], TWO_BINARIES)
 }
 
-fn the_check<'a>(build: &'a Node) -> Result<&'a Node, Box<dyn Error>> {
+fn the_check(build: &Node) -> Result<&Node, Box<dyn Error>> {
     steps(build)
-        .into_iter()
+        .iter()
         .find(|step| step.get("run").and_then(Node::text) == Some(CHECK))
         .ok_or_else(|| "no commit check".into())
 }
@@ -43,7 +43,7 @@ fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_in_the_verified
     let tree = binaries("0.1.81")?;
     let tag = job(&tree, "tag")?;
     let record = steps(tag)
-        .into_iter()
+        .iter()
         .find(|step| step.get("id").and_then(Node::text) == Some("record"))
         .ok_or("no record step")?;
     assert_eq!(
