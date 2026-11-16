@@ -297,8 +297,14 @@ fn run_waits_for_all_open_pipes_within_one_shared_grace_period() {
     );
     let elapsed = started.elapsed();
     assert_eq!(output.status.code(), Some(5), "{output:?}");
-    assert!(elapsed >= std::time::Duration::from_millis(900), "{elapsed:?}");
-    assert!(elapsed < std::time::Duration::from_millis(1900), "{elapsed:?}");
+    assert!(
+        elapsed >= std::time::Duration::from_millis(900),
+        "{elapsed:?}"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_millis(1900),
+        "{elapsed:?}"
+    );
 }
 
 struct Flaky {
