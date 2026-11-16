@@ -7,7 +7,9 @@ use std::path::Path;
 use velnor_actions_contract::{ProposedTask, WorkflowEvent};
 use velnor_actions_rust::SelectionBroadening;
 
-use crate::decisions::{broadening_for_path, selection_broadens_for_path};
+use crate::decisions::{
+    FRESHNESS_INVENTORY_PATH, broadening_for_path, selection_broadens_for_path,
+};
 use crate::discover::Discovery;
 use crate::git_paths::NON_UTF8_PATH;
 use crate::select_affected::{Ownership, affected_packages, has_unowned_file};
@@ -175,7 +177,10 @@ fn affected_from_changed(
     };
     let rust_changed: BTreeSet<String> = changed
         .iter()
-        .filter(|path| !discovery.affected.non_inputs.contains(path))
+        .filter(|path| {
+            path.as_str() != FRESHNESS_INVENTORY_PATH
+                && !discovery.affected.non_inputs.contains(path)
+        })
         .cloned()
         .collect();
     let Some(mut affected) = rust_affected(
@@ -187,20 +192,20 @@ fn affected_from_changed(
     ) else {
         return all_packages;
     };
-    if !rust_changed.is_empty() || toolfiles {
-        affected.extend(
-            discovery
-                .mise_checks
-                .iter()
-                .filter(|check| {
-                    toolfiles
-                        || check.check.selection
-                            == velnor_actions_contract::config::CheckSelection::RustChanges
-                        || check.config_inputs.iter().any(|path| changed.contains(path))
-                })
-                .map(|check| check.check.id.clone()),
-        );
-    }
+    let rust_work = !rust_changed.is_empty() || toolfiles;
+    affected.extend(
+        discovery
+            .mise_checks
+            .iter()
+            .filter(|check| {
+                toolfiles
+                    || (rust_work
+                        && check.check.selection
+                            == velnor_actions_contract::config::CheckSelection::RustChanges)
+                    || check.config_inputs.iter().any(|path| changed.contains(path))
+            })
+            .map(|check| check.check.id.clone()),
+    );
     affected.extend(tofu_affected);
     affected
 }
