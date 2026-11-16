@@ -15,6 +15,7 @@ mod io;
 mod io_cold;
 mod io_cold_targets;
 mod io_foreign_targets;
+mod io_inputs_scope;
 mod io_plan;
 mod io_plan_forged;
 mod io_plan_helper_pin;
