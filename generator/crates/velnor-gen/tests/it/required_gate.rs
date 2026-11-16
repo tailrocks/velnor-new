@@ -297,18 +297,11 @@ fn the_policy_job_is_scheduled_when_deny_or_machete_runs() -> TestResult {
 #[test]
 fn the_spec_survives_its_own_command_line_and_refuses_malformed_arguments() -> TestResult {
     let spec = spec()?;
-    let words: Vec<String> = spec.arguments().split(' ').map(str::to_owned).collect();
-    let mut jobs = Vec::new();
-    let mut tests = Vec::new();
-    let mut plan = String::new();
-    for pair in words.chunks(2) {
-        match pair[0].as_str() {
-            "--plan" => plan.clone_from(&pair[1]),
-            "--job" => jobs.push(pair[1].clone()),
-            _ => tests.push(pair[1].clone()),
-        }
-    }
-    assert_eq!(VerdictSpec::parse(&plan, &jobs, &tests)?, spec);
+    assert_eq!(VerdictSpec::from_text(&spec.text())?, spec);
+    assert!(VerdictSpec::from_text("--job a=always").is_err());
+    assert!(VerdictSpec::from_text("--plan a --plan b").is_err());
+    assert!(VerdictSpec::from_text("--plan").is_err());
+    assert!(VerdictSpec::from_text("--plan a --other b").is_err());
     for (jobs, tests) in [
         (vec!["a"], vec![]),
         (vec!["a=never"], vec![]),

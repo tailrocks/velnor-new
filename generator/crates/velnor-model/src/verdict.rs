@@ -86,8 +86,29 @@ impl VerdictSpec {
         Ok(Self { plan, jobs: parsed })
     }
 
+    pub fn from_text(text: &str) -> Result<Self, String> {
+        let mut plan = None;
+        let mut jobs = Vec::new();
+        let mut tests = Vec::new();
+        let mut words = text.split_whitespace();
+        while let Some(flag) = words.next() {
+            let value = words
+                .next()
+                .ok_or_else(|| format!("the gate spec ends after {flag}"))?;
+            match flag {
+                "--plan" if plan.is_none() => plan = Some(value.to_owned()),
+                "--plan" => return Err("the gate spec names --plan twice".to_owned()),
+                "--job" => jobs.push(value.to_owned()),
+                "--tests" => tests.push(value.to_owned()),
+                other => return Err(format!("the gate spec holds `{other}`")),
+            }
+        }
+        let plan = plan.ok_or("the gate spec has no --plan")?;
+        Self::parse(&plan, &jobs, &tests)
+    }
+
     #[must_use]
-    pub fn arguments(&self) -> String {
+    pub fn text(&self) -> String {
         let mut parts = vec![format!("--plan {}", self.plan)];
         for job in &self.jobs {
             let when = if job.when.is_empty() {

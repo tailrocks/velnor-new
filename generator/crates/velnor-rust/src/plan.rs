@@ -79,7 +79,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
-    let required = verdict_job(facts, &jobs, single, helper_root.is_some(), draft_guard);
+    let required = verdict_job(facts, &jobs, single, draft_guard);
     jobs.push(required);
     WorkflowPlan {
         name: "Rust CI".to_owned(),

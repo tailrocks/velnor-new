@@ -12,8 +12,8 @@ use velnor_model::{
     WorkflowPlan,
 };
 use velnor_render::{
-    HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow,
-    Rule, RuleViolation, check_rules, render, render_workflow,
+    HELPER_FROM_ARTIFACT_RUN, MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, Value, check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -148,6 +148,16 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
             Rule::NotExactlyOneOfRunAndUses,
         ),
         (run(&long), Rule::RunTooLong),
+        (
+            RenderedStep {
+                env: vec![(
+                    "SPEC".to_owned(),
+                    Value::Text("a".repeat(MAX_ENV_CHARACTERS + 1)),
+                )],
+                ..run("echo hi")
+            },
+            Rule::EnvTooLong(MAX_ENV_CHARACTERS + 1),
+        ),
         (run("echo ${{ github.ref_name }}"), Rule::ExpressionInRun),
         (shell, Rule::ShellKey),
         (

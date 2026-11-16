@@ -33,7 +33,7 @@ pub enum Command {
     )]
     ReleaseGate(ReleaseGateArgs),
     #[command(
-        about = "The required check: read the needs context from NEEDS_JSON and the plan outputs of the --plan job, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and the test jobs of every selected package with tests ran at least one test. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
+        about = "The required check: read the needs context from NEEDS_JSON, and the spec in the variable --spec-env names, and the plan outputs of the plan job the spec names, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and the test jobs of every selected package with tests ran at least one test. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
     )]
     Gate(GateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
@@ -143,20 +143,12 @@ fn base_file(text: &str) -> Result<BaseFile, String> {
 
 #[derive(Debug, Args)]
 pub struct GateArgs {
-    #[arg(long, help = "The job whose outputs hold the plan")]
-    pub plan: String,
-    #[arg(
-        long = "job",
-        value_name = "ID=WHEN",
-        help = "A job of needs and when the plan schedules it: always, or conditions joined by +: lane:<root>, policy, schedule, schedule-or-push. Repeat for every job"
-    )]
-    pub jobs: Vec<String>,
     #[arg(
         long,
-        value_name = "ID=ROOT",
-        help = "A job whose tests_run output counts the tests of the root. Repeat for each such job"
+        value_name = "VARIABLE",
+        help = "The environment variable that holds the gate spec the generator wrote: --plan <job>, then --job <ID=WHEN> for every job of needs (WHEN is always, or conditions joined by +: lane:<root>, policy, schedule, schedule-or-push) and --tests <ID=ROOT> for each job whose tests_run output counts the tests of the root"
     )]
-    pub tests: Vec<String>,
+    pub spec_env: String,
 }
 
 #[derive(Debug, Args)]

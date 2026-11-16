@@ -6,17 +6,8 @@ use std::process::{Command, Output};
 
 use crate::support::fresh_dir;
 
-const ARGS: [&str; 9] = [
-    "gate",
-    "--plan",
-    "rust-plan",
-    "--job",
-    "rust-plan=always",
-    "--job",
-    "rust-test=lane:root",
-    "--tests",
-    "rust-test=root",
-];
+const SPEC: &str =
+    "--plan rust-plan --job rust-plan=always --job rust-test=lane:root --tests rust-test=root";
 
 fn needs(plan_result: &str, test_result: &str, tests_run: &str, listed: &str) -> String {
     format!(
@@ -29,7 +20,8 @@ fn gate(label: &str, needs: Option<&str>) -> (Output, String) {
     let summary = dir.join("summary");
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
-        .args(ARGS)
+        .args(["gate", "--spec-env", "GATE_SPEC"])
+        .env("GATE_SPEC", SPEC)
         .env_remove("NEEDS_JSON")
         .env("GITHUB_EVENT_NAME", "pull_request")
         .env("GITHUB_STEP_SUMMARY", &summary);
@@ -119,17 +111,21 @@ fn a_missing_needs_variable_fails() {
 }
 
 #[test]
-fn malformed_gate_arguments_fail_before_anything_passes() {
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args([
-            "gate",
-            "--plan",
-            "rust-plan",
-            "--job",
-            "rust-plan=sometimes",
-        ])
-        .env("NEEDS_JSON", needs("success", "success", "7", "7"))
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(output.status.code(), Some(1), "{output:?}");
+fn a_missing_or_malformed_spec_fails_before_anything_passes() {
+    for spec in [
+        None,
+        Some(""),
+        Some("--plan rust-plan --job rust-plan=sometimes"),
+    ] {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        command
+            .args(["gate", "--spec-env", "GATE_SPEC"])
+            .env_remove("GATE_SPEC")
+            .env("NEEDS_JSON", needs("success", "success", "7", "7"));
+        if let Some(spec) = spec {
+            command.env("GATE_SPEC", spec);
+        }
+        let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(output.status.code(), Some(1), "{spec:?}: {output:?}");
+    }
 }

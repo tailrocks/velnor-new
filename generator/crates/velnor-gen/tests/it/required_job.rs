@@ -3,6 +3,7 @@
 
 use velnor_gen::expected_files;
 use velnor_model::RepoPath;
+use velnor_render::MAX_RUN_CHARACTERS;
 
 use crate::facts::TestResult;
 use crate::golden::{load, samples};
@@ -25,9 +26,9 @@ fn required(text: &str) -> Result<&str, &'static str> {
 fn gate_line(text: &str) -> Result<&str, &'static str> {
     required(text)?
         .lines()
-        .find_map(|line| line.trim().strip_prefix("run: '"))
+        .find_map(|line| line.trim().strip_prefix("GATE_SPEC: '"))
         .map(|line| line.trim_end_matches('\''))
-        .ok_or("no gate line")
+        .ok_or("no gate spec")
 }
 
 fn words(line: &str, flag: &str) -> Vec<String> {
@@ -47,10 +48,13 @@ fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> 
     assert!(!job.contains("Fail when a Rust job failed or was cancelled"));
     assert_eq!(job.matches("      - name: ").count(), 2);
     assert!(job.contains("      - name: Install velnor-ci 0.1.81\n"));
-    assert!(job.contains("        env:\n          NEEDS_JSON: '${{ toJSON(needs) }}'\n"));
+    assert!(job.contains(
+        "        env:\n          NEEDS_JSON: '${{ toJSON(needs) }}'\n          GATE_SPEC: '"
+    ));
+    assert!(job.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
     assert_eq!(
         gate_line(&text)?,
-        "velnor-ci gate --plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
+        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
     );
     Ok(())
 }
@@ -81,10 +85,7 @@ fn the_plan_job_exports_the_tests_flag_of_every_lane_that_counts_tests() -> Test
 fn one_job_exports_its_own_plan_flag_and_the_gate_reads_it_from_that_job() -> TestResult {
     let text = released("0.1.81", &["Cargo.toml"])?;
     let line = gate_line(&text)?;
-    assert_eq!(
-        line,
-        "velnor-ci gate --plan rust --job rust=always --tests rust=root"
-    );
+    assert_eq!(line, "--plan rust --job rust=always --tests rust=root");
     assert!(text.contains("      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'\n"));
     assert!(text.contains("      tests_run: '${{ steps.test.outputs.tests_run }}'\n"));
     assert!(text.contains("      tests_listed: '${{ steps.test.outputs.tests_listed }}'\n"));
@@ -127,13 +128,14 @@ fn built_from_source(version: &str) -> Result<String, Box<dyn std::error::Error>
 }
 
 #[test]
-fn a_helper_built_from_source_is_downloaded_by_the_gate_once_the_released_plan_helper_has_it()
--> TestResult {
+fn a_helper_built_from_source_never_runs_the_gate_from_the_pull_request_build() -> TestResult {
     let text = built_from_source("0.1.81")?;
     let job = required(&text)?;
-    assert!(job.contains("      - name: Download velnor-ci\n"));
+    assert!(job.contains("      - name: Install velnor-ci 0.1.81\n"));
     assert!(job.contains("      - name: velnor-ci gate\n"));
-    assert!(!job.contains("Install velnor-ci"));
+    assert!(!job.contains("Download velnor-ci"));
+    assert!(!job.contains("download-artifact"));
+    assert!(!job.contains("Make velnor-ci executable"));
     assert!(text.contains(
         "      rust_generator_tests: '${{ steps.plan.outputs.rust_generator_tests }}'\n"
     ));
@@ -148,5 +150,25 @@ fn a_helper_built_from_source_keeps_the_old_verdict_while_the_plan_helper_lacks_
     assert!(job.contains("Fail when a Rust job failed or was cancelled"));
     assert!(!job.contains("velnor-ci gate"));
     assert!(!text.contains("_tests"));
+    Ok(())
+}
+
+#[test]
+fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests: Vec<String> = (0..60)
+        .map(|index| {
+            if index == 0 {
+                "Cargo.toml".to_owned()
+            } else {
+                format!("crate-with-a-long-directory-name-{index}/Cargo.toml")
+            }
+        })
+        .collect();
+    let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let text = released("0.1.81", &roots)?;
+    let spec = gate_line(&text)?;
+    assert!(spec.len() > MAX_RUN_CHARACTERS);
+    assert_eq!(spec.matches("--tests ").count(), 60);
+    assert!(required(&text)?.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
     Ok(())
 }

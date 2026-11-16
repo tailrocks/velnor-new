@@ -79,19 +79,14 @@ pub(crate) fn verdict_job(
     facts: &RepoFacts,
     jobs: &[Job],
     single: bool,
-    from_source: bool,
     draft_guard: Option<Step>,
 ) -> Job {
     let gate = has_gate(facts);
     let steps: Vec<Step> = if gate {
-        let install = if from_source {
-            Some(step(StepKind::HelperFromArtifact))
-        } else {
-            facts
-                .helper
-                .as_ref()
-                .map(|release| step(StepKind::InstallHelper(release.clone())))
-        };
+        let install = facts
+            .helper
+            .as_ref()
+            .map(|release| step(StepKind::InstallHelper(release.clone())));
         let plan = if single { RUST_JOB } else { PLAN_JOB };
         install
             .into_iter()

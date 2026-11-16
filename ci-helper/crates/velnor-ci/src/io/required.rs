@@ -25,7 +25,11 @@ fn judge(spec: &VerdictSpec) -> Verdict {
 }
 
 pub(super) fn run_gate(args: &GateArgs) -> Result<String, CiError> {
-    let spec = VerdictSpec::parse(&args.plan, &args.jobs, &args.tests).map_err(CiError::new)?;
+    let text = std::env::var(&args.spec_env)
+        .ok()
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| CiError::new(format!("{} is not set", args.spec_env)))?;
+    let spec = VerdictSpec::from_text(&text).map_err(CiError::new)?;
     let verdict = judge(&spec);
     let table = verdict.table();
     print!("{table}");
