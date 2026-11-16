@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RunCondition,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
+    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -70,8 +70,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.insert(0, plan_job(facts, used));
     }
     if let Some(root) = helper_root {
-        let consumers = helper_consumers(&jobs);
-        jobs.insert(1, helper_job(facts, root, consumers));
+        jobs.insert(1, helper_job(facts, root));
     }
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
@@ -107,18 +106,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
 }
 
-fn helper_consumers(jobs: &[Job]) -> Vec<RunCondition> {
-    jobs.iter()
-        .filter(|job| job.needs.contains(&HELPER_JOB))
-        .map(|job| RunCondition {
-            when: job.when,
-            skip_on_draft: job.skip_on_draft,
-            gate: job.gate.clone(),
-        })
-        .collect()
-}
-
-fn helper_job(facts: &RepoFacts, root: &RustRoot, consumers: Vec<RunCondition>) -> Job {
+fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
@@ -137,9 +125,6 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, consumers: Vec<RunCondition>) 
         })
     }));
     Job {
-        needs: vec![PLAN_JOB],
-        skip_on_draft: false,
-        any_of: consumers,
         steps,
         ..job(facts, HELPER_JOB)
     }
@@ -283,7 +268,6 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
-        any_of: Vec::new(),
         plan_outputs: Vec::new(),
         steps: Vec::new(),
     }

@@ -91,7 +91,6 @@ fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
             permissions: Permissions::default(),
             timeout_minutes: 10,
             gate: None,
-            any_of: Vec::new(),
             plan_outputs: Vec::new(),
             steps: kinds
                 .into_iter()

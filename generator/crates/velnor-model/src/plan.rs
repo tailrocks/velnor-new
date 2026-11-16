@@ -87,16 +87,8 @@ pub struct Job {
     pub permissions: Permissions,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
-    pub any_of: Vec<RunCondition>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub steps: Vec<Step>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RunCondition {
-    pub when: When,
-    pub skip_on_draft: bool,
-    pub gate: Option<Gate>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
