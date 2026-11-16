@@ -36,6 +36,7 @@ pub(super) fn release_suspect_credentials<C>(slot: &mut Option<C>, error: &HostE
         EnsureError::Forbidden,
         EnsureError::Rejected,
         EnsureError::Conflict,
+        EnsureError::Unauthorized,
     ]
     .iter()
     .any(|cause| HostError::poll(cause) == *error);

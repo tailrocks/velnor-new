@@ -205,6 +205,7 @@ async fn an_authorization_failure_drops_the_credentials_and_the_next_poll_restor
         EnsureError::Forbidden,
         EnsureError::Rejected,
         EnsureError::Conflict,
+        EnsureError::Unauthorized,
     ] {
         let mut gate = Gate::new(Some(1));
         let start = Instant::now();
@@ -216,6 +217,17 @@ async fn an_authorization_failure_drops_the_credentials_and_the_next_poll_restor
         assert!(gate.run(true, start, false).await);
         assert_eq!(gate.calls, 1);
     }
+}
+
+#[tokio::test]
+async fn a_transport_uncertainty_keeps_the_credentials_and_restores_nothing() {
+    let mut gate = Gate::new(Some(1));
+    let now = Instant::now();
+    let error = HostError::poll(&EnsureError::Uncertain);
+    assert!(held_poll(&mut gate, &error, now).await);
+    assert_eq!(gate.slot, Some(1));
+    assert!(gate.run(true, now, false).await);
+    assert_eq!(gate.calls, 0);
 }
 
 #[tokio::test]
