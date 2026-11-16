@@ -14,6 +14,8 @@ use poll_attempt::PollAttemptGuard;
 #[path = "turn/removed.rs"]
 mod removed;
 
+use super::credentials::{release_suspect_credentials, restore_active_credentials};
+
 use super::super::{
     polling::{
         ControllerPollOutcome, PositivePollContext, poll_positive_connection,
@@ -71,6 +73,10 @@ async fn poll_connection_inner(
     turn: &mut FairnessTurn,
 ) -> Result<Option<PollTurnResult>, HostError> {
     prepared.collect_authorization().await?;
+    let pending_retirement = removed::pending(prepared, context, pending_retirements);
+    if !restore_active_credentials(prepared, context, pending_retirement).await {
+        return Ok(None);
+    }
     if let Some(credentials) = prepared.credentials.as_ref() {
         context.control_state.invalidate_if_session_changed(
             &prepared.binding,
@@ -169,7 +175,6 @@ async fn prepare_poll(
             "host controller guest image metadata held connection={}",
             prepared.binding.connection_id
         );
-        prepared.credentials.take();
         return Ok(None);
     }
     let allocation = match prepared
@@ -183,7 +188,6 @@ async fn prepare_poll(
                 "host controller polling held connection={} reason={error}",
                 prepared.binding.connection_id
             );
-            prepared.credentials.take();
             return Ok(None);
         }
     };
@@ -199,7 +203,6 @@ async fn prepare_poll(
                     "host controller drain check held connection={} reason={error}",
                     prepared.binding.connection_id
                 );
-                prepared.credentials.take();
                 return Ok(None);
             }
         }
@@ -269,7 +272,7 @@ async fn execute_poll(
                 "host controller poll held connection={} reason={error}",
                 prepared.binding.connection_id
             );
-            prepared.credentials.take();
+            release_suspect_credentials(&mut prepared.credentials, &error);
             Ok(None)
         }
     }

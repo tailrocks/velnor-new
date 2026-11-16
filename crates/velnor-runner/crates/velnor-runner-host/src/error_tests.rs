@@ -42,3 +42,16 @@ fn a_detail_longer_than_the_limit_keeps_its_first_64_printable_bytes() {
     let expected: String = (b'a'..=b'z').cycle().take(64).map(char::from).collect();
     assert_eq!(shown(&raw), expected);
 }
+
+#[test]
+fn a_double_401_is_unauthorized_and_transport_uncertainty_stays_uncertain() {
+    use velnor_runner_github::{SessionError, WireError};
+    assert_eq!(
+        crate::listen::map_listen(SessionError::Wire(WireError::RefreshExhausted)),
+        EnsureError::Unauthorized
+    );
+    assert_eq!(
+        crate::listen::map_listen(SessionError::Uncertain),
+        EnsureError::Uncertain
+    );
+}
