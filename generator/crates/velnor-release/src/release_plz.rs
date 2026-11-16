@@ -122,12 +122,6 @@ fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
     }
 }
 
-pub fn root_publishes_to_crates_io(root: &str, text: &str) -> Result<bool, String> {
-    let document = parse_document(root, text).map_err(|error| error.to_string())?;
-    let released = released_packages(root, &document).map_err(|error| error.to_string())?;
-    Ok(publishes(&document.workspace, &released))
-}
-
 fn released_packages(
     root: &str,
     document: &Document,

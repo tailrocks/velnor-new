@@ -44,12 +44,14 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         .collect::<Result<Vec<_>, CiError>>()?;
     let top = std::env::current_dir()
         .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
-    for (path, (_, text)) in args.files.iter().zip(&files) {
-        let publishes = publishes_to_crates_io(&root_of(&top, path), text)?;
-        check_cargo_discovery(&discovery(&top, path)?, publishes)?;
+    let mut discovered = Vec::new();
+    for path in &args.files {
+        let entries = discovery(&top, path)?;
+        check_cargo_discovery(&entries, false)?;
+        discovered.push(entries);
     }
     let output = check_config(&files)?;
-    if args.manifests {
+    let known = if args.manifests {
         let roots: Vec<String> = args.files.iter().map(|path| root_of(&top, path)).collect();
         let known = super::manifests::read(&top, &roots)?;
         let relative: Vec<(String, String)> = args
@@ -59,6 +61,14 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
             .map(|(path, (_, text))| (relative_to(&top, path), text.clone()))
             .collect();
         check_manifests(&relative, &known.metadata, &known.manifests)?;
+        Some(known)
+    } else {
+        None
+    };
+    let metadata = known.as_ref().map(|known| &known.metadata);
+    for ((path, (_, text)), entries) in args.files.iter().zip(&files).zip(&discovered) {
+        let publishes = publishes_to_crates_io(&root_of(&top, path), text, metadata)?;
+        check_cargo_discovery(entries, publishes)?;
     }
     let patterns = args.tag_patterns();
     check_tag_patterns(&files, &patterns)?;

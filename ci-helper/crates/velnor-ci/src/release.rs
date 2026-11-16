@@ -147,8 +147,12 @@ pub fn check_cargo_discovery(
     Ok(())
 }
 
-pub fn publishes_to_crates_io(root: &str, text: &str) -> Result<bool, CiError> {
-    velnor_release::root_publishes_to_crates_io(root, text).map_err(CiError::new)
+pub fn publishes_to_crates_io(
+    root: &str,
+    text: &str,
+    metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
+) -> Result<bool, CiError> {
+    velnor_release::root_publishes_to_crates_io(root, text, metadata).map_err(CiError::new)
 }
 
 pub fn check_config(files: &[(String, String)]) -> Result<String, CiError> {

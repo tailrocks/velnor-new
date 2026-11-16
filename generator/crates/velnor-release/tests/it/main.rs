@@ -11,6 +11,7 @@ mod hardening;
 mod inheritance;
 mod inventory;
 mod mise_lock;
+mod publishing_shared;
 mod refs;
 mod refusals;
 mod registry;

@@ -237,3 +237,24 @@ fn roots_that_partition_a_shared_workspace_with_release_false_are_accepted() {
         "released from several roots",
     );
 }
+
+#[test]
+fn a_root_whose_members_all_opt_out_of_crates_io_may_set_a_proxy() {
+    let checkout = Checkout::new("proxy-opted-out");
+    checkout
+        .write("Cargo.toml", "[workspace]\nmembers = [\"app\"]\n")
+        .package("app", "app", "")
+        .write(
+            "release-plz.toml",
+            &format!("{PLZ}\n[[package]]\nname = \"app\"\ngit_only = true\n"),
+        )
+        .write(
+            ".cargo/config.toml",
+            "[http]\nproxy = \"http://proxy.example:8080\"\n",
+        );
+    accepted(&checkout, &["release-plz.toml"]);
+    checkout
+        .write("Cargo.toml", "[workspace]\nmembers = [\"app\", \"lib\"]\n")
+        .package("lib", "lib", "");
+    refused(&checkout, &["release-plz.toml"], "proxy");
+}

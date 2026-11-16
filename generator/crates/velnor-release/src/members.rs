@@ -9,7 +9,7 @@ use crate::collisions::check_effective_tags;
 use crate::error::ReleaseError;
 use crate::plan::{manifest_of, read_all};
 use crate::registry::check_publish_registries;
-use crate::release_plz::{RootConfig, valid_package_name};
+use crate::release_plz::{RootConfig, read, valid_package_name};
 use crate::tag::{TagPattern, render};
 
 type Metadata = BTreeMap<RepoPath, RustMetadata>;
@@ -211,4 +211,16 @@ pub fn check_release_manifests(
     let configs = read_all(files)?;
     check_inventory(&configs, Some(metadata)).map_err(|error| error.to_string())?;
     check_registries(&configs, metadata, manifests).map_err(|error| error.to_string())
+}
+
+pub fn root_publishes_to_crates_io(
+    root: &str,
+    text: &str,
+    metadata: Option<&Metadata>,
+) -> Result<bool, String> {
+    let mut configs = [read(root, text).map_err(|error| error.to_string())?];
+    if let Some(metadata) = metadata {
+        settle_publishing(&mut configs, metadata);
+    }
+    Ok(configs[0].publishes_to_crates_io)
 }
