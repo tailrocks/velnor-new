@@ -17,8 +17,8 @@ pub use ids::{
 pub use plan::{
     Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
     Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType,
-    Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, Triggers, When,
-    WorkflowPlan,
+    RunCondition, Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, Triggers,
+    When, WorkflowPlan,
 };
 pub use repo::{
     CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,

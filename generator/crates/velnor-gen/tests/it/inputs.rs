@@ -51,6 +51,7 @@ fn target(
 fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResult {
     let json = br#"{
       "workspace_root": "/repo",
+      "target_directory": "/repo/target",
       "workspace_members": ["path+file:///repo/app#0.0.0"],
       "packages": [{
         "name": "app",
@@ -96,6 +97,7 @@ fn cargo_metadata_reduces_to_members_dependency_edges_and_targets() -> TestResul
                 target("smoke", vec![TargetKind::Test], true, None)?,
             ],
         }],
+        target_directory: Some(path("target")?),
     };
     assert_eq!(
         reduce_metadata(Path::new("/repo"), json)?,
@@ -120,7 +122,9 @@ fn a_path_outside_the_repository_is_an_error() {
         ("/other", package("/repo/a/Cargo.toml", "/repo/b")),
     ];
     for (workspace_root, package) in cases {
-        let json = format!(r#"{{"workspace_root": "{workspace_root}", "packages": [{package}]}}"#);
+        let json = format!(
+            r#"{{"workspace_root": "{workspace_root}", "target_directory": "{workspace_root}/target", "packages": [{package}]}}"#
+        );
         let result = reduce_metadata(Path::new("/repo"), json.as_bytes());
         assert!(
             matches!(result, Err(MetadataError::OutsideRepository(_))),

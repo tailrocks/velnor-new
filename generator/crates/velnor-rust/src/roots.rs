@@ -116,6 +116,7 @@ fn root(
         members,
         depends_on: depends_on.into_iter().collect(),
         external_dependencies: external_dependencies.into_iter().collect(),
+        target_directory: metadata.target_directory.clone(),
     })
 }
 

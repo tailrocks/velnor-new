@@ -164,3 +164,96 @@ fn the_helper_key_takes_a_table_with_a_path_and_nothing_else() -> TestResult {
     }
     Ok(())
 }
+
+fn if_of<'a>(text: &'a str, job: &str) -> Result<&'a str, Box<dyn std::error::Error>> {
+    let start = text.find(&format!("  {job}:\n")).ok_or("job missing")?;
+    let body = &text[start..];
+    let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
+    let line = body[..end]
+        .lines()
+        .find_map(|line| line.strip_prefix("    if: '${{ "))
+        .ok_or("no condition")?;
+    Ok(line.trim_end_matches(" }}'"))
+}
+
+fn runs(condition: &str, event: &str, modes: &[&str]) -> bool {
+    condition
+        .replace(['(', ')'], "")
+        .replace("''", "'")
+        .split(" || ")
+        .any(|all| {
+            all.split(" && ").all(|term| {
+                if let Some(wanted) = term.strip_prefix("github.event_name == '") {
+                    wanted.trim_end_matches('\'') == event
+                } else {
+                    let name = term
+                        .strip_prefix("needs.rust-plan.outputs.")
+                        .and_then(|rest| rest.strip_suffix(" != 'none'"));
+                    name.is_some_and(|name| modes.contains(&name))
+                }
+            })
+        })
+}
+
+#[test]
+fn the_helper_job_runs_exactly_when_a_selected_job_needs_it() -> TestResult {
+    let text = text_of(&sample(None)?)?;
+    let helper = if_of(&text, "rust-helper")?;
+    assert!(!runs(helper, "pull_request", &[]));
+    assert!(!runs(helper, "push", &["rust_other_mode"]));
+    assert!(runs(helper, "schedule", &[]));
+    for lane in job_ids(&text)
+        .into_iter()
+        .filter(|job| job.starts_with("rust-") && !matches!(*job, "rust-plan" | "rust-helper"))
+    {
+        let condition = if_of(&text, lane)?;
+        let outputs: Vec<&str> = condition
+            .split(" && ")
+            .filter_map(|term| {
+                term.trim_start_matches('(')
+                    .strip_prefix("needs.rust-plan.outputs.")?
+                    .split(' ')
+                    .next()
+            })
+            .collect();
+        let event = if outputs.is_empty() {
+            "schedule"
+        } else {
+            "pull_request"
+        };
+        assert!(runs(condition, event, &outputs), "{lane}: {condition}");
+        assert!(runs(helper, event, &outputs), "{lane}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_plan_that_selects_nothing_builds_no_helper_and_leaves_no_lane_waiting_for_it() -> TestResult {
+    let text = text_of(&sample(None)?)?;
+    assert!(text.contains("  rust-helper:\n    needs:\n      - rust-plan\n    if: "));
+    let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
+    assert!(verdict.contains("if: '${{ !cancelled() }}'"));
+    Ok(())
+}
+
+#[test]
+fn the_uploaded_binary_is_under_the_target_directory_cargo_reports() -> TestResult {
+    let mut view = sample(None)?;
+    let manifest = path("ci-helper/Cargo.toml")?;
+    let metadata = view.rust_metadata.get_mut(&manifest).ok_or("no metadata")?;
+    metadata.target_directory = Some(path("out/helper-build")?);
+    let text = text_of(&view)?;
+    assert!(text.contains("path: out/helper-build/debug/velnor-ci"));
+    assert!(!text.contains("ci-helper/target/debug"));
+    let metadata = view.rust_metadata.get_mut(&manifest).ok_or("no metadata")?;
+    metadata.target_directory = None;
+    let error = expected_files(&view).err().ok_or("accepted")?;
+    assert_eq!(
+        error,
+        velnor_gen::GenerateError::Detect(DetectError::Invalid {
+            path: CONFIG_PATH,
+            reason: Reason::HelperTarget(path("ci-helper")?),
+        })
+    );
+    Ok(())
+}

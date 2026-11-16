@@ -62,6 +62,7 @@ pub enum Reason {
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
+    HelperTarget(RepoPath),
     CargoCredentialProvider(String),
 }
 
@@ -84,6 +85,10 @@ impl Reason {
             Self::HelperBox(path) => write!(
                 f,
                 "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
+            ),
+            Self::HelperTarget(path) => write!(
+                f,
+                "helper.path is {path}, whose Cargo target directory is outside the repository, so the built velnor-ci cannot be uploaded"
             ),
             _ => Ok(()),
         }
@@ -174,7 +179,7 @@ impl fmt::Display for Reason {
             Self::OtherMiseConfig => f.write_str(
                 "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
-            Self::UnpinnedTool(_) | Self::HelperBox(_) => self.fmt_setup(f),
+            Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperTarget(_) => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints

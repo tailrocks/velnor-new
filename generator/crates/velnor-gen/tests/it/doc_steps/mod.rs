@@ -36,6 +36,7 @@ fn root(members: Vec<RustMember>) -> RustRoot {
         members,
         depends_on: Vec::new(),
         external_dependencies: Vec::new(),
+        target_directory: None,
     }
 }
 

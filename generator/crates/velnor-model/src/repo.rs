@@ -20,6 +20,7 @@ pub struct RepoView {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RustMetadata {
     pub members: Vec<RustPackage>,
+    pub target_directory: Option<RepoPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -159,6 +160,7 @@ pub struct RustRoot {
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,
+    pub target_directory: Option<RepoPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

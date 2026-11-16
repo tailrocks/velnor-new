@@ -8,7 +8,7 @@ use velnor_model::{
 
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, condition, output, plan_source};
+use crate::gate::{PLAN_STEP, condition, job_condition, output, plan_source};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -44,7 +44,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: condition(job.when, job.gate.as_ref(), false, job.skip_on_draft),
+        condition: job_condition(job),
         runs_on: job.runs_on.as_str().to_owned(),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,

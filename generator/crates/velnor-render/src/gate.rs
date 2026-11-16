@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
+use std::collections::BTreeSet;
+
+use velnor_model::{Gate, GateNeed, Job, PlanFrom, RootSlug, When};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -45,6 +47,43 @@ pub(crate) fn condition(
     after_setup: bool,
     skip_draft: bool,
 ) -> Option<String> {
+    wrapped(condition_parts(when, gate, after_setup, skip_draft))
+}
+
+pub(crate) fn job_condition(job: &Job) -> Option<String> {
+    let mut parts = condition_parts(job.when, job.gate.as_ref(), false, job.skip_on_draft);
+    let alternatives: Option<Vec<String>> = job
+        .any_of
+        .iter()
+        .map(|run| {
+            let parts = condition_parts(run.when, run.gate.as_ref(), false, run.skip_on_draft);
+            (!parts.is_empty()).then(|| format!("({})", parts.join(" && ")))
+        })
+        .collect();
+    if let Some(mut alternatives) = alternatives {
+        let mut seen = BTreeSet::new();
+        alternatives.retain(|alternative| seen.insert(alternative.clone()));
+        if !alternatives.is_empty() {
+            parts.push(format!("({})", alternatives.join(" || ")));
+        }
+    }
+    wrapped(parts)
+}
+
+fn wrapped(parts: Vec<String>) -> Option<String> {
+    if parts.is_empty() {
+        None
+    } else {
+        Some(format!("${{{{ {} }}}}", parts.join(" && ")))
+    }
+}
+
+fn condition_parts(
+    when: When,
+    gate: Option<&Gate>,
+    after_setup: bool,
+    skip_draft: bool,
+) -> Vec<String> {
     let mut parts = Vec::new();
     match when {
         When::Success => {}
@@ -65,11 +104,7 @@ pub(crate) fn condition(
     if let Some(gate) = gate {
         parts.extend(gate_parts(gate));
     }
-    if parts.is_empty() {
-        None
-    } else {
-        Some(format!("${{{{ {} }}}}", parts.join(" && ")))
-    }
+    parts
 }
 
 fn gate_parts(gate: &Gate) -> Vec<String> {

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RepoPath, RootSlug,
+    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RunCondition,
     RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
@@ -22,7 +22,7 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const HELPER_BINARY: RepoPath = RepoPath::from_static("target/debug/velnor-ci");
+const HELPER_BINARY: &str = "debug/velnor-ci";
 const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
@@ -70,7 +70,8 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.insert(0, plan_job(facts, used));
     }
     if let Some(root) = helper_root {
-        jobs.insert(1, helper_job(facts, root));
+        let consumers = helper_consumers(&jobs);
+        jobs.insert(1, helper_job(facts, root, consumers));
     }
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
@@ -106,7 +107,18 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
 }
 
-fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
+fn helper_consumers(jobs: &[Job]) -> Vec<RunCondition> {
+    jobs.iter()
+        .filter(|job| job.needs.contains(&HELPER_JOB))
+        .map(|job| RunCondition {
+            when: job.when,
+            skip_on_draft: job.skip_on_draft,
+            gate: job.gate.clone(),
+        })
+        .collect()
+}
+
+fn helper_job(facts: &RepoFacts, root: &RustRoot, consumers: Vec<RunCondition>) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
@@ -119,10 +131,15 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
             package: PackageName::from_static(HELPER_PACKAGE),
         }))
     });
-    steps.push(step(StepKind::PublishHelper {
-        binary: root.manifest.sibling(&HELPER_BINARY),
+    steps.extend(root.target_directory.iter().map(|target| {
+        step(StepKind::PublishHelper {
+            binary: target.child(HELPER_BINARY),
+        })
     }));
     Job {
+        needs: vec![PLAN_JOB],
+        skip_on_draft: false,
+        any_of: consumers,
         steps,
         ..job(facts, HELPER_JOB)
     }
@@ -266,6 +283,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
+        any_of: Vec::new(),
         plan_outputs: Vec::new(),
         steps: Vec::new(),
     }

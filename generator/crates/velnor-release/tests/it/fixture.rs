@@ -87,6 +87,7 @@ pub(crate) fn metadata(workspaces: &[(&str, &[(&str, &str)])]) -> BTreeMap<RepoP
                 RepoPath::new(*workspace).unwrap_or_else(|e| unreachable!("{e}")),
                 RustMetadata {
                     members: members.iter().map(package).collect(),
+                    target_directory: None,
                 },
             )
         })

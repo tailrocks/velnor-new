@@ -182,6 +182,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             permissions: Permissions::default(),
             timeout_minutes: 10,
             gate: None,
+            any_of: Vec::new(),
             plan_outputs: Vec::new(),
             steps: vec![Step {
                 kind: StepKind::CacheSave(key.clone()),

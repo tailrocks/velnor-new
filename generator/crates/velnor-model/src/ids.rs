@@ -76,6 +76,11 @@ impl RepoPath {
     }
 
     #[must_use]
+    pub fn child(&self, tail: &str) -> Self {
+        Self(Cow::Owned(format!("{}/{tail}", self.0)))
+    }
+
+    #[must_use]
     pub fn sibling(&self, name: &Self) -> Self {
         match self.parent() {
             Some(parent) => Self(Cow::Owned(format!("{parent}/{name}"))),

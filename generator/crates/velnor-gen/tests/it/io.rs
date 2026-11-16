@@ -265,7 +265,7 @@ fn a_sample_name_cannot_leave_the_samples_folder() -> TestResult {
 #[test]
 fn recorded_metadata_no_longer_names_the_checkout_it_came_from() -> TestResult {
     let checkout = Path::new("/home/someone/work/project");
-    let json = br#"{"workspace_root":"/home/someone/work/project","packages":[{"name":"a","id":"path+file:///home/someone/work/project/crates/a#0.1.0","manifest_path":"/home/someone/work/project/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
+    let json = br#"{"workspace_root":"/home/someone/work/project","target_directory":"/home/someone/work/project/target","packages":[{"name":"a","id":"path+file:///home/someone/work/project/crates/a#0.1.0","manifest_path":"/home/someone/work/project/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
     let recorded = relocate_metadata(checkout, json)?;
     assert!(!String::from_utf8(recorded.clone())?.contains("someone"));
     let (workspace, metadata) =
@@ -280,7 +280,7 @@ fn recorded_metadata_no_longer_names_the_checkout_it_came_from() -> TestResult {
 
 #[test]
 fn recorded_metadata_names_no_checkout_whose_path_needs_url_escaping() -> TestResult {
-    let json = br#"{"workspace_root":"/home/some one/project name","packages":[{"name":"a","id":"path+file:///home/some%20one/project%20name/crates/a#0.1.0","manifest_path":"/home/some one/project name/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
+    let json = br#"{"workspace_root":"/home/some one/project name","target_directory":"/home/some one/project name/target","packages":[{"name":"a","id":"path+file:///home/some%20one/project%20name/crates/a#0.1.0","manifest_path":"/home/some one/project name/crates/a/Cargo.toml","dependencies":[],"targets":[]}]}"#;
     let recorded = relocate_metadata(Path::new("/home/some one/project name"), json)?;
     let text = String::from_utf8(recorded)?;
     assert!(!text.contains("some"), "{text}");

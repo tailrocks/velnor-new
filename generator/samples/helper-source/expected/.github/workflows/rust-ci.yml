@@ -64,6 +64,9 @@ jobs:
         name: velnor-ci plan
         run: velnor-ci plan --explain
   rust-helper:
+    needs:
+      - rust-plan
+    if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
