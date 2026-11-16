@@ -124,6 +124,55 @@ struct Scenario {
     volume_override: Option<CleanupVolume>,
 }
 
+fn live_process(pid: u32, namespace: ([u32; 2], u64)) -> TestResult<ProcessIdentity> {
+    let stat = fs::read_to_string(format!("/proc/{pid}/stat"))?;
+    let start_ticks = stat
+        .rsplit_once(')')
+        .and_then(|(_, fields)| fields.split_ascii_whitespace().nth(19))
+        .ok_or("process start ticks are missing")?
+        .parse()?;
+    Ok(ProcessIdentity {
+        start_ticks,
+        ..process(pid, namespace)
+    })
+}
+
+fn scan_runner_identity(runner: ProcessIdentity) -> TestResult<CleanupObserverRecord> {
+    let mut request = request(Scenario {
+        runner_namespace: (runner.namespace_device, runner.namespace_inode),
+        volume_override: None,
+    })?;
+    request.binding.runner = runner;
+    let runtime = fs::read_to_string("/proc/self/mountinfo")?
+        .lines()
+        .map(|line| line.split_ascii_whitespace().collect::<Vec<_>>())
+        .find(|fields| fields.get(4).copied() == Some("/dev"))
+        .and_then(|fields| fields.get(2).copied())
+        .and_then(|device| device.split_once(':'))
+        .map(|(major, minor)| Ok::<_, Box<dyn Error>>([major.parse()?, minor.parse()?]))
+        .transpose()?
+        .ok_or("observer runtime mount is missing")?;
+    request.binding.owned_tmpfs_devices[0] = runtime;
+    request.binding_sha256 = Sha256::digest(serde_json::to_vec(&request.binding)?)
+        .iter()
+        .fold(String::new(), |mut hex, byte| {
+            let _written = write!(hex, "{byte:02x}");
+            hex
+        });
+    Ok(observe_cleanup(request)?)
+}
+
+fn assert_observer_namespace_unowned(record: &CleanupObserverRecord) {
+    assert_eq!(record.owned_reference_count, 0, "{record:?}");
+    assert!(
+        !record
+            .issues
+            .iter()
+            .any(|issue| issue == "observer_in_pair_namespace"),
+        "{record:?}"
+    );
+}
+
 fn request(scenario: Scenario) -> TestResult<CleanupObserverRequest> {
     let boot_id = fs::read_to_string("/proc/sys/kernel/random/boot_id")?
         .trim_end()
@@ -229,10 +278,7 @@ fn a_pair_volume_mounted_in_another_namespace_is_an_owned_reference() -> TestRes
 #[test]
 fn an_observer_inside_a_pair_namespace_is_refused_and_counts_its_own_tasks() -> TestResult<()> {
     let own = identity("/proc/self/ns/mnt")?;
-    let record = scan(Scenario {
-        runner_namespace: own,
-        volume_override: None,
-    })?;
+    let record = scan_runner_identity(live_process(std::process::id(), own)?)?;
     assert!(
         record.owned_reference_count >= 1
             && !record.owned_references_absent
@@ -242,5 +288,37 @@ fn an_observer_inside_a_pair_namespace_is_refused_and_counts_its_own_tasks() -> 
                 .any(|issue| issue == "observer_in_pair_namespace"),
         "{record:?}"
     );
+    Ok(())
+}
+
+#[test]
+fn a_destroyed_pair_namespace_number_reused_by_the_observer_is_not_owned() -> TestResult<()> {
+    let own = identity("/proc/self/ns/mnt")?;
+    let mut child = Command::new("sleep").arg("300").spawn()?;
+    let runner = live_process(child.id(), own)?;
+    child.kill()?;
+    child.wait()?;
+    assert_observer_namespace_unowned(&scan_runner_identity(runner)?);
+    Ok(())
+}
+
+#[test]
+fn a_reused_pair_pid_does_not_make_the_observer_namespace_or_runtime_mounts_owned() -> TestResult<()>
+{
+    let own = identity("/proc/self/ns/mnt")?;
+    let mut runner = live_process(std::process::id(), own)?;
+    runner.start_ticks += 1;
+    assert_observer_namespace_unowned(&scan_runner_identity(runner)?);
+    Ok(())
+}
+
+#[test]
+fn a_live_pair_process_in_another_namespace_does_not_protect_the_observer_namespace()
+-> TestResult<()> {
+    let pair = PairNamespace::start("namespace-mismatch")?;
+    let own = identity("/proc/self/ns/mnt")?;
+    assert_ne!(pair.namespace, own);
+    let runner = live_process(pair.pid(), own)?;
+    assert_observer_namespace_unowned(&scan_runner_identity(runner)?);
     Ok(())
 }
