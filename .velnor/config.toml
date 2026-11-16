@@ -280,26 +280,6 @@ labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
 
 [[checks]]
-id = "native-image-inventory"
-task = "check-native-image-inventory"
-selection = "rust_changes"
-inputs = [
-  "Cargo.lock",
-  "Cargo.toml",
-  "crates/velnor-actions-contract/src/image_candidate/closure_inventory.txt",
-  "crates/velnor-actions-contract/src/image_candidate/closure_supplemental.txt",
-  "mise.toml",
-  "rust-toolchain.toml",
-  "scripts/native-image-candidate-inventory.py",
-]
-tools = ["rust"]
-timeout_minutes = 15
-[checks.runner]
-label = "ubuntu-26.04"
-platform = "linux_x64"
-executor = "hosted"
-
-[[checks]]
 id = "maintenance-helpers"
 task = "test-maintenance-helpers"
 inputs = [
@@ -434,6 +414,8 @@ inputs = [
   "crates/velnor-actions-cli/tests/velnor_cli/cargo_artifact.rs",
   "crates/velnor-actions-cli/tests/velnor_cli/native_required_order.rs",
   "crates/velnor-actions-contract/Cargo.toml",
+  "crates/velnor-actions-contract/src/image_candidate/closure_inventory.txt",
+  "crates/velnor-actions-contract/src/image_candidate/closure_supplemental.txt",
   "crates/velnor-actions-contract/src/archive.rs",
   "crates/velnor-actions-contract/src/cachekey.rs",
   "crates/velnor-actions-contract/src/cachekey_observed.rs",

@@ -106,6 +106,16 @@ VELNOR_INTERNAL_OP=repo-policy-v1 \
   VELNOR_REPO_POLICY_ROOT="$ROOT" \
   VELNOR_REPO_POLICY_BASE_REF=refs/remotes/origin/main \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions
+case "$(uname -s):$(uname -m)" in
+  Linux:x86_64)
+    printf "maintenance-phase: native-image-source-inventory\n"
+    mise --no-env --no-hooks run --force --task-cache off --skip-tools check-native-image-inventory
+    ;;
+  Darwin:*)
+    printf "maintenance-phase: native-image-source-inventory skipped on macOS; requires native Linux x86_64\n"
+    ;;
+  *) echo "Maintenance native image inventory requires Linux x86_64 or macOS" >&2; exit 1 ;;
+esac
 printf "maintenance-phase: native-image-inventory\n"
 python3 scripts/test-native-image-candidate-inventory.py
 printf "maintenance-phase: setup-velnor-install\n"
