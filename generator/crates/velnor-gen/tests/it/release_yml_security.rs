@@ -148,8 +148,26 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
             .position(|step| uses(step).is_some_and(|u| u.starts_with(APP_TOKEN)))
             .ok_or("no token step")?;
         for step in &all[..created] {
-            let tip = step.get("id").and_then(Node::text) == Some("newest");
-            assert!(tip || step.get("env").is_none(), "{id}");
+            let env_is = |expected: &[(&str, &str)]| {
+                step.get("env").is_some_and(|env| {
+                    let mut keys = env.keys();
+                    keys.sort_unstable();
+                    keys == expected.iter().map(|(key, _)| *key).collect::<Vec<_>>()
+                        && expected
+                            .iter()
+                            .all(|(key, value)| env.get(key).and_then(Node::text) == Some(*value))
+                })
+            };
+            let newest = step.get("id").and_then(Node::text) == Some("newest")
+                && env_is(&[
+                    ("BRANCH", "${{ github.event.repository.default_branch }}"),
+                    ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
+                    ("GH_TOKEN", "${{ github.token }}"),
+                    ("REPOSITORY", "${{ github.repository }}"),
+                ]);
+            let branch_only =
+                env_is(&[("BRANCH", "${{ github.event.repository.default_branch }}")]);
+            assert!(newest || branch_only || step.get("env").is_none(), "{id}");
         }
         for step in &all[created + 1..] {
             let token = step.at(&["env", "GITHUB_TOKEN"]).and_then(Node::text);
