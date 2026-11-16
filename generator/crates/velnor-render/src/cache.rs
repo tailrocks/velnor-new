@@ -84,7 +84,27 @@ fn joined(layout: &Layout<'_>) -> RenderedKey {
 }
 
 fn hash_files(path: &RepoPath) -> String {
-    format!("${{{{ hashFiles({}) }}}}", string_expression(path.as_str()))
+    format!(
+        "${{{{ hashFiles({}) }}}}",
+        string_expression(&glob_literal(path.as_str()))
+    )
+}
+
+fn glob_literal(text: &str) -> String {
+    let escaped: String = text
+        .chars()
+        .flat_map(|c| match c {
+            '*' => vec!['[', '*', ']'],
+            '?' => vec!['[', '?', ']'],
+            '[' => vec!['[', '[', ']'],
+            other => vec![other],
+        })
+        .collect();
+    if escaped.starts_with(['!', '#']) {
+        format!("./{escaped}")
+    } else {
+        escaped
+    }
 }
 
 fn quoted(text: &str) -> String {
