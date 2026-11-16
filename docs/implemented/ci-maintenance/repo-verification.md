@@ -100,6 +100,12 @@ the whole suite.
 | `VELNOR_QUALIFICATION_CLOCK_DRIVER` | Absolute path to the `golden_collector_clock` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
 | `VELNOR_GROUP_PROBE_RECEIPT` | Receipt written by `scripts/provision-group-signal-interposer.sh` (macOS) | `scripts/verify-local.sh` on macOS | `velnor-actions-mise` `permission_retry_darwin` |
 
+`velnor-actions-cli` `check_runtime_identity_public` also needs the `mise` on
+`PATH` to be the exact pinned release (`MISE_VERSION` in
+`crates/velnor-actions-mise/src/catalog.rs`). A different mise build fails with
+`mise_binary_unreadable`, because the orchestrator reads at most the pinned byte
+count; the progress test states this precondition before it runs.
+
 The example paths must be canonical, so each recipe resolves the examples
 directory with `cd -P`. It uses `CARGO_TARGET_DIR` when it is set, and `target`
 otherwise.

@@ -10,12 +10,22 @@ fn failed_check_streams_sanitized_progress() -> Result<(), Box<dyn Error>> {
         .map(|entry| entry.join("mise"))
         .find(|path| path.is_file())
         .ok_or("qualified mise missing")?;
+    let (label, platform, target) = host_platform()?;
+    let pin = current_mise_binary(target);
+    let observed = fs::metadata(&runtime)?.len();
+    assert_eq!(
+        observed,
+        pin.bytes,
+        "precondition: the mise on PATH ({}) must be the pinned release {} of {} bytes, found {observed} bytes; install it with `mise install` from the repository root",
+        runtime.display(),
+        pin.version,
+        pin.bytes
+    );
     fs::copy(runtime, fixture.environment.path().join("bin/mise"))?;
     fs::write(
         fixture.root().join(".velnor/controller-approvals.json"),
         compiled_runtime_approvals()?,
     )?;
-    let (label, platform, _) = host_platform()?;
     fs::write(
         fixture.root().join(".velnor/config.toml"),
         config(label, platform),
