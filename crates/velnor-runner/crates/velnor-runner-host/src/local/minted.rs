@@ -132,11 +132,15 @@ impl MintedAgents {
                 Err(_) => Err(HostError::Path),
             };
         }
-        let text: String = journal
-            .open
-            .iter()
-            .map(|(side, name)| format!("{INTENT} {side} {name}\n"))
-            .collect();
+        let mut text = String::new();
+        for (side, name) in &journal.open {
+            text.push_str(INTENT);
+            text.push(' ');
+            text.push_str(side);
+            text.push(' ');
+            text.push_str(name);
+            text.push('\n');
+        }
         let fresh = self.path.with_extension("new");
         let mut file = private_options()
             .truncate(true)
