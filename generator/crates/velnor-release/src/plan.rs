@@ -165,6 +165,10 @@ fn config_reaches(file: &str, root: &str) -> bool {
     reaches(base, root)
 }
 
+fn manifest_under(directory: &str, root: &str) -> bool {
+    root == "." || directory == root || directory.starts_with(&format!("{root}/"))
+}
+
 fn reaches(base: &str, root: &str) -> bool {
     base == "." || root == base || root.starts_with(&format!("{base}/"))
 }
@@ -288,7 +292,12 @@ impl ReleasePlan {
             }
         }
         for (file, text) in &files.cargo_manifest_texts {
-            nightly_manifest(file, text)?;
+            let directory = file.strip_suffix("/Cargo.toml").unwrap_or(".");
+            if configs.iter().any(|config| {
+                reaches(directory, &config.root) || manifest_under(directory, &config.root)
+            }) {
+                nightly_manifest(file, text)?;
+            }
         }
         for (file, text) in files
             .toolchain_files

@@ -159,11 +159,35 @@ fn names_nightly(text: &str) -> bool {
     channel.is_some_and(|channel| channel.starts_with("nightly"))
 }
 
+const STABILIZED_CARGO_FEATURES: [&str; 9] = [
+    "edition2024",
+    "workspace-inheritance",
+    "named-profiles",
+    "strip",
+    "profile-overrides",
+    "rename-dependency",
+    "resolver",
+    "namespaced-features",
+    "weak-dep-features",
+];
+
+fn needs_nightly_features(document: &toml::Table) -> bool {
+    match document.get("cargo-features") {
+        None => false,
+        Some(Value::Array(features)) => features.iter().any(|feature| {
+            !feature
+                .as_str()
+                .is_some_and(|name| STABILIZED_CARGO_FEATURES.contains(&name))
+        }),
+        Some(_) => true,
+    }
+}
+
 pub(crate) fn nightly_manifest(file: &str, text: &str) -> Result<(), ReleaseError> {
-    let features = text
+    let nightly = text
         .parse::<toml::Table>()
-        .is_ok_and(|document| document.contains_key("cargo-features"));
-    if features {
+        .is_ok_and(|document| needs_nightly_features(&document));
+    if nightly {
         Err(ReleaseError::NightlyOnly {
             file: file.to_owned(),
             what: "cargo-features",
