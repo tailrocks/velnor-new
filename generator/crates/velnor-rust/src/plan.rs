@@ -104,7 +104,11 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         name: Some(facts.config.required_check.clone()),
         skip_on_draft: false,
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
-        when: When::NotCancelled,
+        when: if gate {
+            When::Always
+        } else {
+            When::NotCancelled
+        },
         steps: draft_guard.into_iter().chain(verdict_steps).collect(),
         ..job(facts, VERDICT_JOB)
     });

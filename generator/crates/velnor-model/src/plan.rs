@@ -193,6 +193,7 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    Always,
     Scheduled,
     ScheduledOrPush,
 }

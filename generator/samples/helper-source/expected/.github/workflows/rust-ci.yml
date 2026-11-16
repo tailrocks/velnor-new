@@ -845,7 +845,7 @@ jobs:
       - rust-generator
       - rust-local
       - rust-inputs-audit
-    if: '${{ !cancelled() }}'
+    if: '${{ always() }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
