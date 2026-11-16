@@ -24,6 +24,7 @@ mod io_restore;
 mod io_restore_links;
 mod io_stderr;
 mod logscan;
+mod max_lines;
 mod plan;
 mod plan_api;
 mod plan_git;
