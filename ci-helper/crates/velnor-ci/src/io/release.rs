@@ -11,7 +11,9 @@ use crate::cli::{CheckConfigArgs, PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
-use crate::release::{CargoPathEntry, PlainName, check_cargo_discovery, check_config, record};
+use crate::release::{
+    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_tag_patterns, record,
+};
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args
@@ -43,7 +45,9 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
     for path in &args.files {
         check_cargo_discovery(&discovery(&top, path)?)?;
     }
-    check_config(&files)
+    let output = check_config(&files)?;
+    check_tag_patterns(&files, &args.tag_patterns)?;
+    Ok(output)
 }
 
 const CONFIG_ENTRIES: [&str; 3] = [".cargo", ".cargo/config", ".cargo/config.toml"];

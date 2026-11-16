@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use crate::error::ReleaseError;
 use crate::git_ref;
 use crate::settings::{Document, Settings, executable_key};
@@ -199,4 +201,15 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         packages,
         workspace_tags,
     })
+}
+
+pub fn release_tag_patterns(root: &str, text: &str) -> Result<BTreeSet<String>, ReleaseError> {
+    let config = read(root, text)?;
+    Ok(config
+        .packages
+        .iter()
+        .map(|package| &package.tag_pattern)
+        .chain(&config.workspace_tags)
+        .map(|pattern| pattern.as_str().to_owned())
+        .collect())
 }

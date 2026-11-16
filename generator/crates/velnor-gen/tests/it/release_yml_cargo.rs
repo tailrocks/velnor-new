@@ -180,7 +180,7 @@ fn the_tag_job_is_serialized_across_commits_and_both_jobs_with_the_app_token_ref
             .position(|step| {
                 step.get("run").and_then(Node::text)
                     == Some(
-                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml",
+                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern 'release-plz.toml=app-v{{ version }}' --tag-pattern 'release-plz.toml={{ package }}-v{{ version }}' --tag-pattern 'tools/release-plz.toml=tools-v{{ version }}' --tag-pattern 'tools/release-plz.toml={{ package }}-v{{ version }}'",
                     )
             })
             .ok_or("no refuse step")?;

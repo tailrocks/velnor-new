@@ -144,11 +144,29 @@ pub(crate) fn refuse_commands(roots: &[RootPlan]) -> RenderedStep {
         .iter()
         .map(|root| shell_word(&join(&root.root, RELEASE_PLZ_FILE)))
         .collect();
+    let tags: Vec<String> = roots
+        .iter()
+        .flat_map(|root| {
+            let file = join(&root.root, RELEASE_PLZ_FILE);
+            root.packages
+                .iter()
+                .map(|(_, pattern)| pattern)
+                .chain(&root.workspace_tags)
+                .map(move |pattern| {
+                    format!(
+                        "--tag-pattern {}",
+                        shell_word(&format!("{file}={}", pattern.as_str()))
+                    )
+                })
+        })
+        .collect();
     RenderedStep {
-        name: "Refuse a release-plz config that runs commands".to_owned(),
+        name: "Refuse a release-plz config that runs commands or changes the tag patterns"
+            .to_owned(),
         run: Some(format!(
-            "velnor-ci release check-config {}",
-            files.join(" ")
+            "velnor-ci release check-config {} {}",
+            files.join(" "),
+            tags.join(" ")
         )),
         ..RenderedStep::default()
     }
