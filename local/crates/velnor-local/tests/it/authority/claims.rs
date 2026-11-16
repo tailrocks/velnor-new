@@ -150,6 +150,29 @@ async fn authority_removes_the_runner_a_failed_jit_registration_left_behind() {
         ..FakeRunners::default()
     };
     let authority = authority("authority-mint-cleanup", &runners).await;
+    let (status, _) = ask(
+        &authority,
+        "POST",
+        "/jit",
+        Some(TOKEN),
+        json!({"side": "trusted", "name": "velnor-x-jit-1"}),
+    )
+    .await;
+    let left = runners
+        .agents
+        .lock()
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .len();
+    assert_eq!((status, left), (502, 0));
+}
+
+#[tokio::test]
+async fn authority_refuses_a_mint_under_a_name_that_is_registered_and_keeps_that_agent() {
+    let runners = FakeRunners {
+        mint_fails: true,
+        ..FakeRunners::default()
+    };
+    let authority = authority("authority-mint-taken", &runners).await;
     runners
         .agents
         .lock()
@@ -168,7 +191,28 @@ async fn authority_removes_the_runner_a_failed_jit_registration_left_behind() {
         .lock()
         .unwrap_or_else(|e| unreachable!("{e}"))
         .len();
-    assert_eq!((status, left), (502, 0));
+    let minted = *runners
+        .minted
+        .lock()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!((status, left, minted), (409, 1, 0));
+}
+
+#[tokio::test]
+async fn authority_refuses_a_second_mint_under_a_name_that_is_being_minted() {
+    let runners = FakeRunners {
+        mint_stalls: true,
+        ..FakeRunners::default()
+    };
+    let authority = authority("authority-mint-inflight", &runners).await;
+    let body = json!({"side": "trusted", "name": "velnor-x-jit-1"});
+    let first = ask(&authority, "POST", "/jit", Some(TOKEN), body.clone());
+    let second = ask(&authority, "POST", "/jit", Some(TOKEN), body);
+    let status = tokio::select! {
+        (status, _) = first => status,
+        (status, _) = second => status,
+    };
+    assert_eq!(status, 409);
 }
 
 #[tokio::test]

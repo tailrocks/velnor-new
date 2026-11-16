@@ -97,6 +97,10 @@ impl Error {
         Self::new(404, "not_found", msg)
     }
 
+    pub fn conflict(msg: impl Display) -> Self {
+        Self::new(409, "already_exists", msg)
+    }
+
     pub fn precondition(msg: impl Display) -> Self {
         Self::new(412, "failed_precondition", msg)
     }

@@ -3,6 +3,7 @@
 
 mod runners;
 
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -66,6 +67,19 @@ pub struct Authority<B> {
     key: hmac::Key,
     expected: hmac::Tag,
     ledger: Mutex<Ledger>,
+    minting: std::sync::Mutex<BTreeSet<(&'static str, String)>>,
+}
+
+struct Reserved<'a> {
+    minting: &'a std::sync::Mutex<BTreeSet<(&'static str, String)>>,
+    key: (&'static str, String),
+}
+
+impl Drop for Reserved<'_> {
+    fn drop(&mut self) {
+        let mut minting = self.minting.lock().unwrap_or_else(|e| e.into_inner());
+        minting.remove(&self.key);
+    }
 }
 
 impl<B: Backend> Authority<B> {
@@ -87,6 +101,7 @@ impl<B: Backend> Authority<B> {
             key,
             expected,
             ledger: Mutex::new(Ledger { path, entries }),
+            minting: std::sync::Mutex::new(BTreeSet::new()),
         })
     }
 
@@ -177,6 +192,34 @@ impl<B: Backend> Authority<B> {
         let asked: JitRequest = parse(&read_small_body(request.into_body()).await?)?;
         if !agent_name(&asked.name) {
             return Err(Error::invalid("the agent name is not valid".to_owned()));
+        }
+        let key = (asked.side.name(), asked.name.clone());
+        let taken = || {
+            Error::conflict(format!(
+                "{} is already registered or being minted",
+                asked.name
+            ))
+        };
+        if !self
+            .minting
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert(key.clone())
+        {
+            return Err(taken());
+        }
+        let _reserved = Reserved {
+            minting: &self.minting,
+            key,
+        };
+        let listing = |error: io::Error| Error::upstream(format!("runner.server: {error}"));
+        let existing = self
+            .backend
+            .get(asked.side, AGENTS_PATH)
+            .await
+            .map_err(listing)?;
+        if existing.is_some_and(|bytes| agent_id(&bytes, &asked.name).is_some()) {
+            return Err(taken());
         }
         let minted = match self.backend.mint(asked.side, &asked.name).await {
             Ok(minted) => minted,
