@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::thread;
 
-use velnor_ci::github::{compare_path, release_by_tag_path, tag_ref_path};
+use velnor_ci::github::{compare_path, tag_ref_path};
 
 use crate::support::repo;
 
@@ -121,7 +121,6 @@ fn api(author: &str, kind: &str) -> String {
         "/repos/tailrocks/velnor-new/releases?per_page=100&page=1".to_owned(),
         draft(author, kind),
     );
-    let _ = release_by_tag_path(&repo, "app-v0.1.0");
     serve(responses)
 }
 
