@@ -314,6 +314,34 @@ fn a_non_crates_io_default_registry_is_refused_when_publishing_to_crates_io() {
 }
 
 #[test]
+fn net_offline_is_refused_only_for_a_root_that_publishes_to_crates_io() {
+    let git_only = edit(PLZ, "publish_no_verify = true", "git_only = true");
+    let mut publishing = files();
+    publishing.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[net]\noffline = true\n".to_owned(),
+    );
+    assert!(matches!(
+        refusal(&publishing),
+        Some(ReleaseError::CargoOffline { .. })
+    ));
+    publishing.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[net]\noffline = false\nretry = 3\n".to_owned(),
+    );
+    assert_eq!(refusal(&publishing), None);
+    let mut local = files();
+    local
+        .release_plz_toml
+        .insert(".".to_owned(), git_only.unwrap_or_default());
+    local.cargo_configs.insert(
+        ".cargo/config.toml".to_owned(),
+        "[net]\noffline = true\n".to_owned(),
+    );
+    assert_eq!(refusal(&local), None);
+}
+
+#[test]
 fn a_crates_io_default_registry_is_accepted() {
     let mut files = files();
     files.cargo_configs.insert(

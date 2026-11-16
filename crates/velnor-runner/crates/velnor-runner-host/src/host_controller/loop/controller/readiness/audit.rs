@@ -128,57 +128,60 @@ fn audit_remote_runner_with_transport<T: ReadinessTransport>(
     Ok(true)
 }
 
-async fn inspect_owned_container(
+pub(super) struct OwnedPair<'a> {
+    pub(super) connection: &'a str,
+    pub(super) reservation: i64,
+    pub(super) operation: i64,
+}
+
+pub(super) struct ExpectedContainer<'a> {
+    pub(super) id: &'a str,
+    pub(super) name: String,
+    pub(super) role: &'static str,
+    pub(super) image_id: &'a str,
+}
+
+pub(super) async fn audit_pair_containers(
     docker: &Docker,
-    id: &str,
-    name: &str,
-    role: &str,
-    identity: &StorageCleanupIdentity,
-    connection_id: &str,
+    owner: &OwnedPair<'_>,
+    containers: &[ExpectedContainer<'_>],
 ) -> Result<(), HostError> {
-    let error_to_host = |_| HostError::Docker;
-    let inspected = docker_deadline(docker.inspect_container(id, None))
-        .await?
-        .map_err(error_to_host)?;
-    validate_owned_container(
-        &inspected,
-        id,
-        name,
-        role,
-        (identity.reservation_id(), identity.operation_id()),
-        connection_id,
-    )
+    for expected in containers {
+        let inspected = docker_deadline(docker.inspect_container(expected.id, None))
+            .await?
+            .map_err(|_| HostError::Docker)?;
+        validate_owned_container(&inspected, owner, expected)?;
+    }
+    Ok(())
 }
 
 fn validate_owned_container(
     inspected: &ContainerInspectResponse,
-    id: &str,
-    name: &str,
-    role: &str,
-    (reservation_id, operation_id): (i64, i64),
-    connection_id: &str,
+    owner: &OwnedPair<'_>,
+    expected: &ExpectedContainer<'_>,
 ) -> Result<(), HostError> {
     let labels = inspected
         .config
         .as_ref()
         .and_then(|config| config.labels.as_ref())
         .ok_or(HostError::Ownership)?;
-    let expected = std::collections::HashMap::from([
+    let expected_labels = std::collections::HashMap::from([
         ("io.velnor.managed", "true".to_owned()),
-        ("io.velnor.reservation-id", reservation_id.to_string()),
-        ("io.velnor.operation-id", operation_id.to_string()),
-        ("io.velnor.connection-id", connection_id.to_owned()),
-        ("io.velnor.role", role.to_owned()),
-        (IMAGE_KIND_LABEL, role.to_owned()),
+        ("io.velnor.reservation-id", owner.reservation.to_string()),
+        ("io.velnor.operation-id", owner.operation.to_string()),
+        ("io.velnor.connection-id", owner.connection.to_owned()),
+        ("io.velnor.role", expected.role.to_owned()),
+        (IMAGE_KIND_LABEL, expected.role.to_owned()),
     ]);
-    if inspected.id.as_deref() != Some(id)
-        || inspected.name.as_deref() != Some(format!("/{name}").as_str())
-        || expected
+    if inspected.id.as_deref() != Some(expected.id)
+        || inspected.name.as_deref() != Some(format!("/{}", expected.name).as_str())
+        || inspected.image.as_deref() != Some(expected.image_id)
+        || expected_labels
             .iter()
             .any(|(key, value)| labels.get(*key) != Some(value))
         || labels
             .keys()
-            .any(|key| unknown_velnor_label(key, &expected))
+            .any(|key| unknown_velnor_label(key, &expected_labels))
         || inspected.state.as_ref().and_then(|state| state.running) != Some(true)
     {
         return Err(HostError::Ownership);
