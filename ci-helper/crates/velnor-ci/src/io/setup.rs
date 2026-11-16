@@ -69,6 +69,7 @@ fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {
     check_tools(
         pins,
         &parse_reported(&String::from_utf8_lossy(&output.stdout))?,
+        std::env::consts::OS,
     )
 }
 

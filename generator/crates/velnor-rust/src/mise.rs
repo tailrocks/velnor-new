@@ -18,7 +18,17 @@ pub const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 const RUST_TOOLS: [&str; 2] = ["rust", "core:rust"];
 const NEXTEST_SELECTORS: [&str; 2] = ["cargo-nextest", "nextest-rs/nextest"];
 
-type Versions = BTreeMap<String, Vec<String>>;
+type Versions = BTreeMap<String, Vec<Request>>;
+
+#[derive(Clone)]
+struct Request {
+    version: String,
+    os: Option<Vec<String>>,
+}
+
+fn plain(version: String) -> Request {
+    Request { version, os: None }
+}
 
 #[must_use]
 pub fn mise_files() -> Vec<RepoPath> {
@@ -81,8 +91,21 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
         tools: requested
             .into_iter()
             .map(|(name, requested)| {
-                let locked = locked.remove(&name).unwrap_or_default();
-                (name, ToolPin { requested, locked })
+                let locked = locked
+                    .remove(&name)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|request| request.version)
+                    .collect();
+                let (requested, os_filters) = split_requests(&requested);
+                (
+                    name,
+                    ToolPin {
+                        requested,
+                        locked,
+                        os_filters,
+                    },
+                )
             })
             .collect(),
     })
@@ -182,26 +205,65 @@ fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
     }
 }
 
-fn version_list(value: &Value) -> Option<Vec<String>> {
+fn split_requests(requests: &[Request]) -> (Vec<String>, BTreeMap<String, Vec<String>>) {
+    let versions: Vec<String> = requests.iter().map(|r| r.version.clone()).collect();
+    let mut filters: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for version in &versions {
+        let own: Vec<&Request> = requests.iter().filter(|r| &r.version == version).collect();
+        if own.iter().all(|r| r.os.is_some()) {
+            let mut names: Vec<String> = own
+                .iter()
+                .flat_map(|r| r.os.clone().unwrap_or_default())
+                .collect();
+            names.sort();
+            names.dedup();
+            filters.insert(version.clone(), names);
+        }
+    }
+    (versions, filters)
+}
+
+fn os_names(entry: &toml::Table) -> Option<Vec<String>> {
+    match entry.get("os")? {
+        Value::String(name) => Some(vec![name.clone()]),
+        Value::Array(items) => Some(
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_owned))
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+fn version_list(value: &Value) -> Option<Vec<Request>> {
     match value {
-        Value::String(version) => Some(vec![version.clone()]),
+        Value::String(version) => Some(vec![plain(version.clone())]),
         Value::Array(items) => items
             .iter()
             .map(version_list)
             .collect::<Option<Vec<_>>>()
             .map(|lists| lists.concat()),
-        Value::Table(entry) => entry
-            .get("version")
-            .map_or_else(|| source_request(entry), version_list),
+        Value::Table(entry) => {
+            let mut list = entry
+                .get("version")
+                .map_or_else(|| source_request(entry), version_list)?;
+            if let Some(names) = os_names(entry) {
+                for request in &mut list {
+                    request.os.get_or_insert_with(|| names.clone());
+                }
+            }
+            Some(list)
+        }
         _ => None,
     }
 }
 
-fn source_request(entry: &toml::Table) -> Option<Vec<String>> {
+fn source_request(entry: &toml::Table) -> Option<Vec<Request>> {
     ["ref", "path", "prefix"].iter().find_map(|key| {
         entry
             .get(*key)
             .and_then(Value::as_str)
-            .map(|value| vec![format!("{key}:{value}")])
+            .map(|value| vec![plain(format!("{key}:{value}"))])
     })
 }
