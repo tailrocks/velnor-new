@@ -66,3 +66,15 @@ pub(crate) fn base_age(expiry: BaseExpiry) -> Vec<(String, Value)> {
         Value::Expr(format!("${{{{ {on} && '{MAX_BASE_AGE_DAYS}' || '0' }}}}")),
     )]
 }
+
+pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {
+    RenderedStep {
+        name: "Enforce the repository cache budget".to_owned(),
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some(format!("velnor-ci cache budget --budget-bytes {bytes}")),
+        ..RenderedStep::default()
+    }
+}

@@ -5,6 +5,8 @@ mod audit_job;
 mod base_cache;
 mod build_profile;
 mod build_script;
+mod cache_budget;
+mod cache_maintenance;
 mod cargo_lock;
 mod classify;
 mod compat;
@@ -74,3 +76,8 @@ pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use weaken::introduced;
+
+pub use cache_budget::{
+    CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
+    cache_family, delta_pull_request,
+};

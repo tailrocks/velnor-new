@@ -65,16 +65,21 @@ fn the_one_job_lane_saves_after_its_last_cargo_step_in_this_order_and_only_on_th
         .ok_or("no doc step")?;
     let tail: Vec<&str> = order[last_cargo + 1..].iter().map(String::as_str).collect();
     assert_eq!(
-        &tail[..5],
+        &tail[..7],
         [
             "velnor-ci inputs save",
             "Decide whether to save the build directory",
             "Save the target cache",
+            "Enforce the repository cache budget",
             "Delete the older target entries",
             "Save the sources cache",
+            "Enforce the repository cache budget",
         ]
     );
-    for name in &tail[..5] {
+    for name in tail[..7]
+        .iter()
+        .filter(|name| **name != "Enforce the repository cache budget")
+    {
         let text = step(lane, name).ok_or("missing step")?;
         assert!(text.contains(EVENTS), "{name}: {text}");
         assert!(text.contains("!cancelled()"), "{name}: {text}");
@@ -163,7 +168,7 @@ fn only_the_lint_and_test_lanes_save_and_the_sources_come_from_the_test_lane() -
     assert!(step(lint, "Save the target cache").is_some());
     assert!(step(test, "Save the target cache").is_some());
     for (id, block) in &all {
-        if !saving(block) {
+        if !saving(block) && id != "rust-cache-budget" {
             assert!(!block.contains("actions: write"), "{id}");
             assert!(!block.contains("Save the target cache"), "{id}");
         }

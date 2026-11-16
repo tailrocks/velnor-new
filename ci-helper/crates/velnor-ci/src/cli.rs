@@ -329,6 +329,18 @@ pub enum CacheCommand {
         about = "Delete all but the newest entries whose key starts with --prefix on $GITHUB_REF, through the GitHub API; reads GITHUB_TOKEN, which needs actions: write, and GITHUB_REPOSITORY. A failed call prints a warning and exits 0"
     )]
     Trim(TrimArgs),
+    #[command(about = "Enforce the repository cache budget while protecting newest bases")]
+    Budget(BudgetArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BudgetArgs {
+    #[arg(long)]
+    pub dry_run: bool,
+    #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
+    pub repo: Option<String>,
+    #[arg(long, default_value_t = velnor_rust::DEFAULT_CACHE_BUDGET_BYTES)]
+    pub budget_bytes: u64,
 }
 
 #[derive(Debug, Args)]

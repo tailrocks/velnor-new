@@ -73,6 +73,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
+    crate::cache_maintenance::add(facts, &mut jobs, helper_root.is_some());
     upload_cargo_logs(&mut jobs);
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),

@@ -6,7 +6,7 @@ use velnor_model::{
     TESTS_RUN_OUTPUT,
 };
 
-use crate::base_steps::{base_age, cache_decide, cache_trim};
+use crate::base_steps::{base_age, cache_budget, cache_decide, cache_trim};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
 use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source, sources_step};
@@ -116,7 +116,8 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
 
 fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
-        StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
+        StepKind::CacheSave(CacheKey::Sources { root, .. })
+        | StepKind::CacheBudget(_, Some(CacheKey::Sources { root, .. })) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
             sources_step(root.slug())
         )],
@@ -164,6 +165,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
         StepKind::CacheTrim(key) => cache_trim(key),
+        StepKind::CacheBudget(bytes, _) => cache_budget(*bytes),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),

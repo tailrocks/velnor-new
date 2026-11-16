@@ -3,6 +3,8 @@
 
 mod archive;
 mod base_save;
+mod cache_budget;
+mod cache_budget_workflow;
 mod cache_compat;
 mod cache_key_defects;
 mod cache_keys;

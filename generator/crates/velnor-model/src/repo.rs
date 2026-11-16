@@ -236,6 +236,7 @@ pub struct RustCiConfig {
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
     pub ci_debuginfo: CiDebugInfo,
+    pub cache_budget_bytes: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -284,6 +285,7 @@ impl Default for RustCiConfig {
             full_run: FullRun::Nightly,
             helper: None,
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
+            cache_budget_bytes: 8_000_000_000,
         }
     }
 }

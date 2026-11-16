@@ -4,7 +4,7 @@
 use serde::Deserialize;
 
 use crate::error::CiError;
-use crate::github::{GitHubWrite, Repo};
+pub use crate::io::cache_api::trim;
 use crate::logscan::LogScan;
 use crate::time::parse_utc;
 
@@ -54,45 +54,3 @@ pub fn stale_entries(entries: &[CacheEntry], prefix: &str, keep: usize) -> Vec<u
 }
 
 pub const KEEP_NEWEST: usize = 2;
-const PAGE: usize = 100;
-
-pub fn trim(
-    github: &dyn GitHubWrite,
-    repo: &Repo,
-    reference: &str,
-    prefix: &str,
-    keep: usize,
-) -> Result<String, CiError> {
-    if prefix.is_empty() {
-        return Err(CiError::new("the cache prefix is empty"));
-    }
-    let listing = github.get(&format!(
-        "/repos/{repo}/actions/caches?key={}&ref={}&per_page={PAGE}",
-        encode(prefix),
-        encode(reference)
-    ))?;
-    let entries = parse_entries(&listing)?;
-    let stale = stale_entries(&entries, prefix, keep);
-    for id in &stale {
-        github.delete(&format!("/repos/{repo}/actions/caches/{id}"))?;
-    }
-    Ok(format!(
-        "{prefix}: {} entries on {reference}, kept the newest {keep}, deleted {}\n",
-        entries
-            .iter()
-            .filter(|entry| entry.key.starts_with(prefix))
-            .count(),
-        stale.len()
-    ))
-}
-
-fn encode(text: &str) -> String {
-    text.bytes()
-        .map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                char::from(byte).to_string()
-            }
-            _ => format!("%{byte:02X}"),
-        })
-        .collect()
-}

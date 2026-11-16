@@ -64,6 +64,7 @@ pub struct Permissions(pub BTreeMap<PermissionScope, Access>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PermissionScope {
+    PullRequests,
     Actions,
     Contents,
 }
@@ -169,6 +170,7 @@ pub enum When {
     NotCancelled,
     Scheduled,
     ScheduledOrPush,
+    ScheduledMaintenance,
     CacheDebug,
     SaveToolsOnDefaultBranch,
     SaveBase,
@@ -190,6 +192,7 @@ pub enum StepKind {
         archive: Option<RepoPath>,
     },
     CacheTrim(CacheKey),
+    CacheBudget(u64, Option<CacheKey>),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {
