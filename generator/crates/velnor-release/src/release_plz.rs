@@ -207,9 +207,3 @@ pub(crate) fn root_of(file: &str) -> &str {
         _ => ".",
     }
 }
-
-pub fn check_release_plz_config(file: &str, text: &str) -> Result<(), String> {
-    read(root_of(file), text)
-        .map(drop)
-        .map_err(|error| format!("{file}: {error}"))
-}
