@@ -5,12 +5,16 @@
 mod eligibility;
 #[path = "tests/fixture.rs"]
 mod fixture;
+#[path = "tests/migration.rs"]
+mod migration;
 #[path = "tests/renewal.rs"]
 mod renewal;
 #[path = "tests/safety.rs"]
 mod safety;
 #[path = "tests/seed.rs"]
 mod seed;
+#[path = "tests/shape.rs"]
+mod shape;
 
 use crate::journal::Journal;
 
