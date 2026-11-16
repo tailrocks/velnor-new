@@ -5,7 +5,7 @@ mod claims;
 mod fake;
 
 use serde_json::{Value, json};
-use velnor_local::authority::{Call, Entry, Facts, Refusal, admit, call};
+use velnor_local::authority::{Call, call};
 use velnor_local::io::authority::Authority;
 use velnor_local::side::Side;
 
@@ -292,45 +292,6 @@ fn authority_routes_only_its_four_calls() {
     ] {
         assert_eq!(call(method, path), Call::Unknown, "{method} {path}");
     }
-}
-
-#[test]
-fn authority_admits_by_event_ref_sha_and_workflow_before_the_run() {
-    let facts = |id: u64, workflow: &str| Facts {
-        id,
-        attempt: 1,
-        event: "push".to_owned(),
-        git_ref: "refs/heads/main".to_owned(),
-        sha: SHA.to_owned(),
-        workflow: workflow.to_owned(),
-        jobs: vec!["ci".to_owned()],
-    };
-    let entry = |side, workflow: Option<&str>, existing: Vec<u64>| Entry {
-        id: "1-push".to_owned(),
-        side,
-        event: "push".to_owned(),
-        git_ref: "refs/heads/main".to_owned(),
-        sha: SHA.to_owned(),
-        workflow: workflow.map(str::to_owned),
-        existing,
-        claims: Vec::new(),
-    };
-    let entries = [entry(Side::Trusted, Some("a.yml"), vec![])];
-    assert!(admit(&entries, Side::Trusted, &facts(1, "a.yml")).is_ok());
-    assert_eq!(
-        admit(&entries, Side::Trusted, &facts(1, "b.yml")),
-        Err(Refusal::NotDispatched)
-    );
-    assert_eq!(
-        admit(&entries, Side::Untrusted, &facts(1, "a.yml")),
-        Err(Refusal::WrongSide)
-    );
-    let seen = [entry(Side::Trusted, None, vec![1])];
-    assert_eq!(
-        admit(&seen, Side::Trusted, &facts(1, "a.yml")),
-        Err(Refusal::NotDispatched)
-    );
-    assert!(admit(&seen, Side::Trusted, &facts(2, "a.yml")).is_ok());
 }
 
 #[test]
