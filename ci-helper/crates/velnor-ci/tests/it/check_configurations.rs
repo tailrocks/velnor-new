@@ -44,8 +44,9 @@ fn metadata(nodes: &Value) -> Value {
     }
     json!({
         "packages": (["app", "dep", "other"].map(|id| {
-            json!({"id": id, "targets": [{"kind": ["lib"]}]})
+            json!({"id": id, "name": id, "targets": [{"name": id, "kind": ["lib"]}]})
         })),
+        "workspace_members": ["app"],
         "resolve": {"nodes": nodes}
     })
 }
@@ -259,18 +260,18 @@ fn check_configurations_preserves_unknown_target_context() {
     for field in ["targets", "kind"] {
         let mut graph = graph(&[], &[]);
         if field == "targets" {
-            graph["packages"][0]
+            graph["packages"][1]
                 .as_object_mut()
                 .unwrap_or_else(|| unreachable!())
                 .remove(field);
         } else {
-            graph["packages"][0]["targets"] = json!([{}]);
+            graph["packages"][1]["targets"] = json!([{}]);
         }
         hazards.push(graph);
     }
     for kinds in [json!([]), json!(["proc-macro"])] {
         let mut graph = graph(&[], &[]);
-        graph["packages"][0]["targets"][0]["kind"] = kinds;
+        graph["packages"][1]["targets"][0]["kind"] = kinds;
         hazards.push(graph);
     }
     assert_context_hazards("configurations-target-context", hazards);
