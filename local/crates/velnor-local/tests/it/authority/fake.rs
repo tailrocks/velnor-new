@@ -125,9 +125,9 @@ impl Backend for &FakeRunners {
     fn mint(
         &self,
         side: Side,
-        name: &str,
+        name: Option<&str>,
     ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
-        let name = name.to_owned();
+        let name = name.unwrap_or("velnor-x-jit-1").to_owned();
         async move {
             *self.minted.lock().unwrap_or_else(|e| unreachable!("{e}")) += 1;
             if self.mint_stalls {

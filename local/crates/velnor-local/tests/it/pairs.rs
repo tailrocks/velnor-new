@@ -92,6 +92,15 @@ fn the_pairs_are_ready_only_when_every_slot_listens() {
 }
 
 #[test]
+fn a_slot_that_logged_listening_and_then_exited_is_not_counted_ready() {
+    let slots = slots(2, 0);
+    let log = "pair trusted-1 listening\npair trusted-2 listening\npair trusted-1 removed\n";
+    assert_eq!(listening(log, &slots), ["trusted-2"]);
+    let log = format!("{log}pair trusted-1 listening\n");
+    assert_eq!(listening(&log, &slots), ["trusted-1", "trusted-2"]);
+}
+
+#[test]
 fn each_decision_reads_as_admitted_with_its_event_or_refused_with_its_reason() {
     let read = read(&[ADMITTED, REFUSED, "", MALFORMED]);
     let lines: Vec<String> = read.iter().map(Decision::line).collect();
@@ -157,7 +166,7 @@ fn pair_mode_is_the_default_and_names_the_velnor_host_it_runs() {
         unreachable!("{parsed:?}")
     };
     assert_eq!(up.environment.runner, RunnerMode::Pair);
-    assert_eq!(up.environment.velnor_host.to_str(), Some(HOST_BINARY));
+    assert_eq!(up.environment.velnor_host, None);
     assert_eq!(up.environment.containers(2), 0);
     let plain = ["velnor-local", "run", "warm", "--dir", "s", "--repo", "r"];
     let parsed = Cli::try_parse_from(plain.into_iter().chain(["--runner", "plain"]));
@@ -196,7 +205,7 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
         fork_runners: 1,
         default_branch: "main".to_owned(),
         runner: RunnerMode::Pair,
-        velnor_host: HOST_BINARY.into(),
+        velnor_host: Some(HOST_BINARY.into()),
     };
     assert!(env.up(&dir, &args).await.is_err());
     let started = docker.started();

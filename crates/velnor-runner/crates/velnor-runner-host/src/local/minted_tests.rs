@@ -57,3 +57,15 @@ async fn a_torn_or_malformed_line_never_names_an_agent_to_delete() {
     let reloaded = MintedAgents::new(state.path()).load().await.expect("load");
     assert_eq!(reloaded.len(), 2, "{reloaded:?}");
 }
+
+#[tokio::test]
+async fn a_complete_record_that_follows_a_torn_fragment_is_still_an_intent() {
+    let state = tempfile::tempdir().expect("state");
+    std::fs::write(
+        state.path().join(MINTED_FILE),
+        "+ trusted whole\n+ trusted cut+ untrusted second\n+ trusted cut- trusted whole\n",
+    )
+    .expect("seed");
+    let open = MintedAgents::new(state.path()).load().await.expect("load");
+    assert_eq!(open, [("untrusted".to_owned(), "second".to_owned())]);
+}

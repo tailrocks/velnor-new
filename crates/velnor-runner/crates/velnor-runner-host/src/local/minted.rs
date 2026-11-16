@@ -38,6 +38,30 @@ fn valid_name(name: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
+fn record(text: &str) -> Option<(&str, Entry)> {
+    let fields: Vec<&str> = text.split(' ').collect();
+    let [kind, side, name] = fields.as_slice() else {
+        return None;
+    };
+    if !matches!(*kind, INTENT | RETIRED) || Side::parse(side).is_none() || !valid_name(name) {
+        return None;
+    }
+    Some((kind, ((*side).to_owned(), (*name).to_owned())))
+}
+
+fn salvage(line: &str) -> Option<(&str, Entry)> {
+    record(line).or_else(|| {
+        line.match_indices([' '])
+            .filter_map(|(at, _)| at.checked_sub(1))
+            .filter(|&at| {
+                line.as_bytes()
+                    .get(at)
+                    .is_some_and(|b| matches!(*b, b'+' | b'-'))
+            })
+            .find_map(|at| record(&line[at..]))
+    })
+}
+
 fn parse(text: &str) -> (BTreeSet<Entry>, usize) {
     let mut open = BTreeSet::new();
     let mut lines = 0;
@@ -45,22 +69,13 @@ fn parse(text: &str) -> (BTreeSet<Entry>, usize) {
         let Some(line) = line.strip_suffix('\n') else {
             continue;
         };
-        let fields: Vec<&str> = line.split(' ').collect();
-        let [kind, side, name] = fields.as_slice() else {
+        let Some((kind, key)) = salvage(line) else {
             continue;
         };
-        if Side::parse(side).is_none() || !valid_name(name) {
-            continue;
-        }
-        let key = ((*side).to_owned(), (*name).to_owned());
-        match *kind {
-            INTENT => {
-                open.insert(key);
-            }
-            RETIRED => {
-                open.remove(&key);
-            }
-            _ => continue,
+        if kind == INTENT {
+            open.insert(key);
+        } else {
+            open.remove(&key);
         }
         lines += 1;
     }
@@ -175,10 +190,18 @@ impl MintedAgents {
             .open(&self.path)
             .await
             .map_err(|_| HostError::Path)?;
-        file.write_all(format!("{kind} {side} {name}\n").as_bytes())
-            .await
-            .map_err(|_| HostError::Path)?;
-        file.sync_data().await.map_err(|_| HostError::Path)
+        let before = file.metadata().await.map_err(|_| HostError::Path)?.len();
+        let written = async {
+            file.write_all(format!("{kind} {side} {name}\n").as_bytes())
+                .await?;
+            file.sync_data().await
+        }
+        .await;
+        if written.is_err() {
+            let _torn = file.set_len(before).await;
+            return Err(HostError::Path);
+        }
+        Ok(())
     }
 }
 

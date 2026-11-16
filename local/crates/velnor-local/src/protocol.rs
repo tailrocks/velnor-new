@@ -74,6 +74,7 @@ pub struct Error {
     pub status: u16,
     pub code: &'static str,
     pub msg: String,
+    pub cleaned_up: bool,
 }
 
 impl Error {
@@ -82,6 +83,7 @@ impl Error {
             status,
             code,
             msg: msg.to_string(),
+            cleaned_up: false,
         }
     }
 
@@ -115,7 +117,11 @@ impl Error {
 
     #[must_use]
     pub fn body(&self) -> Value {
-        json!({"code": self.code, "msg": self.msg})
+        let mut body = json!({"code": self.code, "msg": self.msg});
+        if self.cleaned_up {
+            body["cleaned_up"] = json!(true);
+        }
+        body
     }
 }
 

@@ -100,6 +100,24 @@ the whole suite.
 | `VELNOR_QUALIFICATION_CLOCK_DRIVER` | Absolute path to the `golden_collector_clock` example executable | `scripts/verify-local.sh` | `velnor-archive-guard` `golden_collector_public` |
 | `VELNOR_GROUP_PROBE_RECEIPT` | Receipt written by `scripts/provision-group-signal-interposer.sh` (macOS) | `scripts/verify-local.sh` on macOS | `velnor-actions-mise` `permission_retry_darwin` |
 
+`velnor-actions-cli` `check_runtime_identity_public` also needs the `mise` on
+`PATH` to be the exact pinned release (`MISE_VERSION` in
+`crates/velnor-actions-mise/src/catalog.rs`). A different mise build fails with
+`mise_binary_unreadable`, because the orchestrator reads at most the pinned byte
+count; the progress test states this precondition before it runs. `mise.toml`
+does not pin mise itself, so install the release with
+`mise install aqua:jdx/mise@2026.11.1` and put its binary first on `PATH`:
+
+```sh
+PATH="$HOME/.local/share/mise/installs/aqua-jdx-mise/2026.11.1/mise/bin:$PATH" \
+  "$HOME/.cargo/bin/cargo" nextest run -p velnor-actions-cli --test check_runtime_identity_public progress
+```
+
+The `~/.local/bin/mise` shim does not satisfy this check, so the pinned binary
+must come first on `PATH` for the run. Call `$HOME/.cargo/bin/cargo` directly:
+the MBX `cargo` wrapper on the default `PATH` rebuilds `PATH` before it runs
+the test, which drops the pinned binary from the front.
+
 The example paths must be canonical, so each recipe resolves the examples
 directory with `cd -P`. It uses `CARGO_TARGET_DIR` when it is set, and `target`
 otherwise.

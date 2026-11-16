@@ -259,6 +259,21 @@ fn the_helpers_compile_the_source_revision_and_keep_their_download_caches() {
 }
 
 #[test]
+fn the_rustup_volume_is_named_for_the_digest_of_the_rust_image_it_holds() {
+    let helpers = steps()[0].clone();
+    let image = helpers
+        .iter()
+        .find(|arg| arg.starts_with("rust:"))
+        .unwrap_or_else(|| unreachable!("{helpers:?}"));
+    let digest = image
+        .rsplit_once("sha256:")
+        .map_or("", |(_, digest)| digest);
+    assert_eq!(digest.len(), 64, "{image}");
+    let volume = format!("velnor-arm64-rustup-{}:/usr/local/rustup", &digest[..12]);
+    assert!(helpers.contains(&volume), "{helpers:?}");
+}
+
+#[test]
 fn a_dirty_source_tree_is_refused_with_the_files_named() {
     assert!(refuse_dirty("").is_ok());
     let refused = refuse_dirty(" M crates/velnor-runner/a.rs\n?? images/dind/new\n");

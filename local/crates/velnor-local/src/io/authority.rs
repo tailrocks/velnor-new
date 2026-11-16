@@ -40,7 +40,7 @@ pub trait Backend: Send + Sync {
     fn mint(
         &self,
         side: Side,
-        name: &str,
+        name: Option<&str>,
     ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send;
 }
 
@@ -177,7 +177,7 @@ impl<B: Backend> Authority<B> {
             .await?;
         let found = facts(&runs, &jobs, id, attempt).ok_or_else(missing)?;
         let mut ledger = self.ledger.lock().await;
-        let admitted = admit(&ledger.entries, side, &found).cloned();
+        let admitted = admit(&ledger.entries, side, &found, &runs).cloned();
         if let Ok(entry) = &admitted {
             let before = ledger.entries.clone();
             if claim(&mut ledger.entries, &entry.id, &found)
@@ -224,38 +224,57 @@ impl<B: Backend> Authority<B> {
         if existing.is_some_and(|bytes| agent_id(&bytes, &asked.name).is_some()) {
             return Err(taken());
         }
-        let minted = match self.backend.mint(asked.side, &asked.name).await {
-            Ok(minted) => minted,
-            Err(error) => {
-                let _removed = self.remove(asked.side, &error.name).await;
-                return Err(Error::upstream(format!("minting a JIT: {error}")));
-            }
-        }
-        .ok_or_else(|| Error::not_found(format!("the {} side is not up", asked.side.name())))?;
+        let minted = mint_or_retire(&self.backend, asked.side, Some(&asked.name))
+            .await?
+            .ok_or_else(|| Error::not_found(format!("the {} side is not up", asked.side.name())))?;
         let reply =
             json!({"name": minted.name, "jit": minted.jit, "seconds": minted.took.as_secs_f64()});
         Ok(json_response(200, &reply))
     }
 
     async fn remove(&self, side: Side, name: &str) -> Result<Response<Body>, Error> {
-        let listed = |bytes: Vec<u8>| agent_id(&bytes, name);
-        let listing = |error: io::Error| Error::upstream(format!("runner.server: {error}"));
-        let before = self.backend.get(side, AGENTS_PATH).await.map_err(listing)?;
-        let before = before
-            .ok_or_else(|| Error::not_found(format!("the {} side is not up", side.name())))?;
-        let Some(id) = listed(before) else {
-            return Ok(json_response(200, &json!({"name": name, "deleted": false})));
-        };
-        self.backend
-            .delete(side, &format!("{AGENTS_PATH}/{id}"))
-            .await
-            .map_err(listing)?;
-        let after = self.backend.get(side, AGENTS_PATH).await.map_err(listing)?;
-        if after.and_then(listed).is_some() {
-            return Err(Error::upstream(format!(
-                "{name} is still registered after its deletion"
-            )));
-        }
-        Ok(json_response(200, &json!({"name": name, "deleted": true})))
+        let deleted = retire(&self.backend, side, name).await?;
+        Ok(json_response(
+            200,
+            &json!({"name": name, "deleted": deleted}),
+        ))
     }
+}
+
+pub async fn mint_or_retire<B: Backend>(
+    backend: &B,
+    side: Side,
+    name: Option<&str>,
+) -> Result<Option<Minted>, Error> {
+    match backend.mint(side, name).await {
+        Ok(minted) => Ok(minted),
+        Err(error) => {
+            let cleaned = matches!(retire(backend, side, &error.name).await, Ok(true));
+            let mut failure = Error::upstream(format!("minting a JIT: {error}"));
+            failure.cleaned_up = cleaned;
+            Err(failure)
+        }
+    }
+}
+
+pub async fn retire<B: Backend>(backend: &B, side: Side, name: &str) -> Result<bool, Error> {
+    let listed = |bytes: Vec<u8>| agent_id(&bytes, name);
+    let listing = |error: io::Error| Error::upstream(format!("runner.server: {error}"));
+    let before = backend.get(side, AGENTS_PATH).await.map_err(listing)?;
+    let before =
+        before.ok_or_else(|| Error::not_found(format!("the {} side is not up", side.name())))?;
+    let Some(id) = listed(before) else {
+        return Ok(false);
+    };
+    backend
+        .delete(side, &format!("{AGENTS_PATH}/{id}"))
+        .await
+        .map_err(listing)?;
+    let after = backend.get(side, AGENTS_PATH).await.map_err(listing)?;
+    if after.and_then(listed).is_some() {
+        return Err(Error::upstream(format!(
+            "{name} is still registered after its deletion"
+        )));
+    }
+    Ok(true)
 }

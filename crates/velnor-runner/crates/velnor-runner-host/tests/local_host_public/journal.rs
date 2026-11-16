@@ -158,3 +158,112 @@ async fn local_failed_mint_keeps_its_name_while_the_agent_is_not_visible_yet() -
     );
     Ok(())
 }
+
+async fn run_until_mint(scenario: &mut Scenario) -> TestResult<Vec<String>> {
+    let plan = scenario.plan(1, 0)?;
+    scenario.start(plan);
+    wait_for_mint(scenario).await
+}
+
+async fn wait_for_mint(scenario: &Scenario) -> TestResult<Vec<String>> {
+    let started = Instant::now();
+    while scenario
+        .fake()
+        .events()
+        .iter()
+        .filter(|event| event.starts_with("mint:"))
+        .count()
+        < 1
+        && started.elapsed() < Duration::from_secs(90)
+    {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    Ok(scenario.fake().events())
+}
+
+#[tokio::test]
+async fn local_name_conflict_retires_its_intent_without_deleting_the_other_agent() -> TestResult<()>
+{
+    let mut scenario = Scenario::new().await?;
+    scenario.fake().mint_conflicts.store(1, Ordering::SeqCst);
+    let events = run_until_mint(&mut scenario).await?;
+    let stopped = scenario.stop().await?;
+    let all = scenario.fake().events();
+    let kept = std::fs::read_to_string(scenario.state.path().join(JOURNAL)).unwrap_or_default();
+    scenario.finish().await?;
+    let conflicted = events
+        .iter()
+        .find_map(|event| event.strip_prefix("mint-conflict:"))
+        .expect("a conflict");
+    assert_eq!(stopped, Ok(()), "{all:?}");
+    assert!(
+        !all.iter()
+            .any(|event| event.ends_with(conflicted) && event.starts_with("delete")),
+        "{all:?}"
+    );
+    assert!(kept.is_empty(), "{kept}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_confirmed_cleanup_of_a_failed_mint_retires_the_intent_without_a_second_delete()
+-> TestResult<()> {
+    let mut scenario = Scenario::new().await?;
+    scenario.fake().mint_cleaned.store(1, Ordering::SeqCst);
+    let events = run_until_mint(&mut scenario).await?;
+    let stopped = scenario.stop().await?;
+    let all = scenario.fake().events();
+    let kept = std::fs::read_to_string(scenario.state.path().join(JOURNAL)).unwrap_or_default();
+    scenario.finish().await?;
+    let cleaned = events
+        .iter()
+        .find_map(|event| event.strip_prefix("mint-cleaned:"))
+        .expect("a cleaned mint");
+    assert_eq!(stopped, Ok(()), "{all:?}");
+    assert!(
+        !all.iter()
+            .any(|event| event.ends_with(cleaned) && event.starts_with("delete")),
+        "{all:?}"
+    );
+    assert!(kept.is_empty(), "{kept}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_journal_failure_after_a_confirmed_delete_is_retried_not_dropped() -> TestResult<()> {
+    let mut scenario = Scenario::new().await?;
+    let journal = scenario.state.path().join(JOURNAL);
+    *scenario.fake().journal_to_lock.lock().expect("lock") = Some(journal.clone());
+    scenario.fake().mint_failures.store(1, Ordering::SeqCst);
+    let plan = scenario.plan(1, 0)?;
+    scenario.start(plan);
+    let started = Instant::now();
+    while !scenario
+        .fake()
+        .events()
+        .iter()
+        .any(|event| event.starts_with("delete:"))
+        && started.elapsed() < Duration::from_secs(60)
+    {
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    std::fs::set_permissions(&journal, std::fs::Permissions::from_mode(0o600))?;
+    let events = wait_for_mint(&scenario).await?;
+    let stopped = scenario.stop().await?;
+    let kept = std::fs::read_to_string(&journal).unwrap_or_default();
+    let all = scenario.fake().events();
+    scenario.finish().await?;
+    let refused = events
+        .iter()
+        .find_map(|event| event.strip_prefix("mint-refused:"))
+        .expect("a refused mint");
+    let deletes = all
+        .iter()
+        .filter(|event| **event == format!("delete:trusted:{refused}"))
+        .count();
+    assert_eq!(deletes, 1, "{all:?}");
+    assert_eq!(stopped, Ok(()), "{events:?}");
+    assert!(kept.is_empty(), "{kept}");
+    Ok(())
+}

@@ -36,6 +36,9 @@ pub(crate) struct Fake {
     minted: AtomicUsize,
     pub(crate) mint_failures: AtomicUsize,
     pub(crate) stall_mint: AtomicBool,
+    pub(crate) mint_conflicts: AtomicUsize,
+    pub(crate) mint_cleaned: AtomicUsize,
+    pub(crate) journal_to_lock: Mutex<Option<std::path::PathBuf>>,
     pub(crate) agents_absent: AtomicBool,
     pub(crate) delete_failures: AtomicUsize,
 }
@@ -124,6 +127,24 @@ impl Fake {
             self.log(format!("registered:{}", requested_name(body)));
             tokio::time::sleep(std::time::Duration::from_secs(3600)).await;
         }
+        let take = |count: &AtomicUsize| {
+            count
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                    left.checked_sub(1)
+                })
+                .is_ok()
+        };
+        if take(&self.mint_conflicts) {
+            self.log(format!("mint-conflict:{}", requested_name(body)));
+            return (409, "{\"code\":\"already_exists\"}".to_owned());
+        }
+        if take(&self.mint_cleaned) {
+            self.log(format!("mint-cleaned:{}", requested_name(body)));
+            return (
+                502,
+                "{\"code\":\"unavailable\",\"cleaned_up\":true}".to_owned(),
+            );
+        }
         let failing = self
             .mint_failures
             .try_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
@@ -132,6 +153,17 @@ impl Fake {
             .is_ok();
         if failing {
             self.log("mint-failed".to_owned());
+            let locked = self
+                .journal_to_lock
+                .lock()
+                .ok()
+                .and_then(|path| path.clone());
+            if let Some(path) = locked {
+                let _locked = std::fs::set_permissions(
+                    path,
+                    std::os::unix::fs::PermissionsExt::from_mode(0o400),
+                );
+            }
             self.log(format!("mint-refused:{}", requested_name(body)));
             return (500, "{}".to_owned());
         }
@@ -258,6 +290,9 @@ pub(crate) async fn serve(docker: Docker, environment: &str) -> TestResult<Serve
         minted: AtomicUsize::new(0),
         mint_failures: AtomicUsize::new(0),
         stall_mint: AtomicBool::new(false),
+        mint_conflicts: AtomicUsize::new(0),
+        mint_cleaned: AtomicUsize::new(0),
+        journal_to_lock: Mutex::new(None),
         agents_absent: AtomicBool::new(false),
         delete_failures: AtomicUsize::new(0),
     });
