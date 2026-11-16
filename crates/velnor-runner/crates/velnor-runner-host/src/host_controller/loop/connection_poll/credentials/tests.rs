@@ -42,12 +42,11 @@ async fn a_held_poll_does_not_strand_the_next_poll() {
 }
 
 #[tokio::test]
-async fn present_credentials_are_not_reloaded() {
+async fn present_credentials_are_not_reloaded() -> Result<(), ()> {
     let mut slot = Some(1_u32);
-    restore_missing(&mut slot, async || -> Result<u32, ()> { Err(()) })
-        .await
-        .unwrap();
+    restore_missing(&mut slot, async || -> Result<u32, ()> { Err(()) }).await?;
     assert_eq!(slot, Some(1));
+    Ok(())
 }
 
 #[tokio::test]

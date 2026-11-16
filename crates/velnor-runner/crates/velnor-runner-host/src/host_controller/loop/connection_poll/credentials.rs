@@ -24,7 +24,7 @@ pub(super) async fn restore_missing<C, E>(
     Ok(())
 }
 
-pub(super) async fn restore_credentials(
+async fn restore_credentials(
     prepared: &mut PreparedConnection,
     context: &ConnectionPollContext<'_>,
 ) -> Result<(), ListenFault> {
@@ -63,6 +63,29 @@ pub(super) async fn restore_credentials(
         })
     })
     .await
+}
+
+pub(super) async fn restore_active_credentials(
+    prepared: &mut PreparedConnection,
+    context: &ConnectionPollContext<'_>,
+) -> bool {
+    if context
+        .config
+        .connection(&prepared.binding.connection_id)
+        .is_none()
+    {
+        return true;
+    }
+    match restore_credentials(prepared, context).await {
+        Ok(()) => true,
+        Err(error) => {
+            eprintln!(
+                "host controller credential restore held connection={} reason={error}",
+                prepared.binding.connection_id
+            );
+            false
+        }
+    }
 }
 
 #[cfg(test)]
