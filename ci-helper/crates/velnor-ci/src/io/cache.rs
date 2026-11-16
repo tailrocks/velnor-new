@@ -119,9 +119,8 @@ pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<String,
     for target in targets {
         let born = match fs::read_to_string(target.join(BORN_FILE)) {
             Ok(born) if born_expired(&born, now_seconds, days) => born.trim().to_owned(),
-            Ok(_) => continue,
             Err(_) if target.is_dir() => "unknown".to_owned(),
-            Err(_) => continue,
+            Ok(_) | Err(_) => continue,
         };
         fs::remove_dir_all(target)
             .map_err(|e| CiError::new(format!("cannot remove {}: {e}", target.display())))?;
