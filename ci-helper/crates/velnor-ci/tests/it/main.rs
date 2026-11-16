@@ -28,6 +28,7 @@ mod plan_main;
 mod platform;
 mod prepare;
 mod prepare_install;
+mod release_branch_prefix;
 mod release_cargo_discovery;
 mod release_check_config;
 mod release_commit;
