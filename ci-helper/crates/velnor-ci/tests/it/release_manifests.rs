@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -137,6 +138,38 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(!marker.exists());
+}
+
+#[test]
+fn a_cargo_config_hazard_is_refused_before_cargo_metadata_runs() {
+    let checkout = Checkout::new("hazard-first");
+    let marker = checkout.0.join("cargo-ran");
+    let stub = checkout.0.join("bin/cargo");
+    checkout
+        .package("", "app", "")
+        .write("release-plz.toml", PLZ)
+        .write(
+            "bin/cargo",
+            &format!("#!/bin/sh\ntouch {}\nexit 1\n", marker.display()),
+        )
+        .write(".cargo/config.toml", "[build]\nrustc-wrapper = \"true\"\n");
+    fs::set_permissions(&stub, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let path = std::env::join_paths(std::iter::once(checkout.0.join("bin")).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["release", "check-config", "release-plz.toml", "--manifests"])
+        .current_dir(&checkout.0)
+        .env("RUSTUP_TOOLCHAIN", "stable")
+        .env("PATH", path)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(1), "{stderr}");
+    assert!(stderr.contains(".cargo/config.toml"), "{stderr}");
+    assert!(!marker.exists(), "cargo metadata ran before the refusal");
 }
 
 #[test]
