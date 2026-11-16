@@ -8,8 +8,7 @@ use std::{
 
 use crate::{
     config::RepositoryConnection, error::HostError, journal::ConnectionJournal,
-    launch::open_connection_session, launch_blocking::ListenFault,
-    scale_set::EnsureError,
+    launch::open_connection_session, launch_blocking::ListenFault, scale_set::EnsureError,
 };
 
 use super::{

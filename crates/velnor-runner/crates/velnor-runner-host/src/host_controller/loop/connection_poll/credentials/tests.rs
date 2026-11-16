@@ -10,8 +10,8 @@ use super::{
 use crate::{
     config::HostConfig,
     error::HostError,
-    scale_set::EnsureError,
     journal::{ConnectionJournal, Journal},
+    scale_set::EnsureError,
 };
 
 #[tokio::test]
