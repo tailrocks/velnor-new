@@ -417,6 +417,8 @@ inputs = [
   "crates/velnor-actions-cli/tests/velnor_cli/cargo_artifact.rs",
   "crates/velnor-actions-cli/tests/velnor_cli/native_required_order.rs",
   "crates/velnor-actions-contract/Cargo.toml",
+  "crates/velnor-actions-contract/src/image_candidate/closure_inventory.txt",
+  "crates/velnor-actions-contract/src/image_candidate/closure_supplemental.txt",
   "crates/velnor-actions-contract/src/archive.rs",
   "crates/velnor-actions-contract/src/cachekey.rs",
   "crates/velnor-actions-contract/src/cachekey_observed.rs",

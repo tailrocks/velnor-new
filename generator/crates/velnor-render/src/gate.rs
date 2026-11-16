@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, Job, PlanFrom, RootSlug, Visibility, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, Visibility, When};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -16,26 +16,6 @@ const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name =
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
-
-pub(crate) fn job_condition(job: &Job) -> String {
-    let predicate = condition(
-        job.when,
-        job.gate.as_ref(),
-        false,
-        job.skip_on_draft,
-        &visibility_part(job.visibility)
-            .into_iter()
-            .collect::<Vec<_>>(),
-    );
-    match predicate {
-        Some(predicate) => format!(
-            "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
-            predicate.trim_start_matches("${{ ").trim_end_matches(" }}")
-        ),
-        None => format!("${{{{ {ACTIVE_EVENT} }}}}"),
-    }
-}
-
 pub(crate) fn sources_step(slug: &RootSlug) -> String {
     format!("sources_{slug}")
 }
@@ -139,6 +119,22 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
+    }
+}
+
+pub(crate) fn admission(
+    when: When,
+    gate: Option<&Gate>,
+    skip_draft: bool,
+    visibility: Visibility,
+) -> String {
+    let extra = visibility_part(visibility).into_iter().collect::<Vec<_>>();
+    match condition(when, gate, false, skip_draft, &extra) {
+        Some(predicate) => format!(
+            "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
+            predicate.trim_start_matches("${{ ").trim_end_matches(" }}")
+        ),
+        None => format!("${{{{ {ACTIVE_EVENT} }}}}"),
     }
 }
 
