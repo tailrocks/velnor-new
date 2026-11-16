@@ -53,10 +53,7 @@ pub enum ReleaseError {
     UnsafeRoot {
         root: String,
     },
-    VersionEndsInLock {
-        manifest: String,
-        version: String,
-    },
+    VersionEndsInLock(String, String),
     DuplicateBinary {
         package: String,
     },
@@ -317,10 +314,6 @@ impl ReleaseError {
             Self::UnsafeRoot { root } => write!(
                 f,
                 ".velnor/release.toml: root {root:?} must be \".\" or a relative path without empty, \".\" or \"..\" components"
-            ),
-            Self::VersionEndsInLock { manifest, version } => write!(
-                f,
-                "{manifest}: version {version:?} would end a release tag in \".lock\", which git refuses"
             ),
             Self::DuplicatePackage { root, package } => write!(
                 f,

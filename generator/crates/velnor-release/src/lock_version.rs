@@ -49,10 +49,7 @@ pub(crate) fn check_versions(
                 .into_iter()
                 .find(|version| version.as_bytes().ends_with(b".lock"))
             {
-                return Err(ReleaseError::VersionEndsInLock {
-                    manifest: path.clone(),
-                    version,
-                });
+                return Err(ReleaseError::VersionEndsInLock(path.clone(), version));
             }
         }
     }

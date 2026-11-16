@@ -59,7 +59,7 @@ fn a_version_that_would_end_the_tag_in_lock_is_refused_before_publication() {
         .insert("Cargo.toml".to_owned(), manifest("1.2.3-alpha.lock"));
     let error = refusal(&files);
     assert!(
-        matches!(error, Some(ReleaseError::VersionEndsInLock { .. })),
+        matches!(error, Some(ReleaseError::VersionEndsInLock(..))),
         "{error:?}"
     );
     files
