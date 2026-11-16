@@ -64,25 +64,38 @@ pub(super) fn sources_order_ok(steps: &[Step]) -> bool {
 
 pub(super) fn tools_order_ok(steps: &[Step]) -> bool {
     let at = |role| steps.iter().position(|step| step.role == Some(role));
-    let (Some(checkout), Some(mise), Some(identity), Some(probe), Some(scrub), Some(save)) = (
+    let (
+        Some(checkout),
+        Some(mise),
+        Some(identity),
+        Some(probe),
+        Some(scrub),
+        Some(verify),
+        Some(save),
+    ) = (
         at(StepRole::Checkout),
         at(StepRole::MiseSetup),
         at(StepRole::ToolsCacheIdentity),
         at(StepRole::ToolsCacheRestore),
         at(StepRole::ToolsCacheScrub),
+        at(StepRole::ToolsCacheVerify),
         at(StepRole::ToolsCacheSave),
-    ) else {
+    )
+    else {
         return false;
     };
     checkout < mise
         && mise < identity
         && identity < probe
         && probe < scrub
+        && scrub < verify
+        && verify + 1 == save
+        && steps[verify].condition.as_deref() == Some(TOOLS_PRODUCER_INSTALL_CONDITION)
         && save + 1 == steps.len()
         && steps.iter().enumerate().all(|(index, step)| {
             if step.role == Some(StepRole::ToolsCacheScrub) || is_install_role(step.role) {
                 index >= scrub
-                    && index < save
+                    && index < verify
                     && step.condition.as_deref() == Some(TOOLS_PRODUCER_INSTALL_CONDITION)
                     && installed_verifier_only(step)
             } else {

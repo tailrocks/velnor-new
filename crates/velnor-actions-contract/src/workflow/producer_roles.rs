@@ -44,6 +44,7 @@ pub(super) fn tools_role(role: StepRole) -> bool {
             | StepRole::ToolsCacheIdentity
             | StepRole::ToolsCacheRestore
             | StepRole::ToolsCacheScrub
+            | StepRole::ToolsCacheVerify
             | StepRole::PreparePinnedTools
             | StepRole::PrepareRustComponents
             | StepRole::VerifyRustManifest

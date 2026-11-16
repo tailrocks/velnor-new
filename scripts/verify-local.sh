@@ -256,6 +256,18 @@ if [ "$(uname -s)" = Linux ]; then
 fi
 pass "toolchain"
 
+if ! MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks install "aqua:jdx/mise@$POLICY_MISE" >>"$TOOLCHAIN_LOG" 2>&1; then
+  fail "nonrust-tools-fixture (pinned Mise unavailable; log: $TOOLCHAIN_LOG)"
+  exit 1
+fi
+NONRUST_FIXTURE_MISE="$(MISE_LOCKFILE=0 mise --no-config --no-env --no-hooks which mise --tool "aqua:jdx/mise@$POLICY_MISE")" || exit 1
+VELNOR_NONRUST_TOOLS_FIXTURE="$LOG_DIR/nonrust-tools-fixture"
+if ! "$BUN_BIN" scripts/provision-nonrust-tools-fixture.ts "$VELNOR_NONRUST_TOOLS_FIXTURE" "$NONRUST_FIXTURE_MISE" >>"$TOOLCHAIN_LOG" 2>&1; then
+  fail "nonrust-tools-fixture (provision failed; log: $TOOLCHAIN_LOG)"
+  exit 1
+fi
+export VELNOR_NONRUST_TOOLS_FIXTURE
+
 stage fmt "${MISE_EXEC[@]}" cargo fmt --all --check
 HK_BIN="$(MISE_AUTO_INSTALL=false MISE_OFFLINE=true mise which hk --tool hk@2.8.0 2>>"$TOOLCHAIN_LOG" || true)"
 if [[ "$HK_BIN" == /* && -x "$HK_BIN" ]]; then

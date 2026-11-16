@@ -7,10 +7,33 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::{CrateJob, CrateObligation, Step, WorkflowPolicy};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
-pub(super) fn image_publication_fixture_step(
+fn nonrust_tools_fixture_step(input: &CrateJobInputs<'_>) -> Result<Vec<Step>, OrchestratorError> {
+    let env = crate::matrix_step::task_step_env(input.catalog, &BTreeMap::new(), true)?;
+    let argv = crate::product_release_pins::exec_argv(
+        &[PinnedTool::Bun],
+        "bun",
+        &[
+            "scripts/provision-nonrust-tools-fixture.ts",
+            "$RUNNER_TEMP/velnor-nonrust-tools-fixture",
+        ],
+        input.catalog,
+    )?;
+    Ok(vec![velnor_actions_workflow_renderer::shell_step(
+        "Prepare non-Rust tools fixture",
+        argv,
+        env,
+    )?])
+}
+
+pub(super) fn repository_fixture_steps(
     input: &CrateJobInputs<'_>,
     model: &CrateJob,
 ) -> Result<Vec<Step>, OrchestratorError> {
+    if input.policy == WorkflowPolicy::VelnorRepositoryV1
+        && model.package_name == "velnor-actions-orchestrator"
+    {
+        return nonrust_tools_fixture_step(input);
+    }
     if input.policy != WorkflowPolicy::VelnorRepositoryV1
         || model.package_name != "velnor-actions-cli"
     {

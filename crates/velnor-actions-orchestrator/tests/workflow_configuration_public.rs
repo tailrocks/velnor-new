@@ -130,6 +130,26 @@ mod non_inputs_release;
 mod non_inputs_replay;
 #[path = "workflow_configuration_public/non_inputs_selection.rs"]
 mod non_inputs_selection;
+#[path = "workflow_configuration_public/nonrust_bundle_crypto.rs"]
+mod nonrust_bundle_crypto;
+#[path = "workflow_configuration_public/nonrust_cas.rs"]
+mod nonrust_cas;
+#[path = "workflow_configuration_public/nonrust_cas_timeout.rs"]
+mod nonrust_cas_timeout;
+#[path = "workflow_configuration_public/nonrust_family_fixture.rs"]
+mod nonrust_family_fixture;
+#[path = "workflow_configuration_public/nonrust_identity.rs"]
+mod nonrust_identity;
+#[path = "workflow_configuration_public/nonrust_process.rs"]
+mod nonrust_process;
+#[path = "workflow_configuration_public/nonrust_producer_subset.rs"]
+mod nonrust_producer_subset;
+#[path = "workflow_configuration_public/nonrust_tools_corruption.rs"]
+mod nonrust_tools_corruption;
+#[path = "workflow_configuration_public/nonrust_tools_fixture.rs"]
+mod nonrust_tools_fixture;
+#[path = "workflow_configuration_public/nonrust_tools_roundtrip.rs"]
+mod nonrust_tools_roundtrip;
 #[path = "workflow_configuration_public/one_job_per_crate.rs"]
 mod one_job_per_crate;
 #[path = "workflow_configuration_public/parallel_owners.rs"]

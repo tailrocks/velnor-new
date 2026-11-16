@@ -50,6 +50,7 @@ pub(crate) fn runtime_prelude_action_uses(runs_on: &str) -> Option<&'static str>
 }
 
 const RUST_CHANNEL_MANIFEST_FORM: &str = "channel-bytes-v1";
+const VERIFIED_INSTALL_ARCHIVES_FORM: &str = "verified-install-archives-v1";
 
 #[derive(Debug, Clone, Copy)]
 pub struct ToolsCacheInputs<'a> {
@@ -253,6 +254,12 @@ fn identity_preimage(
         inputs.rustup_toolchain.unwrap_or("").to_owned(),
     ];
     fields.extend(specs.iter().cloned());
+    if specs
+        .iter()
+        .all(|spec| rust_spec_kind(spec) == RustSpecKind::NotRust)
+    {
+        fields.push(VERIFIED_INSTALL_ARCHIVES_FORM.to_owned());
+    }
     fields.push("components".to_owned());
     fields.extend(components.iter().cloned());
     fields.push("paths".to_owned());

@@ -105,17 +105,19 @@ impl Sandbox {
         fs::write(&script, run)?;
         let mut words = shell.split_whitespace();
         let program = resolve_on(words.next().ok_or("empty shell")?, SYSTEM_PATH)?;
-        let output = Command::new(program)
-            .args(words.map(|word| word.replace("{0}", &script.display().to_string())))
-            .env_clear()
-            .env("PATH", SYSTEM_PATH)
-            .envs(self.base_env())
-            .envs(extra.iter().map(|(name, value)| (name, value)))
-            .current_dir(self.workspace.path())
-            .output()?;
+        let output = super::nonrust_process::output(
+            Command::new(program)
+                .args(words.map(|word| word.replace("{0}", &script.display().to_string())))
+                .env_clear()
+                .env("PATH", SYSTEM_PATH)
+                .envs(self.base_env())
+                .envs(extra.iter().map(|(name, value)| (name, value)))
+                .current_dir(self.workspace.path()),
+        )?;
         Ok(Captured {
             code: output.status.code(),
             stdout: String::from_utf8(output.stdout)?,
+            stderr: String::from_utf8(output.stderr)?,
             github_output: String::new(),
         })
     }
@@ -124,6 +126,7 @@ impl Sandbox {
 pub(super) struct Captured {
     pub(super) code: Option<i32>,
     pub(super) stdout: String,
+    pub(super) stderr: String,
     pub(super) github_output: String,
 }
 

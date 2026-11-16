@@ -230,6 +230,7 @@ impl ProducerKind {
                     && count(StepRole::ToolsCacheIdentity) == 1
                     && count(StepRole::ToolsCacheRestore) == 1
                     && count(StepRole::ToolsCacheScrub) == 1
+                    && count(StepRole::ToolsCacheVerify) == 1
                     && count(StepRole::ToolsCacheSave) == 1
                     && count(StepRole::PreparePinnedTools) >= 1
                     && tools_order_ok(&job.steps)

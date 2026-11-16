@@ -165,39 +165,40 @@ fn scrub_admission_step() -> Yaml {
     ])
 }
 
-const INSTALLS_VERIFY_SCRIPT: &str = include_str!("cache_steps_tools_installs_verify.sh");
+#[path = "cache_steps_tools_verify.rs"]
+mod verify;
+use verify::installs_verify_step;
 
-pub(crate) const INSTALLS_VERIFY_NAME: &str = "Re-verify restored Mise installs";
-
-fn installs_verify_step(tool_pins: &[String]) -> Result<Yaml, RenderError> {
-    for pin in tool_pins {
-        let fields: Vec<&str> = pin.split(' ').collect();
-        let ok = fields.len() == 5
-            && fields.iter().all(|field| {
-                !field.is_empty()
-                    && field
-                        .bytes()
-                        .all(|b| b.is_ascii_alphanumeric() || b"._-:/@+".contains(&b))
-            })
-            && fields[3].starts_with("https://")
-            && fields[4].len() == 64;
-        if !ok {
-            return Err(RenderError::InvalidWorkflow(format!("bad_tool_pin:{pin}")));
-        }
-    }
-    Ok(Yaml::Map(vec![
-        ("name".to_owned(), Yaml::str(INSTALLS_VERIFY_NAME)),
-        ("id".to_owned(), Yaml::str("verify")),
-        ("shell".to_owned(), Yaml::str(crate::VERIFY_VERIFIER_SHELL)),
+pub(crate) fn verify_action_file(
+    version: &str,
+    pins: &[String],
+) -> Result<RenderedFile, RenderError> {
+    let action = Yaml::Map(vec![
+        ("name".to_owned(), Yaml::str("Verify installed Mise tools")),
         (
-            "env".to_owned(),
-            Yaml::Map(vec![(
-                "VELNOR_TOOL_PINS".to_owned(),
-                Yaml::str(tool_pins.join("\n")),
-            )]),
+            "description".to_owned(),
+            Yaml::str("Verify installed tools and retain pinned archives for fresh readers."),
         ),
-        ("run".to_owned(), Yaml::str(INSTALLS_VERIFY_SCRIPT)),
-    ]))
+        (
+            "runs".to_owned(),
+            Yaml::Map(vec![
+                ("using".to_owned(), Yaml::str("composite")),
+                (
+                    "steps".to_owned(),
+                    Yaml::Seq(vec![verify::producer_verify_step(pins)?]),
+                ),
+            ]),
+        ),
+    ]);
+    let bytes = marker::with_marker(version, &crate::yaml::render_yaml(&action))?;
+    Ok(RenderedFile {
+        path: format!(
+            "{}/action.yml",
+            velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_VERIFY_USES
+                .trim_start_matches("./")
+        ),
+        bytes,
+    })
 }
 
 fn action_outputs() -> Yaml {

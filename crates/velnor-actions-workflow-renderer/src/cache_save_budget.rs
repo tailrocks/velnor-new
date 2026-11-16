@@ -120,6 +120,9 @@ pub(crate) fn apply(steps: &mut Vec<Yaml>, minutes: u16) -> Result<(), RenderErr
             else {
                 return Err(invalid());
             };
+            if condition == "false" {
+                continue;
+            }
             output.push(admission(&id, minutes, condition));
             *condition = format!("({condition}) && steps.{id}-budget.outputs.admitted == 'true'");
             output.push(step);

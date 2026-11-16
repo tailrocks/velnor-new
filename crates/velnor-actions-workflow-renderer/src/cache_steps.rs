@@ -58,6 +58,7 @@ pub(crate) use tools::{
 
 pub(crate) use tools::restore_action_file as tools_restore_action_file;
 pub(crate) use tools::scrub_action_file as tools_scrub_action_file;
+pub(crate) use tools::verify_action_file as tools_verify_action_file;
 
 pub(crate) fn tools_cache_restore_step(
     key: &str,

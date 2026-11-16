@@ -74,6 +74,8 @@ pub enum StepRole {
 
     ToolsCacheScrub,
 
+    ToolsCacheVerify,
+
     CargoSourcesRestore,
 
     CargoSourcesSave,
