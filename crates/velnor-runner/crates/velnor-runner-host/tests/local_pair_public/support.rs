@@ -97,6 +97,13 @@ pub(crate) async fn build_program(
         .ok_or_else(|| "built image has no id".into())
 }
 
+pub(crate) fn untag_only() -> RemoveImageOptions {
+    RemoveImageOptions {
+        noprune: true,
+        ..Default::default()
+    }
+}
+
 pub(crate) fn request(environment: &str, network: &str, image: &str) -> LocalPairRequest {
     LocalPairRequest {
         environment: environment.to_owned(),
@@ -177,7 +184,7 @@ impl Fixture {
     pub(crate) async fn finish(self) -> TestResult<()> {
         self.docker.remove_network(&self.network).await?;
         self.docker
-            .remove_image(&self.tag, None::<RemoveImageOptions>, None)
+            .remove_image(&self.tag, Some(untag_only()), None)
             .await?;
         Ok(())
     }
