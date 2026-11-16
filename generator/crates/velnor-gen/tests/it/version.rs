@@ -23,23 +23,24 @@ fn version_prints_the_version_and_a_commit() {
 
 #[test]
 fn only_the_tag_of_the_version_of_the_program_is_released() {
+    let version = env!("CARGO_PKG_VERSION");
+    let tag = format!("rust-ci-v{version}");
     assert_eq!(
-        check_tag("0.1.79", "rust-ci-v0.1.79"),
-        Ok("tag rust-ci-v0.1.79 names version 0.1.79".to_owned())
+        check_tag(version, &tag),
+        Ok(format!("tag {tag} names version {version}"))
     );
     for tag in [
-        "rust-ci-v0.1.80",
-        "rust-ci-v0.1.7",
-        "rust-ci-v0.1.79-rc1",
-        "rust-ci-v0.1.79 ",
-        "v0.1.79",
-        "0.1.79",
-        "",
+        "rust-ci-v0.0.0".to_owned(),
+        format!("{tag}-rc1"),
+        format!("{tag} "),
+        format!("v{version}"),
+        version.to_owned(),
+        String::new(),
     ] {
         assert_eq!(
-            check_tag("0.1.79", tag),
+            check_tag(version, &tag),
             Err(format!(
-                "tag {tag} must be rust-ci-v0.1.79, because this program is version 0.1.79"
+                "tag {tag} must be rust-ci-v{version}, because this program is version {version}"
             ))
         );
     }

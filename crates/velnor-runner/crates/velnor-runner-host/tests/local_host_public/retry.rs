@@ -7,8 +7,9 @@ use velnor_runner_host::local::supervise;
 use std::time::{Duration, Instant};
 
 use super::proxy::{Faults, Proxy, Wait};
-use super::scenario::Scenario;
+use super::scenario::{Scenario, finish_job};
 use super::support::TestResult;
+use std::sync::atomic::Ordering;
 
 fn mints(events: &[String]) -> usize {
     events
@@ -129,5 +130,66 @@ async fn local_slot_counts_only_consecutive_failures_toward_the_retry_bound() ->
     scenario.finish().await?;
     assert_eq!(ended?, Ok(()), "{events:?}");
     assert!(mints(&events) >= 7, "{events:?}");
+    Ok(())
+}
+
+async fn wait_for_event(scenario: &Scenario, event: &str) {
+    let started = Instant::now();
+    while !scenario.fake().events().iter().any(|seen| seen == event)
+        && started.elapsed() < Duration::from_secs(60)
+    {
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+}
+
+#[tokio::test]
+async fn local_slot_retries_the_agent_retirement_after_its_pair_was_removed() -> TestResult<()> {
+    let mut scenario = Scenario::new().await?;
+    scenario.fake().delete_failures.store(1, Ordering::SeqCst);
+    let plan = scenario.plan(1, 0)?;
+    scenario.start(plan);
+    let run = async {
+        let first = super::runner(&scenario, "trusted", &[]).await?;
+        finish_job(&scenario.fixture.docker, &first.runner).await?;
+        wait_for_event(&scenario, "delete:trusted:agent-1").await;
+        TestResult::Ok(())
+    }
+    .await;
+    let stopped = scenario.stop().await?;
+    let events = scenario.fake().events();
+    scenario.finish().await?;
+    run?;
+    assert!(
+        events.contains(&"delete_failed:trusted:agent-1".to_owned()),
+        "{events:?}"
+    );
+    assert!(
+        events.contains(&"delete:trusted:agent-1".to_owned()),
+        "{events:?}"
+    );
+    assert_eq!(stopped, Ok(()), "{events:?}");
+    Ok(())
+}
+
+#[tokio::test]
+async fn local_slot_keeps_the_start_failure_when_retiring_the_agent_also_fails() -> TestResult<()> {
+    let scenario = Scenario::new().await?;
+    scenario
+        .fake()
+        .delete_failures
+        .store(usize::MAX, Ordering::SeqCst);
+    let mut plan = scenario.plan(1, 0)?;
+    plan.runner_image = format!("sha256:{}", "0".repeat(64));
+    let docker = scenario.fixture.docker.clone();
+    let state = scenario.state.path().to_path_buf();
+    let ended = tokio::time::timeout(
+        Duration::from_secs(300),
+        supervise(docker, plan, &state, std::future::pending()),
+    )
+    .await;
+    let events = scenario.fake().events();
+    scenario.fake().delete_failures.store(0, Ordering::SeqCst);
+    scenario.finish().await?;
+    assert_eq!(ended?, Err(HostError::Docker), "{events:?}");
     Ok(())
 }

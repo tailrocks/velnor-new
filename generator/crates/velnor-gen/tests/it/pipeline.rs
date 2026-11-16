@@ -82,13 +82,19 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
         .collect();
     assert_eq!(
         jobs,
-        ["  rust-plan:", "  rust-root:", "  rust-lab:", "  required:"]
+        [
+            "  rust-plan:",
+            "  rust-root:",
+            "  rust-lab:",
+            "  rust-inputs-audit:",
+            "  required:"
+        ]
     );
     assert!(text.contains(
         "  rust-lab:\n    needs:\n      - rust-plan\n    if: '${{ needs.rust-plan.outputs.rust_lab_mode != ''none'' }}'\n"
     ));
     assert!(text.contains(
-        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n    if: '${{ !cancelled() }}'\n"
+        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ !cancelled() }}'\n"
     ));
     Ok(())
 }

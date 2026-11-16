@@ -8,6 +8,8 @@ use velnor_model::{
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
+const DOC_RUN: &str = "cargo doc $PACKAGE_ARGS --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
+
 pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
     let (name, run, env): (String, String, Vec<(String, Value)>) = match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
@@ -55,12 +57,7 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
             "cargo test --doc $PACKAGE_ARGS --locked".into(),
             vec![],
         ),
-        CargoCommand::Doc => (
-            "Documentation".into(),
-            "cargo doc $PACKAGE_ARGS --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'"
-                .into(),
-            vec![],
-        ),
+        CargoCommand::Doc => ("Documentation".into(), DOC_RUN.into(), vec![]),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
             format!("cargo check -p {package} --locked"),
@@ -69,6 +66,11 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
         CargoCommand::Build { package } => (
             format!("Build {package}"),
             format!("cargo build -p {package} --locked"),
+            vec![],
+        ),
+        CargoCommand::BuildAll => (
+            "Build every target".into(),
+            "cargo build --workspace --all-targets --locked".into(),
             vec![],
         ),
         CargoCommand::Deny { manifest } => deny(manifest),

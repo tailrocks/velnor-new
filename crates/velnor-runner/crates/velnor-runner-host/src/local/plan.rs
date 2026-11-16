@@ -137,7 +137,9 @@ impl Plan {
         let sides_valid = !raw.sides.is_empty()
             && raw.sides.iter().enumerate().all(|(index, side)| {
                 side.pairs <= MAX_PAIRS_PER_SIDE
-                    && raw.sides[..index].iter().all(|seen| seen.side != side.side)
+                    && raw.sides[..index]
+                        .iter()
+                        .all(|seen| seen.side != side.side && seen.network != side.network)
             })
             && raw.sides.iter().any(|side| side.pairs > 0);
         if !(32..=128).contains(&raw.token.len()) || !token_plain || !sides_valid {

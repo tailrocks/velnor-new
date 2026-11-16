@@ -28,6 +28,17 @@ fn pull(fork: bool) -> serde_json::Value {
 }
 
 #[test]
+fn a_fork_pull_request_head_repository_has_its_own_id() {
+    let id = |value: &serde_json::Value| value["pull_request"]["head"]["repo"]["id"].as_u64();
+    let fork = pull(true);
+    let own = pull(false);
+    assert!(id(&fork).is_some_and(|id| id > 0), "{fork}");
+    assert_ne!(id(&fork), id(&own));
+    assert_ne!(id(&fork), fork["repository"]["id"].as_u64());
+    assert_eq!(id(&own), own["repository"]["id"].as_u64());
+}
+
+#[test]
 fn only_a_pull_request_from_a_fork_is_untrusted_and_it_never_falls_back_to_the_trusted_side() {
     let push = REPOSITORY.push(&Push {
         branch: "patch",

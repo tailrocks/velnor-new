@@ -44,7 +44,7 @@ fn the_helper_key_builds_the_helper_once_and_every_lane_downloads_it() -> TestRe
         .iter()
         .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
         .collect();
-    assert_eq!(lanes.len(), 5);
+    assert_eq!(lanes.len(), 6);
     assert_eq!(text.matches("Install velnor-ci").count(), 2);
     assert_eq!(text.matches("Download velnor-ci").count(), lanes.len());
     assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
@@ -80,7 +80,7 @@ fn without_the_helper_key_no_job_builds_or_downloads_the_helper() -> TestResult 
     assert!(!job_ids(&text).contains(&"rust-helper"));
     assert!(!text.contains("Download velnor-ci"));
     assert!(!text.contains("upload-artifact"));
-    assert!(!text.contains("cargo build"));
+    assert!(!text.contains("cargo build -p"));
     assert!(text.matches("Install velnor-ci").count() > 2);
     Ok(())
 }
