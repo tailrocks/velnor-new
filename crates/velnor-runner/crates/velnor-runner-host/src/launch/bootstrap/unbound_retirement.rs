@@ -21,13 +21,20 @@ use crate::{
     launch::SelectedEngineContext,
 };
 
+#[path = "unbound_retirement/bounded.rs"]
+mod bounded;
+#[path = "unbound_retirement/initializer.rs"]
+mod initializer;
+
+pub(crate) use bounded::{abandon_and_retire_unbound_pair_before, retire_uncertain_unbound_pairs};
+
 #[cfg(test)]
 #[path = "unbound_retirement/tests.rs"]
-mod tests;
+pub(crate) mod tests;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(crate) async fn abandon_and_retire_unbound_pair(
+async fn abandon_and_retire_unbound_pair(
     docker: &Docker,
     scope: &ConnectionJournal,
     engine: &SelectedEngineContext,
@@ -205,6 +212,9 @@ impl Effects<'_> {
                 Some(&container.id),
                 "removed_and_absent",
             ));
+        }
+        if let Some(helper) = self.claim.initializer() {
+            observations.push(Box::pin(self.remove_initializer(helper)).await?);
         }
         Ok(observations)
     }

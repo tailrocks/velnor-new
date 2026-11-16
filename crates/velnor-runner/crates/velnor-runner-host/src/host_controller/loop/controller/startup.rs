@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Instant};
 
 use bollard::Docker;
 
@@ -86,12 +86,57 @@ pub(super) async fn prepare_startup(
 
     let worker_images =
         prepare_worker_images(docker, journal, selected_engine, image_authority).await?;
-    let admission_ready =
-        prepare_storage_profile(current, docker, journal, image_authority, &worker_images).await?;
+    let admission_ready = finish_startup(
+        FinishInputs {
+            current,
+            state,
+            docker,
+            selected_engine,
+            journal,
+            image_authority,
+        },
+        &worker_images,
+    )
+    .await?;
     Ok(StartupResources {
         worker_images,
         admission_ready,
     })
+}
+
+pub(in crate::host_controller::loop_driver) struct FinishInputs<'a> {
+    pub(in crate::host_controller::loop_driver) current: &'a HostConfig,
+    pub(in crate::host_controller::loop_driver) state: &'a Path,
+    pub(in crate::host_controller::loop_driver) docker: &'a Docker,
+    pub(in crate::host_controller::loop_driver) selected_engine: &'a SelectedEngineContext,
+    pub(in crate::host_controller::loop_driver) journal: &'a Journal,
+    pub(in crate::host_controller::loop_driver) image_authority: &'a ImageAuthority,
+}
+
+pub(in crate::host_controller::loop_driver) async fn finish_startup(
+    inputs: FinishInputs<'_>,
+    worker_images: &VerifiedWorkerImages,
+) -> Result<bool, ListenFault> {
+    let FinishInputs {
+        current,
+        state,
+        docker,
+        selected_engine,
+        journal,
+        image_authority,
+    } = inputs;
+    setup::reconcile_removed_at_startup(&setup::RemovedStartup {
+        state,
+        config: current,
+        journal,
+        docker,
+        engine: selected_engine,
+        images: worker_images,
+        image_authority,
+        deadline: Instant::now() + setup::REMOVED_STARTUP_BUDGET,
+    })
+    .await;
+    prepare_storage_profile(current, docker, journal, image_authority, worker_images).await
 }
 
 async fn prepare_storage_profile(
