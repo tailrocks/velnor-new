@@ -16,8 +16,9 @@ pub fn break_ties(files: &[(String, u64)]) -> Result<Vec<(String, u64)>, CiError
     let mut moved = Vec::new();
     for (time, mut paths) in groups {
         paths.sort_unstable();
+        let mut cursor = Cursor::new(time);
         for path in paths.into_iter().skip(1) {
-            let candidate = free_time(&taken, time).ok_or_else(|| {
+            let candidate = cursor.next_free(&taken).ok_or_else(|| {
                 CiError::new(format!(
                     "cannot give {path} a modification time earlier than {time} ns that no other tracked file has"
                 ))
@@ -30,13 +31,32 @@ pub fn break_ties(files: &[(String, u64)]) -> Result<Vec<(String, u64)>, CiError
     Ok(moved)
 }
 
-fn free_time(taken: &BTreeSet<u64>, time: u64) -> Option<u64> {
-    let mut candidate = time;
-    while candidate > 0 {
-        candidate = candidate.saturating_sub(TIE_STEP_NS);
-        if !taken.contains(&candidate) {
-            return Some(candidate);
+struct Cursor {
+    stepped: u64,
+    scanned: u64,
+}
+
+impl Cursor {
+    fn new(time: u64) -> Self {
+        Self {
+            stepped: time,
+            scanned: time,
         }
     }
-    (0..time).rev().find(|earlier| !taken.contains(earlier))
+
+    fn next_free(&mut self, taken: &BTreeSet<u64>) -> Option<u64> {
+        while self.stepped > 0 {
+            self.stepped = self.stepped.saturating_sub(TIE_STEP_NS);
+            if !taken.contains(&self.stepped) {
+                return Some(self.stepped);
+            }
+        }
+        while self.scanned > 0 {
+            self.scanned -= 1;
+            if !taken.contains(&self.scanned) {
+                return Some(self.scanned);
+            }
+        }
+        None
+    }
 }

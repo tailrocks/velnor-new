@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 
@@ -9,6 +10,13 @@ use crate::error::CiError;
 use crate::ties::break_ties;
 
 pub fn break_time_ties(root: &Path) -> Result<String, CiError> {
+    break_time_ties_with(root, &set_modified_ns)
+}
+
+pub fn break_time_ties_with(
+    root: &Path,
+    set: &dyn Fn(&Path, u64) -> Result<(), CiError>,
+) -> Result<String, CiError> {
     let (top, paths) = tracked_paths(root)?;
     let mut files = Vec::with_capacity(paths.len());
     for path in paths {
@@ -20,7 +28,18 @@ pub fn break_time_ties(root: &Path) -> Result<String, CiError> {
     }
     let moved = break_ties(&files)?;
     for (path, time) in &moved {
-        set_modified_ns(&top.join(path), *time)?;
+        set(&top.join(path), *time)?;
+    }
+    if !moved.is_empty() {
+        let mut seen: BTreeMap<u64, &str> = BTreeMap::new();
+        for (path, _) in &files {
+            let time = modified_ns(&top.join(path))?;
+            if let Some(other) = seen.insert(time, path) {
+                return Err(CiError::new(format!(
+                    "{other} and {path} still share a modification time ({time} ns) after tie breaking; the filesystem cannot hold times this close together, so the cache is not used"
+                )));
+            }
+        }
     }
     Ok(format!(
         "gave {} tracked files a modification time no other tracked file has, out of {}\n",

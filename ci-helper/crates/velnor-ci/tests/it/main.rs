@@ -41,6 +41,7 @@ mod run;
 mod run_group;
 mod setup_pure;
 mod support;
+mod ties;
 mod time;
 mod timings;
 mod timings_runs;
