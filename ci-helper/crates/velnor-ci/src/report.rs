@@ -233,6 +233,7 @@ impl LaneMetrics {
 pub fn configuration(argv: &[String]) -> String {
     let mut options = BTreeMap::new();
     let mut features = BTreeSet::new();
+    let mut targets = BTreeSet::new();
     let mut configs = Vec::new();
     let mut words = argv.iter();
     while let Some(word) = words.next() {
@@ -250,6 +251,9 @@ pub fn configuration(argv: &[String]) -> String {
                             .split(|character: char| character == ',' || character.is_whitespace())
                             .filter(|feature| !feature.is_empty()),
                     ),
+                    "--target" => {
+                        targets.insert(value);
+                    }
                     "--config" => configs.push(value),
                     _ => {
                         options.insert(flag, value);
@@ -265,5 +269,5 @@ pub fn configuration(argv: &[String]) -> String {
             _ => {}
         }
     }
-    format!("{options:?} {features:?} {configs:?}")
+    format!("{options:?} {features:?} {targets:?} {configs:?}")
 }
