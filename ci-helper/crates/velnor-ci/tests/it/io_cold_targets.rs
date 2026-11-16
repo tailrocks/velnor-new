@@ -144,3 +144,44 @@ fn restored_validates_every_configured_target_before_removing_any_cache() {
         assert_configured_checkout(&repo);
     }
 }
+
+#[test]
+fn restored_preserves_tracked_files_in_a_default_target_without_metadata() {
+    let repo = Repo::new("cold-default-tracked");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write_unstaged("target/tracked", "checkout data\n");
+    repo.git(&["add", "--force", "target/tracked"]);
+    repo.git(&[
+        "ls-files",
+        "--error-unmatch",
+        "src/lib.rs",
+        "target/tracked",
+    ]);
+    repo.set_mtime("src/lib.rs", UNIX_EPOCH - Duration::from_secs(1));
+    stale_target(&repo, "target");
+    assert!(!repo.root().join(".velnor/rust-metadata.json").exists());
+    let output = helper(&repo, &["restored"]);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("contains checkout files"),
+        "{output:?}"
+    );
+    assert!(!String::from_utf8_lossy(&output.stdout).contains("building cold"));
+    for (path, expected) in [
+        ("src/lib.rs", "pub fn one() {}\n"),
+        ("target/tracked", "checkout data\n"),
+        ("target/debug/.fingerprint/stale/lib-stale", "x"),
+    ] {
+        assert_eq!(
+            std::fs::read(repo.root().join(path)).unwrap_or_default(),
+            expected.as_bytes()
+        );
+    }
+    assert!(repo.root().join(".git").is_dir());
+    repo.git(&[
+        "ls-files",
+        "--error-unmatch",
+        "src/lib.rs",
+        "target/tracked",
+    ]);
+}

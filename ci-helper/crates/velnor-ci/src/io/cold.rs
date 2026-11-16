@@ -38,28 +38,26 @@ pub fn cold_on_failure(
 }
 
 pub fn every_root_target(root: &Path) -> Result<Vec<PathBuf>, CiError> {
-    let listed = tracked_paths(root);
-    let top = listed.as_ref().map_or(root, |listed| listed.top.as_path());
-    if top
+    let listed = tracked_paths(root)?;
+    let targets = if listed
+        .top
         .join(METADATA_PATH.as_str())
         .try_exists()
         .map_err(|e| CiError::new(format!("cannot find {METADATA_PATH}: {e}")))?
     {
-        let checkout =
-            velnor_gen::io::read_recorded_checkout(top).map_err(|e| CiError::new(e.to_string()))?;
+        let checkout = velnor_gen::io::read_recorded_checkout(&listed.top)
+            .map_err(|e| CiError::new(e.to_string()))?;
         let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
         let mut targets = Vec::new();
         for root in facts.rust_roots {
             let target = checkout.root.join(root.target_dir.as_str());
-            check_target(&checkout.root, &target)?;
             if !targets.contains(&target) {
                 targets.push(target);
             }
         }
-        return Ok(targets);
-    }
-    let mut targets = vec![root.join("target")];
-    if let Ok(listed) = listed {
+        targets
+    } else {
+        let mut targets = vec![root.join("target")];
         for path in listed.paths {
             if let Some(dir) = path.strip_suffix("Cargo.toml")
                 && (dir.is_empty() || dir.ends_with('/'))
@@ -70,6 +68,10 @@ pub fn every_root_target(root: &Path) -> Result<Vec<PathBuf>, CiError> {
                 }
             }
         }
+        targets
+    };
+    for target in &targets {
+        check_target(root, target)?;
     }
     Ok(targets)
 }
