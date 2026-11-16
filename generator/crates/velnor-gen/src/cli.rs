@@ -57,4 +57,11 @@ pub enum ReleaseCommand {
         about = "Print the JSON of the tag ruleset that lets only the velnor-release App create the release tags, from the tag patterns in the release-plz.toml files; pass it to terraform or to gh api --method POST repos/<owner>/<repo>/rulesets --input -"
     )]
     Ruleset,
+    #[command(
+        about = "Compare the live tag rulesets, a JSON array of the full ruleset objects that an admin read of repos/<owner>/<repo>/rulesets/<id> returns, with the generated ones, bypass actors included; exits 1 on a difference"
+    )]
+    RulesetDrift {
+        #[arg(help = "The file with the live rulesets")]
+        live: PathBuf,
+    },
 }

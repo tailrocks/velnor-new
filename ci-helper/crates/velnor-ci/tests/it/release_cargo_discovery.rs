@@ -241,3 +241,34 @@ fn a_non_crates_io_default_registry_is_refused_only_for_a_root_that_publishes() 
         assert_eq!(checkout.check("tools/release-plz.toml").0, code, "{plz}");
     }
 }
+
+#[test]
+fn a_regular_file_named_dot_cargo_is_not_read_as_cargo_configuration() {
+    let checkout = Checkout::new("dot-cargo-file");
+    checkout.write("release-plz.toml", COMPLIANT);
+    checkout.write(".cargo", PROVIDER);
+    assert_eq!(checkout.check("release-plz.toml").0, Some(0));
+    let nested = Checkout::new("dot-cargo-file-nested");
+    nested.write("tools/release-plz.toml", COMPLIANT);
+    nested.write("tools/.cargo", "not = [valid toml\n");
+    assert_eq!(nested.check("tools/release-plz.toml").0, Some(0));
+}
+
+#[test]
+fn a_proxy_or_ca_override_is_refused_only_for_a_root_that_publishes_to_crates_io() {
+    for config in [
+        "[http]\nproxy = \"http://proxy.example:8080\"\n",
+        "[http]\ncainfo = \"ca.pem\"\n",
+    ] {
+        for (plz, code) in [
+            (COMPLIANT.to_owned(), Some(1)),
+            (format!("{COMPLIANT}publish = false\n"), Some(0)),
+            (format!("{COMPLIANT}git_only = true\n"), Some(0)),
+        ] {
+            let checkout = Checkout::new("proxy-mode");
+            checkout.write("tools/release-plz.toml", &plz);
+            checkout.write("tools/.cargo/config.toml", config);
+            assert_eq!(checkout.check("tools/release-plz.toml").0, code, "{plz}");
+        }
+    }
+}

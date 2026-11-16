@@ -125,7 +125,11 @@ fn gated_on(entry: &toml::Value, defaults: &BTreeSet<String>) -> bool {
         .and_then(toml::Value::as_array)
         .into_iter()
         .flatten()
-        .all(|feature| feature.as_str().is_some_and(|name| defaults.contains(name)))
+        .all(|feature| {
+            feature
+                .as_str()
+                .is_some_and(|name| name.contains('/') || defaults.contains(name))
+        })
 }
 
 pub(crate) fn enabled_features(manifest: &toml::Table, requested: &[String]) -> BTreeSet<String> {
