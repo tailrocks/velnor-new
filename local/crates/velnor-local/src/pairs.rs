@@ -65,8 +65,10 @@ pub fn listening<'a>(log: &str, slots: &'a [String]) -> Vec<&'a str> {
     slots
         .iter()
         .filter(|slot| {
+            let prefix = format!("pair {slot} ");
             log.lines()
-                .any(|line| line == format!("pair {slot} listening"))
+                .rfind(|line| line.starts_with(&prefix))
+                .is_some_and(|line| line == format!("pair {slot} listening"))
         })
         .map(String::as_str)
         .collect()

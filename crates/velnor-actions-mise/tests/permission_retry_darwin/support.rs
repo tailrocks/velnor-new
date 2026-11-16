@@ -50,9 +50,9 @@ struct ProbeReceipt {
     compile_argv: Vec<String>,
 }
 
-fn preprovisioned_library() -> Result<PathBuf, Box<dyn std::error::Error>> {
+pub(super) fn preprovisioned_library() -> Result<PathBuf, Box<dyn std::error::Error>> {
     let receipt_path = std::env::var_os("VELNOR_GROUP_PROBE_RECEIPT")
-        .ok_or_else(|| io::Error::other("preprovisioned interposer receipt is missing"))?;
+        .ok_or_else(|| io::Error::other("VELNOR_GROUP_PROBE_RECEIPT is missing; see docs/implemented/ci-maintenance/repo-verification.md, section Local recipe for fixture-dependent tests"))?;
     let receipt_path = PathBuf::from(receipt_path);
     verify_private_artifact(&receipt_path, false, 0o222)?;
     let receipt: ProbeReceipt = serde_json::from_slice(&fs::read(&receipt_path)?)?;

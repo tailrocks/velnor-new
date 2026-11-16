@@ -177,7 +177,7 @@ pub(crate) fn check(
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }
     let locked = release_plz_tools(&mise_lock);
-    let mut pinned = None;
+    let mut pinned: Option<ReleasePlzDownload> = None;
     for (key, value) in configured {
         if let Some(field) = value
             .as_table()
@@ -217,10 +217,17 @@ pub(crate) fn check(
                 url,
             });
         }
-        pinned = Some(
-            linux_x64_download(entry, wanted)
-                .ok_or_else(|| ReleaseError::ReleasePlzNotLockedForLinux { tool: key.clone() })?,
-        );
+        let download = linux_x64_download(entry, wanted)
+            .ok_or_else(|| ReleaseError::ReleasePlzNotLockedForLinux { tool: key.clone() })?;
+        if let Some(first) = &pinned
+            && first.version != download.version
+        {
+            return Err(ReleaseError::ReleasePlzVersionsConflict {
+                first: first.version.clone(),
+                second: download.version,
+            });
+        }
+        pinned = Some(download);
     }
     pinned.ok_or(ReleaseError::ReleasePlzNotInMiseToml)
 }
