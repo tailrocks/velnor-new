@@ -36,11 +36,9 @@ fn names_of(lane: &str) -> Vec<&str> {
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
     let mut repo = locked("0.1.81")?;
-    for root in ["lab/Cargo.toml"] {
-        let more = view(&["Cargo.toml", root], None)?;
-        repo.rust_metadata = more.rust_metadata;
-        repo.tracked_paths.extend(more.tracked_paths);
-    }
+    let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    repo.rust_metadata = more.rust_metadata;
+    repo.tracked_paths.extend(more.tracked_paths);
     let text = workflow(&repo)?;
     for lane in ["rust-root", "rust-lab"] {
         let header = format!("  {lane}:\n");
