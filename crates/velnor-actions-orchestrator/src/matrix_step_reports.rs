@@ -8,10 +8,6 @@ pub(crate) fn helper_path_for_version(version: &str) -> String {
     velnor_actions_workflow_renderer::plan_report::helper_path_for_version(version)
 }
 
-pub(crate) fn report_wrapper_argv(joined: &str, helper: &str) -> Vec<String> {
-    velnor_actions_workflow_renderer::plan_report::report_wrapper_argv(joined, helper)
-}
-
 pub(crate) fn outcome_path_for_key(matrix_key: &str) -> String {
     velnor_actions_workflow_renderer::plan_report::outcome_path_for_key(matrix_key)
 }

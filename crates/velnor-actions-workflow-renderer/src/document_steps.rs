@@ -210,6 +210,7 @@ pub(crate) fn non_internal_step_to_yaml(
         StepKind::Shell { run, env } => shell_step_to_yaml(step, run, env, job_env, false, None),
         StepKind::Internal { .. }
         | StepKind::TaskExecution { .. }
+        | StepKind::TofuTaskExecution { .. }
         | StepKind::NativeCheckExecution { .. } => Err(RenderError::InvalidWorkflow(
             "internal_op_rejected".to_owned(),
         )),
@@ -281,9 +282,9 @@ pub(crate) fn step_to_yaml(
         {
             crate::task_wrapper::preview_task_step(step, ctx)
         }
-        StepKind::TaskExecution { .. } => Err(RenderError::InvalidWorkflow(
-            "unfactored_task_execution".to_owned(),
-        )),
+        StepKind::TaskExecution { .. } | StepKind::TofuTaskExecution { .. } => Err(
+            RenderError::InvalidWorkflow("unfactored_task_execution".to_owned()),
+        ),
         StepKind::NativeCheckExecution { .. } => native_check_execution::render(
             step,
             step_context.job_env,

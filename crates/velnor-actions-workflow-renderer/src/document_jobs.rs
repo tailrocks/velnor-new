@@ -8,6 +8,16 @@ use velnor_actions_contract::{Job, RunsOn, StepKind, StepRole};
 
 use super::document::{JobRenderPolicy, append_job_options, job_header_fields};
 
+fn has_step_env(step: &velnor_actions_contract::Step) -> bool {
+    match &step.kind {
+        StepKind::TofuTaskExecution { execution } => !execution.env.is_empty(),
+        StepKind::Shell { env, .. }
+        | StepKind::Action { env, .. }
+        | StepKind::TaskExecution { env, .. } => !env.is_empty(),
+        StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => false,
+    }
+}
+
 pub(super) fn job_to_yaml(
     id: &str,
     job: &Job,
@@ -28,12 +38,7 @@ pub(super) fn job_to_yaml(
         .env_steps
         .get(id)
         .map_or(job.steps.as_slice(), Vec::as_slice);
-    let step_has_env = source_steps.iter().any(|step| match &step.kind {
-        StepKind::Shell { env, .. }
-        | StepKind::Action { env, .. }
-        | StepKind::TaskExecution { env, .. } => !env.is_empty(),
-        StepKind::NativeCheckExecution { .. } | StepKind::Internal { .. } => false,
-    });
+    let step_has_env = source_steps.iter().any(has_step_env);
     let mut job_env = if step_has_env
         && ctx
             .workflow_tasks

@@ -150,6 +150,10 @@ fn job_texts(job: &Job) -> Vec<&str> {
 fn step_texts<'a>(step: &'a Step, texts: &mut Vec<&'a str>) {
     texts.extend(step.condition.iter().map(String::as_str));
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => {
+            texts.extend(execution.argv.iter().map(String::as_str));
+            texts.extend(execution.env.values().map(String::as_str));
+        }
         StepKind::Action { with, env, .. } => {
             texts.extend(with.values().chain(env.values()).map(String::as_str));
         }

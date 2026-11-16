@@ -201,6 +201,9 @@ pub(crate) fn verify_private_block(steps: &[Step]) -> Result<(), OrchestratorErr
     }
     for step in steps {
         match &step.kind {
+            StepKind::TofuTaskExecution { execution } => {
+                check_private_env(&execution.env)?;
+            }
             StepKind::Action { with, env, .. } => {
                 if with
                     .values()

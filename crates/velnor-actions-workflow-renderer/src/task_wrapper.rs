@@ -26,11 +26,12 @@ use self::script::task_script;
 #[path = "task_wrapper_declared.rs"]
 mod declared;
 
+#[path = "task_wrapper_tofu.rs"]
+mod tofu;
 #[path = "task_wrapper_validation.rs"]
 mod validation;
-use validation::{supports_task_runner, validate_task_checkout, validate_task_job_scope};
-
 use self::declared::{declared_task_call, declared_task_file, validate_task_fields};
+use validation::{supports_task_runner, validate_task_checkout, validate_task_job_scope};
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Shape {
@@ -51,14 +52,12 @@ struct PreparedTaskExecution<'a> {
     record: TaskExecutionManifestEntryV1,
     reference: TaskExecutionRef<'a>,
 }
-
 struct CollectedTaskExecutions<'a> {
     eligible: BTreeMap<(String, usize), TaskExecutionRef<'a>>,
     shapes: BTreeSet<Shape>,
     manifest_tasks: BTreeMap<String, TaskExecutionManifestEntryV1>,
     producer_tasks: BTreeMap<String, BTreeMap<String, String>>,
 }
-
 pub(crate) fn factor_obligation_steps(
     jobs: &BTreeMap<String, Job>,
     ctx: &crate::render::RenderContext,
@@ -71,7 +70,10 @@ pub(crate) fn factor_obligation_steps(
         lane_plan: ctx.lane_plan.as_ref(),
         scale_set_selector: ctx.scale_set_selector.as_ref(),
     };
-    let collected = collect_task_executions(jobs, &context)?;
+    let (jobs, native_tasks) = tofu::lower(jobs, &context)?;
+    let jobs = jobs.as_ref();
+    let mut collected = collect_task_executions(jobs, &context)?;
+    tofu::extend_manifest(&mut collected.manifest_tasks, native_tasks)?;
     let shape_ids = index_shapes(collected.shapes);
     let preview = matches!(
         ctx.controller,
@@ -91,7 +93,6 @@ pub(crate) fn factor_obligation_steps(
     )?;
     Ok((factored, files))
 }
-
 pub fn declared_task_wrapper_digest(
     helper_version: &str,
     generator_version: &str,

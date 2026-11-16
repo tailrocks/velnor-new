@@ -63,6 +63,11 @@ pub(super) fn build_ordered_results(
                 return Err(HelperError::internal("ambiguous_manifest_entry"));
             }
             let digest = obligation_digest(plan, &unit_id)?;
+            if task.task_digest != digest {
+                return Err(HelperError::internal(&format!(
+                    "manifest_task_digest_mismatch:{unit_id}"
+                )));
+            }
             let report_id = task_report_id_for_task(run_key, &entry.matrix_key, digest)
                 .map_err(HelperError::from)?;
             let staged = read_staged_report(&tasks_dir, &report_id)?;

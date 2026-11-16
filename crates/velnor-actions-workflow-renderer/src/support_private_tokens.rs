@@ -31,6 +31,7 @@ pub(super) fn is_private_binding_role(role: Option<StepRole>) -> bool {
 
 fn step_env(step: &Step) -> &BTreeMap<String, String> {
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => &execution.env,
         StepKind::Action { env, .. }
         | StepKind::Shell { env, .. }
         | StepKind::TaskExecution { env, .. }
@@ -45,6 +46,9 @@ fn step_texts(step: &Step) -> Vec<&str> {
         StepKind::Action { with, .. } => texts.extend(with.values().map(String::as_str)),
         StepKind::Shell { run, .. } => texts.extend(run.iter().map(String::as_str)),
         StepKind::TaskExecution { argv, .. } => texts.extend(argv.iter().map(String::as_str)),
+        StepKind::TofuTaskExecution { execution } => {
+            texts.extend(execution.argv.iter().map(String::as_str));
+        }
         StepKind::Internal { .. } | StepKind::NativeCheckExecution { .. } => {}
     }
     texts

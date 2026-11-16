@@ -130,6 +130,9 @@ fn step_texts(step: &Step) -> Vec<&str> {
         StepKind::Action { with, env, .. } => (with.values().collect::<Vec<_>>(), env),
         StepKind::Shell { run, env } => (run.iter().collect(), env),
         StepKind::TaskExecution { argv, env, .. } => (argv.iter().collect(), env),
+        StepKind::TofuTaskExecution { execution } => {
+            (execution.argv.iter().collect(), &execution.env)
+        }
         StepKind::NativeCheckExecution { .. } => (Vec::new(), &*EMPTY_ENV),
         StepKind::Internal { env, .. } => (Vec::new(), env),
     };

@@ -86,6 +86,7 @@ pub(super) fn validate_preview_acquisition(
                     step.kind,
                     StepKind::Internal { .. }
                         | StepKind::TaskExecution { .. }
+                        | StepKind::TofuTaskExecution { .. }
                         | StepKind::NativeCheckExecution { .. }
                 )
                 && !acquired
@@ -367,6 +368,8 @@ fn trusted_plan_step(step: &Step, request: &str) -> bool {
                 || operation == steps::PLAN_OPERATION
                 || operation == steps::RESOLVE_QUALIFICATION_OPERATION
         }
-        StepKind::TaskExecution { .. } | StepKind::NativeCheckExecution { .. } => false,
+        StepKind::TaskExecution { .. }
+        | StepKind::TofuTaskExecution { .. }
+        | StepKind::NativeCheckExecution { .. } => false,
     }
 }

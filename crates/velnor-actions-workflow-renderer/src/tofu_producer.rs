@@ -109,6 +109,7 @@ fn init_step(job: &Job) -> Option<&Step> {
 
 fn task_id(step: &Step) -> Option<&str> {
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => Some(&execution.task_id),
         StepKind::Shell { env, .. } => env.get(TASK_ID_ENV).map(String::as_str),
         _ => None,
     }
@@ -180,8 +181,10 @@ fn install_step(donor: &Job, id: &str) -> Result<Step, RenderError> {
 
 fn fetch_step(donor: &Job, id: &str) -> Result<Step, RenderError> {
     let init = init_step(donor).ok_or_else(|| invalid(&format!("donor_init_missing:{id}")))?;
-    let StepKind::Shell { env, .. } = &init.kind else {
-        return Err(invalid(&format!("donor_init_shape:{id}")));
+    let env = match &init.kind {
+        StepKind::TofuTaskExecution { execution } => &execution.env,
+        StepKind::Shell { env, .. } => env,
+        _ => return Err(invalid(&format!("donor_init_shape:{id}"))),
     };
     let key = task_id(init)
         .and_then(|task| task.split('/').nth(2))

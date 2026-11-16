@@ -66,7 +66,9 @@ fn check_job_steps(id: &str, job: &ReleaseJobSpec) -> Result<(), RenderError> {
                     "release_internal_op:{id}"
                 )));
             }
-            StepKind::TaskExecution { .. } | StepKind::NativeCheckExecution { .. } => {
+            StepKind::TaskExecution { .. }
+            | StepKind::TofuTaskExecution { .. }
+            | StepKind::NativeCheckExecution { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "release_declared_task:{id}"
                 )));
@@ -84,6 +86,15 @@ fn forbid_unexpected_secrets(id: &str, steps: &[Step]) -> Result<(), RenderError
     let rejected = || RenderError::InvalidWorkflow(format!("secret_outside_bootstrap:{id}"));
     for step in steps {
         match &step.kind {
+            StepKind::TofuTaskExecution { execution } => {
+                if step_text::payload_texts(step)
+                    .iter()
+                    .any(|value| value.contains("secrets."))
+                {
+                    return Err(rejected());
+                }
+                execution.validate().map_err(RenderError::Contract)?;
+            }
             StepKind::Action { with, .. } => {
                 if with.values().any(|value| value.contains("secrets.")) {
                     return Err(rejected());
@@ -287,7 +298,9 @@ fn check_publish_bootstrap(
                     "release_internal_op:{id}"
                 )));
             }
-            StepKind::TaskExecution { .. } | StepKind::NativeCheckExecution { .. } => {
+            StepKind::TaskExecution { .. }
+            | StepKind::TofuTaskExecution { .. }
+            | StepKind::NativeCheckExecution { .. } => {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "release_declared_task:{id}"
                 )));

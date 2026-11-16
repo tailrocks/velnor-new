@@ -77,6 +77,10 @@ pub enum StepKind {
         matrix_max_parallel: Option<u32>,
     },
 
+    TofuTaskExecution {
+        execution: Box<super::TaskExecutionManifestEntryV1>,
+    },
+
     NativeCheckExecution {
         check_id: String,
 
@@ -179,6 +183,17 @@ impl Step {
         validate_kind(&self.kind, job)
     }
     fn validate_execution_authority(&self, job: &str) -> Result<(), ContractError> {
+        if matches!(&self.kind, StepKind::TofuTaskExecution { .. })
+            && (self.id.is_some()
+                || self.role != Some(StepRole::TofuProviderUse)
+                || self.condition.is_some()
+                || self.parallel)
+        {
+            return Err(ContractError::identity(
+                "step.tofu",
+                format!("tofu_execution_authority_mismatch:{job}"),
+            ));
+        }
         if matches!(&self.kind, StepKind::NativeCheckExecution { .. })
             && (self.id.is_some()
                 || self.role.is_some()
@@ -261,6 +276,12 @@ fn validate_id_kind(id: Option<StepId>, kind: &StepKind, job: &str) -> Result<()
 
 fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
     match kind {
+        StepKind::TofuTaskExecution { execution } => {
+            if !execution.task_id.starts_with("stack/tofu/") {
+                return Err(ContractError::identity("step.tofu", "tofu_task_required"));
+            }
+            execution.validate()?;
+        }
         StepKind::Action { uses, .. } => {
             if uses.trim().is_empty() {
                 return Err(ContractError::identity(
@@ -287,18 +308,26 @@ fn validate_kind(kind: &StepKind, job: &str) -> Result<(), ContractError> {
             matrix_key,
             report_helper_version,
             matrix_max_parallel,
-        } => validate_task_execution(&TaskExecutionValidation {
-            argv,
-            env,
-            task_id,
-            task_digest,
-            toolchain_inputs,
-            matrix_id,
-            matrix_key,
-            report_helper_version,
-            matrix_max_parallel: *matrix_max_parallel,
-            job,
-        })?,
+        } => {
+            if task_id.starts_with("stack/tofu/") {
+                return Err(ContractError::identity(
+                    "step.task",
+                    "tofu_requires_native_execution",
+                ));
+            }
+            validate_task_execution(&TaskExecutionValidation {
+                argv,
+                env,
+                task_id,
+                task_digest,
+                toolchain_inputs,
+                matrix_id,
+                matrix_key,
+                report_helper_version,
+                matrix_max_parallel: *matrix_max_parallel,
+                job,
+            })?;
+        }
         StepKind::NativeCheckExecution {
             check_id,
             task_id,

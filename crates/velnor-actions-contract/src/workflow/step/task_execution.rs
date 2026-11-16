@@ -5,6 +5,7 @@ mod argv;
 mod environment;
 mod identity;
 mod native_job_image;
+mod tofu;
 mod toolchain;
 
 use crate::canonical::valid_pinned_version;
@@ -36,6 +37,12 @@ pub(in crate::workflow) fn validate_task_execution(
     input: &TaskExecutionValidation<'_>,
 ) -> Result<(), ContractError> {
     let invocation = argv::validate_invocation(input)?;
+    if input.task_id.starts_with("stack/tofu/") {
+        tofu::validate(input, &invocation)?;
+        argv::validate_arguments(input)?;
+        identity::validate_task_and_matrix(input)?;
+        return identity::validate_report_and_matrix_cap(input);
+    }
     if native_job_image::selected(input) {
         native_job_image::validate(input, &invocation)?;
     } else {

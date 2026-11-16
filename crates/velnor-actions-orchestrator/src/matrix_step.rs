@@ -195,18 +195,32 @@ pub(crate) fn obligation_step(
         );
         identity.extend(payload_env);
         check_identity_env_contract(&identity, &obligation.task_id)?;
-        let env = task_step_env(catalog, &identity, false)?;
-        let joined = velnor_actions_workflow_renderer::join_argv_for_run(&obligation.run).map_err(
-            |err| OrchestratorError::Contract {
-                problem: err.to_string(),
-            },
-        )?;
-        let run = report_wrapper_argv(&joined, &helper_path_for_version(helper_version));
-        let mut tofu =
-            velnor_actions_workflow_renderer::shell_step(&obligation.step_name, run, env)
-                .map_err(OrchestratorError::from)?;
-        tofu.role = Some(StepRole::TofuProviderUse);
-        tofu
+        let mut env = task_step_env(catalog, &identity, false)?;
+        for key in obligation_identity_env(&obligation.task_id, &obligation.task_digest, &matrix_id, &obligation.matrix_key, matrix_cap).keys() {
+            env.remove(key);
+        }
+        let mut execution = velnor_actions_contract::TaskExecutionManifestEntryV1 {
+            task_id: obligation.task_id.clone(),
+            execution_digest: String::new(),
+            task_digest: obligation.task_digest.clone(),
+            toolchain_inputs: obligation.toolchain_inputs.clone(),
+            argv: obligation.run.clone(),
+            env,
+            matrix_id,
+            matrix_key: obligation.matrix_key.clone(),
+            report_helper_version: helper_version.to_owned(),
+            matrix_max_parallel: matrix_cap,
+        };
+        execution.refresh_execution_digest()?;
+        execution.validate()?;
+        Step {
+            parallel: false,
+            name: obligation.step_name.clone(),
+            id: None,
+            role: Some(StepRole::TofuProviderUse),
+            condition: None,
+            kind: StepKind::TofuTaskExecution { execution: Box::new(execution) },
+        }
     };
     Ok(step)
 }
@@ -230,5 +244,5 @@ pub(crate) fn check_identity_env_contract(
 mod matrix_step_reports;
 pub(crate) use matrix_step_reports::{
     crate_upload_step, download_plan_step, helper_path_for_version, outcome_path_for_key,
-    report_wrapper_argv, start_path_for_key,
+    start_path_for_key,
 };

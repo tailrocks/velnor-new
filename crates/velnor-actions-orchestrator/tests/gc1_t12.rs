@@ -70,6 +70,7 @@ fn render(parts: &Parts, kinds: &[&str]) -> Result<[Step; 3], Box<dyn Error>> {
 
 fn step_envs(step: &Step) -> Vec<(&String, &String)> {
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => execution.env.iter().collect(),
         StepKind::Action { env, .. }
         | StepKind::Shell { env, .. }
         | StepKind::TaskExecution { env, .. }

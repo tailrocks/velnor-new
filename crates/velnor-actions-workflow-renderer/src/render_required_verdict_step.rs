@@ -38,6 +38,8 @@ pub(super) fn required_verdict_step(step: &Step) -> bool {
                         steps::MERGE_OPERATION
                     )
         }
-        StepKind::TaskExecution { .. } | StepKind::NativeCheckExecution { .. } => false,
+        StepKind::TaskExecution { .. }
+        | StepKind::TofuTaskExecution { .. }
+        | StepKind::NativeCheckExecution { .. } => false,
     }
 }

@@ -32,6 +32,7 @@ fn is_rust_verifier(step: &Step) -> bool {
 
 fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => Some(&execution.env),
         StepKind::Shell { env, .. }
         | StepKind::Action { env, .. }
         | StepKind::TaskExecution { env, .. } => Some(env),

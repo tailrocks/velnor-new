@@ -26,6 +26,7 @@ pub(super) fn valid_rust_verifier_payload(kind: &StepKind) -> bool {
             RUST_VERIFIER_USES.contains(&uses.as_str()) && with.is_empty() && env.is_empty()
         }
         StepKind::TaskExecution { .. }
+        | StepKind::TofuTaskExecution { .. }
         | StepKind::NativeCheckExecution { .. }
         | StepKind::Internal { .. } => false,
     }
@@ -38,6 +39,7 @@ pub(super) fn valid_jactionlint_verifier_payload(kind: &StepKind) -> bool {
             uses == JACTIONLINT_VERIFIER_USES && with.is_empty() && env.is_empty()
         }
         StepKind::TaskExecution { .. }
+        | StepKind::TofuTaskExecution { .. }
         | StepKind::NativeCheckExecution { .. }
         | StepKind::Internal { .. } => false,
     }

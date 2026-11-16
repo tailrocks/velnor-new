@@ -60,6 +60,9 @@ fn check_step_tokens(
         return Ok(());
     }
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => {
+            execution.validate().map_err(RenderError::Contract)?;
+        }
         StepKind::Shell { run, env } => {
             check_env_tokens(id, step.role, env, false)?;
             for arg in strip_unset_argv(run) {
@@ -122,6 +125,10 @@ fn check_step_tokens(
             report_helper_version,
         )?,
     }
+    check_qualification_scope(id, step)
+}
+
+fn check_qualification_scope(id: &str, step: &Step) -> Result<(), RenderError> {
     if matches!(&step.kind, StepKind::Internal { operation, .. }
         if operation == crate::steps::RESOLVE_QUALIFICATION_OPERATION)
         && (id != PLAN_JOB_ID

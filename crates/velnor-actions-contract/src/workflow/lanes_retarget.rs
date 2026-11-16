@@ -118,7 +118,7 @@ fn retarget_check_identity(
                     *matrix_key = key;
                 }
             }
-            StepKind::NativeCheckExecution { .. } => {}
+            StepKind::NativeCheckExecution { .. } | StepKind::TofuTaskExecution { .. } => {}
         }
     }
     Ok(())

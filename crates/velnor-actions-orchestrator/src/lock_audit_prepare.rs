@@ -38,6 +38,7 @@ pub(super) fn verifier_positions(
             }
             StepKind::Shell { .. }
             | StepKind::TaskExecution { .. }
+            | StepKind::TofuTaskExecution { .. }
             | StepKind::Internal { .. }
             | StepKind::NativeCheckExecution { .. } => None,
         };

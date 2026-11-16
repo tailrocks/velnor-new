@@ -96,7 +96,13 @@ pub(crate) fn build_in_group(status: JobStatus, group: &str) -> Result<Fixture, 
 
 fn fixture_parts(group: &str) -> Result<Parts, HelperError> {
     let task_id = task_id_for_internal("lint", "dev").map_err(|_| fail("task_id"))?;
-    let task_digest = digest_b3(b"gc1-t54-task-payload");
+    let (argv, toolchain_inputs) = fixture_execution();
+    let task_digest = task_digest_for_execution(
+        &task_id,
+        &argv,
+        &toolchain_id(&toolchain_inputs).map_err(|_| fail("toolchain_id"))?,
+    )
+    .map_err(|_| fail("manifest_task_digest"))?;
     let input_digest = digest_b3(b"gc1-t54-input");
     let closure_digest = digest_b3(b"gc1-t54-closure");
     let planned = PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")
@@ -214,7 +220,7 @@ fn fixture_report(parts: &Parts, report_id: &str) -> Result<TaskReport, HelperEr
     Ok(report)
 }
 
-fn fixture_manifest(parts: &Parts) -> Result<TaskExecutionManifestV1, HelperError> {
+fn fixture_execution() -> (Vec<String>, ToolchainInputs) {
     let toolchain_inputs = ToolchainInputs {
         tools: vec!["rust@1.89.0".to_owned()],
         components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
@@ -233,18 +239,17 @@ fn fixture_manifest(parts: &Parts) -> Result<TaskExecutionManifestV1, HelperErro
         "test".to_owned(),
         "--locked".to_owned(),
     ];
-    let task_digest = task_digest_for_execution(
-        &parts.task_id,
-        &argv,
-        &toolchain_id(&toolchain_inputs).map_err(|_| fail("toolchain_id"))?,
-    )
-    .map_err(|_| fail("manifest_task_digest"))?;
+    (argv, toolchain_inputs)
+}
+
+fn fixture_manifest(parts: &Parts) -> Result<TaskExecutionManifestV1, HelperError> {
+    let (argv, toolchain_inputs) = fixture_execution();
     let matrix_id = format!("stack:rust|task:{}", parts.task_id);
     let matrix_key = matrix_key_for_id(&matrix_id).map_err(|_| fail("manifest_matrix_key"))?;
     let mut entry = TaskExecutionManifestEntryV1 {
         task_id: parts.task_id.clone(),
         execution_digest: String::new(),
-        task_digest,
+        task_digest: parts.task_digest.clone(),
         toolchain_inputs,
         argv,
         env: BTreeMap::from([

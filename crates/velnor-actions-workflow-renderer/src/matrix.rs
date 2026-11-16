@@ -44,6 +44,15 @@ pub(crate) fn matrix_invalid(problem: &str) -> RenderError {
 
 fn marker_trio(job: &Job) -> Option<[Option<String>; 3]> {
     for step in &job.steps {
+        if let StepKind::TofuTaskExecution { execution } = &step.kind
+            && let Some(cap) = execution.matrix_max_parallel
+        {
+            return Some([
+                Some(PLAN_JOB_ID.to_owned()),
+                Some(PLAN_ID_OUTPUT.to_owned()),
+                Some(cap.to_string()),
+            ]);
+        }
         if let StepKind::Shell { env, .. } = &step.kind {
             let hit = [
                 MATRIX_NEEDS_JOB_ENV,

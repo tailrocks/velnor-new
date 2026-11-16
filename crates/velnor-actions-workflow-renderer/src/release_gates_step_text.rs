@@ -6,6 +6,20 @@ use velnor_actions_contract::{Step, StepKind};
 
 pub(super) fn payload_texts(step: &Step) -> Vec<&str> {
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => execution
+            .argv
+            .iter()
+            .chain(execution.env.keys())
+            .chain(execution.env.values())
+            .map(String::as_str)
+            .chain([
+                execution.task_id.as_str(),
+                execution.task_digest.as_str(),
+                execution.matrix_id.as_str(),
+                execution.matrix_key.as_str(),
+                execution.report_helper_version.as_str(),
+            ])
+            .collect(),
         StepKind::Action { uses, with, env } => std::iter::once(uses.as_str())
             .chain(with.keys().map(String::as_str))
             .chain(with.values().map(String::as_str))

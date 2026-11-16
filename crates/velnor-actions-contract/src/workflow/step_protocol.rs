@@ -247,8 +247,10 @@ pub(crate) fn valid_provider_save(kind: &StepKind) -> bool {
 }
 
 pub(crate) fn valid_provider_use(kind: &StepKind) -> bool {
-    let StepKind::Shell { env, .. } = kind else {
-        return false;
+    let env = match kind {
+        StepKind::Shell { env, .. } => env,
+        StepKind::TofuTaskExecution { execution } => &execution.env,
+        _ => return false,
     };
     let Some(path) = env.get("TF_PLUGIN_CACHE_DIR") else {
         return false;
@@ -308,6 +310,7 @@ fn action_with(step: &Step) -> Option<&BTreeMap<String, String>> {
         StepKind::Action { with, .. } => Some(with),
         StepKind::Shell { .. }
         | StepKind::TaskExecution { .. }
+        | StepKind::TofuTaskExecution { .. }
         | StepKind::NativeCheckExecution { .. }
         | StepKind::Internal { .. } => None,
     }
@@ -315,6 +318,7 @@ fn action_with(step: &Step) -> Option<&BTreeMap<String, String>> {
 
 fn step_env(step: &Step) -> Option<&BTreeMap<String, String>> {
     match &step.kind {
+        StepKind::TofuTaskExecution { execution } => Some(&execution.env),
         StepKind::Action { env, .. }
         | StepKind::Shell { env, .. }
         | StepKind::TaskExecution { env, .. } => Some(env),
