@@ -4,7 +4,7 @@ The new Rust generator reads `.velnor/rust-ci.toml`.
 
 ## Optional crates mirror
 
-The new generator accepts an explicit mirror in `.velnor/rust-ci.toml`. It is off when the table is absent. It applies only when the configured job runner exactly matches the mirror's runner label. Hosted runners and fork pull requests do not use the mirror.
+The new generator accepts an explicit mirror in `.velnor/rust-ci.toml`. It is off when the table is absent. It applies only when the configured job runner exactly matches the mirror's runner label. Every emitted mirror step requires the actual runner context to report `runner.environment == 'self-hosted'` and excludes fork pull requests. Hosted runners do not use the mirror, regardless of their label; a missing or unrecognized runner environment also skips setup.
 
 ```toml
 [crates_mirror]

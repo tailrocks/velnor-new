@@ -8,11 +8,22 @@ const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse
 
 #[test]
 fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
-    for (runner, enabled) in [("mirror-box", true), ("ubuntu-latest", false)] {
+    for (runner, mirror_runner, enabled) in [
+        ("mirror-box", "mirror-box", true),
+        ("ubuntu-26.04-scale-set", "ubuntu-26.04-scale-set", true),
+        ("ubuntu-slim", "ubuntu-slim", true),
+        ("xcode-27", "xcode-27", true),
+        ("ubuntu-future", "ubuntu-future", true),
+        ("ubuntu-latest", "mirror-box", false),
+    ] {
         let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
         repo.files.insert(
             path(".velnor/rust-ci.toml")?,
-            format!("runner = '{runner}'\n{MIRROR}").into_bytes(),
+            format!(
+                "runner = '{runner}'\n{}",
+                MIRROR.replace("mirror-box", mirror_runner)
+            )
+            .into_bytes(),
         );
         let lock = path(".velnor/rust-ci.lock")?;
         let old = String::from_utf8(repo.files[&lock].clone())?;
@@ -38,9 +49,14 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                     assert!(mirror.is_some_and(|index| index < tools));
                 }
                 if let Some(index) = mirror {
-                    assert!(steps[index]["if"].as_str().is_some_and(|condition| {
-                        condition.contains("head.repo.full_name == github.repository")
-                    }));
+                    assert_eq!(
+                        steps[index]["if"].as_str(),
+                        Some(
+                            "${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}"
+                        ),
+                        "{runner}: {}",
+                        steps[index]
+                    );
                 }
             }
         }
