@@ -195,6 +195,30 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
 }
 
 #[test]
+fn a_nested_root_reading_the_repository_root_keeps_the_times_of_files_outside_it() {
+    let repo = Repo::new("nested-root-scope");
+    repo.write("rust/src/lib.rs", "pub fn one() {}\n");
+    repo.write("other/src/lib.rs", "pub fn other() {}\n");
+    repo.write(".velnor/rust-inputs.lock", ".\trust-app\n");
+    let workspace = repo.root().join("rust");
+    let paths = ["rust/src/lib.rs", "other/src/lib.rs"];
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, built);
+    }
+    save_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    for path in paths {
+        repo.set_mtime(path, checkout);
+    }
+    restore_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+
+    assert_eq!(repo.mtime("rust/src/lib.rs"), built);
+    assert_eq!(repo.mtime("other/src/lib.rs"), built);
+}
+
+#[test]
 fn two_roots_restored_from_different_snapshots_each_keep_their_own_times() {
     let repo = Repo::new("two-roots");
     repo.write("one/src/lib.rs", "pub fn one() {}\n");

@@ -130,8 +130,7 @@ fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
         Ok(bytes) => parse_inputs_lock(&bytes)
             .map_err(|e| CiError::new(e.to_string()))?
             .into_keys()
-            .flatten()
-            .map(|path| path.as_str().to_owned())
+            .map(|path| path.map_or_else(String::new, |path| path.as_str().to_owned()))
             .collect(),
         Err(e) if e.kind() == ErrorKind::NotFound => Vec::new(),
         Err(e) => return Err(CiError::new(format!("cannot read {INPUTS_LOCK}: {e}"))),
