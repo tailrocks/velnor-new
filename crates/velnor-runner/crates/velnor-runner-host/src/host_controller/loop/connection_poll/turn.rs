@@ -11,6 +11,8 @@ use crate::{
 #[path = "turn/poll_attempt.rs"]
 mod poll_attempt;
 use poll_attempt::PollAttemptGuard;
+#[path = "turn/removed.rs"]
+mod removed;
 
 use super::super::{
     polling::{
@@ -46,6 +48,8 @@ pub(super) async fn poll_connection(
 ) -> Result<Option<PollTurnResult>, HostError> {
     let connection_id = prepared.binding.connection_id.as_str().to_owned();
     let result = poll_connection_inner(prepared, context, pending_retirements, turn).await;
+    let unpolled_removal =
+        matches!(result, Ok(None)) && removed::pending(prepared, context, pending_retirements);
     if !result
         .as_ref()
         .is_ok_and(|result| result.as_ref().is_some_and(|turn| turn.receipt_recorded))
@@ -53,6 +57,9 @@ pub(super) async fn poll_connection(
         context
             .control_state
             .invalidate_session_poll(&connection_id)?;
+    }
+    if unpolled_removal {
+        removed::reconcile(prepared, context).await?;
     }
     result
 }
@@ -91,6 +98,9 @@ async fn poll_connection_inner(
     };
     let Some(outcome) = execute_poll(prepared, context, pending_retirements, turn, &poll).await?
     else {
+        if poll.is_removed {
+            removed::reconcile(prepared, context).await?;
+        }
         return Ok(Some(PollTurnResult {
             remove_connection: false,
             positive_poll_settled: false,
@@ -273,11 +283,7 @@ async fn reconcile_poll(
 ) -> Result<(), HostError> {
     prepared.record_assigned_total(outcome.assigned_total);
     if is_removed {
-        Box::pin(super::super::polling::reconcile_removed_pre_jit(
-            prepared,
-            &positive_poll_context(context),
-        ))
-        .await?;
+        removed::reconcile(prepared, context).await?;
     } else {
         Box::pin(super::super::polling::reconcile_assigned_population(
             prepared,
