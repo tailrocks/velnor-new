@@ -32,6 +32,7 @@ fn view(timings: &str) -> RepoView {
         manifest,
         RustMetadata {
             members: vec![member],
+            target_directory: None,
         },
     );
     for (name, text) in [
