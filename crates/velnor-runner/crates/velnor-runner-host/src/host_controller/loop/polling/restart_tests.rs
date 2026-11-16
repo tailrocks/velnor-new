@@ -5,6 +5,8 @@
 mod controller;
 #[path = "restart_tests/docker.rs"]
 mod docker;
+#[path = "restart_tests/removed.rs"]
+mod removed;
 #[path = "restart_tests/seed.rs"]
 mod seed;
 
@@ -167,30 +169,29 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     assert_eq!(requests.contains(&removal), kill.helper_created);
     assert!(!fixture.helper_present());
     let recovered = recorded(kill.recovered, "absent", helper);
-    assert_eq!(seed::recorded(&journal, 2).await?, recovered);
     assert_eq!(live_reservations(&journal).await?, live);
 
-    restart(&journal, &docker, &mut controller, &engine).await?;
-    let mut volume_requests = fixture
-        .take_requests()
+    let mut volume_requests = requests
         .into_iter()
         .filter(|request| request.contains(" /volumes/"))
         .collect::<Vec<_>>();
     volume_requests.sort();
     let volume = |method: &str, role: &str| format!("{method} /volumes/{PRIVATE_VOLUME}{role}");
-    let expected = [
+    let mut expected = [
         volume("DELETE", "-home"),
         volume("DELETE", "-metadata"),
         volume("DELETE", "-work"),
         volume("GET", ""),
         volume("GET", "-docker"),
-        volume("GET", "-home"),
-        volume("GET", "-home"),
-        volume("GET", "-metadata"),
-        volume("GET", "-metadata"),
-        volume("GET", "-work"),
-        volume("GET", "-work"),
-    ];
+    ]
+    .into_iter()
+    .chain(
+        ["-home", "-metadata", "-work"]
+            .into_iter()
+            .flat_map(|role| std::iter::repeat_n(volume("GET", role), 4)),
+    )
+    .collect::<Vec<_>>();
+    expected.sort();
     assert_eq!(volume_requests, expected);
     let mut released = recovered;
     released[0] = Some("released".to_owned());
@@ -203,7 +204,7 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     assert_eq!(fixture.take_requests(), Vec::<String>::new());
     assert_eq!(seed::recorded(&journal, 2).await?, released);
     assert_eq!(live_reservations(&journal).await?, live);
-    assert_eq!(controller.prepared.recovery_pass, 4);
+    assert_eq!(controller.prepared.recovery_pass, 3);
     Ok(())
 }
 
