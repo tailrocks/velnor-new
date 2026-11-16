@@ -69,7 +69,7 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
             step,
             [
                 &format!(
-                    "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --repo \"$REPOSITORY\" --manifests{released}"
+                    "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --repo=\"$REPOSITORY\" --manifests{released}"
                 ),
                 "CARGO_BUILD_RUSTC=rustc",
                 "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
@@ -92,7 +92,7 @@ fn helper_0_1_80_gets_the_tag_patterns_but_not_released_versions() -> TestResult
     assert_eq!(found.len(), 2);
     for (_, step) in found {
         assert!(
-            step[0].ends_with("--repo \"$REPOSITORY\" --manifests"),
+            step[0].ends_with("--repo=\"$REPOSITORY\" --manifests"),
             "{}",
             step[0]
         );

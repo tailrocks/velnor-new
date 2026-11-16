@@ -201,7 +201,7 @@ pub(crate) fn refuse_commands(
                 files.join(" ")
             ))
             .chain(tags)
-            .chain(binds_tags.then(|| "--repo \"$REPOSITORY\" --manifests".to_owned()))
+            .chain(binds_tags.then(|| "--repo=\"$REPOSITORY\" --manifests".to_owned()))
             .chain(
                 (binds_tags && tags_released_version && helper.at_least(RELEASED_VERSIONS_HELPER))
                     .then(|| "--released-versions".to_owned()),

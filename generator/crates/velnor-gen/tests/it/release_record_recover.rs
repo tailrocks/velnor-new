@@ -50,7 +50,7 @@ fn the_record_step_runs_after_every_root_and_names_every_config_so_a_rerun_recov
         .ok_or("no run")?;
     assert!(
         run.contains(
-            " --app velnor-release --config release-plz.toml --config tools/release-plz.toml "
+            " --app=velnor-release --config=release-plz.toml --config=tools/release-plz.toml "
         ),
         "{run}"
     );

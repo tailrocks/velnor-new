@@ -39,7 +39,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release-gate --repo "$REPOSITORY" --sha "$COMMIT"'
+        run: 'velnor-ci release-gate --repo="$REPOSITORY" --sha="$COMMIT"'
   release-pr:
     needs:
       - gate
@@ -101,7 +101,7 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -185,14 +185,14 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests --released-versions'
+        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests --released-versions'
       - name: Check that release-plz would tag the verified commit
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
         env:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release preflight --repo "$REPOSITORY" --verified-commit "$COMMIT" --branch-prefix release-plz-'
+        run: 'velnor-ci release preflight --repo="$REPOSITORY" --verified-commit="$COMMIT" --branch-prefix=release-plz-'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -224,7 +224,7 @@ jobs:
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
           RUSTUP_TOOLCHAIN: stable
-        run: 'velnor-ci release record --repo "$REPOSITORY" --verified-commit "$COMMIT" --app velnor-release --config release-plz.toml "$RUNNER_TEMP/release-0.json"'
+        run: 'velnor-ci release record --repo="$REPOSITORY" --verified-commit="$COMMIT" --app=velnor-release --config=release-plz.toml "$RUNNER_TEMP/release-0.json"'
   build-app-linux-x64:
     needs:
       - gate
@@ -242,7 +242,7 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the tag job found it on in the verified history
+      - name: Check that the tag is on the verified commit itself
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
@@ -287,7 +287,7 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the tag job found it on in the verified history
+      - name: Check that the tag is on the verified commit itself
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
@@ -332,7 +332,7 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the tag job found it on in the verified history
+      - name: Check that the tag is on the verified commit itself
         env:
           COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
@@ -441,4 +441,4 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'velnor-ci release publish --repo "$REPOSITORY" --tag "$TAG" --app velnor-release --dir dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'
+        run: 'velnor-ci release publish --repo="$REPOSITORY" --tag="$TAG" --app=velnor-release --dir=dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'

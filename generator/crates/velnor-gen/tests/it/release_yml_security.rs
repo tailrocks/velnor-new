@@ -205,7 +205,7 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
     let exec = "\"$RUNNER_TEMP/release-plz\"";
-    let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo \"$REPOSITORY\" --manifests";
+    let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo=\"$REPOSITORY\" --manifests";
     let mut prepared: Vec<String> = [
         "curl --fail --silent --show-error --location --output \"$RUNNER_TEMP/release-plz.tar.gz\" 'https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz'",
         "printf '%s  %s/release-plz.tar.gz\\n' a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90 \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/release-plz.sha256\"",

@@ -37,7 +37,7 @@ pub(crate) fn record(plan: &ReleasePlan, helper: &HelperRelease, files: &[String
             env
         },
         run: Some(format!(
-            "velnor-ci release record --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" --app {RELEASE_APP_SLUG} {} {files}",
+            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" --app={RELEASE_APP_SLUG} {} {files}",
             configs(plan)
         )),
         ..RenderedStep::default()
@@ -49,7 +49,7 @@ fn configs(plan: &ReleasePlan) -> String {
         .iter()
         .map(|root| {
             format!(
-                "--config {}",
+                "--config={}",
                 shell_word(&join(&root.root, RELEASE_PLZ_FILE))
             )
         })
