@@ -16,6 +16,16 @@ fn gone(pid: Pid) -> bool {
     kill(pid, None) == Err(Errno::ESRCH)
 }
 
+const SPAWN_GRANDCHILD: &str = r#"sh -c 'echo $$; exec sleep 300'; echo done"#;
+
+struct GroupGuard(Pid);
+
+impl Drop for GroupGuard {
+    fn drop(&mut self) {
+        killpg(self.0, Signal::SIGKILL).ok();
+    }
+}
+
 fn grandchild_is_stopped_by(signal: &str) {
     let temp = std::env::temp_dir().join(format!(
         "velnor-ci-run-group-{}-{signal}",
@@ -23,13 +33,15 @@ fn grandchild_is_stopped_by(signal: &str) {
     ));
     std::fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
     let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["run", "--", "sh", "-c", "sleep 300 & echo $!; wait"])
+        .args(["run", "--", "sh", "-c", SPAWN_GRANDCHILD])
         .env("RUNNER_TEMP", &temp)
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "100")
         .stdout(Stdio::piped())
         .process_group(0)
         .spawn()
         .unwrap_or_else(|e| unreachable!("{e}"));
+    let helper = Pid::from_raw(i32::try_from(child.id()).unwrap_or_else(|e| unreachable!("{e}")));
+    let _group = GroupGuard(helper);
     let stdout = child.stdout.take().unwrap_or_else(|| unreachable!("piped"));
     let first = BufReader::new(stdout)
         .lines()
@@ -37,7 +49,6 @@ fn grandchild_is_stopped_by(signal: &str) {
         .and_then(Result::ok)
         .unwrap_or_default();
     let grandchild = Pid::from_raw(first.trim().parse().unwrap_or_else(|e| unreachable!("{e}")));
-    let helper = Pid::from_raw(i32::try_from(child.id()).unwrap_or_else(|e| unreachable!("{e}")));
     kill(helper, Signal::try_from(signal_number(signal)).ok()).ok();
     child.wait().unwrap_or_else(|e| unreachable!("{e}"));
     let deadline = Instant::now() + Duration::from_millis(1500);
@@ -46,7 +57,6 @@ fn grandchild_is_stopped_by(signal: &str) {
     }
     let survived = !gone(grandchild);
     if survived {
-        killpg(grandchild, Signal::SIGKILL).ok();
         kill(grandchild, Signal::SIGKILL).ok();
     }
     std::fs::remove_dir_all(&temp).ok();
