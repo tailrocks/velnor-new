@@ -233,3 +233,27 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     }
     Ok(())
 }
+
+#[test]
+fn release_yml_tag_rechecks_the_live_tip_before_the_app_token_and_skips_when_it_moved() -> TestResult
+{
+    let (_, tree) = two_roots()?;
+    let all = steps(tree.at(&["jobs", "tag"]).ok_or("no job")?);
+    let newest = all
+        .iter()
+        .position(|step| step.get("id").and_then(Node::text) == Some("newest"))
+        .ok_or("no newest step")?;
+    let created = all
+        .iter()
+        .position(|step| uses(step).is_some_and(|u| u.starts_with(APP_TOKEN)))
+        .ok_or("no token step")?;
+    assert!(newest < created);
+    assert!(all[newest].get("if").is_none());
+    for step in &all[newest + 1..] {
+        assert_eq!(
+            step.get("if").and_then(Node::text),
+            Some("${{ steps.newest.outputs.newest == 'true' }}")
+        );
+    }
+    Ok(())
+}
