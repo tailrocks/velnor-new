@@ -1,0 +1,144 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::io;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+
+use bollard::Docker;
+use tokio::io::{AsyncReadExt, AsyncWriteExt, copy_bidirectional};
+use tokio::net::{UnixListener, UnixStream};
+use tokio::task::JoinHandle;
+
+use super::support::TestResult;
+
+#[derive(Clone, Copy)]
+pub(crate) enum Wait {
+    Forward,
+    Fail,
+    Finish,
+}
+
+pub(crate) struct Faults {
+    waits: fn(usize) -> Wait,
+    waited: AtomicUsize,
+    removals: AtomicUsize,
+}
+
+impl Faults {
+    pub(crate) fn new(waits: fn(usize) -> Wait, removals: usize) -> Arc<Self> {
+        Arc::new(Self {
+            waits,
+            waited: AtomicUsize::new(0),
+            removals: AtomicUsize::new(removals),
+        })
+    }
+
+    fn answer(&self, line: &str) -> Option<(u16, &'static str)> {
+        if line.starts_with("POST ")
+            && line.contains("/containers/")
+            && line.contains("/wait")
+            && !line.contains("condition=")
+        {
+            return match (self.waits)(self.waited.fetch_add(1, Ordering::SeqCst)) {
+                Wait::Forward => None,
+                Wait::Fail => Some((500, "{\"message\":\"injected\"}")),
+                Wait::Finish => Some((200, "{\"StatusCode\":0}")),
+            };
+        }
+        let removal = line.starts_with("DELETE ")
+            && line.contains("/containers/")
+            && self.waited.load(Ordering::SeqCst) > 0;
+        let failing = removal
+            && self
+                .removals
+                .try_update(Ordering::SeqCst, Ordering::SeqCst, |left| {
+                    left.checked_sub(1)
+                })
+                .is_ok();
+        failing.then_some((500, "{\"message\":\"injected\"}"))
+    }
+}
+
+pub(crate) struct Proxy {
+    pub(crate) docker: Docker,
+    _directory: tempfile::TempDir,
+    task: JoinHandle<()>,
+}
+
+impl Proxy {
+    pub(crate) fn start(faults: Arc<Faults>) -> TestResult<Self> {
+        let directory = tempfile::tempdir()?;
+        let socket = directory.path().join("docker.sock");
+        let listener = UnixListener::bind(&socket)?;
+        let upstream = std::env::var("DOCKER_HOST")
+            .unwrap_or_else(|_| "unix:///var/run/docker.sock".to_owned());
+        let upstream = upstream.trim_start_matches("unix://").to_owned();
+        let task = tokio::spawn(async move {
+            while let Ok((client, _)) = listener.accept().await {
+                let upstream = upstream.clone();
+                let faults = Arc::clone(&faults);
+                tokio::spawn(async move {
+                    let _ended = relay(client, &upstream, &faults).await;
+                });
+            }
+        });
+        let docker = velnor_runner_host::connect_unix(&format!("unix://{}", socket.display()))?;
+        Ok(Self {
+            docker,
+            _directory: directory,
+            task,
+        })
+    }
+}
+
+impl Drop for Proxy {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+fn head_end(bytes: &[u8]) -> Option<usize> {
+    bytes
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .map(|at| at + 4)
+}
+
+async fn relay(mut client: UnixStream, upstream: &str, faults: &Faults) -> io::Result<()> {
+    let mut pending = Vec::new();
+    loop {
+        let end = loop {
+            if let Some(end) = head_end(&pending) {
+                break end;
+            }
+            let mut chunk = [0_u8; 8192];
+            let read = client.read(&mut chunk).await?;
+            if read == 0 {
+                return Ok(());
+            }
+            pending.extend_from_slice(&chunk[..read]);
+        };
+        let head = String::from_utf8_lossy(&pending[..end]).into_owned();
+        let line = head.lines().next().unwrap_or_default();
+        if let Some((status, body)) = faults.answer(line) {
+            let reply = format!(
+                "HTTP/1.1 {status} X\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            );
+            client.write_all(reply.as_bytes()).await?;
+            pending.drain(..end);
+            continue;
+        }
+        let mut forwarded = pending[..end - 2].to_vec();
+        if !head.to_ascii_lowercase().contains("upgrade") {
+            forwarded.extend_from_slice(b"Connection: close\r\n");
+        }
+        forwarded.extend_from_slice(b"\r\n");
+        forwarded.extend_from_slice(&pending[end..]);
+        let mut server = UnixStream::connect(upstream).await?;
+        server.write_all(&forwarded).await?;
+        copy_bidirectional(&mut client, &mut server).await?;
+        return Ok(());
+    }
+}

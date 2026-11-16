@@ -92,6 +92,23 @@ fn dispatch(cli: &Cli) -> ExitCode {
             connection_id,
             wait,
         } => disconnect(&state, connection_id, *wait),
+        #[cfg(feature = "local-mode")]
+        Command::Local => local(cli.state.as_deref()),
+    }
+}
+
+#[cfg(feature = "local-mode")]
+fn local(state: Option<&Path>) -> ExitCode {
+    let Some(state) = state else {
+        eprintln!("velnor-host local: --state is required");
+        return ExitCode::from(2);
+    };
+    match velnor_runner_host::local::run_local(state, std::io::stdin().lock()) {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(error) => {
+            eprintln!("velnor-host local: {error}");
+            ExitCode::from(1)
+        }
     }
 }
 

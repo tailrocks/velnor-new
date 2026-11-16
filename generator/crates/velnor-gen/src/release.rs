@@ -1,13 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
-use velnor_release::{ReleaseFiles, ReleasePlan};
-use velnor_render::render_release;
+use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_json};
+use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
 use crate::GenerateError;
@@ -16,6 +16,7 @@ pub(crate) fn release_workflow(
     view: &RepoView,
     facts: &RepoFacts,
     helper: &HelperRelease,
+    generated: &BTreeMap<RepoPath, String>,
 ) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Ok(BTreeMap::new());
@@ -27,35 +28,123 @@ pub(crate) fn release_workflow(
     {
         return Err(GenerateError::ReleaseToolchainPath);
     }
-    let plan = ReleasePlan::read(&release_files(view)?).map_err(GenerateError::Release)?;
+    let reality = Reality { facts, generated };
+    let plan =
+        ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
     for root in &plan.roots {
         let manifest = if root.root == "." {
             "Cargo.toml".to_owned()
         } else {
             format!("{}/Cargo.toml", root.root)
         };
-        let detected = facts
+        if let Some(detected) = facts
             .rust_roots
             .iter()
             .find(|detected| detected.manifest.as_str() == manifest)
-            .ok_or_else(|| GenerateError::ReleaseRootWithoutCargoToml(root.root.clone()))?;
-        reject_release_credential_hooks(view, &detected.manifest)?;
-        if let Some((package, _)) = root.packages.iter().find(|(package, _)| {
-            !detected
-                .members
-                .iter()
-                .any(|member| member.name.as_str() == package)
-        }) {
-            return Err(GenerateError::ReleasePackageNotInRoot {
-                root: root.root.clone(),
-                package: package.clone(),
-            });
+        {
+            reject_release_credential_hooks(view, &detected.manifest)?;
         }
     }
     render_release(&plan, helper, &facts.config.default_branch).map_err(GenerateError::Rules)
 }
 
-fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
+pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
+    if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
+        return Err(GenerateError::NoReleaseConfig);
+    }
+    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
+    Ok(ruleset_json(&plan))
+}
+
+struct Reality<'a> {
+    facts: &'a RepoFacts,
+    generated: &'a BTreeMap<RepoPath, String>,
+}
+
+fn cargo_manifests(facts: &RepoFacts) -> BTreeSet<String> {
+    facts
+        .rust_roots
+        .iter()
+        .flat_map(|root| {
+            std::iter::once(root.manifest.to_string()).chain(
+                root.members
+                    .iter()
+                    .map(|member| member.manifest.to_string()),
+            )
+        })
+        .collect()
+}
+
+fn bin_targets(facts: &RepoFacts) -> BTreeSet<(String, String, String)> {
+    let mut found = BTreeSet::new();
+    for root in &facts.rust_roots {
+        for member in &root.members {
+            for target in &member.targets {
+                if target.kinds.contains(&TargetKind::Bin) && !target.requires_features {
+                    for manifest in [&root.manifest, &member.manifest] {
+                        found.insert((
+                            manifest.to_string(),
+                            member.name.to_string(),
+                            target.name.to_string(),
+                        ));
+                    }
+                }
+            }
+        }
+    }
+    found
+}
+
+fn root_members(facts: &RepoFacts) -> BTreeMap<String, BTreeSet<String>> {
+    facts
+        .rust_roots
+        .iter()
+        .map(|root| {
+            let directory = root
+                .manifest
+                .parent()
+                .map_or_else(|| ".".to_owned(), |parent| parent.to_string());
+            let names = root.members.iter().map(|member| member.name.to_string());
+            (directory, names.collect())
+        })
+        .collect()
+}
+
+fn workflow_name(text: &str) -> Option<String> {
+    let value = text
+        .lines()
+        .find_map(|line| line.strip_prefix("name:"))?
+        .trim();
+    for quote in ['"', '\''] {
+        if let Some(inner) = value.strip_prefix(quote) {
+            return inner.split_once(quote).map(|(name, _)| name.to_owned());
+        }
+    }
+    let plain = value.split(" #").next().unwrap_or(value);
+    Some(plain.trim().to_owned())
+}
+
+fn workflow_names(view: &RepoView, generated: &BTreeMap<RepoPath, String>) -> BTreeSet<String> {
+    let tracked = view
+        .files
+        .iter()
+        .filter(|(path, _)| {
+            let name = path.as_str();
+            name.starts_with(".github/workflows/")
+                && std::path::Path::new(name)
+                    .extension()
+                    .is_some_and(|ext| ext == "yml" || ext == "yaml")
+        })
+        .filter(|(_, bytes)| owner_of(bytes) != Owner::VelnorGen)
+        .filter_map(|(_, bytes)| workflow_name(&String::from_utf8_lossy(bytes)));
+    let made = generated.values().filter_map(|text| workflow_name(text));
+    tracked.chain(made).collect()
+}
+
+fn release_files(
+    view: &RepoView,
+    reality: Option<&Reality<'_>>,
+) -> Result<ReleaseFiles, GenerateError> {
     let text = |path: &RepoPath| -> Result<Option<String>, GenerateError> {
         view.files
             .get(path)
@@ -74,13 +163,41 @@ fn release_files(view: &RepoView) -> Result<ReleaseFiles, GenerateError> {
             release_plz_toml.insert(root, text(path)?.unwrap_or_default());
         }
     }
-    let [primary, dot] = &MISE_CONFIGS;
-    let (mise_toml, dot_mise_toml) = (text(primary)?, text(dot)?);
+    let mut mise_tomls = Vec::new();
+    for config in &MISE_CONFIGS {
+        mise_tomls.extend(text(config)?);
+    }
+    let mut cargo_configs = BTreeMap::new();
+    for path in view.files.keys() {
+        let name = path.as_str();
+        if name == ".cargo/config.toml"
+            || name == ".cargo/config"
+            || name.ends_with("/.cargo/config.toml")
+            || name.ends_with("/.cargo/config")
+        {
+            cargo_configs.insert(name.to_owned(), text(path)?.unwrap_or_default());
+        }
+    }
+    let mut toolchain_files = BTreeMap::new();
+    for path in view.files.keys() {
+        if matches!(
+            path.as_str().rsplit('/').next(),
+            Some("rust-toolchain" | "rust-toolchain.toml")
+        ) {
+            toolchain_files.insert(path.to_string(), text(path)?.unwrap_or_default());
+        }
+    }
     Ok(ReleaseFiles {
         release_toml: text(&RELEASE_CONFIG_PATH)?,
         release_plz_toml,
-        mise_toml: mise_toml.unwrap_or_default(),
-        dot_mise_toml,
+        mise_tomls,
+        cargo_configs,
+        toolchain_files,
+        symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
+        root_members: reality.map(|known| root_members(known.facts)),
+        bin_targets: reality.map(|known| bin_targets(known.facts)),
+        cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),
+        workflow_names: reality.map(|known| workflow_names(view, known.generated)),
         mise_lock: text(&MISE_LOCK)?.unwrap_or_default(),
     })
 }

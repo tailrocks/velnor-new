@@ -89,7 +89,7 @@ impl ConnectionJournal {
         in_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
             let mut rows = connection.query(
-                "SELECT n.operation_id, n.engine_id, n.docker_root_digest, n.network_name, n.network_id, n.labels_json, n.create_state FROM capacity_reservation_networks AS n JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = n.reservation_id WHERE n.reservation_id = ?1 AND n.connection_id = ?2 AND n.remove_state = 'not_requested' AND (s.storage_cleanup_proven = 1 OR (s.resources_bound = 0 AND s.bootstrap_start_state = 'not_requested' AND NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = n.reservation_id AND o.create_state != 'unclaimed') AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = n.reservation_id AND (b.create_state != 'unclaimed' OR b.start_state != 'not_requested')) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS x WHERE x.reservation_id = n.reservation_id)))",
+                "SELECT n.operation_id, n.engine_id, n.docker_root_digest, n.network_name, n.network_id, n.labels_json, n.create_state FROM capacity_reservation_networks AS n JOIN capacity_reservation_provisioning_state AS s ON s.reservation_id = n.reservation_id WHERE n.reservation_id = ?1 AND n.connection_id = ?2 AND n.remove_state = 'not_requested' AND (s.storage_cleanup_proven = 1 OR (s.resources_bound = 0 AND s.bootstrap_start_state = 'not_requested' AND NOT EXISTS (SELECT 1 FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = n.reservation_id AND o.create_state != 'unclaimed') AND NOT EXISTS (SELECT 1 FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = n.reservation_id AND (b.create_state != 'unclaimed' OR b.start_state != 'not_requested')) AND NOT EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS x WHERE x.reservation_id = n.reservation_id)) OR EXISTS (SELECT 1 FROM capacity_reservation_unbound_retirement_progress AS p WHERE p.reservation_id = n.reservation_id AND p.phase = 'volumes_absent'))",
                 (reservation_id, connection_id.as_str()),
             ).await.map_err(|_| HostError::Journal)?;
             let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else { return Ok(None); };
@@ -236,7 +236,7 @@ async fn record_removed_in_transaction(
 ) -> Result<(), HostError> {
     let changed = connection
         .execute(
-            "UPDATE capacity_reservation_networks SET remove_state = 'removed' WHERE reservation_id = ?1 AND connection_id = ?2 AND operation_id = ?3 AND network_name = ?4 AND network_id IS ?5 AND remove_state = 'requested'",
+            "UPDATE capacity_reservation_networks SET remove_state = 'removed' WHERE reservation_id = ?1 AND connection_id = ?2 AND operation_id = ?3 AND network_name = ?4 AND network_id IS ?5 AND remove_state IN ('requested', 'uncertain')",
             (
                 claim.reservation_id,
                 claim.connection_id.as_str(),

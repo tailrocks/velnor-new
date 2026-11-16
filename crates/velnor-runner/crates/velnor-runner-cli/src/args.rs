@@ -99,6 +99,10 @@ pub enum Command {
         #[arg(long)]
         wait: bool,
     },
+    /// Run local-mode pairs from a JSON plan on stdin until SIGTERM.
+    #[cfg(feature = "local-mode")]
+    #[command(hide = true)]
+    Local,
 }
 
 /// Recovery journal actions.

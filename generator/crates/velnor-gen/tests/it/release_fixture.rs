@@ -5,7 +5,10 @@ use std::collections::BTreeSet;
 use std::error::Error;
 
 use velnor_gen::expected_files;
-use velnor_model::{PackageName, RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView};
+use velnor_model::{
+    PackageName, RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView, Target,
+    TargetKind, TargetName,
+};
 use velnor_rust::LOCK_PATH;
 
 use crate::pipeline::view;
@@ -14,6 +17,8 @@ use crate::yaml_tree::{Node, parse};
 const LOCK: &str = include_str!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
 pub(crate) const READY: &str = "needs.gate.outputs.ready == 'true'";
 pub(crate) const PUSH: &str = "github.event.workflow_run.event == 'push'";
+pub(crate) const DEFAULT_BRANCH: &str =
+    "github.event.workflow_run.head_branch == github.event.repository.default_branch";
 pub(crate) const GREEN: &str = "github.event.workflow_run.conclusion == 'success'";
 pub(crate) const APP_TOKEN: &str = "actions/create-github-app-token";
 
@@ -37,6 +42,23 @@ pub(crate) const TOOLS: Root = Root {
     publishes: false,
 };
 
+pub(crate) const DASHED: Root = Root {
+    dir: ".",
+    package: "my-app",
+    prefix: "release-plz-my-app-",
+    publishes: false,
+};
+pub(crate) const SPACED: Root = Root {
+    dir: "my tools",
+    package: "tools",
+    prefix: "release-plz-tools-",
+    publishes: false,
+};
+
+pub(crate) fn dashed() -> Result<(String, Node), Box<dyn Error>> {
+    render(&[DASHED], Some("[[binaries]]\npackage = \"my-app\"\n"))
+}
+
 pub(crate) fn release_plz(root: &Root) -> String {
     let publishing = if root.publishes {
         "publish_no_verify = true"
@@ -49,26 +71,42 @@ pub(crate) fn release_plz(root: &Root) -> String {
     )
 }
 
+fn join_manifest(dir: &str) -> String {
+    if dir == "." {
+        "Cargo.toml".to_owned()
+    } else {
+        format!("{dir}/Cargo.toml")
+    }
+}
+
 pub(crate) fn release_view(
     roots: &[Root],
     release_toml: Option<&str>,
 ) -> Result<RepoView, Box<dyn Error>> {
-    let manifests: Vec<String> = roots
-        .iter()
-        .map(|root| {
-            if root.dir == "." {
-                "Cargo.toml".to_owned()
-            } else {
-                format!("{}/Cargo.toml", root.dir)
-            }
-        })
-        .collect();
-    let manifests: Vec<&str> = if manifests.is_empty() {
-        vec!["Cargo.toml"]
+    let manifests: Vec<String> = if roots.is_empty() {
+        vec!["Cargo.toml".to_owned()]
     } else {
-        manifests.iter().map(String::as_str).collect()
+        roots.iter().map(|root| join_manifest(root.dir)).collect()
     };
-    let mut view = view(&manifests, None)?;
+    let refs: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let mut view = view(&refs, None)?;
+    for (root, manifest) in roots.iter().zip(&manifests) {
+        let metadata = view
+            .rust_metadata
+            .get_mut(&RepoPath::new(manifest.as_str())?)
+            .ok_or("no metadata for the root")?;
+        metadata.members[0].name = PackageName::new(root.package)?;
+        for name in [root.package, "rg"] {
+            metadata.members[0].targets.push(Target {
+                name: TargetName::new(name)?,
+                kinds: vec![TargetKind::Bin],
+                tests: false,
+                doctest: false,
+                source: None,
+                requires_features: false,
+            });
+        }
+    }
     view.tracked_paths.insert(LOCK_PATH);
     view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     view.files.insert(
@@ -78,6 +116,10 @@ pub(crate) fn release_view(
     view.files.insert(
         RepoPath::new("mise.lock")?,
         b"[[tools.\"aqua:release-plz/release-plz\"]]\nversion = \"0.4.3\"\n".to_vec(),
+    );
+    view.files.insert(
+        RepoPath::new(".github/workflows/lint.yml")?,
+        b"name: Lint\non: push\n".to_vec(),
     );
     if let Some(text) = release_toml {
         view.files
@@ -124,6 +166,12 @@ pub(crate) fn two_roots() -> Result<(String, Node), Box<dyn Error>> {
         &[APP, TOOLS],
         Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
     )
+}
+
+pub(crate) const TWO_BINARIES: &str = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
+
+pub(crate) fn two_binaries() -> Result<(String, Node), Box<dyn Error>> {
+    render(&[APP, TOOLS], Some(TWO_BINARIES))
 }
 
 pub(crate) fn jobs(tree: &Node) -> Result<Vec<(&str, &Node)>, Box<dyn Error>> {

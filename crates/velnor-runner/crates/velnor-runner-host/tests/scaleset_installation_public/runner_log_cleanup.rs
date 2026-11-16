@@ -3,6 +3,8 @@
 
 #[path = "runner_log_cleanup/seed.rs"]
 mod seed;
+#[path = "runner_log_cleanup/state_mode.rs"]
+mod state_mode;
 
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;

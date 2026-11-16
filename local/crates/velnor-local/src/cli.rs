@@ -4,7 +4,7 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use velnor_cache_rules::REPOSITORY_LIMIT_BYTES;
 
 use crate::side::Side;
@@ -41,7 +41,7 @@ pub enum Command {
     )]
     Conformance(ConformanceArgs),
     #[command(
-        about = "Build the linux/arm64 runner, dind and probe images that pair mode runs, tagged velnor-local/pair-*"
+        about = "Build the linux/arm64 runner, dind and probe images that pair mode runs, tagged velnor-local/pair-*, and velnor-host with local mode"
     )]
     Build(BuildArgs),
     #[command(
@@ -60,6 +60,21 @@ pub enum Command {
 pub struct SuperviseArgs {
     #[arg(long, help = "State directory of the environment")]
     pub dir: PathBuf,
+    #[arg(
+        long,
+        help = "velnor-host built with local mode; when given, supervise runs it with the pairs below"
+    )]
+    pub velnor_host: Option<PathBuf>,
+    #[arg(long, default_value_t = 0, help = "Trusted pairs")]
+    pub pairs: u16,
+    #[arg(long, default_value_t = 0, help = "Untrusted pairs")]
+    pub fork_pairs: u16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum RunnerMode {
+    Pair,
+    Plain,
 }
 
 #[derive(Debug, Args)]
@@ -106,12 +121,12 @@ pub struct EnvironmentArgs {
         help = "State directory of this environment: keys, cache, API stub state, events and logs"
     )]
     pub dir: PathBuf,
-    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u16).range(1..), help = "Number of runner containers, at least one")]
+    #[arg(long, default_value_t = 2, value_parser = clap::value_parser!(u16).range(1..), help = "Number of runner containers, or of pairs in pair mode, at least one")]
     pub runners: u16,
     #[arg(
         long,
         default_value_t = 0,
-        help = "Number of runner containers for untrusted runs, on a network without the API stub but with whatever else Docker containers reach (the host, the LAN, the internet); run starts one when a scenario opens a pull request from a fork"
+        help = "Number of runner containers, or of pairs in pair mode, for untrusted runs, on a network without the API stub but with whatever else Docker containers reach (the host, the LAN, the internet); run starts one when a scenario opens a pull request from a fork"
     )]
     pub fork_runners: u16,
     #[arg(
@@ -120,6 +135,29 @@ pub struct EnvironmentArgs {
         help = "Default branch of the repository"
     )]
     pub default_branch: String,
+    #[arg(
+        long,
+        value_enum,
+        default_value_t = RunnerMode::Pair,
+        help = "Job containers: pair runs each job in a velnor-host dind and runner pair behind the job-start check; plain runs the official runner image without either"
+    )]
+    pub runner: RunnerMode,
+    #[arg(
+        long,
+        default_value = "crates/velnor-runner/target/release/velnor-host",
+        help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it"
+    )]
+    pub velnor_host: PathBuf,
+}
+
+impl EnvironmentArgs {
+    #[must_use]
+    pub const fn containers(&self, runners: u16) -> u16 {
+        match self.runner {
+            RunnerMode::Plain => runners,
+            RunnerMode::Pair => 0,
+        }
+    }
 }
 
 #[derive(Debug, Args)]

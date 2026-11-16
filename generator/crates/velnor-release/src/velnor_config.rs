@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde::Deserialize;
+use velnor_model::Platform;
 
 use crate::error::ReleaseError;
-
-const DEFAULT_PLATFORMS: [&str; 3] = ["linux-x64", "linux-arm64", "macos-arm64"];
+use crate::release_plz::valid_package_name;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Binary {
     pub(crate) package: String,
-    pub(crate) platforms: Vec<String>,
+    pub(crate) bin: String,
+    pub(crate) platforms: Vec<Platform>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +25,7 @@ pub(crate) struct VelnorConfig {
 #[serde(deny_unknown_fields)]
 struct RawBinary {
     package: String,
+    bin: Option<String>,
     platforms: Option<Vec<String>>,
 }
 
@@ -34,6 +36,16 @@ struct Raw {
     after: Option<Vec<String>>,
     #[serde(default)]
     binaries: Vec<RawBinary>,
+}
+
+fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
+    match values.iter().find(|value| value.contains("${{")) {
+        Some(value) => Err(ReleaseError::ExpressionInValue {
+            key: key.to_owned(),
+            value: (*value).to_owned(),
+        }),
+        None => Ok(()),
+    }
 }
 
 pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
@@ -49,6 +61,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
+    refuse_expressions("after", &text_refs(&after))?;
     if after.is_empty() || after.iter().any(|name| name.trim().is_empty()) {
         return Err(ReleaseError::EmptyAfter);
     }
@@ -56,41 +69,78 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     if roots.is_empty() {
         return Err(ReleaseError::EmptyRoots);
     }
+    refuse_expressions("roots", &text_refs(&roots))?;
     if let Some(root) = roots.iter().find(|root| {
-        root.is_empty() || root.starts_with('/') || root.split('/').any(|part| part == "..")
+        root.as_str() != "."
+            && (root.is_empty()
+                || root.starts_with('/')
+                || root.split('/').any(|part| matches!(part, "" | "." | "..")))
     }) {
         return Err(ReleaseError::UnsafeRoot { root: root.clone() });
     }
-    for binary in &raw.binaries {
-        if binary.platforms.as_ref().is_some_and(Vec::is_empty) {
-            return Err(ReleaseError::EmptyPlatforms {
-                package: binary.package.clone(),
-            });
-        }
-        if let Some(platform) = binary
-            .platforms
+    let binaries = raw
+        .binaries
+        .into_iter()
+        .map(binary)
+        .collect::<Result<Vec<_>, _>>()?;
+    for (index, entry) in binaries.iter().enumerate() {
+        if binaries[..index]
             .iter()
-            .flatten()
-            .find(|platform| !DEFAULT_PLATFORMS.contains(&platform.as_str()))
+            .any(|earlier| earlier.package == entry.package)
         {
-            return Err(ReleaseError::UnknownPlatform {
-                package: binary.package.clone(),
-                platform: platform.clone(),
+            return Err(ReleaseError::DuplicateBinary {
+                package: entry.package.clone(),
             });
         }
     }
     Ok(VelnorConfig {
         roots,
         after,
-        binaries: raw
-            .binaries
-            .into_iter()
-            .map(|binary| Binary {
-                package: binary.package,
-                platforms: binary
-                    .platforms
-                    .unwrap_or_else(|| DEFAULT_PLATFORMS.iter().map(|p| (*p).to_owned()).collect()),
-            })
-            .collect(),
+        binaries,
+    })
+}
+
+fn text_refs(values: &[String]) -> Vec<&str> {
+    values.iter().map(String::as_str).collect()
+}
+
+fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
+    refuse_expressions("binaries.package", &[&raw.package])?;
+    let bin = raw.bin.unwrap_or_else(|| raw.package.clone());
+    refuse_expressions("binaries.bin", &[&bin])?;
+    if !valid_package_name(&bin) {
+        return Err(ReleaseError::InvalidBinName {
+            package: raw.package,
+            bin,
+        });
+    }
+    let platforms = match raw.platforms {
+        None => Platform::ALL.to_vec(),
+        Some(names) if names.is_empty() => {
+            return Err(ReleaseError::EmptyPlatforms {
+                package: raw.package,
+            });
+        }
+        Some(names) => {
+            let mut platforms = Vec::new();
+            for name in names {
+                let platform = Platform::ALL
+                    .into_iter()
+                    .find(|platform| platform.file_suffix() == name)
+                    .ok_or_else(|| ReleaseError::UnknownPlatform {
+                        package: raw.package.clone(),
+                        platform: name,
+                    })?;
+                if !platforms.contains(&platform) {
+                    platforms.push(platform);
+                }
+            }
+            platforms
+        }
+    };
+    Ok(Binary {
+        package: raw.package,
+        bin,
+        platforms,
     })
 }

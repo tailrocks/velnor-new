@@ -113,36 +113,35 @@ fn redirecting_key(table: &Table) -> Option<&'static str> {
         .find(|key| settings.contains_key(*key))
 }
 
-pub(crate) fn check(
-    mise_toml: &str,
-    dot_mise_toml: Option<&str>,
-    mise_lock: &str,
-) -> Result<(), ReleaseError> {
-    let mise_toml = parse("mise.toml", mise_toml)?;
-    let dot_mise_toml = dot_mise_toml
-        .map(|text| parse(".mise.toml", text))
-        .transpose()?;
+fn exact_version(version: &str) -> bool {
+    let parts: Vec<&str> = version.split('.').collect();
+    parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()))
+}
+
+pub(crate) fn check(mise_tomls: &[String], mise_lock: &str) -> Result<String, ReleaseError> {
+    let mise_tomls = mise_tomls
+        .iter()
+        .map(|text| parse("mise.toml", text))
+        .collect::<Result<Vec<_>, _>>()?;
     let mise_lock = parse("mise.lock", mise_lock)?;
-    let files = [
-        ("mise.toml", Some(&mise_toml)),
-        (".mise.toml", dot_mise_toml.as_ref()),
-    ];
-    for (file, table) in files {
-        if let Some(key) = table.and_then(redirecting_key) {
-            return Err(ReleaseError::MiseRedirectsInstall {
-                file: file.to_owned(),
-                key: key.to_owned(),
-            });
-        }
+    if let Some(key) = mise_tomls.iter().find_map(redirecting_key) {
+        return Err(ReleaseError::MiseRedirectsInstall {
+            file: "mise.toml".to_owned(),
+            key: key.to_owned(),
+        });
     }
     let mut configured = BTreeMap::new();
-    for table in std::iter::once(&mise_toml).chain(&dot_mise_toml) {
+    for table in &mise_tomls {
         configured.extend(release_plz_tools(table));
     }
     if configured.is_empty() {
         return Err(ReleaseError::ReleasePlzNotInMiseToml);
     }
     let locked = release_plz_tools(&mise_lock);
+    let mut pinned = String::new();
     for (key, value) in configured {
         if let Some(field) = value
             .as_table()
@@ -151,6 +150,12 @@ pub(crate) fn check(
             return Err(ReleaseError::ReleasePlzToolOverride {
                 tool: key.clone(),
                 field: field.clone(),
+            });
+        }
+        let wanted = configured_version(value).unwrap_or_default();
+        if !exact_version(wanted) {
+            return Err(ReleaseError::ReleasePlzVersionNotExact {
+                version: wanted.to_owned(),
             });
         }
         let Some((_, entry)) = locked.iter().find(|(locked_key, _)| *locked_key == key) else {
@@ -163,9 +168,7 @@ pub(crate) fn check(
             });
         }
         let versions = locked_versions(entry);
-        let wanted = configured_version(value).unwrap_or_default();
-        let matches = !wanted.is_empty()
-            && !versions.is_empty()
+        let matches = !versions.is_empty()
             && versions
                 .iter()
                 .all(|version| !version.is_empty() && version == wanted);
@@ -175,6 +178,7 @@ pub(crate) fn check(
                 locked: versions,
             });
         }
+        wanted.clone_into(&mut pinned);
     }
-    Ok(())
+    Ok(pinned)
 }

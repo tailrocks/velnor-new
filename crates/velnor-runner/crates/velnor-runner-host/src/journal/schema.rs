@@ -47,11 +47,12 @@ mod storage_handoff;
 mod storage_initialization;
 mod storage_network;
 mod storage_root_backing;
+mod unbound_retirement;
 
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 42;
+pub(super) const JOURNAL_VERSION: i64 = 43;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -114,7 +115,7 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v42(conn).await
+    validate_persisted_schema_v43(conn).await
 }
 
 mod legacy_validation;
@@ -254,4 +255,9 @@ pub(super) async fn read_table_columns(
 async fn validate_persisted_schema_v42(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v41(conn).await?;
     registry_image_import::validate(conn).await
+}
+
+async fn validate_persisted_schema_v43(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v42(conn).await?;
+    unbound_retirement::validate(conn).await
 }

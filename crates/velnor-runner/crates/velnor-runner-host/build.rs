@@ -16,6 +16,7 @@ const SOURCE_ENV: &str = "VELNOR_RUNNER_BUILD_SOURCE_SHA";
 const HELPER_ENV: &str = "VELNOR_RUNNER_BUILD_HELPER_SHA256";
 const COMPILED_SOURCE_ENV: &str = "VELNOR_COMPILED_SOURCE_SHA";
 const COMPILED_HELPER_ENV: &str = "VELNOR_COMPILED_ATTESTATION_HELPER_SHA256";
+const LOCAL_MODE_ENV: &str = "CARGO_FEATURE_LOCAL_MODE";
 
 fn main() {
     println!("cargo:rerun-if-env-changed={SOURCE_ENV}");
@@ -29,6 +30,9 @@ fn main() {
 }
 
 fn configure() -> Result<(), String> {
+    if env::var_os(SOURCE_ENV).is_some() && env::var_os(LOCAL_MODE_ENV).is_some() {
+        return Err("local mode cannot be built into a release".to_owned());
+    }
     let source = read_input(SOURCE_ENV)?;
     let helper = read_input(HELPER_ENV)?;
     match (source, helper) {

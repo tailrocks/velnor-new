@@ -3,11 +3,12 @@
 
 pub(crate) mod adapter;
 mod cleanup;
-mod containers;
+pub(crate) mod containers;
 mod delivery;
 mod pre_jit_recovery;
 mod publication;
 mod storage;
+mod unbound_retirement;
 mod uncertain_recovery;
 
 pub(crate) use adapter::PreparedAcquiredBootstrap;
@@ -20,7 +21,8 @@ pub(crate) use containers::{
     VerifiedBootstrapContainerCreated, VerifiedBootstrapMountHandoff, VerifiedCreatedStorageObject,
     VerifiedStorageNetworkCreated, VerifiedStorageNetworkRemoved, create_owned_network,
     remove_owned_network, remove_owned_network_for_jit_conflict,
-    remove_owned_network_for_retirement, start_bootstrap_pair,
+    remove_owned_network_for_retirement, remove_owned_network_for_unbound_retirement,
+    start_bootstrap_pair,
 };
 pub(crate) use delivery::ListenerDeliveryReceipt;
 
@@ -31,6 +33,7 @@ pub(crate) use pre_jit_recovery::{
     recover_pre_jit_reservation, remove_bootstrap_after_terminal_failure,
 };
 pub(crate) use publication::JobFactsPublication;
+pub(crate) use unbound_retirement::{abandon_and_retire_unbound_pair, retire_unbound_pair};
 pub(crate) use uncertain_recovery::{UncertainRecovery, recover_uncertain_reservations};
 
 pub(crate) use publication::job_facts_publication;

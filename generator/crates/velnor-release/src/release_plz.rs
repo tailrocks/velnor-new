@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::ReleaseError;
+use crate::git_ref;
 use crate::settings::{Document, Settings, executable_key};
-use crate::tag::{TagPattern, checked, render};
+use crate::tag::{PACKAGE_WILDCARD, TagPattern, checked};
 
 const DEFAULT_PR_BRANCH_PREFIX: &str = "release-plz-";
 
@@ -19,7 +20,7 @@ pub(crate) struct RootConfig {
     pub(crate) pr_branch_prefix: String,
     pub(crate) publishes_to_crates_io: bool,
     pub(crate) packages: Vec<Package>,
-    pub(crate) default_tag: Option<TagPattern>,
+    pub(crate) workspace_tags: Vec<TagPattern>,
 }
 
 fn check_package(
@@ -65,7 +66,7 @@ fn check_package(
     Ok(())
 }
 
-fn valid_package_name(name: &str) -> bool {
+pub(crate) fn valid_package_name(name: &str) -> bool {
     let mut bytes = name.bytes();
     bytes
         .next()
@@ -73,16 +74,11 @@ fn valid_package_name(name: &str) -> bool {
         && bytes.all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
 }
 
-fn workspace_default(root: &str, workspace: &Settings) -> Result<Option<TagPattern>, ReleaseError> {
-    let Some(template) = workspace.git_tag_name.as_deref() else {
-        return Err(ReleaseError::MissingGitTagName {
-            root: root.to_owned(),
-            package: None,
-        });
-    };
-    let pattern = checked(template, "package", root, None)?;
-    check_package(root, None, workspace)?;
-    Ok((render(template, "other") == render(template, "package")).then_some(pattern))
+fn publishes(workspace: &Settings, released: &[(String, Settings)]) -> bool {
+    (workspace.release != Some(false) && workspace.publishes_to_crates_io())
+        || released
+            .iter()
+            .any(|(_, settings)| settings.publishes_to_crates_io())
 }
 
 fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
@@ -101,15 +97,11 @@ fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
     }
 }
 
-pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
-    let document = parse_document(root, text)?;
-    let workspace = &document.workspace;
-    if workspace.release_always != Some(false) {
-        return Err(ReleaseError::ReleaseAlwaysNotFalse {
-            root: root.to_owned(),
-        });
-    }
-    let mut released: Vec<(String, Settings)> = Vec::new();
+fn released_packages(
+    root: &str,
+    document: &Document,
+) -> Result<Vec<(String, Settings)>, ReleaseError> {
+    let mut released = Vec::new();
     for (index, entry) in document.package.iter().enumerate() {
         if document.package[..index]
             .iter()
@@ -126,17 +118,63 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
                 package: entry.name.clone(),
             });
         }
-        let effective = entry.settings.over(workspace);
+        let effective = entry.settings.over(&document.workspace);
         if effective.release != Some(false) {
             released.push((entry.name.clone(), effective));
         }
     }
-    let workspace_releases = workspace.release != Some(false);
-    if released.is_empty() && !workspace_releases {
-        return Err(ReleaseError::RootReleasesNothing {
+    Ok(released)
+}
+
+fn workspace_tags(
+    root: &str,
+    workspace: &Settings,
+    nothing_listed: bool,
+) -> Result<Vec<TagPattern>, ReleaseError> {
+    if workspace.release == Some(false) {
+        return if nothing_listed {
+            Err(ReleaseError::RootReleasesNothing {
+                root: root.to_owned(),
+            })
+        } else {
+            Ok(Vec::new())
+        };
+    }
+    let Some(template) = workspace.git_tag_name.as_deref() else {
+        return Err(ReleaseError::MissingGitTagName {
+            root: root.to_owned(),
+            package: None,
+        });
+    };
+    let pattern = checked(template, PACKAGE_WILDCARD, root, None)?;
+    check_package(root, None, workspace)?;
+    Ok(vec![pattern])
+}
+
+pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
+    let document = parse_document(root, text)?;
+    let workspace = &document.workspace;
+    if workspace.release_always != Some(false) {
+        return Err(ReleaseError::ReleaseAlwaysNotFalse {
             root: root.to_owned(),
         });
     }
+    let prefix = workspace
+        .pr_branch_prefix
+        .clone()
+        .unwrap_or_else(|| DEFAULT_PR_BRANCH_PREFIX.to_owned());
+    if prefix.trim().is_empty() {
+        return Err(ReleaseError::EmptyPrBranchPrefix {
+            root: root.to_owned(),
+        });
+    }
+    if !git_ref::is_valid(&format!("refs/heads/{prefix}x")) {
+        return Err(ReleaseError::InvalidPrBranchPrefix {
+            root: root.to_owned(),
+            prefix,
+        });
+    }
+    let released = released_packages(root, &document)?;
     let mut packages = Vec::new();
     for (name, settings) in &released {
         let Some(template) = settings.git_tag_name.as_deref() else {
@@ -152,29 +190,13 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             tag_pattern,
         });
     }
-    let default_tag = if workspace_releases {
-        workspace_default(root, workspace)?
-    } else {
-        None
-    };
-    let publishes_to_crates_io = released
-        .iter()
-        .any(|(_, settings)| settings.publishes_to_crates_io())
-        || (workspace_releases && workspace.publishes_to_crates_io());
-    let pr_branch_prefix = workspace
-        .pr_branch_prefix
-        .clone()
-        .unwrap_or_else(|| DEFAULT_PR_BRANCH_PREFIX.to_owned());
-    if pr_branch_prefix.is_empty() {
-        return Err(ReleaseError::EmptyPrBranchPrefix {
-            root: root.to_owned(),
-        });
-    }
+    let workspace_tags = workspace_tags(root, workspace, released.is_empty())?;
+    let publishes_to_crates_io = publishes(workspace, &released);
     Ok(RootConfig {
         root: root.to_owned(),
         publishes_to_crates_io,
-        pr_branch_prefix,
+        pr_branch_prefix: prefix,
         packages,
-        default_tag,
+        workspace_tags,
     })
 }

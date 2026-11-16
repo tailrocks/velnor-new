@@ -44,6 +44,7 @@ async fn recover_after_restart(connection: &turso::Connection) -> Result<(), Hos
         .map_err(|_| HostError::Journal)?;
     super::execution_authorization::recover_at_startup(connection).await?;
     orphan_recovery::mark_interrupted_ready_reservations(connection).await?;
+    super::connection::recover_unbound_pairs_at_startup(connection).await?;
     interrupted_initialization::mark_interrupted_storage_initializations(connection).await?;
     super::doctor_probe::recover_at_startup(connection).await
 }

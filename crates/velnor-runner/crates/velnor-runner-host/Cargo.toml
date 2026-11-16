@@ -9,6 +9,9 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[features]
+local-mode = ["tokio/signal"]
+
 [[test]]
 name = "resource_probe_release_public"
 path = "tests/resource_probe_release_public.rs"
@@ -48,6 +51,20 @@ path = "tests/scaleset_installation_public.rs"
 [[test]]
 name = "runner_platform_public"
 path = "tests/runner_platform_public.rs"
+
+[[test]]
+name = "release_lock_public"
+path = "tests/release_lock_public.rs"
+
+[[test]]
+name = "local_pair_public"
+path = "tests/local_pair_public.rs"
+required-features = ["local-mode"]
+
+[[test]]
+name = "local_host_public"
+path = "tests/local_host_public.rs"
+required-features = ["local-mode"]
 
 [[bin]]
 name = "velnor-resource-probe-release"

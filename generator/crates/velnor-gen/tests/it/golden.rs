@@ -89,6 +89,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
             .into_owned(),
         files,
         tracked_paths,
+        symlinks: BTreeSet::new(),
         rust_metadata,
     };
     for manifest in metadata_roots(&view)? {

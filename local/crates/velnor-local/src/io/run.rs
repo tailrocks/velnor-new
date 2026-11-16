@@ -6,6 +6,7 @@ mod restore;
 use std::convert::Infallible;
 use std::future::Future;
 use std::net::SocketAddr;
+use std::path::Path;
 use std::process::ExitCode;
 use std::sync::Arc;
 
@@ -47,7 +48,7 @@ async fn run(command: Command) -> std::io::Result<()> {
         Command::CacheServer(args) => run_cache_server(args).await,
         Command::ApiStub(args) => run_api_stub(args).await,
         Command::Up(args) => up(args).await,
-        Command::Down(args) => Environment::at(&args.dir, DockerCli).await?.down().await,
+        Command::Down(args) => down(&args.dir).await,
         Command::Run(args) => drive::run(args).await,
         Command::Conformance(args) => conformance(args).await,
         Command::Build(args) => super::pair::build(args).await,
@@ -80,11 +81,26 @@ async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
     Ok(())
 }
 
+async fn down(dir: &Path) -> std::io::Result<()> {
+    let env = Environment::at(dir, DockerCli).await?;
+    if let Some(stopped) = super::supervisor::stop(&env.dir).await? {
+        println!("velnor-local: velnor-host stopped: {stopped}");
+    }
+    let [containers, volumes, networks] = env.down().await?;
+    println!(
+        "velnor-local: {} removed: {containers} containers, {volumes} volumes, {networks} networks",
+        env.name
+    );
+    Ok(())
+}
+
 async fn up(args: UpArgs) -> std::io::Result<()> {
     let env = Environment::at(&args.environment.dir, DockerCli).await?;
     let repo = fs::canonicalize(&args.repo).await?;
+    let pairs = super::supervisor::pairs(&args.environment).await?;
+    println!("velnor-local: {}", runner_mode(pairs.as_ref()));
     let addresses = env.up(&repo, &args.environment).await?;
-    let authority = match super::supervisor::start(&env.dir).await {
+    let authority = match super::supervisor::start_with(&env.dir, pairs.as_ref()).await {
         Ok(authority) => authority,
         Err(error) => {
             let _ = env.down().await;
@@ -92,12 +108,22 @@ async fn up(args: UpArgs) -> std::io::Result<()> {
         }
     };
     println!("velnor-local: authority on {}", authority.address);
+    for pair in &authority.pairs {
+        println!("velnor-local: pair {pair} listening");
+    }
     println!(
         "velnor-local: {} is up, API stub at {}",
         env.name, addresses.stub_url
     );
     println!("velnor-local: {}", crate::authority::WARNING);
     Ok(())
+}
+
+pub(super) fn runner_mode(pairs: Option<&super::supervisor::Pairs>) -> String {
+    pairs.map_or_else(
+        || "runner mode plain: official runner containers, no job-start check".to_owned(),
+        super::supervisor::Pairs::describe,
+    )
 }
 
 async fn run_cache_server(args: CacheServerArgs) -> std::io::Result<()> {

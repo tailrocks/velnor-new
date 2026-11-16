@@ -15,6 +15,7 @@ mod daemon_run;
 mod dispatch;
 mod readiness_probe;
 mod service;
+mod state_directory;
 
 pub use args::Cli;
 pub use dispatch::run;

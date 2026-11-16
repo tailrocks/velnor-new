@@ -226,7 +226,7 @@ fn ownership_labels(
     ]))
 }
 
-fn tmpfs_options(bytes: u64, inodes: u64) -> Result<HashMap<String, String>, HostError> {
+pub(crate) fn tmpfs_options(bytes: u64, inodes: u64) -> Result<HashMap<String, String>, HostError> {
     if bytes == 0 || inodes == 0 {
         return Err(HostError::Identity);
     }

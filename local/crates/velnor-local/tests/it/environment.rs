@@ -1,117 +1,24 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
-use std::future::Future;
-use std::io;
 use std::os::unix::fs::PermissionsExt;
-use std::path::Path;
-use std::sync::Mutex;
 
-use velnor_local::cli::EnvironmentArgs;
+use velnor_local::cli::{EnvironmentArgs, RunnerMode};
 use velnor_local::event::{PullRequest, Push, Repository};
-use velnor_local::io::env::{Engine, Environment};
+use velnor_local::io::env::Environment;
 use velnor_local::io::{guarded, open};
 
+use crate::fake_docker::{FakeDocker, after};
 use crate::support::temp_dir;
 
-#[derive(Debug, Default)]
-struct FakeDocker {
-    labelled: Mutex<BTreeMap<String, String>>,
-    calls: Mutex<Vec<Vec<String>>>,
-}
-
-impl FakeDocker {
-    fn left(&self) -> Vec<String> {
-        let labelled = self.labelled.lock().unwrap_or_else(|e| unreachable!("{e}"));
-        labelled.keys().cloned().collect()
-    }
-
-    fn record(&self, args: &[&str]) {
-        let mut calls = self.calls.lock().unwrap_or_else(|e| unreachable!("{e}"));
-        calls.push(args.iter().map(|arg| (*arg).to_owned()).collect());
-    }
-
-    fn started(&self) -> Vec<Vec<String>> {
-        let calls = self.calls.lock().unwrap_or_else(|e| unreachable!("{e}"));
-        calls
-            .iter()
-            .filter(|call| call.starts_with(&["run".to_owned(), "-d".to_owned()]))
-            .cloned()
-            .collect()
-    }
-}
-
-fn after<'a>(call: &'a [String], flag: &str) -> Vec<&'a str> {
-    call.windows(2)
-        .filter(|pair| pair[0] == flag)
-        .map(|pair| pair[1].as_str())
-        .collect()
-}
-
-impl Engine for &FakeDocker {
-    fn docker(&self, args: &[&str]) -> impl Future<Output = io::Result<String>> + Send {
-        self.record(args);
-        std::future::ready(self.answer(args))
-    }
-
-    fn logged(&self, args: &[&str], _: &Path) -> impl Future<Output = io::Result<bool>> + Send {
-        self.record(args);
-        std::future::ready(Ok(true))
-    }
-}
-
-impl FakeDocker {
-    fn answer(&self, args: &[&str]) -> io::Result<String> {
-        let mut labelled = self.labelled.lock().unwrap_or_else(|e| unreachable!("{e}"));
-        let after = |flag: &str| {
-            args.iter()
-                .position(|arg| *arg == flag)
-                .and_then(|at| args.get(at + 1))
-                .map(|value| (*value).to_owned())
-        };
-        let kind = |prefix: &str| -> String {
-            let filter = after("--filter").unwrap_or_default();
-            let label = filter.trim_start_matches("label=");
-            let matching = labelled
-                .iter()
-                .filter(|(name, value)| name.starts_with(prefix) && value.as_str() == label);
-            matching
-                .map(|(name, _)| name.trim_start_matches(prefix).to_owned())
-                .collect::<Vec<_>>()
-                .join("\n")
-        };
-        match args {
-            ["network", "create", ..] => {
-                let name = args.last().copied().unwrap_or_default();
-                labelled.insert(
-                    format!("network:{name}"),
-                    after("--label").unwrap_or_default(),
-                );
-            }
-            ["run", "-d", ..] => {
-                let name = after("--name").unwrap_or_default();
-                labelled.insert(
-                    format!("container:{name}"),
-                    after("--label").unwrap_or_default(),
-                );
-            }
-            ["port", ..] => return Err(io::Error::other("no public port")),
-            ["ps", ..] => return Ok(kind("container:")),
-            ["network", "ls", ..] => return Ok(kind("network:")),
-            ["rm", "-f", "-v", ids @ ..] => {
-                for id in ids {
-                    labelled.remove(&format!("container:{id}"));
-                }
-            }
-            ["network", "rm", ids @ ..] => {
-                for id in ids {
-                    labelled.remove(&format!("network:{id}"));
-                }
-            }
-            _ => {}
-        }
-        Ok(String::new())
+fn plain(dir: &std::path::Path, runners: u16, fork_runners: u16) -> EnvironmentArgs {
+    EnvironmentArgs {
+        dir: dir.to_path_buf(),
+        runners,
+        fork_runners,
+        default_branch: "main".to_owned(),
+        runner: RunnerMode::Plain,
+        velnor_host: "velnor-host".into(),
     }
 }
 
@@ -122,12 +29,7 @@ async fn an_environment_that_fails_to_start_leaves_no_container_or_network() {
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let args = EnvironmentArgs {
-        dir: dir.clone(),
-        runners: 2_u16,
-        fork_runners: 1,
-        default_branch: "main".to_owned(),
-    };
+    let args = plain(&dir, 2, 1);
     let started = env.up(&dir, &args).await;
     assert!(started.is_err());
     assert_eq!(docker.left(), Vec::<String>::new());
@@ -178,12 +80,7 @@ async fn the_untrusted_side_has_its_own_network_and_keys_and_no_way_to_the_stub(
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let args = EnvironmentArgs {
-        dir: dir.clone(),
-        runners: 1_u16,
-        fork_runners: 1,
-        default_branch: "main".to_owned(),
-    };
+    let args = plain(&dir, 1, 1);
     assert!(env.up(&dir, &args).await.is_err());
     let (trusted, untrusted) = (env.name.clone(), format!("{}-fork", env.name));
     let started = docker.started();
@@ -346,12 +243,7 @@ async fn a_malformed_control_token_is_replaced_by_a_full_one() {
     let env = Environment::at(&dir, &docker)
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let args = EnvironmentArgs {
-        dir: dir.clone(),
-        runners: 1_u16,
-        fork_runners: 0,
-        default_branch: "main".to_owned(),
-    };
+    let args = plain(&dir, 1, 0);
     assert!(env.up(&dir, &args).await.is_err());
     let token = std::fs::read_to_string(dir.join("keys/control")).unwrap_or_default();
     assert_eq!(token.len(), 64, "{token}");

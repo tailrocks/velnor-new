@@ -42,6 +42,22 @@ runs:
         esac
         [ -n "$expected" ] || fail "no SHA-256 was given for $platform"
         [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || fail "the SHA-256 for $platform is not 64 lowercase hex digits"
+        MAX_BYTES=268435456
+        bounded_copy() {
+          head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null &
+          reader=$!
+          for _ in $(seq 1 12); do
+            kill -0 "$reader" 2> /dev/null || break
+            sleep 0.05
+          done
+          if kill -0 "$reader" 2> /dev/null; then
+            kill "$reader" 2> /dev/null || true
+            wait "$reader" 2> /dev/null || true
+            return 1
+          fi
+          wait "$reader" || return 1
+          [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
+        }
         arch="$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
         dir=
         if [ -n "${RUNNER_TOOL_CACHE:-}" ]; then
@@ -55,8 +71,7 @@ runs:
           rm -f "$staging/velnor-ci"
           if [ "$source" = cache ]; then
             [ -n "$dir" ] && [ -f "$dir/velnor-ci" ] && [ ! -L "$dir/velnor-ci" ] && [ -x "$dir/velnor-ci" ] || continue
-            [ "$(wc -c < "$dir/velnor-ci")" -le 268435456 ] || continue
-            cp "$dir/velnor-ci" "$staging/velnor-ci" 2> /dev/null || continue
+            bounded_copy "$dir/velnor-ci" "$staging/velnor-ci" || continue
           else
             echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
             curl --fail --silent --show-error --location --retry 3 --output "$staging/velnor-ci" "$RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"

@@ -24,6 +24,7 @@ pub(crate) use create::create_owned_network;
 pub(crate) use remove::remove_owned_network;
 pub(crate) use remove::remove_owned_network_for_jit_conflict;
 pub(crate) use remove::remove_owned_network_for_retirement;
+pub(crate) use remove::remove_owned_network_for_unbound_retirement;
 
 pub(crate) struct VerifiedStorageNetworkCreated {
     reservation_id: i64,

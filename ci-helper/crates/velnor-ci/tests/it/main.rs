@@ -25,6 +25,8 @@ mod plan_main;
 mod platform;
 mod prepare;
 mod prepare_install;
+mod release_cargo_discovery;
+mod release_check_config;
 mod release_fake;
 mod release_publish;
 mod release_publish_guards;

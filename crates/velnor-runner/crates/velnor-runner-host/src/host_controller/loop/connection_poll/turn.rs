@@ -272,7 +272,13 @@ async fn reconcile_poll(
     outcome: &ControllerPollOutcome,
 ) -> Result<(), HostError> {
     prepared.record_assigned_total(outcome.assigned_total);
-    if !is_removed {
+    if is_removed {
+        Box::pin(super::super::polling::reconcile_removed_pre_jit(
+            prepared,
+            &positive_poll_context(context),
+        ))
+        .await?;
+    } else {
         Box::pin(super::super::polling::reconcile_assigned_population(
             prepared,
             &positive_poll_context(context),

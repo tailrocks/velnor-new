@@ -37,13 +37,13 @@ pub enum ReleaseError {
         root: String,
         package: Option<String>,
     },
-    AmbiguousBinary {
-        package: String,
-        roots: Vec<String>,
-    },
     UnknownPlatform {
         package: String,
         platform: String,
+    },
+    InvalidBinName {
+        package: String,
+        bin: String,
     },
     EmptyAfter,
     EmptyRoots,
@@ -52,6 +52,9 @@ pub enum ReleaseError {
     },
     UnsafeRoot {
         root: String,
+    },
+    DuplicateBinary {
+        package: String,
     },
     DuplicatePackage {
         root: String,
@@ -75,6 +78,9 @@ pub enum ReleaseError {
     BinaryNotReleased {
         package: String,
     },
+    EmptyPrBranchPrefix {
+        root: String,
+    },
     TagTemplateWithoutVersion {
         root: String,
         package: Option<String>,
@@ -88,18 +94,9 @@ pub enum ReleaseError {
         root: String,
         package: Option<String>,
     },
-    EmptyPrBranchPrefix {
-        root: String,
-    },
     ExecutableConfig {
         root: String,
         key: &'static str,
-    },
-    ReleasePlzNotInMiseToml,
-    ReleasePlzNotInMiseLock,
-    ReleasePlzLockMismatch {
-        configured: String,
-        locked: Vec<String>,
     },
     ReleasePlzToolOverride {
         tool: String,
@@ -112,6 +109,69 @@ pub enum ReleaseError {
     ReleasePlzArtifactElsewhere {
         tool: String,
         url: String,
+    },
+    CargoCredentialProvider {
+        file: String,
+    },
+    CargoRedirectsCratesIo {
+        file: String,
+    },
+    CargoConfigInclude {
+        file: String,
+    },
+    CargoConfigKeyNotAllowed {
+        file: String,
+        key: String,
+    },
+    SymlinkOnCargoConfigPath {
+        root: String,
+        path: String,
+    },
+    ToolchainFromPath {
+        file: String,
+    },
+    DuplicatePackageName {
+        package: String,
+        roots: Vec<String>,
+    },
+    TagsMayCollide {
+        first: String,
+        second: String,
+    },
+    CargoRunsProgram {
+        file: String,
+        key: String,
+    },
+    ExpressionInValue {
+        key: String,
+        value: String,
+    },
+    InvalidPrBranchPrefix {
+        root: String,
+        prefix: String,
+    },
+    ReleasePlzVersionNotExact {
+        version: String,
+    },
+    PackageNotInRoot {
+        root: String,
+        package: String,
+    },
+    BinaryTargetMissing {
+        package: String,
+        bin: String,
+    },
+    RootWithoutCargoManifest {
+        root: String,
+    },
+    UnknownWorkflow {
+        name: String,
+    },
+    ReleasePlzNotInMiseToml,
+    ReleasePlzNotInMiseLock,
+    ReleasePlzLockMismatch {
+        configured: String,
+        locked: Vec<String>,
     },
 }
 
@@ -183,14 +243,13 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} is not a released [[package]] in any release-plz.toml"
             ),
-            Self::AmbiguousBinary { package, roots } => write!(
-                f,
-                ".velnor/release.toml: binary {package} is released from several roots: {}",
-                roots.join(", ")
-            ),
             Self::UnknownPlatform { package, platform } => write!(
                 f,
                 ".velnor/release.toml: binary {package} names unknown platform {platform:?}"
+            ),
+            Self::InvalidBinName { package, bin } => write!(
+                f,
+                ".velnor/release.toml: binary {package} names bin {bin:?}, which is not a valid binary name"
             ),
             Self::EmptyAfter => write!(
                 f,
@@ -200,9 +259,13 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} must name at least one platform"
             ),
+            Self::DuplicateBinary { package } => write!(
+                f,
+                ".velnor/release.toml: package {package} has more than one [[binaries]] entry"
+            ),
             Self::UnsafeRoot { root } => write!(
                 f,
-                ".velnor/release.toml: root {root:?} must be a relative path without \"..\""
+                ".velnor/release.toml: root {root:?} must be \".\" or a relative path without empty, \".\" or \"..\" components"
             ),
             Self::DuplicatePackage { root, package } => write!(
                 f,
@@ -215,6 +278,26 @@ impl ReleaseError {
             Self::RootReleasesNothing { root } => write!(
                 f,
                 "{root}/release-plz.toml: [workspace] release = false leaves nothing to release"
+            ),
+            Self::EmptyRoots => {
+                write!(f, ".velnor/release.toml: roots must name at least one root")
+            }
+            Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
+            Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
+            Self::ReleasePlzLockMismatch { configured, locked } => write!(
+                f,
+                "mise.toml requests release-plz {configured} but mise.lock locks {}",
+                locked.join(", ")
+            ),
+            _ => self.fmt_hardening(f),
+        }
+    }
+
+    fn fmt_hardening(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EmptyPrBranchPrefix { root } => write!(
+                f,
+                "{root}/release-plz.toml: pr_branch_prefix must not be empty or blank"
             ),
             Self::TagTemplateWithoutVersion { root, package } => write!(
                 f,
@@ -239,28 +322,6 @@ impl ReleaseError {
                 f,
                 "{root}/release-plz.toml: {key} can run commands or read a file that Velnor does not check, and release-plz holds the release App token"
             ),
-            Self::EmptyPrBranchPrefix { root } => write!(
-                f,
-                "{root}/release-plz.toml: pr_branch_prefix must not be empty"
-            ),
-            Self::EmptyRoots => {
-                write!(f, ".velnor/release.toml: roots must name at least one root")
-            }
-            _ => self.fmt_mise(f),
-        }
-    }
-}
-
-impl ReleaseError {
-    fn fmt_mise(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::ReleasePlzNotInMiseToml => write!(f, "mise.toml does not list release-plz"),
-            Self::ReleasePlzNotInMiseLock => write!(f, "mise.lock does not lock release-plz"),
-            Self::ReleasePlzLockMismatch { configured, locked } => write!(
-                f,
-                "mise.toml requests release-plz {configured} but mise.lock locks {}",
-                locked.join(", ")
-            ),
             Self::ReleasePlzToolOverride { tool, field } => write!(
                 f,
                 "mise.toml: the release-plz tool {tool} sets {field}, which can point mise at repository code or run a script while the release App token is in scope; give it only a version"
@@ -273,7 +334,7 @@ impl ReleaseError {
                 f,
                 "mise.lock: {tool} downloads from {url}, which is not a release-plz release on GitHub, so the downloaded program would run with the release App token in scope; run `mise lock` again"
             ),
-            _ => Ok(()),
+            _ => self.fmt_cargo(f),
         }
     }
 }
