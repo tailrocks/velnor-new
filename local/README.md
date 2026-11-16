@@ -70,7 +70,7 @@ velnor-local down --dir "$STATE"
 - Local mode keeps no journal and no reservation. `down` removes everything labelled `velnor-local=<name>`; after it, `docker ps -aq`, `docker volume ls -q` and `docker network ls -q` with that label print nothing.
 - Untrusted runs (fork pull requests) use a second network and runner.server, a cache that only restores, and no secrets or token. That network is an ordinary Docker bridge; replay fork pull requests only where that is acceptable.
 - `STATE` is outside the checkout. `run` copies the checkout and never modifies it.
-- `build` refuses a working tree with uncommitted changes, because the images are named for `HEAD`.
+- `build` refuses uncommitted changes to tracked files, because the images are named for `HEAD`. It also refuses anything `git status` reports under `crates/velnor-runner`, `images` or `.velnor`, including an untracked file there. An untracked file outside those paths does not fail `build`.
 
 ## The approved-workflows check and `--policy`
 
@@ -103,7 +103,7 @@ What the untrusted side does not close: its network is an ordinary Docker bridge
 
 Only `pull_request` is modelled for forks. `pull_request_target`, `workflow_run` and `issue_comment` are never sent, so a workflow that runs on them shows no run, which says nothing about whether it would be safe on GitHub.
 
-Every runner container is linux/arm64 and registers with the labels `ubuntu-latest`, `ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-26.04` and their `-arm` forms, so a workflow written for hosted runners runs unchanged and `runner.arch` is `ARM64`. Every one of these labels runs on the same image, Ubuntu 24.04 in plain mode and the self-hosted Ubuntu 26.04 pair image in pair mode, so a difference between Ubuntu releases does not show locally and a job can pass in one mode and fail in the other; the verdict says so. The runner image has `build-essential`, as hosted Ubuntu runners do.
+Every runner container is linux/arm64 and registers with `ubuntu-latest`, `ubuntu-22.04`, `ubuntu-24.04`, `ubuntu-26.04`, `ubuntu-22.04-arm`, `ubuntu-24.04-arm` and `ubuntu-26.04-arm`, so a workflow written for hosted runners runs unchanged and `runner.arch` is `ARM64`. There is no `ubuntu-latest-arm` label. Every one of these labels runs on the same image, Ubuntu 24.04 in plain mode and the self-hosted Ubuntu 26.04 pair image in pair mode, so a difference between Ubuntu releases does not show locally and a job can pass in one mode and fail in the other; the verdict says so. The runner image has `build-essential`, as hosted Ubuntu runners do.
 
 ## Run a scenario
 
