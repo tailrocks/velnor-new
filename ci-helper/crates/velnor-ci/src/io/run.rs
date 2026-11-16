@@ -68,6 +68,9 @@ pub(super) fn run(args: &RunArgs) -> ExitCode {
 
 fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let path = log_path()?;
+    let started = Instant::now();
+    let mut invocation =
+        super::report::start_invocation(&args.command).map_err(|e| (2, e.to_string()))?;
     let mut log =
         open_log(&path).map_err(|e| (2, format!("cannot open {}: {e}", path.display())))?;
     let write_error = |e: std::io::Error| (2, format!("cannot write {}: {e}", path.display()));
@@ -78,6 +81,8 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         args.command.len() - 1
     )
     .map_err(write_error)?;
+    invocation.log_start =
+        usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
     let signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|e| (2, format!("cannot watch for SIGINT and SIGTERM: {e}")))?;
     let (mut child, own_group) = spawn_child(&args.command)?;
@@ -123,6 +128,10 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     if let Err(error) = writeln!(log, "velnor-ci run: exit {code}") {
         lost = lost.or(Some(error));
     }
+    invocation.log_end =
+        usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
+    invocation.seconds = started.elapsed().as_secs_f64();
+    super::report::save_invocation(&invocation).map_err(|e| (2, e.to_string()))?;
     match lost {
         Some(error) if code == 0 => Err(write_error(error)),
         Some(error) => {

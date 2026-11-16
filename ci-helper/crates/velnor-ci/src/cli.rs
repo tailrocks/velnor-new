@@ -21,6 +21,10 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    #[command(
+        about = "Write ci-metrics.json and the lane summary; --check checks lane artifacts for cache waste"
+    )]
+    Report(ReportArgs),
     #[command(subcommand, about = "Collect and compare run metrics")]
     Bench(BenchCommand),
     #[command(
@@ -72,6 +76,12 @@ pub enum Command {
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct ReportArgs {
+    #[arg(long, help = "Directory of downloaded lane metrics to check")]
+    pub check: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]

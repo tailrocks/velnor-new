@@ -12,6 +12,8 @@ mod inputs;
 mod manifests;
 mod plan;
 mod release;
+mod report;
+mod report_inputs;
 mod restored;
 mod run;
 mod setup;
@@ -99,6 +101,7 @@ pub fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
+        Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),

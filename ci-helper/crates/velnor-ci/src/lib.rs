@@ -21,6 +21,7 @@ pub mod plan;
 pub mod platform;
 pub mod publish;
 pub mod release;
+pub mod report;
 pub mod rulesets;
 pub mod scope;
 pub mod setup;

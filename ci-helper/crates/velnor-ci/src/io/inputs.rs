@@ -63,6 +63,11 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
 }
 
 pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
+    match fs::remove_file(root.join(crate::report::SNAPSHOT)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(CiError::new(error.to_string())),
+    }
     let path = root.join(INPUTS_FILE);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
@@ -80,6 +85,8 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
             plan.links_changed
         ));
     }
+    fs::write(root.join(crate::report::SNAPSHOT), &text)
+        .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
@@ -127,7 +134,7 @@ pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
     })
 }
 
-fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
+pub(super) fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
     let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
     let top = PathBuf::from(
         String::from_utf8(top)
