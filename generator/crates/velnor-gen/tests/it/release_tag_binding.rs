@@ -57,7 +57,7 @@ fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
 #[test]
 fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_token() -> TestResult
 {
-    let found = refuse_steps("0.1.80")?;
+    let found = refuse_steps("0.1.81")?;
     assert_eq!(found.len(), 2);
     for (id, step) in found {
         let released = if id == "tag" {
@@ -82,6 +82,21 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
                 "RUSTUP_TOOLCHAIN=stable",
             ]
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn helper_0_1_80_gets_the_tag_patterns_but_not_released_versions() -> TestResult {
+    let found = refuse_steps("0.1.80")?;
+    assert_eq!(found.len(), 2);
+    for (_, step) in found {
+        assert!(
+            step[0].ends_with("--repo \"$REPOSITORY\" --manifests"),
+            "{}",
+            step[0]
+        );
+        assert!(!step[0].contains("--released-versions"));
     }
     Ok(())
 }
