@@ -596,6 +596,13 @@ WORK="$physical_work"
 
 stage="$WORK/stage"
 mkdir -p "$stage"
+if [ "$MODE" = "check" ]; then
+  hash_tree "$GOLDEN_DIR/cases" "$WORK/manifest.sha256"
+  if ! cmp -s "$GOLDEN_DIR/MANIFEST.sha256" "$WORK/manifest.sha256"; then
+    die "golden manifest does not match the complete cases inventory"
+    exit 1
+  fi
+fi
 if [ "$MODE" = "check-release" ]; then
   for case in $FIXTURES; do
     repo="$WORK/$case"
