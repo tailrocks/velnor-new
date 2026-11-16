@@ -120,7 +120,7 @@ fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
         );
         let env = all[check].get("env").ok_or("no env")?;
         let mut keys = env.keys();
-        keys.sort();
+        keys.sort_unstable();
         assert_eq!(keys, ["GITHUB_TOKEN", "REPOSITORY"], "{id}");
         assert_eq!(
             env.get("GITHUB_TOKEN").and_then(Node::text),

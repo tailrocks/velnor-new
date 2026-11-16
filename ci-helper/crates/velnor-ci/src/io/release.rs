@@ -12,7 +12,6 @@ use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
-use crate::release::{
     CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_tag_patterns,
     publishes_to_crates_io, record,
 };
