@@ -5,6 +5,7 @@ use velnor_model::{RepoPath, RepoView, RustRoot};
 
 use crate::roots::{CARGO_LOCK, is_cargo_config};
 use crate::toml_file::table;
+use crate::weaken_scope::reaches_a_check;
 
 const PUBLIC_SOURCES: [&str; 2] = [
     "registry+https://github.com/rust-lang/crates.io-index",
@@ -24,7 +25,7 @@ pub(crate) fn private_sources(view: &RepoView, roots: &[RustRoot]) -> Option<Str
     let configs = view
         .files
         .iter()
-        .filter(|(path, _)| is_cargo_config(path))
+        .filter(|(path, _)| is_cargo_config(path) && reaches_a_check(path, roots))
         .filter_map(|(path, bytes)| configured_source(path, bytes));
     locks.chain(configs).next().map(|cause| {
         format!(
