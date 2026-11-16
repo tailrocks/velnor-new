@@ -8,6 +8,8 @@ mod check_metadata;
 mod check_metadata_gen;
 mod collect;
 mod compare;
+mod delta;
+mod delta_trim;
 mod event;
 mod gate;
 mod inputs;

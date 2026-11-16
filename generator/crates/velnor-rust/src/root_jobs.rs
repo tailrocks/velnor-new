@@ -81,7 +81,15 @@ impl RootJobs<'_> {
         save_steps(self.facts, self.root, self.lane, job, archive, sources)
     }
 
-    fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
+    fn lane_job(&self, id: JobId, mut steps: Vec<Step>) -> Job {
+        if steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
+        {
+            steps.extend(crate::delta_cache::save(
+                self.facts, self.root, self.lane, &id,
+            ));
+        }
         Job {
             needs: self
                 .lane

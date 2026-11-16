@@ -118,7 +118,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
-      - name: Restore the target cache
+      - id: target_root
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
@@ -1009,7 +1010,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-${{ hashFiles(''lab/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-'
-      - name: Restore the target cache
+      - id: target_lab
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: lab/target
@@ -1122,7 +1124,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
-      - name: Restore the target cache
+      - id: target_root
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
@@ -1143,7 +1146,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-${{ hashFiles(''lab/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-'
-      - name: Restore the target cache
+      - id: target_lab
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: lab/target

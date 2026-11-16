@@ -6,6 +6,8 @@ mod build_inputs;
 mod cache;
 mod cold;
 mod configurations;
+mod delta;
+mod delta_trim;
 mod git;
 mod http;
 mod inputs;
@@ -99,6 +101,7 @@ pub fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
+        Command::Delta(command) => delta::run(command),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
@@ -135,6 +138,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             Ok(decision.report)
         }
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
+        Command::Cache(CacheCommand::TrimDeltas(args)) => delta_trim::run(args.run_id),
         Command::Restored => {
             let root = current_dir()?;
             let targets = every_root_target(&root);

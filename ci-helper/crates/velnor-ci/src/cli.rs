@@ -21,6 +21,11 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    #[command(
+        subcommand,
+        about = "Restore and stage the PR's cumulative build delta"
+    )]
+    Delta(crate::delta_cli::DeltaCommand),
     #[command(subcommand, about = "Collect and compare run metrics")]
     Bench(BenchCommand),
     #[command(
@@ -321,6 +326,10 @@ pub struct AuditArgs {
 
 #[derive(Debug, Subcommand)]
 pub enum CacheCommand {
+    #[command(
+        about = "In trusted workflow_run cleanup, validate the completed same-repository PR run and keep its newest delta per lane"
+    )]
+    TrimDeltas(crate::delta_cli::TrimDeltasArgs),
     #[command(
         about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise; with true, remove every incremental directory below --target-dir and the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
     )]

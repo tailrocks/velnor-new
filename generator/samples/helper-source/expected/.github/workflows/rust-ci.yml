@@ -124,7 +124,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
-      - name: Restore the target cache
+      - id: target_ci_helper
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
@@ -228,7 +229,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
-      - name: Restore the target cache
+      - id: target_root
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
@@ -444,7 +446,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
-      - name: Restore the target cache
+      - id: target_ci_helper
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
@@ -603,7 +606,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
-      - name: Restore the target cache
+      - id: target_crates_velnor_runner
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: crates/velnor-runner/target
@@ -804,7 +808,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
-      - name: Restore the target cache
+      - id: target_generator
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: generator/target
@@ -981,7 +986,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
-      - name: Restore the target cache
+      - id: target_local
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: local/target
@@ -1137,7 +1143,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
-      - name: Restore the target cache
+      - id: target_root
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
@@ -1158,7 +1165,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
-      - name: Restore the target cache
+      - id: target_ci_helper
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
@@ -1179,7 +1187,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
-      - name: Restore the target cache
+      - id: target_crates_velnor_runner
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: crates/velnor-runner/target
@@ -1200,7 +1209,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
-      - name: Restore the target cache
+      - id: target_generator
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: generator/target
@@ -1221,7 +1231,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
-      - name: Restore the target cache
+      - id: target_local
+        name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: local/target

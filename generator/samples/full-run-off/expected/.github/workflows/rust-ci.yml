@@ -88,7 +88,8 @@ jobs:
             ~/.cargo/git/db
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
-      - name: Restore the target cache
+      - id: target_root
+        name: Restore the target cache
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:

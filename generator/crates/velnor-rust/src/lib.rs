@@ -10,6 +10,7 @@ mod classify;
 mod compat;
 mod config;
 mod credentials;
+mod delta_cache;
 mod detect;
 mod doc_steps;
 mod error;

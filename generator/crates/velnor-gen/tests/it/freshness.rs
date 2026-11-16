@@ -52,7 +52,7 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
             .iter()
             .position(|name| *name == "velnor-ci restored")
             .ok_or("no restored step")?;
-        assert_eq!(order[restored - 2], "Restore the target cache", "{lane}");
+        assert_eq!(order[restored - 2], "velnor-ci delta apply", "{lane}");
         assert_eq!(order[restored - 1], "velnor-ci inputs restore", "{lane}");
         assert_eq!(order[restored + 1], "Format", "{lane}");
     }

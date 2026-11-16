@@ -91,6 +91,18 @@ pub(crate) fn condition(
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
         }
+        When::PullRequest | When::SaveDelta | When::SaveDeltaDecided => {
+            parts.push("github.event_name == 'pull_request'".to_owned());
+            if when != When::PullRequest {
+                parts.push(
+                    "github.event.pull_request.head.repo.full_name == github.repository".to_owned(),
+                );
+                parts.push(SETUP_DONE.to_owned());
+            }
+            if when == When::SaveDeltaDecided {
+                parts.push("steps.delta.outputs.save == 'true'".to_owned());
+            }
+        }
     }
     if skip_draft {
         parts.push(NOT_DRAFT.to_owned());

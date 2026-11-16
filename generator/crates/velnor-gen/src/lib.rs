@@ -69,6 +69,9 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
+    if let Some(cleanup) = velnor_render::delta_cleanup(helper, &plan.name) {
+        files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
+    }
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
     let mut notes = facts.timings_notes;

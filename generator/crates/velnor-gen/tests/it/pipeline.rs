@@ -66,6 +66,7 @@ pub(crate) fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
     let mut locked = view.clone();
     crate::facts::lock_pinned_tools(&mut locked)?;
     let mut files = expected_with_notes(&locked).map(|(files, _)| files)?;
+    files.remove(&velnor_render::DELTA_CLEANUP_PATH);
     let text = files
         .remove(&RepoPath::new(WORKFLOW)?)
         .ok_or("the workflow was not rendered")?;

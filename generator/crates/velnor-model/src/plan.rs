@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use crate::cache::CacheKey;
+use crate::cache::{CacheKey, CacheRoot};
 use crate::cron::CronExpr;
 use crate::ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RootSlug, RunnerLabel,
@@ -173,6 +173,9 @@ pub enum When {
     SaveToolsOnDefaultBranch,
     SaveBase,
     SaveBaseDecided,
+    PullRequest,
+    SaveDelta,
+    SaveDeltaDecided,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -191,6 +194,12 @@ pub enum StepKind {
     },
     CacheTrim {
         lane: JobId,
+    },
+    DeltaPrepare(CacheRoot),
+    DeltaApply(CacheRoot),
+    DeltaStage {
+        root: CacheRoot,
+        packages: Vec<PackageName>,
     },
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),

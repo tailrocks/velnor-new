@@ -260,6 +260,7 @@ pub(crate) fn setup_roots(
                 host: Host,
             })),
         ]);
+        toolchain.extend(crate::delta_cache::restore(facts, root, job));
     }
     if lane.from_source || breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));

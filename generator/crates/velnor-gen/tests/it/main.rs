@@ -11,6 +11,7 @@ mod classify;
 mod compile_inputs;
 mod concurrency;
 mod credential_hooks;
+mod delta_cache;
 mod detect;
 mod doc_steps;
 mod drift;

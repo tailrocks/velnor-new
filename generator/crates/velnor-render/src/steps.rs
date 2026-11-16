@@ -166,6 +166,9 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
         StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
         StepKind::CacheTrim { lane } => cache_trim(lane),
+        StepKind::DeltaPrepare(root) => crate::delta_steps::delta_step(root, "prepare"),
+        StepKind::DeltaApply(root) => crate::delta_steps::delta_step(root, "apply"),
+        StepKind::DeltaStage { root, packages } => crate::delta_steps::delta_stage(root, packages),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),
@@ -283,6 +286,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         id: match key {
             CacheKey::Tools { .. } if fallbacks => Some(TOOLS_STEP.to_owned()),
             CacheKey::Sources { root, .. } if fallbacks => Some(sources_step(root.slug())),
+            CacheKey::Target { root, .. } if fallbacks => Some(format!("target_{}", root.slug())),
             _ => None,
         },
         name: format!("{verb} the {} cache", key.family()),

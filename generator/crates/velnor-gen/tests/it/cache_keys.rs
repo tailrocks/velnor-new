@@ -79,10 +79,10 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
         }),
         RenderedKey {
             key: format!(
-                "velnor-dlt-rust-test-root-{HOST}-{COMPAT}-${{{{ steps.restored.outputs.base8 }}}}-${{{{ github.run_id }}}}"
+                "velnor-dlt-pr${{{{ github.event.pull_request.number }}}}-rust-test.root.{HOST}-{COMPAT}-${{{{ steps.delta_base_root.outputs.base8 }}}}-${{{{ github.run_id }}}}"
             ),
             restore_keys: vec![format!(
-                "velnor-dlt-rust-test-root-{HOST}-{COMPAT}-${{{{ steps.restored.outputs.base8 }}}}-"
+                "velnor-dlt-pr${{{{ github.event.pull_request.number }}}}-rust-test.root.{HOST}-{COMPAT}-${{{{ steps.delta_base_root.outputs.base8 }}}}-"
             )],
         }
     );

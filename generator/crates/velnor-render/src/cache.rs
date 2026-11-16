@@ -8,7 +8,6 @@ use crate::steps::{MISE_VERSION, PREPARE_STEP};
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMMIT: &str = "${{ github.sha }}";
 const RUN_ID: &str = "${{ github.run_id }}";
-const DELTA_BASE: &str = "${{ steps.restored.outputs.base8 }}";
 const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +40,7 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
         CacheKey::Delta { .. } => String::new(),
     };
     let owner;
+    let delta_base;
     let layout = match key {
         CacheKey::Tools { .. } => Layout {
             segments: vec!["velnor", "tools", HOST, &mise, &lock],
@@ -57,19 +57,22 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
                 fallbacks: &[5, 4],
             }
         }
-        CacheKey::Delta { job, root, .. } => Layout {
-            segments: vec![
-                "velnor",
-                "dlt",
-                job.as_str(),
-                root.slug().as_str(),
-                HOST,
-                &compat,
-                DELTA_BASE,
-                RUN_ID,
-            ],
-            fallbacks: &[7],
-        },
+        CacheKey::Delta { job, root, .. } => {
+            owner = format!("{job}.{}.{HOST}", root.slug());
+            delta_base = format!("${{{{ steps.delta_base_{}.outputs.base8 }}}}", root.slug());
+            Layout {
+                segments: vec![
+                    "velnor",
+                    "dlt",
+                    "pr${{ github.event.pull_request.number }}",
+                    &owner,
+                    &compat,
+                    &delta_base,
+                    RUN_ID,
+                ],
+                fallbacks: &[6],
+            }
+        }
     };
     joined(&layout)
 }
@@ -147,5 +150,6 @@ pub(crate) fn path_text(path: &CachePath) -> String {
         CachePath::CargoRegistryCache => "~/.cargo/registry/cache".to_owned(),
         CachePath::CargoGitDb => "~/.cargo/git/db".to_owned(),
         CachePath::Target(directory) => directory.to_string(),
+        CachePath::Delta(root) => root.delta_dir(),
     }
 }
