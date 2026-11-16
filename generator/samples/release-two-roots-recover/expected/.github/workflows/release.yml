@@ -145,6 +145,7 @@ jobs:
     environment: release
     permissions:
       contents: read
+      pull-requests: read
     concurrency:
       group: release-tag
       cancel-in-progress: false
@@ -200,6 +201,13 @@ jobs:
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
         run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests --released-versions'
+      - name: Check that release-plz would tag the verified commit
+        if: '${{ steps.newest.outputs.newest == ''true'' }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          REPOSITORY: '${{ github.repository }}'
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+        run: 'velnor-ci release preflight --repo "$REPOSITORY" --verified-commit "$COMMIT" --branch-prefix release-plz-app- --branch-prefix release-plz-tools-'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
