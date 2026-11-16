@@ -81,7 +81,7 @@ pub(super) fn job(
             hosted,
             JobTimeout::DEFAULT,
         ),
-        workflow_steps::perm(&[("actions", "write"), ("contents", "read")]),
+        workflow_steps::perm(&[("actions", "read"), ("contents", "read")]),
     );
     fields.retain(|(key, _)| key != "name");
     fields = workflow_steps::with_needs(fields, &NEEDS);
