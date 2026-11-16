@@ -9,6 +9,7 @@ use bollard::{
     models::ContainerInspectResponse,
     query_parameters::{ListContainersOptions, StopContainerOptions},
 };
+use sha2::{Digest, Sha256};
 
 use crate::{
     error::HostError,
@@ -64,7 +65,12 @@ pub(super) async fn remove_volume_helpers(
         let Some(inspected) = inspected else {
             continue;
         };
-        if !is_helper_of(&inspected, &id, volume) {
+        if !is_helper_of(
+            &inspected,
+            &id,
+            volume,
+            &engine_digest(identity.engine_id()),
+        ) {
             return Err(Failure::not_proven("volume helper ownership"));
         }
         if inspected.state.as_ref().and_then(|state| state.running) == Some(true) {
@@ -111,13 +117,36 @@ async fn stop_helper(context: &Context<'_>, id: &str) -> Result<(), HostError> {
     .map_err(|error| docker_error("volume helper stop", id, &error))
 }
 
-fn is_helper_of(container: &ContainerInspectResponse, id: &str, volume: &str) -> bool {
-    let role = container
+fn engine_digest(engine_id: &str) -> String {
+    use std::fmt::Write;
+    Sha256::digest(engine_id.as_bytes())
+        .iter()
+        .fold(String::new(), |mut encoded, byte| {
+            let _ = write!(encoded, "{byte:02x}");
+            encoded
+        })
+}
+
+fn is_helper_of(
+    container: &ContainerInspectResponse,
+    id: &str,
+    volume: &str,
+    engine_digest: &str,
+) -> bool {
+    let labels = container
         .config
         .as_ref()
-        .and_then(|config| config.labels.as_ref())
-        .and_then(|labels| labels.get("velnor.role"));
+        .and_then(|config| config.labels.as_ref());
+    let role = labels.and_then(|labels| labels.get("velnor.role"));
+    let engine = labels.and_then(|labels| labels.get("velnor.engine"));
+    let engine_bound = match role.map(String::as_str) {
+        Some("resource-probe" | "execution-publication") => {
+            engine.is_some_and(|engine| engine == engine_digest)
+        }
+        _ => true,
+    };
     container.id.as_deref() == Some(id)
+        && engine_bound
         && role.is_some_and(|role| HELPER_ROLES.contains(&role.as_str()))
         && container
             .mounts

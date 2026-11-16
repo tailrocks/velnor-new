@@ -17,7 +17,9 @@ use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
-pub(crate) use self::helper_scenario::run_cancelled_before_start_scenario;
+pub(crate) use self::helper_scenario::{
+    CancelledObservation, HelperSpec, run_cancelled_before_start_scenario,
+};
 use self::helper_scenario::{VolumeState, read_diagnostics_files, write_volume_response};
 use serde_json::{Value, json};
 use velnor_runner_host::{
