@@ -6,11 +6,14 @@ use std::fs;
 use velnor_gen::expected_with_notes;
 use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath};
 use velnor_render::render_key;
+use velnor_rust::{LOCK_PATH, pin_lock};
 
 use crate::archive::jobs_of;
 use crate::base_save::{jobs, names, step};
 use crate::facts::TestResult;
 use crate::golden::{load, samples};
+use crate::lock::{COMMIT_FILE, SUMS};
+use crate::pipeline::{view, workflow};
 
 const GUARD: &str =
     "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)";
@@ -54,8 +57,9 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
         trim.contains("    needs:\n      - rust-lint\n      - rust-test\n"),
         "{trim}"
     );
-    let condition =
-        format!("    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) }}}}'\n");
+    let condition = format!(
+        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'') }}}}'\n"
+    );
     assert!(trim.contains(&condition), "{trim}");
     assert!(
         trim.contains("    permissions:\n      actions: write\n    runs-on:"),
@@ -101,6 +105,93 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
 fn a_repository_that_saves_nothing_gets_no_trim_job() -> TestResult {
     let text = crate::pipeline::workflow(&crate::base_save::pinned("0.1.79", "")?)?;
     assert!(!text.contains("rust-trim"), "{text}");
+    Ok(())
+}
+
+fn job_if(block: &str) -> String {
+    block
+        .lines()
+        .find(|line| line.starts_with("    if: "))
+        .unwrap_or("")
+        .to_owned()
+}
+
+fn needed(block: &str) -> Vec<String> {
+    let mut ids = Vec::new();
+    let mut in_needs = false;
+    for line in block.lines() {
+        if line == "    needs:" {
+            in_needs = true;
+        } else if in_needs {
+            if let Some(id) = line.trim().strip_prefix("- ") {
+                ids.push(id.to_owned());
+            } else {
+                break;
+            }
+        }
+    }
+    ids
+}
+
+fn save_ids(condition: &str) -> Vec<String> {
+    let marker = ".outputs.base_save";
+    let mut rest = condition;
+    let mut ids = Vec::new();
+    while let Some(at) = rest.find(marker) {
+        let id = rest[..at]
+            .rsplit_once("needs.")
+            .map(|(_, id)| id.to_owned())
+            .unwrap_or_default();
+        ids.push(id);
+        rest = &rest[at + marker.len()..];
+    }
+    ids
+}
+
+fn the_job_requires_each_needed_lane_to_have_saved(block: &str) {
+    let needs = needed(block);
+    let clause = format!(
+        "({})",
+        needs
+            .iter()
+            .map(|id| format!("needs.{id}.outputs.base_save == ''true''"))
+            .collect::<Vec<_>>()
+            .join(" || ")
+    );
+    let condition = job_if(block);
+    assert!(condition.contains(&clause), "{condition} missing {clause}");
+    assert_eq!(save_ids(&condition), needs, "{condition}");
+}
+
+#[test]
+fn a_single_lane_trim_job_runs_only_when_that_lane_saved() -> TestResult {
+    let block = lane("", "rust-trim")?;
+    let condition = job_if(&block);
+    assert!(condition.contains("!cancelled()"), "{condition}");
+    assert!(condition.contains(GUARD), "{condition}");
+    assert!(condition.contains(EVENTS), "{condition}");
+    the_job_requires_each_needed_lane_to_have_saved(&block);
+    Ok(())
+}
+
+#[test]
+fn a_two_root_trim_job_runs_only_when_one_of_its_lanes_saved() -> TestResult {
+    let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(b""))?;
+    repo.files.insert(
+        LOCK_PATH,
+        pin_lock("0.1.81", COMMIT_FILE, SUMS)?.into_bytes(),
+    );
+    let text = workflow(&repo)?;
+    let trim = jobs_of(&text)
+        .into_iter()
+        .find(|(id, _)| id == "rust-trim")
+        .map(|(_, block)| block)
+        .ok_or("no trim job")?;
+    assert_eq!(
+        needed(&trim),
+        ["rust-root".to_owned(), "rust-lab".to_owned()]
+    );
+    the_job_requires_each_needed_lane_to_have_saved(&trim);
     Ok(())
 }
 

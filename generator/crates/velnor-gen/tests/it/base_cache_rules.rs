@@ -178,6 +178,79 @@ fn a_cargo_config_registry_or_source_saves_no_base_cache() -> TestResult {
 }
 
 #[test]
+fn a_cargo_config_outside_a_root_still_saves_and_one_on_the_root_does_not() -> TestResult {
+    let source = "[source.mirror]\nregistry = \"https://registry.example.invalid/\"\n";
+    let mut vendor = with_lock_file(CRATES_IO)?;
+    vendor.files.insert(
+        RepoPath::new("fixtures/vendor/.cargo/config.toml")?,
+        source.into(),
+    );
+    still_saves(&vendor)?;
+    still_saves(&rooted("app/Cargo.toml", &[])?)?;
+    suppressed(
+        &rooted("app/Cargo.toml", &[("app/.cargo/config.toml", source)])?,
+        "app/.cargo/config.toml",
+    )?;
+    suppressed(
+        &rooted("app/Cargo.toml", &[(".cargo/config.toml", source)])?,
+        ".cargo/config.toml",
+    )?;
+    still_saves(&rooted(
+        "app/Cargo.toml",
+        &[("app/vendor/.cargo/config.toml", source)],
+    )?)?;
+    suppressed(
+        &rooted(
+            "app/crate/Cargo.toml",
+            &[("app/.cargo/config.toml", source)],
+        )?,
+        "app/.cargo/config.toml",
+    )?;
+    still_saves(&rooted(
+        "application/Cargo.toml",
+        &[("app/.cargo/config.toml", source)],
+    )?)?;
+    Ok(())
+}
+
+fn rooted(root: &str, configs: &[(&str, &str)]) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut view = crate::pipeline::view(&[root], Some(b""))?;
+    view.files.insert(
+        LOCK_PATH,
+        pin_lock("0.1.81", COMMIT_FILE, SUMS)?.into_bytes(),
+    );
+    for (path, text) in configs {
+        view.files.insert(RepoPath::new(*path)?, (*text).into());
+    }
+    Ok(view)
+}
+
+fn still_saves(view: &RepoView) -> TestResult {
+    let (mut files, notes) = expected_with_notes(view)?;
+    let text = files
+        .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .ok_or("no workflow")?;
+    assert!(text.contains("Save the target cache"), "{text}");
+    assert!(
+        notes.iter().all(|note| !note.contains(NO_BASE_SAVE)),
+        "{notes:?}"
+    );
+    Ok(())
+}
+
+fn suppressed(view: &RepoView, config: &str) -> TestResult {
+    saves_nothing(config, view)?;
+    let (_, notes) = expected_with_notes(view)?;
+    assert!(
+        notes
+            .iter()
+            .any(|note| note.contains(config) && note.contains("[source]")),
+        "{config}: {notes:?}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_repository_without_private_dependencies_renders_no_visibility_condition() -> TestResult {
     let text = text_of(&with_lock_file(CRATES_IO)?)?;
     assert!(!text.contains("repository.private"), "{text}");
