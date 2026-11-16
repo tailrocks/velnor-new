@@ -7,6 +7,12 @@ use super::tokens::{Token, tokens};
 const RUSTDOC_SETTINGS: [&str; 3] = ["rustdoc", "missing_docs", "missing_crate_level_docs"];
 
 #[derive(Default)]
+pub(crate) struct Reached {
+    pub(crate) includes: Vec<String>,
+    pub(crate) modules: Vec<String>,
+}
+
+#[derive(Default)]
 pub(crate) struct Found {
     pub(crate) docs: bool,
     pub(crate) fenced: bool,
@@ -30,7 +36,7 @@ impl Found {
             });
     }
 
-    pub(crate) fn scan_rust(&mut self, text: &str, counts: bool) -> Vec<String> {
+    pub(crate) fn scan_rust(&mut self, text: &str, counts: bool) -> Reached {
         self.scan_text(text);
         let tokens = tokens(text);
         if tokens.windows(3).any(|window| {
@@ -41,7 +47,7 @@ impl Found {
         }) {
             self.both();
         }
-        let mut includes = Vec::new();
+        let mut reached = Reached::default();
         for (index, token) in tokens.iter().enumerate() {
             match *token {
                 Token::Doc { fenced, tested } => {
@@ -61,11 +67,21 @@ impl Found {
                             Token::Punct('='),
                             Token::Ident("include_str"),
                             Token::Punct('!'),
-                            Token::Punct('('),
+                            Token::Punct('(' | '[' | '{'),
                             Token::Str(path),
                             ..,
                         ] if attribute(&tokens, index) && counts => {
-                            includes.push((*path).to_owned());
+                            reached.includes.push((*path).to_owned());
+                        }
+                        [Token::Punct('='), Token::Str(path), Token::Punct(']'), ..]
+                            if word == "path"
+                                && counts
+                                && matches!(
+                                    &tokens[..index],
+                                    [.., Token::Punct('#'), Token::Punct('[')]
+                                ) =>
+                        {
+                            reached.modules.push((*path).to_owned());
                         }
                         _ => {}
                     }
@@ -73,7 +89,7 @@ impl Found {
                 _ => {}
             }
         }
-        includes
+        reached
     }
 
     pub(crate) fn scan_included(&mut self, text: &str) {

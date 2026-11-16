@@ -140,9 +140,24 @@ pub fn optional_steps(
     for (path, bytes) in sources {
         let text = String::from_utf8_lossy(bytes);
         if is_rust(path, &rust) {
-            for include in found.scan_rust(&text, !other_kinds.contains(path)) {
-                if let Some(read) = included(sources, path, &include) {
-                    found.scan_included(&String::from_utf8_lossy(read));
+            let counts = !other_kinds.contains(path);
+            let mut pending = vec![(path.clone(), found.scan_rust(&text, counts))];
+            let mut visited = BTreeSet::new();
+            while let Some((from, reached)) = pending.pop() {
+                for include in &reached.includes {
+                    if let Some(read) = included(sources, &from, include) {
+                        found.scan_included(&String::from_utf8_lossy(read));
+                    }
+                }
+                for module in &reached.modules {
+                    let Some((module_path, bytes)) = included_entry(sources, &from, module) else {
+                        continue;
+                    };
+                    if is_rust(module_path, &rust) || !visited.insert(module_path.clone()) {
+                        continue;
+                    }
+                    let text = String::from_utf8_lossy(bytes);
+                    pending.push((module_path.clone(), found.scan_rust(&text, counts)));
                 }
             }
         } else {
@@ -217,6 +232,14 @@ fn included<'a>(
     from: &RepoPath,
     include: &str,
 ) -> Option<&'a Vec<u8>> {
+    included_entry(sources, from, include).map(|(_, bytes)| bytes)
+}
+
+fn included_entry<'a>(
+    sources: &'a BTreeMap<RepoPath, Vec<u8>>,
+    from: &RepoPath,
+    include: &str,
+) -> Option<(&'a RepoPath, &'a Vec<u8>)> {
     if include.starts_with('/') {
         return None;
     }
@@ -232,8 +255,5 @@ fn included<'a>(
         }
     }
     let wanted = parts.join("/");
-    sources
-        .iter()
-        .find(|(path, _)| path.as_str() == wanted)
-        .map(|(_, bytes)| bytes)
+    sources.iter().find(|(path, _)| path.as_str() == wanted)
 }

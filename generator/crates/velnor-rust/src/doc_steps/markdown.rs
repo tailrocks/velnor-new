@@ -13,10 +13,6 @@ const TEST_WORDS: [&str; 9] = [
     "fail",
 ];
 
-/// The lines of a block doc as Markdown sees them: the opening line, then the
-/// rest without a leading `*` column and without their common indentation.
-/// When the opening line carries text, the later lines keep all their
-/// indentation, so an indented example there stays a code block.
 pub(crate) fn block_lines(body: &str) -> Vec<&str> {
     let body = body.strip_suffix("*/").unwrap_or(body);
     let mut lines = body.lines();
@@ -53,8 +49,6 @@ pub(crate) fn block_lines(body: &str) -> Vec<&str> {
         .collect()
 }
 
-/// Whether Markdown text holds a code block rustdoc compiles as a test: an
-/// indented block, or a fence with no language or only Rust and rustdoc words.
 pub(crate) fn tested<'a>(lines: impl IntoIterator<Item = &'a str>) -> bool {
     let mut open: Option<(char, usize)> = None;
     for line in lines {
@@ -109,9 +103,9 @@ fn closes(line: &str, mark: char, length: usize) -> bool {
 }
 
 fn rust_info(info: &str) -> bool {
-    info.split([',', ' ', '\t'])
-        .filter(|word| !word.is_empty())
-        .all(|word| {
+    let words = || info.split([',', ' ', '\t']).filter(|word| !word.is_empty());
+    words().any(|word| matches!(word, "rust" | ".rust"))
+        || words().all(|word| {
             TEST_WORDS.contains(&word)
                 || word.starts_with("edition")
                 || word.starts_with("ignore-")

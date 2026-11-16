@@ -9,6 +9,60 @@ type Files = &'static [(&'static str, &'static str)];
 
 pub(super) const READ: &[(&str, Files, bool, bool)] = &[
     (
+        "fence with rust and an unknown word",
+        &[(
+            "a/src/lib.rs",
+            "/// ```rust,unknown\n/// let x = 1;\n/// ```\npub fn f() {}\n",
+        )],
+        true,
+        true,
+    ),
+    (
+        "fence with only unknown words",
+        &[(
+            "a/src/lib.rs",
+            "/// ```unknown\n/// let x = 1;\n/// ```\npub fn f() {}\n",
+        )],
+        false,
+        true,
+    ),
+    (
+        "doc include with brackets",
+        &[
+            ("a/src/lib.rs", "#![doc = include_str![\"../README.md\"]]\n"),
+            ("a/README.md", README),
+        ],
+        true,
+        true,
+    ),
+    (
+        "doc include with braces",
+        &[
+            ("a/src/lib.rs", "#![doc = include_str!{\"../README.md\"}]\n"),
+            ("a/README.md", README),
+        ],
+        true,
+        true,
+    ),
+    (
+        "path module in a text file with a doctest",
+        &[
+            ("a/src/lib.rs", "#[path = \"m.txt\"]\nmod m;\n"),
+            ("a/src/m.txt", FENCED),
+        ],
+        true,
+        true,
+    ),
+    (
+        "path module in a text file without a doctest",
+        &[
+            ("a/src/lib.rs", "#[path = \"m.txt\"]\nmod m;\n"),
+            ("a/src/m.txt", "pub fn f() {}\n"),
+        ],
+        false,
+        true,
+    ),
+    (
         "unread README",
         &[
             ("a/src/lib.rs", "pub fn documented() {}\n"),
