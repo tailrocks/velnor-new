@@ -8,6 +8,7 @@ mod check_metadata;
 mod check_metadata_gen;
 mod collect;
 mod compare;
+mod configuration_targets;
 mod event;
 mod gate;
 mod inputs;
