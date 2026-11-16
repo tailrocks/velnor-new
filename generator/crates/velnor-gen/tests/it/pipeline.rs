@@ -25,6 +25,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
         view.tracked_paths.insert(manifest.clone());
         let member = RustPackage {
             name: PackageName::new(format!("package-{index}"))?,
+            version: Some("0.1.0".to_owned()),
             manifest: manifest.clone(),
             dependencies: Vec::new(),
             targets: vec![Target {
@@ -94,10 +95,10 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
         ]
     );
     assert!(text.contains(
-        "  rust-lab:\n    needs:\n      - rust-plan\n    if: '${{ needs.rust-plan.outputs.rust_lab_mode != ''none'' }}'\n"
+        "  rust-lab:\n    needs:\n      - rust-plan\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'\n"
     ));
     assert!(text.contains(
-        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ !cancelled() }}'\n"
+        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'\n"
     ));
     Ok(())
 }
