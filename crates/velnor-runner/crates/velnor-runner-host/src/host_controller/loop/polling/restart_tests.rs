@@ -188,11 +188,7 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     .chain(
         ["-home", "-metadata", "-work"]
             .into_iter()
-            .flat_map(|role| {
-                // The recovery pass and the unbound retirement that follows it in the
-                // same turn each verify the volume absent.
-                std::iter::repeat_n(volume("GET", role), 4)
-            }),
+            .flat_map(|role| std::iter::repeat_n(volume("GET", role), 4)),
     )
     .collect::<Vec<_>>();
     expected.sort();

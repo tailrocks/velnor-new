@@ -98,6 +98,26 @@ async fn two_started_container_rows_on_a_pair_that_never_started_are_not_claimed
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_started_pair_with_no_container_ids_is_not_claimed() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let socket = dir.path().join("docker.sock");
+    let _fixture = FixtureDocker::start(&socket, &[FAILED])?;
+    let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
+    let journal = Journal::open(&dir.path().join("launch.db")).await?;
+    let (scope, _) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
+    scope.abandon_unbound_pair(FAILED.reservation).await?;
+    let reservation = FAILED.reservation.to_string();
+    seed::unguarded(&journal, &[UNCLAIMED.replace("{r}", &reservation)]).await?;
+    assert!(
+        scope
+            .claim_unbound_retirement(FAILED.reservation)
+            .await?
+            .is_none()
+    );
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_started_pair_without_an_acquired_request_is_retired() -> TestResult<()> {
     let reservation = FAILED.reservation;
     let dir = tempfile::tempdir()?;

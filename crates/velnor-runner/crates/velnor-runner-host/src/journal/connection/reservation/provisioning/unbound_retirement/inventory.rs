@@ -5,7 +5,7 @@ use crate::error::HostError;
 
 use super::{UnboundContainer, UnboundInitializer, UnboundVolume, unbound_pair};
 
-const ELIGIBLE: &str = "SELECT r.remote_cleanup_proven + r.local_cleanup_proven, i.jit_requested, (SELECT COUNT(*) FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = r.id AND {pair}), (SELECT COUNT(*) FROM connection_runner_jits AS jit WHERE jit.intent_id = i.id), (SELECT COUNT(*) FROM connection_execution_proofs AS proof WHERE proof.intent_id = i.id) + (SELECT COUNT(*) FROM connection_execution_decisions AS decision WHERE decision.intent_id = i.id) + (SELECT COUNT(*) FROM execution_publication_operations AS publication WHERE publication.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id AND b.create_state = 'created' AND b.container_id IS NOT NULL), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = r.id AND o.create_state IN ('requested', 'uncertain')), (SELECT COUNT(*) FROM capacity_reservation_pre_jit_cleanup_claims AS pre WHERE pre.reservation_id = r.id) + (SELECT COUNT(*) FROM physical_attempt_post_jit_retirement_claims AS post WHERE post.reservation_id = r.id), (SELECT COUNT(*) FROM physical_attempt_current AS current WHERE current.reservation_id = r.id AND current.intent_id = i.id) FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id AND i.connection_id = r.connection_id WHERE r.id = ?1 AND r.connection_id = ?2";
+const ELIGIBLE: &str = "SELECT r.remote_cleanup_proven + r.local_cleanup_proven, i.jit_requested, (SELECT COUNT(*) FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = r.id AND {pair}), (SELECT COUNT(*) FROM connection_runner_jits AS jit WHERE jit.intent_id = i.id), (SELECT COUNT(*) FROM connection_execution_proofs AS proof WHERE proof.intent_id = i.id) + (SELECT COUNT(*) FROM connection_execution_decisions AS decision WHERE decision.intent_id = i.id) + (SELECT COUNT(*) FROM execution_publication_operations AS publication WHERE publication.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id AND b.create_state = 'created' AND b.container_id IS NOT NULL), (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS b WHERE b.reservation_id = r.id), (SELECT COUNT(*) FROM capacity_reservation_provisioning_objects AS o WHERE o.reservation_id = r.id AND o.create_state IN ('requested', 'uncertain')), (SELECT COUNT(*) FROM capacity_reservation_pre_jit_cleanup_claims AS pre WHERE pre.reservation_id = r.id) + (SELECT COUNT(*) FROM physical_attempt_post_jit_retirement_claims AS post WHERE post.reservation_id = r.id), (SELECT COUNT(*) FROM physical_attempt_current AS current WHERE current.reservation_id = r.id AND current.intent_id = i.id), (SELECT COUNT(*) FROM capacity_reservation_provisioning_state AS s WHERE s.reservation_id = r.id AND s.bootstrap_start_state = 'not_requested') FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id AND i.connection_id = r.connection_id WHERE r.id = ?1 AND r.connection_id = ?2";
 
 pub(super) async fn eligible(
     connection: &turso::Connection,
@@ -22,7 +22,7 @@ pub(super) async fn eligible(
     let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
         return Ok(false);
     };
-    let mut values = [0_i64; 10];
+    let mut values = [0_i64; 11];
     for (index, value) in values.iter_mut().enumerate() {
         *value = row.get(index).map_err(|_| HostError::Journal)?;
     }
@@ -30,9 +30,9 @@ pub(super) async fn eligible(
         return Err(HostError::Journal);
     }
     Ok(values[..5] == [0, 0, 1, 0, 0]
-        && (values[5] == values[6] || values[5] == 0)
+        && (values[5] == values[6] || (values[5] == 0 && values[10] == 1))
         && matches!(values[6], 0 | 2)
-        && values[7..] == [0, 0, 1])
+        && values[7..10] == [0, 0, 1])
 }
 
 pub(super) async fn current_claim(
