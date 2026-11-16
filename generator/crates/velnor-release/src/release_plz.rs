@@ -107,6 +107,17 @@ pub(crate) fn valid_crates_io_name(name: &str) -> bool {
     name.len() <= 64
         && name.starts_with(|c: char| c.is_ascii_alphabetic())
         && valid_package_name(name)
+        && !windows_reserved(name)
+}
+
+fn windows_reserved(name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    matches!(lower.as_str(), "con" | "prn" | "aux" | "nul")
+        || ["com", "lpt"].iter().any(|prefix| {
+            lower
+                .strip_prefix(prefix)
+                .is_some_and(|digit| matches!(digit.as_bytes(), [b'1'..=b'9']))
+        })
 }
 
 pub(crate) fn valid_package_name(name: &str) -> bool {
@@ -162,15 +173,6 @@ fn released_packages(
             });
         }
         let effective = entry.settings.over(&document.workspace);
-        if effective.release != Some(false)
-            && effective.publishes_to_crates_io()
-            && !valid_crates_io_name(&entry.name)
-        {
-            return Err(ReleaseError::InvalidPackageName {
-                root: root.to_owned(),
-                package: entry.name.clone(),
-            });
-        }
         if effective.release != Some(false) {
             released.push((entry.name.clone(), effective));
         }

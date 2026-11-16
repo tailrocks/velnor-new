@@ -6,6 +6,7 @@ mod cargo_features;
 mod cargo_precedence;
 mod cargo_scope;
 mod config;
+mod crates_io_names;
 mod cross_root_tags;
 mod defaults;
 mod expressions;
