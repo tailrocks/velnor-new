@@ -64,3 +64,20 @@ fn an_alias_passes_when_mise_reports_it_as_the_request_it_resolved() {
     assert!(check_tools(&pins(&["latest-lts"], &[]), &reported).is_err());
     assert!(check_tools(&pins(&["lts"], &["24.11.0"]), &reported).is_err());
 }
+
+#[test]
+fn every_requested_version_must_be_installed() {
+    let reported = parse_reported(&reported(&[("20.1.0", true), ("22.3.0", false)]))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let error = check_tools(&pins(&["20", "22"], &[]), &reported)
+        .err()
+        .unwrap_or_else(|| unreachable!("a missing version must fail"));
+    assert!(error.to_string().contains("22"), "{error}");
+    assert!(!error.to_string().contains("pinned 20"), "{error}");
+    let both = parse_reported(&reported_both()).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(check_tools(&pins(&["20", "22"], &[]), &both), Ok(()));
+}
+
+fn reported_both() -> String {
+    reported(&[("20.1.0", true), ("22.3.0", true)])
+}
