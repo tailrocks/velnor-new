@@ -33,7 +33,7 @@ pub enum ReleaseCommand {
     )]
     Publish(PublishArgs),
     #[command(
-        about = "Read-only, before release-plz holds any publishing authority: exit 1 when release-plz release would tag a commit other than the verified one, which is when a pull request whose head branch starts with a given prefix is associated with the verified commit and its last commit is an ancestor of the verified commit other than that commit itself (a release pull request merged with a merge commit or fast-forwarded), and exit 1 when the pull requests cannot be read. Reads GITHUB_TOKEN, which needs contents: read and pull-requests: read"
+        about = "Read-only, before release-plz holds any publishing authority: exit 1 when release-plz release would tag a commit other than the verified one. For each associated pull request whose head branch starts with a given prefix, that commit is the last sha on the first page of GET /pulls/{n}/commits with no per_page, the request release-plz sends. Exit 1 when that sha is an ancestor of the verified commit other than the verified commit, and exit 1 when the pull requests, that page, or the comparison cannot be read. Reads GITHUB_TOKEN, which needs contents: read and pull-requests: read"
     )]
     Preflight(PreflightArgs),
     #[command(

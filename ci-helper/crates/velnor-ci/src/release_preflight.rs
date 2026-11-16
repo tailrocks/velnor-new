@@ -4,7 +4,9 @@
 use serde::Deserialize;
 
 use crate::error::CiError;
-use crate::github::{ApiCompare, GitHub, Repo, commit_pulls_path, compare_path, parse};
+use crate::github::{
+    ApiCompare, GitHub, Repo, commit_pulls_path, compare_path, parse, pull_commits_path,
+};
 
 const PAGE: usize = 100;
 
@@ -18,6 +20,10 @@ struct ApiPull {
 struct ApiHead {
     #[serde(rename = "ref")]
     branch: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiPrCommit {
     sha: String,
 }
 
@@ -51,17 +57,24 @@ pub fn check_release_source(
             .iter()
             .any(|p| pull.head.branch.starts_with(p.as_str()))
     }) {
-        if pull.head.sha == verified {
+        let commits: Vec<ApiPrCommit> = parse(
+            &github.get(&pull_commits_path(repo, pull.number))?,
+            "commits of the pull request",
+        )?;
+        let Some(chosen) = commits.last() else {
+            continue;
+        };
+        if chosen.sha == verified {
             continue;
         }
         let compare: ApiCompare = parse(
-            &github.get(&compare_path(repo, &pull.head.sha, verified))?,
+            &github.get(&compare_path(repo, &chosen.sha, verified))?,
             "comparison",
         )?;
-        if matches!(compare.status.as_str(), "ahead" | "identical") {
+        if compare.status == "ahead" {
             return Err(CiError::new(format!(
                 "release pull request #{} has its last commit {} inside the verified commit {verified}, so release-plz would tag that commit and not the verified one; release PRs must be squash-merged (or merged through a merge queue with squash) so the tag names the verified commit",
-                pull.number, pull.head.sha
+                pull.number, chosen.sha
             )));
         }
     }
