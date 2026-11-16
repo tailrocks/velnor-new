@@ -334,3 +334,31 @@ async fn a_default_velnor_host_that_others_can_write_is_refused() {
     let resolved = velnor_local::io::supervisor::default_host(&exe).await;
     assert!(resolved.is_err(), "{resolved:?}");
 }
+
+#[test]
+fn the_cli_never_picks_a_velnor_host_planted_in_its_working_directory() {
+    let cwd = temp_dir("pairs-cli-cwd");
+    let planted = cwd.join(HOST_BINARY);
+    let installed = temp_dir("pairs-cli-installed").join("bin/velnor-local");
+    for dir in [planted.parent(), installed.parent()] {
+        std::fs::create_dir_all(dir.unwrap_or_else(|| unreachable!()))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    std::fs::write(&planted, "#!/bin/sh\n").unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::set_permissions(&planted, std::os::unix::fs::PermissionsExt::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::copy(env!("CARGO_BIN_EXE_velnor-local"), &installed)
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let output = std::process::Command::new(&installed)
+        .current_dir(&cwd)
+        .args(["up", "--repo", ".", "--dir"])
+        .arg(cwd.join("state"))
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(
+        stderr.contains(&format!("no {HOST_BINARY} in any folder above")),
+        "{stderr}"
+    );
+}
