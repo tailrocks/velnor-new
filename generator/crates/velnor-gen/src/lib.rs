@@ -7,7 +7,7 @@ mod error;
 pub mod io;
 mod release;
 
-pub use crate::release::release_ruleset;
+pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 

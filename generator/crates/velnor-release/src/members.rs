@@ -3,12 +3,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{RepoPath, RustMetadata};
+use velnor_model::{RepoPath, RustMetadata, RustPackage};
 
+use crate::collisions::check_effective_tags;
 use crate::error::ReleaseError;
 use crate::plan::{manifest_of, read_all};
 use crate::registry::check_publish_registries;
-use crate::release_plz::RootConfig;
+use crate::release_plz::{RootConfig, valid_package_name};
+use crate::tag::TagPattern;
 
 type Metadata = BTreeMap<RepoPath, RustMetadata>;
 
@@ -75,11 +77,16 @@ pub(crate) fn check_inventory(
                 package: package.name.clone(),
             });
         }
-        let inherited = known
-            .iter()
-            .filter(|_| !config.workspace_tags.is_empty())
-            .filter(|name| config.releases(name))
-            .copied();
+        let inherited: Vec<&str> = inherited(config, workspace)
+            .map(|member| member.name.as_str())
+            .collect();
+        if let Some(name) = inherited.iter().find(|name| !valid_package_name(name)) {
+            return Err(ReleaseError::InvalidPackageName {
+                root: config.root.clone(),
+                package: (*name).to_owned(),
+            });
+        }
+        let inherited = inherited.into_iter();
         let listed = config.packages.iter().map(|package| package.name.as_str());
         for name in listed.chain(inherited) {
             if let Some(first) = released.insert(name, config.root.as_str())
@@ -92,7 +99,63 @@ pub(crate) fn check_inventory(
             }
         }
     }
-    Ok(())
+    check_effective_tags(&effective_tags(configs, metadata))
+}
+
+pub(crate) fn inherited<'a>(
+    config: &'a RootConfig,
+    workspace: &'a RustMetadata,
+) -> impl Iterator<Item = &'a RustPackage> {
+    workspace
+        .members
+        .iter()
+        .filter(|_| !config.workspace_tags.is_empty())
+        .filter(|member| config.releases(member.name.as_str()))
+        .filter(|member| {
+            !config
+                .packages
+                .iter()
+                .any(|package| package.name == member.name.as_str())
+        })
+}
+
+pub(crate) fn inherited_tag(
+    config: &RootConfig,
+    workspace: &RustMetadata,
+    package: &str,
+) -> Option<TagPattern> {
+    inherited(config, workspace)
+        .find(|member| member.name.as_str() == package)
+        .and_then(|_| config.workspace_tags.first())
+        .map(|pattern| pattern.instantiate(package))
+}
+
+fn effective_tags(configs: &[RootConfig], metadata: &Metadata) -> Vec<(String, TagPattern)> {
+    let mut tags = Vec::new();
+    for config in configs {
+        tags.extend(
+            config
+                .packages
+                .iter()
+                .map(|package| (package.name.clone(), package.tag_pattern.clone())),
+        );
+        if let Some((_, workspace)) = owner(&config.root, metadata) {
+            tags.extend(inherited(config, workspace).filter_map(|member| {
+                let name = member.name.as_str();
+                inherited_tag(config, workspace, name).map(|pattern| (name.to_owned(), pattern))
+            }));
+        }
+    }
+    tags
+}
+
+pub(crate) fn settle_publishing(configs: &mut [RootConfig], metadata: &Metadata) {
+    for config in configs {
+        if let Some((_, workspace)) = owner(&config.root, metadata) {
+            let unlisted = inherited(config, workspace).next().is_some();
+            config.settle_publishing(unlisted);
+        }
+    }
 }
 
 pub(crate) fn check_registries(

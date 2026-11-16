@@ -7,7 +7,9 @@ use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::error::ReleaseError;
 use crate::hazards::{cargo_config, symlink_on_config_path, toolchain_path};
-use crate::members::{check_inventory, check_registries, inherited_packages};
+use crate::members::{
+    check_inventory, check_registries, inherited_packages, inherited_tag, owner, settle_publishing,
+};
 use crate::mise;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
@@ -206,14 +208,21 @@ fn plan_binaries(
 ) -> Result<Vec<BinaryPlan>, ReleaseError> {
     let mut binaries = Vec::new();
     for binary in &config.binaries {
-        let (root, package) = configs
+        let (root, tag_pattern) = configs
             .iter()
             .find_map(|candidate| {
-                candidate
+                let listed = candidate
                     .packages
                     .iter()
                     .find(|package| package.name == binary.package)
-                    .map(|package| (candidate.root.clone(), package))
+                    .map(|package| package.tag_pattern.clone());
+                let inherited = || {
+                    let (_, workspace) = owner(&candidate.root, files.rust_metadata.as_ref()?)?;
+                    inherited_tag(candidate, workspace, &binary.package)
+                };
+                listed
+                    .or_else(inherited)
+                    .map(|pattern| (candidate.root.clone(), pattern))
             })
             .ok_or_else(|| ReleaseError::BinaryNotReleased {
                 package: binary.package.clone(),
@@ -235,7 +244,7 @@ fn plan_binaries(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
-            tag_pattern: package.tag_pattern.clone(),
+            tag_pattern,
         });
     }
     Ok(binaries)
@@ -276,6 +285,9 @@ impl ReleasePlan {
         }
         check_unique(&configs)?;
         check_inventory(&configs, files.rust_metadata.as_ref())?;
+        if let Some(metadata) = &files.rust_metadata {
+            settle_publishing(&mut configs, metadata);
+        }
         let release_plz = mise::check(&files.mise_tomls, &files.mise_lock)?;
         for root in &config.roots {
             symlink_on_config_path(root, &files.symlinks)?;
