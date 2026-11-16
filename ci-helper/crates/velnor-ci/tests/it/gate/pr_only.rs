@@ -36,6 +36,16 @@ fn an_explicit_pr_only_required_external_check_needs_no_push_job() {
 }
 
 #[test]
+fn pr_only_exemptions_cannot_remove_every_required_push_check() {
+    for (key, value) in [("conclusion", "failure"), ("name", "Other")] {
+        let result = protected()
+            .green_job("Required", |job| job[key] = json!(value))
+            .gate_with(GREEN, &["DCO".to_owned(), "Required".to_owned()]);
+        assert_refused(&result, "no required push check after PR-only exemptions");
+    }
+}
+
+#[test]
 fn pr_only_exemptions_require_live_required_names_and_a_pull_request_rule() {
     let stale = protected().rules(vec![
         json!({"type": "pull_request"}),

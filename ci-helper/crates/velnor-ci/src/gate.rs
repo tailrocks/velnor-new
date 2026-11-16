@@ -186,6 +186,11 @@ fn required_checks(
             "branch {branch} has no pull_request rule, so its required checks cannot be exempted as PR-only"
         )));
     }
+    if checks.iter().all(|name| pr_only_checks.contains(name)) {
+        return Err(CiError::new(format!(
+            "branch {branch} has no required push check after PR-only exemptions"
+        )));
+    }
     for check in &app_checks {
         if !pr_only_checks.contains(&check.context) {
             require(branch, check)?;
