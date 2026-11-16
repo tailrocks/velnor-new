@@ -3,6 +3,7 @@
 
 mod claims;
 mod fake;
+mod mints;
 
 use serde_json::{Value, json};
 use velnor_local::authority::{Call, call};
