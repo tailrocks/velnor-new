@@ -149,8 +149,11 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
             .ok_or("no token step")?;
         for step in &all[..created] {
             let tip = step.get("id").and_then(Node::text) == Some("newest");
-            let branch_only = step.at(&["env", "BRANCH"]).is_some()
-                && step.at(&["env", "GITHUB_TOKEN"]).is_none();
+            let branch_only = step.get("env").is_some_and(|env| {
+                env.keys() == ["BRANCH"]
+                    && env.get("BRANCH").and_then(Node::text)
+                        == Some("${{ github.event.repository.default_branch }}")
+            });
             assert!(tip || branch_only || step.get("env").is_none(), "{id}");
         }
         for step in &all[created + 1..] {

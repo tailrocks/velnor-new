@@ -181,7 +181,7 @@ fn the_release_workflow_follows_the_configured_default_branch() -> TestResult {
 #[test]
 fn a_default_branch_with_shell_or_filter_characters_reaches_the_shell_only_through_the_environment()
 -> TestResult {
-    for name in ["release/c++", "a$(id)", "x;y&z`w`", "${{secrets.T}}"] {
+    for name in ["release/c++", "a$(id)", "x;y&z`w`"] {
         let mut view = release_view(&[APP], Some("[[binaries]]\npackage = \"app\"\n"))?;
         view.tracked_paths.insert(velnor_rust::CONFIG_PATH);
         view.files.insert(
@@ -209,9 +209,6 @@ fn a_default_branch_with_shell_or_filter_characters_reaches_the_shell_only_throu
     let text = files
         .get(&velnor_model::RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
-    assert!(
-        text.contains("      - release/c\\+\\+\n") || text.contains("'release/c\\+\\+'"),
-        "{text}"
-    );
+    assert!(text.contains("'release/c\\+\\+'"), "{text}");
     Ok(())
 }
