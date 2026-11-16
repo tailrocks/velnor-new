@@ -70,7 +70,6 @@ pub(crate) struct Setup {
     pub repo_cargo_config: Option<&'static str>,
     pub ignored: bool,
     pub plain: bool,
-    pub unrecorded: bool,
     pub populate: Option<Populate>,
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
@@ -89,7 +88,6 @@ impl Setup {
             repo_cargo_config: None,
             ignored: false,
             plain: false,
-            unrecorded: false,
             populate: None,
             release: "1.99.1",
             env: Vec::new(),
@@ -118,6 +116,14 @@ fn script(path: &Path, body: &str) {
         .unwrap_or_else(|e| unreachable!("{e}"));
 }
 
+fn record_default_root(checkout: &Path) {
+    fs::write(
+        checkout.join(".velnor/rust-metadata.json"),
+        "{\"roots\":{\"Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
 fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let checkout = dir.join("checkout");
     let bin = dir.join("bin");
@@ -136,13 +142,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         fs::write(checkout.join(".gitignore"), ".cargo/\n"),
     );
     hide(setup.plain, fs::remove_dir_all(checkout.join(".git")));
-    if !setup.unrecorded {
-        fs::write(
-            checkout.join(".velnor/rust-metadata.json"),
-            "{\"roots\":{\"Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
-        )
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    }
+    record_default_root(&checkout);
     if let Some(populate) = &setup.populate {
         populate(&checkout);
     }

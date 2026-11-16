@@ -178,9 +178,10 @@ fn config_shadows_config_toml_in_prepare() {
 #[test]
 fn prepare_fails_closed_when_the_recorded_metadata_is_missing() {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
-    setup.unrecorded = true;
     setup.populate = Some(Box::new(|base| {
         write(base, "lab/.cargo/config.toml", DEBUG);
+        fs::remove_file(base.join(".velnor/rust-metadata.json"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
     }));
     let run = prepare("prepare_fails_closed_when_the_recorded_m", &setup);
     assert!(!run.output.status.success(), "{:?}", run.output);
