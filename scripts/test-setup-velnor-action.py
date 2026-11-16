@@ -14,15 +14,21 @@ ACTION = Path(__file__).resolve().parent.parent / "actions" / "setup-velnor" / "
 RELEASE_URL = "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
-SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv")
+SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc")
 
 STUB_CURL = """#!/bin/sh
 printf '%s\\n' "$*" >> "$STUB_LOG"
 out=
+max=
 while [ $# -gt 0 ]; do
   if [ "$1" = "--output" ]; then out="$2"; fi
+  if [ "$1" = "--max-filesize" ]; then max="$2"; fi
   shift
 done
+if [ -n "$max" ] && [ "$(wc -c < "$STUB_PAYLOAD")" -gt "$max" ]; then
+  echo "curl: (63) Maximum file size exceeded" >&2
+  exit 63
+fi
 cp "$STUB_PAYLOAD" "$out"
 """
 
@@ -142,6 +148,17 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.output)
         self.assertEqual(len(self.curl_calls()), 1)
         self.assertEqual(cached.read_bytes(), PAYLOAD)
+
+    def test_a_download_above_the_size_limit_is_refused_before_it_is_stored(self):
+        with self.payload.open("r+b") as handle:
+            handle.truncate(268435457)
+        result = self.install(hashlib.sha256(PAYLOAD).hexdigest())
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("larger than 268435456 bytes", result.output)
+        self.assertIn("--max-filesize 268435456", self.curl_calls()[0])
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+        self.assertEqual(self.github_path.read_text(), "")
+        self.assertEqual(installed_files(self.runner_temp), [], result.output)
 
     def test_a_binary_with_the_pinned_sha256_is_installed_and_put_on_path(self):
         for tool in DIGEST_TOOLS:
