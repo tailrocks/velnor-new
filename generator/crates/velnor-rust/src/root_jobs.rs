@@ -202,15 +202,28 @@ impl RootJobs<'_> {
             steps.extend(
                 self.cargo(vec![CargoCommand::NextestBuild])
                     .map(skip_on_draft)
-                    .map(|run| saving_run(self.facts, run)),
+                    .map(saving_run),
             );
             steps.extend(saves.iter().cloned());
-        }
-        steps.extend(self.cargo(self.tests()).map(skip_on_draft));
-        steps.extend(self.audit());
-        if !before_tests {
+            steps.extend(self.cargo(self.tests()).map(skip_on_draft));
+            steps.extend(self.audit());
+        } else if saves.is_empty() {
+            steps.extend(self.cargo(self.tests()).map(skip_on_draft));
+            steps.extend(self.audit());
             steps.extend(checks());
+        } else {
+            let mut workspace = vec![CargoCommand::Doc];
+            let mut after = check_alone(self.root);
+            for command in self.tests() {
+                match command {
+                    CargoCommand::Doctest => workspace.push(command),
+                    other => after.push(other),
+                }
+            }
+            steps.extend(self.cargo(workspace));
             steps.extend(saves);
+            steps.extend(self.cargo(after).map(skip_on_draft));
+            steps.extend(self.audit());
         }
         Job {
             skip_on_draft: false,
@@ -222,19 +235,12 @@ impl RootJobs<'_> {
         let tests = self.tests();
         let lint_id = self.id(LINT_JOB);
         let mut steps = setup(self.facts, self.root, self.lane, &lint_id);
-        steps.extend(
-            self.cargo(
-                lint()
-                    .into_iter()
-                    .chain([CargoCommand::Doc])
-                    .chain(check_alone(self.root))
-                    .collect(),
-            ),
-        );
+        steps.extend(self.cargo(lint().into_iter().chain([CargoCommand::Doc]).collect()));
         if tests.is_empty() {
             steps.extend(self.audit());
         }
         steps.extend(self.saves(&lint_id, None, tests.is_empty()));
+        steps.extend(self.cargo(check_alone(self.root)));
         let mut jobs = vec![Job {
             comment,
             skip_on_draft: false,
@@ -248,10 +254,7 @@ impl RootJobs<'_> {
             let saves = self.saves(&test_id, None, true);
             let before_tests = self.nextest && !saves.is_empty();
             if before_tests {
-                steps.extend(
-                    self.cargo(vec![CargoCommand::NextestBuild])
-                        .map(|run| saving_run(self.facts, run)),
-                );
+                steps.extend(self.cargo(vec![CargoCommand::NextestBuild]).map(saving_run));
                 steps.extend(saves.iter().cloned());
             }
             steps.extend(self.cargo(tests));
