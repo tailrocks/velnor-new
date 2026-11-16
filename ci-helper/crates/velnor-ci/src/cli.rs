@@ -190,7 +190,7 @@ pub enum ReleaseCommand {
     )]
     Preflight(PreflightArgs),
     #[command(
-        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
+        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or, with --branch-prefix, when a file's pr_branch_prefix differs from the one listed for it, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
     )]
     CheckConfig(CheckConfigArgs),
 }
@@ -216,6 +216,14 @@ pub struct CheckConfigArgs {
     )]
     pub repo: Option<String>,
     #[arg(
+        long = "branch-prefix",
+        num_args = 2,
+        value_names = ["FILE", "PREFIX"],
+        action = clap::ArgAction::Append,
+        help = "The pr_branch_prefix the workflow was generated for; when given, every file must hold exactly the prefix listed for it, release-plz-, its default, included"
+    )]
+    branch_prefix_words: Vec<String>,
+    #[arg(
         long,
         help = "Read the Cargo workspace of each file's folder with cargo metadata --no-deps --offline, which runs no repository code, and refuse a released package whose package.publish names a registry other than crates-io, a [[package]] that is not a member of its workspace, or a package that two roots release; needs RUSTUP_TOOLCHAIN"
     )]
@@ -229,6 +237,16 @@ pub struct CheckConfigArgs {
 }
 
 impl CheckConfigArgs {
+    #[must_use]
+    pub fn branch_prefixes(&self) -> Vec<(String, String)> {
+        self.branch_prefix_words
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|[file, prefix]| (file.clone(), prefix.clone()))
+            .collect()
+    }
+
     #[must_use]
     pub fn tag_patterns(&self) -> Vec<(String, String)> {
         self.tag_pattern_words
