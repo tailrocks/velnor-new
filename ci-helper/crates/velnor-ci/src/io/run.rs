@@ -3,13 +3,14 @@
 
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
+use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use nix::sys::signal::{Signal, kill};
+use nix::sys::signal::{Signal, killpg};
 use nix::unistd::Pid;
 use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
@@ -81,6 +82,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         .args(&args.command[1..])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
+        .process_group(0)
         .spawn()
         .map_err(|e| {
             let code = if e.kind() == std::io::ErrorKind::NotFound {
@@ -146,7 +148,7 @@ fn forward(mut signals: Signals, pid: Option<Pid>) {
     thread::spawn(move || {
         for received in signals.forever() {
             if let (Some(pid), Ok(signal)) = (pid, Signal::try_from(received)) {
-                kill(pid, signal).ok();
+                killpg(pid, signal).ok();
             }
         }
     });
