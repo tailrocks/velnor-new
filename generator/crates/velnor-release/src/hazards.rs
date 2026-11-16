@@ -82,18 +82,28 @@ fn is_builtin(value: &Value) -> bool {
     }
 }
 
+const TOML_CONFIG_SUFFIX: &str = ".cargo/config.toml";
+
+pub fn shadowed_by_extensionless_config(file: &str, exists: impl Fn(&str) -> bool) -> bool {
+    file.strip_suffix(".toml")
+        .filter(|_| file.ends_with(TOML_CONFIG_SUFFIX))
+        .is_some_and(exists)
+}
+
 pub fn refuse_cargo_config(
     file: &str,
     text: &str,
     publishes_to_crates_io: bool,
+    shadowed: bool,
 ) -> Result<(), String> {
-    cargo_config(file, text, publishes_to_crates_io).map_err(|error| error.to_string())
+    cargo_config(file, text, publishes_to_crates_io, shadowed).map_err(|error| error.to_string())
 }
 
 pub(crate) fn cargo_config(
     file: &str,
     text: &str,
     publishes_to_crates_io: bool,
+    shadowed: bool,
 ) -> Result<(), ReleaseError> {
     let document = text
         .parse::<toml::Table>()
@@ -132,7 +142,7 @@ pub(crate) fn cargo_config(
             file: file.to_owned(),
         });
     }
-    if publishes_to_crates_io && offline(&document) {
+    if publishes_to_crates_io && !shadowed && offline(&document) {
         return Err(ReleaseError::CargoOffline {
             file: file.to_owned(),
         });

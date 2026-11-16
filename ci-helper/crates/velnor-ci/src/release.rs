@@ -122,6 +122,11 @@ pub fn check_cargo_discovery(
     entries: &[CargoPathEntry],
     publishes_to_crates_io: bool,
 ) -> Result<(), CiError> {
+    let exists = |path: &str| {
+        entries
+            .iter()
+            .any(|entry| entry.path == path && entry.text.is_some())
+    };
     for entry in entries {
         if entry.symlink {
             return Err(CiError::new(format!(
@@ -130,8 +135,13 @@ pub fn check_cargo_discovery(
             )));
         }
         if let Some(text) = &entry.text {
-            velnor_release::refuse_cargo_config(&entry.path, text, publishes_to_crates_io)
-                .map_err(CiError::new)?;
+            velnor_release::refuse_cargo_config(
+                &entry.path,
+                text,
+                publishes_to_crates_io,
+                velnor_release::shadowed_by_extensionless_config(&entry.path, exists),
+            )
+            .map_err(CiError::new)?;
         }
     }
     Ok(())
