@@ -3,15 +3,18 @@
 
 use velnor_model::{
     CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_RUN_OUTPUT,
+    TESTS_RUN_OUTPUT, Visibility,
 };
 
 use crate::base_steps::{
-    base_age, cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane,
+    base_age, cache_budget, cache_decide, cache_trim, lane_outputs, skipped_base_saves,
+    trimmed_lane,
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source, sources_step};
+use crate::gate::{
+    PLAN_STEP, TOOLS_STEP, condition, output, plan_source, sources_step, visibility_part,
+};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -44,13 +47,19 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
     let restores = job
         .steps
         .iter()
-        .any(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(_))));
+        .any(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))));
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: condition(job.when, job.gate.as_ref(), false, job.skip_on_draft, &[]),
+        condition: condition(
+            job.when,
+            job.gate.as_ref(),
+            false,
+            job.skip_on_draft,
+            &visibility_part(job.visibility).into_iter().collect::<Vec<_>>(),
+        ),
         runs_on: job.runs_on.as_str().to_owned(),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
@@ -96,7 +105,7 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
             step.gate.as_ref(),
             restores,
             step.skip_on_draft,
-            &saved_unless_hit(&step.kind),
+            &saved_unless_hit(&step.kind, step.visibility),
         ) {
             body.condition = Some(condition);
         }
@@ -117,15 +126,19 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
     rendered
 }
 
-fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
-    match kind {
+fn saved_unless_hit(kind: &StepKind, visibility: Visibility) -> Vec<String> {
+    let kind_part = match kind {
         StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
             sources_step(root.slug())
         )],
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         _ => Vec::new(),
-    }
+    };
+    kind_part
+        .into_iter()
+        .chain(visibility_part(visibility))
+        .collect()
 }
 
 fn variable(need: GateNeed) -> &'static str {
@@ -196,6 +209,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
+        StepKind::NoteSkippedBaseSaves => skipped_base_saves(),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),
@@ -300,7 +314,7 @@ fn helper_arguments(command: HelperCommand) -> &'static str {
         HelperCommand::Plan => "plan",
         HelperCommand::Prepare => "prepare",
         HelperCommand::CheckMetadata => "check-metadata",
-        HelperCommand::Restored(_) => "restored",
+        HelperCommand::Restored(..) => "restored",
         HelperCommand::InputsSave => "inputs save",
         HelperCommand::InputsRestore => "inputs restore",
         HelperCommand::InputsAudit => "inputs audit",
@@ -365,7 +379,9 @@ fn helper_step(command: HelperCommand) -> RenderedStep {
     let (id, env) = match command {
         HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
         HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
-        HelperCommand::Restored(expiry) => (Some(RESTORED_STEP), base_age(expiry)),
+        HelperCommand::Restored(expiry, visibility) => {
+            (Some(RESTORED_STEP), base_age(expiry, visibility))
+        }
         _ => (None, Vec::new()),
     };
     RenderedStep {

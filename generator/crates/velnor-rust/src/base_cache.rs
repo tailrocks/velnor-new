@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, FullRun, HelperCommand, Host, Job, JobId, OnMain,
-    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
+    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily,
+    Visibility, When,
 };
 
 use crate::lane::Lane;
@@ -16,7 +17,7 @@ const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
 
 pub(crate) fn writes_base(facts: &RepoFacts, lane: &Lane) -> bool {
-    facts.private_sources.is_none() && (lane.from_source || has_saving_helper(facts))
+    lane.from_source || has_saving_helper(facts)
 }
 
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
@@ -26,7 +27,27 @@ pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
         .is_some_and(|helper| helper.version().at_least(SAVING_HELPER))
 }
 
-pub(crate) fn expiry(facts: &RepoFacts, lane: &Lane) -> BaseExpiry {
+pub(crate) fn visibility(facts: &RepoFacts) -> Visibility {
+    if facts.private_sources.is_some() {
+        Visibility::PrivateOnly
+    } else {
+        Visibility::Any
+    }
+}
+
+pub(crate) fn restored(facts: &RepoFacts, lane: &Lane) -> HelperCommand {
+    HelperCommand::Restored(expiry(facts, lane), visibility(facts))
+}
+
+pub(crate) fn saving_run(facts: &RepoFacts, run: Step) -> Step {
+    Step {
+        when: When::SavingRun,
+        visibility: visibility(facts),
+        ..run
+    }
+}
+
+fn expiry(facts: &RepoFacts, lane: &Lane) -> BaseExpiry {
     if !writes_base(facts, lane) {
         return BaseExpiry::Never;
     }
@@ -81,10 +102,26 @@ pub(crate) fn save_steps(
             }))
         });
     }
+    let visibility = visibility(facts);
+    if visibility == Visibility::PrivateOnly {
+        steps.insert(
+            0,
+            Step {
+                when: When::SaveBase,
+                visibility: Visibility::PublicOnly,
+                ..step(StepKind::NoteSkippedBaseSaves)
+            },
+        );
+    }
     steps
         .into_iter()
         .map(|saved| Step {
             gate: lane.steps(),
+            visibility: if saved.visibility == Visibility::Any {
+                visibility
+            } else {
+                saved.visibility
+            },
             ..saved
         })
         .collect()
@@ -92,7 +129,10 @@ pub(crate) fn save_steps(
 
 pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     let release = facts.helper.as_ref().filter(|_| has_saving_helper(facts))?;
-    let trims: Vec<Step> = jobs.iter().flat_map(lane_trims).collect();
+    let trims: Vec<Step> = jobs
+        .iter()
+        .flat_map(|lane| lane_trims(facts, lane))
+        .collect();
     let needs: Vec<JobId> = jobs
         .iter()
         .filter(|job| {
@@ -126,9 +166,10 @@ fn is_decide(step: &Step) -> bool {
     matches!(step.kind, StepKind::CacheDecide { .. })
 }
 
-fn lane_trims(lane: &Job) -> Vec<Step> {
-    let family = |family| {
-        step(StepKind::CacheTrim {
+fn lane_trims(facts: &RepoFacts, lane: &Job) -> Vec<Step> {
+    let family = |family| Step {
+        visibility: visibility(facts),
+        ..step(StepKind::CacheTrim {
             lane: lane.id.clone(),
             family,
         })

@@ -101,26 +101,37 @@ fn a_lockfile_with_only_crates_io_sources_saves_the_base_caches() -> TestResult 
     Ok(())
 }
 
+const PRIVATE_ONLY: &str = "github.event.repository.private == true";
+
 #[test]
-fn a_git_or_private_registry_dependency_saves_neither_the_target_nor_the_sources_cache()
+fn a_git_or_private_registry_dependency_saves_the_base_caches_only_in_private_repositories()
 -> TestResult {
     for source in [GIT, PRIVATE_REGISTRY] {
         let view = with_lock_file(source)?;
         let text = text_of(&view)?;
-        for absent in [
+        let lane = block(&text, "rust").ok_or("no lane")?;
+        for name in [
             "Save the target cache",
             "Save the sources cache",
-            "cache decide",
-            "inputs save",
+            "Decide whether to save the build directory",
+            "Build the tests",
+            "velnor-ci inputs save",
         ] {
-            assert!(!text.contains(absent), "{source}: {absent}");
+            let saved = step(&lane, name).ok_or_else(|| format!("{source}: no {name}"))?;
+            assert!(saved.contains(PRIVATE_ONLY), "{source}: {name}: {saved}");
         }
         let trim = block(&text, "rust-trim").ok_or("no budget cleanup")?;
         assert!(
             trim.contains("cache budget --budget-bytes 8000000000"),
             "{trim}"
         );
-        assert!(!trim.contains("cache trim"), "{trim}");
+        for name in [
+            "Delete the older rust entries",
+            "Delete the older rust sources entries",
+        ] {
+            let prune = step(&trim, name).ok_or("no family trim")?;
+            assert!(prune.contains(PRIVATE_ONLY), "{prune}");
+        }
         assert!(!trim.contains("download-artifact"), "{trim}");
         assert!(trim.contains("Install velnor-ci 0.1.81"), "{trim}");
         for (id, lane) in jobs_of(&text) {
@@ -132,26 +143,62 @@ fn a_git_or_private_registry_dependency_saves_neither_the_target_nor_the_sources
         assert!(!required.contains("rust-trim"), "{required}");
         let (_, notes) = expected_with_notes(&view)?;
         assert!(
-            notes
-                .iter()
-                .any(|note| note.contains("private") && note.contains("not saved")),
+            notes.iter().any(|note| note.contains("private")
+                && note.contains("saves run only in private repositories")),
             "{notes:?}"
         );
+        let notice = step(&lane, "Explain the skipped base cache saves").ok_or("no notice")?;
+        assert!(
+            notice.contains("github.event.repository.private != true"),
+            "{notice}"
+        );
+        assert!(notice.contains("::notice::"), "{notice}");
     }
     Ok(())
 }
 
 #[test]
-fn a_registry_declared_in_the_cargo_config_also_stops_the_saves() -> TestResult {
-    let mut view = pinned("0.1.81", "")?;
-    let config = RepoPath::new(".cargo/config.toml")?;
-    view.tracked_paths.insert(config.clone());
-    view.files.insert(
-        config,
-        b"[registries.corp]\nindex = \"sparse+https://registry.example.invalid/\"\n".to_vec(),
-    );
-    let text = text_of(&view)?;
-    assert!(!text.contains("Save the target cache"), "{text}");
+fn public_repositories_with_private_dependencies_still_budget_their_tools_caches() -> TestResult {
+    let text = text_of(&with_lock_file(GIT)?)?;
+    let trim = block(&text, "rust-trim").ok_or("no trim job")?;
+    let condition = trim
+        .lines()
+        .find(|line| line.trim_start().starts_with("if: "))
+        .ok_or("no job condition")?;
+    for needle in [
+        "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)",
+        "github.event_name == ''push''",
+        "!cancelled()",
+    ] {
+        assert!(condition.contains(needle), "{condition}");
+    }
+    assert!(!condition.contains("repository.private"), "{condition}");
+    assert!(!condition.contains("needs."), "{condition}");
+    for name in [
+        "Install velnor-ci 0.1.81",
+        "Enforce the repository cache budget",
+    ] {
+        let command = step(&trim, name).ok_or("no cleanup command")?;
+        assert!(!command.contains("    if:"), "{command}");
+        assert!(!command.contains("base_save"), "{command}");
+    }
+    let all = jobs_of(&text);
+    let mut writers = 0;
+    for (id, lane) in all {
+        if lane.contains("name: Save the") {
+            writers += 1;
+            assert!(trim.contains(&format!("      - {id}\n")), "{id}: {trim}");
+        }
+    }
+    assert!(writers > 0);
+    assert!(trim.contains("actions: write"), "{trim}");
+    Ok(())
+}
+
+#[test]
+fn a_repository_without_private_dependencies_renders_no_visibility_condition() -> TestResult {
+    let text = text_of(&with_lock_file(CRATES_IO)?)?;
+    assert!(!text.contains("repository.private"), "{text}");
     Ok(())
 }
 

@@ -971,6 +971,7 @@ inputs = [
   "generator/samples/release-two-roots/expected/.github/workflows/release.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/rust-ci.yml",
   "generator/samples/policy-lane/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/private-deps/expected/.github/workflows/rust-ci.yml",
   "generator/samples/on-main-everything/expected/.github/workflows/rust-ci.yml",
   "generator/samples/single-crate/expected/.github/workflows/rust-ci.yml",
   "generator/samples/two-roots/expected/.github/workflows/rust-ci.yml",

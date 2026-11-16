@@ -9,7 +9,7 @@ use velnor_model::{
     When,
 };
 
-use crate::base_cache::save_steps;
+use crate::base_cache::{save_steps, saving_run};
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
@@ -202,7 +202,7 @@ impl RootJobs<'_> {
             steps.extend(
                 self.cargo(vec![CargoCommand::NextestBuild])
                     .map(skip_on_draft)
-                    .map(on_saving_run),
+                    .map(|run| saving_run(self.facts, run)),
             );
             steps.extend(saves.iter().cloned());
         }
@@ -250,7 +250,7 @@ impl RootJobs<'_> {
             if before_tests {
                 steps.extend(
                     self.cargo(vec![CargoCommand::NextestBuild])
-                        .map(on_saving_run),
+                        .map(|run| saving_run(self.facts, run)),
                 );
                 steps.extend(saves.iter().cloned());
             }
@@ -321,13 +321,6 @@ impl RootJobs<'_> {
         let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
         group_job.needs.push(build_id.clone());
         [self.lane_job(build_id, build), group_job]
-    }
-}
-
-fn on_saving_run(step: Step) -> Step {
-    Step {
-        when: When::SavingRun,
-        ..step
     }
 }
 

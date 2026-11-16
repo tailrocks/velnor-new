@@ -83,6 +83,7 @@ pub struct Job {
     pub comment: Option<String>,
     pub needs: Vec<JobId>,
     pub when: When,
+    pub visibility: Visibility,
     pub skip_on_draft: bool,
     pub runs_on: RunnerLabel,
     pub permissions: Permissions,
@@ -97,6 +98,7 @@ pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
     pub when: When,
+    pub visibility: Visibility,
     pub skip_on_draft: bool,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
@@ -164,6 +166,14 @@ pub enum PlanFrom {
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum Visibility {
+    #[default]
+    Any,
+    PrivateOnly,
+    PublicOnly,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum When {
     #[default]
     Success,
@@ -191,6 +201,7 @@ pub enum StepKind {
         target: RepoPath,
         archive: Option<RepoPath>,
     },
+    NoteSkippedBaseSaves,
     CacheTrim {
         lane: JobId,
         family: TrimFamily,
@@ -238,7 +249,7 @@ pub enum HelperCommand {
     Plan,
     Prepare,
     CheckMetadata,
-    Restored(BaseExpiry),
+    Restored(BaseExpiry, Visibility),
     InputsSave,
     InputsRestore,
     InputsAudit,
