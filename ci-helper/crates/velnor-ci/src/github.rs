@@ -107,6 +107,9 @@ pub struct ApiRule {
     #[serde(rename = "type")]
     pub kind: String,
     pub parameters: Option<ApiRuleParameters>,
+    pub ruleset_id: Option<u64>,
+    pub ruleset_source: Option<String>,
+    pub ruleset_source_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,6 +148,7 @@ pub struct ApiPage<T> {
         rename = "items",
         alias = "workflow_runs",
         alias = "jobs",
+        alias = "check_runs",
         alias = "statuses"
     )]
     pub items: Vec<T>,

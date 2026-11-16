@@ -16,6 +16,8 @@ const ACTIONS_APP_ID: i64 = 15368;
 const ANY_APP: i64 = -1;
 const RULES_PAGE: usize = 100;
 
+mod exemptions;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     pub ready: bool,
@@ -59,6 +61,7 @@ pub fn release_gate(
     let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
         statuses_path(repo, sha, page)
     })?;
+    let check_names = exemptions::check_names(github, repo, sha, pr_only_checks)?;
     let mut report = Vec::new();
     let mut failures = Vec::new();
     if matches!(compare.status.as_str(), "identical" | "behind") {
@@ -73,12 +76,13 @@ pub fn release_gate(
     for name in &required {
         if pr_only_checks.contains(name) {
             if push.names.contains(name)
+                || check_names.contains(&name.to_lowercase())
                 || statuses
                     .iter()
                     .any(|status| status.context.to_lowercase() == name.to_lowercase())
             {
                 return Err(CiError::new(format!(
-                    "PR-only check {name} has a push job or commit status on commit {sha}"
+                    "PR-only check {name} has a push job or commit status or check run on commit {sha}"
                 )));
             }
             report.push(format!("check {name} is explicitly PR-only"));
@@ -166,13 +170,12 @@ fn required_checks(
 ) -> Result<BTreeSet<String>, CiError> {
     let mut checks = BTreeSet::new();
     let mut app_checks = Vec::new();
-    let mut pull_request = false;
+    let mut pull_requests = Vec::new();
     for page in 1.. {
         let rules: Vec<ApiRule> = parse(
             &github.get(&rules_path(repo, branch, page))?,
             "branch rules",
         )?;
-        pull_request |= rules.iter().any(|rule| rule.kind == "pull_request");
         for rule in rules
             .iter()
             .filter(|rule| rule.kind == "required_status_checks")
@@ -191,7 +194,9 @@ fn required_checks(
                 app_checks.push(check.clone());
             }
         }
-        if rules.len() < RULES_PAGE {
+        let last = rules.len() < RULES_PAGE;
+        pull_requests.extend(rules.into_iter().filter(|rule| rule.kind == "pull_request"));
+        if last {
             break;
         }
     }
@@ -216,10 +221,8 @@ fn required_checks(
             )));
         }
     }
-    if !pr_only_checks.is_empty() && !pull_request {
-        return Err(CiError::new(format!(
-            "branch {branch} has no pull_request rule, so its required checks cannot be exempted as PR-only"
-        )));
+    if !pr_only_checks.is_empty() {
+        exemptions::require_pull_request(github, repo, branch, &pull_requests)?;
     }
     if checks.iter().all(|name| pr_only_checks.contains(name)) {
         return Err(CiError::new(format!(
@@ -253,14 +256,21 @@ fn all_pages<T: DeserializeOwned>(
     path: impl Fn(u32) -> String,
 ) -> Result<Vec<T>, CiError> {
     let mut all = Vec::new();
+    let mut expected = None;
     for page in 1.. {
         let ApiPage { total_count, items } = parse(&github.get(&path(page))?, what)?;
+        if expected.is_some_and(|count| count != total_count) {
+            return Err(CiError::new(format!(
+                "GitHub changed the number of {what} during pagination"
+            )));
+        }
+        expected = Some(total_count);
         let empty = items.is_empty();
         all.extend(items);
-        if all.len() >= total_count {
+        if all.len() == total_count {
             break;
         }
-        if empty {
+        if empty || all.len() > total_count {
             return Err(CiError::new(format!(
                 "GitHub lists {total_count} {what} and returned {}",
                 all.len()

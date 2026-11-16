@@ -9,8 +9,10 @@ use velnor_ci::github::{branch_path, compare_path, rules_path, run_jobs_path, ru
 
 use crate::support::{FakeGitHub, repo};
 
+mod external_checks;
 mod inputs;
 mod pr_only;
+mod pr_rules;
 mod status;
 
 pub(crate) const GATE: &str = include_str!("../data/gate.json");

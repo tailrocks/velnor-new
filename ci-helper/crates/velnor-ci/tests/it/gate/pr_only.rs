@@ -15,14 +15,30 @@ fn dco() -> Value {
     json!({"context": "DCO", "integration_id": 343_649})
 }
 
-fn protected() -> Recorded {
-    Recorded::new().rules(vec![
-        json!({"type": "pull_request"}),
-        required(&[check("Required"), dco()]),
-    ])
+pub(super) const RULESET: &str = "/repos/tailrocks/velnor-new/rulesets/7";
+
+pub(super) fn pr_rule() -> Value {
+    json!({"type": "pull_request", "ruleset_id": 7, "ruleset_source_type": "Repository", "ruleset_source": "tailrocks/velnor-new"})
 }
 
-fn allowed(recorded: &Recorded) -> Result<velnor_ci::gate::Verdict, String> {
+pub(super) fn ruleset() -> Value {
+    json!({"id": 7, "source_type": "Repository", "source": "tailrocks/velnor-new", "target": "branch", "enforcement": "active", "bypass_actors": [], "rules": [{"type": "pull_request"}]})
+}
+
+pub(super) fn checks_path(page: u32) -> String {
+    format!(
+        "/repos/tailrocks/velnor-new/commits/{GREEN}/check-runs?filter=all&per_page=100&page={page}"
+    )
+}
+
+pub(super) fn protected() -> Recorded {
+    Recorded::new()
+        .rules(vec![pr_rule(), required(&[check("Required"), dco()])])
+        .set(RULESET.to_owned(), ruleset())
+        .set(checks_path(1), json!({"total_count": 0, "check_runs": []}))
+}
+
+pub(super) fn allowed(recorded: &Recorded) -> Result<velnor_ci::gate::Verdict, String> {
     recorded.gate_with(GREEN, &["DCO".to_owned()])
 }
 
@@ -116,10 +132,7 @@ fn pr_only_exemptions_cannot_remove_every_required_push_check() {
 
 #[test]
 fn pr_only_exemptions_require_live_required_names_and_a_pull_request_rule() {
-    let stale = protected().rules(vec![
-        json!({"type": "pull_request"}),
-        required(&[check("Required")]),
-    ]);
+    let stale = protected().rules(vec![pr_rule(), required(&[check("Required")])]);
     assert_refused(&allowed(&stale), "PR-only check DCO is not required");
     let typo = protected().gate_with(GREEN, &["DCO typo".to_owned()]);
     assert_refused(&typo, "PR-only check DCO typo is not required");
@@ -153,10 +166,7 @@ fn pr_only_checks_keep_other_checks_bound_to_successful_exact_sha_push_jobs() {
         assert_refused(&result, ABSENT);
     }
     let external = json!({"context": "Required", "integration_id": 1234});
-    let recorded = protected().rules(vec![
-        json!({"type": "pull_request"}),
-        required(&[external, dco()]),
-    ]);
+    let recorded = protected().rules(vec![pr_rule(), required(&[external, dco()])]);
     assert_refused(
         &allowed(&recorded),
         "check Required from the GitHub App 1234",
