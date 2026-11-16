@@ -43,6 +43,9 @@ INSERT INTO physical_attempt_lineages (lineage_id, connection_id, scale_set_id, 
 INSERT INTO physical_attempts (lineage_id, generation, reservation_id, intent_id, physical_nonce, connection_id, scale_set_id, witness_request_id, binding_digest, source_digest, engine_id, docker_root_digest, created_at) VALUES ({r}, 1, {r}, {i}, '{nonce}', 'conn-test-1', 7, {r}, '{binding}', '{hex64}', 'engine-test', '{root}', 0);
 INSERT INTO physical_attempt_current (lineage_id, generation, reservation_id, intent_id) VALUES ({r}, 1, {r}, {i})";
 
+const ADMITTED_PAIR: &str = "INSERT INTO capacity_reservation_bootstrap_containers (reservation_id, role, container_name, create_state, start_state) VALUES ({r}, 'runner', '{volume}-runner', 'unclaimed', 'not_requested');
+INSERT INTO capacity_reservation_bootstrap_containers (reservation_id, role, container_name, create_state, start_state) VALUES ({r}, 'dind', '{volume}-dind', 'unclaimed', 'not_requested')";
+
 const CLAIMED_CONTAINER: &str = "INSERT INTO capacity_reservation_bootstrap_containers (reservation_id, role, container_name, create_state, start_state) VALUES ({r}, 'runner', '{volume}-runner', 'requested', 'not_requested')";
 
 const RECORDED: &str = "SELECT reservation.state, intent.state, init.create_dispatch_state, init.create_state, init.start_state, init.abort_state, init.abort_helper_id FROM capacity_reservations AS reservation JOIN connection_intents AS intent ON intent.id = reservation.intent_id JOIN capacity_reservation_storage_initialization AS init ON init.reservation_id = reservation.id WHERE reservation.id = ?1";
@@ -160,7 +163,8 @@ pub(super) async fn reservation_at_storage_initialization(
             .replace("{i}", &(reservation - 1).to_string())
     };
     execute(journal, &fill(profile, 0, "", CRASHED)).await?;
-    execute_all(journal, &fill(RESERVATION, 2, PRIVATE_VOLUME, CRASHED)).await?;
+    let admitted = [RESERVATION, ADMITTED_PAIR].join(";\n");
+    execute_all(journal, &fill(&admitted, 2, PRIVATE_VOLUME, CRASHED)).await?;
     let physical = fill(PHYSICAL, 2, PRIVATE_VOLUME, CRASHED).replace("{nonce}", NONCE);
     unguarded(journal, &physical).await?;
     let guard = trigger_sql(journal, "storage_initialization_insert_guard").await?;

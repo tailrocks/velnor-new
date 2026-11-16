@@ -26,6 +26,22 @@ struct ApiObject {
 #[derive(Debug, Deserialize)]
 struct ApiCommit {
     parents: Vec<ApiParent>,
+    commit: ApiGitCommit,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiGitCommit {
+    tree: ApiTree,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiTree {
+    sha: String,
+}
+
+struct Verified {
+    tree: String,
+    second_parent: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -41,7 +57,7 @@ pub fn tagged_commits(
 ) -> Result<String, CiError> {
     let verified = full_sha("the verified commit", verified)?;
     let mut lines = String::new();
-    let mut second_parent: Option<Option<String>> = None;
+    let mut known: Option<Verified> = None;
     for (package, tag) in tags {
         let output = format!("{package}{COMMIT_SUFFIX}");
         if tags.keys().any(|other| other.as_str() == output) {
@@ -51,13 +67,21 @@ pub fn tagged_commits(
         }
         let commit = tagged_commit(github, repo, tag)?;
         if commit != verified {
-            if second_parent.is_none() {
-                second_parent = Some(merge_second_parent(github, repo, &verified)?);
+            if known.is_none() {
+                known = Some(verified_commit(github, repo, &verified)?);
             }
-            let parent = second_parent.as_ref().and_then(|known| known.as_deref());
-            if parent != Some(commit.as_str()) {
+            let Some(merge) = known.as_ref() else {
+                unreachable!("loaded above")
+            };
+            if merge.second_parent.as_deref() != Some(commit.as_str()) {
                 return Err(CiError::new(format!(
                     "tag {tag} is on {commit}, which is neither the verified commit {verified} nor the release pull request head merged into it"
+                )));
+            }
+            let head = fetch_commit(github, repo, &commit)?;
+            if head.commit.tree.sha != merge.tree {
+                return Err(CiError::new(format!(
+                    "tag {tag} is on the release pull request head {commit}, whose tree differs from the verified commit {verified}; bring the release pull request up to date with the base branch before merging it, or squash it"
                 )));
             }
         }
@@ -89,16 +113,20 @@ fn not_a_commit(tag: &PlainName, kind: &str) -> CiError {
     CiError::new(format!("tag {tag} names a {kind}, not a commit"))
 }
 
-fn merge_second_parent(
-    github: &dyn GitHub,
-    repo: &Repo,
-    verified: &str,
-) -> Result<Option<String>, CiError> {
-    let commit: ApiCommit = parse(&github.get(&commit_path(repo, verified))?, "commit")?;
-    match commit.parents.as_slice() {
-        [_, second] => Ok(Some(second.sha.clone())),
-        _ => Ok(None),
-    }
+fn fetch_commit(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<ApiCommit, CiError> {
+    parse(&github.get(&commit_path(repo, sha))?, "commit")
+}
+
+fn verified_commit(github: &dyn GitHub, repo: &Repo, verified: &str) -> Result<Verified, CiError> {
+    let commit = fetch_commit(github, repo, verified)?;
+    let second_parent = match commit.parents.as_slice() {
+        [_, second] => Some(second.sha.clone()),
+        _ => None,
+    };
+    Ok(Verified {
+        tree: commit.commit.tree.sha,
+        second_parent,
+    })
 }
 
 fn full_sha(what: &str, sha: &str) -> Result<String, CiError> {
