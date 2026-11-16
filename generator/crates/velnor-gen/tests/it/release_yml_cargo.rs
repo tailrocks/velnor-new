@@ -178,10 +178,11 @@ fn the_tag_job_is_serialized_across_commits_and_both_jobs_with_the_app_token_ref
         let refuse = all
             .iter()
             .position(|step| {
-                step.get("run").and_then(Node::text)
-                    == Some(
-                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml",
+                step.get("run").and_then(Node::text).is_some_and(|run| {
+                    run.starts_with(
+                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml ",
                     )
+                })
             })
             .ok_or("no refuse step")?;
         let helper = all

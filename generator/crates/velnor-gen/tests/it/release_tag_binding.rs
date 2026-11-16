@@ -102,14 +102,17 @@ fn helper_0_1_80_gets_the_tag_patterns_but_not_released_versions() -> TestResult
 }
 
 #[test]
-fn a_helper_that_predates_the_flag_is_never_given_it() -> TestResult {
+fn a_helper_that_predates_the_release_checks_is_refused_with_the_version_to_pin() -> TestResult {
     for version in ["0.1.79", "0.1.0"] {
-        for (_, step) in refuse_steps(version)? {
-            assert_eq!(
-                step,
-                ["velnor-ci release check-config release-plz.toml tools/release-plz.toml"]
-            );
-        }
+        let error = refuse_steps(version)
+            .err()
+            .ok_or("accepted an old helper")?;
+        assert_eq!(
+            error.to_string(),
+            format!(
+                "velnor-ci {version} cannot check the release on the released commit, because it does not recheck the live tag ruleset or the manifests; pin velnor-ci 0.1.80 or later with `velnor-gen pin-helper 0.1.80`"
+            )
+        );
     }
     Ok(())
 }
