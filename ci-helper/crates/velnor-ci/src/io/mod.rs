@@ -3,6 +3,7 @@
 
 mod audit;
 mod build_inputs;
+mod cache;
 mod cold;
 mod configurations;
 mod git;
@@ -23,13 +24,14 @@ use std::path::Path;
 use std::process::ExitCode;
 
 pub use self::audit::audit_inputs;
+pub use self::cache::{Decision, decide, expire_old_bases};
 pub use self::cold::{cold_on_failure, every_root_target, root_target};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
-    AuditArgs, BenchCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs, InputsCommand,
-    ReleaseCommand, ReleaseGateArgs,
+    AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
+    InputsCommand, ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::compare;
@@ -119,14 +121,37 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
+        Command::Cache(CacheCommand::Decide(args)) => {
+            let log = std::env::var_os("RUNNER_TEMP")
+                .filter(|dir| !dir.is_empty())
+                .and_then(|dir| fs::read_to_string(Path::new(&dir).join("velnor-run.log")).ok());
+            let decision = decide(
+                log.as_deref(),
+                &args.target_dir,
+                args.archive.as_deref(),
+                now_seconds(),
+            )?;
+            append_outputs(&format!("save={}\n", decision.save))?;
+            Ok(decision.report)
+        }
+        Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Restored => {
             let root = current_dir()?;
-            cold_on_failure(&every_root_target(&root), "restored", || {
-                break_time_ties(&root)
-            })
+            let targets = every_root_target(&root);
+            let expired = expire_old_bases(&targets, now_seconds())?;
+            let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
+            Ok(expired + &ties)
         }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
+}
+
+fn now_seconds() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| i64::try_from(elapsed.as_secs()).ok())
+        .unwrap_or(0)
 }
 
 fn current_dir() -> Result<std::path::PathBuf, CiError> {
@@ -150,7 +175,7 @@ fn run_collect(args: &CollectArgs) -> Result<String, CiError> {
     Ok(metrics.summary())
 }
 
-fn api_url() -> String {
+pub(self) fn api_url() -> String {
     std::env::var(API_VARIABLE).unwrap_or_else(|_| DEFAULT_API.to_owned())
 }
 

@@ -56,9 +56,14 @@ pub enum Command {
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(
-        about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore"
+        about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold"
     )]
     Restored,
+    #[command(
+        subcommand,
+        about = "Decide whether the run saves the build directory, and delete the older entries of its family"
+    )]
+    Cache(CacheCommand),
     #[command(
         about = "Run a command, stream its output unchanged, append it to velnor-run.log in $RUNNER_TEMP, and exit with its exit code"
     )]
@@ -307,6 +312,34 @@ pub struct AuditArgs {
         help = "Write .velnor/rust-inputs.lock, one path<TAB>package line per read, instead of checking it"
     )]
     pub write: bool,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum CacheCommand {
+    #[command(
+        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise; with true, remove every incremental directory below --target-dir and the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
+    )]
+    Decide(DecideArgs),
+    #[command(
+        about = "Delete all but the newest entries whose key starts with --prefix on $GITHUB_REF, through the GitHub API; reads GITHUB_TOKEN, which needs actions: write, and GITHUB_REPOSITORY. A failed call prints a warning and exits 0"
+    )]
+    Trim(TrimArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DecideArgs {
+    #[arg(long, help = "The build directory the cache saves")]
+    pub target_dir: PathBuf,
+    #[arg(long, help = "A nextest archive file to remove before the save")]
+    pub archive: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct TrimArgs {
+    #[arg(long, help = "Key prefix of the family to trim")]
+    pub prefix: String,
+    #[arg(long, help = "Entries to keep, default 2")]
+    pub keep: Option<usize>,
 }
 
 #[derive(Debug, Subcommand)]
