@@ -217,6 +217,16 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
             prefix,
         });
     }
+    if let Some(entry) = document
+        .package
+        .iter()
+        .find(|entry| entry.settings.publish_timeout.is_some())
+    {
+        return Err(ReleaseError::PackagePublishTimeout {
+            root: root.to_owned(),
+            package: entry.name.clone(),
+        });
+    }
     let released = released_packages(root, &document)?;
     let mut packages = Vec::new();
     for (name, settings) in &released {
@@ -254,7 +264,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         .collect();
     let listed_minutes = released
         .iter()
-        .map(|(_, settings)| settings.registry_minutes())
+        .map(|(_, settings)| settings.registry_check_and_publish_minutes())
         .sum();
     Ok(RootConfig {
         listed_minutes,

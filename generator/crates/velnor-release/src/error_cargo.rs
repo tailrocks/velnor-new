@@ -99,9 +99,13 @@ impl ReleaseError {
                 f,
                 "{root}/release-plz.toml: publish_timeout {value:?} is not a duration such as \"10m\" or \"1h 30m\""
             ),
+            Self::PackagePublishTimeout { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: [[package]] {package} sets publish_timeout, which release-plz 0.4.3 reads only under [workspace], where it applies to every package; move it to [workspace]"
+            ),
             Self::PublishBudgetOutlivesToken { minutes, limit } => write!(
                 f,
-                "the release-plz.toml publish_timeout of the released packages adds up to {minutes} minutes (release-plz applies it once to the registry check and once more to the publish of every released package that publishes, so each publishing package needs 2 x publish_timeout, and 30 minutes wherever none is set; packages with publish = false or git_only cost nothing), and the release App token that the tag job creates before publishing expires after 60 minutes, so at most {limit} minutes of publishing fit in one token; lower publish_timeout or release fewer packages per run (set publish_timeout under [workspace] or on each [[package]]; for example, with one publishing package set publish_timeout = \"10m\" or anything up to 25m, since 2 x 25m = 50m)"
+                "the release-plz.toml publish_timeout of the released packages adds up to {minutes} minutes (release-plz applies it once to the registry check and once more to the publish of every released package that publishes, so each publishing package needs 2 x publish_timeout, and 30 minutes wherever none is set; packages with publish = false or git_only cost nothing), and the release App token that the tag job creates before publishing expires after 60 minutes, so at most {limit} minutes of publishing fit in one token; lower publish_timeout or release fewer packages per run (set publish_timeout under [workspace]; for example, with one publishing package set publish_timeout = \"10m\" or anything up to 25m, since 2 x 25m = 50m)"
             ),
             Self::ReleasePlzVersionTooOld { version, minimum } => write!(
                 f,

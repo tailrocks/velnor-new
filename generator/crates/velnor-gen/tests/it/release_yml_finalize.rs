@@ -52,7 +52,7 @@ fn a_package_without_a_binaries_entry_is_published_by_the_guarded_helper_command
             .and_then(Node::text),
         Some("write")
     );
-    let publish = all.last().ok_or("no steps")?;
+    let publish = &all[all.len() - 2];
     assert_eq!(
         publish.get("run").and_then(Node::text),
         Some(
@@ -160,5 +160,57 @@ fn an_old_helper_with_an_assetless_package_warns_naming_the_version_to_pin() -> 
     );
     let binary = "roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n";
     assert_eq!(notes_with("0.1.80", binary)?, Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
+fn a_failed_finalization_does_not_skip_the_others_and_still_fails_the_job() -> TestResult {
+    let tree = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\", \"tools\"]\n")?;
+    let all = steps(job(&tree, "finalize")?);
+    let publishing: Vec<&Node> = all
+        .iter()
+        .filter(|step| {
+            step.get("run")
+                .and_then(Node::text)
+                .is_some_and(|run| run.contains("release publish"))
+        })
+        .collect();
+    assert_eq!(publishing.len(), 2);
+    for (index, step) in publishing.iter().enumerate() {
+        assert_eq!(
+            step.get("continue-on-error").and_then(Node::text),
+            Some("true")
+        );
+        assert_eq!(
+            step.get("id").and_then(Node::text),
+            Some(format!("publish_{index}").as_str())
+        );
+    }
+    let last = all.last().ok_or("no steps")?;
+    assert_eq!(last.get("run").and_then(Node::text), Some("exit 1"));
+    assert_eq!(
+        last.get("if").and_then(Node::text),
+        Some("${{ steps.publish_0.outcome == 'failure' || steps.publish_1.outcome == 'failure' }}")
+    );
+    Ok(())
+}
+
+#[test]
+fn the_finalize_timeout_grows_with_the_assetless_packages_by_five_requests_of_five_minutes_each()
+-> TestResult {
+    let one = render_with("0.1.81", &[APP], "roots = [\".\"]\n")?;
+    assert_eq!(
+        job(&one, "finalize")?
+            .get("timeout-minutes")
+            .and_then(Node::text),
+        Some("30")
+    );
+    let two = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\", \"tools\"]\n")?;
+    assert_eq!(
+        job(&two, "finalize")?
+            .get("timeout-minutes")
+            .and_then(Node::text),
+        Some("55")
+    );
     Ok(())
 }

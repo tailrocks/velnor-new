@@ -86,3 +86,40 @@ fn naming_files_for_an_assetless_release_or_none_for_a_release_with_assets_is_re
     assert_eq!(fake.requests(), 0);
     assert!(fake.is_draft(id));
 }
+
+#[test]
+fn an_assetless_release_that_the_app_already_published_empty_is_a_success_that_changes_nothing() {
+    let fake = FakeReleases::new();
+    let id = fake.release(TAG, false, BOT, "Bot");
+    let said = publish(&fake, &repo(), &assetless()).map_err(|e| e.to_string());
+    assert_eq!(
+        said,
+        Ok(format!(
+            "release {TAG} ({id}) was already published without files\n"
+        ))
+    );
+    assert!(!fake.is_draft(id));
+}
+
+#[test]
+fn an_assetless_release_published_by_anyone_else_or_holding_assets_is_still_refused() {
+    let fake = FakeReleases::new();
+    let id = fake.release(TAG, false, INTRUDER, "User");
+    assert_eq!(
+        refusal(&fake, &assetless()),
+        format!("release {TAG} is already published ({id}), and a tag is published once")
+    );
+    let fake = FakeReleases::new();
+    let id = fake.release(TAG, false, BOT, "Bot");
+    fake.asset(id, "planted.bin", b"planted");
+    assert_eq!(
+        refusal(&fake, &assetless()),
+        format!(
+            "release {TAG} ({id}) is already published and holds planted.bin, which an assetless release does not"
+        )
+    );
+    let fake = FakeReleases::new();
+    fake.release(TAG, false, BOT, "Bot");
+    fake.release(TAG, true, BOT, "Bot");
+    assert!(refusal(&fake, &assetless()).contains("is already published"));
+}

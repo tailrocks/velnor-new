@@ -62,7 +62,10 @@ pub fn publish(
     request: &Request,
 ) -> Result<String, CiError> {
     let files = verify(request)?;
-    let release = draft(github, repo, &request.tag, &request.app)?;
+    let release = match draft(github, repo, request)? {
+        Found::Draft(release) => release,
+        Found::PublishedByApp(release) => return confirm_published(github, repo, &release),
+    };
     let named = format!("release {} ({})", release.tag_name, release.id);
     let upload = upload_url(repo, &release)?;
     let present = assets(github, repo, release.id)?;
@@ -214,23 +217,48 @@ fn sum_line(line: &str) -> Option<(&str, &str)> {
     (hex && PlainName::new("file", name).is_ok()).then_some((sha256, name))
 }
 
-fn draft(
+enum Found {
+    Draft(ApiRelease),
+    PublishedByApp(ApiRelease),
+}
+
+fn confirm_published(
     github: &dyn GitHub,
     repo: &Repo,
-    tag: &PlainName,
-    app: &PlainName,
-) -> Result<ApiRelease, CiError> {
+    release: &ApiRelease,
+) -> Result<String, CiError> {
+    let named = format!("release {} ({})", release.tag_name, release.id);
+    let present = assets(github, repo, release.id)?;
+    if present.is_empty() {
+        return Ok(format!("{named} was already published without files\n"));
+    }
+    let listed: Vec<&str> = present.iter().map(|asset| asset.name.as_str()).collect();
+    Err(CiError::new(format!(
+        "{named} is already published and holds {}, which an assetless release does not",
+        listed.join(", ")
+    )))
+}
+
+fn draft(github: &dyn GitHub, repo: &Repo, request: &Request) -> Result<Found, CiError> {
+    let (tag, app) = (&request.tag, &request.app);
     let mut tagged: Vec<ApiRelease> = pages(github, "releases", |page| {
         format!("/repos/{repo}/releases?per_page={PAGE}&page={page}")
     })?;
     tagged.retain(|release| release.tag_name == tag.as_str());
+    let bot = format!("{app}[bot]");
+    if let [only] = tagged.as_slice()
+        && request.assetless
+        && !only.draft
+        && made_by(only, &bot)
+    {
+        return Ok(Found::PublishedByApp(tagged.remove(0)));
+    }
     if let Some(published) = tagged.iter().find(|release| !release.draft) {
         return Err(CiError::new(format!(
             "release {tag} is already published ({}), and a tag is published once",
             published.id
         )));
     }
-    let bot = format!("{app}[bot]");
     if tagged.len() > 1 {
         let listed: Vec<String> = tagged
             .iter()
@@ -245,12 +273,8 @@ fn draft(
     let release = tagged
         .pop()
         .ok_or_else(|| CiError::new(format!("no draft release has the tag {tag}")))?;
-    let by_app = release
-        .author
-        .as_ref()
-        .is_some_and(|author| author.login == bot && author.kind == "Bot");
-    if by_app {
-        Ok(release)
+    if made_by(&release, &bot) {
+        Ok(Found::Draft(release))
     } else {
         Err(CiError::new(format!(
             "draft release {tag} ({}) was created by {}, not by {bot}",
@@ -258,6 +282,13 @@ fn draft(
             author(&release)
         )))
     }
+}
+
+fn made_by(release: &ApiRelease, bot: &str) -> bool {
+    release
+        .author
+        .as_ref()
+        .is_some_and(|author| author.login == bot && author.kind == "Bot")
 }
 
 fn author(release: &ApiRelease) -> String {

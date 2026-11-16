@@ -101,37 +101,44 @@ fn outlives(result: Result<Node, GenerateError>) -> Option<u64> {
 #[test]
 fn a_package_without_a_publish_timeout_is_budgeted_at_release_plzs_default_of_thirty_minutes_twice()
 -> TestResult {
-    let text = packages("", &[("app", "1m"), ("second", "")]);
-    assert_eq!(outlives(with_packages(&text, &["second"])?), Some(62));
+    let text = packages("", &[("app", ""), ("second", "")]);
+    assert_eq!(outlives(with_packages(&text, &["second"])?), Some(120));
     Ok(())
 }
 
 #[test]
-fn each_package_is_budgeted_at_its_own_effective_timeout_not_the_largest_one_times_the_count()
+fn the_workspace_publish_timeout_is_charged_twice_for_every_publishing_package() -> TestResult {
+    let workspace = "publish_timeout = \"10m\"\n";
+    let two = packages(workspace, &[("app", ""), ("second", "")]);
+    assert!(with_packages(&two, &["second"])?.is_ok());
+    let three = packages(workspace, &[("app", ""), ("b", ""), ("c", "")]);
+    assert_eq!(outlives(with_packages(&three, &["b", "c"])?), Some(60));
+    Ok(())
+}
+
+#[test]
+fn a_package_level_publish_timeout_is_refused_because_release_plz_reads_only_the_workspace_one()
 -> TestResult {
-    let text = packages(
-        "publish_timeout = \"60m\"\n",
-        &[
-            ("app", "1m"),
-            ("b", "1m"),
-            ("c", "1m"),
-            ("d", "1m"),
-            ("e", "1m"),
-            ("f", "1m"),
-        ],
-    );
-    let tree = with_packages(&text, &["b", "c", "d", "e", "f"])??;
-    assert_eq!(minutes(&tree)?.as_deref(), Some("42"));
+    let text = packages("publish_timeout = \"60m\"\n", &[("app", "1m")]);
+    assert!(matches!(
+        with_packages(&text, &[])?.err(),
+        Some(GenerateError::Release(
+            ReleaseError::PackagePublishTimeout { .. }
+        ))
+    ));
     Ok(())
 }
 
 #[test]
 fn a_package_that_does_not_publish_costs_no_registry_budget() -> TestResult {
-    let unpublished = packages("publish = false\n", &[("app", "25m"), ("second", "")]);
+    let unpublished = packages("publish = false\n", &[("app", ""), ("second", "")]);
     assert!(with_packages(&unpublished, &["second"])?.is_ok());
-    let git_only = packages("git_only = true\n", &[("app", "25m"), ("second", "")]);
+    let git_only = packages("git_only = true\n", &[("app", ""), ("second", "")]);
     assert!(with_packages(&git_only, &["second"])?.is_ok());
-    let mixed = packages("", &[("app", "25m"), ("second", "")]);
+    let mixed = packages(
+        "publish_timeout = \"25m\"\n",
+        &[("app", ""), ("second", "")],
+    );
     let mixed = mixed.replace(
         "name = \"second\"\n",
         "name = \"second\"\npublish = false\n",

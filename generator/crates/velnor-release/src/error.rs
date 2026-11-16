@@ -171,6 +171,10 @@ pub enum ReleaseError {
         root: String,
         value: String,
     },
+    PackagePublishTimeout {
+        root: String,
+        package: String,
+    },
     PublishBudgetOutlivesToken {
         minutes: u64,
         limit: u64,
