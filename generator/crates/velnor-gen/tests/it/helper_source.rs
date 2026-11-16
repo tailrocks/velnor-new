@@ -35,7 +35,7 @@ fn job_ids(text: &str) -> Vec<&str> {
 }
 
 #[test]
-fn the_helper_key_builds_the_helper_once_and_every_lane_downloads_it() -> TestResult {
+fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() -> TestResult {
     let text = text_of(&sample(None)?)?;
     let jobs = job_ids(&text);
     assert_eq!(jobs[..2], ["rust-plan", "rust-helper"]);
@@ -45,11 +45,9 @@ fn the_helper_key_builds_the_helper_once_and_every_lane_downloads_it() -> TestRe
         .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
         .collect();
     assert_eq!(lanes.len(), 6);
-    assert_eq!(text.matches("Install velnor-ci").count(), 2);
-    assert_eq!(text.matches("Download velnor-ci").count(), lanes.len());
     assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
     for lane in lanes {
-        let header = format!("  {lane}:\n    needs:\n      - rust-plan\n      - rust-helper\n");
+        let header = format!("  {lane}:\n    needs:\n      - rust-plan\n    if:");
         assert!(text.contains(&header), "{lane}");
     }
     assert!(
@@ -59,15 +57,51 @@ fn the_helper_key_builds_the_helper_once_and_every_lane_downloads_it() -> TestRe
 }
 
 #[test]
-fn the_plan_job_and_the_helper_job_use_the_released_helper() -> TestResult {
-    let text = text_of(&sample(None)?)?;
-    for job in ["rust-plan", "rust-helper"] {
+fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() -> TestResult {
+    let mut view = sample(None)?;
+    let mise = path("mise.toml")?;
+    view.files
+        .get_mut(&mise)
+        .ok_or("mise missing")?
+        .extend_from_slice(b"\ncargo-machete = \"0.9.1\"\n");
+    let text = text_of(&view)?;
+    assert!(job_ids(&text).contains(&"policy"));
+    let jobs = job_ids(&text);
+    assert_eq!(
+        text.matches("Install velnor-ci 0.1.79").count(),
+        jobs.len() - 1
+    );
+    for pair in jobs.windows(2) {
+        let job = pair[0];
         let start = text.find(&format!("  {job}:\n")).ok_or("job missing")?;
-        let body = &text[start..];
-        let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
-        let body = &body[..end];
+        let end = text
+            .find(&format!("  {}:\n", pair[1]))
+            .ok_or("next job missing")?;
+        let body = &text[start..end];
         assert!(body.contains("Install velnor-ci 0.1.79"), "{job}");
-        assert!(!body.contains("Download velnor-ci"), "{job}");
+    }
+    for forbidden in [
+        "Download velnor-ci",
+        "Make velnor-ci executable",
+        "vbin",
+        "velnor-ci inputs restore",
+    ] {
+        assert!(!text.contains(forbidden), "{forbidden}");
+    }
+    let source_lane = text
+        .split("  rust-ci_helper:\n")
+        .nth(1)
+        .ok_or("source lane missing")?;
+    let source_lane = source_lane
+        .split("\n  rust-")
+        .next()
+        .ok_or("source lane body missing")?;
+    for command in ["cargo-nextest nextest run", "cargo-clippy clippy"] {
+        let step = source_lane
+            .split("- name:")
+            .find(|step| step.contains(command))
+            .ok_or("source check missing")?;
+        assert!(step.contains("working-directory: ci-helper"), "{step}");
     }
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
     assert!(!verdict.contains("velnor-ci"));
@@ -127,8 +161,10 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
         job_ids(&text),
         ["rust-plan", "rust-helper", "rust", "required"]
     );
-    assert_eq!(text.matches("Install velnor-ci").count(), 2);
-    assert_eq!(text.matches("Download velnor-ci").count(), 1);
+    assert_eq!(text.matches("Install velnor-ci").count(), 3);
+    assert!(!text.contains("Download velnor-ci"));
+    assert!(text.contains("cargo-clippy clippy"));
+    assert!(text.contains("cargo-nextest nextest run"));
     Ok(())
 }
 
