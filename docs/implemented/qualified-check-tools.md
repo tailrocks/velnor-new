@@ -35,7 +35,7 @@ The generic Aqua authoring path covers package/version examples such as
 not measured or live-qualified pins.
 
 The repository's `maintenance-helpers` check explicitly selects the measured
-Linux x64 `jactionlint-linux-x64` and `shellcheck-linux-x64` declarations,
+Linux x64 `bun-ci`, `jactionlint-linux-x64`, and `shellcheck-linux-x64` declarations,
 alongside `cargo-nextest` and Rust. Adding those configuration inputs does not
 claim full CI gate qualification. The generic Aqua authoring path also covers
 `jdx/mr-boxington` 1.27.0 as an authoring example, not a measured pin.
@@ -100,7 +100,7 @@ artifacts = [
 
 [[qualified_tools.platforms.executables]]
 name = "bun"
-path = "bin/bun"
+path = "bun"
 sha256 = "<measured executable SHA-256>"
 probe = { kind = "version", expected = "1.3.14" }
 
