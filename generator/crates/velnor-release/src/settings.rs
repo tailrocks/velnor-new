@@ -59,6 +59,20 @@ impl Settings {
             .unwrap_or(crate::timeout::DEFAULT_PUBLISH_MINUTES)
     }
 
+    pub(crate) fn registry_minutes(&self) -> u64 {
+        let check = if self.git_only == Some(true) {
+            0
+        } else {
+            self.publish_minutes()
+        };
+        let publish = if self.publishes_to_crates_io() {
+            self.publish_minutes()
+        } else {
+            0
+        };
+        check + publish
+    }
+
     pub(crate) fn over(&self, base: &Settings) -> Settings {
         Settings {
             git_tag_name: self

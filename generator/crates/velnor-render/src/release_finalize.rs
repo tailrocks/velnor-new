@@ -14,10 +14,22 @@ use crate::steps::install_helper;
 const FINALIZE_TIMEOUT_MINUTES: u16 = 10;
 const ASSETLESS_PUBLISH_HELPER: (u64, u64, u64) = (0, 1, 81);
 
+#[must_use]
+pub fn unfinalized_without_binary(plan: &ReleasePlan, helper: &HelperRelease) -> BTreeSet<String> {
+    if helper.version().at_least(ASSETLESS_PUBLISH_HELPER) {
+        return BTreeSet::new();
+    }
+    assetless(plan)
+}
+
 pub(crate) fn without_binary(plan: &ReleasePlan, helper: &HelperRelease) -> BTreeSet<String> {
     if !helper.version().at_least(ASSETLESS_PUBLISH_HELPER) {
         return BTreeSet::new();
     }
+    assetless(plan)
+}
+
+fn assetless(plan: &ReleasePlan) -> BTreeSet<String> {
     plan.roots
         .iter()
         .flat_map(|root| {

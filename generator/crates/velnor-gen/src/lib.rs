@@ -58,9 +58,11 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
-    let release = release::release_workflow(view, &facts, helper, &files)?;
+    let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
-    Ok((files, facts.timings_notes))
+    let mut notes = facts.timings_notes;
+    notes.extend(release_notes);
+    Ok((files, notes))
 }
 
 pub fn plan_generate(

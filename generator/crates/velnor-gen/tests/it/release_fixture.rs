@@ -62,7 +62,7 @@ pub(crate) fn dashed() -> Result<(String, Node), Box<dyn Error>> {
 
 pub(crate) fn release_plz(root: &Root) -> String {
     let publishing = if root.publishes {
-        "publish_no_verify = true"
+        "publish_no_verify = true\npublish_timeout = \"5m\""
     } else {
         "git_only = true"
     };

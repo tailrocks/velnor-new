@@ -101,7 +101,7 @@ impl ReleaseError {
             ),
             Self::PublishBudgetOutlivesToken { minutes, limit } => write!(
                 f,
-                "the release-plz.toml publish_timeout of the packages to publish adds up to {minutes} minutes (30 for each package that sets none), and the release App token that the tag job creates before publishing expires after 60 minutes, so at most {limit} minutes of publishing fit in one token; lower publish_timeout or release fewer packages per run"
+                "the release-plz.toml publish_timeout of the released packages adds up to {minutes} minutes (release-plz applies it once to the registry check of every released package that is not git_only and once more to each publish; 30 minutes wherever none is set), and the release App token that the tag job creates before publishing expires after 60 minutes, so at most {limit} minutes of publishing fit in one token; lower publish_timeout or release fewer packages per run (set publish_timeout under [workspace] or on each [[package]])"
             ),
             Self::ReleasePlzVersionTooOld { version, minimum } => write!(
                 f,

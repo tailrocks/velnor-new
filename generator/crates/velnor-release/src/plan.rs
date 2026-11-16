@@ -251,15 +251,17 @@ fn plan_binaries(
 }
 
 fn publish_budget(config: &RootConfig, inherited: &[String]) -> u64 {
-    let unlisted = inherited
+    let publishing = inherited
         .iter()
         .filter(|package| config.publishes(package))
         .count();
-    let none_known = config.publishes_to_crates_io && unlisted == 0 && config.packages.is_empty();
-    let unlisted = unlisted.max(usize::from(none_known)) as u64;
+    let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
+    let publishing = publishing.max(usize::from(none_known)) as u64;
+    let checked = (inherited.len() as u64).max(publishing);
     config
-        .listed_publish_minutes
-        .saturating_add(unlisted.saturating_mul(config.unlisted_publish_minutes))
+        .listed_minutes
+        .saturating_add(checked.saturating_mul(config.unlisted_check_minutes))
+        .saturating_add(publishing.saturating_mul(config.unlisted_publish_minutes))
 }
 
 fn plan_roots(

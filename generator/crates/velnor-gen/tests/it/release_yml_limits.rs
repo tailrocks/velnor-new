@@ -23,6 +23,7 @@ fn packages(workspace: &str, packages: &[(&str, &str)]) -> String {
         .split("\n[[package]]")
         .next()
         .unwrap_or_default()
+        .replace("publish_timeout = \"5m\"\n", "")
         .replace("[workspace]\n", &format!("[workspace]\n{workspace}"));
     for (name, timeout) in packages {
         text.extend(["\n[[package]]\nname = \"", name, "\"\n"]);
@@ -76,22 +77,32 @@ fn minutes(tree: &Node) -> Result<Option<String>, Box<dyn Error>> {
 }
 
 #[test]
-fn the_tag_job_is_sized_for_the_publish_timeout_of_every_published_package() -> TestResult {
+fn the_tag_job_is_sized_for_the_registry_check_and_the_publish_of_every_published_package()
+-> TestResult {
     let (_, default) = render(&[PUBLISHING], Some("roots = [\".\"]\n"))?;
-    assert_eq!(minutes(&default)?.as_deref(), Some("60"));
-    for (value, total) in [("20m", "50"), ("45m", "75"), ("90s", "32")] {
+    assert_eq!(minutes(&default)?.as_deref(), Some("40"));
+    for (value, total) in [("10m", "50"), ("20m", "70"), ("90s", "34")] {
         let tree = with_timeout(value)??;
         assert_eq!(minutes(&tree)?.as_deref(), Some(total), "{value}");
     }
     Ok(())
 }
 
+fn outlives(result: Result<Node, GenerateError>) -> Option<u64> {
+    match result.err() {
+        Some(GenerateError::Release(ReleaseError::PublishBudgetOutlivesToken {
+            minutes,
+            limit: 50,
+        })) => Some(minutes),
+        _ => None,
+    }
+}
+
 #[test]
-fn a_package_without_a_publish_timeout_is_budgeted_at_release_plzs_default_of_thirty_minutes()
+fn a_package_without_a_publish_timeout_is_budgeted_at_release_plzs_default_of_thirty_minutes_twice()
 -> TestResult {
-    let text = packages("", &[("app", "10m"), ("second", "")]);
-    let tree = with_packages(&text, &["second"])??;
-    assert_eq!(minutes(&tree)?.as_deref(), Some("70"));
+    let text = packages("", &[("app", "1m"), ("second", "")]);
+    assert_eq!(outlives(with_packages(&text, &["second"])?), Some(62));
     Ok(())
 }
 
@@ -110,33 +121,34 @@ fn each_package_is_budgeted_at_its_own_effective_timeout_not_the_largest_one_tim
         ],
     );
     let tree = with_packages(&text, &["b", "c", "d", "e", "f"])??;
-    assert_eq!(minutes(&tree)?.as_deref(), Some("36"));
+    assert_eq!(minutes(&tree)?.as_deref(), Some("42"));
+    Ok(())
+}
+
+#[test]
+fn a_package_that_does_not_publish_is_still_budgeted_for_its_registry_check() -> TestResult {
+    let unpublished = |timeouts: &[(&str, &str)]| packages("publish = false\n", timeouts);
+    let tree = with_packages(&unpublished(&[("app", "25m")]), &[])??;
+    assert_eq!(minutes(&tree)?.as_deref(), Some("55"));
+    let two = unpublished(&[("app", ""), ("second", "")]);
+    assert_eq!(outlives(with_packages(&two, &["second"])?), Some(60));
+    let git_only = packages("git_only = true\n", &[("app", "")]);
+    let tree = with_packages(&git_only, &[])??;
+    assert_eq!(minutes(&tree)?.as_deref(), Some("30"));
     Ok(())
 }
 
 #[test]
 fn a_budget_that_outlives_the_one_hour_app_token_is_refused() -> TestResult {
-    for value in ["1h 30m", "51m"] {
-        assert!(
-            matches!(
-                with_timeout(value)?.err(),
-                Some(GenerateError::Release(
-                    ReleaseError::PublishBudgetOutlivesToken { limit: 50, .. }
-                ))
-            ),
-            "{value}"
-        );
+    for (value, total) in [("1h 30m", 180), ("26m", 52)] {
+        assert_eq!(outlives(with_timeout(value)?), Some(total), "{value}");
     }
+    assert!(with_timeout("25m")?.is_ok());
     let two_defaults = packages("", &[("app", ""), ("second", "")]);
-    assert!(matches!(
-        with_packages(&two_defaults, &["second"])?.err(),
-        Some(GenerateError::Release(
-            ReleaseError::PublishBudgetOutlivesToken {
-                minutes: 60,
-                limit: 50
-            }
-        ))
-    ));
+    assert_eq!(
+        outlives(with_packages(&two_defaults, &["second"])?),
+        Some(120)
+    );
     Ok(())
 }
 

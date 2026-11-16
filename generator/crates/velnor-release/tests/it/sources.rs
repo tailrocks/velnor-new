@@ -106,7 +106,7 @@ fn workspace_wide_tag_patterns_of_two_roots_that_can_collide_are_refused() -> Te
     Ok(())
 }
 
-const PLZ_TOOLS: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npr_branch_prefix = \"tools-\"\n\n[[package]]\nname = \"tools\"\n";
+const PLZ_TOOLS: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"tools-\"\n\n[[package]]\nname = \"tools\"\n";
 
 #[test]
 fn every_release_root_needs_a_tracked_cargo_manifest() -> TestResult {
