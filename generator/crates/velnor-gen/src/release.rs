@@ -11,7 +11,7 @@ use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_drift, ruleset_json};
 use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
-use crate::GenerateError;
+use crate::{GenerateError, RELEASE_HELPER_MINIMUM};
 
 pub(crate) fn release_workflow(
     view: &RepoView,
@@ -21,6 +21,9 @@ pub(crate) fn release_workflow(
 ) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Ok(BTreeMap::new());
+    }
+    if !helper.version().at_least(RELEASE_HELPER_MINIMUM) {
+        return Err(GenerateError::ReleaseHelperTooOld(helper.version().clone()));
     }
     if facts
         .toolchain
