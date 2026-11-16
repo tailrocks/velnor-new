@@ -12,11 +12,18 @@ use velnor_rust::MetadataFileError;
 type TestResult = Result<(), Box<dyn Error>>;
 
 const RECORDED: &str = ".velnor/rust-metadata.json";
+const LOCK: &str = ".velnor/rust-ci.lock";
+const SAMPLE_LOCK: &str =
+    include_str!("../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
 struct Checkout(PathBuf);
 
 impl Checkout {
     fn new(name: &str) -> Result<Self, Box<dyn Error>> {
+        Self::pinned(name, None)
+    }
+
+    fn pinned(name: &str, helper: Option<&str>) -> Result<Self, Box<dyn Error>> {
         let base =
             std::env::temp_dir().join(format!("velnor-gen-check-{}-{name}", std::process::id()));
         if base.exists() {
@@ -30,6 +37,9 @@ impl Checkout {
             "[package]\nname = \"demo\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
         )?;
         checkout.write("src/lib.rs", "")?;
+        if let Some(helper) = helper {
+            checkout.write(LOCK, &SAMPLE_LOCK.replace("0.1.79", helper))?;
+        }
         checkout.git(&["add", "."])?;
         write_metadata(&checkout.0)?;
         checkout.git(&["add", "."])?;
@@ -109,5 +119,27 @@ fn a_new_auto_discovered_target_fails_although_no_manifest_changed() -> TestResu
             "{path} was not noticed"
         );
     }
+    Ok(())
+}
+
+#[test]
+fn the_version_is_recorded_and_checked_only_for_a_helper_that_reads_it() -> TestResult {
+    for (helper, recorded) in [("0.1.79", false), ("0.1.80", false), ("0.1.81", true)] {
+        let checkout = Checkout::pinned(helper, Some(helper))?;
+        let text = fs::read_to_string(checkout.path().join(RECORDED))?;
+        assert_eq!(text.contains("\"version\""), recorded, "{helper}");
+        check_metadata(checkout.path())?;
+    }
+    Ok(())
+}
+
+#[test]
+fn a_file_written_for_an_older_pin_fails_once_the_pin_moves_to_0_1_81() -> TestResult {
+    let checkout = Checkout::pinned("moved", Some("0.1.79"))?;
+    checkout.write(LOCK, &SAMPLE_LOCK.replace("0.1.79", "0.1.81"))?;
+    checkout.git(&["add", "."])?;
+    assert!(check_metadata(checkout.path()).is_err());
+    write_metadata(checkout.path())?;
+    check_metadata(checkout.path())?;
     Ok(())
 }
