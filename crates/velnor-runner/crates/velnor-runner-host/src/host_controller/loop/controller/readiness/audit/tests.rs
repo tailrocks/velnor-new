@@ -72,10 +72,9 @@ fn a_container_with_another_reservation_is_refused() {
 
 #[test]
 fn a_stopped_pair_container_is_refused() {
-    assert_eq!(
-        check(&inspected(pair_labels(), false)),
-        Err(HostError::Ownership)
-    );
+    let mut labels = pair_labels();
+    labels.extend(image_labels());
+    assert_eq!(check(&inspected(labels, false)), Err(HostError::Ownership));
 }
 
 #[test]
@@ -83,5 +82,21 @@ fn a_container_with_an_unknown_velnor_label_is_refused() {
     let mut labels = pair_labels();
     labels.extend(image_labels());
     labels.insert("io.velnor.extra".to_owned(), "1".to_owned());
+    assert_eq!(check(&inspected(labels, true)), Err(HostError::Ownership));
+}
+
+#[test]
+fn a_container_without_the_image_kind_label_is_refused() {
+    let mut labels = pair_labels();
+    labels.extend(image_labels());
+    labels.remove("io.velnor.image.kind");
+    assert_eq!(check(&inspected(labels, true)), Err(HostError::Ownership));
+}
+
+#[test]
+fn a_container_whose_image_kind_differs_from_its_role_is_refused() {
+    let mut labels = pair_labels();
+    labels.extend(image_labels());
+    labels.insert("io.velnor.image.kind".to_owned(), "dind".to_owned());
     assert_eq!(check(&inspected(labels, true)), Err(HostError::Ownership));
 }
