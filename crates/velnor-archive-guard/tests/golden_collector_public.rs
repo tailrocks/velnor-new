@@ -10,6 +10,8 @@ use std::process::Command;
 mod bounded;
 #[path = "golden_collector_public/executable_custody.rs"]
 mod executable_custody;
+#[path = "golden_collector_public/fixture_recipe.rs"]
+mod fixture_recipe;
 #[path = "golden_collector_public/gate.rs"]
 mod gate;
 #[path = "golden_collector_public/mutation.rs"]
