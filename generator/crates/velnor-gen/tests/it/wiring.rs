@@ -272,7 +272,7 @@ fn a_one_job_workflow_that_skips_drafts_still_lints_them() -> TestResult {
 }
 
 #[test]
-fn the_inputs_audit_runs_only_where_one_job_has_built_every_cargo_root() -> TestResult {
+fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root() -> TestResult {
     let config = Some(b"on_main = \"everything\"\n".as_slice());
     let single = text(&view(&["Cargo.toml"], config)?)?;
     assert_eq!(
@@ -281,6 +281,49 @@ fn the_inputs_audit_runs_only_where_one_job_has_built_every_cargo_root() -> Test
         "{single}"
     );
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], config)?)?;
-    assert!(!lanes.contains("inputs audit"), "{lanes}");
+    assert_eq!(
+        lanes.matches("run: velnor-ci inputs audit").count(),
+        1,
+        "{lanes}"
+    );
+    let audit = lanes
+        .split("\n  rust-inputs-audit:\n")
+        .nth(1)
+        .ok_or("no audit job")?
+        .split("\n  required:\n")
+        .next()
+        .ok_or("no audit job")?;
+    assert!(
+        audit.contains(
+            "if: '${{ (github.event_name == 'schedule' || github.event_name == 'push') }}'"
+        ),
+        "{audit}"
+    );
+    assert_eq!(
+        audit
+            .matches("run: velnor-ci run -- cargo build --workspace --all-targets --locked")
+            .count(),
+        2,
+        "{audit}"
+    );
+    assert!(audit.contains("working-directory: lab"), "{audit}");
+    assert!(
+        audit.trim_end().ends_with("run: velnor-ci inputs audit"),
+        "{audit}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_multi_root_audit_job_follows_the_schedule_policy() -> TestResult {
+    let roots = ["Cargo.toml", "lab/Cargo.toml"];
+    let scheduled = text(&view(&roots, Some(b"full_run = \"nightly\"\n".as_slice()))?)?;
+    assert!(scheduled.contains("rust-inputs-audit:"), "{scheduled}");
+    assert!(
+        scheduled.contains("if: '${{ github.event_name == 'schedule' }}'"),
+        "{scheduled}"
+    );
+    let off = text(&view(&roots, Some(b"full_run = \"off\"\n".as_slice()))?)?;
+    assert!(!off.contains("inputs audit"), "{off}");
     Ok(())
 }
