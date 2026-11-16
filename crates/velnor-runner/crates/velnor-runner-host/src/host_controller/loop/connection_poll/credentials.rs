@@ -129,7 +129,7 @@ pub(super) async fn restore_active_credentials(
     guarded_restore(
         binding.connection_id.as_str(),
         mode,
-        Instant::now,
+        || tokio::time::Instant::now().into_std(),
         RESTORE_ATTEMPT_DEADLINE,
         &mut prepared.restore_retry_at,
         &mut prepared.credentials,
