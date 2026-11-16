@@ -1,0 +1,12 @@
+name: fork reach
+on: [pull_request]
+jobs:
+  reach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Try to reach the API stub
+        run: |
+          echo "runner=$RUNNER_NAME head=${{ github.event.pull_request.head.repo.full_name }} fork=${{ github.event.pull_request.head.repo.fork }} GITHUB_API_URL=$GITHUB_API_URL"
+          status=$(curl -sS -o /dev/null -m 10 -w '%{http_code}' "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/pulls?state=open" || true)
+          echo "status=$status"
+          if getent hosts api-stub; then echo "api-stub resolves"; else echo "api-stub does not resolve"; fi
