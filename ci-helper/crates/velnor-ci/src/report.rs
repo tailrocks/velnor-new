@@ -21,6 +21,18 @@ pub struct Invocation {
     pub log_end: usize,
     pub compilations: Vec<Compilation>,
     pub downloads: Vec<String>,
+    #[serde(default)]
+    pub artifacts: Vec<crate::cargo_artifacts::CargoArtifact>,
+    #[serde(default)]
+    pub progress: Option<Vec<crate::cargo_artifacts::CargoProgress>>,
+    #[serde(default)]
+    pub tests: Vec<(String, f64)>,
+    #[serde(default)]
+    pub rejected: u64,
+    #[serde(default)]
+    pub execution: BTreeMap<String, String>,
+    #[serde(default)]
+    pub target_directory: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -142,8 +154,15 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
 }
 
 pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
+    let observed_roots: BTreeSet<_> = lanes
+        .iter()
+        .flat_map(|lane| &lane.invocations)
+        .filter(|invocation| !invocation.artifacts.is_empty() || invocation.rejected > 0)
+        .map(|invocation| invocation.root.as_str())
+        .collect();
     let mut identities = BTreeSet::new();
     let mut events = BTreeMap::new();
+    let mut units = BTreeMap::new();
     let mut violations = Vec::new();
     for lane in lanes {
         if !identities.insert(&lane.lane) {
@@ -161,6 +180,10 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
         violations.extend(lane.violations.iter().cloned());
         violations.extend(waste(lane));
         for invocation in &lane.invocations {
+            crate::observed_units::collect(invocation, &mut units);
+            if observed_roots.contains(invocation.root.as_str()) {
+                continue;
+            }
             for event in &invocation.compilations {
                 *events
                     .entry((
@@ -176,6 +199,11 @@ pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
     violations.extend(events.into_iter().filter(|(_, count)| *count > 2).map(
         |((root, config, package, version), count)| {
             format!("{root}: {package} v{version} compiled {count} times for {config}")
+        },
+    ));
+    violations.extend(units.into_iter().filter(|(_, (_, count))| *count > 1).map(
+        |(_, (package, count))| {
+            format!("{package}: identical observed compilation unit executed {count} times")
         },
     ));
     violations.sort();

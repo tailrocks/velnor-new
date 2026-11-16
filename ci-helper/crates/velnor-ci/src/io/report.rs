@@ -4,7 +4,7 @@
 use crate::cli::ReportArgs;
 use crate::error::CiError;
 use crate::github::{ApiJobs, GitHub, Repo, jobs_path};
-use crate::logscan::{individual_test, scan};
+
 use crate::report::{
     Hit, INVOCATIONS, Invocation, LaneMetrics, SCHEMA, check, configuration, waste,
 };
@@ -51,6 +51,20 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         log_end: 0,
         compilations: Vec::new(),
         downloads: Vec::new(),
+        artifacts: Vec::new(),
+        progress: Some(Vec::new()),
+        tests: Vec::new(),
+        rejected: 0,
+        execution: crate::observed_units::execution(argv),
+        target_directory: Some(
+            std::env::var_os("CARGO_TARGET_DIR")
+                .map_or_else(
+                    || super::current_dir().map(|cwd| cwd.join("target")),
+                    |path| super::current_dir().map(|cwd| cwd.join(path)),
+                )?
+                .to_string_lossy()
+                .into_owned(),
+        ),
     })
 }
 pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
@@ -59,11 +73,12 @@ pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
             .create(true)
             .append(true)
             .open(temp(INVOCATIONS))
-            .map_err(ci)?,
+            .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?,
         "{}",
-        serde_json::to_string(invocation).map_err(ci)?
+        serde_json::to_string(invocation)
+            .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?
     )
-    .map_err(ci)
+    .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))
 }
 
 fn read_log() -> Result<Vec<u8>, CiError> {
@@ -79,7 +94,6 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         return check_directory(directory);
     }
     let log_bytes = read_log()?;
-    let log = String::from_utf8_lossy(&log_bytes);
     let invocations = fs::read_to_string(temp(INVOCATIONS))
         .unwrap_or_default()
         .lines()
@@ -90,9 +104,9 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         lane: env("GITHUB_JOB"),
         caches: json(&std::env::var("VELNOR_REPORT_CACHES").unwrap_or_else(|_| "[]".to_owned()))?,
         invocations,
-        downloaded: scan(&log).downloaded,
+        downloaded: 0,
         first_cargo_seconds: None,
-        slowest_tests: log.lines().filter_map(individual_test).collect(),
+        slowest_tests: Vec::new(),
         tests_run: env("VELNOR_TESTS_RUN").parse().ok(),
         diagnostics: Vec::new(),
         violations: Vec::new(),
@@ -104,10 +118,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
                 .is_some_and(|name| name.to_string_lossy().starts_with("cargo"))
         })
     });
-    metrics
-        .slowest_tests
-        .sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
-    metrics.slowest_tests.truncate(10);
+    activity_metrics(&mut metrics, &log_bytes);
     if let Err(error) = super::report_inputs::collect_inputs(&mut metrics, &log_bytes) {
         metrics
             .diagnostics
@@ -148,9 +159,10 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     let summary = metrics.summary();
     fs::write(
         temp("ci-metrics.json"),
-        serde_json::to_string_pretty(&metrics).map_err(ci)?,
+        serde_json::to_string_pretty(&metrics)
+            .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?,
     )
-    .map_err(ci)?;
+    .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
     super::append_to("GITHUB_STEP_SUMMARY", &summary)?;
     Ok(summary)
 }
@@ -162,8 +174,12 @@ fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> 
         super::token()?,
         super::http::DEFAULT_TIMEOUT,
     );
-    let run = env("GITHUB_RUN_ID").parse().map_err(ci)?;
-    let attempt = env("GITHUB_RUN_ATTEMPT").parse().map_err(ci)?;
+    let run = env("GITHUB_RUN_ID")
+        .parse()
+        .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
+    let attempt = env("GITHUB_RUN_ATTEMPT")
+        .parse()
+        .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
     for page in 1.. {
         let jobs: ApiJobs = json(&github.get(&jobs_path(&repo, run, attempt, page))?)?;
         if let Some(job) = jobs.jobs.iter().find(|job| {
@@ -230,7 +246,7 @@ fn check_directory(directory: &Path) -> Result<String, CiError> {
         .iter()
         .map(|file| {
             fs::read_to_string(file)
-                .map_err(ci)
+                .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))
                 .and_then(|text| json::<LaneMetrics>(&text))
         })
         .collect::<Result<Vec<_>, _>>()?;
@@ -249,13 +265,83 @@ fn find_metrics(directory: &Path, files: &mut Vec<PathBuf>) -> Result<(), CiErro
     if !directory.exists() {
         return Ok(());
     }
-    for entry in fs::read_dir(directory).map_err(ci)? {
-        let entry = entry.map_err(ci)?;
-        if entry.file_type().map_err(ci)?.is_dir() {
+    for entry in fs::read_dir(directory)
+        .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?
+    {
+        let entry = entry
+            .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
+        if entry
+            .file_type()
+            .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?
+            .is_dir()
+        {
             find_metrics(&entry.path(), files)?;
         } else if entry.file_name() == "ci-metrics.json" {
             files.push(entry.path());
         }
     }
     Ok(())
+}
+
+pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
+    let text = match fs::read_to_string(temp(INVOCATIONS)) {
+        Ok(text) => text,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(ci(error)),
+    };
+    let invocations = text
+        .lines()
+        .map(json)
+        .collect::<Result<Vec<Invocation>, _>>()?;
+    if invocations.is_empty()
+        || invocations
+            .iter()
+            .any(|invocation| invocation.progress.is_none())
+    {
+        return Ok(None);
+    }
+    let mut counts = crate::logscan::LogScan::default();
+    for event in invocations
+        .iter()
+        .filter_map(|invocation| invocation.progress.as_ref())
+        .flatten()
+    {
+        match event.kind {
+            crate::cargo_artifacts::ProgressKind::Compiling => counts.compiling += 1,
+            crate::cargo_artifacts::ProgressKind::Checking => counts.checking += 1,
+            crate::cargo_artifacts::ProgressKind::Documenting => counts.documenting += 1,
+            crate::cargo_artifacts::ProgressKind::Downloaded => counts.downloaded += 1,
+        }
+    }
+    Ok(Some(counts))
+}
+
+fn activity_metrics(metrics: &mut LaneMetrics, log: &[u8]) {
+    for invocation in &metrics.invocations {
+        let mut tap = crate::cargo_artifacts::ArtifactTap::default();
+        tap.feed(
+            log.get(invocation.log_start..invocation.log_end)
+                .unwrap_or_default(),
+        );
+        let batch = tap.finish();
+        let progress = invocation.progress.as_ref().unwrap_or(&batch.progress);
+        metrics.downloaded += progress
+            .iter()
+            .filter(|event| event.kind == crate::cargo_artifacts::ProgressKind::Downloaded)
+            .count() as u64;
+        metrics
+            .slowest_tests
+            .extend(if invocation.progress.is_some() {
+                invocation.tests.clone()
+            } else {
+                batch.tests
+            });
+        metrics
+            .diagnostics
+            .extend(crate::observed_units::diagnostics(invocation));
+    }
+    metrics
+        .slowest_tests
+        .sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
+    metrics.slowest_tests.truncate(10);
 }

@@ -60,6 +60,7 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
 fn third_compile_is_aggregated_across_lanes_by_root_configuration_and_package_version() {
     for (dimension, fails) in [
         ("same", true),
+        ("plain-modern", true),
         ("package-selection", true),
         ("root", false),
         ("configuration", false),
@@ -71,6 +72,9 @@ fn third_compile_is_aggregated_across_lanes_by_root_configuration_and_package_ve
             value["invocations"][0]["configuration"] = json!(configuration(
                 &["cargo", "check", "-p", "a"].map(str::to_owned)
             ));
+        }
+        if dimension == "plain-modern" {
+            value["invocations"][0]["progress"] = json!([]);
         }
         let first = metrics(value.clone());
         value["lane"] = json!("second");
@@ -185,4 +189,72 @@ fn configuration_ignores_command_purpose_and_normalizes_features() {
             "x86_64-unknown-linux-gnu"
         ])),
     );
+}
+
+#[test]
+fn observed_units_distinguish_effective_features_outputs_and_repeated_execution() {
+    for (case, fails) in [
+        ("identical", true),
+        ("package-selection", true),
+        ("features", false),
+        ("metadata-full", false),
+        ("test-target", false),
+        ("fresh", false),
+        ("opaque-unknown", false),
+        ("execution", false),
+    ] {
+        let mut value = lane();
+        value["caches"] = json!([]);
+        value["invocations"][0]["progress"] = json!([]);
+        value["invocations"][0]["artifacts"] = json!([{
+            "package_id":"registry+https://example.invalid/index#serde@1.0.0",
+            "manifest_path":"registry/serde/Cargo.toml",
+            "target":{"name":"serde","kind":["lib"],"crate_types":["lib"],"src_path":"registry/serde/src/lib.rs"},
+            "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
+            "features":["default"],"filenames":["target/debug/deps/libserde-opaque.rmeta"],"fresh":false
+        }]);
+        let first = metrics(value.clone());
+        value["lane"] = json!("second");
+        match case {
+            "features" => {
+                value["invocations"][0]["artifacts"][0]["features"] = json!(["default", "derive"]);
+                value["invocations"][0]["artifacts"][0]["filenames"] =
+                    json!(["target/debug/deps/libserde-other.rmeta"]);
+            }
+            "metadata-full" => {
+                value["invocations"][0]["artifacts"][0]["filenames"] =
+                    json!(["target/debug/deps/libserde-opaque.rlib"]);
+            }
+            "test-target" => {
+                value["invocations"][0]["artifacts"][0]["profile"]["test"] = json!(true);
+            }
+            "fresh" => value["invocations"][0]["artifacts"][0]["fresh"] = json!(true),
+            "opaque-unknown" => {
+                value["invocations"][0]["artifacts"][0]["filenames"] =
+                    json!(["target/debug/libserde.dylib"]);
+            }
+            "package-selection" => {
+                value["invocations"][0]["argv"] = json!(["cargo", "check", "-p", "different"]);
+            }
+            "execution" => {
+                value["invocations"][0]["execution"] = json!({"RUSTFLAGS":"-C target-cpu=native"});
+            }
+            _ => {}
+        }
+        let second = metrics(value.clone());
+        let result = check(&[first, second.clone()]);
+        assert_eq!(result.is_err(), fails, "{case}: {result:?}");
+        if fails {
+            assert!(
+                result
+                    .err()
+                    .is_some_and(|error| error.to_string().contains("serde"))
+            );
+        }
+        if !fails {
+            value["lane"] = json!("third");
+            value["invocations"][0]["artifacts"][0]["fresh"] = json!(true);
+            assert!(check(&[second, metrics(value)]).is_ok(), "{case}");
+        }
+    }
 }

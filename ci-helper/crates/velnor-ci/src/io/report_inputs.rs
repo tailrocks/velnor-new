@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::cargo_artifacts::{ArtifactTap, ProgressKind};
 use crate::error::CiError;
 use crate::inputs::parse_inputs;
-use crate::logscan::named_crate;
 use crate::report::{Compilation, LaneMetrics, SNAPSHOT};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -46,47 +46,41 @@ pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &[u8]) -> Result<()
             {
                 continue;
             }
+            crate::observed_units::normalize(invocation, &checkout.root);
             root_text.clone_into(&mut invocation.root);
-            let slice = log
-                .get(invocation.log_start..invocation.log_end)
-                .ok_or_else(|| CiError::new("invocation log range is invalid"))?;
-            let slice = String::from_utf8_lossy(slice);
-            invocation.downloads = slice
-                .lines()
-                .filter_map(named_crate)
-                .filter(|(_, _, downloaded)| *downloaded)
-                .map(|(name, version, _)| format!("{name} v{version}"))
+            let progress = progress(invocation, log)?;
+            invocation.downloads = progress
+                .iter()
+                .filter(|event| event.kind == ProgressKind::Downloaded)
+                .map(|event| format!("{} v{}", event.package, event.version))
                 .collect();
-            invocation.compilations = slice
-                .lines()
-                .filter(|line| {
-                    !crate::logscan::strip_ansi(line)
-                        .trim_start()
-                        .starts_with("Documenting ")
+            invocation.compilations = progress
+                .iter()
+                .filter(|event| {
+                    matches!(event.kind, ProgressKind::Compiling | ProgressKind::Checking)
                 })
-                .filter_map(|line| named_crate(line).map(|event| (line, event)))
-                .filter(|(_, (_, _, downloaded))| !downloaded)
-                .map(|(line, (package, version, _))| {
+                .map(|event| {
                     let member = root.members.iter().find(|member| {
-                        member.name.as_str() == package
-                            && line.contains(&format!(
-                                "{package} v{version} ({})",
-                                member
-                                    .directory
-                                    .as_ref()
-                                    .map_or_else(
-                                        || checkout.root.clone(),
-                                        |directory| checkout.root.join(directory.as_str())
-                                    )
-                                    .display()
-                            ))
+                        member.name.as_str() == event.package
+                            && event.location.as_deref()
+                                == Some(
+                                    member
+                                        .directory
+                                        .as_ref()
+                                        .map_or_else(
+                                            || checkout.root.clone(),
+                                            |directory| checkout.root.join(directory.as_str()),
+                                        )
+                                        .to_string_lossy()
+                                        .as_ref(),
+                                )
                     });
                     Compilation {
-                        unchanged: unchanged.contains(package.as_str()),
+                        unchanged: unchanged.contains(event.package.as_str()),
                         workspace: member.is_some(),
                         dependencies: dependencies(root, member),
-                        package,
-                        version,
+                        package: event.package.clone(),
+                        version: event.version.clone(),
                     }
                 })
                 .collect();
@@ -198,4 +192,19 @@ fn dependencies(
         }
     }
     dependencies
+}
+
+fn progress(
+    invocation: &crate::report::Invocation,
+    log: &[u8],
+) -> Result<Vec<crate::cargo_artifacts::CargoProgress>, CiError> {
+    if let Some(progress) = &invocation.progress {
+        return Ok(progress.clone());
+    }
+    let slice = log
+        .get(invocation.log_start..invocation.log_end)
+        .ok_or_else(|| CiError::new("invocation log range is invalid"))?;
+    let mut tap = ArtifactTap::default();
+    tap.feed(slice);
+    Ok(tap.finish().progress)
 }

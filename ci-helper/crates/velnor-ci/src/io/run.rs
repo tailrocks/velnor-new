@@ -107,7 +107,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, tests_run) = collect(&receiver, streams);
+    let (mut lost, tests_run) = collect(&receiver, streams, &mut invocation);
     if runs_nextest(&args.command)
         && let Some(tests_run) = tests_run
     {
@@ -131,7 +131,12 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     invocation.log_end =
         usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
     invocation.seconds = started.elapsed().as_secs_f64();
-    super::report::save_invocation(&invocation).map_err(|e| (2, e.to_string()))?;
+    if let Err(error) = super::report::save_invocation(&invocation) {
+        if code == 0 {
+            return Err((2, error.to_string()));
+        }
+        eprintln!("velnor-ci: {error}");
+    }
     match lost {
         Some(error) if code == 0 => Err(write_error(error)),
         Some(error) => {
@@ -191,6 +196,7 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
 fn collect(
     receiver: &mpsc::Receiver<Pumped>,
     streams: usize,
+    invocation: &mut crate::report::Invocation,
 ) -> (Option<std::io::Error>, Option<u64>) {
     let mut lost = None;
     let mut tests_run = None;
@@ -199,6 +205,13 @@ fn collect(
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(pumped) => {
                 lost = lost.or(pumped.failure);
+                invocation.artifacts.extend(pumped.observations.artifacts);
+                invocation
+                    .progress
+                    .get_or_insert_default()
+                    .extend(pumped.observations.progress);
+                invocation.tests.extend(pumped.observations.tests);
+                invocation.rejected += pumped.observations.rejected;
                 tests_run = pumped.tests_run.or(tests_run);
             }
             Err(_) => break,

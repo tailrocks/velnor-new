@@ -13,6 +13,7 @@ const CHUNK: usize = 8192;
 pub struct Pumped {
     pub failure: Option<Error>,
     pub tests_run: Option<u64>,
+    pub observations: crate::cargo_artifacts::ArtifactBatch,
 }
 
 pub fn pump<L: Write>(from: impl Read, to: impl Write, log: &Mutex<L>) -> Option<Error> {
@@ -26,6 +27,7 @@ pub fn pump_counted<L: Write>(
     count: Option<&Mutex<DoctestCount>>,
 ) -> Pumped {
     let mut tap = SummaryTap::default();
+    let mut artifacts = crate::cargo_artifacts::ArtifactTap::default();
     let mut buffer = [0_u8; CHUNK];
     let mut failed = None;
     loop {
@@ -40,6 +42,7 @@ pub fn pump_counted<L: Write>(
         };
         let chunk = &buffer[..read];
         tap.feed(chunk);
+        artifacts.feed(chunk);
         to.write_all(chunk).and_then(|()| to.flush()).ok();
         if let Ok(mut file) = log.lock()
             && let Err(error) = file.write_all(chunk)
@@ -53,6 +56,7 @@ pub fn pump_counted<L: Write>(
     Pumped {
         failure: failed,
         tests_run: tap.finish(),
+        observations: artifacts.finish(),
     }
 }
 

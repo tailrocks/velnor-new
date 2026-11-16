@@ -62,18 +62,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
         "Cargo.lock",
         "version = 4\n[[package]]\nname='demo'\nversion='0.1.0'\n",
     );
-    let samples =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../generator/samples");
-    for (from, to) in [
-        ("full-run-cron/view/mise.toml", "mise.toml"),
-        ("full-run-cron/view/mise.lock", "mise.lock"),
-        (
-            "helper-lock/view/.velnor/rust-ci.lock",
-            ".velnor/rust-ci.lock",
-        ),
-    ] {
-        repo.write(to, &fs::read_to_string(samples.join(from))?);
-    }
+    metadata_inputs(&repo)?;
     velnor_gen::io::write_metadata(repo.root())?;
     repo.git(&["add", "."]);
     assert!(cli(&repo, &["inputs", "save"]).status.success());
@@ -84,10 +73,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     assert_eq!(fs::read(repo.root().join(SNAPSHOT))?, before);
     let fixture = repo.root().join("cargo-fixture");
     symlink("/bin/sh", &fixture)?;
-    let script = format!(
-        "printf '\\377\\n'; printf '   Compiling demo v0.1.0 ({})\\n   Compiling dependency v1.0.0\\n        FAIL [   0.125s] demo::it failing_test\\n     Summary [   0.125s] 2 tests run: 1 passed, 1 failed\\n'; exit 7",
-        fs::canonicalize(repo.root())?.display()
-    );
+    let script = interrupted_output(&repo)?;
     assert_eq!(
         cli(
             &repo,
@@ -113,6 +99,15 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     assert!(!metrics.invocations[0].compilations[0].unchanged);
     assert_eq!(metrics.violations.len(), 1, "{:?}", metrics.violations);
     assert!(metrics.violations[0].contains("dependency v1.0.0"));
+    assert_eq!(metrics.invocations[0].artifacts.len(), 3);
+    assert_eq!(metrics.invocations[0].rejected, 1);
+    assert!(
+        metrics
+            .diagnostics
+            .iter()
+            .any(|text| text.contains("identity unknown for 1"))
+    );
+    assert_eq!(metrics.invocations[0].compilations.len(), 2);
     assert_eq!(metrics.tests_run, Some(7));
     assert_eq!(
         metrics.slowest_tests,
@@ -126,6 +121,10 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     let metrics = report(steps)?;
     assert!(!metrics.caches[0].usable_same_lock);
     assert!(metrics.violations.is_empty(), "{:?}", metrics.violations);
+    fs::write(repo.root().join("velnor-run.log"), b"")?;
+    let decision = cli(&repo, &["cache", "decide", "--target-dir", "target"]);
+    assert!(decision.status.success(), "{decision:?}");
+    assert!(String::from_utf8_lossy(&decision.stdout).contains("2 crates compiled"));
     let metrics = report(r#"{"target_root":{"outputs":{"cache-matched-key":"matched-marker"}}}"#)?;
     assert_eq!(metrics.caches[0].requested_key, "");
     Ok(())
@@ -168,4 +167,45 @@ fn failed_setup_still_writes_metrics_with_unknown_provenance() {
     let metrics = read(&repo);
     assert_ne!(metrics.diagnostics, [] as [String; 0]);
     assert_eq!(metrics.violations, [] as [String; 0]);
+}
+
+fn interrupted_output(repo: &Repo) -> Result<String, Box<dyn std::error::Error>> {
+    let artifact = json!({
+        "reason":"compiler-artifact", "package_id":"path+file:///demo#0.1.0", "manifest_path":"/demo/Cargo.toml",
+        "target":{"name":"demo","kind":["lib"],"crate_types":["lib"],"src_path":"/demo/src/lib.rs"},
+        "profile":{"opt_level":"0","debuginfo":2,"debug_assertions":true,"overflow_checks":true,"test":false},
+        "features":["default"], "filenames":["target/debug/deps/libdemo-opaque.rmeta"], "fresh":false
+    }).to_string();
+    let script = format!(
+        "printf '   Compiling demo v0.1.0 ({})\\n   Compiling dependency v1.0.0\\n        FAIL [   0.125s] demo::it failing_test\\n     Summary [   0.125s] 2 tests run: 1 passed, 1 failed\\n'; true",
+        fs::canonicalize(repo.root())?.display()
+    );
+    let script = format!(
+        r#"printf '%s' '{}'; while ! grep -Fq '{}' velnor-run.log; do sleep 0.01; done; {{ {script}; }} >&2; while ! grep -Fq '2 tests run' velnor-run.log; do sleep 0.01; done; printf '\377\n' >&2; printf '%s\n' '{}'; printf '%s\n' '{}'; printf '%s\n' '{}'; printf '%s\n' '{{"reason":"compiler-artifact"}}'; exit 7"#,
+        &artifact[..10],
+        &artifact[..10],
+        &artifact[10..],
+        artifact.replace(".rmeta", ".rlib"),
+        artifact.replace(
+            "target/debug/deps/libdemo-opaque.rmeta",
+            "target/debug/libdemo.dylib"
+        )
+    );
+    Ok(script)
+}
+
+fn metadata_inputs(repo: &Repo) -> ResultTest {
+    let samples =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../generator/samples");
+    for (from, to) in [
+        ("full-run-cron/view/mise.toml", "mise.toml"),
+        ("full-run-cron/view/mise.lock", "mise.lock"),
+        (
+            "helper-lock/view/.velnor/rust-ci.lock",
+            ".velnor/rust-ci.lock",
+        ),
+    ] {
+        repo.write(to, &fs::read_to_string(samples.join(from))?);
+    }
+    Ok(())
 }
