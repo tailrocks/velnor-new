@@ -37,20 +37,31 @@ pub(crate) fn declared_union(
     workspaces: &[PlannedWorkspace],
     index: &FileIndex,
     policy: WorkflowPolicy,
+    rust_config: &RustConfiguration,
 ) -> BTreeSet<String> {
     let mut union = BTreeSet::new();
     for workspace in workspaces {
         for package in &workspace.record.packages {
-            if package.in_workspace
-                && !package.external
-                && index.contains(&package.manifest)
-                && !repository_maintenance_member(policy, &workspace.record.workspace_root, package)
+            if eligible(policy, index, &workspace.record.workspace_root, package)
+                && rust_config.applies_to(&package.name)
             {
                 union.extend(package.features.iter().cloned());
             }
         }
     }
     union
+}
+
+fn eligible(
+    policy: WorkflowPolicy,
+    index: &FileIndex,
+    workspace_root: &str,
+    package: &velnor_actions_rust::PackageRecord,
+) -> bool {
+    package.in_workspace
+        && !package.external
+        && index.contains(&package.manifest)
+        && !repository_maintenance_member(policy, workspace_root, package)
 }
 
 pub(crate) fn check_scoped_packages(
@@ -100,26 +111,20 @@ pub(crate) fn derive_for_config(
         .rust
         .as_ref()
         .is_some_and(|rust| rust.allow_empty_test_suite);
+    let policy = config.workflow.policy;
     if !rust_config.packages.is_empty()
-        && !record
-            .packages
-            .iter()
-            .any(|package| rust_config.applies_to(&package.name))
+        && !record.packages.iter().any(|package| {
+            eligible(policy, index, &record.workspace_root, package)
+                && rust_config.applies_to(&package.name)
+        })
     {
         return Ok((Vec::new(), Vec::new()));
     }
     let mut groups = Vec::new();
     let mut fallbacks = Vec::new();
     for package in &record.packages {
-        if !package.in_workspace
-            || package.external
-            || !index.contains(&package.manifest)
+        if !eligible(policy, index, &record.workspace_root, package)
             || !rust_config.applies_to(&package.name)
-            || repository_maintenance_member(
-                config.workflow.policy,
-                &record.workspace_root,
-                package,
-            )
         {
             continue;
         }

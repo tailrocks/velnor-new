@@ -106,3 +106,58 @@ fn scoped_configuration_adds_nothing_for_a_workspace_without_its_packages()
     assert_eq!(scoped, BTreeSet::from(["crates/maintenance/Cargo.toml"]));
     Ok(())
 }
+
+#[test]
+fn scoped_configuration_naming_only_an_ineligible_package_adds_no_task()
+-> Result<(), Box<dyn Error>> {
+    let repo = feature_toggle_repo(false, false)?;
+    write_config(repo.path(), "packages = [\"maintenance\"]\n")?;
+    let mut config = fs::read_to_string(repo.path().join(".velnor/config.toml"))?;
+    config.push_str("\n[discovery]\nexclude = [\"crates/maintenance/**\"]\n");
+    fs::write(repo.path().join(".velnor/config.toml"), config)?;
+    let prepared = prepare(repo.path())?;
+    let scoped: Vec<&str> = prepared
+        .discovery
+        .proposals
+        .iter()
+        .filter(|task| task.stack_id == "rust" && task.configuration == "scoped")
+        .map(|task| task.task_id.as_str())
+        .collect();
+    assert!(scoped.is_empty(), "{scoped:?}");
+    Ok(())
+}
+
+#[test]
+fn scoped_configuration_requests_features_only_its_packages_declare() -> Result<(), Box<dyn Error>>
+{
+    let repo = feature_toggle_repo(false, false)?;
+    write_config(repo.path(), "packages = [\"demo\"]\n")?;
+    let error = prepare(repo.path())
+        .err()
+        .ok_or("feature declared only out of scope accepted")?;
+    assert!(
+        error
+            .to_string()
+            .contains("unknown_feature:scoped:demo:maintenance-only"),
+        "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn scoped_configuration_is_accepted_when_rust_is_ignored() -> Result<(), Box<dyn Error>> {
+    let repo = feature_toggle_repo(false, false)?;
+    write_config(repo.path(), "packages = [\"maintenance\"]\n")?;
+    let mut config = fs::read_to_string(repo.path().join(".velnor/config.toml"))?;
+    config.push_str("\n[stacks]\nignore = [\"rust\"]\n");
+    fs::write(repo.path().join(".velnor/config.toml"), config)?;
+    let prepared = prepare(repo.path())?;
+    assert!(
+        prepared
+            .discovery
+            .proposals
+            .iter()
+            .all(|task| task.stack_id != "rust")
+    );
+    Ok(())
+}
