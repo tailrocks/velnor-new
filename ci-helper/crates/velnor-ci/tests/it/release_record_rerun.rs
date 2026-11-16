@@ -13,6 +13,7 @@ use velnor_ci::github::{commit_path, tag_ref_path};
 
 use crate::support::repo;
 
+const TREE: &str = "9999999999999999999999999999999999999999";
 const MERGE: &str = "1111111111111111111111111111111111111111";
 const APP_COMMIT: &str = "2222222222222222222222222222222222222222";
 const TOOLS_COMMIT: &str = "3333333333333333333333333333333333333333";
@@ -115,7 +116,13 @@ fn api(author: &str, kind: &str) -> String {
     }
     responses.insert(
         commit_path(&repo, MERGE),
-        format!(r#"{{"parents":[{{"sha":"{TOOLS_COMMIT}"}},{{"sha":"{APP_COMMIT}"}}]}}"#),
+        format!(
+            r#"{{"parents":[{{"sha":"{TOOLS_COMMIT}"}},{{"sha":"{APP_COMMIT}"}}],"commit":{{"tree":{{"sha":"{TREE}"}}}}}}"#
+        ),
+    );
+    responses.insert(
+        commit_path(&repo, APP_COMMIT),
+        format!(r#"{{"parents":[],"commit":{{"tree":{{"sha":"{TREE}"}}}}}}"#),
     );
     responses.insert(
         "/repos/tailrocks/velnor-new/releases?per_page=100&page=1".to_owned(),
