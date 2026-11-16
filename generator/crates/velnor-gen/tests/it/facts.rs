@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
+use std::fmt::Write;
 
 use velnor_model::{
     DependencyKind, PackageDependency, PackageName, RepoFacts, RepoPath, RepoView, RustMetadata,
@@ -41,9 +42,10 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
     let mut lock = String::new();
     for name in &names {
         for platform in ["linux-x64", "macos-arm64"] {
-            lock.push_str(&format!(
+            write!(
+                lock,
                 "[[tools.\"{name}\"]]\nversion = \"1\"\n\n[tools.\"{name}\".\"platforms.{platform}\"]\nurl = \"https://example.invalid/{name}\"\n\n"
-            ));
+            )?;
         }
     }
     if lock.is_empty() {
