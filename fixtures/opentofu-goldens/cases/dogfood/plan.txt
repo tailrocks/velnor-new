@@ -5,6 +5,7 @@ Detected stacks
   Rust: selected
   Tofu: not detected (strong evidence; add [stacks.tofu] roots to enable)
     evidence: mise-tool:opentofu
+  Mise check native-image-inventory: check-native-image-inventory (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check generator-samples: lint-generator-samples (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Workspace crates: 30
@@ -87,6 +88,7 @@ Workflow to generate
     - cargo-machete (7 steps)
     - check-generator-samples (7 steps)
     - check-maintenance-helpers (7 steps)
+    - check-native-image-inventory (7 steps)
     - jactionlint (7 steps)
     - ledger-cli (17 steps)
     - plan (19 steps)

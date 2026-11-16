@@ -73,6 +73,27 @@ done
 test "$CHECKED" -gt 0
 '''
 
+[tasks.check-native-image-inventory]
+description = "Check native image source inventory from Linux release compiler inputs"
+run = '''
+set -eu
+if [ "$(uname -s):$(uname -m)" != "Linux:x86_64" ]; then
+  echo "Native image inventory requires a native Linux x86_64 runner" >&2
+  exit 1
+fi
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+INVENTORY_WORK="$(mktemp -d)"
+trap 'rm -rf "$INVENTORY_WORK"' EXIT
+cargo metadata --locked --format-version=1 \
+  --filter-platform x86_64-unknown-linux-gnu >"$INVENTORY_WORK/metadata.json"
+cargo --config build.jobs=2 check --release --locked --package velnor-actions-cli \
+  --bin velnor-actions --message-format=json >"$INVENTORY_WORK/artifacts.jsonl"
+python3 scripts/native-image-candidate-inventory.py --check --root "$ROOT" \
+  --metadata "$INVENTORY_WORK/metadata.json" \
+  --artifacts "$INVENTORY_WORK/artifacts.jsonl" --target x86_64-unknown-linux-gnu
+'''
+
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
 run = '''
