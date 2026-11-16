@@ -108,6 +108,14 @@ impl ReleaseError {
                 f,
                 "mise.toml: release-plz {version} cannot authenticate the git fetch of a checkout without persisted credentials; pin release-plz {minimum} or newer"
             ),
+            Self::CargoOffline { file } => write!(
+                f,
+                "{file}: net.offline stops cargo publish from reaching crates.io"
+            ),
+            Self::ReleasePlzVersionsConflict { first, second } => write!(
+                f,
+                "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
+            ),
             _ => Ok(()),
         }
     }

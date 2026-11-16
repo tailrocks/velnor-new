@@ -47,7 +47,7 @@ pub(super) async fn seed_completed_launch(
     conn.execute("BEGIN", ()).await?;
     let mut trigger_rows = conn
         .query(
-            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' AND name IN ('reservation_network_insert_guard', 'cleanup_observer_witness_insert_guard')",
+            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' AND name IN ('reservation_network_insert_guard', 'cleanup_observer_witness_insert_guard', 'root_backing_insert_guard')",
             (),
         )
         .await?;
@@ -304,7 +304,28 @@ async fn seed_storage_attachments_and_witness(
         .await?;
     }
     let hex64 = "a".repeat(64);
+    seed_root_backings(conn, root_digest, &hex64).await?;
     seed_cleanup_witness(conn, root_digest, &hex64).await
+}
+
+async fn seed_root_backings(
+    conn: &turso::Connection,
+    root_digest: &str,
+    hex64: &str,
+) -> TestResult<()> {
+    let hex32 = "b".repeat(32);
+    let sha40 = "a".repeat(40);
+    for (role, container, image) in [
+        ("runner-root", RUNNER_ID, RUNNER_IMAGE_ID),
+        ("dind-root", DIND_ID, DIND_IMAGE_ID),
+    ] {
+        conn.execute(
+            "INSERT INTO capacity_reservation_root_backing_mappings (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, sample_generation_id, role, container_id, image_runtime_id, image_source_sha, logical_mount_id, logical_filesystem_digest, backing_filesystem_digest, mapping_record, mapping_digest) VALUES (2, 'conn-test-1', 1, 'engine-1', ?1, ?2, ?3, ?4, ?5, ?6, 1, ?7, ?7, '{}', ?7)",
+            (root_digest, hex32.as_str(), role, container, image, sha40.as_str(), hex64),
+        )
+        .await?;
+    }
+    Ok(())
 }
 
 async fn seed_cleanup_witness(
