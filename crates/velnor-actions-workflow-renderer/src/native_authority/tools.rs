@@ -11,6 +11,9 @@ use velnor_actions_mise::catalog::{
 };
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
+#[path = "tool_archive_pins.rs"]
+mod archive_pins;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NativeToolOrigin {
     ProjectDeclaration,
@@ -170,6 +173,7 @@ pub(super) fn mise_setup(
 #[must_use]
 pub fn catalog_tool_pins(catalog: &ToolCatalog) -> Vec<String> {
     let mut pins = Vec::new();
+    archive_pins::extend(&mut pins, catalog);
     let jactionlint = catalog.version(PinnedTool::Jactionlint);
     for row in JACTIONLINT_DIGESTS
         .iter()

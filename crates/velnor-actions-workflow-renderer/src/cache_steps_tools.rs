@@ -113,6 +113,13 @@ pub(crate) fn scrub_action_file(version: &str) -> Result<crate::tree::RenderedFi
     restore_action::scrub_action_file(version)
 }
 
+pub(crate) fn verify_action_file(
+    version: &str,
+    pins: &[String],
+) -> Result<crate::tree::RenderedFile, RenderError> {
+    restore_action::verify_action_file(version, pins)
+}
+
 pub(super) fn save_step(key: &str, condition: Option<String>) -> Result<Step, RenderError> {
     let mut step = super::cache_action_step(
         false,

@@ -28,6 +28,8 @@ pub const TOOLS_CACHE_RESTORE_USES: &str = "./.github/actions/velnor-tools-cache
 
 pub const TOOLS_CACHE_SCRUB_USES: &str = "./.github/actions/velnor-tools-cache-scrub";
 
+pub const TOOLS_CACHE_VERIFY_USES: &str = "./.github/actions/velnor-tools-cache-verify";
+
 pub const TOOLS_CACHE_RESTORE_ACTION_USES: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 
@@ -126,6 +128,8 @@ impl StepRole {
             Self::ToolsCacheIdentity => valid_tools_cache_identity(kind),
             Self::ToolsCacheRestore => ToolsRestoreForm::of(kind).is_some(),
             Self::ToolsCacheScrub => valid_tools_cache_scrub(kind),
+            Self::ToolsCacheVerify => matches!(kind, StepKind::Action { uses, with, env }
+                if uses == TOOLS_CACHE_VERIFY_USES && with.is_empty() && env.is_empty()),
             Self::CargoSourcesRestore | Self::MbxBundleRestore | Self::FamilyRestore => {
                 action_has_prefix_for_kind(kind, "actions/cache/restore@")
             }

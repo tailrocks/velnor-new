@@ -32,6 +32,9 @@ pub(crate) fn with_runtime_identity_files(
             version, tool_pins,
         )?);
         files.push(crate::cache_steps::tools_scrub_action_file(version)?);
+        files.push(crate::cache_steps::tools_verify_action_file(
+            version, tool_pins,
+        )?);
         files.push(crate::tool_seed::action_file(version)?);
     }
     Ok(files)

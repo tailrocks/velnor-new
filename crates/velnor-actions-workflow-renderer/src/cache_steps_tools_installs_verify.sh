@@ -31,8 +31,10 @@ origin_bytes=0
 origin_bytes_unknown=
 reused_archives=0
 verified_files=0
+verification_failed=0
 # `<install dir name> <version> <url> <checksum>` for this platform.
 : > "$work/pins"
+: > "$work/retained"
 catalog_pins() { printf '%s\n' "${VELNOR_TOOL_PINS:-}" | awk -v p="$platform" 'NF == 5 && $3 == p { print $1, $2, $4, "sha256:" $5 }'; }
 lock_pins() {
   awk -v want="platforms.$platform" '
@@ -48,13 +50,109 @@ lock_pins() {
   ' "$lock"
 }
 [ -z "$platform" ] || catalog_pins > "$work/pins"
+cp "$work/pins" "$work/catalog-pins"
 if [ -n "$platform" ] && [ -f "$lock" ] && [ ! -L "$lock" ]; then lock_pins >> "$work/pins"; fi
 discard() { printf 'velnor: discarding restored %s: %s; Prepare pinned tools reinstalls it\n' "$1" "$2"; rm -rf "$3"; }
+file_size() { stat -c '%s' "$1" 2>/dev/null || stat -f '%z' "$1"; }
+mapping_key() {
+  awk '
+    { text = text $0 "\n" }
+    END {
+      ws = "[ \t\r\n]*"
+      str = "\"[^\"\\\\[:cntrl:]]*\""
+      urls = "\\[" ws "(" str "(" ws "," ws str ")*)?" ws "\\]"
+      pattern = "^" ws "\\{" ws "\"blake3\"" ws ":" ws "\"[0-9a-f]+\"" ws "," ws "\"effective_filename\"" ws ":" ws "(" str "|null)" ws "," ws "\"urls\"" ws ":" ws urls ws "\\}" ws "$"
+      if (text ~ /[^\t\r\n -~]/ || text !~ pattern) exit 1
+      split(text, fields, "\"")
+      print fields[4]
+    }
+  ' "$1"
+}
+retain_download() {
+  local sum=$1 stored=$2 cache cas mapping key file size valid dir
+  [ "${VELNOR_TOOL_PRODUCER:-false}" = true ] || return 1
+  for cache in "$HOME/.cache/mise" "$HOME/Library/Caches/mise"; do
+    cas="$cache/downloads-cas"
+    valid=true
+    for dir in "$cache" "$cas" "$cas/blobs"; do
+      [ -d "$dir" ] && [ ! -L "$dir" ] || valid=false
+    done
+    [ "$valid" = true ] || continue
+    for dir in "$cas/pins" "$cas/pins/sha256"; do
+      [ ! -L "$dir" ] && { [ ! -e "$dir" ] || [ -d "$dir" ]; } || return 1
+    done
+    mapping="$cas/pins/sha256/$sum.json"
+    if [ ! -e "$mapping" ] && [ ! -L "$mapping" ]; then
+      file=$(bounded_download "$cas" "$sum") || return 1
+    else
+    [ -f "$mapping" ] && [ ! -L "$mapping" ] || return 1
+    size=$(file_size "$mapping") || return 1
+    [ "$size" -le 65536 ] || return 1
+    key=$(mapping_key "$mapping") || return 1
+    case "$key" in ''|*[!0-9a-f]*) return 1 ;; esac
+    [ "${#key}" -eq 64 ] || return 1
+    [ -d "$cas/blobs/$key" ] && [ ! -L "$cas/blobs/$key" ] || return 1
+    file="$cas/blobs/$key/artifact"
+    [ -f "$file" ] && [ ! -L "$file" ] || return 1
+    size=$(file_size "$file") || return 1
+    [ "$size" -le 1610612736 ] || return 1
+    [ "$("${h[@]}" "$file" | cut -d" " -f1)" = "$sum" ] || return 1
+    fi
+    mkdir -p "$archives" || return 1
+    cp "$file" "$stored" || return 1
+    return 0
+  done
+  return 1
+}
+bounded_download() {
+  local cas=$1 sum=$2 deadline=$((SECONDS + 10)) count total=0 dir key file size pid result
+  if find "$cas/blobs" -mindepth 1 -maxdepth 1 -print | head -n 65 > "$work/candidates"; then :
+  else [ "$(wc -l < "$work/candidates")" -eq 65 ] || return 1; fi
+  count=$(wc -l < "$work/candidates")
+  [ "$count" -le 64 ] || return 1
+  : > "$work/artifacts"
+  while IFS= read -r dir; do
+    key=${dir##*/}
+    case "$key" in ''|*[!0-9a-f]*) return 1 ;; esac
+    [ "${#key}" -eq 64 ] && [ -d "$dir" ] && [ ! -L "$dir" ] || return 1
+    file="$dir/artifact"
+    [ -f "$file" ] && [ ! -L "$file" ] || return 1
+    size=$(file_size "$file") || return 1
+    total=$((total + size))
+    [ "$size" -le 1610612736 ] && [ "$total" -le 1610612736 ] || return 1
+    printf '%s\n' "$file" >> "$work/artifacts"
+  done < "$work/candidates"
+  while IFS= read -r file; do
+    [ "$SECONDS" -lt "$deadline" ] || return 1
+    "${h[@]}" "$file" > "$work/hash" &
+    pid=$!
+    while kill -0 "$pid" 2>/dev/null; do
+      if [ "$SECONDS" -ge "$deadline" ]; then
+        echo "download CAS hash deadline exceeded" >&2
+        kill -KILL "$pid" 2>/dev/null || :
+        if wait "$pid"; then :; fi
+        return 1
+      fi
+      sleep 0.1
+    done
+    wait "$pid" || return 1
+    result=$(cut -d" " -f1 "$work/hash")
+    if [ "$result" = "$sum" ]; then printf '%s\n' "$file"; return 0; fi
+  done < "$work/artifacts"
+  return 1
+}
+tree_modes() {
+  local file mode
+  while IFS= read -r -d '' file; do
+    mode=$(stat -c '%a' "$file" 2>/dev/null || stat -f '%Lp' "$file") || return 1
+    printf '%s %q\n' "$mode" "$file"
+  done < <(find . -type f ! -path './.mise-*' -print0)
+}
 verify_install() {
   local dir=$1 tool=$2 version=$3 url sum line archive x link target stored size n
   case "$tool$version" in *[!A-Za-z0-9._+-]*) echo "unsafe name"; return 1 ;; esac
   line=$(awk -v t="$tool" -v v="$version" '$1 == t && $2 == v { print $3, $4; exit }' "$work/pins")
-  [ -n "$line" ] || { echo "no mise.lock or catalog pin for ${platform:-this runner}"; return 1; }
+  [ -n "$line" ] || { echo "no mise.lock or catalog pin for ${platform:-this runner}"; return 2; }
   url=${line%% *}; sum=${line#* }
   case "$sum" in sha256:*) sum=${sum#sha256:} ;; *) echo "mise.lock checksum is not SHA-256"; return 1 ;; esac
   case "$url" in https://*) ;; *) echo "mise.lock URL is not HTTPS"; return 1 ;; esac
@@ -63,6 +161,9 @@ verify_install() {
   stored="$archives/$sum"
   archive="$work/archive"
   rm -rf "$archive" "$work/x"; mkdir -p "$work/x"
+  if [ ! -f "$stored" ] && [ "${VELNOR_TOOL_PRODUCER:-false}" = true ]; then
+    retain_download "$sum" "$stored" || { echo "verified Mise download is unavailable or invalid"; return 1; }
+  fi
   if [ -f "$stored" ] && [ ! -L "$stored" ] && [ "$("${h[@]}" "$stored" | cut -d" " -f1)" = "$sum" ]; then
     printf 'velnor: reusing verified %s@%s archive; no origin download\n' "$tool" "$version"
     archive="$stored"
@@ -87,6 +188,7 @@ verify_install() {
     *.gz) gunzip -c "$archive" > "$work/x/file" ;;
     *) cp "$archive" "$work/x/file" ;;
   esac || { echo "archive does not extract"; return 1; }
+  if [ "$tool" = jactionlint ]; then rm -rf "$dir/.mise-bins"; fi
   (cd "$work/x" && find . -type f -exec "${h[@]}" {} +) | cut -d' ' -f1 | LC_ALL=C sort -u > "$work/archive.sums"
   if [ -n "$(find "$dir" ! -type f ! -type d ! -type l -print -quit)" ]; then echo "special file"; return 1; fi
   while IFS= read -r -d '' link; do
@@ -107,8 +209,19 @@ verify_install() {
     | cut -d' ' -f1 | LC_ALL=C sort -u > "$work/install.sums"
   x=$(LC_ALL=C comm -23 "$work/install.sums" "$work/archive.sums" | head -n 1)
   [ -z "$x" ] || { echo "a file differs from the pinned archive"; return 1; }
+  case "$tool" in
+    shellcheck|gh)
+      (cd "$work/x" && find . -type f -exec "${h[@]}" {} +) | LC_ALL=C sort > "$work/archive.paths"
+      (cd "$dir" && find . -type f ! -path './.mise-*' -exec "${h[@]}" {} +) | LC_ALL=C sort > "$work/install.paths"
+      cmp -s "$work/archive.paths" "$work/install.paths" || { echo "installed paths differ from the pinned archive"; return 1; }
+      (cd "$work/x" && tree_modes) | LC_ALL=C sort > "$work/archive.exec"
+      (cd "$dir" && tree_modes) | LC_ALL=C sort > "$work/install.exec"
+      cmp -s "$work/archive.exec" "$work/install.exec" || { echo "installed executable modes differ from the pinned archive"; return 1; }
+      ;;
+  esac
   n=$(wc -l < "$work/install.sums" | tr -d ' ')
   case "$n" in '' | *[!0-9]*) ;; *) verified_files=$((verified_files + n)) ;; esac
+  verified_archive=$sum
 }
 # Every entry, dot-named ones included (a glob skips those), is verified or
 # discarded: tool directories, version directories and aliases alike.
@@ -129,11 +242,17 @@ while IFS= read -r -d '' tool_dir; do
     fi
     if verify_install "$dir" "$tool" "$version" >"$work/verify.out" 2>&1; then
       cat "$work/verify.out"
+      printf '%s\n' "$verified_archive" >> "$work/retained"
       verified="$verified$version "
       printf 'velnor: restored %s@%s matches its mise.lock archive\n' "$tool" "$version"
     else
+      status=$?
       reason=$(cat "$work/verify.out")
+      if ! awk -v t="$tool" -v v="$version" '$1 == t && $2 == v { found = 1 } END { exit !found }' "$work/catalog-pins"; then
+        status=2
+      fi
       discard "$tool@$version" "${reason:-verification failed}" "$dir"
+      [ "$status" -eq 2 ] || verification_failed=1
     fi
   done < <(entries "$tool_dir")
   # A version alias (`1.26 -> ./1.26.0`) is kept only when it names a sibling
@@ -147,10 +266,17 @@ while IFS= read -r -d '' tool_dir; do
     [ -d "$tool_dir/$target" ] && [ ! -L "$tool_dir/$target" ] || rm -f "$dir"
   done < <(entries "$tool_dir")
 done < <(entries "$installs")
+if [ "${VELNOR_TOOL_PRODUCER:-false}" = true ] && [ -d "$archives" ]; then
+  while IFS= read -r -d '' archive; do
+    sum=${archive##*/}
+    if ! awk -v sum="$sum" '$0 == sum { found = 1 } END { exit !found }' "$work/retained"; then rm -rf "$archive"; fi
+  done < <(entries "$archives")
+fi
 if [ -n "${GITHUB_OUTPUT-}" ]; then
   [ -n "$origin_bytes_unknown" ] || printf 'origin-bytes=%s\n' "$origin_bytes" >> "$GITHUB_OUTPUT"
   printf 'origin-fetches=%s\nreused-archives=%s\nverified-files=%s\n' "$origin_fetches" "$reused_archives" "$verified_files" >> "$GITHUB_OUTPUT"
 fi
+if [ "${VELNOR_TOOL_PRODUCER:-false}" = true ] && [ "$verification_failed" -ne 0 ]; then exit 1; fi
 if [ -n "${GITHUB_STEP_SUMMARY-}" ]; then
   {
     printf 'velnor tools verify: origin-fetches=%s ' "$origin_fetches"

@@ -95,6 +95,13 @@ fn build(plan: &ToolsProducerPlan, policy: PullRequestCachePolicy) -> Result<Job
         &donor_mise_sha256(donor, &plan.id)?,
     )?));
     steps.extend(install_steps(donor, &plan.id)?);
+    let mut verify = crate::steps::action_step(
+        "Verify installed Mise tools",
+        velnor_actions_contract::workflow::step_identity::TOOLS_CACHE_VERIFY_USES,
+        BTreeMap::new(),
+    )?;
+    verify.role = Some(StepRole::ToolsCacheVerify);
+    steps.push(gated(verify));
     steps.push(crate::cache_steps::tools_cache_save_step(
         crate::cache_p08::TOOLS_CACHE_KEY_EXPRESSION,
         Some(crate::cache_p08::tools_cache_save_condition(policy)),

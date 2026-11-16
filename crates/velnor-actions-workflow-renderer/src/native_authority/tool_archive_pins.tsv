@@ -1,0 +1,11 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+shellcheck 0.11.0 linux-x64 https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz 8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198
+shellcheck 0.11.0 linux-arm64 https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.aarch64.tar.xz 12b331c1d2db6b9eb13cfca64306b1b157a86eb69db83023e261eaa7e7c14588
+shellcheck 0.11.0 macos-x64 https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.x86_64.tar.xz 3c89db4edcab7cf1c27bff178882e0f6f27f7afdf54e859fa041fca10febe4c6
+shellcheck 0.11.0 macos-arm64 https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.darwin.aarch64.tar.xz 56affdd8de5527894dca6dc3d7e0a99a873b0f004d7aabc30ae407d3f48b0a79
+gh 2.103.3 linux-x64 https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_linux_amd64.tar.gz 4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d
+gh 2.103.3 linux-arm64 https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_linux_arm64.tar.gz ee32df2323c8847f5fac6cb6b4b69ca75828e9329a8f22f677021f7b3306ce63
+gh 2.103.3 macos-x64 https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_macOS_amd64.zip a2f86418f4350ae6e9ec60d5000bdf7665728436946a97fc27fe50e6ae752682
+gh 2.103.3 macos-arm64 https://github.com/cli/cli/releases/download/v2.103.3/gh_2.103.3_macOS_arm64.zip d700207eae9ae98fe2b89535c2c087c07823d4628c56364695a5a07ef311c062
