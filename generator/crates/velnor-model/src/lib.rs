@@ -7,6 +7,7 @@ mod ids;
 mod plan;
 mod repo;
 mod selection;
+mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
 pub use cron::CronExpr;
@@ -30,3 +31,4 @@ pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };
+pub use verdict::{JobCondition, VerdictJob, VerdictSpec};

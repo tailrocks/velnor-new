@@ -10,6 +10,7 @@ use crate::ids::{
     Sha256, TargetName,
 };
 use crate::repo::TargetKind;
+use crate::verdict::VerdictSpec;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -129,7 +130,10 @@ impl Gate {
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
-            GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+            GateNeed::TestFilter
+            | GateNeed::PackageArgs
+            | GateNeed::DoctestsKnown
+            | GateNeed::TestsExpected => {
                 vec![own(self.need)]
             }
         }
@@ -147,12 +151,34 @@ pub enum GateNeed {
     Deny,
     Machete,
     Policy,
+    TestsExpected,
 }
 
 impl GateNeed {
     #[must_use]
     pub fn is_global(self) -> bool {
         matches!(self, Self::Deny | Self::Machete | Self::Policy)
+    }
+
+    #[must_use]
+    pub fn output_name(self, slug: &RootSlug) -> String {
+        let name = match self {
+            Self::Selected => "mode",
+            Self::Doctests => "doctests",
+            Self::DoctestsKnown => "doctests_known",
+            Self::Docs => "docs",
+            Self::TestFilter => "test_filter",
+            Self::PackageArgs => "package_args",
+            Self::Deny => "deny",
+            Self::Machete => "machete",
+            Self::Policy => "policy",
+            Self::TestsExpected => "tests",
+        };
+        if self.is_global() {
+            format!("rust_{name}")
+        } else {
+            format!("rust_{slug}_{name}")
+        }
     }
 }
 
@@ -201,6 +227,7 @@ pub enum StepKind {
     },
     FailWhenANeedFailed,
     FailOnDraftRun,
+    Verdict(VerdictSpec),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

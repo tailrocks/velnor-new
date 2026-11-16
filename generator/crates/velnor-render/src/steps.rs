@@ -28,6 +28,7 @@ const HELPER_ARTIFACT: &str = "velnor-ci";
 const ARCHIVE_RETENTION_DAYS: u64 = 7;
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
+const NEEDS_JSON: &str = "NEEDS_JSON";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -170,6 +171,15 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         },
         StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
+        StepKind::Verdict(spec) => RenderedStep {
+            name: "velnor-ci gate".to_owned(),
+            env: vec![(
+                NEEDS_JSON.to_owned(),
+                Value::Expr("${{ toJSON(needs) }}".to_owned()),
+            )],
+            run: Some(format!("velnor-ci gate {}", spec.arguments())),
+            ..RenderedStep::default()
+        },
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),

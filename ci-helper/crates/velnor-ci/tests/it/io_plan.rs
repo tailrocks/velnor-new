@@ -46,6 +46,7 @@ pub(crate) fn stale_plan_command(repo: &Repo) -> Command {
     command
         .current_dir(repo.root())
         .env_remove("GITHUB_OUTPUT")
+        .env_remove("GITHUB_STEP_SUMMARY")
         .env_remove("GITHUB_EVENT_NAME")
         .env_remove("GITHUB_EVENT_PATH")
         .env_remove("GITHUB_REPOSITORY")
@@ -81,7 +82,7 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_package_args=-p a\nrust_root_doctests=skip\nrust_root_doctests_known=false\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_package_args=--workspace\nrust_tools_doctests=skip\nrust_tools_doctests_known=false\nrust_tools_docs=run\nrust_deny=skip\nrust_machete=skip\n"
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_package_args=-p a\nrust_root_doctests=skip\nrust_root_doctests_known=false\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_package_args=--workspace\nrust_tools_doctests=skip\nrust_tools_doctests_known=false\nrust_tools_docs=run\nrust_deny=skip\nrust_machete=skip\nrust_root_tests=run\nrust_tools_tests=run\n"
     );
 }
 

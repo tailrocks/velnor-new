@@ -14,6 +14,9 @@ use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
+use crate::required_job::{
+    has_gate, plan_outputs as gate_outputs, spec as verdict_spec, verdict_step,
+};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
 use crate::shape::decide_shape;
@@ -64,22 +67,45 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .config
         .skip_draft_pull_requests
         .then(|| step(StepKind::FailOnDraftRun));
+    let gate = has_gate(facts, helper_root.is_some());
     if !single {
-        let used = used_outputs(&jobs);
+        let mut used = used_outputs(&jobs);
+        if gate {
+            used.extend(gate_outputs(&jobs));
+            used.sort();
+            used.dedup();
+        }
         jobs.insert(0, plan_job(facts, used));
+    } else if gate {
+        let outputs = gate_outputs(&jobs);
+        for job in jobs.iter_mut().filter(|job| job.id == RUST_JOB) {
+            job.plan_outputs.clone_from(&outputs);
+        }
     }
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
+    let verdict_steps = if gate {
+        let plan_id = if single { RUST_JOB } else { PLAN_JOB };
+        let install = match (&helper_root, facts.helper.as_ref()) {
+            (Some(_), _) => Some(step(StepKind::HelperFromArtifact)),
+            (None, release) => {
+                release.map(|release| step(StepKind::InstallHelper(release.clone())))
+            }
+        };
+        install
+            .into_iter()
+            .chain([verdict_step(verdict_spec(plan_id, &jobs))])
+            .collect()
+    } else {
+        vec![step(StepKind::FailWhenANeedFailed)]
+    };
     jobs.push(Job {
         name: Some(facts.config.required_check.clone()),
         skip_on_draft: false,
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
         when: When::NotCancelled,
-        steps: draft_guard
-            .into_iter()
-            .chain([step(StepKind::FailWhenANeedFailed)])
-            .collect(),
+        steps: draft_guard.into_iter().chain(verdict_steps).collect(),
         ..job(facts, VERDICT_JOB)
     });
     WorkflowPlan {

@@ -11,16 +11,18 @@ use velnor_model::{
 };
 use velnor_rust::{
     cargo_files, detect, introduced, member_sources, optional_steps, policy_runs, root_sources,
-    select_event, selects_by_diff, unknown_paths, unread_packages,
+    select_event, selects_by_diff, tests_expected, unknown_paths, unread_packages,
 };
 
 use super::{
-    EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, SOURCE_TOTAL_LIMIT, append_outputs, current_dir, git,
+    EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, SOURCE_TOTAL_LIMIT, SUMMARY_VARIABLE, append_outputs,
+    append_to, current_dir, git,
 };
 use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
 use crate::event::{Event, check_default_branch, parse_event};
-use crate::plan::{Steps, explain, outputs, warnings, weakened};
+use crate::plan::{Steps, explain, outputs, tests_outputs, warnings, weakened};
+use crate::summary::summary;
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
 const LOCK_FILE: &str = "Cargo.lock";
@@ -76,8 +78,22 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .values()
         .any(|selection| !matches!(selection, RustSelection::None));
     let policy = policy_runs(facts.policy, &changes.paths, everything, selected);
-    let outputs = outputs(&selections, &steps, policy)?;
+    let expected: BTreeMap<RepoPath, bool> = facts
+        .rust_roots
+        .iter()
+        .map(|root| {
+            let tests = selections
+                .get(&root.manifest)
+                .is_some_and(|selection| tests_expected(&facts, root, selection));
+            (root.manifest.clone(), tests)
+        })
+        .collect();
+    let outputs = outputs(&selections, &steps, policy)? + &tests_outputs(&expected);
     append_outputs(&outputs)?;
+    append_to(
+        SUMMARY_VARIABLE,
+        &summary(&facts.rust_roots, &selections, &steps),
+    )?;
     let new = introduced(&facts, &changes);
     let report = if args.explain {
         explain(

@@ -11,31 +11,13 @@ const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
-    if need.is_global() {
-        format!("rust_{}", need_name(need))
-    } else {
-        format!("rust_{slug}_{}", need_name(need))
-    }
+    need.output_name(slug)
 }
 
 pub(crate) fn plan_source(from: &PlanFrom) -> String {
     match from {
         PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
         PlanFrom::Job(job) => format!("needs.{job}.outputs"),
-    }
-}
-
-fn need_name(need: GateNeed) -> &'static str {
-    match need {
-        GateNeed::Selected => "mode",
-        GateNeed::Doctests => "doctests",
-        GateNeed::DoctestsKnown => "doctests_known",
-        GateNeed::Docs => "docs",
-        GateNeed::TestFilter => "test_filter",
-        GateNeed::PackageArgs => "package_args",
-        GateNeed::Deny => "deny",
-        GateNeed::Machete => "machete",
-        GateNeed::Policy => "policy",
     }
 }
 
@@ -104,7 +86,10 @@ fn gate_parts(gate: &Gate) -> Vec<String> {
                 format!("(contains({args}, ' -p {package} ') || contains({args}, ' --workspace '))")
             }));
         }
-        GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+        GateNeed::TestFilter
+        | GateNeed::PackageArgs
+        | GateNeed::DoctestsKnown
+        | GateNeed::TestsExpected => {
             parts.push(format!("{} != ''", read(gate.need)));
         }
     }
