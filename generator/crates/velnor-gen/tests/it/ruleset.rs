@@ -9,7 +9,7 @@ use std::process::Command;
 
 use velnor_gen::cli::{Command as Cmd, ReleaseCommand};
 use velnor_gen::io::parse_cli;
-use velnor_gen::{GenerateError, release_ruleset};
+use velnor_gen::{GenerateError, release_ruleset, release_ruleset_drift};
 use velnor_model::RepoPath;
 
 use crate::golden::{load, samples};
@@ -130,6 +130,88 @@ fn the_release_ruleset_command_parses() -> TestResult {
     let cli = parse_cli(["velnor-gen", "release", "ruleset"])?;
     assert_eq!(cli.command, Cmd::Release(ReleaseCommand::Ruleset));
     assert!(parse_cli(["velnor-gen", "release"]).is_err());
+    Ok(())
+}
+
+fn live() -> Result<serde_json::Value, Box<dyn Error>> {
+    Ok(serde_json::from_str(&fs::read_to_string(
+        samples().join("release-two-roots/live-rulesets.json"),
+    )?)?)
+}
+
+fn drift(live: &serde_json::Value) -> Result<Vec<String>, Box<dyn Error>> {
+    let view = load(&samples().join("release-two-roots"))?;
+    Ok(release_ruleset_drift(&view, &live.to_string())?)
+}
+
+#[test]
+fn the_recorded_admin_response_of_the_generated_rulesets_has_no_drift() -> TestResult {
+    assert_eq!(drift(&live()?)?, Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
+fn a_bypass_actor_added_to_the_immutability_ruleset_is_reported() -> TestResult {
+    let mut response = live()?;
+    response[1]["bypass_actors"] = serde_json::json!([{
+        "actor_id": 5_762_496,
+        "actor_type": "Integration",
+        "bypass_mode": "always"
+    }]);
+    let drifts = drift(&response)?;
+    assert_eq!(drifts.len(), 1, "{drifts:?}");
+    assert!(
+        drifts[0].starts_with("release-tags-immutable: bypass_actors differ"),
+        "{drifts:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_response_without_bypass_actors_is_reported_not_trusted() -> TestResult {
+    let mut response = live()?;
+    for ruleset in response.as_array_mut().into_iter().flatten() {
+        ruleset
+            .as_object_mut()
+            .map(|object| object.remove("bypass_actors"));
+    }
+    let drifts = drift(&response)?;
+    assert_eq!(drifts.len(), 2, "{drifts:?}");
+    assert!(
+        drifts.iter().all(|line| line.contains("unreadable")),
+        "{drifts:?}"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_missing_disabled_or_rewritten_ruleset_is_reported() -> TestResult {
+    let mut response = live()?;
+    response[0]["enforcement"] = serde_json::json!("disabled");
+    response[1]["rules"] = serde_json::json!([{ "type": "deletion" }]);
+    response[1]["conditions"]["ref_name"]["include"] = serde_json::json!(["refs/tags/app-v*"]);
+    let drifts = drift(&response)?;
+    assert_eq!(drifts.len(), 3, "{drifts:?}");
+    response.as_array_mut().map(|rulesets| rulesets.remove(0));
+    assert!(
+        drift(&response)?
+            .iter()
+            .any(|line| line == "release-tags: the ruleset does not exist")
+    );
+    assert_eq!(drift(&serde_json::json!({}))?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn the_ruleset_drift_command_parses() -> TestResult {
+    let cli = parse_cli(["velnor-gen", "release", "ruleset-drift", "live.json"])?;
+    assert_eq!(
+        cli.command,
+        Cmd::Release(ReleaseCommand::RulesetDrift {
+            live: PathBuf::from("live.json")
+        })
+    );
+    assert!(parse_cli(["velnor-gen", "release", "ruleset-drift"]).is_err());
     Ok(())
 }
 

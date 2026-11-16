@@ -133,7 +133,7 @@ pub(super) fn create_runtime(
 fn fixture_executable() -> Result<PathBuf, Box<dyn Error>> {
     let executable = std::env::var_os("VELNOR_IMAGE_PUBLICATION_FIXTURE")
         .map(PathBuf::from)
-        .ok_or("VELNOR_IMAGE_PUBLICATION_FIXTURE is required")?;
+        .ok_or("VELNOR_IMAGE_PUBLICATION_FIXTURE is missing; see docs/implemented/ci-maintenance/repo-verification.md, section Local recipe for fixture-dependent tests")?;
     if !executable.is_absolute() {
         return Err("VELNOR_IMAGE_PUBLICATION_FIXTURE must be absolute".into());
     }

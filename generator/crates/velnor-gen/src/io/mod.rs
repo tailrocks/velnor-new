@@ -101,6 +101,9 @@ pub fn main() -> Exit {
         Command::PinHelper { version } => return finish(pin_helper(&cli.root, version)),
         Command::CheckTag { tag } => return tag_verdict(tag),
         Command::Release(ReleaseCommand::Ruleset) => return ruleset::print(&cli.root),
+        Command::Release(ReleaseCommand::RulesetDrift { live }) => {
+            return ruleset::drift(&cli.root, live);
+        }
         Command::Generate | Command::Check => {}
     }
     match execute(&cli) {

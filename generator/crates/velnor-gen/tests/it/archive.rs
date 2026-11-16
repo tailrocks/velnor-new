@@ -50,6 +50,7 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "rust-lint-lab",
             "rust-test-lab",
             "rust-test-default-lab",
+            "rust-inputs-audit",
             "required"
         ]
     );

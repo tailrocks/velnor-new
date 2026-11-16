@@ -7,7 +7,7 @@ use crate::yaml_scalar::scalar;
 use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
-use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_json};
+use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_drift, ruleset_json};
 use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
@@ -55,6 +55,14 @@ pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
     }
     let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
     Ok(ruleset_json(&plan))
+}
+
+pub fn release_ruleset_drift(view: &RepoView, live: &str) -> Result<Vec<String>, GenerateError> {
+    if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
+        return Err(GenerateError::NoReleaseConfig);
+    }
+    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
+    Ok(ruleset_drift(&plan, live))
 }
 
 struct Reality<'a> {

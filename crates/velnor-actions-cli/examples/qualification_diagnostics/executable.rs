@@ -109,7 +109,7 @@ pub(super) fn private_mutation_root() -> io::Result<PathBuf> {
 fn diagnostic_fixture() -> io::Result<PathBuf> {
     let path = env::var_os("VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE")
         .map(PathBuf::from)
-        .ok_or_else(|| io::Error::other("diagnostics fixture locator is missing"))?;
+        .ok_or_else(|| io::Error::other("VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE is missing; see docs/implemented/ci-maintenance/repo-verification.md, section Local recipe for fixture-dependent tests"))?;
     if !path.is_absolute() {
         return Err(io::Error::other(
             "diagnostics fixture path must be absolute",
