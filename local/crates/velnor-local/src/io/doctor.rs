@@ -7,7 +7,9 @@ use std::path::Path;
 use super::env::{DockerCli, Engine, program};
 use super::supervisor::default_host;
 use crate::cli::DoctorArgs;
-use crate::doctor::{BUILD_FIX, PLAIN_IMAGES, Part, docker, healthy, host, pair_images, plain_images, render};
+use crate::doctor::{
+    BUILD_FIX, PLAIN_IMAGES, Part, docker, healthy, host, pair_images, plain_images, render,
+};
 use crate::images::TARGETS;
 
 async fn missing<'a, E: Engine>(engine: &E, tags: impl Iterator<Item = &'a str>) -> Vec<&'a str> {

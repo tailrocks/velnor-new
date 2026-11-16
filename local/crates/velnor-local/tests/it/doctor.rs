@@ -127,7 +127,10 @@ async fn a_host_without_local_mode_or_without_a_file_is_a_miss_with_the_build_fi
     let (parts, text) = report(&docker(&[]), &plain).await;
     assert!(!healthy(&parts), "{text}");
     assert!(text.contains("miss  velnor-host with local mode"), "{text}");
-    assert!(text.contains("fix: build or install velnor-host at"), "{text}");
+    assert!(
+        text.contains("fix: build or install velnor-host at"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
@@ -185,7 +188,10 @@ fn the_doctor_command_exits_1_and_prints_a_fix_when_a_part_is_missing() {
     let text = String::from_utf8_lossy(&output.stdout);
     assert_eq!(output.status.code(), Some(1), "{text}");
     assert!(text.contains("miss  velnor-host with local mode"), "{text}");
-    assert!(text.contains("fix: build or install velnor-host at"), "{text}");
+    assert!(
+        text.contains("fix: build or install velnor-host at"),
+        "{text}"
+    );
 }
 
 #[tokio::test]
@@ -196,7 +202,10 @@ async fn an_unreadable_docker_context_is_a_miss_with_the_docker_fix() {
     };
     let (parts, text) = report(&blind, &host("doctor-context", true)).await;
     assert!(!healthy(&parts), "{text}");
-    assert!(text.contains("miss  docker: context not readable"), "{text}");
+    assert!(
+        text.contains("miss  docker: context not readable"),
+        "{text}"
+    );
     assert!(
         text.contains("fix: start OrbStack or Docker Desktop"),
         "{text}"
