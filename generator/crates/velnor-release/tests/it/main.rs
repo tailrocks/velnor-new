@@ -4,6 +4,7 @@
 mod cargo_precedence;
 mod cargo_scope;
 mod config;
+mod cross_root_tags;
 mod defaults;
 mod expressions;
 mod fixture;
