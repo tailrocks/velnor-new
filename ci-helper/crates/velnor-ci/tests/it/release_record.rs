@@ -130,7 +130,7 @@ fn every_tag_the_plan_renders_is_a_tag_the_recorder_accepts() -> Result<(), Stri
         )]
         .into(),
         mise_tomls: vec!["[tools]\nrelease-plz = \"0.4.3\"\n".to_owned()],
-        mise_lock: "[[tools.release-plz]]\nversion = \"0.4.3\"\n".to_owned(),
+        mise_lock: "[[tools.release-plz]]\nversion = \"0.4.3\"\n\n[tools.release-plz.\"platforms.linux-x64\"]\nchecksum = \"sha256:a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90\"\nurl = \"https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz\"\n".to_owned(),
         ..velnor_release::ReleaseFiles::default()
     };
     let plan = velnor_release::ReleasePlan::read(&files).map_err(|e| e.to_string())?;

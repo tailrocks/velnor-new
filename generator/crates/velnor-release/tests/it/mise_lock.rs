@@ -117,3 +117,16 @@ fn the_plan_carries_the_locked_linux_download_of_release_plz() -> TestResult {
     assert_eq!(plan.release_plz_url, RELEASE_PLZ_URL);
     Ok(())
 }
+
+#[test]
+fn the_cargo_backend_is_refused_by_name_rather_than_as_an_unlocked_download() {
+    let mut files = files();
+    files.mise_tomls = vec!["[tools]\n\"cargo:release-plz\" = \"0.4.3\"\n".to_owned()];
+    files.mise_lock = "[[tools.\"cargo:release-plz\"]]\nversion = \"0.4.3\"\n".to_owned();
+    assert_eq!(
+        refusal(&files),
+        Some(ReleaseError::ReleasePlzBackendNotDownloadable {
+            tool: "cargo:release-plz".to_owned()
+        })
+    );
+}

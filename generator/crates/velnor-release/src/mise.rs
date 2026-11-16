@@ -187,6 +187,9 @@ pub(crate) fn check(
                 field: field.clone(),
             });
         }
+        if key == "cargo:release-plz" {
+            return Err(ReleaseError::ReleasePlzBackendNotDownloadable { tool: key.clone() });
+        }
         let wanted = configured_version(value).unwrap_or_default();
         if !exact_version(wanted) {
             return Err(ReleaseError::ReleasePlzVersionNotExact {
