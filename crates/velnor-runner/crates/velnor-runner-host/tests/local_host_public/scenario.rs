@@ -48,6 +48,7 @@ impl Scenario {
     async fn with(fixture: Fixture) -> TestResult<Self> {
         let served = serve(fixture.docker.clone(), &fixture.environment).await?;
         let fork_network = format!("{}-fork", fixture.network);
+        fixture.guard.track_network(&fork_network);
         fixture
             .docker
             .create_network(NetworkCreateRequest {
