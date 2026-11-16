@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 
 use crate::error::CiError;
-use crate::github::{GitHub, Repo, commit_path, parse, tag_object_path, tag_ref_path};
+use crate::github::{GitHub, Repo, parse, tag_object_path, tag_ref_path};
 use crate::release::PlainName;
 
 const COMMIT_SUFFIX: &str = "_commit";
@@ -23,32 +23,6 @@ struct ApiObject {
     sha: String,
 }
 
-#[derive(Debug, Deserialize)]
-struct ApiCommit {
-    parents: Vec<ApiParent>,
-    commit: ApiGitCommit,
-}
-
-#[derive(Debug, Deserialize)]
-struct ApiGitCommit {
-    tree: ApiTree,
-}
-
-#[derive(Debug, Deserialize)]
-struct ApiTree {
-    sha: String,
-}
-
-struct Verified {
-    tree: String,
-    second_parent: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct ApiParent {
-    sha: String,
-}
-
 pub fn tagged_commits(
     github: &dyn GitHub,
     repo: &Repo,
@@ -57,7 +31,6 @@ pub fn tagged_commits(
 ) -> Result<String, CiError> {
     let verified = full_sha("the verified commit", verified)?;
     let mut lines = String::new();
-    let mut known: Option<Verified> = None;
     for (package, tag) in tags {
         let output = format!("{package}{COMMIT_SUFFIX}");
         if tags.keys().any(|other| other.as_str() == output) {
@@ -67,23 +40,9 @@ pub fn tagged_commits(
         }
         let commit = tagged_commit(github, repo, tag)?;
         if commit != verified {
-            if known.is_none() {
-                known = Some(verified_commit(github, repo, &verified)?);
-            }
-            let Some(merge) = known.as_ref() else {
-                unreachable!("loaded above")
-            };
-            if merge.second_parent.as_deref() != Some(commit.as_str()) {
-                return Err(CiError::new(format!(
-                    "tag {tag} is on {commit}, which is neither the verified commit {verified} nor the release pull request head merged into it"
-                )));
-            }
-            let head = fetch_commit(github, repo, &commit)?;
-            if head.commit.tree.sha != merge.tree {
-                return Err(CiError::new(format!(
-                    "tag {tag} is on the release pull request head {commit}, whose tree differs from the verified commit {verified}; bring the release pull request up to date with the base branch before merging it, or squash it"
-                )));
-            }
+            return Err(CiError::new(format!(
+                "tag {tag} is on {commit}, not on the verified commit {verified}; release pull requests must be squash-merged (or merged through a merge queue with squash) so the tag names the verified commit"
+            )));
         }
         lines.push_str(&[output.as_str(), "=", commit.as_str(), "\n"].concat());
     }
@@ -111,22 +70,6 @@ fn tagged_commit(github: &dyn GitHub, repo: &Repo, tag: &PlainName) -> Result<St
 
 fn not_a_commit(tag: &PlainName, kind: &str) -> CiError {
     CiError::new(format!("tag {tag} names a {kind}, not a commit"))
-}
-
-fn fetch_commit(github: &dyn GitHub, repo: &Repo, sha: &str) -> Result<ApiCommit, CiError> {
-    parse(&github.get(&commit_path(repo, sha))?, "commit")
-}
-
-fn verified_commit(github: &dyn GitHub, repo: &Repo, verified: &str) -> Result<Verified, CiError> {
-    let commit = fetch_commit(github, repo, verified)?;
-    let second_parent = match commit.parents.as_slice() {
-        [_, second] => Some(second.sha.clone()),
-        _ => None,
-    };
-    Ok(Verified {
-        tree: commit.commit.tree.sha,
-        second_parent,
-    })
 }
 
 fn full_sha(what: &str, sha: &str) -> Result<String, CiError> {

@@ -181,6 +181,10 @@ pub enum ReleaseCommand {
     )]
     Publish(PublishArgs),
     #[command(
+        about = "Read-only, before release-plz holds any publishing authority: exit 1 when release-plz release would tag a commit other than the verified one, which is when a pull request whose head branch starts with a given prefix is associated with the verified commit and its last commit is an ancestor of the verified commit other than that commit itself (a release pull request merged with a merge commit or fast-forwarded), and exit 1 when the pull requests cannot be read. Reads GITHUB_TOKEN, which needs contents: read and pull-requests: read"
+    )]
+    Preflight(PreflightArgs),
+    #[command(
         about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
     )]
     CheckConfig(CheckConfigArgs),
@@ -252,6 +256,25 @@ pub struct RecordArgs {
         help = "Full SHA of the commit the release gate verified; also write <package>_commit=<sha> for each released package, the commit its tag is on, and exit 1 before writing anything when a tag is not on that commit or in its history. Reads GITHUB_TOKEN, which needs contents: read"
     )]
     pub verified_commit: Option<String>,
+}
+
+#[derive(Debug, Args)]
+pub struct PreflightArgs {
+    #[arg(long, value_name = "OWNER/NAME", help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(
+        long,
+        value_name = "SHA",
+        help = "Full SHA of the commit the release gate verified"
+    )]
+    pub verified_commit: String,
+    #[arg(
+        long = "branch-prefix",
+        required = true,
+        value_name = "PREFIX",
+        help = "A pr_branch_prefix of a release-plz root; give one per root"
+    )]
+    pub branch_prefixes: Vec<String>,
 }
 
 #[derive(Debug, Args)]

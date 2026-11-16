@@ -11,7 +11,7 @@ use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_steps::{
     COMMIT_OUTPUT_SUFFIX, TAGGED_COMMIT_HELPER, app_token, checkout, expression,
     install_release_plz, label, permissions, refuse_commands, release_plz_arguments,
-    release_plz_step, variables,
+    release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -210,6 +210,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
     steps.push(refuse_commands(&plan.roots, helper.version(), true));
+    steps.extend(source_preflight(plan, helper));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),
@@ -229,6 +230,9 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(record(helper, &files));
     only_while_newest(&mut steps);
     let mut scopes = vec![("contents", "read")];
+    if helper.version().at_least(TAGGED_COMMIT_HELPER) {
+        scopes.push(("pull-requests", "read"));
+    }
     if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
         scopes.push(("id-token", "write"));
     }
@@ -269,6 +273,29 @@ fn output_collisions(tag: &RenderedJob) -> Vec<RuleViolation> {
             rule: Rule::OutputNameCollision(name.clone()),
         })
         .collect()
+}
+
+fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<RenderedStep> {
+    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
+        return None;
+    }
+    let prefixes: String = plan
+        .roots
+        .iter()
+        .map(|root| format!(" --branch-prefix {}", shell_word(&root.pr_branch_prefix)))
+        .collect();
+    Some(RenderedStep {
+        name: "Check that release-plz would tag the verified commit".to_owned(),
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", VERIFIED_COMMIT),
+        ]),
+        run: Some(format!(
+            "velnor-ci release preflight --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\"{prefixes}"
+        )),
+        ..RenderedStep::default()
+    })
 }
 
 fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {

@@ -85,8 +85,57 @@ fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_in_the_verified
 }
 
 #[test]
-fn a_merge_commit_release_builds_the_commit_the_tag_job_resolved_not_the_merge_commit() -> TestResult
-{
+fn the_tag_job_checks_the_release_source_read_only_before_the_app_token_is_minted() -> TestResult {
+    let tree = binaries("0.1.81")?;
+    let tag = job(&tree, "tag")?;
+    let all = steps(tag);
+    let position = |pick: &dyn Fn(&Node) -> bool| all.iter().position(|step| pick(step));
+    let preflight = position(&|step| {
+        step.get("run")
+            .and_then(Node::text)
+            .is_some_and(|run| run.starts_with("velnor-ci release preflight"))
+    })
+    .ok_or("no preflight step")?;
+    let token = position(&|step| step.get("id").and_then(Node::text) == Some("app"))
+        .ok_or("no app token step")?;
+    let first_release_plz = position(&|step| {
+        step.get("run")
+            .and_then(Node::text)
+            .is_some_and(|run| run.starts_with("\"$RUNNER_TEMP/release-plz\" release"))
+    })
+    .ok_or("no release-plz step")?;
+    assert!(preflight < token && token < first_release_plz);
+    let step = &all[preflight];
+    assert_eq!(
+        step.get("run").and_then(Node::text),
+        Some(
+            "velnor-ci release preflight --repo \"$REPOSITORY\" --verified-commit \"$COMMIT\" --branch-prefix release-plz-app- --branch-prefix release-plz-tools-"
+        )
+    );
+    assert_eq!(
+        step.get("if").and_then(Node::text),
+        Some("${{ steps.newest.outputs.newest == 'true' }}")
+    );
+    assert_eq!(
+        tag.at(&["permissions", "pull-requests"])
+            .and_then(Node::text),
+        Some("read")
+    );
+    let older = binaries("0.1.80")?;
+    assert!(
+        runs(job(&older, "tag")?)
+            .iter()
+            .all(|run| !run.contains("preflight"))
+    );
+    assert_eq!(
+        job(&older, "tag")?.at(&["permissions", "pull-requests"]),
+        None
+    );
+    Ok(())
+}
+
+#[test]
+fn a_build_compares_its_checkout_with_the_commit_the_tag_job_recorded() -> TestResult {
     let tree = binaries("0.1.81")?;
     let mut checked = 0;
     for (id, package) in [
