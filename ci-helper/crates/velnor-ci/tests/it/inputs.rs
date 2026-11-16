@@ -81,3 +81,18 @@ fn breaking_ties_never_lands_on_a_time_another_file_already_has() {
         ["b", "d"]
     );
 }
+
+#[test]
+fn every_time_breaking_ties_moves_is_strictly_earlier_than_the_original() {
+    use std::collections::BTreeMap;
+    use velnor_ci::ties::break_ties;
+    let files: Vec<(String, u64)> = (0..6)
+        .map(|n| (format!("f{n}"), if n < 4 { 9_000_000 } else { 8_999_000 }))
+        .collect();
+    let original: BTreeMap<&str, u64> = files.iter().map(|(p, t)| (p.as_str(), *t)).collect();
+    let moved = break_ties(&files);
+    assert_eq!(moved.len(), 4);
+    for (path, time) in &moved {
+        assert!(*time < original[path.as_str()], "{path} moved up to {time}");
+    }
+}
