@@ -58,7 +58,7 @@ pub fn check_release_source(
             &github.get(&compare_path(repo, &pull.head.sha, verified))?,
             "comparison",
         )?;
-        if matches!(compare.status.as_str(), "ahead" | "identical") {
+        if compare.status == "ahead" {
             return Err(CiError::new(format!(
                 "release pull request #{} has its last commit {} inside the verified commit {verified}, so release-plz would tag that commit and not the verified one; release PRs must be squash-merged (or merged through a merge queue with squash) so the tag names the verified commit",
                 pull.number, pull.head.sha

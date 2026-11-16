@@ -69,6 +69,23 @@ fn a_pull_request_that_is_not_a_release_pr_is_not_asked_about() {
 }
 
 #[test]
+fn a_full_page_of_associated_pull_requests_is_refused() {
+    let mut fake = FakeGitHub::default();
+    let items: Vec<_> = (1..=100)
+        .map(|number| (number, "feature/x", VERIFIED))
+        .collect();
+    pulls(&mut fake, &items[..99]);
+    assert_eq!(check(&fake), Ok(()));
+    pulls(&mut fake, &items);
+    assert_eq!(
+        check(&fake),
+        Err(format!(
+            "100 or more pull requests are associated with {VERIFIED}; cannot tell which release pull request release-plz would tag"
+        ))
+    );
+}
+
+#[test]
 fn an_api_error_fails_closed() {
     let mut fake = FakeGitHub::default();
     assert!(check(&fake).is_err());
