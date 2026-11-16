@@ -9,6 +9,7 @@ use crate::error::CiError;
 
 const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
+const REAL_ENV: &str = "VELNOR_CARGO_REAL";
 const MARKER: &str = "# velnor-ci crates-mirror owns this file\n";
 
 pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
@@ -125,19 +126,23 @@ fn forward() -> Result<std::process::ExitStatus, CiError> {
     } else {
         None
     };
-    let cargo = actual_cargo(cargo, selected.as_deref())?;
-    let executable = linked_cargo(&cargo, &wrapper)?;
+    let cargo = match (selected.as_deref(), std::env::var_os(REAL_ENV)) {
+        (None, Some(executable)) => ResolvedCargo {
+            executable: PathBuf::from(executable),
+            toolchain: None,
+        },
+        _ => actual_cargo(cargo, selected.as_deref())?,
+    };
+    let executable = linked_cargo(&cargo.executable, &wrapper)?;
     let mut command = Command::new(executable);
-    if let Some(toolchain) = selected {
-        command.env(
-            "RUSTUP_TOOLCHAIN",
-            toolchain.to_string_lossy().trim_start_matches('+'),
-        );
+    if let Some(toolchain) = cargo.toolchain {
+        command.env("RUSTUP_TOOLCHAIN", toolchain);
     }
     command
         .arg("--config")
         .arg(config)
         .args(args)
+        .env(REAL_ENV, cargo.executable)
         .env("CARGO", wrapper)
         .status()
         .map_err(|e| failed(&e))
@@ -168,44 +173,84 @@ fn linked_cargo(cargo: &Path, wrapper: &Path) -> Result<PathBuf, CiError> {
     Ok(executable)
 }
 
-fn actual_cargo(cargo: PathBuf, selected: Option<&std::ffi::OsStr>) -> Result<PathBuf, CiError> {
-    let executable = std::fs::canonicalize(&cargo).map_err(|e| failed(&e))?;
-    let cargo = if executable.file_stem().is_some_and(|name| name == "mise") {
-        let output = Command::new(executable)
-            .args(["which", "cargo"])
-            .output()
-            .map_err(|e| failed(&e))?;
-        if !output.status.success() {
-            return Err(CiError::new(format!(
-                "cannot resolve Cargo through Mise: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            )));
-        }
-        let path = String::from_utf8(output.stdout).map_err(|e| CiError::new(e.to_string()))?;
-        PathBuf::from(path.trim())
+struct ResolvedCargo {
+    executable: PathBuf,
+    toolchain: Option<std::ffi::OsString>,
+}
+
+fn actual_cargo(
+    cargo: PathBuf,
+    selected: Option<&std::ffi::OsStr>,
+) -> Result<ResolvedCargo, CiError> {
+    let cargo = if selected.is_none()
+        && let Some(mise) = proxy(&cargo, "mise")?
+    {
+        PathBuf::from(query(Command::new(mise).args(["which", "cargo"]))?)
     } else {
         cargo
     };
-    let executable = std::fs::canonicalize(&cargo).map_err(|e| failed(&e))?;
-    if selected.is_none() && executable.file_stem().is_none_or(|name| name != "rustup") {
-        return Ok(cargo);
+    let rustup = proxy(&cargo, "rustup")?;
+    if selected.is_none() && rustup.is_none() {
+        return Ok(ResolvedCargo {
+            executable: cargo,
+            toolchain: None,
+        });
     }
-    let mut query = Command::new("rustup");
-    query.arg("which");
-    if let Some(toolchain) = selected {
-        query
-            .arg("--toolchain")
-            .arg(toolchain.to_string_lossy().trim_start_matches('+'));
+    let rustup = rustup.unwrap_or_else(|| PathBuf::from("rustup"));
+    let toolchain = if let Some(selected) = selected {
+        selected
+            .to_string_lossy()
+            .trim_start_matches('+')
+            .to_owned()
+    } else {
+        query(Command::new(&rustup).args(["show", "active-toolchain"]))?
+            .split_whitespace()
+            .next()
+            .ok_or_else(|| CiError::new("Rustup returned no active toolchain"))?
+            .to_owned()
+    };
+    let executable = PathBuf::from(query(Command::new(rustup).args([
+        "which",
+        "--toolchain",
+        &toolchain,
+        "cargo",
+    ]))?);
+    Ok(ResolvedCargo {
+        executable,
+        toolchain: Some(toolchain.into()),
+    })
+}
+
+fn proxy(cargo: &Path, name: &str) -> Result<Option<PathBuf>, CiError> {
+    let executable = std::fs::canonicalize(cargo).map_err(|e| failed(&e))?;
+    if executable.file_stem().is_some_and(|stem| stem == name) {
+        return Ok(Some(executable));
     }
-    let output = query.arg("cargo").output().map_err(|e| failed(&e))?;
+    let paths = std::env::var_os("PATH").unwrap_or_default();
+    let candidates = std::iter::once(cargo.with_file_name(name))
+        .chain(std::env::split_paths(&paths).map(|path| path.join(name)));
+    Ok(candidates.into_iter().find(|path| same_file(cargo, path)))
+}
+
+fn same_file(left: &Path, right: &Path) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (left.metadata(), right.metadata()) {
+        (Ok(left), Ok(right)) => (left.dev(), left.ino()) == (right.dev(), right.ino()),
+        _ => false,
+    }
+}
+
+fn query(command: &mut Command) -> Result<String, CiError> {
+    let output = command.output().map_err(|e| failed(&e))?;
     if !output.status.success() {
         return Err(CiError::new(format!(
             "cannot resolve Cargo toolchain: {}",
             String::from_utf8_lossy(&output.stderr).trim()
         )));
     }
-    let path = String::from_utf8(output.stdout).map_err(|e| CiError::new(e.to_string()))?;
-    Ok(PathBuf::from(path.trim()))
+    String::from_utf8(output.stdout)
+        .map(|path| path.trim().to_owned())
+        .map_err(|e| CiError::new(e.to_string()))
 }
 
 fn failed(error: &std::io::Error) -> CiError {
