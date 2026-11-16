@@ -18,6 +18,7 @@ pub(super) fn copy_mutation_repository(
     copy_fingerprint_inputs(source, destination)?;
     for directory in [
         ".config",
+        "actions",
         ".github",
         ".velnor",
         "ci-helper",
