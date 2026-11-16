@@ -280,3 +280,74 @@ fn a_control_token_without_a_control_listener_is_refused() {
     assert!(!parse(&["--control-token", "t"]));
     assert!(!parse(&["--control-listen", "127.0.0.1:81"]));
 }
+
+struct Published(String);
+
+impl velnor_local::io::env::Engine for Published {
+    fn docker(
+        &self,
+        args: &[&str],
+    ) -> impl std::future::Future<Output = std::io::Result<String>> + Send {
+        let answer = match args {
+            ["port", ..] => self.0.clone(),
+            _ => String::new(),
+        };
+        std::future::ready(Ok(answer))
+    }
+
+    fn logged(
+        &self,
+        _: &[&str],
+        _: &std::path::Path,
+    ) -> impl std::future::Future<Output = std::io::Result<bool>> + Send {
+        std::future::ready(Ok(true))
+    }
+}
+
+async fn service_up_after(delay: std::time::Duration) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let address = listener
+        .local_addr()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let ready = tokio::time::Instant::now() + delay;
+    tokio::spawn(async move {
+        loop {
+            let Ok((mut stream, _)) = listener.accept().await else {
+                return;
+            };
+            let mut buffer = [0_u8; 2048];
+            let _ = stream.read(&mut buffer).await;
+            let status = if tokio::time::Instant::now() >= ready {
+                "200 OK"
+            } else {
+                "503 Service Unavailable"
+            };
+            let reply =
+                format!("HTTP/1.1 {status}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
+            let _ = stream.write_all(reply.as_bytes()).await;
+        }
+    });
+    address.to_string()
+}
+
+#[tokio::test]
+async fn up_waits_for_runner_server_and_the_cache_even_when_no_plain_runner_starts() {
+    let dir = temp_dir("environment-pair-ready");
+    let delay = std::time::Duration::from_millis(700);
+    let address = service_up_after(delay).await;
+    let env = Environment::at(&dir, Published(address))
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let mut args = plain(&dir, 1, 0);
+    args.runner = RunnerMode::Pair;
+    let started = tokio::time::Instant::now();
+    let up = env.up(&dir, &args).await;
+    assert!(up.is_ok(), "{:?}", up.err());
+    assert!(
+        started.elapsed() >= delay,
+        "up returned before the service answered"
+    );
+}

@@ -17,6 +17,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use super::proxy::Proxy;
+use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
 use crate::side::Side;
 
@@ -122,6 +123,23 @@ pub(super) async fn request(
     let ok = response.status().is_success();
     let bytes = response.into_body().collect().await.ok()?.to_bytes();
     ok.then(|| bytes.to_vec())
+}
+
+async fn wait_for(
+    proxy: &Proxy,
+    path: &str,
+    deadline: tokio::time::Instant,
+    what: &str,
+) -> io::Result<()> {
+    while request(proxy, "GET", path, "").await.is_none() {
+        if tokio::time::Instant::now() > deadline {
+            return Err(io::Error::other(format!(
+                "{what} did not connect within 60 s"
+            )));
+        }
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+    Ok(())
 }
 
 impl<E: Engine> Environment<E> {
@@ -340,28 +358,27 @@ impl<E: Engine> Environment<E> {
             token,
         };
         let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
-        let sides = [("", &addresses.cache, args.containers(args.runners))]
+        let sides: Vec<_> = [("", &addresses.cache, args.containers(args.runners))]
             .into_iter()
             .chain(
                 addresses
                     .fork
                     .as_ref()
                     .map(|fork| ("fork-", fork, args.containers(args.fork_runners))),
-            );
+            )
+            .collect();
+        for (prefix, proxy, _) in &sides {
+            let what = format!("{prefix}runner.server");
+            wait_for(proxy, AGENTS_PATH, deadline, &what).await?;
+        }
         for (prefix, proxy, runners) in sides {
             for number in 1..=runners {
                 let path = format!(
                     "/_apis/v1/Message/isagentonline?name={}-{prefix}runner-{number}",
                     self.name
                 );
-                while request(proxy, "GET", &path, "").await.is_none() {
-                    if tokio::time::Instant::now() > deadline {
-                        return Err(io::Error::other(format!(
-                            "{prefix}runner {number} did not connect within 60 s"
-                        )));
-                    }
-                    tokio::time::sleep(Duration::from_millis(200)).await;
-                }
+                let what = format!("{prefix}runner {number}");
+                wait_for(proxy, &path, deadline, &what).await?;
             }
         }
         Ok(addresses)
