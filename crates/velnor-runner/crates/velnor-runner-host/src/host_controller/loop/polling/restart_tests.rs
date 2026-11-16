@@ -171,6 +171,8 @@ async fn restart_recovers(kill: KillPoint) -> TestResult<()> {
     assert_eq!(live_reservations(&journal).await?, live);
 
     restart(&journal, &docker, &mut controller, &engine).await?;
+    let volume_removal = format!("DELETE /volumes/{PRIVATE_VOLUME}-home");
+    assert!(fixture.take_requests().contains(&volume_removal));
     let mut released = recovered;
     released[0] = Some("released".to_owned());
     assert_eq!(seed::recorded(&journal, 2).await?, released);
