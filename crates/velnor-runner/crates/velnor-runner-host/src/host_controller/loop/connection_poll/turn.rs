@@ -13,6 +13,9 @@ mod poll_attempt;
 use poll_attempt::PollAttemptGuard;
 #[path = "turn/removed.rs"]
 mod removed;
+#[cfg(test)]
+#[path = "turn/tests.rs"]
+mod tests;
 
 use super::credentials::{release_suspect_credentials, restore_active_credentials};
 
