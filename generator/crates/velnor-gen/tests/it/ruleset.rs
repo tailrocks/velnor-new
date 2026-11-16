@@ -126,6 +126,26 @@ fn ruleset_refuses_a_published_package_that_names_another_registry() -> TestResu
 }
 
 #[test]
+fn ruleset_does_not_budget_a_publish_timeout_because_it_publishes_nothing() -> TestResult {
+    let root = Root {
+        publishes: true,
+        ..APP
+    };
+    let mut view = release_view(&[root], Some(""))?;
+    let text = String::from_utf8(
+        view.files
+            .get(&RepoPath::new("release-plz.toml")?)
+            .ok_or("no release-plz.toml")?
+            .clone(),
+    )?
+    .replace("publish_timeout = \"5m\"", "publish_timeout = \"26m\"");
+    view.files
+        .insert(RepoPath::new("release-plz.toml")?, text.into_bytes());
+    assert!(release_ruleset(&view).is_ok());
+    Ok(())
+}
+
+#[test]
 fn the_release_ruleset_command_parses() -> TestResult {
     let cli = parse_cli(["velnor-gen", "release", "ruleset"])?;
     assert_eq!(cli.command, Cmd::Release(ReleaseCommand::Ruleset));
