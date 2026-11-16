@@ -69,14 +69,25 @@ pub(super) fn random_hex(bytes: usize) -> io::Result<String> {
 }
 
 pub async fn mint<E: Engine>(env: &Environment<E>, side: Side) -> Result<Minted, MintError> {
-    let name = format!(
-        "{}-jit-{}",
-        env.name,
-        random_hex(4).map_err(|e| MintError {
-            name: String::new(),
-            source: e
-        })?
-    );
+    mint_named(env, side, None).await
+}
+
+pub async fn mint_named<E: Engine>(
+    env: &Environment<E>,
+    side: Side,
+    chosen: Option<&str>,
+) -> Result<Minted, MintError> {
+    let name = match chosen {
+        Some(name) => name.to_owned(),
+        None => format!(
+            "{}-jit-{}",
+            env.name,
+            random_hex(4).map_err(|e| MintError {
+                name: String::new(),
+                source: e
+            })?
+        ),
+    };
     let failed = |source: io::Error| MintError {
         name: name.clone(),
         source,

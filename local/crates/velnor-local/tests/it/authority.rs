@@ -192,6 +192,34 @@ async fn authority_keeps_the_ledger_on_disk_and_rejects_forged_or_repeated_entri
 }
 
 #[tokio::test]
+async fn authority_mints_under_the_name_the_caller_chose_and_refuses_an_invalid_one() {
+    let runners = FakeRunners::default();
+    let authority = authority("authority-named", &runners).await;
+    let (status, jit) = ask(
+        &authority,
+        "POST",
+        "/jit",
+        Some(TOKEN),
+        json!({"side": "trusted", "name": "host-chosen.1"}),
+    )
+    .await;
+    assert_eq!(
+        (status, jit["name"].as_str()),
+        (200, Some("host-chosen.1")),
+        "{jit}"
+    );
+    let (status, _) = ask(
+        &authority,
+        "POST",
+        "/jit",
+        Some(TOKEN),
+        json!({"side": "trusted", "name": "bad name/../x"}),
+    )
+    .await;
+    assert_eq!(status, 400);
+}
+
+#[tokio::test]
 async fn authority_mints_a_jit_for_a_side_that_is_up_and_deletes_agents_by_name() {
     let runners = FakeRunners::default();
     let authority = authority("authority-agents", &runners).await;

@@ -20,8 +20,8 @@ pub use runners::Runners;
 use super::pair::{MintError, Minted, write_private};
 use super::{Body, json_response, read_small_body};
 use crate::authority::{
-    AGENTS_PATH, Call, Entry, JitRequest, Posted, RUNS_PATH, admit, agent_id, answer, call, claim,
-    facts, run_ids,
+    AGENTS_PATH, Call, Entry, JitRequest, Posted, RUNS_PATH, admit, agent_id, agent_name, answer,
+    call, claim, facts, run_ids,
 };
 use crate::protocol::{Error, parse};
 use crate::side::Side;
@@ -36,7 +36,11 @@ pub trait Backend: Send + Sync {
         path: &str,
     ) -> impl Future<Output = io::Result<Option<Vec<u8>>>> + Send;
     fn delete(&self, side: Side, path: &str) -> impl Future<Output = io::Result<()>> + Send;
-    fn mint(&self, side: Side) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send;
+    fn mint(
+        &self,
+        side: Side,
+        name: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send;
 }
 
 #[derive(Debug)]
@@ -171,7 +175,10 @@ impl<B: Backend> Authority<B> {
 
     async fn jit(&self, request: Request<Body>) -> Result<Response<Body>, Error> {
         let asked: JitRequest = parse(&read_small_body(request.into_body()).await?)?;
-        let minted = match self.backend.mint(asked.side).await {
+        if asked.name.as_deref().is_some_and(|name| !agent_name(name)) {
+            return Err(Error::invalid("the agent name is not valid".to_owned()));
+        }
+        let minted = match self.backend.mint(asked.side, asked.name.as_deref()).await {
             Ok(minted) => minted,
             Err(error) => {
                 let _removed = self.remove(asked.side, &error.name).await;
