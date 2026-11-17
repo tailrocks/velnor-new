@@ -188,7 +188,7 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
             steps::shell_step(
                 "Check the Rust line cap with probe files",
                 vec![
-                    "sh".to_owned(),
+                    "bash".to_owned(),
                     "scripts/alint-line-cap-probe.sh".to_owned(),
                 ],
                 BTreeMap::new(),
