@@ -42,8 +42,7 @@ pub(super) fn context_with(
         |bytes| parse_inputs_lock(bytes).map_err(|e| CiError::new(e.to_string())),
     )?;
     let facts = if files.contains_key(&METADATA_PATH) {
-        let checkout =
-            velnor_gen::io::read_recorded_checkout(top).map_err(|e| CiError::new(e.to_string()))?;
+        let checkout = super::report_checkout::read(top)?.checkout;
         for (path, bytes) in &checkout.view.files {
             if initial
                 .get(path)

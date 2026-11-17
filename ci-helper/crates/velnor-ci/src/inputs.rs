@@ -8,13 +8,24 @@ use crate::scope::Scope;
 
 #[must_use]
 pub fn inputs_file(prefix: &str) -> String {
+    prefixed(".velnor/inputs", prefix)
+}
+
+#[must_use]
+pub fn snapshot_file(prefix: &str) -> String {
+    prefixed(".velnor/restored-inputs", prefix)
+}
+
+#[must_use]
+pub fn witness_file(prefix: &str) -> String {
+    prefixed(".velnor/restored-inputs-witness", prefix)
+}
+
+fn prefixed(stem: &str, prefix: &str) -> String {
     if prefix.is_empty() {
-        ".velnor/inputs.tsv".to_owned()
+        format!("{stem}.tsv")
     } else {
-        format!(
-            ".velnor/inputs-{}.tsv",
-            velnor_rust::sha256_hex(prefix.as_bytes())
-        )
+        format!("{stem}-{}.tsv", velnor_rust::sha256_hex(prefix.as_bytes()))
     }
 }
 

@@ -27,6 +27,12 @@ fn success(output: &Output) {
     assert!(output.status.success(), "{output:?}");
 }
 
+fn start_job(repo: &Repo) {
+    for file in ["velnor-run.log", "velnor-invocations.jsonl"] {
+        repo.write_unstaged(&format!("temp/{file}"), "");
+    }
+}
+
 #[test]
 fn a_quiet_cargo_configuration_cannot_hide_compilation_from_the_cache_decision() {
     let repo = Repo::new("cache-quiet");
@@ -36,7 +42,7 @@ fn a_quiet_cargo_configuration_cannot_hide_compilation_from_the_cache_decision()
     );
     repo.write("src/lib.rs", "pub fn leaf() -> u8 { 1 }\n");
     repo.write(".cargo/config.toml", "[term]\nquiet = true\n");
-    repo.write_unstaged("temp/velnor-run.log", "");
+    start_job(&repo);
     success(&helper(
         &repo,
         &["run", "--", env!("CARGO"), "build", "--offline"],
@@ -57,7 +63,7 @@ fn a_default_branch_build_can_be_reused_by_a_pr_and_an_eight_day_base_builds_col
         "[package]\nname = 'leaf'\nversion = '0.1.0'\nedition = '2024'\n[workspace]\n",
     );
     repo.write("src/lib.rs", "pub fn leaf() -> u8 { 1 }\n");
-    repo.write_unstaged("temp/velnor-run.log", "");
+    start_job(&repo);
     let build = ["run", "--", env!("CARGO"), "build", "--offline"];
     success(&helper(&repo, &build));
     success(&helper(&repo, &["restored", "--target-dir", "target"]));
@@ -71,7 +77,7 @@ fn a_default_branch_build_can_be_reused_by_a_pr_and_an_eight_day_base_builds_col
     assert!(String::from_utf8_lossy(&decided.stdout).contains(" bytes"));
     let pr = repo.fork("cache-pr-restored");
     pr.set_mtime("src/lib.rs", SystemTime::now());
-    pr.write_unstaged("temp/velnor-run.log", "");
+    start_job(&pr);
     success(&helper(&pr, &["restored", "--target-dir", "target"]));
     success(&helper(&pr, &["inputs", "restore"]));
     success(&helper(&pr, &build));
@@ -96,7 +102,7 @@ fn a_default_branch_build_can_be_reused_by_a_pr_and_an_eight_day_base_builds_col
         .unwrap_or_else(|e| unreachable!("{e}"));
     success(&expired);
     assert!(!repo.root().join("target").exists(), "{expired:?}");
-    repo.write_unstaged("temp/velnor-run.log", "");
+    start_job(&repo);
     success(&helper(&repo, &build));
     success(&helper(&repo, &["inputs", "save"]));
     let cold = helper(&repo, &["cache", "decide", "--target-dir", "target"]);

@@ -173,9 +173,9 @@ fn generated_save_and_restore_share_custom_targets_and_detect_once_for_three_roo
                     args.len() == 4
                         && args[1..]
                             == [
-                                serde_json::json!("ls-files"),
-                                serde_json::json!("-s"),
-                                serde_json::json!("-z"),
+                                serde_json::json!("config"),
+                                serde_json::json!("--get"),
+                                serde_json::json!("remote.origin.url"),
                             ]
                 })
         })

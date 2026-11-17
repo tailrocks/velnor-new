@@ -97,7 +97,8 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
             "  rust-lab:",
             "  rust-inputs-audit:",
             "  rust-trim:",
-            "  required:"
+            "  required:",
+            "  cache:"
         ]
     );
     assert!(text.contains(

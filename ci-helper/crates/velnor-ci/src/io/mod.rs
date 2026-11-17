@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod activity;
+mod archive_witness;
 mod audit;
 mod build_inputs;
 mod cache;
@@ -13,6 +15,7 @@ mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
 mod git;
+mod git_witness;
 mod http;
 mod input_scopes;
 mod input_target;
@@ -20,7 +23,12 @@ mod inputs;
 mod inputs_batch;
 mod manifests;
 mod plan;
+pub mod pump;
+mod recording;
 mod release;
+mod report;
+mod report_checkout;
+mod report_inputs;
 mod required;
 mod restored;
 mod restored_targets;
@@ -118,6 +126,7 @@ pub fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
+        Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save(args)) => {

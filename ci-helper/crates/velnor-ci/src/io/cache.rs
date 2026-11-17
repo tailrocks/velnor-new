@@ -31,7 +31,16 @@ pub fn decide(
     now_seconds: i64,
 ) -> Result<Decision, CiError> {
     let counts = scan(log.ok_or_else(|| CiError::new("velnor-run.log is missing"))?);
-    if !should_save(&counts) {
+    decide_counts(&counts, target, archive, now_seconds)
+}
+
+pub(super) fn decide_counts(
+    counts: &crate::logscan::LogScan,
+    target: &Path,
+    archive: Option<&Path>,
+    now_seconds: i64,
+) -> Result<Decision, CiError> {
+    if !should_save(counts) {
         return Ok(Decision {
             save: false,
             report: "no crate was compiled, checked or documented in this run; saving nothing\n"
@@ -222,17 +231,15 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         .unwrap_or_else(|| args.manifest_path.clone());
     let refusal = super::cache_sources::refusal(&root, &manifests)?;
     let sources = refusal.is_none();
-    let decision = match refusal {
-        Some(reason) => Decision {
+    let decision = if let Some(reason) = refusal {
+        Decision {
             save: false,
             report: reason,
-        },
-        None => decide(
-            Some(&String::from_utf8_lossy(&log)),
-            &target,
-            archive.as_deref(),
-            super::now_seconds(),
-        )?,
+        }
+    } else {
+        let counts = super::activity::activity()?
+            .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+        decide_counts(&counts, &target, archive.as_deref(), super::now_seconds())?
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
     Ok(decision.report)

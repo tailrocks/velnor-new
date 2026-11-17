@@ -12,7 +12,7 @@ use super::input_scopes::{git_prefix, scoped_files};
 use crate::error::CiError;
 use crate::inputs::{
     SavedInput, Tracked, TrackedFile, format_inputs, inputs_file, is_representable, parse_inputs,
-    parse_ls_files, plan_restore, with_worktree_blobs,
+    parse_ls_files, plan_restore, snapshot_file, with_worktree_blobs, witness_file,
 };
 use crate::scope::Scope;
 
@@ -140,6 +140,42 @@ pub(super) fn publish_snapshot(path: &Path, text: &str) -> Result<(), CiError> {
     Ok(())
 }
 
+pub(super) fn input_witness(tracked: &Tracked) -> String {
+    let mut inputs: Vec<_> = tracked
+        .files
+        .iter()
+        .chain(&tracked.links)
+        .cloned()
+        .map(|file| SavedInput { file, mtime_ns: 0 })
+        .collect();
+    inputs.extend(tracked.absent.iter().map(|path| SavedInput {
+        file: crate::inputs::TrackedFile {
+            path: path.clone(),
+            blob: String::new(),
+            mode: "absent".to_owned(),
+        },
+        mtime_ns: 0,
+    }));
+    for (marker, count) in [
+        ("unsupported", tracked.unsupported),
+        ("unverifiable-link", tracked.unverifiable_links),
+        ("submodule", tracked.submodules),
+    ] {
+        if count > 0 {
+            inputs.push(SavedInput {
+                file: crate::inputs::TrackedFile {
+                    path: format!("@{marker}"),
+                    blob: count.to_string(),
+                    mode: "marker".to_owned(),
+                },
+                mtime_ns: 0,
+            });
+        }
+    }
+    inputs.sort_by(|left, right| left.file.cmp(&right.file));
+    format_inputs(&inputs)
+}
+
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     restore_inputs_scoped(root, target, None)
 }
@@ -149,7 +185,10 @@ pub(super) fn restore_inputs_scoped(
     target: &Path,
     scope: Option<&Scope>,
 ) -> Result<String, CiError> {
-    let relative = target.join(inputs_file(&git_prefix(root)?));
+    let prefix = git_prefix(root)?;
+    remove_restored(&root.join(target).join(snapshot_file(&prefix)))?;
+    remove_restored(&root.join(target).join(witness_file(&prefix)))?;
+    let relative = target.join(inputs_file(&prefix));
     let path = root.join(&relative);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
@@ -164,6 +203,11 @@ pub(super) fn restore_inputs_scoped(
     let saved =
         parse_inputs(&text).map_err(|e| CiError::new(format!("{}: {e}", path.display())))?;
     let (top, tracked) = scoped_files(root, scope)?;
+    fs::write(
+        root.join(target).join(witness_file(&prefix)),
+        input_witness(&tracked),
+    )
+    .map_err(|e| CiError::new(format!("cannot preserve input witness: {e}")))?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
         return Err(CiError::new(format!(
@@ -171,6 +215,8 @@ pub(super) fn restore_inputs_scoped(
             plan.links_changed
         )));
     }
+    fs::write(root.join(target).join(snapshot_file(&prefix)), &text)
+        .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
@@ -184,6 +230,17 @@ pub(super) fn restore_inputs_scoped(
         plan.unsupported,
         plan.submodules
     ))
+}
+
+fn remove_restored(path: &Path) -> Result<(), CiError> {
+    match fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(CiError::new(format!(
+            "cannot remove {}: {error}",
+            path.display()
+        ))),
+    }
 }
 
 pub(super) struct TrackedPaths {
