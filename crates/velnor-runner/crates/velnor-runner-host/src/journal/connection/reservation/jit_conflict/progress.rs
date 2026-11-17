@@ -102,13 +102,27 @@ pub(super) async fn resume_local_absence(
         if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
             return Err(HostError::Identity);
         }
-        if local == 0 && cleanup == 0 && witness == 0 {
+        if local == 0 && cleanup == 0 && witness == 1 {
             return Ok(false);
         }
         if local != 1 || cleanup != 1 || witness != 1 {
             return Err(HostError::Identity);
         }
         let evidence = local_evidence(connection, claim.identity()).await?;
+        let mut rows = connection
+            .query(
+                "SELECT evidence_sha256 FROM physical_attempt_jit_conflict_recovery_progress WHERE reservation_id=?1 AND claim_generation=?2 AND phase_index=1 AND phase='local_absent'",
+                (claim.reservation_id(), claim.claim_generation()),
+            )
+            .await
+            .map_err(|_| HostError::Journal)?;
+        if let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+            if row.get::<String>(0).map_err(|_| HostError::Journal)? != evidence {
+                return Err(HostError::Journal);
+            }
+            return Ok(true);
+        }
+        drop(rows);
         insert_phase(
             connection,
             claim,

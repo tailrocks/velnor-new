@@ -22,7 +22,10 @@ fn invalid() -> RenderError {
 
 fn environment() -> BTreeMap<String, String> {
     let mut env = crate::toolchain_env::credential_scrub();
-    env.insert(TOKEN.to_owned(), "${{ github.token }}".to_owned());
+    env.insert(
+        TOKEN.to_owned(),
+        "${{ github.event_name == 'push' && github.token || '' }}".to_owned(),
+    );
     env
 }
 
@@ -135,7 +138,7 @@ case "${{GITHUB_WORKSPACE:-}}" in /*) ;; *) printf '%s\n' 'fixture workspace mus
 cd -P -- "$GITHUB_WORKSPACE"
 fixture_workspace=$PWD
 unset fixture_origin_credential
-fixture_origin_credential=${{VELNOR_FIXTURE_ORIGIN_TOKEN:?}}
+fixture_origin_credential=${{VELNOR_FIXTURE_ORIGIN_TOKEN-}}
 unset VELNOR_FIXTURE_ORIGIN_TOKEN
 unset {denied}
 unset BUN_OPTIONS NODE_OPTIONS NODE_PATH

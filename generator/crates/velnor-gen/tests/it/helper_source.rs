@@ -44,11 +44,11 @@ fn the_helper_key_builds_the_helper_once_and_every_lane_downloads_it() -> TestRe
         .iter()
         .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
         .collect();
-    assert_eq!(lanes.len(), 6);
-    assert_eq!(text.matches("Install velnor-ci").count(), 2);
-    assert_eq!(text.matches("Download velnor-ci").count(), lanes.len());
+    assert_eq!(lanes.len(), 7);
+    assert_eq!(text.matches("Install velnor-ci").count(), 4);
+    assert_eq!(text.matches("Download velnor-ci").count(), lanes.len() - 1);
     assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
-    for lane in lanes {
+    for lane in lanes.into_iter().filter(|lane| **lane != "rust-trim") {
         let header = format!("  {lane}:\n    needs:\n      - rust-plan\n      - rust-helper\n");
         assert!(text.contains(&header), "{lane}");
     }
@@ -66,11 +66,12 @@ fn the_plan_job_and_the_helper_job_use_the_released_helper() -> TestResult {
         let body = &text[start..];
         let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
         let body = &body[..end];
-        assert!(body.contains("Install velnor-ci 0.1.79"), "{job}");
+        assert!(body.contains("Install velnor-ci 0.1.81"), "{job}");
         assert!(!body.contains("Download velnor-ci"), "{job}");
     }
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
-    assert!(!verdict.contains("velnor-ci"));
+    assert!(verdict.contains("Install velnor-ci 0.1.81"));
+    assert!(!verdict.contains("Download velnor-ci"));
     Ok(())
 }
 
@@ -115,8 +116,12 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
         )],
     )?;
     view.tracked_paths.insert(path(".velnor/rust-ci.lock")?);
-    view.files
-        .insert(path(".velnor/rust-ci.lock")?, HELPER_LOCK.to_vec());
+    view.files.insert(
+        path(".velnor/rust-ci.lock")?,
+        String::from_utf8(HELPER_LOCK.to_vec())?
+            .replace("0.1.79", "0.1.81")
+            .into_bytes(),
+    );
     view.tracked_paths.insert(CONFIG_PATH);
     view.files.insert(
         CONFIG_PATH,
@@ -125,9 +130,9 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     let text = text_of(&view)?;
     assert_eq!(
         job_ids(&text),
-        ["rust-plan", "rust-helper", "rust", "required"]
+        ["rust-plan", "rust-helper", "rust", "rust-trim", "required"]
     );
-    assert_eq!(text.matches("Install velnor-ci").count(), 2);
+    assert_eq!(text.matches("Install velnor-ci").count(), 4);
     assert_eq!(text.matches("Download velnor-ci").count(), 1);
     Ok(())
 }
@@ -218,6 +223,21 @@ fn the_upload_path_follows_the_repository_target_dir() -> TestResult {
 }
 
 #[test]
+fn the_rendered_default_helper_upload_uses_the_cargo_host_output_path() -> TestResult {
+    let text = text_of(&sample(None)?)?;
+    let upload = text
+        .split("- name: Upload velnor-ci")
+        .nth(1)
+        .ok_or("no upload")?;
+    let upload = upload.split("- name:").next().unwrap_or_default();
+    assert!(
+        upload.contains("path: ci-helper/target/debug/velnor-ci"),
+        "{upload}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_build_target_in_any_config_of_the_helper_root_refuses_the_helper() -> TestResult {
     let triple = "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n";
     let array = "[build]\ntarget = [\"aarch64-unknown-linux-gnu\"]\n";
@@ -273,5 +293,42 @@ fn a_target_dir_with_glob_characters_is_uploaded_literally() -> TestResult {
         let config = format!("[build]\ntarget-dir = \"{dir}\"\n");
         assert_eq!(helper_path(Some(&config))?, format!("'{literal}'"));
     }
+    Ok(())
+}
+
+#[test]
+fn the_host_tuple_build_target_refuses_a_helper_without_publishing_a_wrong_path() -> TestResult {
+    let host = "[build]\ntarget = \"host-tuple\"\n";
+    for files in [
+        vec![(".cargo/config.toml", host)],
+        vec![
+            (
+                ".cargo/config.toml",
+                "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n",
+            ),
+            ("ci-helper/.cargo/config.toml", host),
+        ],
+    ] {
+        let error = expected_files(&helper_with_configs(&files)?)
+            .err()
+            .ok_or("accepted helper target that cannot resolve the runner host upload path")?;
+        assert!(
+            matches!(
+                error,
+                velnor_gen::GenerateError::Detect(DetectError::Invalid {
+                    reason: Reason::HelperTarget(_),
+                    ..
+                })
+            ),
+            "{files:?}: {error:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_empty_build_target_list_does_not_refuse_the_helper() -> TestResult {
+    let view = helper_with_configs(&[(".cargo/config.toml", "[build]\ntarget = []\n")])?;
+    assert!(expected_files(&view).is_ok());
     Ok(())
 }

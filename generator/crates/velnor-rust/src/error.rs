@@ -61,12 +61,14 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
+    HostTupleVersion(String),
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
     HelperTarget(RepoPath),
     CargoCredentialProvider(String),
     TargetDirOutside(String),
+    TargetDirOverlap(String),
     BuildDirKey(&'static str),
     RuntimeTargetDir {
         used: RepoPath,
@@ -84,6 +86,20 @@ impl DetectError {
 }
 
 impl Reason {
+    fn fmt_build_target(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UndeclaredTarget(target) => write!(
+                f,
+                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
+            ),
+            Self::HostTupleVersion(version) => write!(
+                f,
+                "build.target uses host-tuple, which Cargo does not support in Rust {version}; use Rust 1.91.0 or newer"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnpinnedTool(tool) => write!(
@@ -118,6 +134,7 @@ impl Reason {
                 f,
                 "build.target-dir is {value:?}, which is not a plain folder inside the repository below its root (a leading ~ or a {{placeholder}} is not modelled); the target cache can only save a folder of the checkout, so name one"
             ),
+            Self::TargetDirOverlap(value) => write!(f, "build.target-dir {value:?} overlaps tracked checkout content or repository control paths; use an untracked build directory"),
             Self::RuntimeTargetDir { used, rendered } => write!(
                 f,
                 "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
@@ -188,10 +205,7 @@ impl fmt::Display for Reason {
                 f,
                 "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
             ),
-            Self::UndeclaredTarget(target) => write!(
-                f,
-                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
-            ),
+            Self::UndeclaredTarget(_) | Self::HostTupleVersion(_) => self.fmt_build_target(f),
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
@@ -204,6 +218,7 @@ impl fmt::Display for Reason {
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
             | Self::TargetDirOutside(_)
+            | Self::TargetDirOverlap(_)
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),

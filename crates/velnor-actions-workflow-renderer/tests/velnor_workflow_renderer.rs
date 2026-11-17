@@ -101,3 +101,5 @@ pub mod workflow_size;
 mod workflow_timeout;
 
 mod stable_sources_qualification_graph;
+
+mod homebrew_qualification_acquire;

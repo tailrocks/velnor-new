@@ -20,6 +20,7 @@ const JOB: &str = "rust-velnor-actions-orchestrator";
 const PACKAGE: &str = "velnor-actions-orchestrator";
 const MANIFEST: &str = "crates/velnor-actions-orchestrator/Cargo.toml";
 const TOKEN: &str = "VELNOR_FIXTURE_ORIGIN_TOKEN";
+const GUARDED_TOKEN: &str = "${{ github.event_name == 'push' && github.token || '' }}";
 
 pub(super) fn root() -> Result<PathBuf, Box<dyn Error>> {
     Ok(Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -44,6 +45,52 @@ pub(super) fn launcher() -> Result<RenderedCommand, Box<dyn Error>> {
     )
 }
 
+fn workflow_jobs(text: &str) -> Result<serde_json::Value, Box<dyn Error>> {
+    let workflow: serde_json::Value = serde_saphyr::from_str_with_options(
+        text,
+        serde_saphyr::options! { budget: serde_saphyr::budget! { enforce_alias_anchor_ratio: false } },
+    )?;
+    Ok(workflow["jobs"].clone())
+}
+
+fn assert_no_token_reaches_checkout_code(jobs: &serde_json::Value) -> Result<(), Box<dyn Error>> {
+    let mut checked = 0;
+    for (id, job) in jobs.as_object().ok_or("no jobs")? {
+        for step in job["steps"].as_array().into_iter().flatten() {
+            let runs_checkout_code = step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("$GITHUB_WORKSPACE") || run.contains("scripts/"));
+            if !runs_checkout_code {
+                continue;
+            }
+            for (key, value) in step["env"].as_object().into_iter().flatten() {
+                let Some(value) = value.as_str() else { continue };
+                if value.contains("github.token") || value.contains("secrets.") {
+                    checked += 1;
+                    assert!(
+                        value.starts_with("${{ github.event_name == 'push' && "),
+                        "{id}: {key} reaches pull-request checkout code"
+                    );
+                }
+            }
+        }
+    }
+    assert!(checked > 0);
+    Ok(())
+}
+
+#[test]
+fn pull_request_checkout_code_never_receives_a_token() -> Result<(), Box<dyn Error>> {
+    let rendered = render_staged_tree(&prepare(&root()?)?)?;
+    let text = rendered
+        .get(".github/workflows/ci.yml")
+        .ok_or("no CI workflow")?;
+    assert_no_token_reaches_checkout_code(&workflow_jobs(text)?)?;
+    assert_no_token_reaches_checkout_code(&workflow_jobs(&fs::read_to_string(
+        root()?.join(".github/workflows/ci.yml"),
+    )?)?)
+}
+
 #[test]
 fn repository_fixture_is_emitted_only_in_readonly_own_orchestrator_ci() -> Result<(), Box<dyn Error>>
 {
@@ -62,12 +109,9 @@ fn repository_fixture_is_emitted_only_in_readonly_own_orchestrator_ci() -> Resul
     assert_eq!(owners, [JOB]);
     assert!(jobs[JOB].permissions.is_none());
     let step = launcher()?;
-    assert_eq!(
-        step.env.get(TOKEN).map(String::as_str),
-        Some("${{ github.token }}")
-    );
+    assert_eq!(step.env.get(TOKEN).map(String::as_str), Some(GUARDED_TOKEN));
     let mut expected = velnor_actions_workflow_renderer::toolchain_env::credential_scrub();
-    expected.insert(TOKEN.to_owned(), "${{ github.token }}".to_owned());
+    expected.insert(TOKEN.to_owned(), GUARDED_TOKEN.to_owned());
     assert_eq!(step.env, expected);
     let output = tempfile::tempdir()?;
     generate(
