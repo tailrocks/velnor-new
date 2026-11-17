@@ -160,7 +160,7 @@ fn the_policy_lane_runs_each_tool_only_when_its_output_says_run() -> TestResult 
 }
 
 #[test]
-fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult {
+fn a_single_root_workflow_starts_policy_only_when_the_shared_plan_selects_it() -> TestResult {
     let mut files = view(&["Cargo.toml"], None)?;
     track(&mut files, "deny.toml", "")?;
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
@@ -172,12 +172,12 @@ fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult
         .take_while(|line| line.starts_with("   "))
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(!job.contains("needs:"), "{job}");
-    assert!(job.contains("run: velnor-ci plan"), "{job}");
+    assert!(job.contains("needs: rust-plan"), "{job}");
+    assert!(!job.contains("run: velnor-ci plan"), "{job}");
+    assert!(job.contains("needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run'"), "{job}");
     let deny = step(&job, "Dependency policy").join("\n");
-    assert!(deny.contains("steps.plan.outcome == 'success'"), "{deny}");
     assert!(
-        deny.contains("steps.plan.outputs.rust_deny == 'run'"),
+        deny.contains("needs.rust-plan.outputs.rust_deny == 'run'"),
         "{deny}"
     );
     Ok(())
