@@ -172,6 +172,7 @@ fn assert_image_context_selection(
             "image/fixture-unrelated.txt",
             if precise { "not_affected" } else { "run" },
         ),
+        ("outside-context.txt", "not_affected"),
     ] {
         super::workflow_configuration_fixture::git(
             &["checkout", "--detach", &repo.base],
@@ -187,6 +188,34 @@ fn assert_image_context_selection(
         );
     }
     Ok(())
+}
+
+#[test]
+fn context_root_copy_selects_every_nested_context_input() -> TestResult {
+    for keyword in ["COPY", "ADD"] {
+        for source in [".", "./", "././"] {
+            assert_image_context_selection(
+                &format!("FROM scratch\n{keyword} {source} /dest\n"),
+                ("src/nested/main.txt", "run"),
+                false,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn json_heredoc_like_copy_source_selects_its_literal_file() -> TestResult {
+    assert_image_context_selection(
+        "FROM scratch\nCOPY [\"<<payload\", \"/dest\"]\n",
+        ("<<payload", "run"),
+        true,
+    )?;
+    assert_image_context_selection(
+        "FROM scratch\nCOPY <<payload /dest\ninline data\npayload\n",
+        ("<<payload", "not_affected"),
+        true,
+    )
 }
 
 #[test]
