@@ -3,8 +3,7 @@
 
 use crate::plan::{head, job, step};
 use velnor_model::{
-    Access, CacheLaneOutput, HelperVersion, Job, JobId, PermissionScope, RepoFacts, Step, StepKind,
-    When, cache_lane_outputs,
+    Access, HelperVersion, Job, JobId, PermissionScope, RepoFacts, Step, StepKind, When,
 };
 
 pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
@@ -26,11 +25,8 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
                 })
         });
     let mut producers = Vec::new();
-    let mut verified = Vec::new();
     for job in jobs {
-        let saves = cache_lane_outputs(&job.steps)
-            .iter()
-            .any(|output| matches!(output, CacheLaneOutput::CacheOk(_)));
+        let saves = job.steps.iter().any(|step| matches!(step.kind, StepKind::CacheSave(_)));
         if !job
             .steps
             .iter()
@@ -42,9 +38,6 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
         if job.id.as_str() == "rust-helper" && !released {
             continue;
         }
-        if saves {
-            verified.push(job.id.clone());
-        }
         attach_metrics(job, nextest_artifacts);
         producers.push(&*job);
     }
@@ -55,12 +48,6 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
         step(StepKind::DownloadMetrics),
         step(StepKind::CheckMetrics { needs_max_bytes }),
     ]);
-    if !verified.is_empty() {
-        steps.push(Step {
-            when: When::Finalizer,
-            ..step(StepKind::CacheResult(verified))
-        });
-    }
     Some(Job {
         name: Some("Cache".to_owned()),
         needs,

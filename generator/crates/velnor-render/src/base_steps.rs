@@ -66,20 +66,24 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
             Some((output.name().to_owned(), value))
         })
         .collect::<Vec<_>>();
-    outputs.extend([TrimFamily::Target, TrimFamily::Sources].into_iter().filter_map(
-        |family| {
-            steps.iter().find_map(|step| match &step.kind {
-                StepKind::CacheSave(key) if crate::cache_upload::family_of(key) == Some(family) => {
-                    let id = key_id(key)?;
-                    Some((
-                        key_output(family).to_owned(),
-                        format!("${{{{ steps.{id}.outputs.key }}}}"),
-                    ))
-                }
-                _ => None,
-            })
-        },
-    ));
+    outputs.extend(
+        [TrimFamily::Target, TrimFamily::Sources]
+            .into_iter()
+            .filter_map(|family| {
+                steps.iter().find_map(|step| match &step.kind {
+                    StepKind::CacheSave(key)
+                        if crate::cache_upload::family_of(key) == Some(family) =>
+                    {
+                        let id = key_id(key)?;
+                        Some((
+                            key_output(family).to_owned(),
+                            format!("${{{{ steps.{id}.outputs.key }}}}"),
+                        ))
+                    }
+                    _ => None,
+                })
+            }),
+    );
     outputs
 }
 
