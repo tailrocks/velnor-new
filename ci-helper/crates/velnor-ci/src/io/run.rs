@@ -282,8 +282,7 @@ fn collect(
         }
     }
     let counts = slots.iter().rev().find_map(|slot| {
-        slot
-            .lock()
+        slot.lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
     });
