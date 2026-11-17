@@ -18,13 +18,15 @@ pub(super) fn check_target(root: &Path, target: &Path) -> Result<(), CiError> {
     let links = symlink_objects(&path)?;
     let top = protect_checkout(root, &targets, &links)?;
     let mut checked = BTreeSet::from([top]);
-    for target in &targets {
+    for target in targets.iter().chain(links.iter()) {
         for ancestor in target.ancestors() {
             if !checked.contains(ancestor) && git_marker(ancestor)? {
                 protect_checkout(ancestor, &targets, &links)?;
                 checked.insert(ancestor.to_path_buf());
             }
         }
+    }
+    for target in &targets {
         protect_tree(target)?;
     }
     Ok(())
