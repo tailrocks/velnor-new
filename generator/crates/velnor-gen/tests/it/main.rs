@@ -105,6 +105,7 @@ mod setup_action_cache;
 mod setup_action_owner;
 mod setup_action_swap;
 mod setup_action_tool_cache;
+mod test_setup;
 mod tool_pins;
 mod toolchain;
 mod toolchain_components;

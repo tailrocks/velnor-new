@@ -55,6 +55,7 @@ pub enum Reason {
     LockLine(usize),
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
+    UnknownTestSetupRoot(String),
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
@@ -197,6 +198,10 @@ impl fmt::Display for Reason {
             Self::UnknownRoot(root) => write!(
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
+            ),
+            Self::UnknownTestSetupRoot(root) => write!(
+                f,
+                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
