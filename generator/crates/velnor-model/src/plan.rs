@@ -173,6 +173,7 @@ pub enum When {
     SaveToolsOnDefaultBranch,
     SaveBase,
     SaveBaseDecided,
+    BaseExpired,
     SavingRun,
 }
 
@@ -227,13 +228,12 @@ pub enum TrimFamily {
 pub enum BaseExpiry {
     Never,
     OnDefaultBranch,
-    OnDispatch,
-    OnDefaultBranchExceptPush,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelperCommand {
     Plan,
+    PlanFull,
     Prepare,
     CheckMetadata,
     Restored(BaseExpiry),

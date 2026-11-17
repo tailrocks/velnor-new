@@ -58,7 +58,7 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
         "{trim}"
     );
     let condition = format!(
-        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'') }}}}'\n"
+        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'' || needs.rust-test.outputs.sources_saved == ''true'') }}}}'\n"
     );
     assert!(trim.contains(&condition), "{trim}");
     assert!(
@@ -133,34 +133,36 @@ fn needed(block: &str) -> Vec<String> {
     ids
 }
 
-fn save_ids(condition: &str) -> Vec<String> {
-    let marker = ".outputs.base_save";
+fn admitted(condition: &str) -> Vec<(String, String)> {
+    let mut found = Vec::new();
     let mut rest = condition;
-    let mut ids = Vec::new();
-    while let Some(at) = rest.find(marker) {
-        let id = rest[..at]
-            .rsplit_once("needs.")
-            .map(|(_, id)| id.to_owned())
-            .unwrap_or_default();
-        ids.push(id);
-        rest = &rest[at + marker.len()..];
+    while let Some(at) = rest.find("needs.") {
+        rest = &rest[at + "needs.".len()..];
+        let Some((id, tail)) = rest.split_once(".outputs.") else {
+            break;
+        };
+        let name = tail.split(' ').next().unwrap_or("");
+        if tail.contains("== ''true''") && matches!(name, "base_save" | "sources_saved") {
+            found.push((id.to_owned(), name.to_owned()));
+        }
     }
-    ids
+    found
 }
 
 fn the_job_requires_each_needed_lane_to_have_saved(block: &str) {
     let needs = needed(block);
-    let clause = format!(
-        "({})",
-        needs
-            .iter()
-            .map(|id| format!("needs.{id}.outputs.base_save == ''true''"))
-            .collect::<Vec<_>>()
-            .join(" || ")
-    );
     let condition = job_if(block);
-    assert!(condition.contains(&clause), "{condition} missing {clause}");
-    assert_eq!(save_ids(&condition), needs, "{condition}");
+    let found = admitted(&condition);
+    for id in &needs {
+        assert!(
+            found.contains(&(id.clone(), "base_save".to_owned())),
+            "{condition} misses the target save of {id}"
+        );
+    }
+    assert!(
+        found.iter().all(|(id, _)| needs.contains(id)),
+        "{condition}"
+    );
 }
 
 #[test]
@@ -339,5 +341,43 @@ fn the_pull_request_check_flags_a_lane_that_holds_actions_write_and_passes_the_g
     assert_eq!(pull_request_writers(&broken), ["rust"]);
     let unguarded = text.replace(&format!("({EVENTS})"), "true");
     assert_eq!(pull_request_writers(&unguarded), ["rust-trim"]);
+    Ok(())
+}
+
+#[test]
+fn a_run_that_saved_only_sources_still_admits_the_trim_job_and_trims_them() -> TestResult {
+    let all = jobs("0.1.81", "shape = \"lint-test\"\n")?;
+    let find = |id: &str| {
+        all.iter()
+            .find(|(job, _)| job == id)
+            .map(|(_, block)| block.as_str())
+            .ok_or("missing job")
+    };
+    let test = find("rust-test")?;
+    let save = step(test, "Save the sources cache").ok_or("no sources save")?;
+    let id = save
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("id: sources_save_"))
+        .ok_or("the sources save has no id")?;
+    assert!(
+        test.contains(&format!(
+            "      sources_saved: '${{{{ steps.sources_save_{id}.outcome == ''success'' }}}}'\n"
+        )),
+        "{test}"
+    );
+    assert!(!find("rust-lint")?.contains("sources_saved"));
+    let trim = find("rust-trim")?;
+    let condition = job_if(trim);
+    let sources_only = condition
+        .replace("needs.rust-lint.outputs.base_save == ''true''", "false")
+        .replace("needs.rust-test.outputs.base_save == ''true''", "false");
+    assert!(
+        sources_only
+            .contains("false || false || needs.rust-test.outputs.sources_saved == ''true''"),
+        "{condition}"
+    );
+    let prune =
+        step(trim, "Delete the older rust-test sources entries").ok_or("no sources trim")?;
+    assert!(prune.contains("sources_prefix"), "{prune}");
     Ok(())
 }

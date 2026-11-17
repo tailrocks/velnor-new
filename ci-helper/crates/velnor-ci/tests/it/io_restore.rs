@@ -499,7 +499,7 @@ fn restore_then_tie_breaking_leaves_the_restored_times_of_distinct_files_alone()
 }
 
 #[test]
-fn the_restored_command_prints_its_report_and_writes_no_output_file() {
+fn the_restored_command_prints_its_report_and_writes_only_the_expired_output() {
     let repo = Repo::new("restored-command");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -512,5 +512,9 @@ fn the_restored_command_prints_its_report_and_writes_no_output_file() {
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).starts_with("gave "));
     assert_eq!(output.stderr.len(), 0);
-    assert!(!repo.root().join("env").exists() && !repo.root().join("output").exists());
+    assert!(!repo.root().join("env").exists());
+    assert_eq!(
+        std::fs::read_to_string(repo.root().join("output")).unwrap_or_default(),
+        "expired=false\n"
+    );
 }
