@@ -42,8 +42,12 @@ pub(crate) enum Setup {
 pub(crate) const REPLAN_STEP: &str = "replan";
 const BASE_EXPIRED: &str = "steps.restored.outputs.expired == 'true'";
 
-pub(crate) fn replanned_read(source: &str, key: &str) -> String {
-    format!("steps.{REPLAN_STEP}.outputs.{key} || {source}.{key}")
+pub(crate) fn plan_read(source: &str, key: &str, setup: Setup) -> String {
+    if setup == Setup::Replanned {
+        format!("steps.{REPLAN_STEP}.outputs.{key} || {source}.{key}")
+    } else {
+        format!("{source}.{key}")
+    }
 }
 
 pub(crate) fn plan_source(from: &PlanFrom) -> String {
@@ -150,9 +154,9 @@ fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let read = |need| {
         let key = output(&gate.slug, need);
         if replanned {
-            format!("({})", replanned_read(&source, &key))
+            format!("({})", plan_read(&source, &key, Setup::Replanned))
         } else {
-            format!("{source}.{key}")
+            plan_read(&source, &key, Setup::Restored)
         }
     };
     let runs = |need| format!("{} == 'run'", read(need));

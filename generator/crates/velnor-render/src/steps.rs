@@ -12,8 +12,8 @@ use crate::base_steps::{
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
 use crate::gate::{
-    PLAN_STEP, REPLAN_STEP, Setup, TOOLS_STEP, admission, condition, output, plan_source,
-    replanned_read, sources_save_step, sources_step,
+    PLAN_STEP, REPLAN_STEP, Setup, TOOLS_STEP, admission, condition, output, plan_read,
+    plan_source, sources_save_step, sources_step,
 };
 use crate::permission_pairs;
 use crate::rules::{
@@ -123,11 +123,7 @@ fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
             let key = output(&plan.slug, *need);
-            let read = if setup == Setup::Replanned {
-                replanned_read(&source, &key)
-            } else {
-                format!("{source}.{key}")
-            };
+            let read = plan_read(&source, &key, setup);
             (
                 variable(*need).to_owned(),
                 Value::Expr(format!("${{{{ {read} }}}}")),
