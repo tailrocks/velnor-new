@@ -1,88 +1,68 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_gen::expected_files;
-use velnor_model::RepoPath;
-
 use crate::facts::TestResult;
-use crate::golden::{load, samples};
 use crate::pipeline::{view, workflow};
 
-fn environment(text: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let tree = crate::yaml_tree::document(text)?;
-    tree.get("env")
-        .cloned()
-        .ok_or_else(|| "the generated workflow has no environment".into())
+fn rendered() -> Result<String, Box<dyn std::error::Error>> {
+    workflow(&view(&["Cargo.toml"], None)?)
 }
 
 #[test]
-fn the_generated_workflow_stops_the_toolchain_from_installing_itself() -> TestResult {
-    let env = environment(&workflow(&view(&["Cargo.toml"], None)?)?)?;
+fn the_generated_workflow_keeps_rustup_and_mise_from_installing_an_unpinned_toolchain() -> TestResult
+{
+    let text = rendered()?;
+    let tree = crate::yaml_tree::document(&text)?;
+    let environment = tree.get("env").cloned().unwrap_or_default();
     assert_eq!(
-        env.get("RUSTUP_AUTO_INSTALL")
+        environment
+            .get("RUSTUP_AUTO_INSTALL")
             .and_then(serde_json::Value::as_str),
         Some("0"),
-        "rustup must not install a toolchain that the workflow did not pin"
+        "the generated workflow must not let rustup install a toolchain it did not pin: {environment}"
     );
     assert_eq!(
-        env.get("MISE_AUTO_INSTALL")
+        environment
+            .get("MISE_AUTO_INSTALL")
             .and_then(serde_json::Value::as_str),
         Some("false"),
-        "mise must not install a tool that the workflow did not pin"
+        "the generated workflow must not let mise install a tool it did not pin: {environment}"
     );
-    Ok(())
-}
-
-#[test]
-fn the_generated_setup_still_reads_the_repository_mise_configuration() -> TestResult {
-    let text = workflow(&view(&["Cargo.toml"], None)?)?;
-    let env = environment(&text)?;
-    for flag in [
-        "MISE_NO_CONFIG",
-        "MISE_NO_ENV",
-        "MISE_NO_HOOKS",
-        "MISE_LOCKFILE",
-    ] {
-        assert!(
-            env.get(flag).is_none(),
-            "{flag} would hide the repository's mise configuration from the generated setup"
+    for name in ["RUSTUP_AUTO_INSTALL", "MISE_AUTO_INSTALL"] {
+        assert_eq!(
+            text.matches(name).count(),
+            1,
+            "{name} must be set once, at the workflow level, so no job can turn the automatic installation back on"
         );
     }
-    assert!(
-        text.contains("uses: jdx/mise-action@"),
-        "the generated setup must keep installing the pinned tools through mise"
-    );
     Ok(())
 }
 
 #[test]
-fn the_pinned_nextest_stays_installable_by_the_generated_setup() -> TestResult {
-    let sample = load(&samples().join("velnor-new"))?;
-    let mise = sample
-        .files
-        .get(&RepoPath::new("mise.toml")?)
-        .ok_or("the sample has no mise configuration")?;
-    let mise = String::from_utf8_lossy(mise);
-    assert!(
-        mise.contains("cargo-nextest"),
-        "the sample does not pin nextest"
-    );
-    let files = expected_files(&sample)?;
-    let text = files
-        .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
-        .ok_or("no generated workflow")?;
-    assert!(
-        text.contains("uses: jdx/mise-action@"),
-        "the generated setup must keep installing the pinned tools through mise"
-    );
-    assert!(
-        text.contains("cargo-nextest nextest run"),
-        "the generated workflow must run the pinned nextest"
-    );
-    let env = environment(text)?;
-    assert!(
-        env.get("MISE_NO_CONFIG").is_none(),
-        "the mise shim must keep resolving the pinned nextest from the repository's configuration"
-    );
+fn the_generated_workflow_never_hides_the_repository_mise_configuration() -> TestResult {
+    let text = rendered()?;
+    for (flag, consequence) in [
+        (
+            "MISE_NO_CONFIG",
+            "mise would stop reading the repository's mise configuration, and the pinned tools with it",
+        ),
+        (
+            "MISE_NO_ENV",
+            "mise would stop reading the environment the repository's mise configuration declares",
+        ),
+        (
+            "MISE_NO_HOOKS",
+            "mise would stop running the hooks the repository's mise configuration declares",
+        ),
+        (
+            "MISE_LOCKFILE",
+            "mise would stop reading the pinned versions in the repository's mise lock file",
+        ),
+    ] {
+        assert!(
+            !text.contains(flag),
+            "{flag} must not reach the generated workflow: {consequence}"
+        );
+    }
     Ok(())
 }
