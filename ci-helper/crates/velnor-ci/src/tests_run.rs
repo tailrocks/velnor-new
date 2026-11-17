@@ -9,6 +9,8 @@ use velnor_rust::{PackageCounts, encode_package_counts, package_token};
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
+pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
+
 const LINE_LIMIT: usize = 4096;
 const RUN_FLAGS: &[&str] = &[
     "--fail-fast",
