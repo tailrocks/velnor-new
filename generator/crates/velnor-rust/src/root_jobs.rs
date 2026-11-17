@@ -90,6 +90,7 @@ impl RootJobs<'_> {
     }
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
+        let steps = crate::test_setup::inserted(self.facts, self.root, self.lane, steps);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
             needs: self
