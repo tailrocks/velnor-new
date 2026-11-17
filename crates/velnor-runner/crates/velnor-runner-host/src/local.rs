@@ -12,6 +12,7 @@ mod authority;
 mod channel;
 mod cleanup_audit;
 mod decide;
+mod io;
 mod layout;
 mod minted;
 mod pair;

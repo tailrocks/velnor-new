@@ -11,14 +11,14 @@ use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
 
 use crate::error::CiError;
 use crate::inputs::{
-    SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
-    parse_ls_files, plan_restore, with_worktree_blobs,
+    INPUTS_FILE, RESTORE_WITNESS, SNAPSHOT, SavedInput, Tracked, TrackedFile, format_inputs,
+    is_representable, parse_inputs, parse_ls_files, plan_restore, with_worktree_blobs,
 };
 use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
-    let path = root.join(target).join(".velnor/inputs.tsv");
+    let path = root.join(target).join(INPUTS_FILE);
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -56,27 +56,78 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
         tracked.links.len(),
-        target.join(".velnor/inputs.tsv").display(),
+        target.join(INPUTS_FILE).display(),
         tracked.absent.len(),
         tracked.unsupported,
         tracked.submodules
     ))
 }
 
+pub(super) fn input_witness(tracked: &Tracked) -> String {
+    let mut inputs: Vec<_> = tracked
+        .files
+        .iter()
+        .chain(&tracked.links)
+        .cloned()
+        .map(|file| SavedInput { file, mtime_ns: 0 })
+        .collect();
+    inputs.extend(tracked.absent.iter().map(|path| SavedInput {
+        file: crate::inputs::TrackedFile {
+            path: path.clone(),
+            blob: String::new(),
+            mode: "absent".to_owned(),
+        },
+        mtime_ns: 0,
+    }));
+    for (marker, count) in [
+        ("unsupported", tracked.unsupported),
+        ("unverifiable-link", tracked.unverifiable_links),
+        ("submodule", tracked.submodules),
+    ] {
+        if count > 0 {
+            inputs.push(SavedInput {
+                file: crate::inputs::TrackedFile {
+                    path: format!("@{marker}"),
+                    blob: count.to_string(),
+                    mode: "marker".to_owned(),
+                },
+                mtime_ns: 0,
+            });
+        }
+    }
+    inputs.sort_by(|left, right| left.file.cmp(&right.file));
+    format_inputs(&inputs)
+}
+
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    let path = root.join(target).join(".velnor/inputs.tsv");
+    match fs::remove_file(root.join(target).join(SNAPSHOT)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(CiError::new(error.to_string())),
+    }
+    match fs::remove_file(root.join(target).join(RESTORE_WITNESS)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(CiError::new(error.to_string())),
+    }
+    let path = root.join(target).join(INPUTS_FILE);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
             return Ok(format!(
                 "no {}; nothing restored (cold run)\n",
-                target.join(".velnor/inputs.tsv").display()
+                target.join(INPUTS_FILE).display()
             ));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
     let saved = parse_inputs(&text)?;
     let (top, tracked) = worktree_files(root)?;
+    fs::write(
+        root.join(target).join(RESTORE_WITNESS),
+        input_witness(&tracked),
+    )
+    .map_err(|e| CiError::new(format!("cannot preserve input witness: {e}")))?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
         return Ok(format!(
@@ -84,6 +135,8 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
             plan.links_changed
         ));
     }
+    fs::write(root.join(target).join(SNAPSHOT), &text)
+        .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
     }
@@ -131,7 +184,7 @@ pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
     })
 }
 
-fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
+pub(super) fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
     let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
     let top = PathBuf::from(
         String::from_utf8(top)

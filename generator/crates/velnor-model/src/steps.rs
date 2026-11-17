@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cache::CacheKey;
+use crate::helper::HelperRelease;
 use crate::ids::{JobId, RepoPath};
-use crate::plan::{CargoCommand, HelperRelease};
+use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -62,6 +63,16 @@ pub enum StepKind {
         needs_max_bytes: usize,
     },
     UploadCargoLog,
+    ReportCaches {
+        caches: Vec<CacheKey>,
+        nextest_artifacts: bool,
+    },
+    UploadMetrics,
+    DownloadMetrics,
+    CheckMetrics {
+        needs_max_bytes: usize,
+        trusted_api: bool,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

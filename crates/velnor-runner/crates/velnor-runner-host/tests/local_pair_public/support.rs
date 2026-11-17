@@ -4,6 +4,8 @@
 use std::collections::HashMap;
 use std::error::Error;
 use std::fmt::Write as _;
+use std::path::{Path, PathBuf};
+use std::process::Command;
 
 use bollard::Docker;
 use bollard::models::NetworkCreateRequest;
@@ -50,6 +52,16 @@ pub(crate) fn platform() -> &'static str {
     }
 }
 
+pub(crate) fn job_hook_binary() -> TestResult<std::path::PathBuf> {
+    if let Some(path) = std::env::var_os("VELNOR_TEST_JOB_HOOK_BINARY") {
+        return Ok(path.into());
+    }
+    if cfg!(target_os = "linux") {
+        return Ok(env!("CARGO_BIN_EXE_velnor-local-test-job-hook").into());
+    }
+    Err("set VELNOR_TEST_JOB_HOOK_BINARY to a Linux velnor-job-start-hook binary".into())
+}
+
 fn append(
     context: &mut tar::Builder<Vec<u8>>,
     path: &str,
@@ -65,22 +77,131 @@ fn append(
     Ok(())
 }
 
+fn append_root_file(
+    context: &mut tar::Builder<Vec<u8>>,
+    source: &Path,
+    destination: &Path,
+) -> TestResult<()> {
+    let destination = format!(
+        "rootfs/{}",
+        destination
+            .to_str()
+            .ok_or("non-UTF-8 runtime path")?
+            .trim_start_matches('/')
+    );
+    append(context, &destination, 0o755, &std::fs::read(source)?)
+}
+
+fn runtime_dependencies(binary: &Path) -> TestResult<Vec<PathBuf>> {
+    let output = Command::new("ldd").arg(binary).output()?;
+    if !output.status.success() {
+        let diagnostic = format!(
+            "{}{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        if diagnostic.contains("not a dynamic executable")
+            || diagnostic.contains("statically linked")
+        {
+            return Ok(Vec::new());
+        }
+        return Err(format!("ldd failed for {}", binary.display()).into());
+    }
+    let output = String::from_utf8(output.stdout)?;
+    Ok(output
+        .lines()
+        .filter_map(|line| {
+            let dependency = line
+                .split_once("=>")
+                .map_or(line, |(_, dependency)| dependency)
+                .split_whitespace()
+                .next()?;
+            dependency
+                .starts_with('/')
+                .then(|| PathBuf::from(dependency))
+        })
+        .collect())
+}
+
+fn append_runtime(context: &mut tar::Builder<Vec<u8>>, job_hook: &Path) -> TestResult<()> {
+    let binaries = vec![
+        PathBuf::from("/bin/sh"),
+        PathBuf::from("/bin/sync"),
+        PathBuf::from("/bin/mv"),
+        PathBuf::from("/usr/bin/setsid"),
+    ];
+    let mut dependencies = Vec::new();
+    for binary in binaries
+        .iter()
+        .map(PathBuf::as_path)
+        .chain(std::iter::once(job_hook))
+    {
+        dependencies.extend(runtime_dependencies(binary)?);
+    }
+    for binary in binaries {
+        append_root_file(context, &binary, &binary)?;
+    }
+    dependencies.sort();
+    dependencies.dedup();
+    for dependency in dependencies {
+        append_root_file(context, &dependency, &dependency)?;
+    }
+    Ok(())
+}
+
+fn append_rootfs(
+    context: &mut tar::Builder<Vec<u8>>,
+    root: &Path,
+    directory: &Path,
+) -> TestResult<()> {
+    for entry in std::fs::read_dir(directory)? {
+        let entry = entry?;
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_symlink() {
+            return Err(format!("runtime root contains symlink {}", path.display()).into());
+        }
+        if file_type.is_dir() {
+            append_rootfs(context, root, &path)?;
+        } else {
+            let relative = path.strip_prefix(root)?;
+            let destination = format!(
+                "rootfs/{}",
+                relative.to_str().ok_or("non-UTF-8 runtime path")?
+            );
+            append(context, &destination, 0o755, &std::fs::read(path)?)?;
+        }
+    }
+    Ok(())
+}
+
 pub(crate) async fn build_program(
     docker: &Docker,
     tag: &str,
     program: Program,
 ) -> TestResult<String> {
     let mut context = tar::Builder::new(Vec::new());
-    append(
-        &mut context,
-        "Dockerfile",
-        0o644,
-        b"FROM scratch\nCOPY program /program\nCMD [\"/program\"]\n",
-    )?;
+    let mut dockerfile = "FROM scratch\n".to_owned();
+    if cfg!(target_os = "linux") || std::env::var_os("VELNOR_TEST_JOB_HOOK_BINARY").is_some() {
+        let binary = job_hook_binary()?;
+        append(&mut context, "job-hook", 0o755, &std::fs::read(&binary)?)?;
+        if cfg!(target_os = "linux") {
+            append_runtime(&mut context, &binary)?;
+        } else if let Some(rootfs) = std::env::var_os("VELNOR_TEST_JOB_HOOK_ROOTFS") {
+            let root = PathBuf::from(rootfs);
+            append_rootfs(&mut context, &root, &root)?;
+        } else {
+            return Err("set VELNOR_TEST_JOB_HOOK_ROOTFS to a Linux root filesystem".into());
+        }
+        dockerfile.push_str("COPY rootfs/ /\nCOPY job-hook /velnor-job-start-hook\n");
+    }
+    dockerfile.push_str("COPY program /program\nCMD [\"/program\"]\n");
+    append(&mut context, "Dockerfile", 0o644, dockerfile.as_bytes())?;
     append(&mut context, "program", 0o755, &program::elf(program))?;
     let options = BuildImageOptions {
         dockerfile: "Dockerfile".to_owned(),
         t: Some(tag.to_owned()),
+        platform: platform().to_owned(),
         rm: true,
         ..Default::default()
     };

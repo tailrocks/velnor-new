@@ -65,6 +65,38 @@ debug = "none"
 debug = "none"
 ```
 
+## Cache telemetry and enforcement
+
+With helper `0.1.81` or a supported source-built helper, each reporting-enabled
+Cargo lane ends with `velnor-ci report` and uploads `ci-metrics.json`. These
+steps also run after an earlier failure unless the run was cancelled. Report
+and upload failures do not replace the lane's build result. The report retains
+logs, provenance and step results, and emits local metrics without calling the
+API or using `GITHUB_TOKEN`.
+The workflow supplies each cache's family, root, and restore/save step IDs; the
+helper derives observed facts from step results and filesystem evidence. When a
+released bootstrap helper is older than `0.1.81`, the source-built artifact helper runs the
+tokenless local checks and diagnostics without API access.
+
+The separate `Cache` job checks the same-run metrics from every reporting
+lane. With released helper `0.1.81` or later, it runs `report --check` to add
+Actions API timings and cache archive sizes, then fails on cache waste, missing
+metrics, or unverifiable required evidence. The job has `actions: read` for
+this enrichment and receives an empty explicit API token on fork pull requests.
+It has no checkout and runs no Cargo commands. It is advisory by default. To
+include it in Required's dependencies and verdict specification, set this in
+`.velnor/rust-ci.toml`:
+
+```toml
+cache_check_blocks = true
+```
+
+`rust-trim` continues to verify cache uploads and prune old entries without a
+checkout or repository code. The `Cache` job needs no additional permission to
+download artifacts from its own run. The schema-1 JSON separates cache
+outcomes, captured Cargo invocations, display fields, verification errors, and
+optional diagnostics.
+
 ## Worked example
 
 A repository with the root `lab/Cargo.toml` and the job `rust-lint`, on `ubuntu-latest` (X64), at commit `c0ffee`, run `42`, compat `9f3a1c5e7b2d4a60`:

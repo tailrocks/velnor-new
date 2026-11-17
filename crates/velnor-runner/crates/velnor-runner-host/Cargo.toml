@@ -71,6 +71,12 @@ name = "velnor-resource-probe-release"
 path = "src/bin/velnor_resource_probe_release.rs"
 test = false
 
+[[bin]]
+name = "velnor-local-test-job-hook"
+path = "../velnor-resource-probe/src/bin/velnor_job_start_hook.rs"
+test = false
+required-features = ["local-mode"]
+
 [lib]
 doctest = false
 test = true
