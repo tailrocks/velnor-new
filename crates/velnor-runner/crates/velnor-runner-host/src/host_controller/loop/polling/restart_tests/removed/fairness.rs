@@ -5,7 +5,9 @@ use std::time::Duration;
 
 use bollard::query_parameters::{RemoveContainerOptionsBuilder, StopContainerOptionsBuilder};
 
-use super::{Controller, RETIRED, Restarted, TestResult, restarted_with_removed_pairs, seed};
+use super::{
+    Controller, RETIRED, Restarted, TestResult, freeze, restarted_with_removed_pairs, seed, stalled,
+};
 use crate::config::RepositoryConnection;
 use crate::controller_ipc::ControlState;
 use crate::host_controller::loop_driver::{
@@ -24,7 +26,6 @@ const SECOND: Pair = Pair {
     bound: false,
 };
 const BUDGET: Duration = Duration::from_secs(5);
-const GUARD: Duration = Duration::from_secs(15);
 const CHARGE: &str = "SELECT state || '/' || cpu_millicores || '/' || memory_bytes FROM capacity_reservations WHERE id = ?1";
 const CHARGED: &str = "uncertain/3000/6442450944";
 const GENERATION: &str = "SELECT CAST(claim_generation AS TEXT) FROM capacity_reservation_unbound_retirement_claims WHERE reservation_id = ?1";
@@ -149,6 +150,7 @@ async fn reconcile(
     pending: &[RepositoryConnection],
     connections: &mut Vec<PreparedConnection>,
 ) -> TestResult<()> {
+    let clock = freeze();
     let recovery = poll_active_connections(
         ConnectionPollContext { ..*context },
         pending,
@@ -156,20 +158,10 @@ async fn reconcile(
         FairnessTurn::new(true, false),
     );
     tokio::pin!(recovery);
-    tokio::time::timeout(GUARD, async {
-        tokio::select! {
-            result = &mut recovery => {
-                result?;
-                Err::<(), Box<dyn std::error::Error>>("removed connection poll returned before its assigned pair stalled".into())
-            }
-            () = restarted.fixture.hung() => Ok(()),
-        }
-    })
-    .await??;
-    tokio::time::pause();
-    tokio::time::advance(BUDGET + Duration::from_secs(1)).await;
-    tokio::time::resume();
-    tokio::time::timeout(GUARD, &mut recovery).await??;
+    stalled(&restarted.fixture, &mut recovery).await?;
+    clock.advance(BUDGET + Duration::from_secs(1)).await;
+    recovery.await?;
+    drop(clock);
     Ok(())
 }
 
