@@ -48,8 +48,7 @@ fn a_previous_slow_poll_does_not_spend_the_next_connections_retirement_budget() 
 
 fn run(stall: bool, name: &str) -> TestResult<()> {
     if std::env::var_os(CHILD).is_some() {
-        return tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+        return tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()?
             .block_on(exercise(stall));
@@ -158,11 +157,11 @@ async fn exercise(stall: bool) -> TestResult<()> {
     )
     .await?;
     let active = active_connection(&restarted).await?;
+    let failed_objects = restarted.fixture.objects(FAILED);
     if stall {
-        restarted.fixture.hang_after(format!(
-            "DELETE /containers/{}",
-            FAILED.container_id("runner")
-        ));
+        restarted
+            .fixture
+            .gate_container_inspection(&FAILED.container_id("runner"));
     }
     let control_state = ControlState::new(&removed.config);
     let pending = [removed.prepared.binding.clone()];
@@ -172,10 +171,8 @@ async fn exercise(stall: bool) -> TestResult<()> {
         vec![active.prepared, removed.prepared]
     };
     let started = Instant::now();
-    let guard = Duration::from_secs(if stall { 5 } else { 15 });
-    tokio::time::timeout(
-        guard,
-        poll_active_connections(
+    {
+        let poll = poll_active_connections(
             ConnectionPollContext {
                 config: &removed.config,
                 journal: &restarted.journal,
@@ -195,21 +192,50 @@ async fn exercise(stall: bool) -> TestResult<()> {
             &pending,
             &mut connections,
             FairnessTurn::new(false, false),
-        ),
-    )
-    .await??;
-    assert!(started.elapsed() < guard);
-    assert_polled(&restarted, &control_state).await?;
+        );
+        tokio::pin!(poll);
+        if stall {
+            tokio::time::timeout(Duration::from_secs(15), async {
+                tokio::select! {
+                    result = &mut poll => {
+                        result?;
+                        Err::<(), Box<dyn std::error::Error>>("connection poll returned before retirement inspection stalled".into())
+                    }
+                    () = restarted.fixture.hung() => Ok(()),
+                }
+            })
+            .await??;
+            assert_eq!(restarted.fixture.inspection_gate_hits(), 1);
+            tokio::time::pause();
+            tokio::time::advance(Duration::from_secs(1)).await;
+            tokio::time::resume();
+            tokio::time::timeout(Duration::from_secs(5), &mut poll).await??;
+        } else {
+            tokio::time::timeout(Duration::from_secs(15), &mut poll).await??;
+            assert!(started.elapsed() < Duration::from_secs(15));
+        }
+    }
+    assert_recovery_outcome(stall, &restarted, &control_state, failed_objects, started).await
+}
+
+async fn assert_recovery_outcome(
+    stall: bool,
+    restarted: &Restarted,
+    control_state: &ControlState,
+    failed_objects: Vec<String>,
+    started: Instant,
+) -> TestResult<()> {
+    assert_polled(restarted, control_state).await?;
     if stall {
-        tokio::time::timeout(Duration::from_secs(1), restarted.fixture.hung()).await?;
         assert_eq!(
             seed::text(&restarted.journal, seed::RESERVATION, FAILED.reservation).await?,
             UNCERTAIN
         );
-        assert_ne!(restarted.fixture.objects(FAILED), Vec::<String>::new());
+        assert_ne!(failed_objects, Vec::<String>::new());
+        assert_eq!(restarted.fixture.objects(FAILED), failed_objects);
     } else {
         assert!(started.elapsed() >= Duration::from_secs(6));
-        assert_retired(&restarted).await?;
+        assert_retired(restarted).await?;
     }
     Ok(())
 }
