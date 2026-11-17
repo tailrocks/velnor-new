@@ -109,6 +109,11 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
         }
     }
     private_sources_disable_deltas()?;
+    custom_targets_omit_deltas()?;
+    Ok(())
+}
+
+fn custom_targets_omit_deltas() -> TestResult {
     let mut custom = pinned("0.1.81", "")?;
     let config = RepoPath::new(".cargo/config.toml")?;
     custom.tracked_paths.insert(config.clone());
