@@ -5,6 +5,9 @@ mod audit;
 mod build_inputs;
 mod cold;
 mod configurations;
+mod crates_mirror;
+mod crates_mirror_dispatch;
+mod crates_mirror_mise;
 mod git;
 mod http;
 mod inputs;
@@ -74,6 +77,9 @@ where
 
 #[must_use]
 pub fn main() -> ExitCode {
+    if crates_mirror::is_wrapper() {
+        return crates_mirror::run();
+    }
     let cli = match parse_cli(std::env::args_os()) {
         Ok(cli) => cli,
         Err(error) if error.use_stderr() => {
@@ -119,6 +125,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Plan(args) => plan::run_plan(&args),
         Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
+        Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),

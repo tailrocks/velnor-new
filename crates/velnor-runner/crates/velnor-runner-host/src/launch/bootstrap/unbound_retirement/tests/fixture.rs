@@ -27,6 +27,8 @@ struct State {
     requests: Vec<String>,
     hang_after: Option<String>,
     armed: bool,
+    read_gate: Option<String>,
+    read_gate_hits: usize,
 }
 
 pub(crate) struct FixtureDocker {
@@ -104,6 +106,14 @@ impl FixtureDocker {
 
     pub(crate) fn hang_after(&self, request: String) {
         lock(&self.state).hang_after = Some(request);
+    }
+
+    pub(crate) fn gate_container_inspection(&self, id: &str) {
+        lock(&self.state).read_gate = Some(format!("GET /containers/{id}/json"));
+    }
+
+    pub(crate) fn inspection_gate_hits(&self) -> usize {
+        lock(&self.state).read_gate_hits
     }
 
     pub(crate) async fn hung(&self) {
@@ -226,7 +236,11 @@ async fn serve(mut stream: UnixStream, state: &Mutex<State>, hung: &Notify) -> T
     let segments: Vec<&str> = route.split('/').skip(1).collect();
     let response = {
         let mut state = lock(state);
-        if state.armed {
+        if state.read_gate.as_deref() == Some(request.as_str()) {
+            state.requests.push(request.clone());
+            state.read_gate_hits += 1;
+            None
+        } else if state.armed {
             state.armed = false;
             state.hang_after = None;
             None

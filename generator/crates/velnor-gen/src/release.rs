@@ -129,7 +129,8 @@ fn tracked_workflows(view: &RepoView) -> impl Iterator<Item = (String, String)> 
         .iter()
         .filter(|(path, _)| {
             let name = path.as_str();
-            name.starts_with(".github/workflows/")
+            name.strip_prefix(".github/workflows/")
+                .is_some_and(|relative| !relative.contains('/'))
                 && std::path::Path::new(name)
                     .extension()
                     .is_some_and(|ext| ext == "yml" || ext == "yaml")
