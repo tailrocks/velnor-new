@@ -67,6 +67,7 @@ pub enum Reason {
     HelperTarget(RepoPath),
     CargoCredentialProvider(String),
     TargetDirOutside(String),
+    TargetDirOverlap(String),
     BuildDirKey(&'static str),
     RuntimeTargetDir {
         used: RepoPath,
@@ -118,6 +119,7 @@ impl Reason {
                 f,
                 "build.target-dir is {value:?}, which is not a plain folder inside the repository below its root (a leading ~ or a {{placeholder}} is not modelled); the target cache can only save a folder of the checkout, so name one"
             ),
+            Self::TargetDirOverlap(value) => write!(f, "build.target-dir {value:?} overlaps tracked checkout content or repository control paths; use an untracked build directory"),
             Self::RuntimeTargetDir { used, rendered } => write!(
                 f,
                 "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
@@ -204,6 +206,7 @@ impl fmt::Display for Reason {
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
             | Self::TargetDirOutside(_)
+            | Self::TargetDirOverlap(_)
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),

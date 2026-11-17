@@ -41,17 +41,19 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
-    let restores = job
-        .steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))));
+    let restores = job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::Helper(HelperCommand::Restored(..)) | StepKind::RestoredTargets { .. }
+        )
+    });
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(with_saved_lane(
-            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            crate::base_steps::audited_lane(admission(job.when, job.gate.as_ref(), job.skip_on_draft), job),
             &job.steps,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
@@ -93,7 +95,9 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                     (true, true) => Setup::Replanned,
                 };
                 *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-                Some(rendered_steps(step, setup))
+                let mut bodies = rendered_steps(step, setup);
+                for body in &mut bodies { body.condition = all_conditions(body.condition.take(), crate::base_steps::audited_save(job, step)); }
+                Some(bodies)
             })
             .flatten()
             .collect(),
@@ -135,6 +139,12 @@ fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
                 Value::Expr(format!("${{{{ {read} }}}}")),
             )
         }));
+    }
+    if let Some(verify) = rendered
+        .first()
+        .and_then(|saved| crate::cache_upload::verification(&step.kind, saved))
+    {
+        rendered.push(verify);
     }
     rendered
 }
@@ -188,7 +198,9 @@ fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
-        StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
+        StepKind::CacheDecide { target, archive, manifests } => cache_decide(target, archive.as_ref(), manifests),
+        StepKind::RestoredTargets { expiry, targets } => crate::helper_steps::restored_step(*expiry, targets),
+        StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
@@ -324,6 +336,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         },
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
+        continue_on_error: !fallbacks && crate::cache_upload::verification_id(key).is_some(),
         with,
         ..RenderedStep::default()
     }

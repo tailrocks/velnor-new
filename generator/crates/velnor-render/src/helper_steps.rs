@@ -53,3 +53,21 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
         ..RenderedStep::default()
     }
 }
+
+pub(crate) fn restored_step(
+    expiry: velnor_model::BaseExpiry,
+    targets: &[RepoPath],
+) -> RenderedStep {
+    let mut step = helper_step(HelperCommand::Restored(expiry));
+    step.env.push((
+        "VELNOR_CACHE_TARGETS".to_owned(),
+        crate::rules::Value::Text(
+            targets
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join("\n"),
+        ),
+    ));
+    step
+}

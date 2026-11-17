@@ -3,6 +3,7 @@
 
 mod base_steps;
 mod cache;
+mod cache_upload;
 mod cargo;
 mod events;
 mod gate;

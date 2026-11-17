@@ -104,9 +104,10 @@ pub(crate) fn condition(
         When::ScheduledOrPush => parts.push(format!(
             "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
         )),
-        When::SaveBase | When::SaveBaseDecided => {
+        When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
+                parts.push("success()".to_owned());
                 parts.push(SETUP_DONE.to_owned());
             }
             if setup == Setup::Replanned {
@@ -114,10 +115,18 @@ pub(crate) fn condition(
             }
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(SAVING_EVENTS.to_owned());
+            if when == When::SaveSources {
+                parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
+            }
             if when == When::SaveBaseDecided {
                 parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
             }
         }
+        When::FullAudit => {
+            let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
+            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired})"));
+        },
+        When::FullAuditOrPush => parts.push("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')".to_owned()),
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());

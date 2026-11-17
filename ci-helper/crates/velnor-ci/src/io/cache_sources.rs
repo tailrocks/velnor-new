@@ -2,50 +2,67 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::path::Path;
-use std::process::Command;
+use std::path::{Path, PathBuf};
 
 use crate::error::CiError;
 
-pub(super) fn refusal(root: &Path) -> Result<Option<String>, CiError> {
-    let output = Command::new("git")
-        .args([
-            "ls-files",
-            "-z",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-            "Cargo.lock",
-            "**/Cargo.lock",
-        ])
-        .current_dir(root)
-        .output()
-        .map_err(|e| CiError::new(format!("cannot list Cargo.lock files: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(
-            "cannot list Cargo.lock files for cache eligibility",
-        ));
+pub(super) fn refusal(root: &Path, manifests: &[PathBuf]) -> Result<Option<String>, CiError> {
+    let refused = |path: &Path| {
+        Some(format!(
+            "base caches are not saved because dependency sources in {} are not proven public\n",
+            path.display()
+        ))
+    };
+    if std::env::vars_os().any(|(key, _)| {
+        let key = key.to_string_lossy();
+        key.starts_with("CARGO_SOURCE_")
+            || key.starts_with("CARGO_REGISTRIES_")
+            || key == "CARGO_REGISTRY_INDEX"
+            || key == "CARGO_BUILD_TARGET_DIR"
+    }) {
+        return Ok(refused(Path::new("Cargo environment")));
     }
-    let listing = String::from_utf8(output.stdout)
-        .map_err(|_| CiError::new("Cargo.lock path is not UTF-8"))?;
-    let paths: Vec<&str> = listing.split_terminator('\0').collect();
-    if paths.is_empty() {
-        return Ok(Some(
-            "base caches are not saved because no Cargo.lock proves dependency sources public\n"
-                .to_owned(),
-        ));
-    }
-    for path in paths {
-        let public = fs::read_to_string(root.join(path))
-            .ok()
-            .and_then(|text| velnor_rust::cacheable_lock(&text).ok())
-            .unwrap_or(false);
-        if !public {
-            return Ok(Some(format!(
-                "base caches are not saved because dependency sources in {path} are not proven public\n"
-            )));
+    let cargo_home = std::env::var_os("CARGO_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
+    let Some(cargo_home) = cargo_home else {
+        return Ok(refused(Path::new("CARGO_HOME")));
+    };
+    for manifest in manifests {
+        let directory = root
+            .join(manifest)
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| CiError::new("manifest has no parent"))?;
+        let lock = directory.join("Cargo.lock");
+        if !read_public(&lock, velnor_rust::cacheable_lock) {
+            return Ok(refused(&lock));
+        }
+        for dir in directory
+            .ancestors()
+            .map(|dir| dir.join(".cargo"))
+            .chain([cargo_home.clone()])
+        {
+            for name in ["config", "config.toml"] {
+                let path = dir.join(name);
+                match fs::symlink_metadata(&path) {
+                    Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+                    Ok(meta) if meta.is_file() => {}
+                    _ => return Ok(refused(&path)),
+                }
+                if !read_public(&path, velnor_rust::cacheable_config) {
+                    return Ok(refused(&path));
+                }
+            }
         }
     }
     Ok(None)
+}
+
+fn read_public(path: &Path, check: fn(&str) -> Result<bool, velnor_rust::LockError>) -> bool {
+    fs::symlink_metadata(path).is_ok_and(|meta| meta.is_file())
+        && fs::read_to_string(path)
+            .ok()
+            .and_then(|text| check(&text).ok())
+            .unwrap_or(false)
 }
