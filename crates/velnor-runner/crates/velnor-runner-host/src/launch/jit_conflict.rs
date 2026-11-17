@@ -4,6 +4,9 @@
 mod local;
 mod remote;
 
+#[cfg(test)]
+mod tests;
+
 use bollard::Docker;
 
 use crate::{
