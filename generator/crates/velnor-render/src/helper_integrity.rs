@@ -11,7 +11,10 @@ const CHECKSUM_ARGUMENTS: &str = "${{ runner.os == 'Linux' && '--check --status'
 
 pub(crate) const INVOCATION_SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
 
-pub(crate) const INVOCATION_PREFIX: &str = "VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d \"$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX\") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp \"$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX\") && /bin/cp \"$VELNOR_HELPER\" \"$VELNOR_HELPER_COPY\" && /bin/chmod 500 \"$VELNOR_HELPER_COPY\" && { \"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\" || { /usr/bin/printf '%s\\n' 'velnor-ci integrity check failed' >&2; exit 1; }; } && exec \"$VELNOR_HELPER_COPY\" ";
+pub(crate) const INVOCATION_PREFIX: &str =
+    "/bin/bash --noprofile --norc -p -e -o pipefail -c \"$VELNOR_HELPER_LAUNCHER\" -- ";
+
+pub(crate) const LAUNCHER: &str = "VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d \"$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX\") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp \"$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX\") && /bin/cp \"$VELNOR_HELPER\" \"$VELNOR_HELPER_COPY\" && /bin/chmod 500 \"$VELNOR_HELPER_COPY\" && { /usr/bin/env -i PATH=/usr/bin:/bin \"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\" || { /usr/bin/printf '%s\\n' 'velnor-ci integrity check failed' >&2; exit 1; }; } && exec \"$VELNOR_HELPER_COPY\" \"$@\"";
 
 pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedStep> {
     let Some(release) = job.steps.iter().find_map(|step| match &step.kind {
@@ -65,7 +68,7 @@ fn install_copy(condition: Option<&str>) -> Vec<RenderedStep> {
         ),
         (
             "Protect the released helper",
-            "/bin/chmod 500 \"$VELNOR_HELPER_DIRECTORY\" \"$VELNOR_HELPER\"",
+            "/bin/chmod 500 \"$VELNOR_HELPER\"",
         ),
     ]
     .into_iter()
@@ -99,6 +102,10 @@ fn verification_environment(release: &HelperRelease) -> Vec<(String, Value)> {
         })
         .collect();
     vec![
+        (
+            "VELNOR_HELPER_LAUNCHER".to_owned(),
+            Value::Text(LAUNCHER.to_owned()),
+        ),
         helper_path(),
         (
             "VELNOR_HELPER_TEMP".to_owned(),

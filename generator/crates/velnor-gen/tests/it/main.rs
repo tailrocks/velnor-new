@@ -25,8 +25,10 @@ mod harness;
 mod harness_kinds;
 mod harness_undecided;
 mod helper_integrity;
+mod helper_perl_environment;
 mod helper_source;
 mod helper_startup;
+mod helper_workflow_size;
 
 mod inputs;
 mod io;

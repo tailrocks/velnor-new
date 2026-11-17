@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
+use std::fmt::Write;
 
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::{RELEASE_WORKFLOW_PATH, RepoPath};
@@ -78,5 +79,53 @@ fn nested_push_templates_do_not_become_required_release_workflows() -> TestResul
             .texts(),
         ["Rust CI", DIRECT]
     );
+    Ok(())
+}
+
+#[test]
+fn alias_dense_workflows_preserve_release_dependency_names_and_events() -> TestResult {
+    for event in ["pull_request", "push"] {
+        let mut text =
+            format!("name: Extra\non: {event}\nenv:\n  SHARED: &shared 'released-helper'\n");
+        for index in 0..200 {
+            writeln!(text, "  COPY_{index}: *shared")?;
+        }
+        let expected = if event == "push" { Some("Extra") } else { None };
+        assert_eq!(
+            missing_name(text.as_bytes(), "\"Rust CI\"")?.as_deref(),
+            expected
+        );
+        assert_eq!(
+            missing_name(text.as_bytes(), "\"Rust CI\", \"Extra\"")?,
+            None
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn workflows_beyond_input_or_expansion_bounds_stay_conservative() -> TestResult {
+    let oversized = format!(
+        "name: Extra\non: pull_request\nenv:\n  LONG: '{}'\n",
+        "é".repeat(250_001)
+    );
+    let mut expanded = format!(
+        "name: Extra\non: pull_request\nenv:\n  SHARED: &shared '{}'\n",
+        "x".repeat(100_000)
+    );
+    for index in 0..200 {
+        writeln!(expanded, "  COPY_{index}: *shared")?;
+    }
+    assert!(expanded.len() < 500_000);
+    for text in [oversized, expanded] {
+        assert_eq!(
+            missing_name(text.as_bytes(), "\"Rust CI\"")?.as_deref(),
+            Some(PATH)
+        );
+        assert_eq!(
+            missing_name(text.as_bytes(), &format!("\"Rust CI\", {PATH:?}"))?,
+            None
+        );
+    }
     Ok(())
 }

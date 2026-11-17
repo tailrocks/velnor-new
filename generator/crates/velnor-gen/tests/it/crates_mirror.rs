@@ -38,12 +38,12 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                 .insert(lock.clone(), old.replace("0.1.79", "0.1.81").into_bytes());
             let text = workflow(&repo)?;
             assert_eq!(
-                text.contains("exec \"$VELNOR_HELPER_COPY\" crates-mirror"),
+                text.contains("\"$VELNOR_HELPER_LAUNCHER\" -- crates-mirror"),
                 enabled,
                 "{text}"
             );
             if enabled {
-                let yaml: serde_json::Value = serde_saphyr::from_str(&text)?;
+                let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
                 let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
                 assert!(jobs.contains_key("policy"));
                 if !shape.is_empty() {
@@ -55,7 +55,7 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                     let steps = job["steps"].as_array().ok_or("steps missing")?;
                     let mirror = steps.iter().position(|step| {
                         step["run"].as_str().is_some_and(|run| {
-                            run.contains("exec \"$VELNOR_HELPER_COPY\" crates-mirror")
+                            run.contains("\"$VELNOR_HELPER_LAUNCHER\" -- crates-mirror")
                         })
                     });
                     assert_cargo_scope(steps, mirror, runner, job_id);
@@ -69,7 +69,7 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                         let repeated = steps.get(tools + 1).ok_or("mirror missing after Mise")?;
                         let run = repeated["run"].as_str().ok_or("mirror command missing")?;
                         assert!(
-                            run.contains("exec \"$VELNOR_HELPER_COPY\" crates-mirror"),
+                            run.contains("\"$VELNOR_HELPER_LAUNCHER\" -- crates-mirror"),
                             "{runner}: {repeated}"
                         );
                         assert_helper_guard(
@@ -85,7 +85,7 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                 .insert(lock, old.replace("0.1.79", "0.1.80").into_bytes());
             assert!(workflow(&repo).is_err_and(|error| error.to_string().contains("0.1.81")));
             repo.files.remove(&path(".velnor/rust-ci.toml")?);
-            assert!(!workflow(&repo)?.contains("exec \"$VELNOR_HELPER_COPY\" crates-mirror"));
+            assert!(!workflow(&repo)?.contains("\"$VELNOR_HELPER_LAUNCHER\" -- crates-mirror"));
         }
     }
     Ok(())
@@ -95,7 +95,7 @@ fn assert_cargo_scope(steps: &[serde_json::Value], mirror: Option<usize>, runner
     let has_cargo = steps.iter().any(|step| {
         step["run"]
             .as_str()
-            .is_some_and(|run| run.contains("exec \"$VELNOR_HELPER_COPY\" run "))
+            .is_some_and(|run| run.contains("\"$VELNOR_HELPER_LAUNCHER\" -- run "))
     });
     assert_eq!(mirror.is_some(), has_cargo, "{runner}: {job}");
     assert_mirror_before_tools(steps, mirror);
@@ -137,7 +137,7 @@ fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
         *lock = String::from_utf8(lock.clone())?
             .replace("0.1.79", "0.1.81")
             .into_bytes();
-        let yaml: serde_json::Value = serde_saphyr::from_str(&workflow(&repo)?)?;
+        let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
         let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
         assert!(jobs.contains_key("policy"));
         if shape == "one-job" {
@@ -173,14 +173,14 @@ fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
                 steps,
                 steps.iter().position(|step| {
                     step["run"].as_str().is_some_and(|run| {
-                        run.contains("exec \"$VELNOR_HELPER_COPY\" crates-mirror")
+                        run.contains("\"$VELNOR_HELPER_LAUNCHER\" -- crates-mirror")
                     })
                 }),
             );
             for (index, step) in steps.iter().enumerate().filter(|(_, step)| {
                 step["run"]
                     .as_str()
-                    .is_some_and(|run| run.contains("exec \"$VELNOR_HELPER_COPY\" crates-mirror"))
+                    .is_some_and(|run| run.contains("\"$VELNOR_HELPER_LAUNCHER\" -- crates-mirror"))
             }) {
                 saw_mirror = true;
                 if let Some(plan) = plan {

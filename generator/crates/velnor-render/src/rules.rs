@@ -112,7 +112,7 @@ impl fmt::Display for RuleViolation {
         if let Rule::WorkflowTooLarge(bytes) = &self.rule {
             return write!(
                 f,
-                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
+                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; reduce the workflow size"
             );
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
@@ -234,7 +234,15 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if step.run.is_some() == step.uses.is_some() {
         rules.push(Rule::NotExactlyOneOfRunAndUses);
     }
+    let mut launchers = step
+        .env
+        .iter()
+        .filter(|(key, _)| key == "VELNOR_HELPER_LAUNCHER");
+    let trusted_launcher = launchers.next().is_some_and(|(_, value)| {
+        value == &Value::Text(crate::helper_integrity::LAUNCHER.to_owned())
+    }) && launchers.next().is_none();
     let trusted_shell = step.shell.as_deref() == Some(crate::helper_integrity::INVOCATION_SHELL)
+        && trusted_launcher
         && step
             .run
             .as_deref()

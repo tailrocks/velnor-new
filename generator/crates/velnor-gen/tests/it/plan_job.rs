@@ -78,7 +78,7 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     );
     let plan_step = steps_of(&text, "rust");
     assert!(plan_index < plan_step.len());
-    assert!(text.contains(r#"exec "$VELNOR_HELPER_COPY" plan --explain'"#));
+    assert!(text.contains(r#""$VELNOR_HELPER_LAUNCHER" -- plan --explain'"#));
     assert!(!text.contains("steps.velnor-helper-check-"));
     assert!(!text.contains("GITHUB_TOKEN"), "{text}");
     Ok(())
@@ -154,7 +154,7 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
     for line in steps {
         assert!(
             line.contains(
-                "\"$VELNOR_HELPER_COPY\" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"
+                "\"$VELNOR_HELPER_LAUNCHER\" -- run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"
             ),
             "{line}"
         );
@@ -215,7 +215,7 @@ fn every_cargo_command_runs_through_the_helper() -> TestResult {
     for run in runs {
         let cargo = run.contains("cargo-") || run.starts_with("cargo ");
         assert!(
-            !cargo || run.contains("exec \"$VELNOR_HELPER_COPY\" run "),
+            !cargo || run.contains("\"$VELNOR_HELPER_LAUNCHER\" -- run "),
             "{run}"
         );
     }
@@ -336,7 +336,7 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
         let text = workflow(&view(roots, None)?)?;
         let cargo: Vec<&str> = text
             .split("      - name: ")
-            .filter(|step| step.contains(r#"exec "$VELNOR_HELPER_COPY" run -- cargo"#))
+            .filter(|step| step.contains(r#""$VELNOR_HELPER_LAUNCHER" -- run -- cargo"#))
             .collect();
         assert!(!cargo.is_empty(), "{text}");
         for step in cargo {

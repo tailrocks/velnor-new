@@ -67,10 +67,15 @@ pub fn render_workflow(
             ),
         ),
     ];
-    Ok(BTreeMap::from([(
-        WORKFLOW_PATH,
-        format!("{GENERATED_HEADER}{}", emit(&workflow)),
-    )]))
+    let file = format!("{GENERATED_HEADER}{}", emit(&workflow));
+    if file.len() > rules::MAX_WORKFLOW_BYTES {
+        return Err(vec![RuleViolation {
+            job: String::new(),
+            step: 0,
+            rule: Rule::WorkflowTooLarge(file.len()),
+        }]);
+    }
+    Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }
 
 pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String)> {

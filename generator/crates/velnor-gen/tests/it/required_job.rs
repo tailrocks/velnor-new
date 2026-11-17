@@ -53,7 +53,7 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
     assert!(job.contains(
         "        env:\n          NEEDS_JSON: '${{ toJSON(needs) }}'\n          GATE_SPEC: '"
     ));
-    assert!(job.contains("exec \"$VELNOR_HELPER_COPY\" gate --spec-env GATE_SPEC'\n"));
+    assert!(job.contains("\"$VELNOR_HELPER_LAUNCHER\" -- gate --spec-env GATE_SPEC'\n"));
     assert_eq!(
         gate_line(&text)?,
         "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
@@ -143,8 +143,8 @@ fn a_helper_built_from_source_never_runs_the_gate_from_the_pull_request_build() 
 }
 
 #[test]
-fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
-    let manifests: Vec<String> = (0..60)
+fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests: Vec<String> = (0..20)
         .map(|index| {
             if index == 0 {
                 "Cargo.toml".to_owned()
@@ -157,8 +157,37 @@ fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
     let text = released("0.1.81", &roots)?;
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
-    assert_eq!(spec.matches("--tests ").count(), 60);
-    assert!(required(&text)?.contains("exec \"$VELNOR_HELPER_COPY\" gate --spec-env GATE_SPEC'\n"));
+    assert_eq!(spec.matches("--tests ").count(), 20);
+    assert!(
+        required(&text)?.contains("\"$VELNOR_HELPER_LAUNCHER\" -- gate --spec-env GATE_SPEC'\n")
+    );
+    Ok(())
+}
+
+#[test]
+fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> TestResult {
+    let manifests: Vec<String> = (0..60)
+        .map(|index| {
+            if index == 0 {
+                "Cargo.toml".to_owned()
+            } else {
+                format!("crate-with-a-long-directory-name-{index}/Cargo.toml")
+            }
+        })
+        .collect();
+    let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let mut view = view(&roots, None)?;
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    view.files
+        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
+    let result = expected_files(&view);
+    let Err(velnor_gen::GenerateError::Rules(violations)) = result else {
+        return Err("oversized main workflow was not rejected by YAML rules".into());
+    };
+    let violation = violations.iter().find(|violation| matches!(violation.rule, velnor_render::Rule::WorkflowTooLarge(bytes) if bytes > 500_000)).ok_or("no workflow size violation")?;
+    let message = violation.to_string();
+    assert!(message.contains("500000 bytes"));
+    assert!(message.contains("reduce the workflow size"));
     Ok(())
 }
 

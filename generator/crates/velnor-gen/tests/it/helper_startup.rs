@@ -8,7 +8,7 @@ use std::os::unix::fs::PermissionsExt;
 
 const SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
 
-fn native_helper(root: &std::path::Path) -> Result<String, Box<dyn std::error::Error>> {
+pub(crate) fn native_helper(root: &std::path::Path) -> Result<String, Box<dyn std::error::Error>> {
     let source = root.join("velnor-ci-bin/velnor-ci");
     fs::copy("/bin/echo", &source)?;
     if cfg!(target_os = "macos") {
@@ -132,13 +132,41 @@ fn hardened_shell_is_allowed_only_with_the_exact_trusted_wrapper() -> TestResult
         .find(|step| step["name"] == "velnor-ci plan")
         .and_then(|step| step["run"].as_str())
         .ok_or("no invocation")?;
-    for (run, shell) in [
-        ("echo ordinary", SHELL),
+    let valid_environment: Vec<(String, velnor_render::Value)> = steps(&yaml)?
+        .iter()
+        .find(|step| step["name"] == "velnor-ci plan")
+        .ok_or("no plan")?["env"]
+        .as_object()
+        .ok_or("no environment")?
+        .iter()
+        .map(|(key, value)| {
+            Ok((
+                key.clone(),
+                velnor_render::Value::Text(value.as_str().ok_or("invalid env")?.to_owned()),
+            ))
+        })
+        .collect::<Result<_, Box<dyn std::error::Error>>>()?;
+    for (run, shell, change) in [
+        ("echo ordinary", SHELL, "none"),
+        (invocation, SHELL, "missing"),
+        (invocation, SHELL, "mutated"),
         (
             invocation,
             "/bin/bash --noprofile --norc -e -o pipefail {0}",
+            "none",
         ),
     ] {
+        let mut env = valid_environment.clone();
+        if change == "missing" {
+            env.retain(|(key, _)| key != "VELNOR_HELPER_LAUNCHER");
+        }
+        if change == "mutated" {
+            for (key, value) in &mut env {
+                if key == "VELNOR_HELPER_LAUNCHER" {
+                    *value = velnor_render::Value::Text("exit 0".to_owned());
+                }
+            }
+        }
         let result = check_rules(&RenderedWorkflow {
             jobs: vec![RenderedJob {
                 id: "trusted".to_owned(),
@@ -148,6 +176,7 @@ fn hardened_shell_is_allowed_only_with_the_exact_trusted_wrapper() -> TestResult
                     name: "trusted".to_owned(),
                     run: Some(run.to_owned()),
                     shell: Some(shell.to_owned()),
+                    env,
                     ..RenderedStep::default()
                 }],
                 ..RenderedJob::default()

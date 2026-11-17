@@ -21,7 +21,7 @@ use crate::io::Scratch;
 const GOOD: &str = "#!/bin/sh\nprintf 'released-helper\\n'\n";
 const BAD: &str = "#!/bin/sh\nprintf 'replaced-helper\\n'\n";
 
-pub(crate) fn workflow(digest: &str) -> Result<Value, Box<dyn Error>> {
+pub(crate) fn workflow_text(digest: &str, extra: Vec<StepKind>) -> Result<String, Box<dyn Error>> {
     let release = HelperRelease::new(
         HelperVersion::new("1.2.3")?,
         CommitSha::new("1793cf84b5924e2542a03b0fb2580e7395b2f4cb")?,
@@ -55,10 +55,22 @@ pub(crate) fn workflow(digest: &str) -> Result<Value, Box<dyn Error>> {
         },
     ])?;
     plan.jobs[0].steps.last_mut().ok_or("no verdict")?.when = When::Always;
+    let template = plan.jobs[0].steps[1].clone();
+    plan.jobs[0]
+        .steps
+        .extend(extra.into_iter().map(|kind| velnor_model::Step {
+            kind,
+            ..template.clone()
+        }));
     let files = render(&plan).map_err(|errors| format!("{errors:?}"))?;
-    Ok(serde_saphyr::from_str(
-        files.get(&WORKFLOW_PATH).ok_or("no workflow")?,
-    )?)
+    Ok(files.get(&WORKFLOW_PATH).ok_or("no workflow")?.clone())
+}
+
+pub(crate) fn workflow(digest: &str) -> Result<Value, Box<dyn Error>> {
+    Ok(crate::yaml_tree::document(&workflow_text(
+        digest,
+        Vec::new(),
+    )?)?)
 }
 
 pub(crate) fn steps(workflow: &Value) -> Result<&Vec<Value>, Box<dyn Error>> {
@@ -86,24 +98,16 @@ fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> Tes
             "/bin/bash --noprofile --norc -p -e -o pipefail {0}"
         );
         assert_eq!(run.lines().count(), 1, "{run}");
-        let mut rest = run;
-        for operation in [
-            "VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d \"$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX\")",
-            "VELNOR_HELPER_COPY=$(/usr/bin/mktemp \"$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX\")",
-            "/bin/cp \"$VELNOR_HELPER\" \"$VELNOR_HELPER_COPY\"",
-            "/bin/chmod 500 \"$VELNOR_HELPER_COPY\"",
-            "{ \"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\" || { /usr/bin/printf '%s\\n' 'velnor-ci integrity check failed' >&2; exit 1; }; }",
-            "exec \"$VELNOR_HELPER_COPY\" ",
-        ] {
-            rest = rest
-                .strip_prefix(operation)
-                .ok_or_else(|| format!("missing {operation}: {run}"))?;
-            if !operation.starts_with("exec ") {
-                rest = rest
-                    .strip_prefix(" && ")
-                    .ok_or("operation not conditional")?;
-            }
-        }
+        let rest = run
+            .strip_prefix(
+                "/bin/bash --noprofile --norc -p -e -o pipefail -c \"$VELNOR_HELPER_LAUNCHER\" -- ",
+            )
+            .ok_or("missing trusted invocation")?;
+        let launcher = step["env"]["VELNOR_HELPER_LAUNCHER"]
+            .as_str()
+            .ok_or("no launcher")?;
+        assert!(launcher.contains("/usr/bin/env -i PATH=/usr/bin:/bin"));
+        assert!(launcher.ends_with("exec \"$VELNOR_HELPER_COPY\" \"$@\""));
         assert_eq!(step["env"]["VELNOR_HELPER_TEMP"], "${{ runner.temp }}");
         assert!(
             !step["if"]
@@ -180,22 +184,25 @@ pub(crate) fn execute_environment(
     }
     command
         .env_clear()
-        .env("PATH", format!("{}:/usr/bin:/bin", shadows.display()));
+        .env("PATH", format!("{}:/usr/bin:/bin", shadows.display()))
+        .envs(environment.iter().copied());
     if let Some(env) = step["env"].as_object() {
         for (key, value) in env {
             let text = value.as_str().ok_or("non-string environment")?;
             let text = if key == "VELNOR_HELPER_SHA256" {
                 digest.to_owned()
             } else if key == "VELNOR_HELPER_CHECKSUM" {
-                assert!(text.contains("/usr/bin/sha256sum") && text.contains("/usr/bin/shasum"));
-                if cfg!(target_os = "macos") {
+                assert!(text.contains("/usr/bin/shasum"));
+                if text == "/usr/bin/shasum" {
+                    text
+                } else if cfg!(target_os = "macos") {
                     "/usr/bin/shasum"
                 } else {
                     "/usr/bin/sha256sum"
                 }
                 .to_owned()
             } else if key == "VELNOR_HELPER_CHECKSUM_ARGUMENTS" {
-                if cfg!(target_os = "macos") {
+                if cfg!(target_os = "macos") || text.starts_with("-a 256") {
                     "-a 256 --check --status"
                 } else {
                     "--check --status"
@@ -210,7 +217,6 @@ pub(crate) fn execute_environment(
             command.env(key, text);
         }
     }
-    command.envs(environment.iter().copied());
     Ok(command.output()?)
 }
 
@@ -284,7 +290,7 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
             .permissions()
             .mode()
             & 0o777,
-        0o500
+        0o700
     );
     for invalid in ["", &"0".repeat(64)] {
         let rejected = execute(&steps[use_index], &root, &shadows, invalid)?;
@@ -312,10 +318,8 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
     );
     assert!(rejected.stderr.ends_with(b"\n"));
     assert_eq!(rejected.stdout, b"");
-    fs::set_permissions(
-        installed.parent().ok_or("no installed parent")?,
-        fs::Permissions::from_mode(0o700),
-    )?;
+    fs::set_permissions(installed, fs::Permissions::from_mode(0o500))?;
+    fs::remove_dir_all(installed.parent().ok_or("no installed parent")?)?;
     Ok(())
 }
 
