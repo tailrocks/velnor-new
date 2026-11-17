@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{collections::BTreeMap, error::Error, fs};
+use std::{collections::BTreeMap, error::Error, fs, path::Path};
 
 use serde_json::Value;
 use velnor_actions_contract::{StepKind, StepRole};
@@ -151,10 +151,43 @@ pub(super) fn restore_declared_paths(
         if let Some(path) = path.strip_prefix("~/") {
             let source = producer.home.path().join(path);
             if source.exists() {
-                copy_tree(&source, &reader.home.path().join(path))?;
+                let restored = reader.home.path().join(path);
+                copy_tree(&source, &restored)?;
+                relocate_links(&restored, producer.home.path(), reader.home.path())?;
             }
         }
     }
+    Ok(())
+}
+
+/// A real cache restore lands at the producer's `$HOME`, so Mise's absolute
+/// `.mise-bins` links stay inside the install; the sandboxes' homes differ.
+fn relocate_links(dir: &Path, from: &Path, to: &Path) -> Result<(), Box<dyn Error>> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        let kind = entry.file_type()?;
+        if kind.is_dir() {
+            relocate_links(&path, from, to)?;
+        } else if kind.is_symlink()
+            && let Ok(suffix) = fs::read_link(&path)?.strip_prefix(from)
+        {
+            let target = to.join(suffix);
+            fs::remove_file(&path)?;
+            std::os::unix::fs::symlink(target, &path)?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn restored_absolute_links_follow_the_reader_home() -> Result<(), Box<dyn Error>> {
+    let (from, to) = (tempfile::tempdir()?, tempfile::tempdir()?);
+    let bins = to.path().join("install/.mise-bins");
+    fs::create_dir_all(&bins)?;
+    std::os::unix::fs::symlink(from.path().join("install/uv"), bins.join("uv"))?;
+    relocate_links(to.path(), from.path(), to.path())?;
+    assert_eq!(fs::read_link(bins.join("uv"))?, to.path().join("install/uv"));
     Ok(())
 }
 
