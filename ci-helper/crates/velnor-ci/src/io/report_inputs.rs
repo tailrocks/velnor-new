@@ -46,7 +46,7 @@ fn collect_root(
     let saved = read_snapshot(&root_path.join(SNAPSHOT))?;
     let saved_witness = read_witness(&root_path.join(RESTORE_WITNESS))?;
     let usable = saved.is_some();
-    let links = link_evidence::LinkEvidence::collect(&current, saved.as_deref());
+    let links = link_evidence::LinkEvidence::collect(checkout, &current, saved.as_deref());
     let same_lock = !symlink_lock && same_lock(&root.manifest, &current, saved.as_deref())?;
     let unchanged = if symlink_lock || links.unverifiable {
         BTreeSet::new()

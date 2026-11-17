@@ -98,6 +98,72 @@ fn tracked_link_cycle_cannot_prove_source_contents() -> super::super::ResultTest
     assert_unknown(&repo)
 }
 
+#[test]
+fn untracked_directory_link_before_parent_cannot_bless_a_tracked_decoy() -> super::super::ResultTest
+{
+    let outside = Repo::new("report-external-directory");
+    fs::create_dir_all(outside.root().join("nested"))?;
+    outside.write("README.md", "pub fn before() {}\n");
+    let repo = tracked_chain()?;
+    fs::remove_file(repo.root().join("source-link"))?;
+    symlink(
+        "untracked-dir/../README.md",
+        repo.root().join("source-link"),
+    )?;
+    repo.git(&["add", "source-link"]);
+    symlink(
+        outside.root().join("nested"),
+        repo.root().join("untracked-dir"),
+    )?;
+    save_restore(&repo);
+    outside.write("README.md", "pub fn after() {}\n");
+    assert_eq!(
+        fs::read_to_string(repo.root().join("demo/src/lib.rs"))?,
+        "pub fn after() {}\n"
+    );
+    assert_eq!(
+        fs::read_to_string(repo.root().join("README.md"))?,
+        "pub fn before() {}\n"
+    );
+    assert_unknown(&repo)
+}
+
+#[test]
+fn missing_directory_before_parent_cannot_prove_source_contents() -> super::super::ResultTest {
+    let repo = tracked_chain()?;
+    fs::remove_file(repo.root().join("source-link"))?;
+    symlink("missing-dir/../README.md", repo.root().join("source-link"))?;
+    repo.git(&["add", "source-link"]);
+    save_restore(&repo);
+    assert!(fs::read(repo.root().join("demo/src/lib.rs")).is_err());
+    assert_unknown(&repo)
+}
+
+#[test]
+fn untracked_source_parent_directory_link_cannot_prove_source_contents() -> super::super::ResultTest
+{
+    let outside = Repo::new("report-external-source-parent");
+    let repo = tracked_chain()?;
+    fs::rename(repo.root().join("demo/src"), outside.root().join("src"))?;
+    symlink(outside.root().join("src"), repo.root().join("demo/src"))?;
+    save_restore(&repo);
+    assert_unknown(&repo)
+}
+
+#[test]
+fn regular_referent_with_directory_suffix_cannot_prove_source_contents() -> super::super::ResultTest
+{
+    for target in ["README.md/", "README.md/."] {
+        let repo = tracked_chain()?;
+        fs::remove_file(repo.root().join("source-link"))?;
+        symlink(target, repo.root().join("source-link"))?;
+        repo.git(&["add", "source-link"]);
+        save_restore(&repo);
+        assert_unknown(&repo)?;
+    }
+    Ok(())
+}
+
 fn tracked_chain() -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = Repo::new("report-tracked-source-chain");
     repo.write_all(&[

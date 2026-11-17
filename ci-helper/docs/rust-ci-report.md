@@ -66,7 +66,10 @@ target chains resolve to regular files covered by both tracked snapshots.
 Changes in a covered referent select the original symlink path. Absolute,
 escaping, untracked, dangling, cyclic, or directory-link targets make warm
 compilation provenance unverifiable. The report does not follow or hash
-arbitrary referents. This uncertainty disables an unchanged-workspace claim
+arbitrary referents. It verifies each traversed directory prefix with symlink
+metadata before inspecting a child, including prefixes cancelled by `..`.
+Missing directories and untracked directory symlinks cannot prove a referent.
+This uncertainty disables an unchanged-workspace claim
 within the affected root and leaves independent roots verifiable.
 Repeated compilations without a recognized unit identity retain their observed
 package and available configuration context. Three such observations in one
