@@ -287,7 +287,6 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             spec.needs,
         ),
         vec![
-            checkout_step(),
             validate_artifact_id_step(spec.artifact),
             download_by_id_step(spec.artifact),
             identified_publish_step(
