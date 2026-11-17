@@ -135,6 +135,11 @@ fn a_path_dependency_needs_its_build_script_run_and_a_current_unit() {
     assert!(!lock.exists());
     unit(&repo, compiled, "out.d: vendor/leaf/build.rs\n");
     fs::write(&output, text).unwrap_or_else(|e| unreachable!("{e}"));
+    super::inventory::build(
+        &repo,
+        "target/debug/build/leaf-0000000000000009/output",
+        Some(&repo.root().join("target")),
+    );
 
     repo.write_all(&[
         (

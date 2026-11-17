@@ -10,7 +10,8 @@ use crate::golden::{load, samples};
 use crate::pipeline::{HELPER_LOCK, view, workflow};
 
 fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
-    let mut view = view(roots, None)?;
+    let config = (version == "0.1.80").then_some(b"full_run = \"off\"\n".as_slice());
+    let mut view = view(roots, config)?;
     let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", version, 1);
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
@@ -19,7 +20,11 @@ fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error:
 
 fn required(text: &str) -> Result<&str, &'static str> {
     text.find("  required:\n")
-        .map(|at| &text[at..])
+        .map(|at| {
+            let job = &text[at..];
+            let end = job.find("\n  cache:\n").map_or(job.len(), |at| at + 1);
+            &job[..end]
+        })
         .ok_or("no required job")
 }
 
@@ -56,7 +61,7 @@ fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> 
     assert!(job.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
     assert_eq!(
         gate_line(&text)?,
-        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
+        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-lab=lab"
     );
     Ok(())
 }
@@ -93,6 +98,9 @@ fn one_job_exports_its_own_plan_flag_and_the_gate_reads_it_from_that_job() -> Te
     assert!(text.contains("      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'\n"));
     assert!(text.contains("      tests_run: '${{ steps.test.outputs.tests_run }}'\n"));
     assert!(text.contains("      tests_listed: '${{ steps.test.outputs.tests_listed }}'\n"));
+    assert!(text.contains(
+        "      # jactionlint ignore=unused-job-output\n      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'\n"
+    ));
     Ok(())
 }
 
@@ -123,8 +131,15 @@ fn built_from_source(version: &str) -> Result<String, Box<dyn std::error::Error>
     let mut view = load(&samples().join("helper-source"))?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let bytes = view.files.get(&lock).ok_or("no lock")?;
-    let text = String::from_utf8(bytes.clone())?.replacen("0.1.79", version, 1);
+    let text = String::from_utf8(bytes.clone())?.replacen("0.1.81", version, 1);
     view.files.insert(lock, text.into_bytes());
+    if version == "0.1.80" {
+        let config = view
+            .files
+            .get_mut(&velnor_rust::CONFIG_PATH)
+            .ok_or("no config")?;
+        config.extend_from_slice(b"\nfull_run = \"off\"\n");
+    }
     let mut files = expected_files(&view)?;
     files
         .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
@@ -177,24 +192,74 @@ fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
     Ok(())
 }
 
+fn many_members(count: usize) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
+    let mut view = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    view.files
+        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
+    let metadata = view
+        .rust_metadata
+        .get_mut(&RepoPath::new("Cargo.toml")?)
+        .ok_or("no metadata")?;
+    let member = metadata.members.first().ok_or("no member")?.clone();
+    metadata.members = (0..count)
+        .map(|index| {
+            let mut member = member.clone();
+            member.name = velnor_model::PackageName::new(format!(
+                "package-with-a-long-but-valid-cargo-name-{index}"
+            ))?;
+            Ok(member)
+        })
+        .collect::<Result<_, Box<dyn std::error::Error>>>()?;
+    Ok(view)
+}
+
+#[test]
+fn a_large_plan_cannot_overflow_the_required_jobs_needs_environment() -> TestResult {
+    let small = expected_files(&many_members(10)?)?;
+    assert!(small.values().any(|text| text.contains("velnor-ci gate")));
+    let large = expected_files(&many_members(2_500)?);
+    assert!(
+        matches!(&large, Err(velnor_gen::GenerateError::Rules(violations))
+            if violations.iter().any(|violation|
+                violation.job == "required"
+                    && matches!(violation.rule, velnor_render::Rule::EnvTooLong(_)))),
+        "generation must reject the expanded needs context before a runner starts"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_package_map_that_does_not_fit_the_needs_environment_is_rejected() -> TestResult {
+    let files = expected_files(&many_members(600)?);
+    assert!(
+        matches!(&files, Err(velnor_gen::GenerateError::Rules(violations))
+            if violations.iter().any(|violation|
+                violation.job == "required"
+                    && matches!(violation.rule, velnor_render::Rule::EnvTooLong(_)))),
+        "the map of every selected package must fit the needs environment"
+    );
+    Ok(())
+}
+
 #[test]
 fn an_env_value_over_the_limit_is_a_rule_violation() {
     use velnor_render::{
         MAX_ENV_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, Value, check_rules,
     };
-    let step = |length| RenderedStep {
+    let step = |value| RenderedStep {
         name: "step".to_owned(),
         run: Some("echo hi".to_owned()),
-        env: vec![("SPEC".to_owned(), Value::Text("a".repeat(length)))],
+        env: vec![("SPEC".to_owned(), value)],
         ..RenderedStep::default()
     };
-    let violations = |length| {
+    let violations = |value| {
         check_rules(&RenderedWorkflow {
             jobs: vec![RenderedJob {
                 id: "required".to_owned(),
                 runs_on: "ubuntu-latest".to_owned(),
                 timeout_minutes: 10,
-                steps: vec![step(length)],
+                steps: vec![step(value)],
                 ..RenderedJob::default()
             }],
         })
@@ -204,9 +269,29 @@ fn an_env_value_over_the_limit_is_a_rule_violation() {
         .map(|violation| violation.rule)
         .collect::<Vec<Rule>>()
     };
-    assert_eq!(violations(MAX_ENV_CHARACTERS), Vec::<Rule>::new());
     assert_eq!(
-        violations(MAX_ENV_CHARACTERS + 1),
+        violations(Value::Text("a".repeat(MAX_ENV_CHARACTERS))),
+        Vec::<Rule>::new()
+    );
+    assert_eq!(
+        violations(Value::Text("a".repeat(MAX_ENV_CHARACTERS + 1))),
         vec![Rule::EnvTooLong(MAX_ENV_CHARACTERS + 1)]
+    );
+    for bytes in [MAX_ENV_CHARACTERS, MAX_ENV_CHARACTERS + 1] {
+        assert_eq!(
+            violations(Value::BoundedExpr {
+                text: "${{ toJSON(needs) }}".to_owned(),
+                max_bytes: bytes,
+            }),
+            if bytes == MAX_ENV_CHARACTERS {
+                vec![]
+            } else {
+                vec![Rule::EnvTooLong(bytes)]
+            }
+        );
+    }
+    assert_eq!(
+        violations(Value::Text("é".repeat(MAX_ENV_CHARACTERS))),
+        vec![Rule::EnvTooLong(2 * MAX_ENV_CHARACTERS)]
     );
 }

@@ -12,6 +12,8 @@ pub enum JobCondition {
     Policy,
     Schedule,
     ScheduleOrPush,
+    ScheduleOrDispatch,
+    ScheduleOrPushOrDispatch,
 }
 
 impl JobCondition {
@@ -19,6 +21,8 @@ impl JobCondition {
         match text {
             "policy" => Ok(Self::Policy),
             "schedule" => Ok(Self::Schedule),
+            "schedule-or-dispatch" => Ok(Self::ScheduleOrDispatch),
+            "schedule-or-push-or-dispatch" => Ok(Self::ScheduleOrPushOrDispatch),
             "schedule-or-push" => Ok(Self::ScheduleOrPush),
             other => other
                 .strip_prefix("lane:")
@@ -35,6 +39,8 @@ impl fmt::Display for JobCondition {
             Self::Lane(slug) => write!(f, "lane:{slug}"),
             Self::Policy => f.write_str("policy"),
             Self::Schedule => f.write_str("schedule"),
+            Self::ScheduleOrDispatch => f.write_str("schedule-or-dispatch"),
+            Self::ScheduleOrPushOrDispatch => f.write_str("schedule-or-push-or-dispatch"),
             Self::ScheduleOrPush => f.write_str("schedule-or-push"),
         }
     }

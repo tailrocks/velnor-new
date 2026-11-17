@@ -51,7 +51,9 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "rust-test-lab",
             "rust-test-default-lab",
             "rust-inputs-audit",
-            "required"
+            "rust-trim",
+            "required",
+            "cache"
         ]
     );
     let block = |id: &str| {
@@ -112,7 +114,11 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
         ("shape = \"groups\"\n", 2),
     ] {
         let jobs = rendered(config)?;
-        let text: String = jobs.iter().map(|(_, block)| block.as_str()).collect();
+        let text: String = jobs
+            .iter()
+            .filter(|(id, _)| id != "cache")
+            .map(|(_, block)| block.as_str())
+            .collect();
         assert_eq!(text.matches("name: Upload the tests\n").count(), archives);
         assert_eq!(
             text.matches("uses: actions/download-artifact@").count(),
@@ -125,13 +131,19 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
             .collect();
         assert_eq!(testing.len(), 2, "{config}: {testing:?}");
         for (id, block) in &jobs {
-            let reports = ["tests_run", "tests_listed"].iter().all(|name| {
-                block.contains(&format!(
-                    "      {name}: '${{{{ steps.test.outputs.{name} }}}}'\n"
-                ))
-            });
+            let reports = ["tests_run", "tests_listed", "tests_by_package"]
+                .iter()
+                .all(|name| {
+                    block.contains(&format!(
+                        "      {name}: '${{{{ steps.test.outputs.{name} }}}}'\n"
+                    ))
+                });
             assert_eq!(reports, block.contains("nextest run"), "{config}: {id}");
-            for line in block.lines().filter(|line| line.contains("nextest run")) {
+            for line in block
+                .lines()
+                .filter(|line| line.contains("nextest run") && !line.contains("--no-run"))
+            {
+                assert!(line.contains("--status-level pass"), "{config}: {line}");
                 assert!(line.ends_with("--no-tests=pass'"), "{config}: {line}");
             }
         }

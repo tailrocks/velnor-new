@@ -93,8 +93,7 @@ fn a_deleted_workflow_with_any_other_identity_is_rejected_for_historical_a_and_d
 }
 
 #[test]
-fn an_admission_without_a_pin_has_no_deleted_workflow_exception() -> Result<(), OrchestratorError>
-{
+fn an_admission_without_a_pin_has_no_deleted_workflow_exception() -> Result<(), OrchestratorError> {
     let (plan, _spec, a, _d) = load_catalog()?;
     let unpinned = HistoricalPackageReleaseAdmission::new_from_protected_policy(
         &plan,
