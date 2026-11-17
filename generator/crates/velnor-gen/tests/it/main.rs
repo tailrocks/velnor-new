@@ -5,6 +5,7 @@ mod archive;
 mod cache_compat;
 mod cache_key_defects;
 mod cache_keys;
+mod cargo_flags;
 mod cargo_lock;
 mod classify;
 mod compile_inputs;
