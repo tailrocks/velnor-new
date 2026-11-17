@@ -8,6 +8,8 @@ fn rejects_scope(scope: &str) -> Result<(), Box<dyn Error>> {
     let mut missed = Vec::new();
     for expression in [
         "${{ github.token }}",
+        "${{ github[format('{0}', 'token')] }}",
+        "${{ toJSON(github.*) }}",
         "${{ secrets.RELEASE_CREDENTIAL }}",
         "${{ github['token'] }}",
         "${{ secrets['ANOTHER_PRIVATE_VALUE'] }}",
