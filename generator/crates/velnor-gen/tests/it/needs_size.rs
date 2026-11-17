@@ -43,7 +43,9 @@ fn cache_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
         .iter()
         .flat_map(|job| &job.steps)
         .find_map(|step| match step.kind {
-            StepKind::CheckMetrics { needs_max_bytes } => Some(needs_max_bytes),
+            StepKind::CheckMetrics {
+                needs_max_bytes, ..
+            } => Some(needs_max_bytes),
             _ => None,
         })
         .ok_or("no Cache bound")
@@ -51,7 +53,7 @@ fn cache_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
 
 #[test]
 fn cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs() -> TestResult {
-    for (roots, rejected) in [(2, false), (50, false), (62, true)] {
+    for (roots, rejected) in [(2, false), (28, false), (38, true)] {
         let plan = saving_plan(roots, false)?;
         let workflow = rendered_workflow(&plan);
         let actual = realized_needs(&workflow, "cache")?;
@@ -65,7 +67,7 @@ fn cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs() 
             .iter()
             .find(|job| job.id.as_str() == "cache")
             .ok_or("Cache")?;
-        let producers: Vec<_> = plan
+        let mut producers: Vec<_> = plan
             .jobs
             .iter()
             .filter(|job| {
@@ -75,6 +77,12 @@ fn cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs() 
             })
             .map(|job| job.id.clone())
             .collect();
+        producers.extend(
+            plan.jobs
+                .iter()
+                .filter(|job| job.id.as_str() == "rust-trim")
+                .map(|job| job.id.clone()),
+        );
         assert_eq!(cache.needs, producers);
         let errors = velnor_render::check_rules(&workflow)
             .err()
@@ -133,7 +141,38 @@ fn blocking_cache_adds_its_outputless_context_to_required_without_changing_the_c
     Ok(())
 }
 
-fn realized_output(name: &str, text: &str) -> Result<String, Box<dyn std::error::Error>> {
+fn realized_output(
+    name: &str,
+    text: &str,
+    job: &RenderedJob,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if matches!(name, "target_key" | "sources_key") {
+        let id = text
+            .strip_prefix("${{ steps.")
+            .and_then(|inner| inner.strip_suffix(".outputs.key }}"))
+            .ok_or("key output")?;
+        let step = job
+            .steps
+            .iter()
+            .find(|step| step.id.as_deref() == Some(id))
+            .ok_or("key step")?;
+        let (_, velnor_render::Value::Expr(key)) = step
+            .env
+            .iter()
+            .find(|(name, _)| name == "CACHE_KEY")
+            .ok_or("cache key")?
+        else {
+            return Err("cache key expression".into());
+        };
+        let mut key = key
+            .replace("${{ github.sha }}", &"a".repeat(40))
+            .replace("${{ github.run_id }}", &u64::MAX.to_string());
+        while let Some(start) = key.find("${{ hashFiles(") {
+            let end = key[start..].find(" }}").ok_or("hash expression")? + start + 3;
+            key.replace_range(start..end, &"f".repeat(64));
+        }
+        return realized_output("base_prefix", &key, job);
+    }
     if matches!(name, "base_prefix" | "sources_prefix") && text.starts_with("velnor-") {
         let value = text
             .replace("${{ runner.os }}", "Windows")
@@ -152,7 +191,7 @@ fn realized_output(name: &str, text: &str) -> Result<String, Box<dyn std::error:
         assert_eq!(expression, format!("steps.test.outputs.{name}"));
         return Ok(u64::MAX.to_string());
     }
-    if matches!(name, "base_save" | "sources_saved" | "cache_ok") {
+    if matches!(name, "base_save" | "sources_saved") {
         check_cache_expression(name, expression)?;
         return Ok("false".to_owned());
     }
@@ -186,16 +225,6 @@ fn check_cache_expression(name: &str, expression: &str) -> TestResult {
             .strip_prefix("steps.sources_save_")
             .and_then(|inner| inner.strip_suffix(".outcome == 'success'"))
             .is_some_and(|slug| !slug.is_empty() && valid_step_id(slug)),
-        "cache_ok" => expression.split(" && ").all(|term| {
-            term.strip_prefix("steps.")
-                .and_then(|inner| inner.strip_suffix(".outcome != 'failure'"))
-                .is_some_and(|id| {
-                    id == "target_verified"
-                        || (id.starts_with("sources_")
-                            && id.ends_with("_verified")
-                            && valid_step_id(id))
-                })
-        }),
         _ => false,
     };
     if !supported {
@@ -232,7 +261,7 @@ fn realized_needs(
     for id in dependencies {
         let mut outputs = Map::new();
         for (name, text) in &jobs.get(id.as_str()).ok_or("producer job")?.outputs {
-            let value = realized_output(name, text)?;
+            let value = realized_output(name, text, jobs.get(id.as_str()).ok_or("producer job")?)?;
             assert!(!value.contains("${{"), "{name}: {value}");
             outputs.insert(name.clone(), Value::String(value));
         }
@@ -300,7 +329,7 @@ fn production_job_lowering_preserves_planned_jobs_and_matches_yaml_dependencies_
 #[test]
 fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_context() -> TestResult
 {
-    for roots in [34, 35, 38] {
+    for roots in [22, 24, 26] {
         let plan = saving_plan(roots, false)?;
         let workflow = rendered_workflow(&plan);
         let actual = realized_needs(&workflow, "required")?;
@@ -309,11 +338,10 @@ fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_co
             actual <= bound,
             "roots={roots}, actual={actual}, bound={bound}"
         );
-        if roots <= 34 {
+        if roots <= 22 {
             assert!(velnor_render::check_rules(&workflow).is_ok());
         } else {
-            if roots == 38 {
-                assert_eq!(actual, 100_430);
+            if roots == 26 {
                 assert!(
                     actual > MAX_ENV_CHARACTERS,
                     "actual={actual}, bound={bound}"

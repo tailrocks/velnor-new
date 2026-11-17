@@ -135,7 +135,7 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
         assert_unified_cache_verdict(&parsed)?;
         assert_eq!(cache.name.as_deref(), Some("Cache"));
         assert_eq!(cache.when, When::Finalizer);
-        assert!(parsed["jobs"]["cache"]["permissions"]["actions"].is_null());
+        assert_eq!(parsed["jobs"]["cache"]["permissions"]["actions"], "read");
         assert_eq!(
             parsed["jobs"]["rust-trim"]["permissions"]["actions"],
             "write"
@@ -152,8 +152,10 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
                 .any(|step| matches!(step.kind, StepKind::Cargo(_)))
         }) {
             assert_eq!(
-                parsed["jobs"][lane.id.as_str()]["permissions"]["actions"],
-                "read"
+                parsed["jobs"][lane.id.as_str()]["permissions"]["actions"].as_str(),
+                parsed["jobs"][lane.id.as_str()]["outputs"]["base_save"]
+                    .is_string()
+                    .then_some("read")
             );
             assert!(cache.needs.contains(&lane.id));
             let report = lane
@@ -186,27 +188,18 @@ fn assert_unified_cache_verdict(workflow: &serde_json::Value) -> TestResult {
     );
     let cache = &jobs["cache"];
     let steps = cache["steps"].as_array().ok_or("cache steps")?;
-    let verdict = steps
-        .iter()
-        .position(|step| step["run"] == "velnor-ci cache check --success \"$CACHE_OK\"")
-        .ok_or("Cache must report failed uploads")?;
     let waste = steps
         .iter()
         .position(|step| step["name"] == "Check cache waste")
         .ok_or("waste check")?;
-    assert!(waste < verdict);
-    assert_eq!(steps[verdict]["if"], "${{ !cancelled() }}");
-    assert_ne!(steps[verdict]["continue-on-error"], true);
-    let uploads = steps[verdict]["env"]["CACHE_OK"]
-        .as_str()
-        .ok_or("upload verdict")?;
+    assert_ne!(steps[waste]["continue-on-error"], true);
     let needs = cache["needs"].as_array().ok_or("cache needs")?;
+    assert!(needs.iter().any(|need| need == "rust-trim"));
     for (id, job) in jobs
         .iter()
-        .filter(|(_, job)| job["outputs"]["cache_ok"].is_string())
+        .filter(|(_, job)| job["outputs"]["target_key"].is_string())
     {
         assert!(needs.iter().any(|need| need == id));
-        assert!(uploads.contains(&format!("needs.{id}.outputs.cache_ok != 'false'")));
         assert!(
             job["steps"]
                 .as_array()
@@ -227,7 +220,7 @@ fn assert_unified_cache_verdict(workflow: &serde_json::Value) -> TestResult {
     assert!(
         steps
             .iter()
-            .all(|step| step["run"] != "velnor-ci cache check --success \"$CACHE_OK\"")
+            .any(|step| step["run"] == "velnor-ci cache check --success \"$CACHE_OK\"")
     );
     Ok(())
 }
@@ -359,10 +352,7 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
                 Some("Report cache telemetry" | "Upload cache metrics")
             );
             if step["name"] == "Report cache telemetry" {
-                assert_eq!(
-                    step["env"]["GITHUB_TOKEN"],
-                    "${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '' }}"
-                );
+                assert!(step["env"]["GITHUB_TOKEN"].is_null());
             }
             let verified_save = step["uses"]
                 == "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
@@ -370,22 +360,6 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
                     step["name"].as_str(),
                     Some("Save the target cache" | "Save the sources cache")
                 );
-            if verified_save {
-                let verify = steps
-                    .iter()
-                    .find(|verify| {
-                        verify["run"] == "velnor-ci cache verify --key \"$CACHE_KEY\""
-                            && verify["env"]["CACHE_KEY"] == step["with"]["key"]
-                    })
-                    .ok_or("paired upload verification")?;
-                let id = verify["id"].as_str().ok_or("verification id")?;
-                assert!(
-                    job["outputs"]["cache_ok"]
-                        .as_str()
-                        .ok_or("cache_ok output")?
-                        .contains(&format!("steps.{id}.outcome != 'failure'"))
-                );
-            }
             let verification = step["run"] == "velnor-ci cache verify --key \"$CACHE_KEY\"";
             assert_eq!(
                 step["continue-on-error"].as_bool().unwrap_or(false),

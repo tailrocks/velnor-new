@@ -84,6 +84,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     let mut metrics = LaneMetrics {
         schema: SCHEMA,
         lane: env("GITHUB_JOB"),
+        job_name: std::env::var("VELNOR_REPORT_JOB_NAME").ok(),
         caches,
         invocations,
         downloaded: 0,
@@ -114,11 +115,6 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
             .push(format!("Download provenance unavailable: {error}"));
     }
     activity_metrics(&mut metrics, &log_bytes);
-    if let Err(error) = api_metrics(&mut metrics, &steps) {
-        metrics
-            .diagnostics
-            .push(format!("GitHub telemetry unavailable: {error}"));
-    }
     metrics.violations = waste(&metrics);
     let summary = metrics.summary();
     fs::write(
@@ -131,7 +127,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     Ok(summary)
 }
 
-fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> {
+fn api_metrics(metrics: &mut LaneMetrics) -> Result<(), CiError> {
     let repo = Repo::parse(&env("GITHUB_REPOSITORY"))?;
     let github = super::http::HttpGitHub::new(
         super::api_url(),
@@ -146,10 +142,11 @@ fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> 
         .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
     for page in 1.. {
         let jobs: ApiJobs = json(&github.get(&jobs_path(&repo, run, attempt, page))?)?;
-        if let Some(job) = jobs.jobs.iter().find(|job| {
-            job.name
-                == std::env::var("VELNOR_REPORT_JOB_NAME").unwrap_or_else(|_| metrics.lane.clone())
-        }) {
+        if let Some(job) = jobs
+            .jobs
+            .iter()
+            .find(|job| job.name == metrics.job_name.as_deref().unwrap_or(&metrics.lane))
+        {
             metrics.first_cargo_seconds = job
                 .started_at
                 .as_deref()
@@ -172,22 +169,16 @@ fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> 
             .diagnostics
             .push("Job start to first cargo is unavailable".to_owned());
     }
-    cache_metrics(metrics, steps, &github, &repo)
+    cache_metrics(metrics, &github, &repo)
 }
 
 fn cache_metrics(
     metrics: &mut LaneMetrics,
-    steps: &Value,
     github: &impl GitHub,
     repo: &Repo,
 ) -> Result<(), CiError> {
-    let default = env("VELNOR_REPORT_DEFAULT_BRANCH");
     for cache in &mut metrics.caches {
-        let saving = env("GITHUB_REF") == format!("refs/heads/{default}")
-            && matches!(
-                steps[&cache.save_step]["outcome"].as_str(),
-                Some("success" | "failure" | "cancelled")
-            );
+        let saving = cache.save != SaveOutcome::NotAttempted;
         let key = if saving {
             &cache.requested_key
         } else if let Some(key) = &cache.matched_key {
@@ -261,7 +252,7 @@ fn inventory_entry<'a>(
 fn check_directory(directory: &Path) -> Result<String, CiError> {
     let mut files = Vec::new();
     find_metrics(directory, &mut files)?;
-    let lanes = files
+    let mut lanes = files
         .iter()
         .map(|file| {
             fs::read_to_string(file)
@@ -272,9 +263,27 @@ fn check_directory(directory: &Path) -> Result<String, CiError> {
     let needs: serde_json::Map<String, Value> =
         json(&std::env::var("VELNOR_REPORT_NEEDS").unwrap_or_else(|_| "{}".to_owned()))?;
     for (lane, need) in needs {
+        if lane == "rust-trim" {
+            if !matches!(need["result"].as_str(), Some("success" | "skipped")) {
+                return Err(CiError::new("cache upload verification failed"));
+            }
+            continue;
+        }
         if need["result"] != "skipped" && !lanes.iter().any(|metrics| metrics.lane == lane) {
             return Err(CiError::new(format!("missing metrics for lane {lane}")));
         }
+    }
+    for (file, lane) in files.iter().zip(&mut lanes) {
+        if let Err(error) = api_metrics(lane) {
+            lane.diagnostics
+                .push(format!("GitHub telemetry unavailable: {error}"));
+        }
+        lane.violations = waste(lane);
+        fs::write(file, serde_json::to_string_pretty(lane).map_err(ci)?).map_err(ci)?;
+        super::append_to(
+            "GITHUB_STEP_SUMMARY",
+            &format!("## {}\n\n{}", lane.lane, lane.summary()),
+        )?;
     }
     check(&lanes)
 }

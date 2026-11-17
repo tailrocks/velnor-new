@@ -169,7 +169,6 @@ jobs:
       - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
-      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -354,7 +353,6 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -377,7 +375,6 @@ jobs:
       - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
-      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -506,7 +503,6 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_ci_helper","root":"ci-helper","save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -529,7 +525,6 @@ jobs:
       - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') }}'
     permissions:
-      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -700,7 +695,6 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -723,7 +717,6 @@ jobs:
       - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_generator_mode != ''none'') }}'
     permissions:
-      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -870,7 +863,6 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_generator","root":"generator","save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -893,7 +885,6 @@ jobs:
       - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_local_mode != ''none'') }}'
     permissions:
-      actions: read
       contents: read
     outputs:
       # jactionlint ignore=unused-job-output
@@ -1028,7 +1019,6 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_local","root":"local","save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -1050,7 +1040,6 @@ jobs:
       - rust-helper
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event_name == ''schedule'') }}'
     permissions:
-      actions: read
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1269,7 +1258,6 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"},{"family":"sources","restore_step":"sources_ci_helper","root":"ci-helper","save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"},{"family":"sources","restore_step":"sources_generator","root":"generator","save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"},{"family":"sources","restore_step":"sources_local","root":"local","save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -1319,11 +1307,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Check out
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          fetch-depth: 1
-          persist-credentials: false
       - name: Download velnor-ci
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -1341,4 +1324,5 @@ jobs:
       - name: Check cache waste
         env:
           VELNOR_REPORT_NEEDS: '${{ toJSON(needs) }}'
+          VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
         run: 'velnor-ci report --check "$RUNNER_TEMP/ci-metrics"'

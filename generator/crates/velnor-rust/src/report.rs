@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::plan::{head, job, step};
+use crate::plan::{job, step};
 use velnor_model::{
     Access, HelperVersion, Job, JobId, PermissionScope, RepoFacts, Step, StepKind, When,
 };
 
-pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
+fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Option<Job> {
     let released = facts
         .helper
         .as_ref()
@@ -26,7 +26,10 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
         });
     let mut producers = Vec::new();
     for job in jobs {
-        let saves = job.steps.iter().any(|step| matches!(step.kind, StepKind::CacheSave(_)));
+        let saves = job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::CacheSave(_)));
         if !job
             .steps
             .iter()
@@ -41,29 +44,43 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
         attach_metrics(job, nextest_artifacts);
         producers.push(&*job);
     }
+    producers.extend(maintenance);
     let needs = producers.iter().map(|job| job.id.clone()).collect();
     let needs_max_bytes = crate::required_size::needs_max_bytes(facts, producers);
-    let mut steps = head(facts, 1, from_source);
+    let mut steps: Vec<_> = if released {
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::InstallHelper(release.clone())))
+            .collect()
+    } else {
+        vec![step(StepKind::HelperFromArtifact)]
+    };
     steps.extend([
         step(StepKind::DownloadMetrics),
-        step(StepKind::CheckMetrics { needs_max_bytes }),
+        step(StepKind::CheckMetrics {
+            needs_max_bytes,
+            trusted_api: released,
+        }),
     ]);
-    Some(Job {
+    let mut cache = Job {
         name: Some("Cache".to_owned()),
         needs,
         when: When::Finalizer,
         skip_on_draft: false,
         steps,
         ..job(facts, JobId::from_static("cache"))
-    })
+    };
+    if released {
+        cache
+            .permissions
+            .0
+            .insert(PermissionScope::Actions, Access::Read);
+    }
+    Some(cache)
 }
 
 fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
-    job.permissions
-        .0
-        .entry(PermissionScope::Actions)
-        .or_insert(Access::Read);
-
     let caches = job
         .steps
         .iter()
@@ -94,8 +111,8 @@ pub(crate) fn finish(
     single: bool,
     draft_guard: Option<Step>,
 ) {
-    let cache = attach(facts, jobs);
     let trim = crate::base_cache::trim_job(facts, jobs);
+    let cache = attach(facts, jobs, trim.as_ref());
     if facts.config.cache_check_blocks {
         jobs.extend(cache.clone());
     }

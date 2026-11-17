@@ -46,10 +46,6 @@ pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
         run: Some("velnor-ci report".to_owned()),
         env: vec![
             (
-                "GITHUB_TOKEN".to_owned(),
-                Value::Expr("${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '' }}".to_owned()),
-            ),
-            (
                 "VELNOR_REPORT_CACHES".to_owned(),
                 Value::Text(
                     serde_json::Value::Array(caches)
@@ -125,7 +121,7 @@ pub(crate) fn artifact(upload: bool) -> RenderedStep {
         ..RenderedStep::default()
     }
 }
-pub(crate) fn check(needs_max_bytes: usize) -> RenderedStep {
+pub(crate) fn check(needs_max_bytes: usize, trusted_api: bool) -> RenderedStep {
     RenderedStep {
         name: "Check cache waste".to_owned(),
         run: Some("velnor-ci report --check \"$RUNNER_TEMP/ci-metrics\"".to_owned()),
@@ -135,7 +131,13 @@ pub(crate) fn check(needs_max_bytes: usize) -> RenderedStep {
                 text: "${{ toJSON(needs) }}".to_owned(),
                 max_bytes: needs_max_bytes,
             },
-        )],
+        )].into_iter().chain(trusted_api.then(|| (
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '' }}".to_owned()),
+        ))).chain([(
+            "VELNOR_REPORT_DEFAULT_BRANCH".to_owned(),
+            Value::Expr("${{ github.event.repository.default_branch }}".to_owned()),
+        )]).collect(),
         ..RenderedStep::default()
     }
 }

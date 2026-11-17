@@ -47,6 +47,8 @@ pub enum Hit {
 pub struct LaneMetrics {
     pub schema: u32,
     pub lane: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub job_name: Option<String>,
     pub caches: Vec<Cache>,
     pub invocations: Vec<Invocation>,
     pub downloaded: u64,

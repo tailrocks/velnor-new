@@ -85,7 +85,12 @@ fn report_api_tokens_are_confined_to_a_released_helper_without_repository_code()
                 .filter(|step| step["run"] == "velnor-ci report")
             {
                 assert!(report["env"]["GITHUB_TOKEN"].is_null(), "{id}: {report}");
-                assert!(job["permissions"]["actions"].is_null(), "{id}: {job}");
+                assert_eq!(
+                    job["permissions"]["actions"].as_str(),
+                    (version == "0.1.81" && job["outputs"]["base_save"].is_string())
+                        .then_some("read"),
+                    "{id}: {job}"
+                );
                 assert_eq!(report["env"]["VELNOR_REPORT_STEPS"], "${{ toJSON(steps) }}");
                 assert!(
                     job["steps"]

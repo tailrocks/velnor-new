@@ -156,6 +156,21 @@ fn checker_rejects_missing_malformed_and_duplicate_artifacts_and_accepts_skipped
         );
     }
     assert!(check(r#"{"rust":{"result":"skipped"}}"#).status.success());
+    assert!(
+        check(r#"{"rust-trim":{"result":"skipped"}}"#)
+            .status
+            .success()
+    );
+    assert!(
+        !check(r#"{"rust-trim":{"result":"failure"}}"#)
+            .status
+            .success()
+    );
+    assert!(
+        !check(r#"{"rust-trim":{"result":"cancelled"}}"#)
+            .status
+            .success()
+    );
     assert!(!check(r#"{"rust":{"result":"failure"}}"#).status.success());
     fs::create_dir_all(repo.root().join("artifacts/rust"))?;
     let mut value = crate::report::lane();
@@ -197,8 +212,13 @@ fn local_report_does_not_contact_github_even_with_an_ambient_token() -> ResultTe
             if let Ok((mut stream, _)) = listener.accept() {
                 contacted = true;
                 let mut request = [0; 4096];
-                let _ = stream.read(&mut request);
-                let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+                assert!(
+                    stream
+                        .read(&mut request)
+                        .unwrap_or_else(|error| unreachable!("{error}"))
+                        > 0
+                );
+                stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n").unwrap_or_else(|error| unreachable!("{error}"));
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
@@ -295,6 +315,7 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
     Ok(())
 }
 
+mod api;
 mod evidence;
 mod policy;
 mod provenance;

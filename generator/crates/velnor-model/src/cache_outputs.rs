@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CacheKey, Step, StepKind};
+use crate::{CacheKey, CacheKeySegment, Step, StepKind};
 
 pub const BASE_PREFIX_OUTPUT: &str = "base_prefix";
 pub const BASE_SAVE_OUTPUT: &str = "base_save";
@@ -14,6 +14,7 @@ pub enum CacheLaneOutput {
     BaseSave,
     SourcesPrefix(CacheKey),
     SourcesSaved(CacheKey),
+    SavedKey(CacheKey),
 }
 
 impl CacheLaneOutput {
@@ -24,6 +25,8 @@ impl CacheLaneOutput {
             Self::BaseSave => BASE_SAVE_OUTPUT,
             Self::SourcesPrefix(_) => SOURCES_PREFIX_OUTPUT,
             Self::SourcesSaved(_) => SOURCES_SAVED_OUTPUT,
+            Self::SavedKey(CacheKey::Sources { .. }) => "sources_key",
+            Self::SavedKey(_) => "target_key",
         }
     }
 
@@ -31,6 +34,21 @@ impl CacheLaneOutput {
     pub fn max_content_bytes(&self) -> usize {
         match self {
             Self::BaseSave | Self::SourcesSaved(_) => 5,
+            Self::SavedKey(key) => key
+                .layout()
+                .segments
+                .iter()
+                .fold(0_usize, |bytes, segment| {
+                    bytes
+                        .saturating_add(match segment {
+                            CacheKeySegment::Lock(_) => 64,
+                            CacheKeySegment::Commit => 40,
+                            CacheKeySegment::RunId => 20,
+                            _ => segment.json_content_max_bytes(),
+                        })
+                        .saturating_add(1)
+                })
+                .saturating_sub(1),
             Self::BasePrefix(key) | Self::SourcesPrefix(key) => {
                 let layout = key.layout();
                 let Some(&length) = layout.fallback_lengths.last() else {
@@ -63,11 +81,18 @@ pub fn cache_lane_outputs(steps: &[Step]) -> Vec<CacheLaneOutput> {
     let sources = saved(|key| matches!(key, CacheKey::Sources { .. })).filter(|_| decides);
     target
         .into_iter()
-        .flat_map(|key| [CacheLaneOutput::BasePrefix(key), CacheLaneOutput::BaseSave])
+        .flat_map(|key| {
+            [
+                CacheLaneOutput::BasePrefix(key.clone()),
+                CacheLaneOutput::BaseSave,
+                CacheLaneOutput::SavedKey(key),
+            ]
+        })
         .chain(sources.into_iter().flat_map(|key| {
             [
                 CacheLaneOutput::SourcesPrefix(key.clone()),
-                CacheLaneOutput::SourcesSaved(key),
+                CacheLaneOutput::SourcesSaved(key.clone()),
+                CacheLaneOutput::SavedKey(key),
             ]
         }))
         .collect()

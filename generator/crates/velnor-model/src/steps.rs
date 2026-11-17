@@ -71,6 +71,7 @@ pub enum StepKind {
     DownloadMetrics,
     CheckMetrics {
         needs_max_bytes: usize,
+        trusted_api: bool,
     },
 }
 

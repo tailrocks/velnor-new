@@ -103,24 +103,37 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             )
             .chain(lane_outputs(&job.steps))
             .collect(),
-        steps: job
-            .steps
-            .iter()
-            .scan(false, |replanned, step| {
-                let setup = match (restores, *replanned) {
-                    (false, _) => Setup::Before,
-                    (true, false) => Setup::Restored,
-                    (true, true) => Setup::Replanned,
-                };
-                *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-                let mut bodies = rendered_steps(step, setup, tests, artifacts);
-                for body in &mut bodies { body.condition = all_conditions(body.condition.take(), crate::base_steps::audited_save(job, step)); }
-                Some(bodies)
-            })
-            .flatten()
-            .collect(),
+        steps: job_steps(job, restores, tests, artifacts),
         ..RenderedJob::default()
     }
+}
+
+fn job_steps(
+    job: &Job,
+    restores: bool,
+    tests: bool,
+    artifacts: ArtifactFormat,
+) -> Vec<RenderedStep> {
+    job.steps
+        .iter()
+        .scan(false, |replanned, step| {
+            let setup = match (restores, *replanned) {
+                (false, _) => Setup::Before,
+                (true, false) => Setup::Restored,
+                (true, true) => Setup::Replanned,
+            };
+            *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+            let mut bodies = rendered_steps(step, setup, tests, artifacts, job.name.as_deref());
+            for body in &mut bodies {
+                body.condition = all_conditions(
+                    body.condition.take(),
+                    crate::base_steps::audited_save(job, step),
+                );
+            }
+            Some(bodies)
+        })
+        .flatten()
+        .collect()
 }
 
 fn rendered_steps(
@@ -128,6 +141,7 @@ fn rendered_steps(
     setup: Setup,
     tests: bool,
     artifacts: ArtifactFormat,
+    job_name: Option<&str>,
 ) -> Vec<RenderedStep> {
     let mut rendered = vec![step_body(
         &step.kind,
@@ -143,6 +157,14 @@ fn rendered_steps(
         });
     }
     for body in &mut rendered {
+        if matches!(step.kind, StepKind::ReportCaches { .. })
+            && let Some(name) = job_name
+        {
+            body.env.push((
+                "VELNOR_REPORT_JOB_NAME".to_owned(),
+                Value::Text(name.to_owned()),
+            ));
+        }
         body.condition = all_conditions(
             body.condition.take(),
             condition(
@@ -206,7 +228,10 @@ fn step_body(
         StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
-        StepKind::CheckMetrics { needs_max_bytes } => crate::report::check(*needs_max_bytes),
+        StepKind::CheckMetrics {
+            needs_max_bytes,
+            trusted_api,
+        } => crate::report::check(*needs_max_bytes, *trusted_api),
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
             uses: Some(CHECKOUT.to_owned()),
