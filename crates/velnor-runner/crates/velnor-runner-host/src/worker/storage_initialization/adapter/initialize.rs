@@ -179,11 +179,13 @@ impl InitializationContext<'_> {
         {
             return Ok(());
         }
-        let remaining = self.deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            return Ok(());
-        }
-        recover_absent(self.docker, self.journal, self.reservation_id, remaining).await
+        recover_absent(
+            self.docker,
+            self.journal,
+            self.reservation_id,
+            self.deadline,
+        )
+        .await
     }
 }
 

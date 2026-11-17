@@ -8,7 +8,7 @@ use std::time::Instant;
 use bollard::Docker;
 use tempfile::TempDir;
 
-use crate::config::{ConnectionId, HostConfig};
+use crate::config::HostConfig;
 use crate::connect::SetOwnership;
 use crate::host_controller::loop_driver::state::{
     AdminRefreshSchedule, PreparedConnection, PreparedSetup,
@@ -19,7 +19,7 @@ use crate::launch::{ImageAuthority, SelectedEngineContext, VerifiedWorkerImages}
 use crate::scale_set::EnsuredSet;
 use crate::worker::guest_image::write_guest_image;
 
-use super::seed::{CONNECTION_ID, IMAGE_ID};
+use super::seed::IMAGE_ID;
 use super::{HOST_CONFIG, PositivePollContext, TestResult};
 
 pub(super) struct Controller {
@@ -36,10 +36,18 @@ impl Controller {
         engine: &SelectedEngineContext,
     ) -> TestResult<Self> {
         let config = HostConfig::parse(HOST_CONFIG)?;
+        Self::with_config(scope, engine, config)
+    }
+
+    pub(super) fn with_config(
+        scope: &ConnectionJournal,
+        engine: &SelectedEngineContext,
+        config: HostConfig,
+    ) -> TestResult<Self> {
         let images = VerifiedWorkerImages::for_test(engine, &"1".repeat(40), IMAGE_ID, IMAGE_ID)?;
         let state = tempfile::tempdir()?;
         let binding = config
-            .connection(&ConnectionId::parse(CONNECTION_ID)?)
+            .connection(scope.connection_id())
             .ok_or("connection")?
             .clone();
         let guest_image = write_guest_image(state.path(), &binding, &images)?;
@@ -105,6 +113,7 @@ impl Controller {
             state: self.state.path(),
             image_authority: &self.image_authority,
             admission_ready: true,
+            retirement_budget: std::time::Duration::from_secs(120),
         };
         super::super::reconcile_assigned_population(&mut self.prepared, &context).await?;
         Ok(())
