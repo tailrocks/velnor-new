@@ -110,7 +110,7 @@ fn the_config_file_sets_runner_time_limit_and_excluded_roots() -> TestResult {
     assert!(text.contains("    runs-on: self-hosted\n    timeout-minutes: 12\n"));
     let format = step_named(&text, "Format");
     assert!(format.contains("!cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''"));
-    assert!(format.contains(r#"run: '"$VELNOR_HELPER" run -- cargo-fmt --all --check'"#));
+    assert!(format.contains(r#"exec "$VELNOR_HELPER_COPY" run -- cargo-fmt --all --check'"#));
     assert!(!text.contains("lab"));
     Ok(())
 }
@@ -129,7 +129,7 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
         .filter(|step| step.lines().any(|line| line.trim() == "name: Format"))
         .collect();
     assert_eq!(formats.len(), 3, "{formats:?}");
-    let format_command = r#"run: '"$VELNOR_HELPER" run -- cargo-fmt --all --check'"#;
+    let format_command = r#"exec "$VELNOR_HELPER_COPY" run -- cargo-fmt --all --check'"#;
     for directory in ["'-bad'", "'it''s crates'", "\"odd\\uffff\""] {
         let rendered = format!("working-directory: {directory}");
         assert!(
@@ -140,7 +140,7 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
         );
     }
     assert_eq!(
-        text.matches(r#"run: '"$VELNOR_HELPER" run -- cargo-fmt --all --check'"#)
+        text.matches(r#"exec "$VELNOR_HELPER_COPY" run -- cargo-fmt --all --check'"#)
             .count(),
         3
     );

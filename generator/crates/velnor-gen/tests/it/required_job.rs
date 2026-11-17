@@ -48,15 +48,12 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
     ));
     assert!(!job.contains("Check out"));
     assert!(!job.contains("Fail when a Rust job failed or was cancelled"));
-    assert!(
-        job.contains("      - name: Verify the released helper\n")
-            || job.contains("        name: Verify the released helper\n")
-    );
+    assert!(!job.contains("Verify the released helper"));
     assert!(job.contains("      - name: Install velnor-ci 0.1.81\n"));
     assert!(job.contains(
         "        env:\n          NEEDS_JSON: '${{ toJSON(needs) }}'\n          GATE_SPEC: '"
     ));
-    assert!(job.contains("        run: '\"$VELNOR_HELPER\" gate --spec-env GATE_SPEC'\n"));
+    assert!(job.contains("exec \"$VELNOR_HELPER_COPY\" gate --spec-env GATE_SPEC'\n"));
     assert_eq!(
         gate_line(&text)?,
         "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
@@ -161,9 +158,7 @@ fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
     assert_eq!(spec.matches("--tests ").count(), 60);
-    assert!(
-        required(&text)?.contains("        run: '\"$VELNOR_HELPER\" gate --spec-env GATE_SPEC'\n")
-    );
+    assert!(required(&text)?.contains("exec \"$VELNOR_HELPER_COPY\" gate --spec-env GATE_SPEC'\n"));
     Ok(())
 }
 

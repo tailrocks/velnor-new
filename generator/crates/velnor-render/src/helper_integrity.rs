@@ -3,12 +3,13 @@
 
 use velnor_model::{HelperRelease, Job, StepKind};
 
-use crate::gate::all_conditions;
 use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 const DIRECTORY: &str = "${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}";
 const CHECKSUM: &str = "${{ runner.os == 'Linux' && '/usr/bin/sha256sum' || runner.os == 'macOS' && '/usr/bin/shasum' || '' }}";
 const CHECKSUM_ARGUMENTS: &str = "${{ runner.os == 'Linux' && '--check --status' || runner.os == 'macOS' && '-a 256 --check --status' || '' }}";
+
+pub(crate) const INVOCATION_PREFIX: &str = "VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d \"$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX\") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp \"$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX\") && /bin/cp \"$VELNOR_HELPER\" \"$VELNOR_HELPER_COPY\" && /bin/chmod 500 \"$VELNOR_HELPER_COPY\" && \"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\" && exec \"$VELNOR_HELPER_COPY\" ";
 
 pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedStep> {
     let Some(release) = job.steps.iter().find_map(|step| match &step.kind {
@@ -34,14 +35,8 @@ pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedS
             .as_ref()
             .and_then(|run| run.strip_prefix("velnor-ci "))
         {
-            let id = format!("velnor-helper-check-{}", secured.len());
-            secured.push(verification(&id, step.condition.clone(), release));
-            step.run = Some(format!("\"$VELNOR_HELPER\" {arguments}"));
-            step.env.push(helper_path());
-            step.condition = all_conditions(
-                step.condition,
-                Some(format!("${{{{ steps.{id}.outcome == 'success' }}}}")),
-            );
+            step.run = Some(format!("{INVOCATION_PREFIX}{arguments}"));
+            step.env.extend(verification_environment(release));
         }
         secured.push(step);
     }
@@ -91,7 +86,7 @@ fn install_copy(condition: Option<&str>) -> Vec<RenderedStep> {
     .collect()
 }
 
-fn verification(id: &str, condition: Option<String>, release: &HelperRelease) -> RenderedStep {
+fn verification_environment(release: &HelperRelease) -> Vec<(String, Value)> {
     let choices: Vec<String> = release
         .digests()
         .iter()
@@ -100,17 +95,23 @@ fn verification(id: &str, condition: Option<String>, release: &HelperRelease) ->
             format!("runner.os == '{os}' && runner.arch == '{arch}' && '{digest}'")
         })
         .collect();
-    RenderedStep {
-        id: Some(id.to_owned()),
-        name: "Verify the released helper".to_owned(),
-        condition,
-        env: vec![
-            helper_path(),
-            ("VELNOR_HELPER_SHA256".to_owned(), Value::Expr(format!("${{{{ {} || '' }}}}", choices.join(" || ")))),
-            ("VELNOR_HELPER_CHECKSUM".to_owned(), Value::Expr(CHECKSUM.to_owned())),
-            ("VELNOR_HELPER_CHECKSUM_ARGUMENTS".to_owned(), Value::Expr(CHECKSUM_ARGUMENTS.to_owned())),
-        ],
-        run: Some("\"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER\"".to_owned()),
-        ..RenderedStep::default()
-    }
+    vec![
+        helper_path(),
+        (
+            "VELNOR_HELPER_TEMP".to_owned(),
+            Value::Expr("${{ runner.temp }}".to_owned()),
+        ),
+        (
+            "VELNOR_HELPER_SHA256".to_owned(),
+            Value::Expr(format!("${{{{ {} || '' }}}}", choices.join(" || "))),
+        ),
+        (
+            "VELNOR_HELPER_CHECKSUM".to_owned(),
+            Value::Expr(CHECKSUM.to_owned()),
+        ),
+        (
+            "VELNOR_HELPER_CHECKSUM_ARGUMENTS".to_owned(),
+            Value::Expr(CHECKSUM_ARGUMENTS.to_owned()),
+        ),
+    ]
 }

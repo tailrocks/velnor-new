@@ -96,7 +96,7 @@ fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestRes
     let text = workflow(&view(&["Cargo.toml"], None)?)?;
     let cargo: Vec<&str> = steps(&text)
         .into_iter()
-        .filter(|step| step.contains(r#"run: '"$VELNOR_HELPER" run -- cargo"#))
+        .filter(|step| step.contains(r#"exec "$VELNOR_HELPER_COPY" run -- cargo"#))
         .collect();
     assert_ne!(cargo.len(), 0);
     for step in cargo {
@@ -278,7 +278,7 @@ fn compile_steps_build_the_whole_workspace_because_a_narrower_package_set_unifie
             .lines()
             .filter_map(|line| line.trim().strip_prefix("run: "))
             .map(|run| run.trim_matches('\''))
-            .filter(|run| run.starts_with("\"$VELNOR_HELPER\" run"))
+            .filter(|run| run.contains("exec \"$VELNOR_HELPER_COPY\" run"))
             .filter(|run| {
                 run.contains("clippy")
                     || run.contains("nextest")

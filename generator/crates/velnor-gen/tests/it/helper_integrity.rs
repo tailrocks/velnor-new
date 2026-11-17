@@ -267,11 +267,6 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
             & 0o777,
         0o500
     );
-    fs::set_permissions(installed, fs::Permissions::from_mode(0o700))?;
-    fs::write(installed, BAD)?;
-    let rejected = execute(&steps[use_index], &root, &shadows, &digest)?;
-    assert!(!rejected.status.success());
-    assert!(!String::from_utf8_lossy(&rejected.stdout).contains("replaced-helper"));
     for invalid in ["", &"0".repeat(64)] {
         assert!(
             !execute(&steps[use_index], &root, &shadows, invalid)?
@@ -279,9 +274,51 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
                 .success()
         );
     }
+    fs::set_permissions(installed, fs::Permissions::from_mode(0o700))?;
+    fs::write(installed, BAD)?;
+    let rejected = execute(&steps[use_index], &root, &shadows, &digest)?;
+    assert!(
+        !rejected.status.success(),
+        "replaced helper executed: {}",
+        String::from_utf8_lossy(&rejected.stdout)
+    );
+    assert!(!String::from_utf8_lossy(&rejected.stdout).contains("replaced-helper"));
     fs::set_permissions(
         installed.parent().ok_or("no installed parent")?,
         fs::Permissions::from_mode(0o700),
     )?;
+    Ok(())
+}
+
+#[test]
+fn trusted_helper_arguments_still_reject_shell_syntax() -> TestResult {
+    use velnor_render::{RenderedJob, RenderedStep, RenderedWorkflow, Rule, check_rules};
+
+    let yaml = workflow(&"a".repeat(64))?;
+    let command = steps(&yaml)?
+        .iter()
+        .find(|step| step["name"] == "velnor-ci plan")
+        .and_then(|step| step["run"].as_str())
+        .ok_or("no helper command")?;
+    for (suffix, symbol) in [("; BAD", ";"), (" $(BAD)", "$(")] {
+        let result = check_rules(&RenderedWorkflow {
+            jobs: vec![RenderedJob {
+                id: "format".to_owned(),
+                runs_on: "ubuntu-latest".to_owned(),
+                timeout_minutes: 10,
+                steps: vec![RenderedStep {
+                    name: "trusted helper".to_owned(),
+                    run: Some(format!("{command}{suffix}")),
+                    ..RenderedStep::default()
+                }],
+                ..RenderedJob::default()
+            }],
+        });
+        assert!(result.is_err_and(|violations| {
+            violations
+                .iter()
+                .any(|violation| violation.rule == Rule::ForbiddenSyntax(symbol))
+        }));
+    }
     Ok(())
 }

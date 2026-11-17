@@ -25,7 +25,7 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 17] = [
+const LANE_SETUP: [&str; 14] = [
     "Check out",
     "Install velnor-ci 0.1.79",
     "Create the released helper directory",
@@ -35,13 +35,10 @@ const LANE_SETUP: [&str; 17] = [
     "Install tools",
     "Add Rust components",
     "Save the tools cache",
-    "Verify the released helper",
     "velnor-ci prepare",
-    "Verify the released helper",
     "velnor-ci check-metadata",
     "Restore the sources cache",
     "Restore the target cache",
-    "Verify the released helper",
     "velnor-ci restored",
 ];
 
@@ -52,14 +49,13 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     assert!(!text.contains("rust-plan"), "{text}");
     let steps = steps_of(&text, "rust");
     assert_eq!(
-        steps[..7],
+        steps[..6],
         [
             "Check out",
             "Install velnor-ci 0.1.79",
             "Create the released helper directory",
             "Copy the released helper",
             "Protect the released helper",
-            "Verify the released helper",
             "velnor-ci plan",
         ]
     );
@@ -82,10 +78,8 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     );
     let plan_step = steps_of(&text, "rust");
     assert!(plan_index < plan_step.len());
-    assert!(text.contains(r#"run: '"$VELNOR_HELPER" plan --explain'"#));
-    assert!(
-        text.contains("steps.velnor-helper-check-") && text.contains(".outcome == ''success''")
-    );
+    assert!(text.contains(r#"exec "$VELNOR_HELPER_COPY" plan --explain'"#));
+    assert!(!text.contains("steps.velnor-helper-check-"));
     assert!(!text.contains("GITHUB_TOKEN"), "{text}");
     Ok(())
 }
@@ -160,7 +154,7 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
     for line in steps {
         assert!(
             line.contains(
-                "\"$VELNOR_HELPER\" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"
+                "\"$VELNOR_HELPER_COPY\" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"
             ),
             "{line}"
         );
@@ -221,7 +215,7 @@ fn every_cargo_command_runs_through_the_helper() -> TestResult {
     for run in runs {
         let cargo = run.contains("cargo-") || run.starts_with("cargo ");
         assert!(
-            !cargo || run.starts_with("\"$VELNOR_HELPER\" run "),
+            !cargo || run.contains("exec \"$VELNOR_HELPER_COPY\" run "),
             "{run}"
         );
     }
@@ -342,7 +336,7 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
         let text = workflow(&view(roots, None)?)?;
         let cargo: Vec<&str> = text
             .split("      - name: ")
-            .filter(|step| step.contains(r#"run: '"$VELNOR_HELPER" run -- cargo"#))
+            .filter(|step| step.contains(r#"exec "$VELNOR_HELPER_COPY" run -- cargo"#))
             .collect();
         assert!(!cargo.is_empty(), "{text}");
         for step in cargo {

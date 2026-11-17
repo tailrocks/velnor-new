@@ -268,13 +268,16 @@ fn run_rules(run: &str, rules: &mut Vec<Rule>) {
     if run.contains('\n') {
         rules.push(Rule::MultiLineRun);
     }
+    let command = run
+        .strip_prefix(crate::helper_integrity::INVOCATION_PREFIX)
+        .unwrap_or(run);
     for word in FORBIDDEN_WORDS {
         if has_word(run, word) {
             rules.push(Rule::ForbiddenSyntax(word));
         }
     }
     for symbol in FORBIDDEN_SYMBOLS {
-        if run.contains(symbol) {
+        if command.contains(symbol) {
             rules.push(Rule::ForbiddenSyntax(symbol));
         }
     }
