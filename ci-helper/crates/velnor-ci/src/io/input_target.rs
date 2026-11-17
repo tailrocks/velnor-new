@@ -15,12 +15,13 @@ pub(super) fn check_target(root: &Path, target: &Path) -> Result<(), CiError> {
     let object = target_object(&path)?;
     let mut targets = vec![object, resolve(&path)?];
     targets.dedup();
-    let top = protect_checkout(root, &targets)?;
+    let links = symlink_objects(&path)?;
+    let top = protect_checkout(root, &targets, &links)?;
     let mut checked = BTreeSet::from([top]);
     for target in &targets {
         for ancestor in target.ancestors() {
             if !checked.contains(ancestor) && git_marker(ancestor)? {
-                protect_checkout(ancestor, &targets)?;
+                protect_checkout(ancestor, &targets, &links)?;
                 checked.insert(ancestor.to_path_buf());
             }
         }
@@ -36,7 +37,30 @@ pub(super) fn target_object(path: &Path) -> Result<PathBuf, CiError> {
     }
 }
 
-fn protect_checkout(root: &Path, targets: &[PathBuf]) -> Result<PathBuf, CiError> {
+fn symlink_objects(path: &Path) -> Result<BTreeSet<PathBuf>, CiError> {
+    let mut pending = vec![path.to_path_buf()];
+    let mut links = BTreeSet::new();
+    while let Some(path) = pending.pop() {
+        for ancestor in path.ancestors() {
+            if !metadata(ancestor)?.is_some_and(|metadata| metadata.is_symlink()) {
+                continue;
+            }
+            if links.insert(target_object(ancestor)?) {
+                let destination = fs::read_link(ancestor).map_err(|e| {
+                    CiError::new(format!("cannot read symlink {}: {e}", ancestor.display()))
+                })?;
+                pending.push(ancestor.with_file_name(destination));
+            }
+        }
+    }
+    Ok(links)
+}
+
+fn protect_checkout(
+    root: &Path,
+    targets: &[PathBuf],
+    links: &BTreeSet<PathBuf>,
+) -> Result<PathBuf, CiError> {
     let root = resolve(root)?;
     let tracked = tracked_paths(&root)?;
     let top = resolve(&tracked.top)?;
@@ -53,7 +77,8 @@ fn protect_checkout(root: &Path, targets: &[PathBuf]) -> Result<PathBuf, CiError
             || tracked
                 .paths
                 .iter()
-                .any(|path| top.join(path).starts_with(target))
+                .map(|path| top.join(path))
+                .any(|path| path.starts_with(target) || links.contains(&path))
     }) {
         return Err(CiError::new(format!(
             "target directory {} contains checkout files",
