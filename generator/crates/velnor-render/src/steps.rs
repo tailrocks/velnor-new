@@ -3,12 +3,14 @@
 
 use velnor_model::{
     CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_RUN_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source};
+use crate::gate::{
+    PLAN_STEP, TOOLS_STEP, all_conditions, condition, output, plan_source, verdict_step,
+};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -67,14 +69,22 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             })
-            .chain(job.steps.iter().any(|step| {
-                matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
-            }).then(|| {
-                (
-                    TESTS_RUN_OUTPUT.to_owned(),
-                    format!("${{{{ steps.{TEST_STEP_ID}.outputs.{TESTS_RUN_OUTPUT} }}}}"),
-                )
-            }))
+            .chain(
+                job.steps
+                    .iter()
+                    .any(|step| {
+                        matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
+                    })
+                    .then_some([TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT])
+                    .into_iter()
+                    .flatten()
+                    .map(|name| {
+                        (
+                            name.to_owned(),
+                            format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
+                        )
+                    }),
+            )
             .collect(),
         steps: job
             .steps
@@ -95,11 +105,10 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         });
     }
     for body in &mut rendered {
-        if let Some(condition) =
-            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft)
-        {
-            body.condition = Some(condition);
-        }
+        body.condition = all_conditions(
+            body.condition.take(),
+            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft),
+        );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
@@ -167,6 +176,12 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         },
         StepKind::Cargo(command) => cargo_step(command),
         StepKind::Helper(command) => helper_step(*command),
+StepKind::CratesMirror(mirror) => RenderedStep {
+    name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
+    condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
+    run: Some(format!("velnor-ci crates-mirror --registry {} --cainfo {}", crate::release_steps::shell_word(&mirror.registry), crate::release_steps::shell_word(&mirror.cainfo))),
+    ..RenderedStep::default()
+},
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),
@@ -182,6 +197,10 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
+        StepKind::Verdict {
+            spec,
+            needs_max_bytes,
+        } => verdict_step(spec, *needs_max_bytes),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),

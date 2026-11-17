@@ -10,8 +10,9 @@ use std::{
 use super::{
     super::CleanupObserverRequest,
     helpers::{
-        add_issue, expired, io_vanished, linux_device, namespace_identity, namespace_link,
-        numeric_name, observe_descriptor, process_start_ticks, read_bounded, vanished,
+        add_issue, expired, io_vanished, linux_device, live_process_namespace, namespace_identity,
+        namespace_link, numeric_name, observe_descriptor, process_start_ticks, read_bounded,
+        vanished,
     },
     mounts::{check_owned_mounts, check_tmpfs_mounts, read_task_mountinfo},
 };
@@ -56,7 +57,7 @@ pub(super) fn scan(request: &CleanupObserverRequest, started: Instant) -> Invent
         owned_reference_count: 0,
         namespaces: BTreeSet::new(),
     };
-    let context = context(request, started);
+    let context = context(request, started, &mut inventory.issues);
     if context.observer_in_pair_namespace {
         add_issue(&mut inventory.issues, "observer_in_pair_namespace");
     }
@@ -88,11 +89,27 @@ pub(super) fn scan(request: &CleanupObserverRequest, started: Instant) -> Invent
     inventory
 }
 
-fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_> {
+fn context<'a>(
+    request: &'a CleanupObserverRequest,
+    started: Instant,
+    issues: &mut Vec<String>,
+) -> ScanContext<'a> {
     let binding = &request.binding;
-    let observer_pid = std::process::id();
+    let mut protected_namespaces = Vec::new();
+    let mut identities_readable = true;
+    for process in [&binding.daemon, &binding.runner, &binding.dind] {
+        match live_process_namespace(process) {
+            Ok(Some(namespace)) => protected_namespaces.push(namespace),
+            Ok(None) => {}
+            Err(_) => {
+                identities_readable = false;
+                add_issue(issues, "observer_identity_unreadable");
+            }
+        }
+    }
     let own_namespace = namespace_identity("/proc/self/ns/mnt").ok();
-    let observer_namespace = observer_outside_pair_namespaces(own_namespace, binding);
+    let outside_namespace = observer_outside_pair_namespaces(own_namespace, &protected_namespaces);
+    let observer_namespace = outside_namespace.filter(|_| identities_readable);
     let self_mountinfo = read_bounded(
         "/proc/self/mountinfo",
         MOUNTINFO_LIMIT,
@@ -100,7 +117,7 @@ fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_
     )
     .unwrap_or_default();
     let observer_tmpfs_devices =
-        observer_runtime_tmpfs_devices(observer_pid, observer_namespace, binding, &self_mountinfo);
+        observer_runtime_tmpfs_devices(observer_namespace, &self_mountinfo);
     ScanContext {
         request,
         started,
@@ -117,7 +134,7 @@ fn context(request: &CleanupObserverRequest, started: Instant) -> ScanContext<'_
             .map(|device| linux_device(u64::from(device[0]), u64::from(device[1])))
             .collect(),
         observer_namespace,
-        observer_in_pair_namespace: own_namespace.is_some() && observer_namespace.is_none(),
+        observer_in_pair_namespace: own_namespace.is_some() && outside_namespace.is_none(),
         observer_tmpfs_devices,
     }
 }
