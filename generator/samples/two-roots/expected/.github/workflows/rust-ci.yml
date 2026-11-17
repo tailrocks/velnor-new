@@ -24,6 +24,7 @@ defaults:
   run:
     shell: 'bash -p {0}'
 jobs:
+  # jactionlint ignore=shellcheck
   rust-plan:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
@@ -70,6 +71,7 @@ jobs:
         name: velnor-ci plan
         run: '. "$VELNOR_EXEC" plan --explain'
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust-root:
     needs:
       - rust-plan
@@ -293,6 +295,7 @@ jobs:
           retention-days: 3
           overwrite: true
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust-xtask:
     needs:
       - rust-plan
@@ -514,6 +517,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-inputs-audit:
     needs:
       - rust-plan
@@ -673,6 +677,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-trim:
     name: Cache maintenance
     needs:
@@ -761,6 +766,7 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-root-target_key.outcome != ''failure'' && steps.verify-rust-root-sources_key.outcome != ''failure'' && steps.verify-rust-xtask-target_key.outcome != ''failure'' && steps.verify-rust-xtask-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+  # jactionlint ignore=shellcheck
   required:
     name: Required
     needs:
@@ -796,6 +802,7 @@ jobs:
           NEEDS_JSON: '${{ toJSON(needs) }}'
           GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-xtask=lane:xtask --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-xtask=xtask'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
+  # jactionlint ignore=shellcheck
   cache:
     name: Cache
     needs:

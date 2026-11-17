@@ -23,6 +23,7 @@ defaults:
     shell: 'bash -p {0}'
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:

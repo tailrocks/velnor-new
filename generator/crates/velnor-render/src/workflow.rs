@@ -71,9 +71,21 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         "steps",
         Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
     )]);
-    match &job.comment {
-        Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
-        None => Yaml::Map(items),
+    let launches_helper = job.steps.iter().any(|step| {
+        step.run
+            .as_deref()
+            .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
+    });
+    let notes: Vec<&str> = job
+        .comment
+        .as_deref()
+        .into_iter()
+        .chain(launches_helper.then_some(crate::helper_integrity::SHELLCHECK_IGNORE))
+        .collect();
+    if notes.is_empty() {
+        Yaml::Map(items)
+    } else {
+        Yaml::Noted(notes.join("\n"), Box::new(Yaml::Map(items)))
     }
 }
 

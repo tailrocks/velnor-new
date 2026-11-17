@@ -24,6 +24,7 @@ defaults:
   run:
     shell: 'bash -p {0}'
 jobs:
+  # jactionlint ignore=shellcheck
   rust-plan:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
@@ -83,6 +84,7 @@ jobs:
         name: velnor-ci plan
         run: '. "$VELNOR_EXEC" plan --explain'
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust-root:
     needs:
       - rust-plan
@@ -368,6 +370,7 @@ jobs:
           retention-days: 3
           overwrite: true
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust-ci_helper:
     needs:
       - rust-plan
@@ -599,6 +602,7 @@ jobs:
           retention-days: 3
           overwrite: true
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust-crates_velnor_runner:
     needs:
       - rust-plan
@@ -872,6 +876,7 @@ jobs:
           retention-days: 3
           overwrite: true
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust-generator:
     needs:
       - rust-plan
@@ -1121,6 +1126,7 @@ jobs:
           retention-days: 3
           overwrite: true
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust-local:
     needs:
       - rust-plan
@@ -1357,6 +1363,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-inputs-audit:
     needs:
       - rust-plan
@@ -1614,6 +1621,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-trim:
     name: Cache maintenance
     needs:
@@ -1789,6 +1797,7 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-root-target_key.outcome != ''failure'' && steps.verify-rust-root-sources_key.outcome != ''failure'' && steps.verify-rust-ci_helper-target_key.outcome != ''failure'' && steps.verify-rust-ci_helper-sources_key.outcome != ''failure'' && steps.verify-rust-crates_velnor_runner-target_key.outcome != ''failure'' && steps.verify-rust-crates_velnor_runner-sources_key.outcome != ''failure'' && steps.verify-rust-generator-target_key.outcome != ''failure'' && steps.verify-rust-generator-sources_key.outcome != ''failure'' && steps.verify-rust-local-target_key.outcome != ''failure'' && steps.verify-rust-local-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+  # jactionlint ignore=shellcheck
   required:
     name: Required
     needs:
@@ -1827,6 +1836,7 @@ jobs:
           NEEDS_JSON: '${{ toJSON(needs) }}'
           GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-ci_helper=lane:ci_helper --job rust-crates_velnor_runner=lane:crates_velnor_runner --job rust-generator=lane:generator --job rust-local=lane:local --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-ci_helper=ci_helper --tests rust-crates_velnor_runner=crates_velnor_runner --tests rust-generator=generator --tests rust-local=local'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
+  # jactionlint ignore=shellcheck
   cache:
     name: Cache
     needs:

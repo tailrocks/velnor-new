@@ -308,7 +308,7 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         .split("\n  rust-inputs-audit:\n")
         .nth(1)
         .ok_or("no audit job")?
-        .split("\n  rust-trim:\n")
+        .split("\n  # jactionlint ignore=shellcheck\n  rust-trim:\n")
         .next()
         .ok_or("no audit job")?;
     assert!(
