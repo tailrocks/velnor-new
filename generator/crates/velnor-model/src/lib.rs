@@ -3,6 +3,7 @@
 
 mod cache;
 mod cron;
+mod helper;
 mod ids;
 mod plan;
 mod repo;
@@ -11,15 +12,16 @@ mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
 pub use cron::CronExpr;
+pub use helper::{HelperRelease, Platform};
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
     RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, BaseExpiry, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand,
-    HelperRelease, Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform,
-    PullRequestType, Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, Triggers, TrimFamily, When, WorkflowPlan,
+    Access, BaseExpiry, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job,
+    LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, PullRequestType, Shape,
+    ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
+    TrimFamily, When, WorkflowPlan,
 };
 pub use repo::{
     CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,

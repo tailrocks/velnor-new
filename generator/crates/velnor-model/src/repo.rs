@@ -5,8 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::cron::CronExpr;
+use crate::helper::HelperRelease;
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
-use crate::plan::{HelperRelease, Shape};
+use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
