@@ -58,7 +58,7 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
         "{trim}"
     );
     let condition = format!(
-        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'' || (needs.rust-test.outputs.sources_saved == ''true'' || needs.rust-test.outputs.cache_ok == ''false'')) }}}}'\n"
+        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'' || (needs.rust-test.outputs.sources_saved == ''true'' || needs.rust-test.outputs.sources_key != '''')) }}}}'\n"
     );
     assert!(trim.contains(&condition), "{trim}");
     assert!(

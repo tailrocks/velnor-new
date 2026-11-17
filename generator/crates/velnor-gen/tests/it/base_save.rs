@@ -159,9 +159,9 @@ fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_br
             "velnor-ci inputs save",
             "Decide whether to save the build directory",
             "Save the target cache",
-            "Verify the target cache upload",
+            "Record the target cache key",
             "Save the sources cache",
-            "Verify the sources cache upload",
+            "Record the sources cache key",
         ]
     );
     for name in &saved {
