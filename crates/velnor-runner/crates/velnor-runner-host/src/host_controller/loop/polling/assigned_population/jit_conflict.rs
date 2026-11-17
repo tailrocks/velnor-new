@@ -33,11 +33,9 @@ pub(super) async fn reconcile(
     if !context.selected_engine.matches_selection(&engine) {
         return Ok(false);
     }
+    Box::pin(reconcile_tombstones(prepared, context, binding)).await?;
     let candidates = prepared.scope.recoverable_jit_conflict_candidates().await?;
-    if candidates.is_empty() {
-        return Ok(false);
-    }
-    if prepared.credentials.is_none() {
+    if candidates.is_empty() || prepared.credentials.is_none() {
         return Ok(false);
     }
     for candidate in candidates {
@@ -93,6 +91,31 @@ pub(super) async fn reconcile(
         }
     }
     Ok(false)
+}
+
+async fn reconcile_tombstones(
+    prepared: &mut PreparedConnection,
+    context: &PositivePollContext<'_>,
+    binding: &crate::config::RepositoryConnection,
+) -> Result<(), HostError> {
+    let Some(credentials) = prepared.credentials.as_mut() else {
+        return Ok(());
+    };
+    crate::launch::jit_conflict::reconcile_tombstones(
+        crate::launch::jit_conflict::ReconcileContext {
+            docker: context.docker,
+            journal: context.journal,
+            scope: &prepared.scope,
+            binding,
+            set_id: prepared.set_id,
+            link: &mut credentials.link,
+            github_pat: &credentials.github_pat,
+            selected: context.selected_engine,
+            images: context.worker_images,
+            image_authority: context.image_authority,
+        },
+    )
+    .await
 }
 
 fn settlement_clears_population(

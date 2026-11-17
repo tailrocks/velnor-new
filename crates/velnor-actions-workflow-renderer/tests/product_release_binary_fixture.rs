@@ -22,7 +22,6 @@ use super::product_release_binary_hash_fixture::{install_shasum_double, sha256};
 
 pub(crate) const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
 pub(crate) const HELPER_SUFFIX: &[u8] = b"helper payload\n";
-
 const BINARY_WORKFLOW: &str = ".github/workflows/product-release-binary.yml";
 const BUILD_STEP: &str = "Build velnor-host with MBX";
 const VERIFY_STEP: &str = "Verify Mach-O architecture";
@@ -296,7 +295,17 @@ fn pins() -> ProductReleasePins {
         macos_x86_64_setup: setup,
         install_gate_tools_argv: argv(),
         install_build_tools_argv: argv(),
-        install_qualify_tools_argv: argv(),
+        install_qualify_tools_argv: [
+            "mise",
+            "install",
+            "rust@1.91.0",
+            "bun@1.4.4",
+            "jactionlint@2.103.2",
+            "shellcheck@0.11.0",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         qualify_mbx_action_steps: std::array::from_fn(|_| fixture_step()),
         install_runner_build_tools_argv: argv(),
         install_gh_argv: argv(),
@@ -324,6 +333,7 @@ fn pins() -> ProductReleasePins {
         ],
         mr_boxington_version: "1.29.2".to_owned(),
         gh_version: "2.83.1".to_owned(),
+        bun_version: "1.4.4".to_owned(),
     }
 }
 

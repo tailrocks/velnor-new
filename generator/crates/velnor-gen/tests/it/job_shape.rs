@@ -224,6 +224,7 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
             "  rust-lint-lab:",
             "  rust-test-lab:",
             "  rust-inputs-audit:",
+            "  rust-trim:",
             "  required:"
         ]
     );

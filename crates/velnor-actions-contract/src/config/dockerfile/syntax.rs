@@ -3,7 +3,8 @@
 
 use super::{DockerfileProblem, is_digest_pinned};
 
-pub(super) fn check_directives(text: &str) -> Result<(), DockerfileProblem> {
+pub(super) fn check_directives(text: &str) -> Result<bool, DockerfileProblem> {
+    let mut custom_frontend = false;
     for line in text.lines() {
         let Some(directive) = line.trim().strip_prefix('#') else {
             break;
@@ -16,10 +17,16 @@ pub(super) fn check_directives(text: &str) -> Result<(), DockerfileProblem> {
             "syntax" if !is_digest_pinned(value.trim()) => {
                 return Err(DockerfileProblem::SyntaxUnpinned(value.trim().to_owned()));
             }
+            "syntax" => {
+                let name = value.trim().split('@').next().unwrap_or_default();
+                let name = name.split(':').next().unwrap_or_default();
+                custom_frontend |=
+                    !matches!(name, "docker/dockerfile" | "docker.io/docker/dockerfile");
+            }
             _ => {}
         }
     }
-    Ok(())
+    Ok(custom_frontend)
 }
 
 pub(super) fn instructions(text: &str) -> Vec<(String, String)> {
