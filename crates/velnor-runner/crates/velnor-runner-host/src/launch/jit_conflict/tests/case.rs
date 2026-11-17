@@ -27,6 +27,7 @@ pub(super) enum Schema {
     Current,
     Historical45,
     Historical46,
+    Historical47,
 }
 
 pub(super) struct Case {
@@ -69,6 +70,7 @@ impl Case {
             Schema::Current => Journal::open(&path).await?,
             Schema::Historical45 => Journal::open_historical_v45_for_test(&path).await?,
             Schema::Historical46 => Journal::open_historical_v46_for_test(&path).await?,
+            Schema::Historical47 => Journal::open_historical_v47_for_test(&path).await?,
         };
         let started = if control {
             vec![CRASH, super::policy_rotation::CONTROL]
@@ -155,6 +157,7 @@ impl Case {
             Schema::Current => Journal::open(&path).await?,
             Schema::Historical45 => Journal::open_historical_v45_for_test(&path).await?,
             Schema::Historical46 => Journal::open_historical_v46_for_test(&path).await?,
+            Schema::Historical47 => Journal::open_historical_v47_for_test(&path).await?,
         };
         let scope = journal.connection_scope(&binding).await?;
         Ok(Self {

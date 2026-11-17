@@ -12,10 +12,7 @@ use crate::launch::bootstrap::{UncertainRecovery, recover_uncertain_reservations
 #[tokio::test(flavor = "multi_thread")]
 async fn an_interrupted_claim_is_cleaned_by_name_and_releases_only_after_metadata_settlement()
 -> TestResult<()> {
-    for exists in [false, true] {
-        Box::pin(cleanup(exists, false)).await?;
-    }
-    Ok(())
+    Box::pin(cleanup(true, false)).await
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -10,9 +10,11 @@ mod end_to_end;
 mod github;
 mod historical;
 mod inbox;
+mod late_creation;
 mod policy_rotation;
 mod population;
 mod probe_docker;
+mod remote_absence_boundary;
 mod storage_seed;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;

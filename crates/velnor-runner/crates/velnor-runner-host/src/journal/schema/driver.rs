@@ -102,6 +102,22 @@ pub(in crate::journal) async fn bootstrap_historical_v45(
 }
 
 #[cfg(test)]
+pub(in crate::journal) async fn bootstrap_historical_v47(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    let mut version = super::journal_version(conn).await?;
+    while version != 47 {
+        let expected = expected_next_version(version).ok_or(HostError::Journal)?;
+        migration_step(conn, version)?.await?;
+        version = super::journal_version(conn).await?;
+        if version != expected {
+            return Err(HostError::Journal);
+        }
+    }
+    super::validate_persisted_schema_v46(conn).await
+}
+
+#[cfg(test)]
 pub(in crate::journal) async fn bootstrap_historical_v46(
     conn: &turso::Connection,
 ) -> Result<(), HostError> {

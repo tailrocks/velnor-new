@@ -55,6 +55,16 @@ pub struct Journal {
 
 impl Journal {
     #[cfg(test)]
+    pub(crate) async fn open_historical_v47_for_test(path: &Path) -> Result<Self, HostError> {
+        let journal = Self {
+            file: JournalFile::open(path).await?,
+        };
+        schema::bootstrap_historical_v47(&journal.connection().await?).await?;
+        journal.file.reset_after_bootstrap()?;
+        Ok(journal)
+    }
+
+    #[cfg(test)]
     pub(crate) async fn open_historical_v46_for_test(path: &Path) -> Result<Self, HostError> {
         let journal = Self {
             file: JournalFile::open(path).await?,
