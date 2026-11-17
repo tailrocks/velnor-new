@@ -9,8 +9,8 @@ use velnor_model::{
 };
 
 use crate::plan::{
-    CHECKOUT_DEPTH, HELPER_JOB, PLAN_DEPTH, head, job, step, tools_install, tools_restore,
-    tools_save,
+    CHECKOUT_DEPTH, HELPER_JOB, PLAN_DEPTH, head, job, mirror_step, step, tools_install,
+    tools_restore, tools_save,
 };
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
@@ -142,19 +142,26 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
     let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
-    steps.extend(
-        [
-            tools_restore(facts),
-            tools_install(facts),
-            tools_save(facts),
-        ]
-        .into_iter()
-        .flatten()
-        .map(|step| Step {
-            gate: policy_gate.clone(),
-            ..step
-        }),
-    );
+    steps.extend(mirror_step(facts).map(|step| Step {
+        gate: policy_gate.clone(),
+        ..step
+    }));
+    if !facts.tools.tools.is_empty() {
+        steps.extend(
+            [
+                tools_restore(facts),
+                tools_install(facts),
+                mirror_step(facts),
+                tools_save(facts),
+            ]
+            .into_iter()
+            .flatten()
+            .map(|step| Step {
+                gate: policy_gate.clone(),
+                ..step
+            }),
+        );
+    }
     if facts.policy.deny {
         steps.extend(facts.rust_roots.iter().map(|root| {
             lane.cargo(
