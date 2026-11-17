@@ -144,7 +144,7 @@ fn package(package_id: &str) -> Option<Package> {
     })
 }
 
-fn is_compilation(kind: ProgressKind) -> bool {
+pub(super) fn is_compilation(kind: ProgressKind) -> bool {
     matches!(
         kind,
         ProgressKind::Compiling | ProgressKind::Checking | ProgressKind::Documenting

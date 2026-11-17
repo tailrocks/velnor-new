@@ -226,6 +226,28 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
     let workspace = event(&warm, "Compiling", "demo", "0.1.0", true);
     let metrics = progress(&warm, &[workspace], true)?;
     assert_ne!(metrics.verification_errors, [] as [String; 0]);
+
+    let quiet = artifact(
+        &warm,
+        "demo",
+        "lib",
+        "target/debug/deps/libdemo-hash.rmeta",
+        false,
+        false,
+    )?;
+    let metrics = observation(&warm, &[], &[quiet], true)?;
+    assert_ne!(metrics.verification_errors, [] as [String; 0]);
+
+    let fresh = artifact(
+        &warm,
+        "demo",
+        "lib",
+        "target/debug/deps/libdemo-hash.rmeta",
+        true,
+        false,
+    )?;
+    let metrics = observation(&warm, &[], &[fresh], true)?;
+    assert_eq!(metrics.verification_errors, [] as [String; 0]);
     Ok(())
 }
 

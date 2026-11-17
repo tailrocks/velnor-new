@@ -211,18 +211,23 @@ fn symlink_lock_unavailable(
             continue;
         }
         let progress = progress(invocation, log)?;
-        if progress.iter().any(|event| {
-            matches!(
-                event.kind,
-                ProgressKind::Compiling | ProgressKind::Checking | ProgressKind::Documenting
-            )
-        }) {
+        if has_compilation(invocation, &progress) {
             metrics.verification_errors.push(format!(
                 "{root}: a tracked Cargo.lock symlink prevents compilation input verification"
             ));
         }
     }
     Ok(())
+}
+
+fn has_compilation(
+    invocation: &crate::telemetry::Invocation,
+    progress: &[crate::cargo_artifacts::CargoProgress],
+) -> bool {
+    invocation.artifacts.iter().any(|artifact| !artifact.fresh)
+        || progress
+            .iter()
+            .any(|event| artifact_evidence::is_compilation(event.kind))
 }
 
 fn same_lock(
