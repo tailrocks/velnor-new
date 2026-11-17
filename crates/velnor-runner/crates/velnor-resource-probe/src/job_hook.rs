@@ -115,7 +115,7 @@ pub fn run() -> Result<(), ProbeError> {
         &challenge.nonce,
     )?;
 
-    let decision = channel::wait_for_decision(&control, Path::new(CONTROL_PATH), deadline)?;
+    let decision = channel::wait_for_decision(&control, deadline)?;
     validation::validate_decision(&challenge, &request, &decision, &request_sha256)
 }
 
