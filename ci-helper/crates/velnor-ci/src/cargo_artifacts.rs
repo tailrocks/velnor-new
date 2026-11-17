@@ -173,6 +173,17 @@ fn cargo_progress(line: &str) -> Option<CargoProgress> {
 }
 
 fn individual_test(line: &str) -> Option<(String, f64)> {
+    let line = if let Some(retry) = line.strip_prefix("TRY ") {
+        let (attempt, status) = retry.split_once(' ')?;
+        if !attempt.bytes().all(|byte| byte.is_ascii_digit())
+            || !attempt.bytes().any(|byte| byte != b'0')
+        {
+            return None;
+        }
+        status
+    } else {
+        line
+    };
     let rest = line
         .strip_prefix("PASS [")
         .or_else(|| line.strip_prefix("FAIL ["))?;

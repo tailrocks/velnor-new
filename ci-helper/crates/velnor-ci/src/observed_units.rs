@@ -112,11 +112,41 @@ pub fn normalize(invocation: &mut Invocation, checkout: &Path) {
         }
         relative(&mut artifact.target.src_path);
         relative(&mut artifact.manifest_path);
-        let prefix = format!("path+file://{}", checkout.display());
-        if let Some(suffix) = artifact.package_id.strip_prefix(&prefix)
-            && (suffix.starts_with('/') || suffix.starts_with('#'))
-        {
-            artifact.package_id = format!("path+file://checkout{suffix}");
+        if let Some(package) = checkout_package(&artifact.package_id, checkout) {
+            artifact.package_id = package;
         }
     }
+    if let Ok(root) = Path::new(&invocation.root).strip_prefix(checkout) {
+        invocation.root = if root.as_os_str().is_empty() {
+            ".".to_owned()
+        } else {
+            root.to_string_lossy().into_owned()
+        };
+    }
+}
+
+fn checkout_package(package: &str, checkout: &Path) -> Option<String> {
+    let (path, fragment) = package.strip_prefix("path+file://")?.split_once('#')?;
+    if !path.starts_with('/') {
+        return None;
+    }
+    let mut encoded = path.bytes();
+    let mut decoded = Vec::with_capacity(path.len());
+    while let Some(byte) = encoded.next() {
+        decoded.push(if byte == b'%' {
+            let high = char::from(encoded.next()?).to_digit(16)?;
+            let low = char::from(encoded.next()?).to_digit(16)?;
+            u8::try_from(high * 16 + low).ok()?
+        } else {
+            byte
+        });
+    }
+    let path = String::from_utf8(decoded).ok()?;
+    let relative = Path::new(&path).strip_prefix(checkout).ok()?;
+    let suffix = if relative.as_os_str().is_empty() {
+        String::new()
+    } else {
+        format!("/{}", relative.display())
+    };
+    Some(format!("path+file://checkout{suffix}#{fragment}"))
 }

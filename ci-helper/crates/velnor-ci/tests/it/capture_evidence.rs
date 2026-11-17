@@ -4,7 +4,7 @@
 use serde_json::json;
 use std::collections::BTreeMap;
 use velnor_ci::cargo_artifacts::{CargoProgress, ProgressKind};
-use velnor_ci::observed_units::{collect, diagnostics};
+use velnor_ci::observed_units::{collect, diagnostics, normalize};
 use velnor_ci::progress_evidence::{Evidence, corroborate};
 use velnor_ci::telemetry::Invocation;
 
@@ -35,6 +35,58 @@ fn mixed_output_copies_preserve_the_qualified_compilation_identity() {
         collect(&invocation, &mut unknown);
         assert!(unknown.is_empty());
         assert_eq!(diagnostics(&invocation).len(), 1);
+    }
+    assert_checkout_normalization();
+}
+
+fn assert_checkout_normalization() {
+    let mut units = BTreeMap::new();
+    for (checkout, encoded) in [
+        ("/agent one/工作", "/agent%20one/%E5%B7%A5%E4%BD%9C"),
+        ("/agent two/工作", "/agent%20two/%E5%B7%A5%E4%BD%9C"),
+    ] {
+        let mut invocation = invocation();
+        checkout.clone_into(&mut invocation.root);
+        invocation
+            .argv
+            .push(format!("--manifest-path={checkout}/Cargo.toml"));
+        let argv = invocation.argv.clone();
+        invocation.target_directory = Some(format!("{checkout}/target"));
+        let artifact = &mut invocation.artifacts[0];
+        artifact.package_id = format!("path+file://{encoded}#app@0.1.0");
+        artifact.manifest_path = format!("{checkout}/Cargo.toml");
+        artifact.target.src_path = format!("{checkout}/src/lib.rs");
+        artifact.filenames = vec![format!("{checkout}/target/debug/deps/libapp-opaque.rlib")];
+        normalize(&mut invocation, std::path::Path::new(checkout));
+        assert_eq!(invocation.root, ".");
+        assert_eq!(invocation.argv, argv);
+        assert_eq!(
+            invocation.artifacts[0].package_id,
+            "path+file://checkout#app@0.1.0"
+        );
+        collect(&invocation, &mut units);
+    }
+    assert_eq!(units.len(), 1);
+    assert_eq!(
+        units
+            .values()
+            .next()
+            .unwrap_or_else(|| unreachable!("unit"))
+            .1,
+        2
+    );
+    for package in [
+        "path+file:///agent%20one/%E5%B7%A5%E4%BD%9C-sibling#app@0.1.0",
+        "path+file:///agent%Q0one/工作#app@0.1.0",
+        "path+file:///agent%20one/%FF#app@0.1.0",
+        "path+file:///agent%#app@0.1.0",
+    ] {
+        let mut invocation = invocation();
+        "/agent one/工作-sibling".clone_into(&mut invocation.root);
+        package.clone_into(&mut invocation.artifacts[0].package_id);
+        normalize(&mut invocation, std::path::Path::new("/agent one/工作"));
+        assert_eq!(invocation.root, "/agent one/工作-sibling");
+        assert_eq!(invocation.artifacts[0].package_id, package);
     }
 }
 
