@@ -61,7 +61,7 @@ test.each([
   ["an extra release ref", { conditions: { ref_name: { include: [...releaseRefs, "refs/tags/extra-v*"], exclude: [] } } }],
   ["an excluded release ref", { conditions: { ref_name: { include: [...releaseRefs], exclude: [releaseRefs[0]] } } }],
   ["a duplicate ref hiding an absent ref", { conditions: { ref_name: { include: [releaseRefs[0], releaseRefs[0], releaseRefs[2]], exclude: [] } } }],
-] satisfies [string, Partial<Ruleset>][]) ("release-tags rejects %s", async (_name, changed) => {
+] satisfies [string, Partial<Ruleset>][])("release-tags rejects %s", async (_name, changed) => {
   await expect(run({ rulesets: [baseline(), { ...release(), ...changed }] })).rejects.toThrow("release-tags must protect creation of exactly the release tag refs");
 });
 test("an unreadable release ref condition cannot prove creation protection", async () => {
