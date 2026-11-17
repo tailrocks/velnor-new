@@ -37,6 +37,7 @@ mod lock_affected;
 mod lock_consistency;
 mod main_and_scheduled;
 mod metadata_file;
+mod needs_size;
 mod no_programs;
 mod patch;
 mod pipeline;
