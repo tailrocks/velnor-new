@@ -10,6 +10,7 @@ mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_mirror;
 mod credentials;
 mod detect;
 mod doc_steps;
