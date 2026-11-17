@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, Step, StepKind, TESTS_RUN_OUTPUT,
+    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, Step, StepKind, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT,
 };
 
 use crate::artifact_steps::{
@@ -36,6 +37,8 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
 
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
+const NEEDS_JSON: &str = "NEEDS_JSON";
+const GATE_SPEC: &str = "GATE_SPEC";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -85,12 +88,22 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             })
-            .chain(tests.then(|| {
-                (
-                    TESTS_RUN_OUTPUT.to_owned(),
-                    format!("${{{{ steps.{TEST_STEP_ID}.outputs.{TESTS_RUN_OUTPUT} }}}}"),
-                )
-            }))
+            .chain(
+                job.steps
+                    .iter()
+                    .any(|step| {
+                        matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
+                    })
+                    .then_some([TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT])
+                    .into_iter()
+                    .flatten()
+                    .map(|name| {
+                        (
+                            name.to_owned(),
+                            format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
+                        )
+                    }),
+            )
             .chain(lane_outputs(&job.steps))
             .collect(),
         steps: job
@@ -235,6 +248,7 @@ fn step_body(kind: &StepKind, tests: bool, artifacts: ArtifactFormat) -> Rendere
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
+        StepKind::Verdict(spec) => verdict_step(spec),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),
@@ -314,6 +328,21 @@ fn helper_step(command: HelperCommand) -> RenderedStep {
             HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
             _ => format!("velnor-ci {arguments}"),
         }),
+        ..RenderedStep::default()
+    }
+}
+
+fn verdict_step(spec: &velnor_model::VerdictSpec) -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci gate".to_owned(),
+        env: vec![
+            (
+                NEEDS_JSON.to_owned(),
+                Value::Expr("${{ toJSON(needs) }}".to_owned()),
+            ),
+            (GATE_SPEC.to_owned(), Value::Text(spec.text())),
+        ],
+        run: Some(format!("velnor-ci gate --spec-env {GATE_SPEC}")),
         ..RenderedStep::default()
     }
 }

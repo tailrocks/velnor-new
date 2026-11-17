@@ -6,10 +6,10 @@ use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
 use velnor_model::CacheKey;
 
 pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
-    if let CacheKey::Sources { root, .. } = key {
-        if !restore {
-            return crate::gate::sources_save_step(root.slug());
-        }
+    if let CacheKey::Sources { root, .. } = key
+        && !restore
+    {
+        return crate::gate::sources_save_step(root.slug());
     }
     let root = match key {
         CacheKey::Tools { .. } => None,

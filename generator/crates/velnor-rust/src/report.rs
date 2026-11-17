@@ -79,26 +79,20 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
     })
 }
 
-pub(crate) fn finish(facts: &RepoFacts, jobs: &mut Vec<Job>, draft_guard: Option<Step>) {
+pub(crate) fn finish(
+    facts: &RepoFacts,
+    jobs: &mut Vec<Job>,
+    single: bool,
+    draft_guard: Option<Step>,
+) {
     let cache = attach(facts, jobs);
-    let mut verdict_needs: Vec<JobId> = jobs.iter().map(|job| job.id.clone()).collect();
     let trim = crate::base_cache::trim_job(facts, jobs);
-    jobs.extend(trim);
     if facts.config.cache_check_blocks {
-        verdict_needs.extend(cache.iter().map(|job| job.id.clone()));
         jobs.extend(cache.clone());
     }
-    jobs.push(Job {
-        name: Some(facts.config.required_check.clone()),
-        skip_on_draft: false,
-        needs: verdict_needs,
-        when: When::NotCancelled,
-        steps: draft_guard
-            .into_iter()
-            .chain([step(StepKind::FailWhenANeedFailed)])
-            .collect(),
-        ..job(facts, JobId::from_static("required"))
-    });
+    let required = crate::required_job::verdict_job(facts, jobs, single, draft_guard);
+    jobs.extend(trim);
+    jobs.push(required);
     if !facts.config.cache_check_blocks {
         jobs.extend(cache);
     }
