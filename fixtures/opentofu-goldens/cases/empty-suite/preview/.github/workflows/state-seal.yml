@@ -63,7 +63,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4c12bb75ab5566b7aafa0e3a0373f22f0645936e70ce2cb60ca54c1c7c446a73
+          d: 7d46679a741b9514c5796b4edf2110097162053e4c4ae376357af5b6928d54ba
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -119,8 +119,8 @@ jobs:
           name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-  tools-producer-36dc5056:
-    name: Tools producer / 36dc5056
+  tools-producer-20760930:
+    name: Tools producer / 20760930
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -160,7 +160,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 36dc505668ecab5cc7f5b51a7730e45e805a2393225cdfd08b30ff1d931a4374
+          d: 20760930e103111f843b8be9659064f38616a879e37d2f9fb356c1d1178b57c2
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -220,8 +220,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-4c12bb75:
-    name: Tools producer / 4c12bb75
+  tools-producer-7d46679a:
+    name: Tools producer / 7d46679a
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -262,7 +262,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 4c12bb75ab5566b7aafa0e3a0373f22f0645936e70ce2cb60ca54c1c7c446a73
+          d: 7d46679a741b9514c5796b4edf2110097162053e4c4ae376357af5b6928d54ba
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'

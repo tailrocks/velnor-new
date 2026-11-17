@@ -352,7 +352,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 924ced60a9ba5b2f4777ac8dd5715e422dcf8decb9abfd446b6beb9f992329ce-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: 7c6869dd6747402e6efea815ea4a2232ad462ac6a2a46e48edbb578136aaa76b-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - &s18
         name: Restore Mise tools
         id: tools-restore
@@ -1722,7 +1722,7 @@ jobs:
       - state-producer-ci-helper
       - sources-producer
       - tools-producer-4eb0ca99
-      - tools-producer-924ced60
+      - tools-producer-7c6869dd
       - tools-producer-d70f170f
       - tools-producer-daae926b
     if: "!cancelled() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && github.ref_protected == true && needs.state-producer-ci-helper.outputs.produced == 'true' && needs.state-producer-ci-helper.outputs.artifact_id != ''"
@@ -2091,8 +2091,8 @@ jobs:
         name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: *r15
-  tools-producer-924ced60:
-    name: Tools producer / 924ced60
+  tools-producer-7c6869dd:
+    name: Tools producer / 7c6869dd
     runs-on: ubuntu-26.04
     timeout-minutes: 10
     continue-on-error: true

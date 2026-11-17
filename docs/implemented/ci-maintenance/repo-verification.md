@@ -151,8 +151,10 @@ Provisioning runs all 43 Bun decoder tests before installing the genuine tools.
 An optional `VELNOR_FIXTURE_ORIGIN_TOKEN="$(gh auth token)"` assignment on the
 provisioning command avoids the shared anonymous GitHub API quota during local
 retries. The recorder sends it only to canonical GitHub API origins and removes
-it from the environment before spawning children. Own CI uses its standard
-read-only `github.token`; no personal access token secret is required.
+it from the environment before spawning children. Own CI passes its standard
+read-only `github.token` only on `push` runs; pull requests run provisioning
+anonymously because the provisioner is code from the pull request checkout. No
+personal access token secret is required.
 The local verification script holds an inherited optional token outside its
 child environment and passes it only to the provisioner.
 

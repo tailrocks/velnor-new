@@ -64,7 +64,9 @@ fn assert_no_token_reaches_checkout_code(jobs: &serde_json::Value) -> Result<(),
                 continue;
             }
             for (key, value) in step["env"].as_object().into_iter().flatten() {
-                let Some(value) = value.as_str() else { continue };
+                let Some(value) = value.as_str() else {
+                    continue;
+                };
                 if value.contains("github.token") || value.contains("secrets.") {
                     checked += 1;
                     assert!(

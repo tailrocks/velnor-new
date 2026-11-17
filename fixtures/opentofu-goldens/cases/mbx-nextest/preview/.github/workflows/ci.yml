@@ -139,7 +139,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: a518576afe9c9dd4b4777d46edb1f95ce92483409362c5e01411a151f7440977-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: ce5acb6f0195a5228f1fc93f9940dccb20f6c2d7192606284e2edf08a313a996-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -355,7 +355,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: c645831b9e482858fc7c0dcbaa178276e71680505de41bb89324593e305e8303-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
+          d: d29215ff25b6032dc92160d28f71e62fd77dc66d6bfb6dc5666e490ce9685249-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
