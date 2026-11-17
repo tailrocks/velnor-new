@@ -175,18 +175,12 @@ jobs:
         run: '. "$VELNOR_EXEC" plan --full'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || needs.rust-plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
@@ -215,38 +209,19 @@ jobs:
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p app '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo check -p app --locked --message-format=json-render-diagnostics'
       - name: Check core alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p core '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo check -p core --locked --message-format=json-render-diagnostics'
       - name: Check lib alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p lib '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo check -p lib --locked --message-format=json-render-diagnostics'
       - name: Check macros alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p macros '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo check -p macros --locked --message-format=json-render-diagnostics'
       - name: Check tool alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p tool '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo check -p tool --locked --message-format=json-render-diagnostics'
-      - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: 'velnor-cargo-log-${{ github.job }}'
-          path: '${{ runner.temp }}/velnor-run.log'
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -373,8 +348,6 @@ jobs:
         run: '. "$VELNOR_EXEC" plan --full'
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest archive --workspace --locked --cargo-message-format=json-render-diagnostics --archive-file ''nextest-archive.tar.zst'''
       - name: Upload the tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -430,18 +403,8 @@ jobs:
       - name: Doctests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
         run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
-      - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: 'velnor-cargo-log-${{ github.job }}'
-          path: '${{ runner.temp }}/velnor-run.log'
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -524,18 +487,8 @@ jobs:
       - id: test
         name: Test
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --archive-file ''nextest-archive.tar.zst'' --extract-to . --extract-overwrite --workspace-remap . --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
-      - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' }}'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: 'velnor-cargo-log-${{ github.job }}'
-          path: '${{ runner.temp }}/velnor-run.log'
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -666,20 +619,14 @@ jobs:
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_lab_mode || needs.rust-plan.outputs.rust_lab_mode) != ''none'' && (steps.replan.outputs.rust_lab_docs || needs.rust-plan.outputs.rust_lab_docs) == ''run'' && (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args) != '''' }}'
         working-directory: lab
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
@@ -710,18 +657,7 @@ jobs:
       - name: Check lab alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args)), '' -p lab '') || contains(format('' {0} '', (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args)), '' --workspace '')) }}'
         working-directory: lab
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo check -p lab --locked --message-format=json-render-diagnostics'
-      - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: 'velnor-cargo-log-${{ github.job }}'
-          path: '${{ runner.temp }}/velnor-run.log'
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -853,8 +789,6 @@ jobs:
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest archive --workspace --locked --cargo-message-format=json-render-diagnostics --archive-file ''nextest-archive.tar.zst'''
       - name: Upload the tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -908,15 +842,6 @@ jobs:
         env:
           CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-lab-${{ hashFiles(''lab/Cargo.lock'') }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
-      - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: 'velnor-cargo-log-${{ github.job }}'
-          path: '${{ runner.temp }}/velnor-run.log'
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -1001,18 +926,8 @@ jobs:
         name: Test
         working-directory: lab
         env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_lab_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --archive-file ''nextest-archive.tar.zst'' --extract-to . --extract-overwrite --workspace-remap . --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
-      - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' }}'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: 'velnor-cargo-log-${{ github.job }}'
-          path: '${{ runner.temp }}/velnor-run.log'
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -1156,26 +1071,13 @@ jobs:
         run: '. "$VELNOR_EXEC" plan --full'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
-        env:
-          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: velnor-ci inputs audit
         run: '. "$VELNOR_EXEC" inputs audit'
-      - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
-        with:
-          name: 'velnor-cargo-log-${{ github.job }}'
-          path: '${{ runner.temp }}/velnor-run.log'
-          if-no-files-found: ignore
-          retention-days: 3
-          overwrite: true
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'

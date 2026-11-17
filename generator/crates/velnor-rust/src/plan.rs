@@ -4,9 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, TargetName, Triggers, When, WorkflowPlan,
+    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
+    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
+    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -77,7 +77,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
-    upload_cargo_logs(&mut jobs);
+    if facts.config.cache_debug == CacheDebug::On {
+        upload_cargo_logs(&mut jobs);
+    }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
