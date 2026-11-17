@@ -38,26 +38,22 @@ pub(super) struct FilterMatch {
 pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
     let listed: Listed = serde_json::from_slice(bytes).ok()?;
     let mut packages = BTreeMap::new();
-    let mut skipped = BTreeMap::new();
     for suite in listed.rust_suites.into_values() {
         if !package_token(&suite.package_name) {
             return None;
         }
         let mut runnable = 0u64;
         let mut excluded = 0u64;
-        let mut not_runnable = 0u64;
         for case in suite.testcases.into_values() {
             let filter = case.filter_match;
             match filter.status.as_str() {
                 "matches" => runnable = runnable.checked_add(1)?,
                 "mismatch" => {
-                    if filter
+                    if !filter
                         .reason
                         .as_deref()
                         .is_some_and(|reason| NOT_RUNNABLE.contains(&reason))
                     {
-                        not_runnable = not_runnable.checked_add(1)?;
-                    } else {
                         excluded = excluded.checked_add(1)?;
                     }
                 }
@@ -66,13 +62,8 @@ pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
         }
         add(&mut packages, &suite.package_name, runnable)?;
         add(&mut packages, &suite.package_name, excluded)?;
-        add(&mut skipped, &suite.package_name, not_runnable)?;
     }
-    Some(if packages.is_empty() {
-        skipped
-    } else {
-        packages
-    })
+    Some(packages)
 }
 
 fn add(into: &mut BTreeMap<String, u64>, name: &str, count: u64) -> Option<()> {

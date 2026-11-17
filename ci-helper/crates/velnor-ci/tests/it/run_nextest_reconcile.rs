@@ -181,3 +181,55 @@ END";
         verdict.table()
     );
 }
+
+#[test]
+fn a_package_whose_tests_are_all_ignored_does_not_fail_the_required_gate() {
+    let script = r"cat >&2 <<'END'
+     Summary [   0.012s] 0 tests run: 0 passed, 1 skipped
+END";
+    let list = concat!(
+        r##"{"test-count":1,"rust-suites":{"##,
+        r##""idle":{"package-name":"idle","status":"listed","testcases":{"hidden":{"ignored":true,"filter-match":{"status":"mismatch","reason":"ignored"}}}}}}"##
+    );
+    let (output, written, _) = run_with_output("tests-run-ignored", script, list, &NEXTEST_RUN);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=0\ntests_listed=0\ntests_by_package=\n"
+    );
+    let outputs = written
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect::<BTreeMap<_, _>>();
+    let spec = VerdictSpec::parse(
+        "rust-plan",
+        &[
+            "rust-plan=always".to_owned(),
+            "rust-test=lane:root".to_owned(),
+        ],
+        &["rust-test=root".to_owned()],
+    )
+    .expect("verdict spec");
+    let needs = BTreeMap::from([
+        (
+            JobId::new("rust-plan").expect("job id"),
+            Need {
+                result: Some("success".to_owned()),
+                outputs: BTreeMap::from([
+                    ("rust_root_mode".to_owned(), "some".to_owned()),
+                    ("rust_root_tests".to_owned(), "run".to_owned()),
+                ]),
+            },
+        ),
+        (
+            JobId::new("rust-test").expect("job id"),
+            Need {
+                result: Some("success".to_owned()),
+                outputs,
+            },
+        ),
+    ]);
+    let verdict = decide(&spec, &needs, Some("pull_request"));
+    assert!(verdict.passed, "{}", verdict.table());
+}
