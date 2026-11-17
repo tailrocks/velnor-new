@@ -21,7 +21,11 @@ fn scratch(name: &str) -> PathBuf {
 
 fn script(temp: &Path, name: &str, body: &str) {
     let program = temp.join(name);
-    fs::write(&program, format!("#!/bin/sh\n{body}\n")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(
+        &program,
+        format!("#!/bin/sh\nif [ \"$2\" = list ]; then exit 1; fi\n{body}\n"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
 }
@@ -93,13 +97,17 @@ echo '     Summary [   0.001s] 0 tests run: 0 passed, 0 skipped'";
 }
 
 #[test]
-fn a_count_read_before_a_descendant_holds_the_pipe_is_published_after_the_grace() {
+fn a_count_read_before_a_descendant_holds_the_pipe_is_withheld_after_the_grace() {
     let body = "echo '     Summary [   0.020s] 4 tests run: 4 passed, 0 skipped' >&2\n\
 sleep 30 &\n\
 exit 0";
     let (output, written) = nextest("held", body);
     assert_eq!(output.status.code(), Some(0), "{output:?}");
-    assert!(written.contains("tests_run=4\n"), "{written}");
+    assert!(written.is_empty(), "{written}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("output capture incomplete"),
+        "{output:?}"
+    );
 }
 
 #[test]

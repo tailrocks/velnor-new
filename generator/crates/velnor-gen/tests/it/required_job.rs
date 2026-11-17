@@ -20,7 +20,11 @@ fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error:
 
 fn required(text: &str) -> Result<&str, &'static str> {
     text.find("  required:\n")
-        .map(|at| &text[at..])
+        .map(|at| {
+            let job = &text[at..];
+            let end = job.find("\n  cache:\n").map_or(job.len(), |at| at + 1);
+            &job[..end]
+        })
         .ok_or("no required job")
 }
 
@@ -94,6 +98,9 @@ fn one_job_exports_its_own_plan_flag_and_the_gate_reads_it_from_that_job() -> Te
     assert!(text.contains("      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'\n"));
     assert!(text.contains("      tests_run: '${{ steps.test.outputs.tests_run }}'\n"));
     assert!(text.contains("      tests_listed: '${{ steps.test.outputs.tests_listed }}'\n"));
+    assert!(text.contains(
+        "      # jactionlint ignore=unused-job-output\n      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'\n"
+    ));
     Ok(())
 }
 
@@ -218,6 +225,19 @@ fn a_large_plan_cannot_overflow_the_required_jobs_needs_environment() -> TestRes
                 violation.job == "required"
                     && matches!(violation.rule, velnor_render::Rule::EnvTooLong(_)))),
         "generation must reject the expanded needs context before a runner starts"
+    );
+    Ok(())
+}
+
+#[test]
+fn a_package_map_that_does_not_fit_the_needs_environment_is_rejected() -> TestResult {
+    let files = expected_files(&many_members(600)?);
+    assert!(
+        matches!(&files, Err(velnor_gen::GenerateError::Rules(violations))
+            if violations.iter().any(|violation|
+                violation.job == "required"
+                    && matches!(violation.rule, velnor_render::Rule::EnvTooLong(_)))),
+        "the map of every selected package must fit the needs environment"
     );
     Ok(())
 }

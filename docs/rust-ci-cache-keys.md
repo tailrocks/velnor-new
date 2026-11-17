@@ -11,7 +11,7 @@
 | Target | `velnor-tgt-<job>.<root>.<host>-<compat>-<lockhash>-${{ github.sha }}-${{ github.run_id }}` | `...-<compat>-<lockhash>-`, then `...-<compat>-` | `build.target-dir`, default `<dir>/target` |
 | Delta | `velnor-dlt-pr<PR number>-<job>.<root>.<host>-<compat>-<base8>-${{ github.run_id }}` | `...-<compat>-<base8>-` | `<target-dir>.velnor-delta` |
 
-`<lockhash>` is `${{ hashFiles('<dir>/Cargo.lock') }}` and `<base8>` is `${{ steps.delta_base_<root>.outputs.base8 }}`, the first eight hex characters of the SHA-256 of the target restore's actual `cache-matched-key`. A fallback is always a strict prefix of its key, and the second fallback of a Target key is a strict prefix of the first. Every Delta fallback retains the explicit PR number, lane, root, host, compat and base digest. A key never contains a branch name, a literal digest or `run_attempt`. `hashFiles` reads a root path literally: `*`, `?` and `[` are written as `[*]`, `[?]` and `[[]`, and a leading `!` or `#` gets a `./` prefix. Generation fails when a key can pass 512 characters at run time (the `actions/cache` limit), counting every expression at its longest value. `build.target-dir` is read from the `.cargo/config.toml` or `.cargo/config` that applies to the root (the nearest wins, the file without `.toml` first); generation fails when it is absolute, outside the repository, holds the root, starts with `~`, contains a `{` or `}` placeholder, or when `build.build-dir` is set, because the Target cache would not cover that directory. Generated jobs set no `CARGO_TARGET_DIR`, and `[env]` entries starting with `CARGO` are refused. The run id at the end of a Target key lets a full run save a clean base when the commit has not changed since the last save. A rerun of the same run reuses that id on purpose: the save finds the key taken and writes nothing, so unchanged data is never saved twice, and a rerun after a failed save still saves because no entry exists yet.
+`<lockhash>` is `${{ hashFiles('<dir>/Cargo.lock') }}` and `<base8>` is `${{ steps.delta_base_<root>.outputs.base8 }}`, the first eight hex characters of the SHA-256 of the target restore's actual `cache-matched-key`. A fallback is always a strict prefix of its key, and the second fallback of a Target key is a strict prefix of the first. The second segment of every key is its family tag (`tools`, `src`, `tgt` or `dlt`), so a Delta key is never equal to, and never a prefix of, a Tools, Sources or Target key. Every Delta fallback retains the explicit PR number, lane, root, host, compat and base digest. A key never contains a branch name, a literal digest or `run_attempt`. `hashFiles` reads a root path literally: `*`, `?` and `[` are written as `[*]`, `[?]` and `[[]`, and a leading `!` or `#` gets a `./` prefix. Generation fails when a key can pass 512 characters at run time (the `actions/cache` limit), counting every expression at its longest value. `build.target-dir` is read from the `.cargo/config.toml` or `.cargo/config` that applies to the root (the nearest wins, the file without `.toml` first); generation fails when it is absolute, outside the repository, holds the root, starts with `~`, contains a `{` or `}` placeholder, or when `build.build-dir` is set, because the Target cache would not cover that directory. Generated jobs set no `CARGO_TARGET_DIR`, and `[env]` entries starting with `CARGO` are refused. The run id at the end of a Target key lets a full run save a clean base when the commit has not changed since the last save. A rerun of the same run reuses that id on purpose: the save finds the key taken and writes nothing, so unchanged data is never saved twice, and a rerun after a failed save still saves because no entry exists yet.
 
 ## Tools cache
 
@@ -76,6 +76,38 @@ debug = "none"
 [profile.test.package."*"]
 debug = "none"
 ```
+
+## Cache telemetry and enforcement
+
+With helper `0.1.81` or a supported source-built helper, each reporting-enabled
+Cargo lane ends with `velnor-ci report` and uploads `ci-metrics.json`. These
+steps also run after an earlier failure unless the run was cancelled. Report
+and upload failures do not replace the lane's build result. The report retains
+logs, provenance and step results, and emits local metrics without calling the
+API or using `GITHUB_TOKEN`.
+The workflow supplies each cache's family, root, and restore/save step IDs; the
+helper derives observed facts from step results and filesystem evidence. When a
+released bootstrap helper is older than `0.1.81`, the source-built artifact helper runs the
+tokenless local checks and diagnostics without API access.
+
+The separate `Cache` job checks the same-run metrics from every reporting
+lane. With released helper `0.1.81` or later, it runs `report --check` to add
+Actions API timings and cache archive sizes, then fails on cache waste, missing
+metrics, or unverifiable required evidence. The job has `actions: read` for
+this enrichment and receives an empty explicit API token on fork pull requests.
+It has no checkout and runs no Cargo commands. It is advisory by default. To
+include it in Required's dependencies and verdict specification, set this in
+`.velnor/rust-ci.toml`:
+
+```toml
+cache_check_blocks = true
+```
+
+`rust-trim` continues to verify cache uploads and prune old entries without a
+checkout or repository code. The `Cache` job needs no additional permission to
+download artifacts from its own run. The schema-1 JSON separates cache
+outcomes, captured Cargo invocations, display fields, verification errors, and
+optional diagnostics.
 
 ## Worked example
 

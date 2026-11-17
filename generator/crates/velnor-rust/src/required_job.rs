@@ -46,9 +46,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
         When::Success
         | When::NotCancelled
-        | When::Always
-        | When::CacheDebug
-        | When::SaveToolsOnDefaultBranch
+        | When::Finalizer
         | When::SaveBase
         | When::SaveBaseDecided
         | When::SaveSources
@@ -56,7 +54,10 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::SaveDelta
         | When::SaveDeltaDecided
         | When::BaseExpired
-        | When::SavingRun => None,
+        | When::SavingRun
+        | When::Always
+        | When::CacheDebug
+        | When::SaveToolsOnDefaultBranch => None,
     };
     gate.into_iter().chain(when).collect()
 }

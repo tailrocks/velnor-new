@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod activity;
+mod archive_witness;
 mod audit;
 mod build_inputs;
 mod cache;
@@ -20,12 +22,18 @@ mod delta_source;
 mod delta_tree;
 mod delta_trim;
 mod git;
+mod git_witness;
 mod http;
 mod input_snapshot;
 mod inputs;
 mod manifests;
 mod plan;
+pub mod pump;
+mod recording;
 mod release;
+mod report;
+mod report_checkout;
+mod report_inputs;
 mod required;
 mod restored;
 mod run;
@@ -129,17 +137,15 @@ fn run_decide(args: DecideArgs) -> Result<String, CiError> {
     let manifests = cache_paths::list("VELNOR_CACHE_MANIFESTS")?.unwrap_or(args.manifest_path);
     let refusal = cache_sources::refusal(&current_dir()?, &manifests)?;
     let sources = refusal.is_none();
-    let decision = match refusal {
-        Some(reason) => Decision {
+    let decision = if let Some(reason) = refusal {
+        Decision {
             save: false,
             report: reason,
-        },
-        None => decide(
-            Some(&String::from_utf8_lossy(&log)),
-            &target,
-            args.archive.as_deref(),
-            now_seconds(),
-        )?,
+        }
+    } else {
+        let counts = activity::activity()?
+            .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+        cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
     };
     append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
     Ok(decision.report)
@@ -148,6 +154,7 @@ fn run_decide(args: DecideArgs) -> Result<String, CiError> {
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
         Command::Delta(command) => delta::run(command),
+        Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save(args)) => {

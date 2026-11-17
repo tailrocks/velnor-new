@@ -20,7 +20,7 @@ const NEEDS_JSON: &str = "NEEDS_JSON";
 const GATE_SPEC: &str = "GATE_SPEC";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
-
+const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 pub(crate) fn sources_step(slug: &RootSlug) -> String {
     format!("sources_{slug}")
 }
@@ -45,6 +45,10 @@ pub(crate) fn verdict_step(spec: &VerdictSpec, needs_max_bytes: usize) -> Render
         run: Some(format!("velnor-ci gate --spec-env {GATE_SPEC}")),
         ..RenderedStep::default()
     }
+}
+
+pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
+    need.output_name(slug)
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -73,10 +77,6 @@ pub(crate) fn plan_read(source: &str, key: &str, setup: Setup) -> String {
     } else {
         format!("{source}.{key}")
     }
-}
-
-pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
-    need.output_name(slug)
 }
 
 pub(crate) fn plan_source(from: &PlanFrom) -> String {
@@ -111,6 +111,7 @@ pub(crate) fn condition(
     let mut parts = Vec::new();
     match when {
         When::Success => {}
+        When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
         When::NotCancelled => {
             parts.push(NOT_CANCELLED.to_owned());
@@ -178,8 +179,6 @@ pub(crate) fn condition(
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
     }
 }
-
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 
 pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> String {
     match condition(when, gate, Setup::Before, skip_draft, &[]) {

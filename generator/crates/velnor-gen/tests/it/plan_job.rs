@@ -58,7 +58,11 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     let plain =
         "steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''";
     let gated = text.matches(plain).count() + text.matches(condition).count();
-    let later = steps.len() - 3;
+    let reporting = steps
+        .iter()
+        .filter(|name| matches!(**name, "Report cache telemetry" | "Upload cache metrics"))
+        .count();
+    let later = steps.len() - 3 - reporting;
     assert_eq!(
         gated, later,
         "every step after the plan carries the gate: {text}"
