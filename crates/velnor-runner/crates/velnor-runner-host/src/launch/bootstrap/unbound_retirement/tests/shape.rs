@@ -186,7 +186,7 @@ async fn sweep(containers: Containers) -> TestResult<()> {
     assert_eq!(scope.uncertain_unbound_pairs().await?, vec![reservation]);
 
     retire_uncertain_unbound_pairs(
-        std::time::Instant::now() + std::time::Duration::from_secs(30),
+        tokio::time::Instant::now() + std::time::Duration::from_secs(30),
         &docker,
         &scope,
         &engine,

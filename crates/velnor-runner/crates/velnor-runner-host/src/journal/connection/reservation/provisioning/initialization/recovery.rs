@@ -11,7 +11,7 @@ impl ConnectionJournal {
             return Err(HostError::Identity);
         }
         let connection_id = self.connection_id().as_str().to_owned();
-        in_transaction(self.journal_ref(), async |connection| {
+        read_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
             if super::unbound_retirement::reserves_cleanup(connection, &connection_id, reservation_id).await? {
                 return Ok(None);
@@ -86,16 +86,17 @@ impl ConnectionJournal {
     }
 
 
-    pub(crate) async fn claim_storage_initializer_abort(
+    pub(crate) async fn claim_storage_initializer_abort_before(
         &self,
         candidate: &StorageInitializationClaim,
+        deadline: tokio::time::Instant,
     ) -> Result<Option<StorageInitializationClaim>, HostError> {
         if self.connection_id().as_str() != candidate.connection_id || candidate.reservation_id <= 0
         {
             return Err(HostError::Identity);
         }
         let connection_id = self.connection_id().as_str().to_owned();
-        in_transaction(self.journal_ref(), async |connection| {
+        in_transaction_before(self.journal_ref(), deadline, async |connection| {
             self.validate_scope(connection).await?;
             if super::unbound_retirement::reserves_cleanup(connection, &connection_id, candidate.reservation_id).await? {
                 return Ok(None);

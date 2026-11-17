@@ -7,7 +7,7 @@ use super::{
     population, scalar,
 };
 use crate::journal::JitConflictRecoveryClaim;
-use crate::launch::bootstrap::{UncertainRecovery, recover_uncertain_reservations};
+use crate::launch::bootstrap::{UncertainRecovery, uncertain_recovery_work};
 
 #[tokio::test(flavor = "multi_thread")]
 async fn an_interrupted_claim_is_cleaned_by_name_and_releases_only_after_metadata_settlement()
@@ -40,7 +40,7 @@ async fn cleanup(exists: bool, mismatch: bool) -> TestResult<()> {
         )
         .await?
         .ok_or("cleanup claim")?;
-    recover_uncertain_reservations(&UncertainRecovery {
+    let recovery = UncertainRecovery {
         docker: &case.docker,
         journal: &case.journal,
         scope: &case.scope,
@@ -48,8 +48,8 @@ async fn cleanup(exists: bool, mismatch: bool) -> TestResult<()> {
         images: &case.images,
         image_authority: &case.authority,
         pass: 0,
-    })
-    .await?;
+    };
+    assert!(uncertain_recovery_work(&recovery).await?.is_empty());
     assert_eq!(case.fixture.objects(CRASH).len(), 8);
     let foreign = case.fixture.objects(FOREIGN);
     if mismatch {

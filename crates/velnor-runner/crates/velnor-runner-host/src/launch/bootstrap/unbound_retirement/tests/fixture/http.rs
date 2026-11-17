@@ -70,7 +70,11 @@ pub(super) async fn serve(
     let segments: Vec<&str> = route.split('/').skip(1).collect();
     let active = {
         let mut state = lock(state);
-        if state.armed {
+        if state.read_gate.as_deref() == Some(request.as_str()) {
+            state.requests.push(request.clone());
+            state.read_gate_hits += 1;
+            false
+        } else if state.armed {
             state.armed = false;
             state.hang_after = None;
             false

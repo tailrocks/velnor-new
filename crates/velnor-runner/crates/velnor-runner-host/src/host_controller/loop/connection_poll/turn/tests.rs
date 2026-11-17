@@ -3,6 +3,8 @@
 
 #[path = "tests/fixture.rs"]
 mod fixture;
+#[path = "tests/restore_timeout.rs"]
+mod restore_timeout;
 
 use super::{ConnectionPollContext, FairnessTurn, PollTurnResult, poll_connection};
 use fixture::Fixture;

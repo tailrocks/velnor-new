@@ -38,6 +38,8 @@ struct State {
     armed: bool,
     creates: BTreeMap<(String, String), (String, Arc<barriers::CreateGate>)>,
     deletes: BTreeMap<String, Arc<barriers::DeleteGate>>,
+    read_gate: Option<String>,
+    read_gate_hits: usize,
 }
 
 pub(crate) struct FixtureDocker {
@@ -142,6 +144,14 @@ impl FixtureDocker {
 
     pub(crate) fn hang_after(&self, request: String) {
         lock(&self.state).hang_after = Some(request);
+    }
+
+    pub(crate) fn gate_container_inspection(&self, id: &str) {
+        lock(&self.state).read_gate = Some(format!("GET /containers/{id}/json"));
+    }
+
+    pub(crate) fn inspection_gate_hits(&self) -> usize {
+        lock(&self.state).read_gate_hits
     }
 
     pub(crate) async fn hung(&self) {

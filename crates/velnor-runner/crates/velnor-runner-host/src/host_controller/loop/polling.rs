@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use bollard::Docker;
 
@@ -50,6 +50,7 @@ pub(super) struct PositivePollContext<'a> {
     pub(super) state: &'a Path,
     pub(super) image_authority: &'a Arc<ImageAuthority>,
     pub(super) admission_ready: bool,
+    pub(super) retirement_budget: Duration,
 }
 
 pub(super) async fn poll_zero_header_connection(
