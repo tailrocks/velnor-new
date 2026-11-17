@@ -5,16 +5,19 @@ use serde::{Deserialize, Serialize};
 
 use crate::logscan::LogScan;
 
+pub const METRICS_SCHEMA_VERSION: u32 = 2;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunMetrics {
+    pub schema_version: u32,
     pub repo: String,
     pub run_id: u64,
     pub run_attempt: u32,
     pub workflow: String,
     pub event: String,
     pub head_sha: String,
-    pub wall_seconds: u64,
-    pub runner_seconds: u64,
+    pub wall_seconds: Option<u64>,
+    pub runner_seconds: Option<u64>,
     pub jobs: Vec<JobMetrics>,
 }
 
@@ -25,8 +28,8 @@ pub struct JobMetrics {
     pub labels: Vec<String>,
     pub conclusion: String,
     pub started: bool,
-    pub queue_seconds: u64,
-    pub duration_seconds: u64,
+    pub queue_seconds: Option<u64>,
+    pub duration_seconds: Option<u64>,
     #[serde(default)]
     pub setup_seconds: Option<u64>,
     pub steps: Vec<StepMetrics>,
@@ -36,7 +39,7 @@ pub struct JobMetrics {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StepMetrics {
     pub name: String,
-    pub seconds: u64,
+    pub seconds: Option<u64>,
     #[serde(default)]
     pub log: LogScan,
 }
@@ -71,16 +74,19 @@ impl RunMetrics {
 
     #[must_use]
     pub fn summary(&self) -> String {
+        let runner = self.runner_seconds.map_or_else(
+            || "unmeasured".to_owned(),
+            |seconds| format!("{seconds}s ({:.1} runner-minutes)", minutes(seconds)),
+        );
         let mut lines = vec![
             format!(
                 "run {} of {} (attempt {}, {}, {})",
                 self.run_id, self.repo, self.run_attempt, self.event, self.head_sha
             ),
             format!(
-                "wall {}s, runner {}s ({:.1} runner-minutes)",
-                self.wall_seconds,
-                self.runner_seconds,
-                minutes(self.runner_seconds)
+                "wall {}, runner {runner}",
+                self.wall_seconds
+                    .map_or_else(|| "unmeasured".to_owned(), |seconds| format!("{seconds}s"))
             ),
             format!(
                 "jobs {} ({} run, {} skipped), crates compiled {}, crates downloaded {}",
@@ -92,14 +98,16 @@ impl RunMetrics {
             ),
         ];
         lines.extend(self.jobs.iter().map(|job| {
+            let duration = job
+                .duration_seconds
+                .map_or_else(|| "unmeasured".to_owned(), |seconds| format!("{seconds}s"));
             let setup = job
                 .setup_seconds
                 .map_or_else(String::new, |seconds| format!(", setup {seconds}s"));
             format!(
-                "  {} [{}] {}s{setup}, crates compiled {}, downloaded {}",
+                "  {} [{}] {duration}{setup}, crates compiled {}, downloaded {}",
                 job.name,
                 job.conclusion,
-                job.duration_seconds,
                 job.log.crates_compiled(),
                 job.log.downloaded
             )

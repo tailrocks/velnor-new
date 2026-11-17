@@ -21,7 +21,7 @@ pub(super) const ATTESTATION_DIR: &str = "release-attestations";
 
 fn manifest_script(rust_version: &str, mr_boxington_version: &str) -> String {
     format!(
-        "bash -s -- '{VERSION}' '{REPOSITORY}' {rust_version} {mr_boxington_version} <<'VELNOR_CREATE_RELEASE_MANIFEST'\n{}\nVELNOR_CREATE_RELEASE_MANIFEST",
+        "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash -s -- '{VERSION}' '{REPOSITORY}' {rust_version} {mr_boxington_version} <<'VELNOR_CREATE_RELEASE_MANIFEST'\n{}\nVELNOR_CREATE_RELEASE_MANIFEST",
         include_str!("../../../scripts/generator-release/create-release-manifest.sh")
     )
 }

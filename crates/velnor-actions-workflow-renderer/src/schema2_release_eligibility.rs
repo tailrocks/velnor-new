@@ -105,10 +105,6 @@ pub(super) fn script(pins: &ProductReleasePins) -> Result<String, RenderError> {
     ))
 }
 
-pub(super) fn publisher_definition() -> String {
-    render_function(true, WORKFLOW_PATH, "workflow_dispatch")
-}
-
 pub(super) fn publisher_definition_source_free() -> String {
     render_function(false, WORKFLOW_PATH, "workflow_dispatch")
 }

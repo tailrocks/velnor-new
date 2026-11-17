@@ -9,7 +9,7 @@ use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_steps::{
-    COMMIT_OUTPUT_SUFFIX, TAGGED_COMMIT_HELPER, app_token, checkout, expression,
+    APP_TOKEN_OUTPUT, COMMIT_OUTPUT_SUFFIX, TAGGED_COMMIT_HELPER, app_token, checkout, expression,
     install_release_plz, label, permissions, refuse_commands, release_plz_arguments,
     release_plz_step, shell_word, variables,
 };
@@ -115,38 +115,47 @@ fn escape_filter(name: &str) -> String {
 
 fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut command = "velnor-ci release-gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\"".to_owned();
+    let mut scopes = vec![
+        ("actions", "read"),
+        ("contents", "read"),
+        ("statuses", "read"),
+    ];
+    let mut steps = vec![install_helper(helper)];
+    let mut token = "${{ github.token }}";
+    if !plan.pr_only_checks.is_empty() {
+        scopes.push(("checks", "read"));
+        let mut app_scopes = scopes.clone();
+        app_scopes.push(("administration", "write"));
+        steps.push(app_token(&app_scopes));
+        token = APP_TOKEN_OUTPUT;
+    }
     for name in &plan.pr_only_checks {
         command.push_str(" --pr-only-check=");
         command.push_str(&shell_word(name));
     }
+    steps.push(RenderedStep {
+        id: Some("gate".to_owned()),
+        name: "Check that every required check passed on the commit".to_owned(),
+        env: variables(&[
+            ("GITHUB_TOKEN", token),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
+        ]),
+        run: Some(command),
+        ..RenderedStep::default()
+    });
     RenderedJob {
         id: "gate".to_owned(),
         condition: Some(expression(FROM_A_PASSED_PUSH)),
-        permissions: permissions(&[
-            ("actions", "read"),
-            ("contents", "read"),
-            ("statuses", "read"),
-        ]),
+        permissions: permissions(&scopes),
+        environment: (!plan.pr_only_checks.is_empty()).then(|| ENVIRONMENT.to_owned()),
         outputs: vec![(
             "ready".to_owned(),
             "${{ steps.gate.outputs.ready }}".to_owned(),
         )],
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: GATE_TIMEOUT_MINUTES,
-        steps: vec![
-            install_helper(helper),
-            RenderedStep {
-                id: Some("gate".to_owned()),
-                name: "Check that every required check passed on the commit".to_owned(),
-                env: variables(&[
-                    ("GITHUB_TOKEN", "${{ github.token }}"),
-                    ("REPOSITORY", "${{ github.repository }}"),
-                    ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
-                ]),
-                run: Some(command),
-                ..RenderedStep::default()
-            },
-        ],
+        steps,
         ..RenderedJob::default()
     }
 }

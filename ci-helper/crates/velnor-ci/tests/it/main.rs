@@ -2,12 +2,23 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit;
+mod base_expiry;
+mod cache;
+mod cache_flow;
+mod cache_retention_flow;
+
+mod cache_safety;
+mod cache_upload;
+
+mod cache_trim;
+mod cache_trim_errors;
 mod check_configurations;
 mod check_metadata;
 mod check_metadata_gen;
 mod collect;
 mod compare;
 mod configuration_targets;
+mod crates_mirror;
 mod event;
 mod gate;
 mod inputs;
@@ -22,6 +33,7 @@ mod io_policy;
 mod io_release;
 mod io_required;
 mod io_restore;
+mod io_restore_symlinks;
 mod io_stderr;
 mod logscan;
 mod plan;
@@ -30,6 +42,10 @@ mod plan_git;
 mod plan_main;
 mod platform;
 mod prepare;
+mod prepare_compat;
+mod prepare_components;
+mod prepare_configs;
+mod prepare_inputs;
 mod prepare_install;
 mod release_branch_prefix;
 mod release_cargo_discovery;
@@ -49,11 +65,13 @@ mod rulesets;
 mod run;
 mod run_env;
 mod run_group;
+mod run_summary;
 mod setup_pure;
 mod support;
 mod ties;
 mod time;
 mod timings;
+mod timings_groups;
 mod timings_runs;
 mod timings_setup;
 mod unowned;
