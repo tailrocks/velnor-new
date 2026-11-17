@@ -117,16 +117,32 @@ fn missing_snapshot_binding_cannot_authorize_a_delta_save() {
 
 #[test]
 fn tracked_staging_inputs_survive_apply_stage_and_git_clean_with_path_aliases() {
+    let (repo, _) = fixture("tracked-delta-staging");
+    let sentinel = "target.velnor-delta/sentinel";
+    repo.write(sentinel, "tracked input must survive\n");
+    repo.make_executable(sentinel);
+    repo.commit();
+    let expected = prepare(&repo);
+    save_inputs(&repo);
+    let time = repo.mtime(sentinel);
+    let assert_preserved = || {
+        assert_eq!(
+            fs::read_to_string(repo.root().join(sentinel)).unwrap_or_default(),
+            "tracked input must survive\n"
+        );
+        assert_eq!(repo.mtime(sentinel), time);
+        assert_eq!(
+            fs::metadata(repo.root().join(sentinel))
+                .unwrap_or_else(|e| unreachable!("{e}"))
+                .permissions()
+                .mode()
+                & 0o777,
+            0o755
+        );
+    };
+
     for alias in ["relative", "absolute", "parent"] {
         for verb in ["prepare", "apply", "stage"] {
-            let (repo, _) = fixture("tracked-delta-staging");
-            let sentinel = "target.velnor-delta/sentinel";
-            repo.write(sentinel, "tracked input must survive\n");
-            repo.make_executable(sentinel);
-            repo.commit();
-            let expected = prepare(&repo);
-            save_inputs(&repo);
-            let time = repo.mtime(sentinel);
             let staging = match alias {
                 "absolute" => repo.root().join("target.velnor-delta"),
                 "parent" => repo.root().join("src/../target.velnor-delta"),
@@ -150,36 +166,26 @@ fn tracked_staging_inputs_survive_apply_stage_and_git_clean_with_path_aliases() 
                 repo.root().join("target/debug/app").is_file(),
                 "collision changed the build directory"
             );
+            assert_preserved();
             assert!(
                 !output.status.success() || values.contains("save=false"),
                 "tracked staging was accepted: {}",
                 String::from_utf8_lossy(&output.stdout)
             );
-            repo.git(&["clean", "-fdx"]);
-            assert_eq!(
-                fs::read_to_string(repo.root().join(sentinel)).unwrap_or_default(),
-                "tracked input must survive\n"
-            );
-            assert_eq!(repo.mtime(sentinel), time);
-            assert_eq!(
-                fs::metadata(repo.root().join(sentinel))
-                    .unwrap_or_else(|e| unreachable!("{e}"))
-                    .permissions()
-                    .mode()
-                    & 0o777,
-                0o755
-            );
-            let diff = Command::new("git")
-                .args(["status", "--porcelain"])
-                .current_dir(repo.root())
-                .output()
-                .unwrap_or_else(|e| unreachable!("{e}"));
-            success(&diff);
-            assert!(
-                diff.stdout.is_empty(),
-                "{}",
-                String::from_utf8_lossy(&diff.stdout)
-            );
         }
     }
+
+    repo.git(&["clean", "-fdx"]);
+    assert_preserved();
+    let diff = Command::new("git")
+        .args(["status", "--porcelain"])
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    success(&diff);
+    assert!(
+        diff.stdout.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&diff.stdout)
+    );
 }
