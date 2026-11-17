@@ -97,9 +97,35 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
             .verification_errors
             .push(format!("Restored input provenance unavailable: {error}"));
     }
-    activity_metrics(&mut metrics, &log_bytes);
     let steps: Value =
         json(&std::env::var("VELNOR_REPORT_STEPS").unwrap_or_else(|_| "{}".to_owned()))?;
+    cache_step_metrics(&mut metrics, &steps);
+    if let Err(error) = super::report_inputs::verify_downloads(&mut metrics, &log_bytes) {
+        metrics
+            .verification_errors
+            .push(format!("Download provenance unavailable: {error}"));
+    }
+    activity_metrics(&mut metrics, &log_bytes);
+    if let Err(error) = api_metrics(&mut metrics, &steps) {
+        metrics
+            .diagnostics
+            .push(format!("GitHub telemetry unavailable: {error}"));
+    }
+    metrics.violations = waste(&metrics);
+    let summary = metrics.summary();
+    fs::write(
+        temp("ci-metrics.json"),
+        serde_json::to_string_pretty(&metrics)
+            .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?,
+    )
+    .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
+    super::append_to("GITHUB_STEP_SUMMARY", &summary)?;
+    Ok(summary)
+}
+
+fn cache_step_metrics(metrics: &mut LaneMetrics, steps: &Value) {
+    let default = format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH"));
+    let saving = env("GITHUB_REF") == default;
     for cache in &mut metrics.caches {
         cache.requested_key = steps[&cache.restore_step]["outputs"]["cache-primary-key"]
             .as_str()
@@ -117,32 +143,16 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         };
         cache.usable &= cache.hit != Hit::Miss;
         cache.usable_same_lock &= cache.usable;
-        cache.save =
-            if env("GITHUB_REF") == format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH")) {
-                match steps[&cache.save_step]["outcome"].as_str() {
-                    Some("failure" | "cancelled") => SaveOutcome::Failed,
-                    Some("success") => SaveOutcome::Unknown,
-                    _ => SaveOutcome::NotAttempted,
-                }
-            } else {
-                SaveOutcome::NotAttempted
-            };
+        cache.save = if saving {
+            match steps[&cache.save_step]["outcome"].as_str() {
+                Some("failure" | "cancelled") => SaveOutcome::Failed,
+                Some("success") => SaveOutcome::Unknown,
+                _ => SaveOutcome::NotAttempted,
+            }
+        } else {
+            SaveOutcome::NotAttempted
+        };
     }
-    if let Err(error) = api_metrics(&mut metrics, &steps) {
-        metrics
-            .diagnostics
-            .push(format!("GitHub telemetry unavailable: {error}"));
-    }
-    metrics.violations = waste(&metrics);
-    let summary = metrics.summary();
-    fs::write(
-        temp("ci-metrics.json"),
-        serde_json::to_string_pretty(&metrics)
-            .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?,
-    )
-    .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
-    super::append_to("GITHUB_STEP_SUMMARY", &summary)?;
-    Ok(summary)
 }
 
 fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> {
@@ -329,11 +339,7 @@ fn activity_metrics(metrics: &mut LaneMetrics, log: &[u8]) {
                 .unwrap_or_default(),
         );
         let batch = tap.finish();
-        let progress = invocation.progress.as_ref().unwrap_or(&batch.progress);
-        metrics.downloaded += progress
-            .iter()
-            .filter(|event| event.kind == crate::cargo_artifacts::ProgressKind::Downloaded)
-            .count() as u64;
+        metrics.downloaded += invocation.downloads.len() as u64;
         metrics
             .slowest_tests
             .extend(if invocation.progress.is_some() {

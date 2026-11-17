@@ -5,11 +5,14 @@ use crate::cargo_artifacts::{ArtifactTap, ProgressKind};
 use crate::error::CiError;
 use crate::inputs::parse_inputs;
 use crate::report::{Hit, LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
-use crate::telemetry::Compilation;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
 use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
+
+#[path = "report_artifacts.rs"]
+mod artifact_evidence;
+
 fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
 }
@@ -113,15 +116,22 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
             &mut metrics.diagnostics,
             &mut metrics.verification_errors,
         );
-        crate::observed_units::normalize(invocation, inputs.checkout);
-        inputs.root_text.clone_into(&mut invocation.root);
+        let (compilations, errors) = artifact_evidence::compilations(
+            invocation,
+            inputs.root,
+            inputs.checkout,
+            inputs.unchanged,
+            &progress,
+        );
+        metrics.verification_errors.extend(errors);
+        invocation.compilations = compilations;
         invocation.downloads = progress
             .iter()
             .filter(|event| event.kind == ProgressKind::Downloaded)
             .map(|event| format!("{} v{}", event.package, event.version))
             .collect();
-        invocation.compilations =
-            compilations(inputs.root, inputs.checkout, inputs.unchanged, &progress);
+        crate::observed_units::normalize(invocation, inputs.checkout);
+        inputs.root_text.clone_into(&mut invocation.root);
         verify_witness(
             &mut metrics.verification_errors,
             invocation,
@@ -134,31 +144,21 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
     Ok(())
 }
 
-fn compilations(
-    root: &velnor_model::RustRoot,
-    checkout: &Path,
-    unchanged: &BTreeSet<String>,
-    progress: &[crate::cargo_artifacts::CargoProgress],
-) -> Vec<Compilation> {
-    progress
-        .iter()
-        .filter(|event| {
-            matches!(
-                event.kind,
-                ProgressKind::Compiling | ProgressKind::Checking | ProgressKind::Documenting
-            )
-        })
-        .map(|event| {
-            let member = member(root, checkout, event);
-            Compilation {
-                unchanged: unchanged.contains(event.package.as_str()),
-                workspace: member.is_some(),
-                dependencies: dependencies(root, member),
-                package: event.package.clone(),
-                version: event.version.clone(),
-            }
-        })
-        .collect()
+pub(super) fn verify_downloads(metrics: &mut LaneMetrics, log: &[u8]) -> Result<(), CiError> {
+    for invocation in &mut metrics.invocations {
+        let progress = progress(invocation, log)?;
+        let exact_sources = metrics.caches.iter().any(|cache| {
+            cache.family == "sources"
+                && cache.root.as_deref() == Some(invocation.root.as_str())
+                && cache.hit == Hit::Exact
+        });
+        let (downloads, diagnostics, errors) =
+            artifact_evidence::downloads(invocation, &invocation.root, &progress, exact_sources);
+        invocation.downloads = downloads;
+        metrics.diagnostics.extend(diagnostics);
+        metrics.verification_errors.extend(errors);
+    }
+    Ok(())
 }
 
 fn verify_witness(
@@ -215,13 +215,10 @@ fn symlink_lock_unavailable(
             matches!(
                 event.kind,
                 ProgressKind::Compiling | ProgressKind::Checking | ProgressKind::Documenting
-            ) && event
-                .location
-                .as_deref()
-                .is_none_or(|location| !Path::new(location).starts_with(checkout))
+            )
         }) {
             metrics.verification_errors.push(format!(
-                "{root}: a tracked Cargo.lock symlink prevents dependency input verification"
+                "{root}: a tracked Cargo.lock symlink prevents compilation input verification"
             ));
         }
     }
