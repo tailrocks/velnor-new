@@ -18,6 +18,12 @@ struct Fixture {
 
 impl Fixture {
     fn new(name: &str, nested: bool) -> Self {
+        let mut fixture = Self::unbuilt(name, nested);
+        fixture.build_baseline(nested);
+        fixture
+    }
+
+    fn unbuilt(name: &str, nested: bool) -> Self {
         let repo = Repo::new(name);
         let directory = if nested {
             repo.root().join("nested")
@@ -69,13 +75,11 @@ impl Fixture {
                 "pub fn touch() {}\n",
             );
         }
-        let mut fixture = Self {
+        Self {
             repo,
             directory,
             identity: String::new(),
-        };
-        fixture.build_baseline(nested);
-        fixture
+        }
     }
 
     fn build_baseline(&mut self, nested: bool) {
@@ -326,4 +330,44 @@ fn nested_workspace_parent_configuration_cannot_keep_old_fingerprints() {
         &["app", "peer", "spare", "local", "stable"],
         &[],
     );
+}
+
+#[test]
+fn custom_local_target_inside_a_member_cannot_reuse_rejected_source() {
+    let mut fixture = Fixture::unbuilt("delta-custom-local-target", false);
+    fixture.repo.write(
+        "local/Cargo.toml",
+        "[package]\nname='local'\nversion='0.1.0'\nedition='2024'\n[lib]\npath='../app/src/shared.rs'\n",
+    );
+    fixture
+        .repo
+        .write("app/src/shared.rs", "pub fn value() -> u32 { 1 }\n");
+    fixture.build_baseline(false);
+    fixture.incomplete_watchsets(false);
+    fixture.restore();
+    assert_units(
+        &fixture.build(),
+        &[],
+        &["app", "peer", "spare", "local", "stable"],
+    );
+    fixture
+        .repo
+        .write_unstaged("velnor-run.log", "Compiling app v0.1.0\n");
+    success(&fixture.helper(&["inputs", "save"]).0);
+    fixture.delta("stage");
+    fixture.change(
+        "app/src/shared.rs",
+        "compile_error!(\"custom local source rejected\");\n",
+    );
+    fixture.restore();
+    let restored = fixture.build();
+    fs::remove_dir_all(fixture.directory.join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let cold = fixture.build();
+    assert!(!cold.status.success(), "{cold:?}");
+    assert!(String::from_utf8_lossy(&cold.stderr).contains("custom local source rejected"));
+    assert!(
+        !restored.status.success(),
+        "custom local source was reused: {restored:?}"
+    );
+    assert!(String::from_utf8_lossy(&restored.stderr).contains("custom local source rejected"));
 }
