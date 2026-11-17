@@ -8,6 +8,10 @@ use crate::facts::TestResult;
 use crate::pipeline::view;
 
 fn npm_config(request: &str, options: &str, vars: &str) -> TestResult {
+    npm_locked(request, options, vars, "24")
+}
+
+fn npm_locked(request: &str, options: &str, vars: &str, version: &str) -> TestResult {
     let mut repo = view(&["Cargo.toml"], None)?;
     let config = RepoPath::from_static("mise.toml");
     let locked = RepoPath::from_static("mise.lock");
@@ -17,7 +21,7 @@ fn npm_config(request: &str, options: &str, vars: &str) -> TestResult {
         config,
         format!("{mise}\"npm:fixture\" = {{ {request} }}\n{vars}").into_bytes(),
     );
-    repo.files.insert(locked, format!("{lock}\n[[tools.\"npm:fixture\"]]\nversion = \"24.0.0\"\nbackend = \"npm:fixture\"\nspecifiers = [\"24\"]\n{options}\n[tools.\"npm:fixture\".\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/npm\"\n").into_bytes());
+    repo.files.insert(locked, format!("{lock}\n[[tools.\"npm:fixture\"]]\nversion = \"{version}.0.0\"\nbackend = \"npm:fixture\"\nspecifiers = [\"{version}\"]\n{options}\n[tools.\"npm:fixture\".\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/npm\"\n").into_bytes());
     velnor_rust::check_tools(&velnor_rust::detect(&repo)?)?;
     expected_files(&repo)?;
     Ok(())
@@ -65,7 +69,7 @@ fn templated_versions_use_the_rendered_lock_specifier() -> TestResult {
     npm_config(
         "version = \"{{ vars.alias }}\"",
         "",
-        "[vars]\nalias = \"{{ vars.v }}\"\nv = \"24\"\n",
+        "[vars]\nv = \"24\"\nalias = \"{{ vars.v }}\"\n",
     )?;
     assert!(npm_config("version = \"{{ vars.v }}\"", "", "[vars]\nv = \"25\"\n").is_err());
     assert!(
@@ -84,6 +88,18 @@ fn templated_versions_use_the_rendered_lock_specifier() -> TestResult {
         )
         .is_err()
     );
+    Ok(())
+}
+
+#[test]
+fn templated_versions_follow_vars_declaration_order() -> TestResult {
+    let forward = "[vars]\nz = '24'\na = \"{{ vars.z | default(value='25') }}\"\n";
+    let reverse = "[vars]\na = \"{{ vars.z | default(value='25') }}\"\nz = '24'\n";
+    let request = "version = \"{{ vars.a }}\"";
+    npm_locked(request, "", forward, "24")?;
+    assert!(npm_locked(request, "", forward, "25").is_err());
+    npm_locked(request, "", reverse, "25")?;
+    assert!(npm_locked(request, "", reverse, "24").is_err());
     Ok(())
 }
 
