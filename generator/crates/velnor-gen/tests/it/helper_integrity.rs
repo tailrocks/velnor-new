@@ -294,7 +294,8 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
             "{}",
             String::from_utf8_lossy(&rejected.stderr)
         );
-        assert!(rejected.stdout.is_empty());
+        assert!(rejected.stderr.ends_with(b"\n"));
+        assert_eq!(rejected.stdout, b"");
     }
     fs::set_permissions(installed, fs::Permissions::from_mode(0o700))?;
     fs::write(installed, BAD)?;
@@ -309,7 +310,8 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
         "{}",
         String::from_utf8_lossy(&rejected.stderr)
     );
-    assert!(rejected.stdout.is_empty());
+    assert!(rejected.stderr.ends_with(b"\n"));
+    assert_eq!(rejected.stdout, b"");
     fs::set_permissions(
         installed.parent().ok_or("no installed parent")?,
         fs::Permissions::from_mode(0o700),
