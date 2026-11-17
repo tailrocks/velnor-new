@@ -24,7 +24,7 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
                         .is_ok_and(|version| version.at_least((0, 9, 123)))
                 })
         });
-    let mut needs = Vec::new();
+    let mut producers = Vec::new();
     for job in jobs {
         if !job
             .steps
@@ -40,7 +40,7 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
             .0
             .entry(PermissionScope::Actions)
             .or_insert(Access::Read);
-        needs.push(job.id.clone());
+
         let caches = job
             .steps
             .iter()
@@ -63,11 +63,14 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
                 ..step(kind)
             }),
         );
+        producers.push(&*job);
     }
+    let needs = producers.iter().map(|job| job.id.clone()).collect();
+    let needs_max_bytes = crate::required_size::needs_max_bytes(facts, producers);
     let mut steps = head(facts, 1, from_source);
     steps.extend([
         step(StepKind::DownloadMetrics),
-        step(StepKind::CheckMetrics),
+        step(StepKind::CheckMetrics { needs_max_bytes }),
     ]);
     Some(Job {
         name: Some("Cache".to_owned()),

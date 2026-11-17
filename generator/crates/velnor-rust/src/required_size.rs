@@ -6,8 +6,11 @@ use velnor_model::{
     TESTS_RUN_OUTPUT, cache_lane_outputs, json_char_bytes, json_string_bytes,
 };
 
-pub(crate) fn needs_max_bytes(facts: &RepoFacts, jobs: &[Job]) -> usize {
-    jobs.iter().fold(4_usize, |total, job| {
+pub(crate) fn needs_max_bytes<'a>(
+    facts: &RepoFacts,
+    jobs: impl IntoIterator<Item = &'a Job>,
+) -> usize {
+    jobs.into_iter().fold(4_usize, |total, job| {
         let outputs = job
             .plan_outputs
             .iter()

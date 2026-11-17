@@ -252,7 +252,9 @@ pub enum StepKind {
     },
     UploadMetrics,
     DownloadMetrics,
-    CheckMetrics,
+    CheckMetrics {
+        needs_max_bytes: usize,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

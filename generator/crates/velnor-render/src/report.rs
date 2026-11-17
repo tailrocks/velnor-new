@@ -121,13 +121,16 @@ pub(crate) fn artifact(upload: bool) -> RenderedStep {
         ..RenderedStep::default()
     }
 }
-pub(crate) fn check() -> RenderedStep {
+pub(crate) fn check(needs_max_bytes: usize) -> RenderedStep {
     RenderedStep {
         name: "Check cache waste".to_owned(),
         run: Some("velnor-ci report --check \"$RUNNER_TEMP/ci-metrics\"".to_owned()),
         env: vec![(
             "VELNOR_REPORT_NEEDS".to_owned(),
-            Value::Expr("${{ toJSON(needs) }}".to_owned()),
+            Value::BoundedExpr {
+                text: "${{ toJSON(needs) }}".to_owned(),
+                max_bytes: needs_max_bytes,
+            },
         )],
         ..RenderedStep::default()
     }

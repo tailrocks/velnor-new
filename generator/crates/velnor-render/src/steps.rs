@@ -188,7 +188,7 @@ fn step_body(kind: &StepKind, tests: bool, artifacts: ArtifactFormat) -> Rendere
         StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
-        StepKind::CheckMetrics => crate::report::check(),
+        StepKind::CheckMetrics { needs_max_bytes } => crate::report::check(*needs_max_bytes),
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
             uses: Some(CHECKOUT.to_owned()),

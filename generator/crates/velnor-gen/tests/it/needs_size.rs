@@ -8,14 +8,14 @@ use velnor_render::{MAX_ENV_CHARACTERS, Rule};
 use crate::facts::TestResult;
 use crate::pipeline::{HELPER_LOCK, view};
 
-fn saving_plan(roots: usize) -> Result<WorkflowPlan, Box<dyn std::error::Error>> {
+fn saving_plan(roots: usize, blocks: bool) -> Result<WorkflowPlan, Box<dyn std::error::Error>> {
     let manifests: Vec<_> = (0..roots)
         .map(|index| format!("root_{index:02}_{}/Cargo.toml", "x".repeat(150)))
         .collect();
 
     let mut view = view(
         &manifests.iter().map(String::as_str).collect::<Vec<_>>(),
-        Some(b"shape = \"lint-test\"\n"),
+        Some(format!("shape = \"lint-test\"\ncache_check_blocks = {blocks}\n").as_bytes()),
     )?;
     let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
     view.files
@@ -41,7 +41,8 @@ fn inspection_workflow(plan: &WorkflowPlan) -> Result<Value, Box<dyn std::error:
     for step in plan.jobs.iter_mut().flat_map(|job| &mut job.steps) {
         if let StepKind::Verdict {
             needs_max_bytes, ..
-        } = &mut step.kind
+        }
+        | StepKind::CheckMetrics { needs_max_bytes } = &mut step.kind
         {
             *needs_max_bytes = 0;
         }
@@ -50,6 +51,98 @@ fn inspection_workflow(plan: &WorkflowPlan) -> Result<Value, Box<dyn std::error:
     Ok(serde_saphyr::from_str(
         rendered.values().next().ok_or("workflow")?,
     )?)
+}
+
+fn cache_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
+    plan.jobs
+        .iter()
+        .flat_map(|job| &job.steps)
+        .find_map(|step| match step.kind {
+            StepKind::CheckMetrics { needs_max_bytes } => Some(needs_max_bytes),
+            _ => None,
+        })
+        .ok_or("no Cache bound")
+}
+
+#[test]
+fn cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs() -> TestResult {
+    for (roots, rejected) in [(2, false), (50, false), (62, true)] {
+        let plan = saving_plan(roots, false)?;
+        let actual = realized_needs(&inspection_workflow(&plan)?, "cache")?;
+        let bound = cache_bound(&plan)?;
+        assert!(
+            actual <= bound,
+            "roots={roots}, actual={actual}, bound={bound}"
+        );
+        let cache = plan
+            .jobs
+            .iter()
+            .find(|job| job.id.as_str() == "cache")
+            .ok_or("Cache")?;
+        let producers: Vec<_> = plan
+            .jobs
+            .iter()
+            .filter(|job| {
+                job.steps
+                    .iter()
+                    .any(|step| matches!(step.kind, StepKind::ReportCaches { .. }))
+            })
+            .map(|job| job.id.clone())
+            .collect();
+        assert_eq!(cache.needs, producers);
+        let errors = velnor_render::render(&plan).err().unwrap_or_default();
+        assert_eq!(
+            errors
+                .iter()
+                .any(|error| error.job == "cache" && matches!(error.rule, Rule::EnvTooLong(_))),
+            rejected,
+            "roots={roots}, actual={actual}, bound={bound}, {errors:?}"
+        );
+        if rejected {
+            assert!(actual > MAX_ENV_CHARACTERS, "actual={actual}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn blocking_cache_adds_its_outputless_context_to_required_without_changing_the_cache_budget()
+-> TestResult {
+    let advisory = saving_plan(2, false)?;
+    let blocking = saving_plan(2, true)?;
+    let payload_growth = realized_needs(&inspection_workflow(&blocking)?, "required")?
+        - realized_needs(&inspection_workflow(&advisory)?, "required")?;
+    let budget_growth = required_bound(&blocking)? - required_bound(&advisory)?;
+    assert!(payload_growth > 0);
+    assert!(
+        budget_growth >= payload_growth,
+        "payload={payload_growth}, bound={budget_growth}"
+    );
+    assert_eq!(cache_bound(&advisory)?, cache_bound(&blocking)?);
+    for (plan, expected) in [(&advisory, false), (&blocking, true)] {
+        let required = plan
+            .jobs
+            .iter()
+            .find(|job| job.id.as_str() == "required")
+            .ok_or("Required")?;
+        assert_eq!(
+            required.needs.iter().any(|id| id.as_str() == "cache"),
+            expected
+        );
+        let spec = required
+            .steps
+            .iter()
+            .find_map(|step| match &step.kind {
+                StepKind::Verdict { spec, .. } => Some(spec),
+                _ => None,
+            })
+            .ok_or("verdict spec")?;
+        assert_eq!(
+            spec.jobs.iter().any(|job| job.id.as_str() == "cache"),
+            expected
+        );
+    }
+    Ok(())
 }
 
 fn realized_output(name: &str, text: &str) -> String {
@@ -104,7 +197,7 @@ fn realized_needs(workflow: &Value, consumer: &str) -> Result<usize, Box<dyn std
 fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_context() -> TestResult
 {
     for roots in [2, 35, 36, 60] {
-        let plan = saving_plan(roots)?;
+        let plan = saving_plan(roots, false)?;
         let actual = realized_needs(&inspection_workflow(&plan)?, "required")?;
         let bound = required_bound(&plan)?;
         assert!(
