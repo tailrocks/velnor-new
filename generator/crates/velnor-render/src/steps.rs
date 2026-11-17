@@ -3,12 +3,10 @@
 
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
-use crate::artifact_steps::{
-    download_helper, download_step, publish_helper, upload_cargo_log, upload_step,
-};
+use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, cargo_step, reports_tests};
@@ -17,9 +15,7 @@ use crate::gate::{
     sources_step, verdict_step,
 };
 use crate::permission_pairs;
-use crate::rules::{
-    HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
-};
+use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
@@ -86,7 +82,11 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                     .any(|step| {
                         matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
                     })
-                    .then_some([TESTS_RUN_OUTPUT, TESTS_LISTED_OUTPUT])
+                    .then_some([
+                        TESTS_RUN_OUTPUT,
+                        TESTS_LISTED_OUTPUT,
+                        TESTS_BY_PACKAGE_OUTPUT,
+                    ])
                     .into_iter()
                     .flatten()
                     .map(|name| {
@@ -98,7 +98,10 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             )
             .chain(lane_outputs(&job.steps))
             .collect(),
-        steps: job_steps(job, restores, audit, tests, artifacts),
+        steps: crate::helper_integrity::secure_steps(
+            job,
+            job_steps(job, restores, audit, tests, artifacts),
+        ),
         ..RenderedJob::default()
     }
 }
@@ -144,13 +147,6 @@ fn rendered_steps(
         tests,
         artifacts,
     ));
-    if step.kind == StepKind::HelperFromArtifact {
-        rendered.push(RenderedStep {
-            name: "Make velnor-ci executable".to_owned(),
-            run: Some(HELPER_FROM_ARTIFACT_RUN.to_owned()),
-            ..RenderedStep::default()
-        });
-    }
     for body in &mut rendered {
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
@@ -284,8 +280,6 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::UploadCargoLog => upload_cargo_log(),
-        StepKind::HelperFromArtifact => download_helper(),
-        StepKind::PublishHelper { binary } => publish_helper(binary),
         StepKind::Verdict {
             spec,
             needs_max_bytes,

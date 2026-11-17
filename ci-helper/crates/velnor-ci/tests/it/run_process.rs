@@ -143,8 +143,10 @@ mod tests_run {
 
     fn fake_nextest(directory: &Path, script: &str) {
         let program = directory.join("cargo-nextest");
-        fs::write(&program, format!("#!/bin/sh\n{script}\n"))
-            .unwrap_or_else(|e| unreachable!("{e}"));
+        let mut body = String::from("#!/bin/sh\nif [ \"$2\" = list ]; then exit 1; fi\n");
+        body.push_str(script);
+        body.push('\n');
+        fs::write(&program, body).unwrap_or_else(|e| unreachable!("{e}"));
         fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
             .unwrap_or_else(|e| unreachable!("{e}"));
     }

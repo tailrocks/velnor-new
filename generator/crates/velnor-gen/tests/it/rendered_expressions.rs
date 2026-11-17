@@ -36,7 +36,7 @@ fn every_rendered_expression_is_complete_when_no_lane_uploads_a_cache() -> TestR
     view.files
         .insert(RepoPath::new("Cargo.lock")?, GIT_LOCK.as_bytes().to_vec());
     let text = workflow(&view)?;
-    assert!(text.contains("velnor-ci cache budget"), "{text}");
+    assert!(text.contains("\"$VELNOR_EXEC\" cache budget"), "{text}");
     assert_eq!(incomplete_expressions(&text), Vec::<String>::new());
     assert!(!text.contains("Require verified cache uploads"), "{text}");
     Ok(())

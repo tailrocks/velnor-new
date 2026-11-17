@@ -31,9 +31,12 @@ fn budget_runs_once_after_all_saves_with_configured_bytes_and_read_permission() 
             .find(|(id, _)| id == "rust-trim")
             .ok_or("trim")?
             .1;
-        assert_eq!(text.matches("velnor-ci cache budget").count(), 1);
+        assert_eq!(text.matches("\"$VELNOR_EXEC\" cache budget").count(), 1);
         let budget = step(trim, "Enforce the repository cache budget").ok_or("budget")?;
-        assert!(budget.contains(&format!("velnor-ci cache budget --budget-bytes {bytes}")));
+        assert!(
+            budget.contains(&format!("velnor-ci cache budget --budget-bytes {bytes}")),
+            "{budget}"
+        );
         assert!(budget.contains("GITHUB_TOKEN:"));
         assert!(!budget.contains("    if:"), "{budget}");
         assert!(trim.ends_with(budget), "{trim}");
@@ -165,7 +168,7 @@ fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestRes
                 assert!(condition.contains(required), "{required}: {condition}");
             }
             assert!(!condition.contains("needs."), "{condition}");
-            assert_eq!(text.matches("velnor-ci cache budget").count(), 1);
+            assert_eq!(text.matches("\"$VELNOR_EXEC\" cache budget").count(), 1);
             let budget = step(trim, "Enforce the repository cache budget").ok_or("budget")?;
             assert!(
                 budget.contains(&format!("velnor-ci cache budget --budget-bytes {bytes}")),

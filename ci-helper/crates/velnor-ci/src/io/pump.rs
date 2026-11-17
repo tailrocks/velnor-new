@@ -24,7 +24,7 @@ impl Capture {
         self.observations.progress.extend(batch.progress);
         self.observations.tests.extend(batch.tests);
         self.observations.rejected += batch.rejected;
-        self.counts = counts.or(self.counts);
+        self.counts = counts.or_else(|| self.counts.take());
     }
 }
 

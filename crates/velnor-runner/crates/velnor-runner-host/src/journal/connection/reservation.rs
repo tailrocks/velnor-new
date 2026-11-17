@@ -210,14 +210,17 @@ pub(in crate::journal) use provisioning::recover_unbound_pairs_at_startup;
 pub(crate) use provisioning::{
     BootstrapContainerCreateClaim, BootstrapStartClaim, RecordedStorageNetwork,
 };
-pub(crate) use provisioning::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use provisioning::{
+    UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
+    UnboundRetirementPhase,
+};
 
 pub(crate) use provisioning::{
     CreateInterruptionOutcome, PhysicalSuccessorReservationResult,
     RequestPhysicalReservationResult, StorageCleanupIdentity, StorageInitializationClaim,
-    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
-    StorageObjectCreateClaim, StorageProvisioningPlan, StorageProvisioningRole,
-    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRecoveryIdentity,
+    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageProvisioningPlan,
+    StorageProvisioningRole, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 pub(crate) use provisioning::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,

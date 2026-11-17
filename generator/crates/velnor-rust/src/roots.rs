@@ -8,7 +8,6 @@ use velnor_model::{
     RustMetadata, RustPackage, RustRoot,
 };
 
-use crate::build_target::sets_build_target;
 use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
@@ -117,7 +116,6 @@ fn root(
     Ok(RustRoot {
         manifest: manifest.clone(),
         target_dir: target_dir(view, manifest)?,
-        sets_build_target: sets_build_target(view, manifest)?,
         members,
         depends_on: depends_on.into_iter().collect(),
         external_dependencies: external_dependencies.into_iter().collect(),

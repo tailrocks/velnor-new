@@ -43,6 +43,20 @@ pub(super) fn is_run(line: &Line, path: &[(usize, String)]) -> bool {
         && mapping_entry(&line.content).is_some_and(|(key, _)| key == "run")
 }
 
+pub(super) fn is_helper_env(line: &Line, path: &[(usize, String)]) -> bool {
+    line.indent == 10
+        && path.len() == 5
+        && is_step(&path[..4])
+        && path[4].0 == 8
+        && path[4].1 == "env"
+        && mapping_entry(&line.content).is_some_and(|(key, _)| {
+            key.starts_with("VELNOR_HELPER")
+                && key
+                    .bytes()
+                    .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit() || byte == b'_')
+        })
+}
+
 fn is_steps(path: &[(usize, String)]) -> bool {
     path.len() == 3
         && path[0].0 == 0
