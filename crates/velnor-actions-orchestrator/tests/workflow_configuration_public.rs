@@ -3,6 +3,8 @@
 
 mod workflow_configuration_fixture;
 
+#[path = "workflow_configuration_public/alint_line_cap_probe.rs"]
+mod alint_line_cap_probe;
 #[path = "workflow_configuration_public/both_rust_sharding.rs"]
 mod both_rust_sharding;
 #[path = "workflow_configuration_public/branches.rs"]
@@ -101,8 +103,6 @@ mod native_artifacts_fixture;
 mod native_artifacts_suite_gate;
 #[path = "workflow_configuration_public/native_artifacts_suites.rs"]
 mod native_artifacts_suites;
-#[path = "workflow_configuration_public/alint_line_cap_probe.rs"]
-mod alint_line_cap_probe;
 #[path = "workflow_configuration_public/non_inputs_checkout.rs"]
 mod non_inputs_checkout;
 #[path = "workflow_configuration_public/non_inputs_checkout_support.rs"]

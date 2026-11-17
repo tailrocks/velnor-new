@@ -23,7 +23,10 @@ fn alint_line_cap_probe_is_run_by_bash_which_the_script_requires() -> TestResult
         let ci = tree
             .get(".github/workflows/ci.yml")
             .ok_or("generated ci workflow is missing")?;
-        let probe_lines: Vec<&str> = ci.lines().filter(|line| line.contains(PROBE_SCRIPT)).collect();
+        let probe_lines: Vec<&str> = ci
+            .lines()
+            .filter(|line| line.contains(PROBE_SCRIPT))
+            .collect();
         assert_eq!(probe_lines.len(), 1, "{policy:?}: {probe_lines:?}");
         assert!(
             probe_lines[0].ends_with(&format!(" bash {PROBE_SCRIPT}")),
