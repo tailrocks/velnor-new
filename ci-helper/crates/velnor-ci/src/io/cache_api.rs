@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::time::Duration;
 
 use serde::Deserialize;
 use velnor_rust::{CacheEntry, budget_plan, cache_family, delta_pull_request};
@@ -71,6 +72,7 @@ fn pages<T: serde::de::DeserializeOwned>(
 
 fn delete_entries(github: &dyn GitHubWrite, repo: &Repo, ids: &[u64]) -> Result<(), CiError> {
     for id in ids {
+        github.wait(Duration::from_millis(160));
         if let Err(error) = github.delete(&format!("/repos/{repo}/actions/caches/{id}"))
             && !error.is_missing()
         {

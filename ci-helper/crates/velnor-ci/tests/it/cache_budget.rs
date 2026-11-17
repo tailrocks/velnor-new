@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
+use std::collections::VecDeque;
+use std::time::Duration;
 use velnor_ci::error::CiError;
 use velnor_ci::github::{GitHub, GitHubWrite, Repo};
 use velnor_ci::io::cache_api::{budget, trim};
@@ -17,6 +19,8 @@ struct Api {
     incomplete: bool,
     status: Value,
     confirmations: RefCell<Vec<String>>,
+    elapsed: Cell<Duration>,
+    deletions: RefCell<VecDeque<Duration>>,
 }
 
 impl Api {
@@ -32,6 +36,8 @@ impl Api {
             incomplete: false,
             status: json!({"state":"open"}),
             confirmations: RefCell::default(),
+            elapsed: Cell::new(Duration::ZERO),
+            deletions: RefCell::default(),
         }
     }
 }
@@ -75,6 +81,10 @@ impl GitHub for Api {
     }
 }
 impl GitHubWrite for Api {
+    fn wait(&self, duration: Duration) {
+        self.elapsed.set(self.elapsed.get() + duration);
+    }
+
     fn upload(&self, _: &str, _: &[u8]) -> Result<String, CiError> {
         Err(CiError::new("unused"))
     }
@@ -82,6 +92,13 @@ impl GitHubWrite for Api {
         Err(CiError::new("unused"))
     }
     fn delete(&self, path: &str) -> Result<(), CiError> {
+        let now = self.elapsed.get();
+        let mut deletions = self.deletions.borrow_mut();
+        deletions.retain(|at| now.saturating_sub(*at) < Duration::from_secs(60));
+        if deletions.len() >= 400 {
+            return Err(CiError::new("HTTP 429: 400 cache deletions per minute"));
+        }
+        deletions.push_back(now);
         if self.fail_delete {
             return Err(CiError::new("delete failed"));
         }
@@ -118,6 +135,7 @@ fn repository_budget_lists_all_pages_and_dry_run_preserves_external_state() {
     let report = budget(&api, &repo(), 0, 0, true).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.contains("would delete 101"), "{report}");
     assert_eq!(api.entries.borrow().len(), 101);
+    assert_eq!(api.elapsed.get(), Duration::ZERO);
     budget(&api, &repo(), 0, 0, false).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(api.entries.borrow().is_empty());
 }

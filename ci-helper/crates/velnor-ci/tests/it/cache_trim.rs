@@ -43,6 +43,8 @@ impl GitHub for PagedCaches {
 }
 
 impl GitHubWrite for PagedCaches {
+    fn wait(&self, _: std::time::Duration) {}
+
     fn upload(&self, _: &str, _: &[u8]) -> Result<String, CiError> {
         Err(CiError::new("unused"))
     }
@@ -129,6 +131,8 @@ impl GitHub for FakeCaches {
 }
 
 impl GitHubWrite for FakeCaches {
+    fn wait(&self, _: std::time::Duration) {}
+
     fn upload(&self, _: &str, _: &[u8]) -> Result<String, CiError> {
         Err(CiError::new("unused"))
     }
