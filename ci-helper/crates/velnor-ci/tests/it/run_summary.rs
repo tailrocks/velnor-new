@@ -105,7 +105,7 @@ exit 0";
 #[test]
 fn a_doctest_step_that_ran_zero_doctests_fails() {
     let temp = scratch("doctests-zero");
-    let zero = "printf '   Doc-tests a\\n\\nrunning 0 tests\\n\\ntest result: ok. 0 passed\\n'";
+    let zero = "printf '   Doc-tests a\\n\\nrunning 0 tests\\n\\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\\n'";
     let output = doctests_in(&temp, zero);
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     assert!(
@@ -114,7 +114,7 @@ fn a_doctest_step_that_ran_zero_doctests_fails() {
     );
     assert_eq!(
         output.stdout,
-        "   Doc-tests a\n\nrunning 0 tests\n\ntest result: ok. 0 passed\n".as_bytes()
+        "   Doc-tests a\n\nrunning 0 tests\n\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\n".as_bytes()
     );
     let none = doctests_in(&temp, "true");
     assert_eq!(none.status.code(), Some(1), "{none:?}");
@@ -123,9 +123,9 @@ fn a_doctest_step_that_ran_zero_doctests_fails() {
 #[test]
 fn a_doctest_step_that_ran_a_doctest_passes_and_a_failing_one_keeps_its_code() {
     let temp = scratch("doctests-some");
-    let ran = "printf 'running 0 tests\\ntest result: ok. 0 passed\\nrunning 1 test\\ntest x ... ok\\ntest result: ok. 1 passed\\n'";
+    let ran = "printf 'running 0 tests\\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\\nrunning 1 test\\ntest x ... ok\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\\n'";
     assert_eq!(doctests_in(&temp, ran).status.code(), Some(0));
-    let split = "printf 'running 0 tests\\ntest result: ok. 0 passed\\nrunn'; printf 'ing 3 tests\\ntest result: ok. 3 passed\\n'";
+    let split = "printf 'running 0 tests\\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\\nrunn'; printf 'ing 3 tests\\ntest result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\\n'";
     assert_eq!(doctests_in(&temp, split).status.code(), Some(0));
     let failing = "printf 'running 0 tests\\n'; exit 101";
     assert_eq!(doctests_in(&temp, failing).status.code(), Some(101));
@@ -202,6 +202,34 @@ fn a_doctest_result_without_a_trailing_newline_counts_at_end_of_stream() {
     let body = "printf 'running 1 test\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out'";
     let output = doctests("eof-result", body);
     assert_eq!(output.status.code(), Some(0), "{output:?}");
+}
+
+#[test]
+fn an_incomplete_doctest_result_does_not_count_as_a_doctest_that_ran() {
+    let missing_ignored = "printf 'running 1 test\\ntest result: ok. 0 passed; 0 failed;\\n'";
+    assert_eq!(
+        doctests("incomplete-ignored", missing_ignored)
+            .status
+            .code(),
+        Some(1)
+    );
+    let missing_failed = "printf 'running 1 test\\ntest result: ok. 1 passed;\\n'";
+    assert_eq!(
+        doctests("incomplete-failed", missing_failed).status.code(),
+        Some(1)
+    );
+}
+
+#[test]
+fn a_malformed_doctest_result_does_not_count_as_a_doctest_that_ran() {
+    let body = "printf 'running 1 test\\ntest result: ok. many passed; 0 failed; 0 ignored;\\n'";
+    assert_eq!(doctests("malformed", body).status.code(), Some(1));
+}
+
+#[test]
+fn a_doctest_result_that_counts_no_test_overrides_the_announced_total() {
+    let body = "printf 'running 3 tests\\ntest result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\\n'";
+    assert_eq!(doctests("zero-count", body).status.code(), Some(1));
 }
 
 #[test]

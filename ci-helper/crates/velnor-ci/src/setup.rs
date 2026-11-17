@@ -226,7 +226,6 @@ pub fn missing_toolchain(
 #[derive(Debug, Default)]
 pub struct DoctestCount {
     line: Vec<u8>,
-    announced: u64,
     confirmed: u64,
     ignored: u64,
 }
@@ -244,7 +243,6 @@ impl DoctestCount {
 
     pub fn end_stream(&mut self) {
         self.end_line();
-        self.announced = 0;
     }
 
     #[must_use]
@@ -254,36 +252,38 @@ impl DoctestCount {
 
     fn end_line(&mut self) {
         let line = String::from_utf8_lossy(&self.line);
-        self.announced += doctests_in(&line);
-        if crate::logscan::strip_ansi(&line)
-            .trim()
-            .starts_with("test result:")
-        {
-            self.confirmed += self.announced;
-            self.announced = 0;
-            self.ignored += ignored_in(&line);
+        if let Some((confirmed, ignored)) = result_counts(&line) {
+            self.confirmed += confirmed;
+            self.ignored += ignored;
         }
         self.line.clear();
     }
 }
 
-fn ignored_in(line: &str) -> u64 {
+fn result_counts(line: &str) -> Option<(u64, u64)> {
     let clean = crate::logscan::strip_ansi(line);
-    let Some(rest) = clean.trim().strip_prefix("test result:") else {
-        return 0;
-    };
-    rest.split(';')
-        .find_map(|part| part.trim().strip_suffix(" ignored"))
-        .and_then(|count| count.trim().parse().ok())
-        .unwrap_or(0)
-}
-
-fn doctests_in(line: &str) -> u64 {
-    let clean = crate::logscan::strip_ansi(line);
-    clean
-        .trim()
-        .strip_prefix("running ")
-        .and_then(|rest| rest.split(' ').next())
-        .and_then(|count| count.parse().ok())
-        .unwrap_or(0)
+    let rest = clean.trim().strip_prefix("test result:")?;
+    let mut passed = None;
+    let mut failed = None;
+    let mut ignored = None;
+    for part in rest.split(';') {
+        let mut words = part.split_whitespace().rev();
+        let Some(field) = words.next() else {
+            continue;
+        };
+        let Some(value) = words.next() else {
+            continue;
+        };
+        let slot = match field {
+            "passed" => &mut passed,
+            "failed" => &mut failed,
+            "ignored" => &mut ignored,
+            _ => continue,
+        };
+        *slot = Some(value.parse::<u64>().ok()?);
+    }
+    let passed = passed?;
+    let failed = failed?;
+    let ignored = ignored?;
+    Some((passed + failed + ignored, ignored))
 }
