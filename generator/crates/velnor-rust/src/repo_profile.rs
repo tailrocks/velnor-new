@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::RepoPath;
 
-use crate::error::DetectError;
+use crate::error::{DetectError, Reason};
 use crate::roots::is_cargo_config;
 use crate::toml_file::table;
 
@@ -21,6 +21,9 @@ pub fn repo_profile(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<String, Detec
             continue;
         }
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+        if parsed.contains_key("include") {
+            return Err(DetectError::invalid(file, Reason::CargoConfigInclude));
+        }
         if let Some(profile) = parsed.get("profile") {
             let wrapped = toml::Table::from_iter([("profile".to_owned(), profile.clone())]);
             sections.push(format!("{file}\n{wrapped}\n"));

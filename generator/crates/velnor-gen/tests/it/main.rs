@@ -57,6 +57,7 @@ mod release_yml_limits;
 mod release_yml_quoting;
 mod release_yml_security;
 mod render_empty_key;
+mod repo_profile_include;
 mod repo_sample;
 mod required_gate;
 mod required_gate_lanes;
