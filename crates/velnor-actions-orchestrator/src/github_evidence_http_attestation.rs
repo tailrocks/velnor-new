@@ -14,6 +14,9 @@ pub(crate) fn fetch_attestation_bundle(
     limit: usize,
     deadline: CheckDeadline,
 ) -> Result<Vec<u8>, OrchestratorError> {
+    if let Some(bytes) = crate::homebrew::qualification_evidence::read("bundle", url, limit)? {
+        return decode_bundle(&bytes, limit);
+    }
     let remaining = deadline
         .remaining()
         .map_err(|_| internal("package_verification_deadline"))?;
