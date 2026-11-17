@@ -6,10 +6,12 @@ use velnor_model::{
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
+use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
 use crate::gate::{
-    PLAN_STEP, TOOLS_STEP, all_conditions, condition, output, plan_source, verdict_step,
+    PLAN_STEP, Setup, TOOLS_STEP, admission, all_conditions, condition, output, plan_read,
+    plan_source, sources_save_step, sources_step, verdict_step,
 };
 use crate::permission_pairs;
 use crate::rules::{
@@ -17,7 +19,6 @@ use crate::rules::{
 };
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
-const RESTORED_STEP: &str = "restored";
 pub(crate) const RUN: &str = "velnor-ci run --";
 pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
@@ -38,26 +39,21 @@ const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e4
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
-const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
-    let admission = match condition(job.when, job.gate.as_ref(), false, job.skip_on_draft) {
-        Some(predicate) => format!(
-            "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
-            predicate.trim_start_matches("${{ ").trim_end_matches(" }}")
-        ),
-        None => format!("${{{{ {ACTIVE_EVENT} }}}}"),
-    };
     let restores = job
         .steps
         .iter()
-        .any(|step| step.kind == StepKind::Helper(HelperCommand::Restored));
+        .any(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))));
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: Some(admission),
+        condition: Some(with_saved_lane(
+            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            &job.steps,
+        )),
         runs_on: job.runs_on.as_str().to_owned(),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
@@ -85,18 +81,28 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                         )
                     }),
             )
+            .chain(lane_outputs(&job.steps))
             .collect(),
         steps: job
             .steps
             .iter()
-            .flat_map(|step| rendered_steps(step, restores))
+            .scan(false, |replanned, step| {
+                let setup = match (restores, *replanned) {
+                    (false, _) => Setup::Before,
+                    (true, false) => Setup::Restored,
+                    (true, true) => Setup::Replanned,
+                };
+                *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+                Some(rendered_steps(step, setup))
+            })
+            .flatten()
             .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind)];
+fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
+    let mut rendered = vec![step_body(&step.kind, step.directory.as_ref())];
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -107,7 +113,13 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
     for body in &mut rendered {
         body.condition = all_conditions(
             body.condition.take(),
-            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft),
+            condition(
+                step.when,
+                step.gate.as_ref(),
+                setup,
+                step.skip_on_draft,
+                &saved_unless_hit(&step.kind),
+            ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
@@ -117,13 +129,25 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
             let key = output(&plan.slug, *need);
+            let read = plan_read(&source, &key, setup);
             (
                 variable(*need).to_owned(),
-                Value::Expr(format!("${{{{ {source}.{key} }}}}")),
+                Value::Expr(format!("${{{{ {read} }}}}")),
             )
         }));
     }
     rendered
+}
+
+fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
+    match kind {
+        StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
+            "steps.{}.outputs.cache-hit != 'true'",
+            sources_step(root.slug())
+        )],
+        StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
+        _ => Vec::new(),
+    }
 }
 
 fn variable(need: GateNeed) -> &'static str {
@@ -134,7 +158,7 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind) -> RenderedStep {
+fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
     match kind {
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
@@ -164,6 +188,8 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
+        StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
+        StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),
@@ -175,8 +201,9 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             ..RenderedStep::default()
         },
         StepKind::Cargo(command) => cargo_step(command),
-        StepKind::Helper(command) => helper_step(*command),
-        StepKind::InputsRestore { target_dir } => inputs_restore(target_dir),
+        StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
+        StepKind::InputsRestore(target) => crate::helper_steps::inputs_step("restore", target, directory),
 StepKind::CratesMirror(mirror) => RenderedStep {
     name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
     condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
@@ -208,17 +235,6 @@ StepKind::CratesMirror(mirror) => RenderedStep {
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
-    }
-}
-
-fn inputs_restore(target_dir: &RepoPath) -> RenderedStep {
-    RenderedStep {
-        name: "velnor-ci inputs restore".to_owned(),
-        run: Some(format!(
-            "velnor-ci inputs restore --target-dir \"${{GITHUB_WORKSPACE}}\"/{}",
-            crate::release_steps::shell_word(target_dir.as_str())
-        )),
-        ..RenderedStep::default()
     }
 }
 
@@ -300,22 +316,16 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         ));
     }
     RenderedStep {
-        id: (fallbacks && matches!(key, CacheKey::Tools { .. })).then(|| TOOLS_STEP.to_owned()),
+        id: match key {
+            CacheKey::Tools { .. } if fallbacks => Some(TOOLS_STEP.to_owned()),
+            CacheKey::Sources { root, .. } if fallbacks => Some(sources_step(root.slug())),
+            CacheKey::Sources { root, .. } => Some(sources_save_step(root.slug())),
+            _ => None,
+        },
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
         with,
         ..RenderedStep::default()
-    }
-}
-
-fn helper_arguments(command: HelperCommand) -> &'static str {
-    match command {
-        HelperCommand::Plan => "plan",
-        HelperCommand::Prepare => "prepare",
-        HelperCommand::CheckMetadata => "check-metadata",
-        HelperCommand::Restored => "restored",
-        HelperCommand::InputsSave => "inputs save",
-        HelperCommand::InputsAudit => "inputs audit",
     }
 }
 
@@ -368,26 +378,6 @@ fn download_step(name: &str, into: Option<&RepoPath>) -> RenderedStep {
         name: "Download the tests".to_owned(),
         uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
         with,
-        ..RenderedStep::default()
-    }
-}
-
-fn helper_step(command: HelperCommand) -> RenderedStep {
-    let arguments = helper_arguments(command);
-    let (id, env) = match command {
-        HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
-        HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
-        HelperCommand::Restored => (Some(RESTORED_STEP), Vec::new()),
-        _ => (None, Vec::new()),
-    };
-    RenderedStep {
-        name: format!("velnor-ci {arguments}"),
-        id: id.map(str::to_owned),
-        env,
-        run: Some(match command {
-            HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
-            _ => format!("velnor-ci {arguments}"),
-        }),
         ..RenderedStep::default()
     }
 }

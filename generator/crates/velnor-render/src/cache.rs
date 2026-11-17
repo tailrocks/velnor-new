@@ -40,6 +40,7 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
         }
         CacheKey::Delta { .. } => String::new(),
     };
+    let owner;
     let layout = match key {
         CacheKey::Tools { .. } => Layout {
             segments: vec!["velnor", "tools", HOST, &mise, &lock],
@@ -49,20 +50,13 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             segments: vec!["velnor", "src", HOST, root.slug().as_str(), &lock],
             fallbacks: &[4],
         },
-        CacheKey::Target { job, root, .. } => Layout {
-            segments: vec![
-                "velnor",
-                "tgt",
-                job.as_str(),
-                root.slug().as_str(),
-                HOST,
-                &compat,
-                &lock,
-                COMMIT,
-                RUN_ID,
-            ],
-            fallbacks: &[7, 6],
-        },
+        CacheKey::Target { job, root, .. } => {
+            owner = format!("{job}.{}.{HOST}", root.slug());
+            Layout {
+                segments: vec!["velnor", "tgt", &owner, &compat, &lock, COMMIT, RUN_ID],
+                fallbacks: &[5, 4],
+            }
+        }
         CacheKey::Delta { job, root, .. } => Layout {
             segments: vec![
                 "velnor",

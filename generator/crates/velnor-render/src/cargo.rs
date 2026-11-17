@@ -26,6 +26,7 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
                 .join(" "),
             vec![],
         ),
+        CargoCommand::NextestBuild => nextest_build(),
         CargoCommand::NextestRun { filter } => nextest_run("--workspace --locked", filter),
         CargoCommand::NextestRunArchive { file, filter } => nextest_run(
             &format!(
@@ -100,6 +101,14 @@ fn cache_debug_env() -> (String, Value) {
         Value::Expr(format!(
             "${{{{ {CACHE_DEBUG_ON} && '{FINGERPRINT_LOG}' || '' }}}}"
         )),
+    )
+}
+
+fn nextest_build() -> (String, String, Vec<(String, Value)>) {
+    (
+        "Build the tests".into(),
+        "cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run".into(),
+        vec![],
     )
 }
 

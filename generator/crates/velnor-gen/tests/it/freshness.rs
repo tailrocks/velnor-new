@@ -58,7 +58,8 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
             .ok_or("no restored step")?;
         assert_eq!(order[restored - 2], "Restore the target cache", "{lane}");
         assert_eq!(order[restored - 1], "velnor-ci inputs restore", "{lane}");
-        assert_eq!(order[restored + 1], "Format", "{lane}");
+        assert_eq!(order[restored + 1], "velnor-ci plan --full", "{lane}");
+        assert_eq!(order[restored + 2], "Format", "{lane}");
     }
     let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
     let audited = named(audit, "velnor-ci inputs restore");

@@ -3,14 +3,13 @@
 
 use std::collections::BTreeMap;
 
-use crate::cache::CacheKey;
 use crate::cron::CronExpr;
 use crate::ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RootSlug, RunnerLabel,
     Sha256, TargetName,
 };
 use crate::repo::TargetKind;
-use crate::verdict::VerdictSpec;
+use crate::steps::StepKind;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -199,57 +198,10 @@ pub enum When {
     ScheduledOrPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StepKind {
-    Checkout {
-        depth: u32,
-    },
-    InstallTools {
-        only: Option<String>,
-    },
-    CacheRestore(CacheKey),
-    CacheSave(CacheKey),
-    RustComponents(Vec<String>),
-    RustTargets(Vec<String>),
-    UploadArchive {
-        name: String,
-        file: RepoPath,
-    },
-    DownloadArchive {
-        name: String,
-        into: Option<RepoPath>,
-    },
-    Cargo(CargoCommand),
-    Helper(HelperCommand),
-    InputsRestore {
-        target_dir: RepoPath,
-    },
-    CratesMirror(crate::repo::CratesMirror),
-    GeneratorCheck,
-    InstallHelper(HelperRelease),
-    HelperFromArtifact,
-    PublishHelper {
-        binary: RepoPath,
-    },
-    FailWhenANeedFailed,
-    FailOnDraftRun,
-    Verdict {
-        spec: VerdictSpec,
-        needs_max_bytes: usize,
-    },
-    UploadCargoLog,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HelperCommand {
-    Plan,
-    Prepare,
-    CheckMetadata,
-    Restored,
-    InputsSave,
-    InputsAudit,
+    SaveBase,
+    SaveBaseDecided,
+    BaseExpired,
+    SavingRun,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -336,6 +288,7 @@ pub enum CargoCommand {
         package: PackageName,
     },
     BuildAll,
+    NextestBuild,
     NextestRun {
         filter: FilterRef,
     },

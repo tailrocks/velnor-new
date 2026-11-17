@@ -82,7 +82,8 @@ jobs:
       - name: velnor-ci check-metadata
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci check-metadata
-      - name: Restore the sources cache
+      - id: sources_root
+        name: Restore the sources cache
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -97,10 +98,10 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
-            velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+            velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - id: restored
         name: velnor-ci restored
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'

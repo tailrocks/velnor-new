@@ -71,6 +71,7 @@ pub fn expected_with_notes(
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
     let mut notes = facts.timings_notes;
+    notes.extend(facts.private_sources);
     notes.extend(release_notes);
     Ok((files, notes))
 }

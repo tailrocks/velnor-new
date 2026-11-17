@@ -46,7 +46,11 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::NotCancelled
         | When::Always
         | When::CacheDebug
-        | When::SaveToolsOnDefaultBranch => None,
+        | When::SaveToolsOnDefaultBranch
+        | When::SaveBase
+        | When::SaveBaseDecided
+        | When::BaseExpired
+        | When::SavingRun => None,
     };
     gate.into_iter().chain(when).collect()
 }
