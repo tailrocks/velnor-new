@@ -116,6 +116,8 @@ crates/velnor-actions-contract/src/config/distribution_destinations.rs
 crates/velnor-actions-contract/src/config/distribution_protection_observer.rs
 crates/velnor-actions-contract/src/config/distribution_updater.rs
 crates/velnor-actions-contract/src/config/dockerfile.rs
+crates/velnor-actions-contract/src/config/dockerfile/environment.rs
+crates/velnor-actions-contract/src/config/dockerfile/exclusions.rs
 crates/velnor-actions-contract/src/config/dockerfile/runner.rs
 crates/velnor-actions-contract/src/config/dockerfile/syntax.rs
 crates/velnor-actions-contract/src/config/dockerfile/variable.rs
