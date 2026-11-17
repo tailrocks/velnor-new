@@ -54,9 +54,15 @@ async fn historical_46_policy_rotation_preserves_409_local_proof_after_upgrade()
 
 async fn recovers(schema: Schema, outcome: JitOutcome, during: bool) -> TestResult<()> {
     let case = Case::with_control(schema, outcome, true, true).await?;
-    case.journal
-        .recover_after_restart_without_authority()
-        .await?;
+    if matches!(schema, Schema::Historical46 | Schema::Historical47) {
+        case.journal
+            .recover_after_restart_v46_v47_for_test()
+            .await?;
+    } else {
+        case.journal
+            .recover_after_restart_without_authority()
+            .await?;
+    }
     let foreign = case.fixture.objects(FOREIGN);
     let before = frozen(&case).await?;
     let claim = if during {

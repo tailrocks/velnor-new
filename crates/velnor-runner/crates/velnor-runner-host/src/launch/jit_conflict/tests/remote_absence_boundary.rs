@@ -84,9 +84,15 @@ async fn prepared(
     outcome: JitOutcome,
 ) -> TestResult<(Case, JitConflictRecoveryClaim)> {
     let case = Box::pin(Case::new(schema, outcome, false)).await?;
-    case.journal
-        .recover_after_restart_without_authority()
-        .await?;
+    if matches!(schema, Schema::Historical46 | Schema::Historical47) {
+        case.journal
+            .recover_after_restart_v46_v47_for_test()
+            .await?;
+    } else {
+        case.journal
+            .recover_after_restart_without_authority()
+            .await?;
+    }
     let candidates = case.scope.recoverable_jit_conflict_candidates().await?;
     let claim = case
         .scope
