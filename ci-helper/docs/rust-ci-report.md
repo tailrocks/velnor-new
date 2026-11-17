@@ -61,16 +61,15 @@ A tracked `Cargo.lock` symlink prevents same-lock verification for its Cargo
 root. A usable target with that symlink makes compilation provenance
 unverifiable, including quiet non-fresh artifacts. Cold runs still retain
 compilation evidence. Fresh artifacts alone do not claim compilation.
-Other tracked symlink inputs prove unchanged contents only when their relative
-target chains resolve to regular files covered by both tracked snapshots.
-Changes in a covered referent select the original symlink path. Absolute,
-escaping, untracked, dangling, cyclic, or directory-link targets make warm
-compilation provenance unverifiable. The report does not follow or hash
-arbitrary referents. It verifies each traversed directory prefix with symlink
-metadata before inspecting a child, including prefixes cancelled by `..`.
-Missing directories and untracked directory symlinks cannot prove a referent.
-This uncertainty disables an unchanged-workspace claim
-within the affected root and leaves independent roots verifiable.
+Other tracked symlink inputs also make warm compilation provenance
+unverifiable. Input snapshots store link text, without historical referent
+contents or directory identities. Even a link whose current target is tracked
+cannot prove that the restored build read the same contents. The report does
+not reconstruct historical referents from the current checkout.
+Current or saved symlink inputs disable an unchanged-workspace claim within
+the affected root and leave independent roots verifiable. Cold runs retain
+compilation counts without a provenance error. Fresh artifacts alone do not
+require compilation provenance.
 Repeated compilations without a recognized unit identity retain their observed
 package and available configuration context. Three such observations in one
 context make the check fail verification, because it cannot prove that Cargo

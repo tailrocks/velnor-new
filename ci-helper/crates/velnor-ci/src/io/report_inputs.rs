@@ -3,7 +3,7 @@
 
 use crate::cargo_artifacts::{ArtifactTap, ProgressKind};
 use crate::error::CiError;
-use crate::inputs::parse_inputs;
+use crate::inputs::{SYMLINK_MODE, parse_inputs};
 use crate::report::{Hit, LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -12,8 +12,6 @@ use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
 
 #[path = "report_artifacts.rs"]
 mod artifact_evidence;
-#[path = "report_links.rs"]
-mod link_evidence;
 
 fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
@@ -46,12 +44,16 @@ fn collect_root(
     let saved = read_snapshot(&root_path.join(SNAPSHOT))?;
     let saved_witness = read_witness(&root_path.join(RESTORE_WITNESS))?;
     let usable = saved.is_some();
-    let links = link_evidence::LinkEvidence::collect(checkout, &current, saved.as_deref());
+    let unverifiable_links = !current.links.is_empty()
+        || current.unverifiable_links > 0
+        || saved
+            .as_ref()
+            .is_some_and(|saved| saved.iter().any(|input| input.file.mode == SYMLINK_MODE));
     let same_lock = !symlink_lock && same_lock(&root.manifest, &current, saved.as_deref())?;
-    let unchanged = if symlink_lock || links.unverifiable {
+    let unchanged = if symlink_lock || unverifiable_links {
         BTreeSet::new()
     } else {
-        unchanged(facts, root, &current, saved, &links.changed)
+        unchanged(facts, root, &current, saved)
     };
     for cache in &mut metrics.caches {
         if cache.family == "target" && cache.root.as_deref() == Some(root_text) {
@@ -66,7 +68,7 @@ fn collect_root(
             checkout,
             current: &current,
             symlink_lock,
-            unverifiable_links: links.unverifiable,
+            unverifiable_links,
             log,
             root_text,
             root_path: &root_path,
@@ -147,7 +149,7 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
             invocation,
             inputs.root_text,
             inputs.current,
-            inputs.unverifiable_links,
+            inputs.unverifiable_links && !inputs.symlink_lock,
             inputs.saved_witness,
             warm,
         );
@@ -214,7 +216,6 @@ fn unchanged(
     root: &velnor_model::RustRoot,
     current: &crate::inputs::Tracked,
     saved: Option<Vec<crate::inputs::SavedInput>>,
-    links_changed: &BTreeSet<String>,
 ) -> BTreeSet<String> {
     let mut unchanged = BTreeSet::new();
     if current.unsupported > 0 || current.unverifiable_links > 0 || !current.absent.is_empty() {
@@ -260,7 +261,6 @@ fn unchanged(
                 .chain(current.keys())
                 .filter(|path| saved.get(*path) != current.get(*path))
                 .copied()
-                .chain(links_changed.iter())
                 .filter_map(|path| RepoPath::new(path.as_str()).ok())
                 .collect(),
             ..ChangeSet::default()

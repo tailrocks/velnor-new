@@ -34,22 +34,47 @@ fn external_source_referent_cannot_claim_unchanged_workspace_waste() -> super::s
 }
 
 #[test]
-fn stable_tracked_source_chain_proves_workspace_waste() -> super::super::ResultTest {
+fn stable_tracked_source_chain_is_unknown_only_for_warm_compilation() -> super::super::ResultTest {
     let repo = tracked_chain()?;
     save_restore(&repo);
-    let metrics = progress(&repo, &[event(&repo, "Compiling", "demo", "0.1.0", true)])?;
+    assert_unknown(&repo)?;
+    for steps in [
+        "{}",
+        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-hit":"false"}}}"#,
+    ] {
+        let metrics = report(&repo, &cache(), steps)?;
+        assert_eq!(metrics.invocations[0].compilations.len(), 1);
+        assert!(!metrics.caches[0].usable, "{metrics:?}");
+        assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+        assert!(metrics.violations.is_empty(), "{metrics:?}");
+        assert!(velnor_ci::report::check(&[metrics]).is_ok());
+    }
+    let root = fs::canonicalize(repo.root())?.join("demo");
+    let mut fresh = artifact(
+        &repo,
+        "demo",
+        "lib",
+        "target/debug/deps/libdemo.rmeta",
+        true,
+        false,
+    )?;
+    fresh["package_id"] = json!(format!("path+file://{}#demo@0.1.0", root.display()));
+    fresh["manifest_path"] = json!(root.join("Cargo.toml"));
+    fresh["target"]["src_path"] = json!(root.join("src/lib.rs"));
+    let metrics = observation(&repo, &[], &[fresh])?;
     assert!(
-        metrics.invocations[0].compilations[0].unchanged,
+        metrics.invocations[0].compilations.is_empty(),
         "{metrics:?}"
     );
+    assert!(metrics.caches[0].usable, "{metrics:?}");
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
-    assert!(!metrics.violations.is_empty(), "{metrics:?}");
-    assert!(velnor_ci::report::check(&[metrics]).is_err());
+    assert!(metrics.violations.is_empty(), "{metrics:?}");
+    assert!(velnor_ci::report::check(&[metrics]).is_ok());
     Ok(())
 }
 
 #[test]
-fn changed_tracked_referent_selects_the_symlinked_workspace_source() -> super::super::ResultTest {
+fn changed_tracked_referent_cannot_prove_historical_source_contents() -> super::super::ResultTest {
     let repo = tracked_chain()?;
     assert!(
         super::super::cli(&repo, &["inputs", "save"])
@@ -62,15 +87,49 @@ fn changed_tracked_referent_selects_the_symlinked_workspace_source() -> super::s
             .status
             .success()
     );
-    let metrics = progress(&repo, &[event(&repo, "Compiling", "demo", "0.1.0", true)])?;
-    assert!(
-        !metrics.invocations[0].compilations[0].unchanged,
-        "{metrics:?}"
+    assert_unknown(&repo)
+}
+
+#[test]
+fn historical_directory_link_replacement_cannot_bless_a_tracked_decoy() -> super::super::ResultTest
+{
+    let outside = Repo::new("report-historical-directory");
+    fs::create_dir_all(outside.root().join("nested"))?;
+    outside.write("README.md", "pub fn outside() {}\n");
+    let repo = tracked_chain()?;
+    fs::remove_file(repo.root().join("source-link"))?;
+    symlink(
+        "untracked-dir/../README.md",
+        repo.root().join("source-link"),
+    )?;
+    repo.git(&["add", "source-link"]);
+    symlink(
+        outside.root().join("nested"),
+        repo.root().join("untracked-dir"),
+    )?;
+    assert_eq!(
+        fs::read_to_string(repo.root().join("demo/src/lib.rs"))?,
+        "pub fn outside() {}\n"
     );
-    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
-    assert!(metrics.violations.is_empty(), "{metrics:?}");
-    assert!(velnor_ci::report::check(&[metrics]).is_ok());
-    Ok(())
+    assert!(
+        super::super::cli(&repo, &["inputs", "save"])
+            .status
+            .success()
+    );
+    fs::remove_file(repo.root().join("untracked-dir"))?;
+    fs::create_dir(repo.root().join("untracked-dir"))?;
+    for path in ["demo/src/lib.rs", "README.md"] {
+        assert_eq!(
+            fs::read_to_string(repo.root().join(path))?,
+            "pub fn before() {}\n"
+        );
+    }
+    assert!(
+        super::super::cli(&repo, &["inputs", "restore"])
+            .status
+            .success()
+    );
+    assert_unknown(&repo)
 }
 
 #[test]
