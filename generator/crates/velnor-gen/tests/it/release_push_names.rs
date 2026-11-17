@@ -4,8 +4,10 @@
 use std::error::Error;
 
 use velnor_gen::{GenerateError, expected_files};
-use velnor_model::RepoPath;
+use velnor_model::{RELEASE_WORKFLOW_PATH, RepoPath};
 use velnor_release::ReleaseError;
+
+use crate::yaml_tree::parse;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -49,5 +51,32 @@ fn a_push_workflow_the_old_name_scan_missed_must_be_named_in_after() -> TestResu
 #[test]
 fn a_workflow_without_a_name_key_is_not_a_push_workflow_unless_it_pushes() -> TestResult {
     assert_eq!(missing_name(b"on: pull_request\n", "\"Rust CI\"")?, None);
+    Ok(())
+}
+
+#[test]
+fn nested_push_templates_do_not_become_required_release_workflows() -> TestResult {
+    const DIRECT: &str = ".github/workflows/ci.yml";
+    const NESTED: &str = ".github/workflows/templates/push.yaml";
+    let mut view = crate::release_fixture::release_view(
+        &[crate::release_fixture::APP],
+        Some(&format!("after = [\"Rust CI\", {DIRECT:?}]\n")),
+    )?;
+    view.files
+        .insert(RepoPath::new(DIRECT)?, b"on: push\n".to_vec());
+    view.files
+        .insert(RepoPath::new(NESTED)?, b"on: push\n".to_vec());
+
+    let files = expected_files(&view)?;
+    let release = files
+        .get(&RELEASE_WORKFLOW_PATH)
+        .ok_or("no release workflow")?;
+    let tree = parse(release)?;
+    assert_eq!(
+        tree.at(&["on", "workflow_run", "workflows"])
+            .ok_or("no workflow_run workflows")?
+            .texts(),
+        ["Rust CI", DIRECT]
+    );
     Ok(())
 }
