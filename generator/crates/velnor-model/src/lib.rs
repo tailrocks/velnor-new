@@ -3,21 +3,24 @@
 
 mod cache;
 mod cron;
+mod helper;
 mod ids;
 mod plan;
 mod repo;
 mod selection;
+mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
 pub use cron::CronExpr;
+pub use helper::{HelperRelease, Platform};
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
     RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, BaseExpiry, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand,
-    HelperRelease, Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform,
-    PullRequestType, Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, Triggers,
+    Access, BaseExpiry, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job,
+    LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, PullRequestType, Shape,
+    ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
     TrimFamily, When, WorkflowPlan,
 };
 pub use repo::{
@@ -30,3 +33,4 @@ pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };
+pub use verdict::{JobCondition, VerdictJob, VerdictSpec};

@@ -3,6 +3,7 @@
 
 mod archive;
 mod base_cache_rules;
+mod base_expiry;
 mod base_save;
 mod cache_compat;
 mod cache_key_defects;
@@ -60,6 +61,10 @@ mod release_yml_quoting;
 mod release_yml_security;
 mod render_empty_key;
 mod repo_sample;
+mod required_gate;
+mod required_gate_lanes;
+mod required_job;
+mod required_policy_single;
 mod restored_term;
 mod rule_config;
 mod rules;

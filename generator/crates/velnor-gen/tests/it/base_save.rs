@@ -307,39 +307,3 @@ fn the_test_prebuild_ignores_a_nextest_default_filter() -> TestResult {
     );
     Ok(())
 }
-
-#[test]
-fn restored_carries_the_age_limit_on_the_events_that_build_a_clean_base() -> TestResult {
-    let limit = |config: &str| -> Result<String, Box<dyn std::error::Error>> {
-        let all = jobs("0.1.81", config)?;
-        let (_, lane) = all
-            .iter()
-            .find(|(id, _)| id == "rust")
-            .ok_or("no rust job")?;
-        let restored = step(lane, "velnor-ci restored").ok_or("no restored")?;
-        Ok(restored
-            .lines()
-            .find(|line| line.contains("VELNOR_BASE_MAX_AGE_DAYS"))
-            .unwrap_or("")
-            .trim()
-            .to_owned())
-    };
-    let ref_is_main =
-        "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)";
-    assert_eq!(
-        limit("")?,
-        format!(
-            "VELNOR_BASE_MAX_AGE_DAYS: '${{{{ {ref_is_main} && github.event_name != ''push'' && ''7'' || ''0'' }}}}'"
-        )
-    );
-    let every_run =
-        format!("VELNOR_BASE_MAX_AGE_DAYS: '${{{{ {ref_is_main} && ''7'' || ''0'' }}}}'");
-    assert_eq!(limit("on_main = \"everything\"\n")?, every_run);
-    assert_eq!(
-        limit("full_run = \"off\"\n")?,
-        format!(
-            "VELNOR_BASE_MAX_AGE_DAYS: '${{{{ {ref_is_main} && github.event_name == ''workflow_dispatch'' && ''7'' || ''0'' }}}}'"
-        )
-    );
-    Ok(())
-}

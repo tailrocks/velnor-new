@@ -7,6 +7,7 @@ const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
 pub(crate) const CACHE_DEBUG_ON: &str = "vars.VELNOR_CACHE_DEBUG == '1'";
 const NOT_CANCELLED: &str = "!cancelled()";
+const ALWAYS: &str = "always()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -20,11 +21,29 @@ pub(crate) fn sources_step(slug: &RootSlug) -> String {
     format!("sources_{slug}")
 }
 
+pub(crate) fn sources_save_step(slug: &RootSlug) -> String {
+    format!("sources_save_{slug}")
+}
+
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
-    if need.is_global() {
-        format!("rust_{}", need_name(need))
+    need.output_name(slug)
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Setup {
+    Before,
+    Restored,
+    Replanned,
+}
+
+pub(crate) const REPLAN_STEP: &str = "replan";
+const BASE_EXPIRED: &str = "steps.restored.outputs.expired == 'true'";
+
+pub(crate) fn plan_read(source: &str, key: &str, setup: Setup) -> String {
+    if setup == Setup::Replanned {
+        format!("steps.{REPLAN_STEP}.outputs.{key} || {source}.{key}")
     } else {
-        format!("rust_{slug}_{}", need_name(need))
+        format!("{source}.{key}")
     }
 }
 
@@ -35,40 +54,27 @@ pub(crate) fn plan_source(from: &PlanFrom) -> String {
     }
 }
 
-fn need_name(need: GateNeed) -> &'static str {
-    match need {
-        GateNeed::Selected => "mode",
-        GateNeed::Doctests => "doctests",
-        GateNeed::DoctestsKnown => "doctests_known",
-        GateNeed::Docs => "docs",
-        GateNeed::TestFilter => "test_filter",
-        GateNeed::PackageArgs => "package_args",
-        GateNeed::Deny => "deny",
-        GateNeed::Machete => "machete",
-        GateNeed::Policy => "policy",
-    }
-}
-
 pub(crate) fn condition(
     when: When,
     gate: Option<&Gate>,
-    after_setup: bool,
+    setup: Setup,
     skip_draft: bool,
     extra: &[String],
 ) -> Option<String> {
     let mut parts = Vec::new();
     match when {
         When::Success => {}
+        When::Always => parts.push(ALWAYS.to_owned()),
         When::NotCancelled => {
             parts.push(NOT_CANCELLED.to_owned());
-            if after_setup {
+            if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
         }
         When::CacheDebug => {
             parts.push(NOT_CANCELLED.to_owned());
             parts.push(CACHE_DEBUG_ON.to_owned());
-            if after_setup {
+            if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
         }
@@ -78,8 +84,11 @@ pub(crate) fn condition(
         )),
         When::SaveBase | When::SaveBaseDecided => {
             parts.push(NOT_CANCELLED.to_owned());
-            if after_setup {
+            if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
+            }
+            if setup == Setup::Replanned {
+                parts.push(format!("steps.{REPLAN_STEP}.outcome != 'failure'"));
             }
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(SAVING_EVENTS.to_owned());
@@ -87,6 +96,7 @@ pub(crate) fn condition(
                 parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
             }
         }
+        When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(SAVING_EVENTS.to_owned());
@@ -101,7 +111,7 @@ pub(crate) fn condition(
     }
     parts.extend(extra.iter().cloned());
     if let Some(gate) = gate {
-        parts.extend(gate_parts(gate));
+        parts.extend(gate_parts(gate, setup == Setup::Replanned));
     }
     if parts.is_empty() {
         None
@@ -113,7 +123,7 @@ pub(crate) fn condition(
 const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
 
 pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> String {
-    match condition(when, gate, false, skip_draft, &[]) {
+    match condition(when, gate, Setup::Before, skip_draft, &[]) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")
@@ -122,13 +132,20 @@ pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> St
     }
 }
 
-fn gate_parts(gate: &Gate) -> Vec<String> {
+fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
         PlanFrom::Job(_) => Vec::new(),
     };
-    let read = |need| format!("{source}.{}", output(&gate.slug, need));
+    let read = |need| {
+        let key = output(&gate.slug, need);
+        if replanned {
+            format!("({})", plan_read(&source, &key, Setup::Replanned))
+        } else {
+            plan_read(&source, &key, Setup::Restored)
+        }
+    };
     let runs = |need| format!("{} == 'run'", read(need));
     match gate.need {
         GateNeed::Selected | GateNeed::Doctests | GateNeed::Docs => {
@@ -154,7 +171,10 @@ fn gate_parts(gate: &Gate) -> Vec<String> {
                 format!("(contains({args}, ' -p {package} ') || contains({args}, ' --workspace '))")
             }));
         }
-        GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+        GateNeed::TestFilter
+        | GateNeed::PackageArgs
+        | GateNeed::DoctestsKnown
+        | GateNeed::TestsExpected => {
             parts.push(format!("{} != ''", read(gate.need)));
         }
     }
