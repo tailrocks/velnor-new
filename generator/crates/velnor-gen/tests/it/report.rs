@@ -66,7 +66,8 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
                         .into_bytes();
                     }
                 }
-                let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+                let parsed: serde_json::Value =
+                    serde_saphyr::from_str(&crate::archive::plain_invocations(&workflow(&view)?))?;
                 let mut cargo = 0;
                 let mut nextest_commands = 0;
                 for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
@@ -126,8 +127,9 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
         )?);
         let plan = plan(&facts);
         let rendered = velnor_render::render(&plan).map_err(|errors| format!("{errors:?}"))?;
-        let parsed: serde_json::Value =
-            serde_saphyr::from_str(rendered.values().next().ok_or("workflow")?)?;
+        let parsed: serde_json::Value = serde_saphyr::from_str(
+            &crate::archive::plain_invocations(rendered.values().next().ok_or("workflow")?),
+        )?;
         assert_metrics_policy(&parsed)?;
         let cache = plan.jobs.iter().find(|job| job.id.as_str() == "cache");
         if version == "0.1.80" {
@@ -248,7 +250,8 @@ fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() 
         view.tracked_paths.insert(config.clone());
         view.files
             .insert(config, b"[build]\ntarget-dir = \"shared\"\n".to_vec());
-        let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+        let parsed: serde_json::Value =
+            serde_saphyr::from_str(&crate::archive::plain_invocations(&workflow(&view)?))?;
         let mut reported_root = false;
         for job in parsed["jobs"].as_object().ok_or("jobs")?.values() {
             for report in job["steps"]
@@ -296,7 +299,7 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
     let bytes = view.files.get_mut(&lock).ok_or("lock")?;
     let old = String::from_utf8(bytes.clone())?;
     *bytes = old.replace("0.1.79", "0.1.81").into_bytes();
-    let text = workflow(&view)?;
+    let text = crate::archive::plain_invocations(&workflow(&view)?);
     let parsed: serde_json::Value = serde_saphyr::from_str(&text)?;
     let job = &parsed["jobs"]["rust"];
     let steps = job["steps"].as_array().ok_or("steps")?;
@@ -324,7 +327,8 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
                 }
             }
         }
-        let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+        let parsed: serde_json::Value =
+            serde_saphyr::from_str(&crate::archive::plain_invocations(&workflow(&view)?))?;
         for (id, job) in parsed["jobs"].as_object().ok_or("jobs")? {
             let steps = job["steps"].as_array().ok_or("steps")?;
             let Some(report) = steps.iter().find(|step| step["run"] == "velnor-ci report") else {

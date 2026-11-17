@@ -139,6 +139,11 @@ fn values(items: &[(String, Value)]) -> Yaml {
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };
+                let yaml = if key.starts_with("VELNOR_HELPER") && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > 100 && !text.contains('\n')) {
+                    Yaml::Shared(Box::new(yaml))
+                } else {
+                    yaml
+                };
                 entry(key, yaml)
             })
             .collect(),

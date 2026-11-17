@@ -114,9 +114,9 @@ fn cargo_command(
             format!("cargo check -p {package} --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Build { package } => (
+        CargoCommand::BuildBinary { package, binary } => (
             format!("Build {package}"),
-            format!("cargo build -p {package} --locked{cargo}"),
+            format!("cargo build -p {package} --bin {binary} --locked{cargo}"),
             vec![],
         ),
         CargoCommand::BuildAll => (

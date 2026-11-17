@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
     PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    Shape, ShapeDecision, Step, StepKind, TargetName, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -50,16 +50,13 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .zip(decisions)
         .flat_map(|(root, decision)| {
-            let lane = Lane::root(RootSlug::of(&root.manifest), single, helper_root.is_some());
+            let lane = Lane::root(RootSlug::of(&root.manifest), single);
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
-    jobs.extend(audit_job(facts, &jobs, helper_root.is_some()));
+    jobs.extend(audit_job(facts, &jobs));
     if facts.policy.any() {
-        jobs.push(policy_job(
-            facts,
-            &Lane::policy(single, helper_root.is_some()),
-        ));
+        jobs.push(policy_job(facts, &Lane::policy(single)));
     }
     let draft_guard = facts
         .config
@@ -109,19 +106,18 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
-        from_source: false,
     };
     let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
         directory: root.manifest.parent(),
-        ..step(StepKind::Cargo(CargoCommand::Build {
+        ..step(StepKind::Cargo(CargoCommand::BuildBinary {
             package: PackageName::from_static(HELPER_PACKAGE),
+            binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
-    steps.push(step(StepKind::PublishHelper {
-        binary: root.target_dir.child("debug/velnor-ci"),
-    }));
     Job {
+        needs: vec![PLAN_JOB],
+        gate: lane.job(),
         steps,
         ..job(facts, HELPER_JOB)
     }
@@ -146,18 +142,14 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step> {
+pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth })];
-    if from_source {
-        steps.push(step(StepKind::HelperFromArtifact));
-    } else {
-        steps.extend(
-            facts
-                .helper
-                .iter()
-                .map(|release| step(StepKind::InstallHelper(release.clone()))),
-        );
-    }
+    steps.extend(
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
+    );
     steps
 }
 
@@ -212,7 +204,6 @@ pub(crate) fn setup_roots(
         } else {
             CHECKOUT_DEPTH
         },
-        lane.from_source,
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
@@ -274,7 +265,7 @@ pub(crate) fn setup_roots(
             })),
         ]);
     }
-    if lane.from_source || breaks_ties(facts) {
+    if breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));
     }
     toolchain.extend(restored(facts));
