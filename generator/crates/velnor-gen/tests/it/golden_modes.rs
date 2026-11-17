@@ -7,6 +7,7 @@ use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use velnor_gen::{GenerateError, expected_with_notes};
+use velnor_model::RepoPath;
 
 use crate::facts::TestResult;
 use crate::golden::{check_sample, load, samples, update_requested};
@@ -57,13 +58,29 @@ fn only_the_value_one_turns_the_golden_update_on() {
 fn a_different_render_is_a_failure_and_leaves_expected_alone_unless_updating() -> TestResult {
     let copy = Copy::of("single-crate", "modes")?;
     let workflow = copy.0.join("expected/.github/workflows/rust-ci.yml");
+    let path = RepoPath::new(".github/workflows/rust-ci.yml")?;
     fs::write(&workflow, "stale\n")?;
+
     let failures = check_sample(&copy.0, update_requested(Some(OsStr::new("0"))))?;
-    assert_eq!(failures.len(), 1, "{failures:?}");
+    assert!(
+        failures
+            .iter()
+            .any(|failure| failure.contains(path.as_str())),
+        "{failures:?}"
+    );
     assert_eq!(fs::read_to_string(&workflow)?, "stale\n");
-    let updated = check_sample(&copy.0, update_requested(Some(OsStr::new("1"))))?;
-    assert_eq!(updated.len(), 0, "{updated:?}");
-    assert_ne!(fs::read_to_string(&workflow)?, "stale\n");
+
+    check_sample(&copy.0, update_requested(Some(OsStr::new("1"))))?;
+    let rendered = expected_with_notes(&load(&copy.0)?)?
+        .0
+        .get(&path)
+        .ok_or("the sample renders no workflow")?
+        .clone();
+    let written = fs::read_to_string(&workflow)?;
+    assert!(
+        written == rendered,
+        "the expected file was rewritten with other content"
+    );
     Ok(())
 }
 

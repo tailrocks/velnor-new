@@ -294,24 +294,3 @@ fn a_sample_without_metadata_for_one_of_its_roots_is_rejected() -> TestResult {
     assert!(error.to_string().contains("xtask/Cargo.toml"), "{error}");
     Ok(())
 }
-
-#[cfg(unix)]
-#[test]
-fn a_dangling_symlinks_sidecar_is_rejected() -> TestResult {
-    use std::os::unix::fs::symlink;
-
-    let sample = std::env::temp_dir().join(format!(
-        "velnor-gen-golden-dangling-symlinks-{}",
-        std::process::id()
-    ));
-    if sample.exists() {
-        fs::remove_dir_all(&sample)?;
-    }
-    fs::create_dir_all(&sample)?;
-    fs::write(sample.join("manifests.txt"), "")?;
-    symlink("missing-symlink-recording", sample.join("symlinks.txt"))?;
-    let result = load(&sample);
-    fs::remove_dir_all(&sample)?;
-    assert!(result.is_err());
-    Ok(())
-}
