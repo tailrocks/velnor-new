@@ -65,7 +65,9 @@ jobs:
         name: velnor-ci plan
         run: velnor-ci plan --explain
   rust-helper:
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
+    needs:
+      - rust-plan
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest

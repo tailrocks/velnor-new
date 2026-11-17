@@ -117,6 +117,8 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
         }))
     });
     Job {
+        needs: vec![PLAN_JOB],
+        gate: lane.job(),
         steps,
         ..job(facts, HELPER_JOB)
     }
