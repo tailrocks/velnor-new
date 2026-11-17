@@ -91,6 +91,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
             }
         }
         Ok(_) => return Err(format!("{} is not a regular file", symlinks_file.display()).into()),
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
     tracked_paths.extend(symlinks.iter().cloned());

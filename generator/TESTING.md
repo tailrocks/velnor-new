@@ -18,7 +18,7 @@
 
 ## Samples
 
-A sample is a folder `samples/<name>/` with `view/` (the files the generator reads), `manifests.txt` (the tracked `Cargo.toml` and `Cargo.lock` paths), `symlinks.txt` (the tracked symbolic links, which may be empty), `cargo-metadata/<root>.json` (recorded output) and `expected/` (the files the generator must write).
+A sample is a folder `samples/<name>/` with `view/` (the files the generator reads), `manifests.txt` (the tracked `Cargo.toml` and `Cargo.lock` paths), an optional `symlinks.txt` (the tracked symbolic links, which may be empty; when present, it must be a regular file), `cargo-metadata/<root>.json` (recorded output) and `expected/` (the files the generator must write).
 
 Record a sample from a real checkout. Never type one by hand.
 

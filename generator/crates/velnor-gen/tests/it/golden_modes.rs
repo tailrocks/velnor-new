@@ -3,6 +3,7 @@
 
 use std::ffi::OsStr;
 use std::fs;
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use velnor_gen::{GenerateError, expected_with_notes};
@@ -79,11 +80,32 @@ fn a_sample_that_records_a_cargo_symlink_is_refused_like_the_live_checkout() -> 
 }
 
 #[test]
-fn a_sample_without_a_symlink_sidecar_is_rejected() -> TestResult {
+fn a_sample_without_a_symlink_sidecar_has_no_symlinks() -> TestResult {
     let copy = Copy::of("release-bin", "missing-symlink-sidecar")?;
     let symlinks = copy.0.join("symlinks.txt");
     fs::write(&symlinks, "")?;
     fs::remove_file(symlinks)?;
+    assert!(load(&copy.0)?.symlinks.is_empty());
+    assert!(expected_with_notes(&load(&copy.0)?).is_ok());
+    Ok(())
+}
+
+#[test]
+fn a_dangling_symlink_sidecar_is_rejected() -> TestResult {
+    let copy = Copy::of("release-bin", "dangling-symlink-sidecar")?;
+    let symlinks = copy.0.join("symlinks.txt");
+    fs::remove_file(&symlinks)?;
+    symlink("missing", &symlinks)?;
+    assert!(load(&copy.0).is_err());
+    Ok(())
+}
+
+#[test]
+fn a_non_regular_symlink_sidecar_is_rejected() -> TestResult {
+    let copy = Copy::of("release-bin", "non-regular-symlink-sidecar")?;
+    let symlinks = copy.0.join("symlinks.txt");
+    fs::remove_file(&symlinks)?;
+    fs::create_dir(&symlinks)?;
     assert!(load(&copy.0).is_err());
     Ok(())
 }
