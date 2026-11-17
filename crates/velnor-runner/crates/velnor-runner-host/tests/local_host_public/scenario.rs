@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::time::{Duration, Instant};
 
 use bollard::Docker;
@@ -206,15 +207,48 @@ pub(crate) async fn read_challenge(docker: &Docker, runner: &str) -> TestResult<
 }
 
 pub(crate) async fn wait_for_decision(docker: &Docker, runner: &str) -> TestResult<Decision> {
-    let started = Instant::now();
+    let path = format!("{CONTROL}/decision.json");
+    let docker = docker.clone();
+    let runner = runner.to_owned();
+    wait_for_decision_bytes(
+        move || {
+            let docker = docker.clone();
+            let runner = runner.clone();
+            let path = path.clone();
+            async move { download(&docker, &runner, &path).await }
+        },
+        Duration::from_secs(120),
+    )
+    .await
+}
+
+async fn wait_for_decision_bytes<F, Fut>(mut download: F, timeout: Duration) -> TestResult<Decision>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = TestResult<Vec<u8>>>,
+{
+    let deadline = Instant::now() + timeout;
     loop {
-        if let Ok(bytes) = download(docker, runner, &format!("{CONTROL}/decision.json")).await {
-            return Ok(serde_json::from_slice(&bytes)?);
+        if let Ok(Ok(bytes)) = tokio::time::timeout_at(deadline.into(), download()).await {
+            match serde_json::from_slice(&bytes) {
+                Ok(decision) => return Ok(decision),
+                Err(error) if error.is_eof() => {}
+                Err(error) => return Err(error.into()),
+            }
         }
-        if started.elapsed() > Duration::from_secs(120) {
-            return Err("no decision within the hook's 120 s".into());
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "no decision within the hook's 120 s",
+            )
+            .into());
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep_until(
+            (Instant::now() + Duration::from_millis(100))
+                .min(deadline)
+                .into(),
+        )
+        .await;
     }
 }
 
@@ -275,3 +309,7 @@ pub(crate) async fn finish_job(docker: &Docker, runner: &str) -> TestResult<()> 
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "scenario_tests.rs"]
+mod tests;
