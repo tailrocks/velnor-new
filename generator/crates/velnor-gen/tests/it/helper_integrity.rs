@@ -92,7 +92,7 @@ fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> Tes
             "VELNOR_HELPER_COPY=$(/usr/bin/mktemp \"$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX\")",
             "/bin/cp \"$VELNOR_HELPER\" \"$VELNOR_HELPER_COPY\"",
             "/bin/chmod 500 \"$VELNOR_HELPER_COPY\"",
-            "\"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\"",
+            "{ \"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\" || { /usr/bin/printf '%s\\n' 'velnor-ci integrity check failed' >&2; exit 1; }; }",
             "exec \"$VELNOR_HELPER_COPY\" ",
         ] {
             rest = rest
@@ -287,11 +287,14 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
         0o500
     );
     for invalid in ["", &"0".repeat(64)] {
+        let rejected = execute(&steps[use_index], &root, &shadows, invalid)?;
+        assert!(!rejected.status.success());
         assert!(
-            !execute(&steps[use_index], &root, &shadows, invalid)?
-                .status
-                .success()
+            String::from_utf8_lossy(&rejected.stderr).contains("velnor-ci integrity check failed"),
+            "{}",
+            String::from_utf8_lossy(&rejected.stderr)
         );
+        assert!(rejected.stdout.is_empty());
     }
     fs::set_permissions(installed, fs::Permissions::from_mode(0o700))?;
     fs::write(installed, BAD)?;
@@ -301,7 +304,12 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
         "replaced helper executed: {}",
         String::from_utf8_lossy(&rejected.stdout)
     );
-    assert!(!String::from_utf8_lossy(&rejected.stdout).contains("replaced-helper"));
+    assert!(
+        String::from_utf8_lossy(&rejected.stderr).contains("velnor-ci integrity check failed"),
+        "{}",
+        String::from_utf8_lossy(&rejected.stderr)
+    );
+    assert!(rejected.stdout.is_empty());
     fs::set_permissions(
         installed.parent().ok_or("no installed parent")?,
         fs::Permissions::from_mode(0o700),
