@@ -221,33 +221,64 @@ pub fn missing_toolchain(
 #[derive(Debug, Default)]
 pub struct DoctestCount {
     line: Vec<u8>,
-    pub ran: u64,
+    confirmed: u64,
+    ignored: u64,
 }
 
 impl DoctestCount {
     pub fn feed(&mut self, chunk: &[u8]) {
         for byte in chunk {
             if *byte == b'\n' {
-                self.ran += doctests_in(&String::from_utf8_lossy(&self.line));
-                self.line.clear();
+                self.end_line();
             } else if self.line.len() < LINE_LIMIT {
                 self.line.push(*byte);
             }
         }
     }
 
-    pub fn finish(&mut self) -> u64 {
-        self.feed(b"\n");
-        self.ran
+    pub fn end_stream(&mut self) {
+        self.end_line();
+    }
+
+    #[must_use]
+    pub const fn ran(&self) -> u64 {
+        self.confirmed.saturating_sub(self.ignored)
+    }
+
+    fn end_line(&mut self) {
+        let line = String::from_utf8_lossy(&self.line);
+        if let Some((confirmed, ignored)) = result_counts(&line) {
+            self.confirmed += confirmed;
+            self.ignored += ignored;
+        }
+        self.line.clear();
     }
 }
 
-fn doctests_in(line: &str) -> u64 {
+fn result_counts(line: &str) -> Option<(u64, u64)> {
     let clean = crate::logscan::strip_ansi(line);
-    clean
-        .trim()
-        .strip_prefix("running ")
-        .and_then(|rest| rest.split(' ').next())
-        .and_then(|count| count.parse().ok())
-        .unwrap_or(0)
+    let rest = clean.trim().strip_prefix("test result:")?;
+    let mut passed = None;
+    let mut failed = None;
+    let mut ignored = None;
+    for part in rest.split(';') {
+        let mut words = part.split_whitespace().rev();
+        let Some(field) = words.next() else {
+            continue;
+        };
+        let Some(value) = words.next() else {
+            continue;
+        };
+        let slot = match field {
+            "passed" => &mut passed,
+            "failed" => &mut failed,
+            "ignored" => &mut ignored,
+            _ => continue,
+        };
+        *slot = Some(value.parse::<u64>().ok()?);
+    }
+    let passed = passed?;
+    let failed = failed?;
+    let ignored = ignored?;
+    Some((passed + failed + ignored, ignored))
 }

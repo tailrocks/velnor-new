@@ -2,8 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit_job;
+mod base_cache;
 mod build_profile;
 mod build_script;
+mod build_target;
 mod cargo_flags;
 mod cargo_lock;
 mod classify;
@@ -30,6 +32,7 @@ mod os_pins;
 mod owners;
 mod plan;
 mod policy;
+mod private_sources;
 mod reads;
 mod repo_profile;
 mod required_job;
@@ -86,3 +89,5 @@ pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use verdict::{JobResult, Need, PlanOutput, TestCounts, Verdict, decide, verdict};
 pub use weaken::introduced;
+
+pub use private_sources::{cacheable_config, cacheable_lock};

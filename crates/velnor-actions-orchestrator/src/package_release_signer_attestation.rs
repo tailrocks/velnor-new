@@ -9,7 +9,6 @@ use std::{
 };
 
 use serde::Deserialize;
-use sha2::Digest;
 use velnor_actions_mise::{CheckDeadline, PinnedTool, PinnedToolExec, ToolCatalog};
 
 use super::{PackageReleaseSigningIdentity, VerifiedSignedPackage};
@@ -138,14 +137,26 @@ fn verify_one_with_bundle(
         OsString::from("--format"),
         OsString::from("json"),
     ]);
+    let offline_root = crate::homebrew::qualification_evidence::trusted_root()?;
+    if let Some(root) = &offline_root {
+        args.extend([
+            OsString::from("--custom-trusted-root"),
+            root.as_os_str().to_owned(),
+        ]);
+    }
     let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
         .map_err(|_| internal("package_attestation_gh_unavailable"))?;
     let timeout = deadline
         .remaining()
         .map(|remaining| remaining.min(VERIFY_TIMEOUT))
         .map_err(|_| internal("package_verification_deadline"))?;
-    let output = exec
-        .command_with_github_token(&ToolCatalog::pinned(), identity.source_token)
+    let catalog = ToolCatalog::pinned();
+    let command = if offline_root.is_some() {
+        exec.command(&catalog)
+    } else {
+        exec.command_with_github_token(&catalog, identity.source_token)
+    };
+    let output = command
         .and_then(|command| command.run_bounded(VERIFY_OUTPUT_LIMIT, timeout))
         .map_err(|_| internal("package_attestation_verification_failed"))?;
     if !output.success || output.stdout.is_empty() {
@@ -155,6 +166,9 @@ fn verify_one_with_bundle(
 }
 
 fn source_attestation_token() -> Result<String, OrchestratorError> {
+    if crate::homebrew::qualification_evidence::active() {
+        return Ok(String::new());
+    }
     validate_source_attestation_token(env::var("GH_TOKEN").ok(), env::var("VELNOR_TAP_TOKEN").ok())
 }
 
@@ -362,13 +376,7 @@ fn is_sha256(value: &str) -> bool {
 }
 
 fn sha256(bytes: &[u8]) -> String {
-    const HEX: &[u8; 16] = b"0123456789abcdef";
-    let mut output = String::with_capacity(64);
-    for byte in sha2::Sha256::digest(bytes) {
-        output.push(char::from(HEX[usize::from(byte >> 4)]));
-        output.push(char::from(HEX[usize::from(byte & 0x0f)]));
-    }
-    output
+    crate::generator::sha256_hex(bytes)
 }
 
 #[path = "package_release_signer_attestation_fetch.rs"]

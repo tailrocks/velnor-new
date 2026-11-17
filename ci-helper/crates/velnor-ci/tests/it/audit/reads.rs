@@ -57,6 +57,16 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &format!("{target}/build/app-000000000000000c/output"),
         "cargo:rerun-if-changed=../../shared/app-build.txt\n",
     );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/lib-0000000000000005/output"),
+        None,
+    );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/app-000000000000000c/output"),
+        None,
+    );
 
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
@@ -123,7 +133,7 @@ fn reads_below_an_unowned_manifest_that_does_not_parse_go_to_every_member_using_
 }
 
 #[test]
-fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
+fn a_target_directory_that_contains_tracked_inputs_is_refused() {
     let repo = workspace_below_the_root();
     repo.write(
         "rust/.cargo/config.toml",
@@ -152,13 +162,13 @@ fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
         &format!("{target}/build/lib-0000000000000004/output"),
         "cargo:rerun-if-changed=../../docs/debug/gen.txt\n",
     );
-    let written = audit(&repo, &["--write"]);
-    assert!(written.status.success(), "{written:?}");
-    assert_eq!(
-        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
-            .unwrap_or_else(|e| unreachable!("{e}")),
-        "docs/schema.json\tapp\n"
+    let output = audit(&repo, &["--write"]);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("overlaps tracked checkout content"),
+        "{output:?}"
     );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
 #[test]
@@ -210,6 +220,11 @@ fn reads_of_a_path_dependency_whose_sources_lie_outside_its_directory_go_to_the_
         &repo,
         "target/debug/build/mid-0000000000000004/output",
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\n",
+    );
+    super::inventory::build(
+        &repo,
+        "target/debug/build/mid-0000000000000004/output",
+        Some(&repo.root().join("target")),
     );
     assert_eq!(
         written_lock(&repo),
