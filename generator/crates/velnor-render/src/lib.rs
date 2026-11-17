@@ -6,6 +6,7 @@ mod base_steps;
 mod cache;
 mod cache_upload;
 mod cargo;
+mod env;
 mod events;
 mod gate;
 mod header;
@@ -64,6 +65,7 @@ pub fn render_workflow(
         Some(entry("on", triggers(&plan.triggers))),
         Some(entry("permissions", permissions(&plan.permissions))),
         Some(entry("concurrency", concurrency(plan.concurrency))),
+        Some(entry("env", env::workflow_env())),
         helper_integrity::defaults(&rendered.jobs).map(|defaults| entry("defaults", defaults)),
         Some(entry(
             "jobs",
