@@ -320,3 +320,10 @@ fn the_host_tuple_build_target_refuses_a_helper_without_publishing_a_wrong_path(
     }
     Ok(())
 }
+
+#[test]
+fn an_empty_build_target_list_does_not_refuse_the_helper() -> TestResult {
+    let view = helper_with_configs(&[(".cargo/config.toml", "[build]\ntarget = []\n")])?;
+    assert!(expected_files(&view).is_ok());
+    Ok(())
+}

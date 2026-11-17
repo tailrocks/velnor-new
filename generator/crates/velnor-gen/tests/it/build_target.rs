@@ -186,7 +186,33 @@ fn floating_rust_channels_can_use_the_host_tuple_target() -> TestResult {
                 ("mise.toml", &mise),
             ],
         )?;
-        assert!(generate(&repo).is_ok(), "{channel}");
+        let result = generate(&repo);
+        assert!(result.is_ok(), "{channel}: {result:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn host_qualified_release_channels_can_use_the_host_tuple_target() -> TestResult {
+    for channel in [
+        "1.91.1-x86_64-unknown-linux-gnu",
+        "1.91-x86_64-unknown-linux-gnu",
+        "stable-x86_64-unknown-linux-gnu",
+    ] {
+        let repo = with(
+            &["Cargo.toml"],
+            &[
+                (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+                (
+                    "mise.toml",
+                    &format!(
+                        "[tools]\nrust = \"{channel}\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+                    ),
+                ),
+            ],
+        )?;
+        let result = generate(&repo);
+        assert!(result.is_ok(), "{channel}: {result:?}");
     }
     Ok(())
 }

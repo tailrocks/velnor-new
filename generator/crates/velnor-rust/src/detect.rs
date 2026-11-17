@@ -267,7 +267,7 @@ fn check_setup_files(view: &RepoView, rust_roots: &[RustRoot]) -> Result<(), Det
     Ok(())
 }
 
-const MISE_FOLDERS: [&str; 3] = [".config/", ".mise/", "mise/"];
+const MISE_FOLDERS: [&str; 5] = [".config/", ".mise/", "mise/", "rtx/", ".rtx/"];
 
 fn other_mise_config(path: &RepoPath) -> bool {
     let text = path.as_str();

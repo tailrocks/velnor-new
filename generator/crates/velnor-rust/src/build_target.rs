@@ -48,13 +48,21 @@ pub(crate) fn check_host_tuple_version(
 }
 
 fn supports_host_tuple(version: &str) -> bool {
-    match version {
+    let channel = match version.split_once('-') {
+        Some((channel @ ("stable" | "beta" | "nightly"), host))
+            if host.contains('_') || host.starts_with("aarch64-") =>
+        {
+            channel
+        }
+        _ => version,
+    };
+    match channel {
         "stable" | "beta" | "nightly" => true,
         _ => {
-            if let Some(date) = version.strip_prefix("nightly-") {
+            if let Some(date) = channel.strip_prefix("nightly-") {
                 return valid_nightly_date(date) && date >= "2025-09-26";
             }
-            release_channel(version).is_some_and(|(major, minor)| (major, minor) >= (1, 91))
+            release_channel(channel).is_some_and(|(major, minor)| (major, minor) >= (1, 91))
         }
     }
 }
@@ -89,7 +97,17 @@ fn valid_nightly_date(date: &str) -> bool {
 }
 
 fn release_channel(version: &str) -> Option<(u16, u16)> {
-    let parts: Vec<_> = version.split('.').collect();
+    let release = version.split_once('-').map_or(version, |(release, host)| {
+        if host.is_empty()
+            || !host
+                .bytes()
+                .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+        {
+            return "";
+        }
+        release
+    });
+    let parts: Vec<_> = release.split('.').collect();
     if !(2..=3).contains(&parts.len())
         || parts
             .iter()
@@ -113,7 +131,6 @@ fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets,
         let Some(value) = parsed.get("build").and_then(|build| build.get("target")) else {
             continue;
         };
-        configured = true;
         let invalid = || {
             DetectError::invalid(
                 file,
@@ -125,6 +142,7 @@ fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets,
         };
         match value {
             toml::Value::String(one) => {
+                configured = true;
                 if kind == Some(true) {
                     return Err(invalid());
                 }
@@ -136,6 +154,7 @@ fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets,
                 }
             }
             toml::Value::Array(many) => {
+                configured |= !many.is_empty();
                 if kind == Some(false) {
                     return Err(invalid());
                 }

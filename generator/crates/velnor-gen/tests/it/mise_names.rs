@@ -38,6 +38,8 @@ fn a_name_that_mise_loads_and_velnor_does_not_model_is_still_refused() -> TestRe
         ".config/mise/config.toml",
         "mise/config.toml",
         ".mise/config.toml",
+        "rtx/config.toml",
+        ".rtx/config.toml",
     ] {
         let file = RepoPath::new(name)?;
         assert!(
