@@ -22,6 +22,8 @@ mod metadata;
 mod metadata_file;
 mod mise;
 mod mise_lock;
+mod mise_options;
+mod mise_template;
 mod os_pins;
 mod owners;
 mod plan;

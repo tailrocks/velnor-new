@@ -9,6 +9,8 @@ use velnor_model::{MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins, ToolReq
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 use crate::mise_lock::{is_rustup_tool, locked_tools};
+use crate::mise_options::option_value;
+use crate::mise_template::render_versions;
 use crate::toml_file::table;
 
 pub static MISE_CONFIGS: [RepoPath; 2] = [
@@ -208,12 +210,13 @@ fn runs_a_command(value: &Value) -> bool {
 }
 
 fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
-    match table(bytes)?.get("tools") {
+    let parsed = table(bytes)?;
+    let mut versions = match parsed.get("tools") {
         None => Ok(Versions::new()),
         Some(Value::Table(tools)) => tools
             .iter()
             .map(|(name, value)| {
-                version_list(value, RUST_TOOLS.contains(&name.as_str()))
+                version_list(value, name)
                     .map(|list| (name.clone(), list))
                     .ok_or_else(|| Reason::InvalidValue {
                         key: "tools",
@@ -225,7 +228,9 @@ fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
             key: "tools",
             value: other.to_string(),
         }),
-    }
+    }?;
+    render_versions(&mut versions, &parsed)?;
+    Ok(versions)
 }
 
 fn os_names(entry: &toml::Table) -> Option<Vec<String>> {
@@ -241,18 +246,19 @@ fn os_names(entry: &toml::Table) -> Option<Vec<String>> {
     }
 }
 
-fn version_list(value: &Value, rust: bool) -> Option<Vec<ToolRequest>> {
+fn version_list(value: &Value, name: &str) -> Option<Vec<ToolRequest>> {
+    let rust = RUST_TOOLS.contains(&name);
     match value {
         Value::String(version) => Some(vec![plain(version.clone())]),
         Value::Array(items) => items
             .iter()
-            .map(|value| version_list(value, rust))
+            .map(|value| version_list(value, name))
             .collect::<Option<Vec<_>>>()
             .map(|lists| lists.concat()),
         Value::Table(entry) => {
             let mut list = entry
                 .get("version")
-                .map_or_else(|| source_request(entry), |value| version_list(value, rust))?;
+                .map_or_else(|| source_request(entry), |value| version_list(value, name))?;
             if let Some(names) = os_names(entry) {
                 for request in &mut list {
                     request.os.get_or_insert_with(|| names.clone());
@@ -276,7 +282,9 @@ fn version_list(value: &Value, rust: bool) -> Option<Vec<ToolRequest>> {
                     .contains(&key.as_str())
                         || (rust && key.as_str() == "mr_boxington"))
                 })
-                .map(|(key, value)| (key.clone(), option_value(key, value, rust)))
+                .filter_map(|(key, value)| {
+                    option_value(name, key, value, rust).map(|value| (key.clone(), value))
+                })
                 .collect();
             for request in &mut list {
                 request.options.extend(options.clone());
@@ -285,29 +293,6 @@ fn version_list(value: &Value, rust: bool) -> Option<Vec<ToolRequest>> {
         }
         _ => None,
     }
-}
-
-fn option_value(key: &str, value: &Value, rust: bool) -> String {
-    if rust && ["components", "targets"].contains(&key) {
-        let values: Option<Vec<&str>> = match value {
-            Value::String(text) => Some(text.split(',').collect()),
-            Value::Array(values) => values.iter().map(Value::as_str).collect(),
-            _ => None,
-        };
-        if let Some(values) = values {
-            return values
-                .into_iter()
-                .map(str::trim)
-                .filter(|value| !value.is_empty())
-                .collect::<std::collections::BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>()
-                .join(",");
-        }
-    }
-    value
-        .as_str()
-        .map_or_else(|| value.to_string(), str::to_owned)
 }
 
 fn source_request(entry: &toml::Table) -> Option<Vec<ToolRequest>> {

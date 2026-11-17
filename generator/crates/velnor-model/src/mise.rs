@@ -39,7 +39,7 @@ impl MisePlatform<'static> {
     #[must_use]
     pub fn runner(label: &str) -> Option<Self> {
         let label = label.to_ascii_lowercase();
-        let arm = label.contains("arm");
+        let arm = label.contains("arm") || label.contains("aarch64");
         if label.starts_with("ubuntu") || label.starts_with("linux") {
             Some(Self::new("linux", if arm { "arm64" } else { "x64" }))
         } else if label.starts_with("macos") {
