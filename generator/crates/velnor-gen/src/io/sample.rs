@@ -76,6 +76,13 @@ pub fn relocate_metadata(checkout: &Path, json: &[u8]) -> Result<Vec<u8>, Error>
     let checkout = checkout
         .to_str()
         .ok_or_else(|| Error::Repository("the checkout path is not UTF-8".to_owned()))?;
+    let original = checkout;
+    let unc = checkout
+        .strip_prefix(r"\\?\UNC\")
+        .map(|rest| format!(r"\\{rest}"));
+    let checkout = unc
+        .as_deref()
+        .unwrap_or_else(|| checkout.strip_prefix(r"\\?\").unwrap_or(checkout));
     let from = checkout.trim_end_matches(['/', '\\']);
     let is_drive_root = from.len() == 2
         && from.as_bytes()[0].is_ascii_alphabetic()
@@ -96,6 +103,7 @@ pub fn relocate_metadata(checkout: &Path, json: &[u8]) -> Result<Vec<u8>, Error>
         normalized.clone(),
         encoded,
         encoded_normalized,
+        original.trim_end_matches(['/', '\\']).to_owned(),
     ];
     if normalized != from {
         let url_path = format!("/{normalized}");
@@ -134,7 +142,7 @@ fn relocate_text(text: &str, from: &[&str]) -> String {
         let at_boundary = cursor == 0
             || in_file_url
             || text[..cursor].chars().next_back().is_some_and(|character| {
-                character.is_whitespace() || matches!(character, ';' | ',' | '|')
+                character.is_whitespace() || matches!(character, ';' | ',' | '|' | '=')
             });
         if at_boundary
             && let Some(prefix) = prefixes.iter().find(|prefix| {
@@ -235,10 +243,7 @@ pub fn write_sample(
     let existing = real_directory(root, &sample_path(base.clone())?)?;
     let samples = root.join(SAMPLES);
     fs::create_dir_all(&samples).map_err(|e| Error::File(samples.clone(), e))?;
-    let staging = samples
-        .parent()
-        .ok_or_else(|| Error::Repository("the samples directory has no parent".to_owned()))?;
-    let staged = StagedSample::new(staging)?;
+    let staged = StagedSample::new(&samples)?;
     let prepared = staged.path.join("new");
     fs::create_dir(&prepared).map_err(|e| Error::File(prepared.clone(), e))?;
     if let Some(existing) = &existing {

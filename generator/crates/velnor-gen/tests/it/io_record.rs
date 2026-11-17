@@ -102,6 +102,11 @@ fn a_published_sample_reports_failure_to_remove_its_previous_version() -> TestRe
     assert_ne!(error, "");
     assert!(staging_path.is_dir());
     assert_eq!(
+        staging_path.parent(),
+        Some(scratch.repo().join("generator/samples").as_path())
+    );
+
+    assert_eq!(
         fs::read_to_string(sample.join("view/mise.toml"))?,
         "[tools]\n"
     );

@@ -30,6 +30,8 @@ mod io;
 mod io_files;
 mod io_manifests;
 mod io_record;
+mod io_record_boundaries;
+
 mod job_setup;
 mod job_shape;
 mod lock;
