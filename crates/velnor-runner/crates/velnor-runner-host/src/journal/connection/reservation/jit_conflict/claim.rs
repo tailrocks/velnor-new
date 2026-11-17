@@ -30,6 +30,10 @@ impl JitConflictRecoveryCandidate {
 }
 
 impl JitConflictRecoveryClaim {
+    pub(crate) const fn allows_initial_remote_absence(&self) -> bool {
+        matches!(self.identity.source, RecoverySource::Conflict)
+    }
+
     pub(super) fn identity(&self) -> &ConflictIdentity {
         &self.identity
     }

@@ -92,7 +92,7 @@ async fn delayed_registration() -> TestResult<()> {
 
 async fn assert_retained(case: &Case) -> TestResult<()> {
     assert_eq!(scalar(&case.journal,
-        "SELECT COUNT(*) FROM physical_attempt_jit_conflict_recovery_progress WHERE reservation_id=2 AND phase_index IN (2,4)"
+        "SELECT CAST(COUNT(*) AS TEXT) FROM physical_attempt_jit_conflict_recovery_progress WHERE reservation_id=2 AND phase_index IN (2,4)"
     ).await?, "0");
     assert_eq!(
         scalar(
@@ -111,7 +111,7 @@ async fn assert_retained(case: &Case) -> TestResult<()> {
     assert_eq!(
         scalar(
             &case.journal,
-            "SELECT COUNT(*) FROM physical_attempt_current WHERE reservation_id=2"
+            "SELECT CAST(COUNT(*) AS TEXT) FROM physical_attempt_current WHERE reservation_id=2"
         )
         .await?,
         "1"

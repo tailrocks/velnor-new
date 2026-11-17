@@ -60,7 +60,7 @@ pub(super) use unbound_retirement::UNBOUND_SHAPE;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 47;
+pub(super) const JOURNAL_VERSION: i64 = 48;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -123,7 +123,8 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v46(conn).await
+    validate_persisted_schema_v46(conn).await?;
+    jit_interrupted_claims::validate_initial_absence(conn).await
 }
 
 async fn validate_persisted_schema_v46(conn: &turso::Connection) -> Result<(), HostError> {

@@ -19,7 +19,7 @@ async fn a_historical_journal_upgrades_and_rejects_a_replaced_recovery_source() 
     drop(historical);
 
     let upgraded = Journal::open(&path).await?;
-    assert_eq!(version(&upgraded).await?, 47);
+    assert_eq!(version(&upgraded).await?, 48);
     assert_eq!(
         text(
             &upgraded,

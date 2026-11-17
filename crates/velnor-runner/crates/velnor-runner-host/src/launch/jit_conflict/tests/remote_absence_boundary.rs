@@ -30,7 +30,7 @@ async fn refuses_unfenced_absence() -> TestResult<()> {
             .is_err()
     );
     assert_eq!(scalar(&case.journal,
-        "SELECT COUNT(*) FROM physical_attempt_jit_conflict_recovery_progress WHERE reservation_id=2 AND phase_index=2"
+        "SELECT CAST(COUNT(*) AS TEXT) FROM physical_attempt_jit_conflict_recovery_progress WHERE reservation_id=2 AND phase_index=2"
     ).await?, "0");
     Ok(())
 }
@@ -63,7 +63,7 @@ async fn upgrades_only_fenced_history() -> TestResult<()> {
             );
             assert_eq!(super::historical::version(&case.journal).await?, 47);
             assert_eq!(scalar(&case.journal,
-                "SELECT COUNT(*) FROM sqlite_schema WHERE name='jit_interrupted_remote_absence_guard'"
+                "SELECT CAST(COUNT(*) AS TEXT) FROM sqlite_schema WHERE name='jit_interrupted_remote_absence_guard'"
             ).await?, "0");
             assert_eq!(super::historical::proof_rows(&case.journal).await?, before);
             let case = case.reopen(Schema::Historical47).await?;

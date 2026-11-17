@@ -4,7 +4,11 @@
 use crate::error::HostError;
 
 mod ddl;
+mod initial_absence;
 mod v47;
+pub(super) use initial_absence::{
+    migrate as migrate_v47_to_v48, validate as validate_initial_absence,
+};
 pub(super) use v47::migrate as migrate_v46_to_v47;
 #[cfg(test)]
 mod migration_tests;

@@ -213,7 +213,7 @@ where
     I: Transport + ?Sized,
     A: Transport + ?Sized,
 {
-    if matches!(&prior, PriorObservation::Found(_)) {
+    if !claim.allows_initial_remote_absence() || matches!(&prior, PriorObservation::Found(_)) {
         return Ok(false);
     }
     if matches!(&prior, PriorObservation::Unobserved) {
