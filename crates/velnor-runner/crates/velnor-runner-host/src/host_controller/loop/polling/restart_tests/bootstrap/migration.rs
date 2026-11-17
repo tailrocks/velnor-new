@@ -96,6 +96,14 @@ async fn submit_network(case: &Prepared) -> TestResult<()> {
     Ok(())
 }
 
+async fn unpublished(case: &Prepared) -> TestResult<()> {
+    db::unresolved(&case.journal, true).await?;
+    assert_eq!(db::number(&case.journal, "SELECT COUNT(*) FROM capacity_reservation_unbound_historical_network_removals WHERE reservation_id=2").await?, 0);
+    let connection = case.journal.connection().await?;
+    assert!(connection.execute("UPDATE capacity_reservation_networks SET remove_state='removed' WHERE reservation_id=2", ()).await.is_err());
+    Ok(())
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn historical_removed_network_stays_charged_until_late_creation_is_deleted() -> TestResult<()>
 {
@@ -112,6 +120,7 @@ async fn historical_removed_network_stays_charged_until_late_creation_is_deleted
         _ = publication.accepted() => {},
     }
     drop(original);
+    case.fixture.take_requests();
     let case = case
         .restart()
         .await
@@ -124,7 +133,7 @@ async fn historical_removed_network_stays_charged_until_late_creation_is_deleted
     controller
         .turn(&case.journal, &case.docker, &case.engine)
         .await?;
-    db::unresolved(&case.journal, true).await?;
+    unpublished(&case).await?;
     assert_eq!(proofs(&case).await?, before);
     publication.release();
     publication.published().await;

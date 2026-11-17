@@ -9,7 +9,7 @@ pub(in crate::journal) use shape::UNBOUND_SHAPE;
 
 pub(super) async fn migrate_v48_to_v49(conn: &turso::Connection) -> Result<(), HostError> {
     super::validate_persisted_schema_v48(conn).await?;
-    creation_targets::validate_history(conn).await?;
+    creation_targets::migrate_history(conn).await?;
     creation_targets::install(conn).await?;
     replace_shape_guards(conn, UNBOUND_SHAPE).await?;
     conn.execute("PRAGMA user_version = 49", ())

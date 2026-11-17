@@ -3,6 +3,7 @@
 
 use crate::error::HostError;
 
+mod history;
 mod observations;
 mod predicates;
 use predicates::{CONTAINERS, NETWORKS, RESOURCE_MATCH, VOLUMES};
@@ -112,17 +113,18 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
         RESOURCE_MATCH.replace("{t}", "target"),
         CONTAINERS.replace("{r}", "phase.reservation_id"),
         VOLUMES.replace("{r}", "phase.reservation_id"),
-        NETWORKS.replace("{r}", "network.reservation_id"),
+        history::unpublished_networks("network.reservation_id"),
         CONTAINERS.replace("{r}", "retired.reservation_id"),
         VOLUMES.replace("{r}", "retired.reservation_id"),
-        NETWORKS.replace("{r}", "retired.reservation_id")
+        history::unpublished_networks("retired.reservation_id")
     );
     require_false(conn, &invalid).await?;
+    history::validate(conn).await?;
     observations::validate(conn).await
 }
 
-pub(super) async fn validate_history(conn: &turso::Connection) -> Result<(), HostError> {
-    require_false(conn, "SELECT EXISTS (SELECT 1 FROM capacity_reservation_networks network JOIN capacity_reservation_unbound_retirement_claims claim ON claim.reservation_id=network.reservation_id WHERE network.network_id IS NULL AND network.remove_state='removed')").await
+pub(super) async fn migrate_history(conn: &turso::Connection) -> Result<(), HostError> {
+    history::migrate(conn).await
 }
 
 async fn require_false(conn: &turso::Connection, sql: &str) -> Result<(), HostError> {
