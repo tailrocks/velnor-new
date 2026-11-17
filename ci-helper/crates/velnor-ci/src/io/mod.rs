@@ -23,6 +23,7 @@ mod restored;
 mod run;
 mod setup;
 mod timings;
+mod unit_platforms;
 mod units;
 
 use std::fs::{self, OpenOptions};
