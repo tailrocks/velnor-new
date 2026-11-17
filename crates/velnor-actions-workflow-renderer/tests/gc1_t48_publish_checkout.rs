@@ -6,7 +6,10 @@ use base64::{Engine, engine::general_purpose::STANDARD};
 
 fn fixed_script(section: &str) -> Result<String, Box<dyn Error>> {
     let mut bytes = Vec::new();
-    for line in section.lines().filter(|line| line.contains("printf '%s' '")) {
+    for line in section
+        .lines()
+        .filter(|line| line.contains("printf '%s' '"))
+    {
         let encoded = line
             .split("printf '%s' '")
             .nth(1)
