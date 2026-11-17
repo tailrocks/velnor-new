@@ -1,4 +1,4 @@
-use velnor_actions_contract::config::analyze_dockerfile;
+use velnor_actions_contract::config::{DockerfileProblem, analyze_dockerfile};
 
 fn rejects_or_claims_whole_context(text: &str) -> bool {
     match analyze_dockerfile(text, &[]) {
@@ -229,4 +229,99 @@ fn multiple_argument_defaults_do_not_replace_values_with_fallbacks() {
         );
         assert!(!facts.context_sources.contains("src/main.txt"), "{facts:?}");
     }
+}
+
+#[test]
+fn add_sources_must_be_proven_local_before_claiming_context() -> Result<(), String> {
+    for text in [
+        "FROM scratch\nARG PATH\nADD https://host/$PATH /dest\n",
+        "FROM scratch\nENV PATH=src\nADD https://host/$PATH /dest\n",
+        "FROM scratch\nARG HTTP_PROXY=src\nADD $HTTP_PROXY /dest\n",
+        "FROM scratch\nARG SRC=https://host/file\nADD $SRC /dest\n",
+        "FROM scratch AS base\nADD --from=base https://host/file /dest\n",
+    ] {
+        assert!(
+            matches!(
+                analyze_dockerfile(text, &[]),
+                Err(DockerfileProblem::RemoteAdd(_))
+            ),
+            "{text}: {:?}",
+            analyze_dockerfile(text, &[])
+        );
+    }
+    let local = analyze_dockerfile("FROM scratch\nARG SRC=src\nADD $SRC/file /dest\n", &[])
+        .map_err(|e| format!("{e:?}"))?;
+    assert!(local.context_sources.contains("src/file"));
+    let unknown = analyze_dockerfile(
+        "FROM scratch\nARG HTTP_PROXY=src\nCOPY $HTTP_PROXY/file /dest\n",
+        &[],
+    )
+    .map_err(|e| format!("{e:?}"))?;
+    assert!(unknown.claims_whole_context);
+    Ok(())
+}
+
+#[test]
+fn fired_onbuild_instructions_keep_direct_refusals() -> Result<(), String> {
+    for instruction in [
+        "RUN --mount=type=secret,id=x echo x",
+        "RUN --mount=type=ssh echo x",
+        "RUN --mount=type=bind,from=busybox:latest echo x",
+        "ADD https://host/file /dest",
+        "COPY dir/../file /dest",
+        "ADD ../file /dest",
+        "COPY [\"'src'/file\", \"/dest\"]",
+        "ADD --from=base https://host/file /dest",
+    ] {
+        let direct = analyze_dockerfile(&format!("FROM scratch AS base\n{instruction}\n"), &[]);
+        assert!(direct.is_err(), "{instruction}: {direct:?}");
+        let inherited = analyze_dockerfile(
+            &format!("FROM scratch AS base\nONBUILD {instruction}\nFROM base\n"),
+            &[],
+        );
+        assert_eq!(inherited, direct, "{instruction}");
+    }
+    for instruction in ["RUN echo x", "COPY src/file /dest", "ADD src/file /dest"] {
+        analyze_dockerfile(
+            &format!("FROM scratch AS base\nONBUILD {instruction}\nFROM base\n"),
+            &[],
+        )
+        .map_err(|e| format!("{e:?}"))?;
+    }
+    analyze_dockerfile(
+        "FROM scratch\nONBUILD RUN --mount=type=secret,id=x echo x\n",
+        &[],
+    )
+    .map_err(|e| format!("{e:?}"))?;
+    Ok(())
+}
+
+#[test]
+fn parent_components_refuse_before_normalization_or_unknown_context() -> Result<(), String> {
+    for keyword in ["COPY", "ADD"] {
+        for (args, source) in [
+            ("", "dir/../file"),
+            ("", "../file"),
+            ("ARG SRC=dir\n", "$SRC/../file"),
+            ("ARG SRC=dir/..\n", "$SRC/file"),
+            ("ARG HTTP_PROXY\n", "$HTTP_PROXY/../file"),
+            ("", "--from=0 ../file"),
+        ] {
+            let text = format!("FROM scratch\n{args}{keyword} {source} /dest\n");
+            assert!(
+                matches!(
+                    analyze_dockerfile(&text, &[]),
+                    Err(DockerfileProblem::ContextEscape(_))
+                ),
+                "{text}: {:?}",
+                analyze_dockerfile(&text, &[])
+            );
+        }
+        for source in ["dir/./file", "dir//file"] {
+            let text = format!("FROM scratch\n{keyword} {source} /dest\n");
+            let facts = analyze_dockerfile(&text, &[]).map_err(|e| format!("{e:?}"))?;
+            assert!(facts.context_sources.contains("dir/file"));
+        }
+    }
+    Ok(())
 }
