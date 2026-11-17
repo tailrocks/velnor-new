@@ -196,7 +196,7 @@ fn realized_needs(workflow: &Value, consumer: &str) -> Result<usize, Box<dyn std
 #[test]
 fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_context() -> TestResult
 {
-    for roots in [2, 35, 36, 60] {
+    for roots in [2, 34, 35, 36, 60] {
         let plan = saving_plan(roots, false)?;
         let actual = realized_needs(&inspection_workflow(&plan)?, "required")?;
         let bound = required_bound(&plan)?;
@@ -204,7 +204,7 @@ fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_co
             actual <= bound,
             "roots={roots}, actual={actual}, bound={bound}"
         );
-        if roots <= 35 {
+        if roots <= 34 {
             assert!(velnor_render::render(&plan).is_ok());
         } else {
             if roots == 60 {

@@ -161,16 +161,15 @@ fn run(cli: Cli) -> Result<String, CiError> {
                 cache_paths::list("VELNOR_CACHE_MANIFESTS")?.unwrap_or(args.manifest_path);
             let refusal = cache_sources::refusal(&current_dir()?, &manifests)?;
             let sources = refusal.is_none();
-            let decision = match refusal {
-                Some(reason) => Decision {
+            let decision = if let Some(reason) = refusal {
+                Decision {
                     save: false,
                     report: reason,
-                },
-                None => {
-                    let counts = activity::activity()?
-                        .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
-                    cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
                 }
+            } else {
+                let counts = activity::activity()?
+                    .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+                cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
             };
             append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
             Ok(decision.report)
