@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
-use std::os::unix::fs::symlink;
+use std::os::unix::fs::{PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
 use velnor_gen::Drift;
@@ -174,18 +174,18 @@ fn files(entries: &[(&str, &str)]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Box<dy
 #[test]
 fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files() -> TestResult {
     let scratch = Scratch::new("record")?;
+    let samples = scratch.repo().join("generator/samples");
     let sample = scratch.repo().join("generator/samples/demo");
+    let expected = sample.join("expected");
     write(
         &sample.join("expected/.github/workflows/rust-ci.yml"),
         "kept\n",
     )?;
-    symlink(
-        ".github/workflows/rust-ci.yml",
-        sample.join("expected/link"),
-    )?;
+    symlink(".github/workflows/rust-ci.yml", expected.join("link"))?;
     write(&sample.join("view/old/Cargo.toml"), "")?;
     write(&sample.join("cargo-metadata/old.json"), "{}")?;
-    write_sample(
+    fs::set_permissions(&expected, fs::Permissions::from_mode(0o555))?;
+    let result = write_sample(
         &scratch.repo(),
         "demo",
         &Recording {
@@ -196,29 +196,30 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
             ],
             metadata: files(&[("lab/Cargo.toml", "{}\n")])?,
         },
-    )?;
-    assert_eq!(
-        fs::read_to_string(sample.join("manifests.txt"))?,
-        "Cargo.toml\nlab/Cargo.toml\n"
     );
-    assert_eq!(
-        fs::read_to_string(sample.join("view/mise.toml"))?,
-        "[tools]\n"
-    );
-    assert_eq!(
-        fs::read_to_string(sample.join("cargo-metadata/lab/Cargo.toml.json"))?,
-        "{}\n"
-    );
+    fs::set_permissions(&expected, fs::Permissions::from_mode(0o755))?;
+    for entry in fs::read_dir(&samples)? {
+        let expected = entry?.path().join("previous/expected");
+        if expected.exists() {
+            fs::set_permissions(expected, fs::Permissions::from_mode(0o755))?;
+        }
+    }
+    result?;
+    for (path, bytes) in [
+        ("manifests.txt", "Cargo.toml\nlab/Cargo.toml\n"),
+        ("view/mise.toml", "[tools]\n"),
+        ("cargo-metadata/lab/Cargo.toml.json", "{}\n"),
+        ("expected/.github/workflows/rust-ci.yml", "kept\n"),
+    ] {
+        assert_eq!(fs::read_to_string(sample.join(path))?, bytes, "{path}");
+    }
     assert!(!sample.join("view/old").exists());
     assert!(!sample.join("cargo-metadata/old.json").exists());
-    assert_eq!(
-        fs::read_to_string(sample.join("expected/.github/workflows/rust-ci.yml"))?,
-        "kept\n"
-    );
     assert_eq!(
         fs::read_link(sample.join("expected/link"))?,
         Path::new(".github/workflows/rust-ci.yml")
     );
+    assert_eq!(fs::read_dir(&samples)?.count(), 1);
     Ok(())
 }
 
@@ -321,8 +322,7 @@ fn a_failed_recording_keeps_every_existing_sample_file_unchanged() -> TestResult
     for (path, text) in kept {
         write(&sample.join(path), text)?;
     }
-    let long_name = "a".repeat(300);
-    let long_path = format!("new/{long_name}");
+    let long_path = format!("new/{}", "a".repeat(300));
     let recording = Recording {
         view: files(&[(&long_path, "unwritable")])?,
         manifests: vec![RepoPath::new("Cargo.toml")?],
@@ -354,11 +354,17 @@ fn recorded_metadata_relocates_only_checkout_path_prefixes() -> TestResult {
     let json = br#"{"nearby":"/Users/me/workspace/crate","manifest":"/rep/crates/a/Cargo.toml"}"#;
     let recorded = relocate_metadata(Path::new("/rep"), json)?;
     let value: serde_json::Value = serde_json::from_slice(&recorded)?;
-    assert_eq!(value["nearby"], "/Users/me/workspace/crate");
     assert_eq!(value["manifest"], "/repo/crates/a/Cargo.toml");
     let recorded = relocate_metadata(Path::new("/Users/me/work"), json)?;
     let value: serde_json::Value = serde_json::from_slice(&recorded)?;
     assert_eq!(value["nearby"], "/Users/me/workspace/crate");
+    let json = br#"["/tmp/repo#other/crate","/tmp/repo?other/crate","path+file:///tmp/repo#package","file:///tmp/repo?query"]"#;
+    let recorded = relocate_metadata(Path::new("/tmp/repo"), json)?;
+    let value: serde_json::Value = serde_json::from_slice(&recorded)?;
+    assert_eq!(value[0], "/tmp/repo#other/crate");
+    assert_eq!(value[1], "/tmp/repo?other/crate");
+    assert_eq!(value[2], "path+file:///repo#package");
+    assert_eq!(value[3], "file:///repo?query");
     Ok(())
 }
 
