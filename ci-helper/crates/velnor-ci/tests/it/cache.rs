@@ -1,13 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::cell::RefCell;
 use std::fs;
 use std::process::{Command, Output};
 
-use velnor_ci::cache::{born_expired, stale_entries, trim};
-use velnor_ci::error::CiError;
-use velnor_ci::github::{GitHub, GitHubWrite, Repo};
+use velnor_ci::cache::born_expired;
 use velnor_ci::time::date_text;
 
 use crate::io::Repo as Checkout;
@@ -44,6 +41,7 @@ fn decide(repo: &Checkout, log: Option<&str>) -> (Output, String) {
 }
 
 fn seed(repo: &Checkout) {
+    repo.write_unstaged("Cargo.lock", "version = 4\n");
     repo.write_unstaged("target/debug/incremental/app-1/work", "x");
     repo.write_unstaged("target/debug/deps/libapp.rlib", "rlib");
     repo.write_unstaged("nextest-archive.tar.zst", "archive");
@@ -93,17 +91,16 @@ fn a_build_script_incremental_directory_survives_while_cargo_incremental_state_i
 }
 
 #[test]
-fn a_warm_run_or_a_run_with_no_log_saves_nothing_and_removes_nothing() {
-    for log in [Some(WARM), None] {
-        let repo = Checkout::new("decide-warm");
-        seed(&repo);
-        let (output, written) = decide(&repo, log);
-        assert!(output.status.success());
-        assert_eq!(written, "save=false\n");
-        assert!(repo.root().join("target/debug/incremental").is_dir());
-        assert!(repo.root().join("nextest-archive.tar.zst").is_file());
-        assert!(!repo.root().join("target/.velnor/born").exists());
-    }
+fn a_warm_run_saves_nothing_and_removes_nothing() {
+    let log = Some(WARM);
+    let repo = Checkout::new("decide-warm");
+    seed(&repo);
+    let (output, written) = decide(&repo, log);
+    assert!(output.status.success());
+    assert_eq!(written, "save=false\n");
+    assert!(repo.root().join("target/debug/incremental").is_dir());
+    assert!(repo.root().join("nextest-archive.tar.zst").is_file());
+    assert!(!repo.root().join("target/.velnor/born").exists());
 }
 
 #[test]
@@ -198,202 +195,6 @@ fn dates_are_written_as_the_utc_calendar_day() {
     assert_eq!(date_text(NOW), "2026-11-17");
 }
 
-struct PagedCaches {
-    entries: Vec<String>,
-    asked: RefCell<Vec<String>>,
-    deleted: RefCell<Vec<String>>,
-}
-
-fn query(path: &str, name: &str) -> usize {
-    path.split(['?', '&'])
-        .find_map(|pair| pair.strip_prefix(&format!("{name}=")))
-        .and_then(|value| value.parse().ok())
-        .unwrap_or(1)
-}
-
-impl GitHub for PagedCaches {
-    fn get(&self, path: &str) -> Result<String, CiError> {
-        self.asked.borrow_mut().push(path.to_owned());
-        let (page, size) = (query(path, "page"), query(path, "per_page"));
-        let slice: Vec<&str> = self
-            .entries
-            .iter()
-            .skip((page - 1) * size)
-            .take(size)
-            .map(String::as_str)
-            .collect();
-        Ok(format!(
-            r#"{{"total_count":{},"actions_caches":[{}]}}"#,
-            self.entries.len(),
-            slice.join(",")
-        ))
-    }
-}
-
-impl GitHubWrite for PagedCaches {
-    fn upload(&self, _: &str, _: &[u8]) -> Result<String, CiError> {
-        Err(CiError::new("unused"))
-    }
-    fn patch(&self, _: &str, _: &str) -> Result<String, CiError> {
-        Err(CiError::new("unused"))
-    }
-    fn delete(&self, path: &str) -> Result<(), CiError> {
-        self.deleted.borrow_mut().push(path.to_owned());
-        Ok(())
-    }
-}
-
-fn paged(count: u64) -> PagedCaches {
-    let entries = (1..=count)
-        .map(|id| {
-            format!(
-                r#"{{"id":{id},"key":"velnor-tgt-rust-lab-Linux-X64-abcd-h-{id}","created_at":"2026-01-01T00:00:{:02}Z"}}"#,
-                id % 60
-            )
-        })
-        .collect();
-    PagedCaches {
-        entries,
-        asked: RefCell::default(),
-        deleted: RefCell::default(),
-    }
-}
-
-#[test]
-fn trim_reads_every_page_of_a_250_entry_family_and_deletes_all_but_the_newest_two() {
-    let fake = paged(250);
-    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
-    let report = trim(
-        &fake,
-        &repo,
-        "refs/heads/main",
-        "velnor-tgt-rust-lab-Linux-X64-abcd-",
-        2,
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(fake.asked.borrow().len(), 3, "{:?}", fake.asked.borrow());
-    for (index, page) in [1, 2, 3].iter().enumerate() {
-        assert!(
-            fake.asked.borrow()[index].contains(&format!("page={page}")),
-            "{:?}",
-            fake.asked.borrow()
-        );
-    }
-    assert_eq!(fake.deleted.borrow().len(), 248);
-    assert!(report.contains("250 entries"), "{report}");
-    assert!(report.contains("deleted 248"), "{report}");
-    assert!(!report.contains("warning"), "{report}");
-}
-
-#[test]
-fn trim_stops_at_its_page_bound_and_warns_instead_of_reading_forever() {
-    let fake = paged(100_000);
-    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
-    let report = trim(
-        &fake,
-        &repo,
-        "refs/heads/main",
-        "velnor-tgt-rust-lab-Linux-X64-abcd-",
-        2,
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    let pages = fake.asked.borrow().len();
-    assert!((2..=50).contains(&pages), "{pages}");
-    assert!(report.contains("::warning::"), "{report}");
-    assert!(report.contains("stopped after"), "{report}");
-}
-
-struct FakeCaches {
-    listing: String,
-    asked: RefCell<Vec<String>>,
-    deleted: RefCell<Vec<String>>,
-}
-
-impl GitHub for FakeCaches {
-    fn get(&self, path: &str) -> Result<String, CiError> {
-        self.asked.borrow_mut().push(path.to_owned());
-        Ok(self.listing.clone())
-    }
-}
-
-impl GitHubWrite for FakeCaches {
-    fn upload(&self, _: &str, _: &[u8]) -> Result<String, CiError> {
-        Err(CiError::new("unused"))
-    }
-    fn patch(&self, _: &str, _: &str) -> Result<String, CiError> {
-        Err(CiError::new("unused"))
-    }
-    fn delete(&self, path: &str) -> Result<(), CiError> {
-        self.deleted.borrow_mut().push(path.to_owned());
-        Ok(())
-    }
-}
-
-fn listing() -> String {
-    let entry = |id: u64, key: &str, day: u32| {
-        format!(r#"{{"id":{id},"key":"{key}","created_at":"2026-11-{day:02}T10:00:00Z"}}"#)
-    };
-    let family = "velnor-tgt-rust-lint-lab-Linux-X64-abcd-";
-    let other = "velnor-tgt-rust-lint-lab-Linux-X64-9999-";
-    let entries = [
-        entry(1, &format!("{family}h1-1"), 1),
-        entry(5, &format!("{family}h1-5"), 5),
-        entry(3, &format!("{family}h1-3"), 3),
-        entry(4, &format!("{family}h1-4"), 4),
-        entry(2, &format!("{family}h1-2"), 2),
-        entry(9, &format!("{other}h1-9"), 1),
-        entry(10, "velnor-tgt-rust-test-lab-Linux-X64-abcd-h1-1", 1),
-    ];
-    format!(
-        r#"{{"total_count":7,"actions_caches":[{}]}}"#,
-        entries.join(",")
-    )
-}
-
-#[test]
-fn trim_keeps_the_newest_two_of_one_family_and_compat_and_touches_nothing_else() {
-    let fake = FakeCaches {
-        listing: listing(),
-        asked: RefCell::default(),
-        deleted: RefCell::default(),
-    };
-    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
-    let report = trim(
-        &fake,
-        &repo,
-        "refs/heads/main",
-        "velnor-tgt-rust-lint-lab-Linux-X64-abcd-",
-        2,
-    )
-    .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(
-        *fake.deleted.borrow(),
-        [
-            "/repos/tailrocks/velnor-lab/actions/caches/3",
-            "/repos/tailrocks/velnor-lab/actions/caches/2",
-            "/repos/tailrocks/velnor-lab/actions/caches/1",
-        ]
-    );
-    assert!(report.contains("deleted 3"), "{report}");
-    let asked = fake.asked.borrow()[0].clone();
-    assert!(asked.contains("ref=refs%2Fheads%2Fmain"), "{asked}");
-    assert!(
-        asked.contains("key=velnor-tgt-rust-lint-lab-Linux-X64-abcd-"),
-        "{asked}"
-    );
-}
-
-#[test]
-fn trim_deletes_nothing_when_the_family_has_no_more_than_the_kept_entries() {
-    let entries =
-        velnor_ci::cache::parse_entries(&listing()).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(
-        stale_entries(&entries, "velnor-tgt-rust-lint-lab-Linux-X64-9999-", 2),
-        Vec::<u64>::new()
-    );
-    assert_eq!(stale_entries(&entries, "nothing-", 2), Vec::<u64>::new());
-}
-
 #[test]
 fn restored_treats_a_build_directory_saved_without_a_born_file_as_expired() {
     let repo = Checkout::new("expire-unborn");
@@ -420,7 +221,7 @@ fn restored_keeps_a_build_directory_without_a_born_file_when_no_limit_is_set() {
 }
 
 #[test]
-fn trim_without_a_token_warns_and_exits_zero_like_every_other_trim_failure() {
+fn trim_without_a_token_fails() {
     let repo = Checkout::new("trim-no-token");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["cache", "trim", "--prefix", "velnor-tgt-rust-root-"])
@@ -432,9 +233,8 @@ fn trim_without_a_token_warns_and_exits_zero_like_every_other_trim_failure() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "{stdout}{stderr}");
-    assert!(stdout.contains("::warning::cache trim"), "{stdout}{stderr}");
-    assert!(stdout.contains("GITHUB_TOKEN"), "{stdout}");
+    assert!(!output.status.success(), "{stdout}{stderr}");
+    assert!(stderr.contains("GITHUB_TOKEN"), "{stderr}");
 }
 
 #[test]
@@ -449,4 +249,96 @@ fn a_non_utf8_child_log_still_saves_compiled_crates() {
     let (output, written) = decide(&repo, None);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(written, "save=true\n");
+}
+
+#[test]
+fn cache_decision_rechecks_changed_lock_sources_before_saving() {
+    for source in [
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "sparse+https://index.crates.io/",
+    ] {
+        check_source(source, true);
+    }
+}
+
+#[test]
+fn cache_decision_refuses_git_sources() {
+    check_source("git+https://github.com/owner/private#123", false);
+}
+
+#[test]
+fn cache_decision_refuses_alternate_registries() {
+    check_source("registry+https://private.example/index", false);
+}
+
+fn check_source(source: &str, public: bool) {
+    let repo = Checkout::new("decide-private");
+    seed(&repo);
+    repo.write_unstaged(
+        "Cargo.lock",
+        &format!(
+            "version = 4\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = {source:?}\n"
+        ),
+    );
+    let (output, written) = decide(&repo, Some(COMPILED));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, format!("save={public}\n"), "{output:?}");
+    if !public {
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("not proven public"),
+            "{output:?}"
+        );
+    }
+}
+
+#[test]
+fn missing_run_log_fails_without_publishing_a_decision() {
+    log_error(false);
+}
+
+#[test]
+fn unreadable_run_log_fails_without_publishing_a_decision() {
+    log_error(true);
+}
+
+fn log_error(unreadable: bool) {
+    let repo = Checkout::new("decide-log-error");
+    seed(&repo);
+    if unreadable {
+        fs::create_dir_all(repo.root().join("runner-temp/velnor-run.log"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let (output, written) = decide(&repo, None);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(written.is_empty(), "{written}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("velnor-run.log"),
+        "{output:?}"
+    );
+    assert!(repo.root().join("target/debug/incremental").exists());
+}
+
+#[test]
+fn cache_decision_refuses_locks_that_cannot_prove_public_sources() {
+    for mode in ["missing", "malformed", "unreadable", "nested-private"] {
+        let repo = Checkout::new("decide-lock-refusal");
+        seed(&repo);
+        repo.git(&["add", "Cargo.lock"]);
+        match mode {
+            "missing" => fs::remove_file(repo.root().join("Cargo.lock"))
+                .unwrap_or_else(|e| unreachable!("{e}")),
+            "malformed" => repo.write_unstaged("Cargo.lock", "not a lock file"),
+            "unreadable" => {
+                fs::remove_file(repo.root().join("Cargo.lock"))
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+                fs::create_dir(repo.root().join("Cargo.lock"))
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+            }
+            _ => repo.write_unstaged("nested/Cargo.lock", "version = 4\n[[package]]\nname = \"secret\"\nversion = \"1.0.0\"\nsource = \"git+https://example.com/private#123\"\n"),
+        }
+        let (output, written) = decide(&repo, Some(COMPILED));
+        assert!(output.status.success(), "{mode}: {output:?}");
+        assert_eq!(written, "save=false\n", "{mode}: {output:?}");
+        assert!(repo.root().join("target/debug/incremental").is_dir());
+    }
 }

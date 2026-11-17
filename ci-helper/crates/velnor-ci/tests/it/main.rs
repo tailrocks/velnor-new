@@ -4,6 +4,8 @@
 mod audit;
 mod base_expiry;
 mod cache;
+mod cache_trim;
+mod cache_trim_errors;
 mod capture_evidence;
 mod cargo_artifacts;
 mod check_configurations;
@@ -28,6 +30,7 @@ mod io_release;
 mod io_report;
 mod io_required;
 mod io_restore;
+mod io_restore_symlinks;
 mod io_stderr;
 mod logscan;
 mod plan;

@@ -171,7 +171,10 @@ fn the_one_job_lane_saves_between_the_test_build_and_the_test_run_and_only_on_th
         sources.contains("steps.sources_root.outputs.cache-hit != ''true''"),
         "{sources}"
     );
-    assert!(!sources.contains("steps.base"), "{sources}");
+    assert!(
+        sources.contains("steps.base.outputs.save == ''true''"),
+        "{sources}"
+    );
     assert!(!lane.contains("actions: write"), "{lane}");
     let decide = step(lane, "Decide whether to save the build directory").ok_or("no decide")?;
     assert!(
