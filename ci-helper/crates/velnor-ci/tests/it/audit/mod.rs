@@ -341,4 +341,15 @@ pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
         &format!("{target}/build/leaf-0000000000000009/output"),
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
     );
+    prepare_path_dependency_outputs(repo, target);
+}
+
+fn prepare_path_dependency_outputs(repo: &Repo, target: &str) {
+    let target_directory = repo.root().join("target");
+    for output in [
+        format!("{target}/build/mid-0000000000000004/output"),
+        format!("{target}/build/leaf-0000000000000009/output"),
+    ] {
+        inventory::build(repo, &output, Some(&target_directory));
+    }
 }

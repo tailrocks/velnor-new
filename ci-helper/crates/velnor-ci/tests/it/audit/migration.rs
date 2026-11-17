@@ -12,6 +12,7 @@ enum InputDirectory {
     Shared,
     Generated,
     OutDir,
+    Repository,
 }
 
 fn cargo_project(input: InputDirectory) -> Repo {
@@ -30,6 +31,7 @@ fn cargo_project(input: InputDirectory) -> Repo {
     let directory = match input {
         InputDirectory::Shared => "root.join(\"../shared\")",
         InputDirectory::Generated => "root.join(\"target/generated\")",
+        InputDirectory::Repository => "root.join(\"..\")",
         InputDirectory::OutDir => {
             "std::path::PathBuf::from(std::env::var_os(\"OUT_DIR\").unwrap())"
         }
@@ -117,13 +119,13 @@ fn a_clean_cargo_build_discovers_generated_directory_inputs_before_a_verified_re
 fn an_arbitrary_command_that_discovers_a_directory_is_executed_once() {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
-    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci")).current_dir(repo.root()).args(["inputs", "build", "--", "sh", "-c", "printf run >> rust/target/runs.txt; mkdir -p rust/target/generated; printf 'cargo:rerun-if-changed=../target/generated\\n' > rust/target/debug/build/lib-f000000000000008/output; touch -m -t 206501010000 rust/target/debug/build/lib-f000000000000008/output"]).output().unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(built.status.success(), "{built:?}");
+    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci")).current_dir(repo.root().join("rust")).args(["inputs", "build", "--", "sh", "-c", "printf run >> target/runs.txt; mkdir -p target/generated; printf 'cargo:rerun-if-changed=../target/generated\\n' > target/debug/build/lib-f000000000000008/output; touch -m -t 206501010000 target/debug/build/lib-f000000000000008/output"]).output().unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
         fs::read_to_string(repo.root().join("rust/target/runs.txt"))
             .unwrap_or_else(|e| unreachable!("{e}")),
         "run"
     );
+    assert!(built.status.success(), "{built:?}");
     let refused = audit(&repo, &["--write"]);
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
@@ -153,6 +155,7 @@ fn records_execution() {
 }
 "#);
     let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .env_remove("NEXTEST_PROFILE")
         .current_dir(repo.root().join("rust"))
         .args([
             "inputs",
@@ -276,4 +279,89 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
         "2"
     );
     assert_fresh(&repo, "shared\tapp\nshared\tlib\n");
+}
+
+#[test]
+fn cargo_toolchain_and_global_options_keep_compiler_discovery_enabled() {
+    for prefix in [
+        vec!["+1.99.1"],
+        vec!["-v"],
+        vec!["--color", "never"],
+        vec!["--config", "build.jobs=1"],
+    ] {
+        let repo = cargo_project(InputDirectory::Generated);
+        let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .current_dir(repo.root().join("rust"))
+            .args(["inputs", "build", "--", "cargo"])
+            .args(&prefix)
+            .args(["build", "--workspace", "--all-targets", "--offline"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(built.status.success(), "{prefix:?}: {built:?}");
+        assert_eq!(runs(&repo), 2, "{prefix:?}");
+        assert_fresh(&repo, "");
+    }
+}
+
+#[test]
+fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes() {
+    use std::time::{Duration, UNIX_EPOCH};
+
+    let repo = cargo_project(InputDirectory::Repository);
+    repo.write(".velnor/prepare", "");
+    repo.write_unstaged("rust/target/runs.txt", "0");
+    let version = Command::new("rustc")
+        .arg("-vV")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(version.status.success(), "{version:?}");
+    let version = String::from_utf8(version.stdout).unwrap_or_else(|e| unreachable!("{e}"));
+    let host = version
+        .lines()
+        .find_map(|line| line.strip_prefix("host: "))
+        .unwrap_or_else(|| unreachable!("{version}"));
+    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root().join("rust"))
+        .env("CARGO_TARGET_DIR", repo.root())
+        .args([
+            "inputs",
+            "build",
+            "--",
+            "cargo",
+            "build",
+            "--workspace",
+            "--all-targets",
+            "--offline",
+            "--target",
+            host,
+        ])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{built:?}");
+    let artifact = format!("{host}/debug/new-artifact");
+    repo.write_unstaged(&artifact, "generated");
+    repo.set_mtime(&artifact, UNIX_EPOCH + Duration::from_secs(4_000_000_000));
+    let check = || {
+        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .current_dir(repo.root())
+            .env("CARGO_TARGET_DIR", repo.root())
+            .args(["inputs", "audit", "--write"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"))
+    };
+    let written = check();
+    assert!(written.status.success(), "{written:?}");
+    let lock = repo.root().join(".velnor/rust-inputs.lock");
+    assert_eq!(
+        fs::read_to_string(&lock).unwrap_or_else(|e| unreachable!("{e}")),
+        ".\tapp\n"
+    );
+    fs::remove_file(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.set_mtime(
+        "shared/value.txt",
+        UNIX_EPOCH + Duration::from_secs(4_000_000_000),
+    );
+    let stale = check();
+    assert_eq!(stale.status.code(), Some(1), "{stale:?}");
+    assert!(!lock.exists());
 }

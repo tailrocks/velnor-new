@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod declarations;
+mod generated;
 mod invocation;
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -15,7 +16,7 @@ use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
 use super::super::units::{UnitFile, Workspace, apart, unit_files, workspace};
-use super::inventory::{self, Entries};
+use super::inventory::{self, Evidence};
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
 use invocation::Invocation;
@@ -27,6 +28,7 @@ struct Builder<'a> {
     workspaces: Vec<Workspace>,
     targets: BTreeSet<PathBuf>,
     roots: BTreeSet<PathBuf>,
+    declared: BTreeSet<PathBuf>,
     location: PathBuf,
 }
 
@@ -36,10 +38,11 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let workspaces = facts
         .rust_roots
         .iter()
-        .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
+        .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
         .collect::<Result<Vec<_>, _>>()?;
     apart(&workspaces)?;
     let invocation = Invocation::new(&args.command);
+    invocation.validate_targets(directory, &workspaces)?;
     let mut roots = BTreeSet::from([checkout.root.clone()]);
     roots.extend(args.directory.iter().map(|root| directory.join(root)));
     let mut builder = Builder {
@@ -49,6 +52,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         targets: inventory::exclusions(&workspaces),
         workspaces,
         roots,
+        declared: BTreeSet::new(),
         location: fs::canonicalize(invocation.location(directory))
             .map_err(|e| CiError::new(e.to_string()))?,
     };
@@ -81,11 +85,18 @@ impl Builder<'_> {
     ) -> Result<(), CiError> {
         for _ in 0..if replayable { 2 } else { 1 } {
             let declared = self.declared()?;
+            self.targets.extend(
+                declared
+                    .iter()
+                    .flat_map(|unit| unit.targets.iter().cloned()),
+            );
             self.roots.extend(
                 declared
                     .iter()
                     .flat_map(|unit| unit.directories.iter().cloned()),
             );
+            self.declared
+                .extend(declared.iter().flat_map(|unit| unit.paths.iter().cloned()));
             if invalidate {
                 let invocation = Invocation::new(command);
                 if declared
@@ -109,22 +120,34 @@ impl Builder<'_> {
         ))
     }
 
-    fn capture(&self) -> (Entries, bool) {
-        let mut entries = Entries::new();
+    fn capture(&self) -> (Evidence, bool) {
+        let mut evidence = Evidence {
+            entries: BTreeMap::new(),
+            declared: BTreeMap::new(),
+            targets: self.targets.clone(),
+        };
+        for path in &self.declared {
+            match inventory::state(path) {
+                Ok(state) => {
+                    evidence.declared.insert(path.clone(), state);
+                }
+                Err(_) => return (evidence, false),
+            }
+        }
         let mut remaining = inventory::LIMIT * 10;
         for root in &self.roots {
             if !root.exists() {
                 continue;
             }
             match inventory::scan(root, &self.targets, &mut remaining) {
-                Ok(found) => entries.extend(found),
-                Err(_) => return (entries, false),
+                Ok(found) => evidence.entries.extend(found),
+                Err(_) => return (evidence, false),
             }
         }
-        (entries, true)
+        (evidence, true)
     }
 
-    fn run(&self, command: &[String], entries: &Entries, complete: bool) -> Result<(), CiError> {
+    fn run(&self, command: &[String], entries: &Evidence, complete: bool) -> Result<(), CiError> {
         let mut before = BTreeMap::new();
         for workspace in &self.workspaces {
             for (unit, path) in unit_files(&workspace.target_directory)? {
@@ -139,7 +162,14 @@ impl Builder<'_> {
             .current_dir(self.directory)
             .status()
             .map_err(|e| CiError::new(format!("cannot run build command: {e}")))?;
-        self.record(entries, complete, &before, started, status)?;
+        self.record(
+            entries,
+            complete,
+            &before,
+            started,
+            status,
+            Invocation::new(command).compiler,
+        )?;
         if !status.success() {
             return Err(CiError::new(format!("build command failed: {status}")));
         }
@@ -148,13 +178,20 @@ impl Builder<'_> {
 
     fn record(
         &self,
-        entries: &Entries,
+        entries: &Evidence,
         complete: bool,
         before: &BTreeMap<PathBuf, (String, SystemTime)>,
         started: SystemTime,
         status: ExitStatus,
+        compiler: bool,
     ) -> Result<(), CiError> {
-        let bytes = serde_json::to_vec(entries).map_err(|e| CiError::new(e.to_string()))?;
+        let mut evidence = entries.clone();
+        if compiler && status.success() {
+            evidence
+                .targets
+                .extend(generated::targets(&self.workspaces, entries, before)?);
+        }
+        let bytes = serde_json::to_vec(&evidence).map_err(|e| CiError::new(e.to_string()))?;
         let digest = sha256_hex(&bytes);
         for workspace in &self.workspaces {
             let store = workspace.target_directory.join(inventory::STORE);

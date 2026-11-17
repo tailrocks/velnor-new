@@ -16,6 +16,8 @@ pub(super) struct Declared {
     pub(super) output: PathBuf,
     pub(super) package: String,
     pub(super) directories: Vec<PathBuf>,
+    pub(super) paths: Vec<PathBuf>,
+    pub(super) targets: BTreeSet<PathBuf>,
     pub(super) trusted: bool,
 }
 
@@ -68,42 +70,62 @@ pub(super) fn declarations(
             let Some(bases) = bases.get(&package) else {
                 continue;
             };
-            if bases.len() != 1 {
-                return Err(CiError::new(format!(
-                    "cannot associate build output {} with one package directory",
-                    output.display()
-                )));
-            }
-            let Some(base) = bases.first() else {
-                continue;
-            };
             let text = fs::read_to_string(&output).map_err(|e| CiError::new(e.to_string()))?;
-            let directories: Vec<PathBuf> = rerun_if_changed(&text)
+            let paths: Vec<PathBuf> = bases
                 .iter()
-                .map(|path| base.join(path))
-                .filter(|path| fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()))
+                .flat_map(|base| {
+                    rerun_if_changed(&text)
+                        .into_iter()
+                        .map(|path| base.join(path))
+                })
                 .collect();
-            if directories.is_empty() {
-                continue;
-            }
-            let mut remaining = inventory::LIMIT * 10;
-            let trusted = directories.iter().all(|path| {
-                inventory::scan(path, &targets, &mut remaining)
-                    .and_then(|entries| {
-                        inventory::view(&entries, &fs::canonicalize(path)?, &targets)
-                    })
-                    .and_then(|entries| inventory::matches(&output, path, &entries, &targets))
-                    .unwrap_or(false)
-            });
+            let directories: Vec<PathBuf> = paths
+                .iter()
+                .filter(|path| fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()))
+                .cloned()
+                .collect();
+            let trusted = trusted(&output, &paths, &directories, &targets);
+            let targets = inventory::load(&output)
+                .ok()
+                .filter(|saved| targets.is_subset(&saved.targets))
+                .map_or_else(|| targets.clone(), |saved| saved.targets);
             found.push(Declared {
                 output,
                 package,
                 directories,
+                paths,
+                targets,
                 trusted,
             });
         }
     }
     Ok(found)
+}
+
+fn trusted(
+    output: &Path,
+    paths: &[PathBuf],
+    directories: &[PathBuf],
+    targets: &BTreeSet<PathBuf>,
+) -> bool {
+    let mut remaining = inventory::LIMIT * 10;
+    let saved = inventory::load(output).ok();
+    let targets = saved
+        .as_ref()
+        .filter(|saved| targets.is_subset(&saved.targets))
+        .map_or(targets, |saved| &saved.targets);
+    paths.iter().all(|path| {
+        saved
+            .as_ref()
+            .and_then(|saved| saved.state(path))
+            .zip(inventory::state(path).ok())
+            .is_some_and(|(before, current)| before == current)
+    }) && directories.iter().all(|path| {
+        inventory::scan(path, targets, &mut remaining)
+            .and_then(|entries| inventory::view(&entries, &fs::canonicalize(path)?, targets))
+            .and_then(|entries| inventory::matches(output, path, &entries, targets))
+            .unwrap_or(false)
+    })
 }
 
 pub(super) fn invalidate(declared: &[Declared]) -> Result<(), CiError> {

@@ -57,6 +57,16 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &format!("{target}/build/app-000000000000000c/output"),
         "cargo:rerun-if-changed=../../shared/app-build.txt\n",
     );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/lib-0000000000000005/output"),
+        None,
+    );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/app-000000000000000c/output"),
+        None,
+    );
 
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
@@ -152,6 +162,11 @@ fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
         &format!("{target}/build/lib-0000000000000004/output"),
         "cargo:rerun-if-changed=../../docs/debug/gen.txt\n",
     );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/lib-0000000000000004/output"),
+        None,
+    );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(
@@ -210,6 +225,11 @@ fn reads_of_a_path_dependency_whose_sources_lie_outside_its_directory_go_to_the_
         &repo,
         "target/debug/build/mid-0000000000000004/output",
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../schema/future.json\n",
+    );
+    super::inventory::build(
+        &repo,
+        "target/debug/build/mid-0000000000000004/output",
+        Some(&repo.root().join("target")),
     );
     assert_eq!(
         written_lock(&repo),

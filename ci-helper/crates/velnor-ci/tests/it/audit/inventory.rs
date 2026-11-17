@@ -154,6 +154,7 @@ fn directly_named_files_do_not_consume_the_directory_walk_budget() {
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
     unit(&repo, OUTPUT, &output);
+    build(&repo, OUTPUT, None);
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert!(repo.root().join(".velnor/rust-inputs.lock").is_file());
@@ -240,4 +241,50 @@ fn membership_changes_during_the_build_do_not_become_the_prebuild_inventory() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");
     assert_stale(&repo);
+}
+
+#[test]
+fn a_missing_untracked_directory_without_inventory_is_stale() {
+    let repo = workspace_below_the_root();
+    own_units(&repo, "rust/target/debug", &[]);
+    unit(&repo, "shared/generated/value.txt", "input");
+    unit(
+        &repo,
+        OUTPUT,
+        "cargo:rerun-if-changed=../../shared/generated\n",
+    );
+    fs::remove_file(repo.root().join("shared/generated/value.txt"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    fs::remove_dir(repo.root().join("shared/generated")).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.set_mtime(OUTPUT, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+    assert_stale(&repo);
+}
+
+#[test]
+fn replacing_a_declared_directory_with_an_older_file_is_stale() {
+    for keep_inventory in [true, false] {
+        let repo = workspace_below_the_root();
+        own_units(&repo, "rust/target/debug", &[]);
+        unit(&repo, "shared/generated/value.txt", "input");
+        unit(
+            &repo,
+            OUTPUT,
+            "cargo:rerun-if-changed=../../shared/generated\n",
+        );
+        build(&repo, OUTPUT, None);
+        fs::remove_file(repo.root().join("shared/generated/value.txt"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::remove_dir(repo.root().join("shared/generated"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        unit(&repo, "shared/generated", "replacement");
+        repo.set_mtime(
+            "shared/generated",
+            UNIX_EPOCH + Duration::from_secs(1_000_000_000),
+        );
+        if !keep_inventory {
+            fs::remove_file(repo.root().join(format!("{OUTPUT}.velnor-inputs.json")))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
+        assert_stale(&repo);
+    }
 }

@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod evidence;
+
+pub(super) use evidence::{Evidence, State, state};
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io;
@@ -254,20 +258,16 @@ pub(super) fn matches(
     targets: &BTreeSet<PathBuf>,
 ) -> io::Result<bool> {
     let saved = load(output)?;
-    let Some(root) = resolve(&saved, declared) else {
+    let Some(root) = resolve(&saved.entries, declared) else {
         return Ok(false);
     };
-    if root != fs::canonicalize(declared)? {
+    if root != fs::canonicalize(declared)? || saved.targets != *targets {
         return Ok(false);
     }
-    Ok(view(&saved, &root, targets)? == *current)
+    Ok(view(&saved.entries, &root, targets)? == *current)
 }
 
-pub(super) fn contained_directory(output: &Path, directory: &Path) -> bool {
-    load(output).is_ok_and(|saved| resolve(&saved, directory).is_some())
-}
-
-fn load(output: &Path) -> io::Result<Entries> {
+pub(super) fn load(output: &Path) -> io::Result<Evidence> {
     let receipt: Receipt = serde_json::from_slice(&fs::read(receipt_path(output))?)?;
     if receipt.output != sha256_hex(&fs::read(output)?)
         || receipt.modified != fs::metadata(output)?.modified()?

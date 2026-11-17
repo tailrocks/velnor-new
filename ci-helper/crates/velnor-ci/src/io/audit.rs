@@ -58,7 +58,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     let workspaces = facts
         .rust_roots
         .iter()
-        .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
+        .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
         .collect::<Result<Vec<_>, _>>()?;
     apart(&workspaces)?;
     let mut audit = Audit {
@@ -296,7 +296,7 @@ impl Audit<'_> {
         else {
             return Ok(None);
         };
-        if self.changed_since(workspace, &paths, built, file)? {
+        if self.changed_since(workspace, &paths, built, file, false)? {
             if !self.owners.of(package, &source).is_empty() {
                 self.stale.push(file.display().to_string());
             }
@@ -336,7 +336,7 @@ impl Audit<'_> {
                     || self.repository.to_path_buf(),
                     |d| self.repository.join(d.as_str()),
                 );
-                if self.changed_since(&base, &paths, built, file)? {
+                if self.changed_since(&base, &paths, built, file, true)? {
                     continue;
                 }
                 ran = true;

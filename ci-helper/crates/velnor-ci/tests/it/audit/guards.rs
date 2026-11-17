@@ -184,6 +184,11 @@ fn a_build_output_whose_declared_input_changed_since_leaves_the_build_script_unc
         &format!("{target}/build/lib-000000000000000f/output"),
         "cargo:rerun-if-changed=../../shared/build.txt\n",
     );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/lib-000000000000000f/output"),
+        None,
+    );
     repo.set_mtime(
         "shared/build.txt",
         UNIX_EPOCH + Duration::from_secs(4_000_000_000),
