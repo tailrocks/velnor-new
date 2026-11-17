@@ -1,15 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod base_steps;
 mod cache;
+mod cache_upload;
 mod cargo;
 mod events;
 mod gate;
 mod header;
+mod helper_steps;
 mod key_length;
 mod release;
 mod release_binaries;
 mod release_finalize;
+mod release_outputs;
 mod release_steps;
 mod rules;
 mod steps;

@@ -1,14 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-#![cfg(unix)]
-
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use crate::run::scratch;
+use super::scratch;
 
 const BOLD: &str = "\u{1b}[1m";
 const RESET: &str = "\u{1b}[0m";

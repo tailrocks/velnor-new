@@ -5,7 +5,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-pub(crate) fn scratch(name: &str) -> PathBuf {
+fn scratch(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("velnor-ci-run-{}-{name}", std::process::id()));
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
@@ -24,7 +24,7 @@ fn run(temp: &Path, command: &[&str]) -> Output {
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-pub(crate) fn run_with_grace(temp: &Path, millis: &str, command: &[&str]) -> Output {
+fn run_with_grace(temp: &Path, millis: &str, command: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .arg("run")
         .arg("--")
@@ -125,63 +125,6 @@ fn run_passes_every_argument_after_the_first_separator_to_the_command() {
     );
 }
 
-fn doctest_run(temp: &Path, script: &str) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["run", "--require-doctests", "--", "sh", "-c", script])
-        .env("RUNNER_TEMP", temp)
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"))
-}
-
-#[test]
-fn a_doctest_step_that_ran_zero_doctests_fails() {
-    let temp = scratch("doctests-zero");
-    let zero = "printf '   Doc-tests a\\n\\nrunning 0 tests\\n\\ntest result: ok. 0 passed\\n'";
-    let output = doctest_run(&temp, zero);
-    assert_eq!(output.status.code(), Some(1), "{output:?}");
-    assert!(
-        String::from_utf8_lossy(&output.stderr).contains("0 doctests"),
-        "{output:?}"
-    );
-    assert_eq!(
-        output.stdout,
-        "   Doc-tests a\n\nrunning 0 tests\n\ntest result: ok. 0 passed\n".as_bytes()
-    );
-    let none = doctest_run(&temp, "true");
-    assert_eq!(none.status.code(), Some(1), "{none:?}");
-}
-
-#[test]
-fn a_doctest_step_that_ran_a_doctest_passes_and_a_failing_one_keeps_its_code() {
-    let temp = scratch("doctests-some");
-    let ran = "printf 'running 0 tests\\nrunning 1 test\\ntest x ... ok\\n'";
-    assert_eq!(doctest_run(&temp, ran).status.code(), Some(0));
-    let split = "printf 'running 0 tests\\nrunn'; printf 'ing 3 tests\\n'";
-    assert_eq!(doctest_run(&temp, split).status.code(), Some(0));
-    let failing = "printf 'running 0 tests\\n'; exit 101";
-    assert_eq!(doctest_run(&temp, failing).status.code(), Some(101));
-}
-
-#[test]
-fn a_doctest_flag_set_to_false_does_not_require_a_doctest() {
-    let temp = scratch("doctests-false");
-    for (value, code) in [("false", 0), ("true", 1)] {
-        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-            .args(["run", &format!("--require-doctests={value}"), "--", "true"])
-            .env("RUNNER_TEMP", &temp)
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        assert_eq!(output.status.code(), Some(code), "{value} {output:?}");
-    }
-}
-
-#[test]
-fn a_run_without_the_flag_does_not_count_doctests() {
-    let temp = scratch("doctests-off");
-    let output = run(&temp, &["sh", "-c", "printf 'running 0 tests\\n'"]);
-    assert_eq!(output.status.code(), Some(0), "{output:?}");
-}
-
 #[test]
 fn run_passes_shell_metacharacters_to_the_command_as_plain_arguments() {
     let temp = scratch("metacharacters");
@@ -271,6 +214,159 @@ fn run_fails_when_the_log_cannot_take_the_output() {
         "{output:?}"
     );
 }
+
+#[test]
+fn run_returns_when_the_command_exits_although_a_background_process_keeps_its_pipes_open() {
+    let temp = scratch("background");
+    let started = std::time::Instant::now();
+    let output = run_with_grace(
+        &temp,
+        "200",
+        &["sh", "-c", "sleep 30 & echo started; exit 4"],
+    );
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+    assert_eq!(output.status.code(), Some(4));
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "started\n");
+}
+
+#[test]
+fn run_waits_for_all_open_pipes_within_one_shared_grace_period() {
+    let temp = scratch("shared-grace");
+    let started = std::time::Instant::now();
+    let output = run_with_grace(
+        &temp,
+        "1000",
+        &["sh", "-c", "sleep 30 & echo out; echo err >&2; exit 5"],
+    );
+    let elapsed = started.elapsed();
+    assert_eq!(output.status.code(), Some(5), "{output:?}");
+    assert!(
+        elapsed >= std::time::Duration::from_millis(900),
+        "{elapsed:?}"
+    );
+    assert!(
+        elapsed < std::time::Duration::from_millis(1900),
+        "{elapsed:?}"
+    );
+}
+
+struct Flaky {
+    chunks: Vec<std::io::Result<Vec<u8>>>,
+}
+
+impl std::io::Read for Flaky {
+    fn read(&mut self, buffer: &mut [u8]) -> std::io::Result<usize> {
+        if self.chunks.is_empty() {
+            return Ok(0);
+        }
+        self.chunks.remove(0).map(|bytes| {
+            buffer[..bytes.len()].copy_from_slice(&bytes);
+            bytes.len()
+        })
+    }
+}
+
+#[test]
+fn run_keeps_reading_after_an_interrupted_read() {
+    let from = Flaky {
+        chunks: vec![
+            Ok(b"before ".to_vec()),
+            Err(std::io::ErrorKind::Interrupted.into()),
+            Ok(b"after".to_vec()),
+        ],
+    };
+    let mut shown = Vec::new();
+    let log = std::sync::Mutex::new(Vec::new());
+    velnor_ci::stream::pump(from, &mut shown, &log);
+    assert_eq!(shown, b"before after");
+    assert_eq!(
+        log.into_inner().unwrap_or_else(|e| unreachable!("{e}")),
+        b"before after"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn run_keeps_the_exit_code_of_the_command_when_the_final_log_line_cannot_be_written() {
+    let temp = scratch("full-log");
+    let script = format!(
+        "trap '' XFSZ; ulimit -f 1; exec {} run -- sh -c 'head -c 2000 /dev/zero | tr \"\\0\" x; exit 7'",
+        env!("CARGO_BIN_EXE_velnor-ci")
+    );
+    let output = Command::new("sh")
+        .args(["-c", &script])
+        .env("RUNNER_TEMP", &temp)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(7), "{output:?}");
+    assert_eq!(output.stdout.len(), 2000);
+    assert!(String::from_utf8_lossy(&output.stderr).contains("velnor-run.log"));
+}
+
+#[cfg(unix)]
+#[test]
+fn run_forwards_sigterm_to_the_command_and_exits_with_its_code() {
+    forwards("TERM", 5);
+}
+
+#[cfg(unix)]
+#[test]
+fn run_forwards_sigint_to_the_command_and_exits_with_its_code() {
+    forwards("INT", 6);
+}
+
+#[cfg(unix)]
+fn forwards(signal: &str, code: i32) {
+    use std::io::{BufRead, BufReader};
+    use std::os::unix::process::CommandExt;
+    use std::process::Stdio;
+
+    use nix::sys::signal::{Signal, killpg};
+    use nix::unistd::Pid;
+
+    let temp = scratch(&format!("sig{signal}"));
+    let script = format!(
+        "trap 'echo got-{signal}; exit {code}' {signal}; echo ready; i=0; while [ $i -lt 100 ]; do sleep 0.1; i=$((i+1)); done; exit 9"
+    );
+    let mut child = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["run", "--", "sh", "-c", &script])
+        .env("RUNNER_TEMP", &temp)
+        .stdout(Stdio::piped())
+        .process_group(0)
+        .spawn()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = child.stdout.take().unwrap_or_else(|| unreachable!("piped"));
+    let mut lines = BufReader::new(stdout).lines();
+    assert_eq!(lines.next().and_then(Result::ok).as_deref(), Some("ready"));
+    let sent = Command::new("kill")
+        .args([&format!("-{signal}"), &child.id().to_string()])
+        .status()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(sent.success());
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(1);
+    let status = loop {
+        if let Some(status) = child.try_wait().unwrap_or_else(|e| unreachable!("{e}")) {
+            break Some(status);
+        }
+        if std::time::Instant::now() >= deadline {
+            break None;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    };
+    let status = status.unwrap_or_else(|| {
+        let pid = i32::try_from(child.id()).unwrap_or_else(|e| unreachable!("{e}"));
+        killpg(Pid::from_raw(pid), Signal::SIGKILL).ok();
+        child.wait().unwrap_or_else(|e| unreachable!("{e}"))
+    });
+    assert_eq!(status.code(), Some(code));
+    assert_eq!(
+        lines.next().and_then(Result::ok).as_deref(),
+        Some(format!("got-{signal}").as_str())
+    );
+}
+
+#[cfg(unix)]
+mod tests_run;
 
 #[test]
 fn the_child_gets_its_own_group_only_when_no_terminal_is_present() {

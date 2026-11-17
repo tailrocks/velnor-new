@@ -119,6 +119,7 @@ crates/velnor-actions-contract/src/config/distribution_updater.rs
 crates/velnor-actions-contract/src/config/dockerfile.rs
 crates/velnor-actions-contract/src/config/dockerfile/runner.rs
 crates/velnor-actions-contract/src/config/dockerfile/syntax.rs
+crates/velnor-actions-contract/src/config/dockerfile/variable.rs
 crates/velnor-actions-contract/src/config/execution.rs
 crates/velnor-actions-contract/src/config/github.rs
 crates/velnor-actions-contract/src/config/github_evidence_snapshot.rs

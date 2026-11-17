@@ -8,7 +8,8 @@ use velnor_model::{RepoPath, RunnerLabel};
 
 use crate::support::FakeGitHub;
 
-pub(crate) const LIST: &str = include_str!("data/timings/list.json");
+pub(crate) const LIST: &str = include_str!("data/timings/list-main-pr.json");
+pub(crate) const RECORDED_LIST: &str = include_str!("data/timings/list.json");
 const REPO: &str = include_str!("data/timings/repo.json");
 
 const RUNS: [(u64, &str, &str); 3] = [
@@ -136,7 +137,10 @@ fn the_file_holds_the_medians_of_the_step_times_bench_collect_reports() {
             got.lint_build_seconds,
             median(
                 runs.iter()
-                    .map(|r| f64::from(u32::try_from(step(r, "Lint").seconds).unwrap_or_default()))
+                    .map(|r| f64::from(
+                        u32::try_from(step(r, "Lint").seconds.unwrap_or_default())
+                            .unwrap_or_default()
+                    ))
                     .collect()
             )
         );
@@ -191,10 +195,7 @@ fn only_ordinary_runs_count() {
 
 #[test]
 fn a_pull_request_into_another_branch_is_not_the_default_branch() {
-    let elsewhere = LIST.replace(
-        "\"pull_requests\":[]",
-        "\"pull_requests\":[{\"base\":{\"ref\":\"release\"}}]",
-    );
+    let elsewhere = LIST.replace("\"ref\":\"main\"", "\"ref\":\"release\"");
     let report = gather(&recorded(&elsewhere), &lab(), &roots(), &runner())
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
