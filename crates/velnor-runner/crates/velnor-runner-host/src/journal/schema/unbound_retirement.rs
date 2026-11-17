@@ -3,6 +3,26 @@
 
 use crate::error::HostError;
 
+mod creation_targets;
+mod shape;
+pub(in crate::journal) use shape::UNBOUND_SHAPE;
+
+pub(super) async fn migrate_v48_to_v49(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v48(conn).await?;
+    creation_targets::validate_history(conn).await?;
+    creation_targets::install(conn).await?;
+    replace_shape_guards(conn, UNBOUND_SHAPE).await?;
+    conn.execute("PRAGMA user_version = 49", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    validate(conn).await
+}
+
+pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_objects(conn, objects(UNBOUND_SHAPE)).await?;
+    creation_targets::validate(conn).await
+}
+
 const VERSION: i64 = 43;
 
 const CLAIMS: &str = "CREATE TABLE capacity_reservation_unbound_retirement_claims (reservation_id INTEGER NOT NULL PRIMARY KEY REFERENCES capacity_reservations(id), connection_id TEXT NOT NULL REFERENCES connection_scopes(connection_id), operation_id INTEGER NOT NULL UNIQUE REFERENCES connection_intents(id), engine_id TEXT NOT NULL CHECK (length(engine_id) BETWEEN 1 AND 128), docker_root_digest TEXT NOT NULL CHECK (length(docker_root_digest) = 64 AND docker_root_digest NOT GLOB '*[^0-9a-f]*'), claim_generation INTEGER NOT NULL CHECK (claim_generation > 0), lease_until INTEGER NOT NULL CHECK (lease_until > 0))";
@@ -15,7 +35,7 @@ const SHAPE_V43: &str = "state.bootstrap_start_state IN ('started', 'uncertain')
 
 const SHAPE_V44: &str = "{s}.resources_bound = 0 AND {s}.jit_state = 'not_requested' AND {s}.publication_state = 'not_requested' AND {s}.delivery_state = 'not_requested' AND {s}.storage_cleanup_proven = 0 AND (({s}.bootstrap_start_state IN ('started', 'uncertain') AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2) OR ({s}.bootstrap_start_state = 'not_requested' AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 0 AND EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS init WHERE init.reservation_id = {s}.reservation_id AND init.abort_state = 'absent')))";
 
-pub(in crate::journal) const UNBOUND_SHAPE: &str = "{s}.resources_bound = 0 AND {s}.jit_state = 'not_requested' AND {s}.publication_state = 'not_requested' AND {s}.delivery_state = 'not_requested' AND {s}.storage_cleanup_proven = 0 AND (({s}.bootstrap_start_state IN ('started', 'uncertain') AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2) OR ({s}.bootstrap_start_state = 'not_requested' AND ((SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 0 OR ((SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id AND pair_container.create_state = 'unclaimed' AND pair_container.start_state = 'not_requested' AND pair_container.container_id IS NULL) = 2)) AND EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS init WHERE init.reservation_id = {s}.reservation_id AND init.abort_state = 'absent')))";
+const SHAPE_V45: &str = "{s}.resources_bound = 0 AND {s}.jit_state = 'not_requested' AND {s}.publication_state = 'not_requested' AND {s}.delivery_state = 'not_requested' AND {s}.storage_cleanup_proven = 0 AND (({s}.bootstrap_start_state IN ('started', 'uncertain') AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2) OR ({s}.bootstrap_start_state = 'not_requested' AND ((SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 0 OR ((SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id) = 2 AND (SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers AS pair_container WHERE pair_container.reservation_id = {s}.reservation_id AND pair_container.create_state = 'unclaimed' AND pair_container.start_state = 'not_requested' AND pair_container.container_id IS NULL) = 2)) AND EXISTS (SELECT 1 FROM capacity_reservation_storage_initialization AS init WHERE init.reservation_id = {s}.reservation_id AND init.abort_state = 'absent')))";
 
 const CLAIM_INSERT_GUARD: &str = "CREATE TRIGGER unbound_retirement_claim_insert_guard BEFORE INSERT ON capacity_reservation_unbound_retirement_claims WHEN NOT EXISTS (SELECT 1 FROM capacity_reservations AS reservation JOIN connection_intents AS intent ON intent.id = reservation.intent_id AND intent.connection_id = reservation.connection_id JOIN capacity_reservation_provisioning AS provisioning ON provisioning.reservation_id = reservation.id AND provisioning.operation_id = intent.id JOIN capacity_reservation_provisioning_state AS state ON state.reservation_id = reservation.id WHERE reservation.id = NEW.reservation_id AND reservation.connection_id = NEW.connection_id AND intent.id = NEW.operation_id AND provisioning.engine_id = NEW.engine_id AND provisioning.docker_root_digest = NEW.docker_root_digest AND NEW.claim_generation = 1 AND reservation.state = 'uncertain' AND reservation.remote_cleanup_proven = 0 AND reservation.local_cleanup_proven = 0 AND intent.state = 'uncertain' AND intent.cleanup_proven = 0 AND intent.jit_requested = 0 AND {shape}) BEGIN SELECT RAISE(ABORT, 'invalid unbound retirement claim'); END";
 
@@ -127,7 +147,7 @@ pub(super) async fn migrate_v43_to_v44(conn: &turso::Connection) -> Result<(), H
 
 pub(super) async fn migrate_v44_to_v45(conn: &turso::Connection) -> Result<(), HostError> {
     super::validate_persisted_schema_v44(conn).await?;
-    replace_shape_guards(conn, UNBOUND_SHAPE).await?;
+    replace_shape_guards(conn, SHAPE_V45).await?;
     conn.execute("PRAGMA user_version = 45", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -167,8 +187,8 @@ pub(super) async fn validate_v44(conn: &turso::Connection) -> Result<(), HostErr
     validate_objects(conn, objects(SHAPE_V44)).await
 }
 
-pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_objects(conn, objects(UNBOUND_SHAPE)).await
+pub(super) async fn validate_v45(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_objects(conn, objects(SHAPE_V45)).await
 }
 
 async fn validate_objects(

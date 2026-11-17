@@ -70,9 +70,26 @@ async fn an_aborted_initializer_with_the_two_unclaimed_admission_rows_is_claimed
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_pair_that_never_started_without_an_initializer_row_is_not_claimed() -> TestResult<()> {
+async fn a_pristine_pair_without_dispatched_resources_is_not_claimed() -> TestResult<()> {
     for containers in [Containers::None, Containers::Unclaimed] {
-        assert!(!claimed(containers, None).await?);
+        let dir = tempfile::tempdir()?;
+        let socket = dir.path().join("docker.sock");
+        let _fixture = FixtureDocker::start(&socket, &[FAILED])?;
+        let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
+        let journal = Journal::open(&dir.path().join("launch.db")).await?;
+        let (scope, _) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
+        scope.abandon_unbound_pair(FAILED.reservation).await?;
+        shaped(&journal, containers, None).await?;
+        seed::unguarded(&journal, &[
+            format!("UPDATE capacity_reservation_provisioning_objects SET create_state='unclaimed',docker_id=NULL WHERE reservation_id={}", FAILED.reservation),
+            format!("DELETE FROM capacity_reservation_networks WHERE reservation_id={}", FAILED.reservation),
+        ]).await?;
+        assert!(
+            scope
+                .claim_unbound_retirement(FAILED.reservation)
+                .await?
+                .is_none()
+        );
     }
     Ok(())
 }

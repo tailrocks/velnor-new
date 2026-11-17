@@ -200,12 +200,24 @@ async fn recovers(crash: Crash, foreign: bool) -> TestResult<()> {
     if foreign {
         make_foreign(&fixture, crash)?;
     }
+    let creation_state = db::creation_state(&journal).await?;
+    drop(scope);
+    drop(journal);
+    let journal = Journal::open(&path).await?;
+    db::assert_current(&journal).await?;
+    db::assert_crash_fields(&journal, crash).await?;
+    assert_eq!(db::creation_state(&journal).await?, creation_state);
+    let config = crate::config::HostConfig::parse(super::HOST_CONFIG)?;
+    let scope = journal
+        .connection_scope(config.connections().first().ok_or("binding")?)
+        .await?;
     let neighbor = bootstrap_seed::state(&journal, NEIGHBOR.reservation).await?;
     let neighbor_objects = fixture.objects(NEIGHBOR);
     Box::pin(before_restart(
         &scope, &journal, &docker, &engine, &fixture, &policy,
     ))
     .await?;
+    assert_eq!(db::creation_state(&journal).await?, creation_state);
     drop(scope);
     drop(journal);
 
@@ -235,19 +247,7 @@ async fn recovers(crash: Crash, foreign: bool) -> TestResult<()> {
     bootstrap_seed::assert_planning(&scope, CRASHED.reservation, &policy, foreign).await?;
     let recovered_capacity = journal.readiness_capacity_usage().await?;
     assert_eq!(recovered_capacity.jobs, if foreign { 2 } else { 1 });
-    if foreign {
-        foreign_retained(&fixture, crash)?;
-    } else {
-        assert_eq!(
-            super::seed::cleanup_proven(&journal, CRASHED.reservation).await?,
-            (1, 1, 1)
-        );
-        assert!(!fixture.has_initializer(CRASHED));
-        assert!(
-            fixture.objects(CRASHED).is_empty(),
-            "{crash:?} left owned Docker objects"
-        );
-    }
+    assert_cleanup_result(&journal, &fixture, crash, foreign).await?;
     repeat(
         &journal,
         &docker,
@@ -261,6 +261,28 @@ async fn recovers(crash: Crash, foreign: bool) -> TestResult<()> {
     bootstrap_seed::assert_planning(&scope, CRASHED.reservation, &policy, foreign).await?;
     if foreign {
         foreign_retained(&fixture, crash)?;
+    }
+    Ok(())
+}
+
+async fn assert_cleanup_result(
+    journal: &Journal,
+    fixture: &FixtureDocker,
+    crash: Crash,
+    foreign: bool,
+) -> TestResult<()> {
+    if foreign {
+        foreign_retained(fixture, crash)?;
+    } else {
+        assert_eq!(
+            super::seed::cleanup_proven(journal, CRASHED.reservation).await?,
+            (1, 1, 1)
+        );
+        assert!(!fixture.has_initializer(CRASHED));
+        assert!(
+            fixture.objects(CRASHED).is_empty(),
+            "{crash:?} left owned Docker objects"
+        );
     }
     Ok(())
 }

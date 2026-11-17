@@ -9,6 +9,7 @@ mod pre_jit_recovery;
 mod publication;
 mod storage;
 mod unbound_retirement;
+pub(crate) use unbound_retirement::UnboundCreationObservation;
 mod uncertain_recovery;
 
 pub(crate) use adapter::PreparedAcquiredBootstrap;

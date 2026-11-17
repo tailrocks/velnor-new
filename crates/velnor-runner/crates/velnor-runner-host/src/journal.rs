@@ -8,6 +8,9 @@ mod connection;
 mod doctor_probe;
 pub(crate) mod execution_authorization;
 mod file_identity;
+mod unbound_observation;
+mod unbound_ownership;
+pub(crate) use crate::launch::bootstrap::UnboundCreationObservation;
 pub(crate) mod header_authority;
 mod image_import;
 mod launch;
@@ -53,7 +56,10 @@ pub(crate) use connection::{
 pub(crate) use connection::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
 };
-pub(crate) use connection::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use connection::{
+    UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
+    UnboundRetirementPhase,
+};
 
 pub(crate) use connection::{
     AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,
@@ -66,11 +72,11 @@ pub(crate) use connection::{
     SourceAuthorizationBinding, StorageAdmissionSample, StorageCleanupIdentity,
     StorageCleanupObserverWitness, StorageFilesystemKind, StorageInitializationClaim,
     StorageInodePolicy, StorageMedium, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
-    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageObserver, StoragePoolLimit,
-    StoragePoolObservation, StoragePoolObservationInput, StorageProfile,
-    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageProvisioningPlan,
-    StorageProvisioningRole, StorageRole, StorageRoleLimit, StorageSampleIdentity,
-    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+    StorageNetworkRecoveryIdentity, StorageNetworkRemovalClaim, StorageObjectCreateClaim,
+    StorageObserver, StoragePoolLimit, StoragePoolObservation, StoragePoolObservationInput,
+    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
+    StorageProvisioningPlan, StorageProvisioningRole, StorageRole, StorageRoleLimit,
+    StorageSampleIdentity, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 
 pub(crate) use doctor_probe::{

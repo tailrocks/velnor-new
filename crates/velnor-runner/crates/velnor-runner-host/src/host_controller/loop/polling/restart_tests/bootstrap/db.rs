@@ -19,6 +19,10 @@ pub(super) async fn assert_current(journal: &Journal) -> TestResult<()> {
 
 pub(super) async fn assert_historical(journal: &Journal, crash: Crash) -> TestResult<()> {
     assert_eq!(number(journal, "PRAGMA user_version").await?, 48);
+    assert_crash_fields(journal, crash).await
+}
+
+pub(super) async fn assert_crash_fields(journal: &Journal, crash: Crash) -> TestResult<()> {
     let query = match crash {
         Crash::DindCreate => {
             "SELECT COUNT(*) FROM capacity_reservation_bootstrap_containers WHERE reservation_id=2 AND role='dind' AND create_state='requested' AND container_id IS NULL"
@@ -97,7 +101,7 @@ pub(super) async fn target(
     assert_eq!(number(journal, "SELECT COUNT(*) FROM sqlite_schema WHERE type='table' AND name='capacity_reservation_unbound_creation_targets'").await?, 1, "DELETE occurred before a durable exact target ledger existed");
     let connection = journal.connection().await?;
     let mut rows = connection.query(
-        "SELECT resource_kind,role,docker_name,docker_id,observation_sha256 FROM capacity_reservation_unbound_creation_targets WHERE reservation_id=2 AND resource_kind=?1 AND role=?2",
+        "SELECT resource_kind,role,docker_name,docker_id,observation_sha256,observation_json FROM capacity_reservation_unbound_creation_targets WHERE reservation_id=2 AND resource_kind=?1 AND role=?2",
         (kind, role),
     ).await?;
     let row = rows
@@ -111,6 +115,23 @@ pub(super) async fn target(
     let digest = row.get::<String>(4)?;
     assert_eq!(digest.len(), 64);
     assert!(digest.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    if kind == "container" {
+        let json: serde_json::Value = serde_json::from_str(&row.get::<String>(5)?)?;
+        let labels = json
+            .get("labels")
+            .and_then(serde_json::Value::as_object)
+            .ok_or("canonical ownership labels")?;
+        assert_eq!(labels.len(), 5);
+        for key in [
+            "io.velnor.managed",
+            "io.velnor.reservation-id",
+            "io.velnor.operation-id",
+            "io.velnor.connection-id",
+            "io.velnor.role",
+        ] {
+            assert!(labels.contains_key(key), "missing ownership label {key}");
+        }
+    }
     assert!(rows.next().await?.is_none());
     Ok(())
 }
@@ -145,4 +166,8 @@ pub(super) fn no_dispatch(fixture: &super::FixtureDocker) {
             .iter()
             .any(|request| request.contains("/create") || request.ends_with("/start"))
     );
+}
+
+pub(super) async fn creation_state(journal: &Journal) -> TestResult<String> {
+    crate::launch::bootstrap::unbound_pair_fixtures::seed::text(journal, "SELECT json_object('containers',(SELECT json_group_array(json_array(role,create_state,start_state,container_id)) FROM (SELECT role,create_state,start_state,container_id FROM capacity_reservation_bootstrap_containers WHERE reservation_id=?1 ORDER BY role)),'volumes',(SELECT json_group_array(json_array(role,create_state,docker_id)) FROM (SELECT role,create_state,docker_id FROM capacity_reservation_provisioning_objects WHERE reservation_id=?1 ORDER BY role)),'network',(SELECT json_group_array(json_array(create_state,network_id,remove_state)) FROM capacity_reservation_networks WHERE reservation_id=?1),'bootstrap',(SELECT bootstrap_start_state FROM capacity_reservation_provisioning_state WHERE reservation_id=?1))",CRASHED.reservation).await
 }

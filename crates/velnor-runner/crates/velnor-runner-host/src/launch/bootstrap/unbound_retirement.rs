@@ -9,7 +9,6 @@ use bollard::{
     Docker,
     errors::Error as DockerError,
     models::{ContainerInspectResponse, Volume},
-    query_parameters::{RemoveContainerOptions, StopContainerOptions},
 };
 use serde::Serialize;
 use sha2::{Digest, Sha256};
@@ -21,10 +20,18 @@ use crate::{
     launch::SelectedEngineContext,
 };
 
+#[path = "unbound_retirement/creation_target.rs"]
+mod creation_target;
+pub(crate) use creation_target::UnboundCreationObservation;
+
 #[path = "unbound_retirement/bounded.rs"]
 mod bounded;
+#[path = "unbound_retirement/effects.rs"]
+mod effects;
 #[path = "unbound_retirement/initializer.rs"]
 mod initializer;
+#[path = "unbound_retirement/preflight.rs"]
+mod preflight;
 
 pub(crate) use bounded::{abandon_and_retire_unbound_pair_before, retire_uncertain_unbound_pairs};
 
@@ -64,6 +71,13 @@ pub(crate) async fn retire_unbound_pair(
     {
         return Err(HostError::Ownership);
     }
+    let effects = match effects.preflight().await? {
+        preflight::Publication::Ready(effects) => effects,
+        preflight::Publication::Deferred => {
+            scope.defer_unbound_retirement_claim(&claim).await?;
+            return Ok(false);
+        }
+    };
     for phase in [
         UnboundRetirementPhase::ContainersAbsent,
         UnboundRetirementPhase::VolumesAbsent,
@@ -80,12 +94,7 @@ pub(crate) async fn retire_unbound_pair(
             }
             UnboundRetirementPhase::VolumesAbsent => Box::pin(effects.remove_volumes()).await?,
         };
-        let digest =
-            Sha256::digest(serde_json::to_vec(&evidence).map_err(|_| HostError::Identity)?)
-                .iter()
-                .flat_map(|byte| [byte >> 4, byte & 0x0f])
-                .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
-                .collect::<String>();
+        let digest = digest(&evidence)?;
         scope
             .record_unbound_retirement_phase(&claim, phase, &digest)
             .await?;
@@ -104,6 +113,19 @@ struct Observation {
     name: String,
     id: Option<String>,
     outcome: &'static str,
+}
+
+struct ReadyEffects<'a> {
+    effects: Effects<'a>,
+    inventory: crate::journal::UnboundRetirementInventory,
+}
+
+impl<'a> std::ops::Deref for ReadyEffects<'a> {
+    type Target = Effects<'a>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.effects
+    }
 }
 
 struct Effects<'a> {
@@ -143,121 +165,6 @@ impl Effects<'_> {
         } else {
             Err(HostError::Ownership)
         }
-    }
-
-    async fn remove_containers(&self) -> Result<Vec<Observation>, HostError> {
-        let mut observations = Vec::new();
-        for container in self.claim.containers() {
-            let present = self
-                .authorized(inspect_container(self.docker, &container.id))
-                .await?;
-            let by_name = self
-                .authorized(inspect_container(self.docker, &container.name))
-                .await?;
-            if by_name
-                .as_ref()
-                .is_some_and(|named| named.id.as_deref() != Some(container.id.as_str()))
-            {
-                return Err(HostError::Ownership);
-            }
-            let Some(inspected) = present else {
-                observations.push(observation(
-                    &container.role,
-                    &container.name,
-                    Some(&container.id),
-                    "already_absent",
-                ));
-                continue;
-            };
-            self.validate_container(&inspected, &container.role, &container.name, &container.id)?;
-            if inspected.state.as_ref().and_then(|state| state.running) == Some(true) {
-                let stop = self.docker.stop_container(
-                    &container.id,
-                    Some(StopContainerOptions {
-                        t: Some(10),
-                        signal: None,
-                    }),
-                );
-                Box::pin(
-                    self.authorized(async { within(stop).await?.map_err(|_| HostError::Docker) }),
-                )
-                .await?;
-            }
-            let remove = self.docker.remove_container(
-                &container.id,
-                Some(RemoveContainerOptions {
-                    force: false,
-                    v: false,
-                    link: false,
-                }),
-            );
-            Box::pin(
-                self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) }),
-            )
-            .await?;
-            if self
-                .authorized(inspect_container(self.docker, &container.id))
-                .await?
-                .is_some()
-                || self
-                    .authorized(inspect_container(self.docker, &container.name))
-                    .await?
-                    .is_some()
-            {
-                return Err(HostError::Ownership);
-            }
-            observations.push(observation(
-                &container.role,
-                &container.name,
-                Some(&container.id),
-                "removed_and_absent",
-            ));
-        }
-        if let Some(helper) = self.claim.initializer() {
-            observations.push(Box::pin(self.remove_initializer(helper)).await?);
-        }
-        Ok(observations)
-    }
-
-    async fn remove_volumes(&self) -> Result<Vec<Observation>, HostError> {
-        let mut observations = Vec::new();
-        for volume in self.claim.volumes() {
-            let Some(inspected) = self
-                .authorized(inspect_volume(self.docker, &volume.name))
-                .await?
-            else {
-                observations.push(observation(
-                    &volume.role,
-                    &volume.name,
-                    None,
-                    "already_absent",
-                ));
-                continue;
-            };
-            self.validate_volume(&inspected, &volume.role, &volume.name)?;
-            let remove = self.docker.remove_volume(
-                &volume.name,
-                None::<bollard::query_parameters::RemoveVolumeOptions>,
-            );
-            Box::pin(
-                self.authorized(async { within(remove).await?.map_err(|_| HostError::Docker) }),
-            )
-            .await?;
-            if self
-                .authorized(inspect_volume(self.docker, &volume.name))
-                .await?
-                .is_some()
-            {
-                return Err(HostError::Ownership);
-            }
-            observations.push(observation(
-                &volume.role,
-                &volume.name,
-                None,
-                "removed_and_absent",
-            ));
-        }
-        Ok(observations)
     }
 
     fn validate_container(
@@ -356,4 +263,14 @@ async fn inspect_volume(docker: &Docker, name: &str) -> Result<Option<Volume>, H
 
 async fn within<F: Future>(future: F) -> Result<F::Output, HostError> {
     docker_deadline_after(future, REQUEST_TIMEOUT).await
+}
+
+fn digest(value: &impl Serialize) -> Result<String, HostError> {
+    Ok(
+        Sha256::digest(serde_json::to_vec(value).map_err(|_| HostError::Identity)?)
+            .iter()
+            .flat_map(|byte| [byte >> 4, byte & 0x0f])
+            .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
+            .collect(),
+    )
 }

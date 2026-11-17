@@ -72,7 +72,7 @@ async fn upgrades_only_fenced_history() -> TestResult<()> {
             drop(opened?);
             let case = case.reopen(Schema::Current).await?;
             assert_eq!(super::historical::proof_rows(&case.journal).await?, before);
-            assert_eq!(super::historical::version(&case.journal).await?, 48);
+            assert_eq!(super::historical::version(&case.journal).await?, 49);
             Box::pin(case.finish(&claim, false)).await?;
         }
     }

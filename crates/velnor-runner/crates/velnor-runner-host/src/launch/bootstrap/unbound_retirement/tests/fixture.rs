@@ -59,7 +59,7 @@ impl FixtureDocker {
                     pair.container_id(role),
                     Container {
                         name: format!("w{}-{role}", pair.nonce()),
-                        labels: json!({"io.velnor.managed": "true", "io.velnor.reservation-id": reservation, "io.velnor.operation-id": operation, "io.velnor.connection-id": CONNECTION_ID, "io.velnor.role": role}),
+                        labels: json!({"io.velnor.managed": "true", "io.velnor.reservation-id": reservation, "io.velnor.operation-id": operation, "io.velnor.connection-id": CONNECTION_ID, "io.velnor.role": role, "io.velnor.image.kind": role, "org.opencontainers.image.title": "ubuntu"}),
                         running: true,
                         inspection: None,
                     },
