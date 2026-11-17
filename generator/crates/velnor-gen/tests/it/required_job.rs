@@ -20,7 +20,11 @@ fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error:
 
 fn required(text: &str) -> Result<&str, &'static str> {
     text.find("  required:\n")
-        .map(|at| &text[at..])
+        .map(|at| {
+            let job = &text[at..];
+            let end = job.find("\n  cache:\n").map_or(job.len(), |at| at + 1);
+            &job[..end]
+        })
         .ok_or("no required job")
 }
 

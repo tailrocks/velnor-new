@@ -4,14 +4,12 @@
 use std::collections::HashMap;
 
 use bollard::Docker;
-use bollard::models::{ContainerCreateBody, HostConfig, Mount, MountType, VolumeCreateRequest};
+use bollard::models::VolumeCreateRequest;
 use bollard::query_parameters::{
-    CreateContainerOptions, InspectContainerOptions, StartContainerOptions,
-    UploadToContainerOptions, WaitContainerOptions,
+    InspectContainerOptions, StartContainerOptions, UploadToContainerOptions, WaitContainerOptions,
 };
 use futures_util::StreamExt;
 
-use crate::config::RunnerPlatform;
 use crate::docker_client::docker_deadline;
 use crate::error::HostError;
 use crate::journal::StorageRole;
@@ -20,7 +18,8 @@ use crate::launch::bootstrap::containers::pair::{PairCreate, PairSpecContext, cr
 use crate::launch::bootstrap::containers::storage_object::tmpfs_options;
 use crate::worker::{WorkerContainerRole, WorkerVolumeRole};
 
-use super::remove::{Removed, remove_container, remove_labelled};
+use super::io::{MetadataUpload, upload_to_metadata};
+use super::remove::{Removed, remove_labelled};
 use super::request::{LocalPairRequest, Validated, validate};
 use super::{layout, storage};
 
@@ -237,46 +236,9 @@ async fn prefill_metadata(
         request,
         &validated.pair,
         &volume,
-        ("init", layout::metadata_archive()?),
+        MetadataUpload::Initialize(layout::metadata_archive()?),
     )
     .await
-}
-
-pub(super) async fn upload_to_metadata(
-    docker: &Docker,
-    request: &LocalPairRequest,
-    pair: &str,
-    volume: &str,
-    (purpose, archive): (&str, Vec<u8>),
-) -> Result<(), HostError> {
-    let platform = RunnerPlatform::parse(&request.platform).ok_or(HostError::Config)?;
-    let helper = PairCreate {
-        options: CreateContainerOptions {
-            name: Some(format!("{pair}-{purpose}")),
-            platform: platform.as_str().to_owned(),
-        },
-        config: ContainerCreateBody {
-            image: Some(request.dind_image.clone()),
-            entrypoint: Some(vec!["/velnor-local-never-started".to_owned()]),
-            network_disabled: Some(true),
-            labels: Some(owned_labels(request, pair, purpose)),
-            host_config: Some(HostConfig {
-                network_mode: Some("none".to_owned()),
-                mounts: Some(vec![Mount {
-                    target: Some(layout::METADATA_TARGET.to_owned()),
-                    source: Some(volume.to_owned()),
-                    typ: Some(MountType::VOLUME),
-                    ..Default::default()
-                }]),
-                ..Default::default()
-            }),
-            ..Default::default()
-        },
-    };
-    let helper_id = create(docker, helper).await?;
-    let uploaded = upload(docker, &helper_id, layout::METADATA_PARENT, archive).await;
-    let removed = remove_container(docker, &helper_id).await;
-    uploaded.and(removed)
 }
 
 async fn create(docker: &Docker, create: PairCreate) -> Result<String, HostError> {
@@ -325,7 +287,11 @@ async fn upload(docker: &Docker, id: &str, path: &str, archive: Vec<u8>) -> Resu
     .map_err(|_| HostError::Docker)
 }
 
-fn owned_labels(request: &LocalPairRequest, pair: &str, role: &str) -> HashMap<String, String> {
+pub(super) fn owned_labels(
+    request: &LocalPairRequest,
+    pair: &str,
+    role: &str,
+) -> HashMap<String, String> {
     HashMap::from([
         (ENVIRONMENT_LABEL.to_owned(), request.environment.clone()),
         (PAIR_LABEL.to_owned(), pair.to_owned()),
