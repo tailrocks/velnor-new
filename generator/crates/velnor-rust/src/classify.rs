@@ -57,7 +57,7 @@ pub(crate) fn classify<'c>(
     Class::Unknown
 }
 
-fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
+pub(crate) fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
     let name = path.as_str().rsplit('/').next().unwrap_or_default();
     if TOOLCHAIN_FILES.contains(&name) {
         Some(AllTrigger::ToolchainFile(path.clone()))

@@ -88,6 +88,7 @@ pub(super) struct Manifest {
     pub base: String,
     pub nodes: BTreeMap<PathBuf, Node>,
     pub removed: Vec<PathBuf>,
+    pub sources: super::delta_source::SourceSnapshot,
 }
 
 pub(super) fn capture(root: &Path, base: &str) -> Result<Snapshot, CiError> {

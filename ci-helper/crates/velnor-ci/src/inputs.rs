@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::error::CiError;
 
 pub const INPUTS_FILE: &str = "target/.velnor/inputs.tsv";
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct TrackedFile {
     pub path: String,
     pub blob: String,
@@ -22,7 +24,8 @@ pub struct SavedInput {
 
 pub const SYMLINK_MODE: &str = "120000";
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Tracked {
     pub files: Vec<TrackedFile>,
     pub links: Vec<TrackedFile>,

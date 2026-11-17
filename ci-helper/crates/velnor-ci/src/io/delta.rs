@@ -60,9 +60,16 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
     } else {
         match manifest {
             Ok(manifest) if !base.is_empty() && manifest.base == base => {
-                match tree::apply(&manifest, &args.staging_dir, &args.target_dir, cutoff) {
-                    Ok(count) => {
-                        format!("applied {count} delta files, preserving modification times\n")
+                match tree::apply(&manifest, &args.staging_dir, &args.target_dir, cutoff).and_then(
+                    |count| {
+                        super::delta_freshness::invalidate(&args.target_dir, &manifest.sources)
+                            .map(|invalidated| (count, invalidated))
+                    },
+                ) {
+                    Ok((count, invalidated)) => {
+                        format!(
+                            "applied {count} delta files, preserving modification times; invalidated {invalidated} source-affected fingerprints\n"
+                        )
                     }
                     Err(error) => cold(&args.target_dir, &error)?,
                 }
@@ -140,7 +147,7 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         }
         _ => return decline("no valid base inventory"),
     };
-    let manifest = match select(args, base, &baseline, cutoff, &inputs) {
+    let manifest = match select(args, base, &baseline, cutoff, inputs) {
         Ok(manifest) => manifest,
         Err(error) => return decline(&error.to_string()),
     };
@@ -196,7 +203,7 @@ fn select(
     base: &str,
     baseline: &Snapshot,
     cutoff: u64,
-    inputs: &super::input_snapshot::VerifiedInputs,
+    inputs: super::input_snapshot::VerifiedInputs,
 ) -> Result<Manifest, CiError> {
     let mut current = BTreeMap::new();
     let mut size = 0_u64;
@@ -211,11 +218,7 @@ fn select(
                 || node.metadata() != stat.metadata()
         });
         if !stat.directory() && known_changed {
-            let minimum = Manifest {
-                base: base.to_owned(),
-                nodes: BTreeMap::from([(path.clone(), stat.clone())]),
-                removed: Vec::new(),
-            };
+            let minimum = (&path, &stat);
             let overhead = snapshot::encode(&minimum)?.len() as u64;
             if size.saturating_add(stat.size()).saturating_add(overhead) > LIMIT {
                 return Err(CiError::new("delta exceeds its byte limit"));
@@ -261,6 +264,7 @@ fn select(
         base: base.to_owned(),
         nodes,
         removed,
+        sources: inputs.sources,
     })
 }
 

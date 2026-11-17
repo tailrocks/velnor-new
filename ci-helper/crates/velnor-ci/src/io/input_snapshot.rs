@@ -28,6 +28,7 @@ impl InputSnapshot {
 
 pub(super) struct VerifiedInputs {
     pub digest: [u8; 32],
+    pub sources: super::delta_source::SourceSnapshot,
 }
 
 pub(super) fn verify(root: &Path, path: &Path) -> Result<VerifiedInputs, CiError> {
@@ -45,6 +46,10 @@ pub(super) fn verify(root: &Path, path: &Path) -> Result<VerifiedInputs, CiError
     }
     Ok(VerifiedInputs {
         digest: Sha256::digest(text.as_bytes()).into(),
+        sources: super::delta_source::SourceSnapshot {
+            identity: captured.source_identity,
+            tracked: captured.sources,
+        },
     })
 }
 

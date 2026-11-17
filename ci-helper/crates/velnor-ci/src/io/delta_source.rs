@@ -1,12 +1,63 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
+use velnor_model::RepoPath;
 
 use crate::error::CiError;
 use crate::inputs::Tracked;
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct SourceSnapshot {
+    pub identity: String,
+    pub tracked: Tracked,
+}
+
+impl SourceSnapshot {
+    pub(super) fn records(&self) -> Result<BTreeMap<RepoPath, (&str, &str, &str)>, CiError> {
+        let invalid = || CiError::new("delta source snapshot is incomplete or invalid");
+        if self.tracked.submodules != 0 || identity_of(&self.tracked)? != self.identity {
+            return Err(invalid());
+        }
+        let mut records = BTreeMap::new();
+        for (kind, files) in [("file", &self.tracked.files), ("link", &self.tracked.links)] {
+            for file in files {
+                let valid = if kind == "file" {
+                    matches!(file.blob.len(), 40 | 64)
+                        && file
+                            .blob
+                            .bytes()
+                            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+                        && u32::from_str_radix(&file.mode, 8)
+                            .is_ok_and(|mode| mode & !0o7777 == 0o100_000)
+                } else {
+                    file.mode == crate::inputs::SYMLINK_MODE
+                        && crate::inputs::is_representable(&file.blob)
+                };
+                let path = RepoPath::new(&file.path).map_err(|_| invalid())?;
+                if !valid
+                    || records
+                        .insert(path, (kind, file.blob.as_str(), file.mode.as_str()))
+                        .is_some()
+                {
+                    return Err(invalid());
+                }
+            }
+        }
+        for path in &self.tracked.absent {
+            let path = RepoPath::new(path).map_err(|_| invalid())?;
+            if records.insert(path, ("absent", "", "")).is_some() {
+                return Err(invalid());
+            }
+        }
+        Ok(records)
+    }
+}
 
 pub(super) fn identity(root: &Path) -> Result<String, CiError> {
     identity_of(&super::inputs::source_files(root)?)

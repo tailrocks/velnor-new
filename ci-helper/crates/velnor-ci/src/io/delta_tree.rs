@@ -117,6 +117,7 @@ pub(super) fn validate(
     target: &Path,
     cutoff: u64,
 ) -> Result<(), CiError> {
+    manifest.sources.records()?;
     snapshot::validate_times(&manifest.nodes, cutoff)?;
     let size = manifest
         .nodes

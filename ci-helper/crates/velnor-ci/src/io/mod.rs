@@ -7,6 +7,7 @@ mod cache;
 mod cold;
 mod configurations;
 mod delta;
+mod delta_freshness;
 mod delta_paths;
 mod delta_snapshot;
 mod delta_source;

@@ -3,6 +3,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+mod local;
+mod paths;
+pub use local::affected_local_packages;
+pub(crate) use paths::{claims, relative};
+use paths::{contains, depth};
+
 use crate::classify::{Class, classify};
 use crate::config::rule_matches;
 use crate::lock_affected::lock_affected;
@@ -62,13 +68,17 @@ pub fn unread_packages(facts: &RepoFacts, changes: &ChangeSet) -> BTreeMap<RepoP
 }
 
 fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
+    walk_with_local(facts, changes, false)
+}
+
+fn walk_with_local<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet, local: bool) -> Walk<'a> {
     let graph = Graph::new(facts, changes);
     let mut walk = Walk {
         triggers: vec![None; facts.rust_roots.len()],
         ..Walk::default()
     };
     for path in &changes.paths {
-        graph.place(path, &mut walk);
+        graph.place(path, &mut walk, local);
     }
     while let Some(manifest) = walk.queue.pop() {
         let name = graph.nodes[manifest].name;
@@ -88,21 +98,12 @@ fn walk<'a>(facts: &'a RepoFacts, changes: &'a ChangeSet) -> Walk<'a> {
     walk
 }
 
-const OWN_FOLDERS: [&str; 4] = ["src/", "tests/", "benches/", "examples/"];
-const BUILD_SCRIPT: &str = "build.rs";
-
 struct Node<'a> {
     root: Option<usize>,
     name: &'a PackageName,
     directory: Option<RepoPath>,
     whole: bool,
     sources: Vec<&'a RepoPath>,
-}
-
-pub(crate) fn claims(directory: Option<&RepoPath>, whole: bool, path: &RepoPath) -> bool {
-    relative(directory, path).is_some_and(|rest| {
-        whole || rest == BUILD_SCRIPT || OWN_FOLDERS.iter().any(|folder| rest.starts_with(folder))
-    })
 }
 
 struct Graph<'a> {
@@ -201,7 +202,7 @@ impl<'a> Graph<'a> {
         });
     }
 
-    fn place(&self, path: &'a RepoPath, walk: &mut Walk<'a>) {
+    fn place(&self, path: &'a RepoPath, walk: &mut Walk<'a>, local: bool) {
         let text = path.as_str();
         let locked: Vec<&PackageName> = text
             .match_indices('/')
@@ -227,7 +228,10 @@ impl<'a> Graph<'a> {
         let claimed = self
             .nodes
             .iter()
-            .filter(|(_, node)| in_root(node) && claims(node.directory.as_ref(), node.whole, path))
+            .filter(|(_, node)| {
+                (in_root(node) || (local && node.root.is_none()))
+                    && claims(node.directory.as_ref(), node.whole, path)
+            })
             .max_by_key(|(_, node)| depth(node.directory.as_ref()))
             .map(|(manifest, _)| *manifest);
         let sourced: Vec<&RepoPath> = self
@@ -377,22 +381,4 @@ impl<'a> Walk<'a> {
             slot.get_or_insert_with(|| trigger.clone());
         }
     }
-}
-
-fn depth(directory: Option<&RepoPath>) -> usize {
-    directory.map_or(0, |directory| directory.as_str().len())
-}
-
-pub(crate) fn relative<'p>(directory: Option<&RepoPath>, path: &'p RepoPath) -> Option<&'p str> {
-    match directory {
-        None => Some(path.as_str()),
-        Some(directory) => path
-            .as_str()
-            .strip_prefix(directory.as_str())?
-            .strip_prefix('/'),
-    }
-}
-
-fn contains(directory: Option<&RepoPath>, path: &RepoPath) -> bool {
-    relative(directory, path).is_some()
 }
