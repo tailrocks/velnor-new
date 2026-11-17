@@ -82,7 +82,7 @@ fn every_ci_job_excludes_closed_pull_requests_and_preserves_other_events() -> Te
             jobs.get("required")
                 .and_then(|job| job.get("if"))
                 .and_then(serde_json::Value::as_str),
-            Some(format!("${{{{ {ACTIVE_EVENT} && (!cancelled()) }}}}").as_str())
+            Some(format!("${{{{ {ACTIVE_EVENT} && (always()) }}}}").as_str())
         );
         if let Some(condition) = jobs
             .get("rust-test")

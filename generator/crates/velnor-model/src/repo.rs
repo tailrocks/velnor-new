@@ -5,16 +5,36 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::cron::CronExpr;
+use crate::helper::HelperRelease;
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
-use crate::plan::{HelperRelease, Shape};
+use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
-    pub repository: String,
+    pub repository: RepositoryIdentity,
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub symlinks: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepositoryIdentity {
+    Named(String),
+    Unhosted,
+}
+
+impl Default for RepositoryIdentity {
+    fn default() -> Self {
+        Self::Named(String::new())
+    }
+}
+
+impl FullRun {
+    #[must_use]
+    pub fn is_hashed(&self) -> bool {
+        matches!(self, Self::Hourly | Self::Nightly | Self::Weekly)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -80,6 +100,7 @@ pub struct RepoFacts {
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
+    pub private_sources: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
     pub deny_configs: BTreeMap<RepoPath, RepoPath>,
@@ -224,6 +245,7 @@ pub struct ToolPin {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
+    pub crates_mirror: Option<CratesMirror>,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -238,6 +260,7 @@ pub struct RustCiConfig {
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
     pub ci_debuginfo: CiDebugInfo,
+    pub cache_check_blocks: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -272,6 +295,7 @@ impl Default for RustCiConfig {
     fn default() -> Self {
         Self {
             runner: RunnerLabel::from_static("ubuntu-latest"),
+            crates_mirror: None,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),
@@ -286,6 +310,14 @@ impl Default for RustCiConfig {
             full_run: FullRun::Nightly,
             helper: None,
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
+            cache_check_blocks: false,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CratesMirror {
+    pub runner: RunnerLabel,
+    pub registry: String,
+    pub cainfo: String,
 }

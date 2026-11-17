@@ -20,6 +20,7 @@ mod check;
 mod error;
 mod identity;
 mod pin;
+pub use identity::repository_name;
 mod recorded;
 mod ruleset;
 mod sample;
@@ -35,8 +36,8 @@ use pin::pin_helper;
 pub use pin::write_lock;
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, recording_of,
-    relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
+    recording_of, relocate_metadata, write_sample,
 };
 use tracked::tracked;
 use workflows::{ENGINE_CONFIG, workflow_paths};
@@ -96,8 +97,16 @@ pub fn main() -> Exit {
     match &cli.command {
         Command::RecordSample { checkout, name } => {
             return finish(
-                record_sample(&cli.root, checkout, name)
-                    .map(|()| format!("recorded {SAMPLES}/{name}")),
+                record_sample(&cli.root, checkout, name).map(|outcome| match outcome {
+                    SampleWriteOutcome::Recorded => format!("recorded {SAMPLES}/{name}"),
+                    SampleWriteOutcome::RecordedWithCleanupFailure {
+                        staging_path,
+                        error,
+                    } => format!(
+                        "recorded {SAMPLES}/{name}; cleanup failed for {}: {error}",
+                        staging_path.display()
+                    ),
+                }),
             );
         }
         Command::PinHelper { version } => return finish(pin_helper(&cli.root, version)),
@@ -287,11 +296,8 @@ pub fn view_of(
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
     for source in build_script_sources(&view) {
-        match read_files(root, std::slice::from_ref(&source)) {
-            Ok(files) => view.files.extend(files),
-            Err(Error::NotRegular(_)) => {}
-            Err(error) => return Err(error),
-        }
+        view.files
+            .extend(read_files(root, std::slice::from_ref(&source))?);
     }
     add_manifests(&mut view, |paths| read_files(root, paths))?;
     Ok((view, recorded))

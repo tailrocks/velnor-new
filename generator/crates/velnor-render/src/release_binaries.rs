@@ -5,8 +5,10 @@ use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release_outputs::commit_output;
 use crate::release_steps::{
-    checkout, expression, install_tool, join, permissions, shell_word, variables,
+    TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
+    variables,
 };
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
@@ -28,7 +30,7 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
             let mut jobs: Vec<RenderedJob> = binary
                 .platforms
                 .iter()
-                .map(|platform| build(binary, *platform))
+                .map(|platform| build(binary, *platform, helper))
                 .collect();
             jobs.push(sums(binary));
             jobs.push(publish(binary, helper));
@@ -67,7 +69,7 @@ fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> Rende
     }
 }
 
-fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
+fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> RenderedJob {
     let (runner, triple) = target(platform);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
@@ -81,16 +83,7 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
             id: Some("source".to_owned()),
             ..checkout(&tagged_source(binary), 1)
         },
-        RenderedStep {
-            env: variables(&[
-                ("COMMIT", VERIFIED_COMMIT),
-                ("CHECKED_OUT", "${{ steps.source.outputs.commit }}"),
-            ]),
-            ..command(
-                "Check that the tag is the commit the gate verified".to_owned(),
-                "test \"$CHECKED_OUT\" = \"$COMMIT\"".to_owned(),
-            )
-        },
+        same_commit(binary, helper),
     ];
     if linux {
         steps.push(command(
@@ -135,6 +128,32 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
             binary,
             Vec::new(),
         )
+    }
+}
+
+fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
+    let (name, expected, test) = if helper.version().at_least(TAGGED_COMMIT_HELPER) {
+        (
+            "Check that the tag is on the verified commit itself",
+            format!(
+                "${{{{ needs.tag.outputs.{} }}}}",
+                commit_output(&binary.package)
+            ),
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
+        )
+    } else {
+        (
+            "Check that the tag is the commit the gate verified",
+            VERIFIED_COMMIT.to_owned(),
+            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+        )
+    };
+    RenderedStep {
+        env: variables(&[
+            ("COMMIT", &expected),
+            ("CHECKED_OUT", "${{ steps.source.outputs.commit }}"),
+        ]),
+        ..command(name.to_owned(), test.to_owned())
     }
 }
 
@@ -193,7 +212,7 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             ),
         ]),
         run: Some(format!(
-            "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app {RELEASE_APP_SLUG} --dir {DIST} {}",
+            "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
             assets(binary).join(" ")
         )),
         ..RenderedStep::default()

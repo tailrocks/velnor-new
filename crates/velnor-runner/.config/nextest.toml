@@ -1,5 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
+experimental = ["wrapper-scripts"]
+
+[scripts.wrapper.local-docker-ci]
+command = ["sh", "-c", 'if [ "${GITHUB_ACTIONS:-}" = true ] && [ "${VELNOR_TEST_DOCKER_HOST+x}" != x ]; then export VELNOR_TEST_DOCKER_HOST=unix:///var/run/docker.sock; fi; exec "$@"', "local-docker-ci"]
+
+[[profile.ci.scripts]]
+filter = 'package(=velnor-runner-host) and (binary(=local_pair_public) or binary(=local_host_public))'
+platform = 'cfg(target_os = "linux")'
+run-wrapper = 'local-docker-ci'
+
 [profile.ci]
 retries = 0
 test-threads = "num-cpus"
@@ -12,3 +22,4 @@ docker-networks = { max-threads = 4 }
 [[profile.default.overrides]]
 filter = "binary(local_host_public) | binary(local_pair_public)"
 test-group = "docker-networks"
+success-output = "immediate"

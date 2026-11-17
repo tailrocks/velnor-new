@@ -38,6 +38,7 @@ const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<("
 pub enum Value {
     Text(String),
     Expr(String),
+    BoundedExpr { text: String, max_bytes: usize },
     Int(u64),
     Bool(bool),
 }
@@ -100,6 +101,7 @@ pub enum Rule {
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
+    OutputNameCollision(String),
     EnvTooLong(usize),
 }
 
@@ -116,6 +118,12 @@ impl fmt::Display for RuleViolation {
             return write!(
                 f,
                 "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
+            );
+        }
+        if let Rule::OutputNameCollision(name) = &self.rule {
+            return write!(
+                f,
+                "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
             );
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
@@ -145,14 +153,14 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
-            Rule::WorkflowTooLarge(_) => Ok(()),
+            Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
             ),
             Rule::EnvTooLong(length) => write!(
                 f,
-                "an env value is {length} characters long, and the limit is {MAX_ENV_CHARACTERS}; the gate spec grows with the number of jobs, so split the repository's Cargo roots"
+                "an env value can expand to {length} UTF-8 bytes, and the limit is {MAX_ENV_CHARACTERS}; the required gate's needs JSON includes every dependency's outputs, so reduce the Cargo roots or package outputs"
             ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
@@ -264,7 +272,8 @@ fn longest_env(step: &RenderedStep) -> Option<usize> {
     step.env
         .iter()
         .filter_map(|(_, value)| match value {
-            Value::Text(text) => Some(text.chars().count()),
+            Value::Text(text) => Some(text.len()),
+            Value::BoundedExpr { max_bytes, .. } => Some(*max_bytes),
             _ => None,
         })
         .max()
