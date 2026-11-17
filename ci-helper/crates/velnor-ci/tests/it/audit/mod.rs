@@ -1,12 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod boundary;
 mod freshness;
 mod gated;
 mod guards;
 mod identity;
 mod inventory;
 mod links;
+mod migration;
 mod optional;
 mod partial;
 mod reads;

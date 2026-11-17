@@ -15,6 +15,16 @@ threads-required = "num-test-threads"
 slow-timeout = { period = "120s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'test(audit::migration::) | test(audit::boundary::)'
+threads-required = "num-test-threads"
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'test(audit::migration::) | test(audit::boundary::)'
+threads-required = "num-test-threads"
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "test(crates_mirror)"
 success-output = "immediate"
 threads-required = "num-test-threads"

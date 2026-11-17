@@ -310,7 +310,7 @@ fn file_name(text: &str) -> Result<PlainName, CiError> {
 #[derive(Debug, Subcommand)]
 pub enum InputsCommand {
     #[command(
-        about = "Capture source directory entries before running a build command, and bind the inventories to its new build outputs for inputs audit"
+        about = "Capture directory inputs and bind them to build outputs for inputs audit. Known Cargo compiler commands may run twice to establish inventories; tests precompile and execute once, and arbitrary commands execute once. Bootstrap uses --workspace or explicit -p package selections and refuses to invalidate unselected packages"
     )]
     Build(InputsBuildArgs),
     #[command(
