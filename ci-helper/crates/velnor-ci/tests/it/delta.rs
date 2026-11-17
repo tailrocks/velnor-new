@@ -133,6 +133,7 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
 fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts() {
     let repo = Repo::new("delta-base");
     for base in ["other base", ""] {
+        repo.write_unstaged("delta/removed.json", "[]");
         repo.write_unstaged("delta/base-key", "base");
         repo.write_unstaged("delta/files/debug/poison", "wrong base");
         repo.write_unstaged("target/debug/base", "base artifact");
@@ -158,6 +159,7 @@ fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts
                     .unwrap_or_else(|e| unreachable!("{e}")),
             );
         }
+        repo.write_unstaged("delta/removed.json", "[]");
         repo.write_unstaged("delta/files/debug/poison", "invalid identity");
         repo.write_unstaged("target/debug/base", "base artifact");
         let mut writer = (identity == "fifo").then(|| {
@@ -252,6 +254,7 @@ fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
 fn delta_symlinks_never_read_or_overwrite_files_outside_the_cache() {
     let repo = Repo::new("delta-links");
     repo.write_unstaged("outside/untouched", "safe");
+    repo.write_unstaged("delta/removed.json", "[]");
     repo.write_unstaged("delta/base-key", "base");
     repo.write_unstaged("delta/files/debug/untouched", "poison");
     fs::create_dir_all(repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
