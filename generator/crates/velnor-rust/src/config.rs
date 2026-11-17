@@ -12,7 +12,8 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 16] = [
+const KEYS: [&str; 17] = [
+    "cache_check_blocks",
     "runner",
     "crates_mirror",
     "timeout_minutes",
@@ -34,6 +35,7 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 struct RawConfig {
+    cache_check_blocks: Option<bool>,
     runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
@@ -100,7 +102,6 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             }));
         }
     };
-    let nextest_harnesses = harnesses(raw.nextest_harnesses).map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
@@ -116,12 +117,13 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     Ok(RustCiConfig {
+        cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         crates_mirror: raw
             .crates_mirror
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        nextest_harnesses,
+        nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
             .skip_draft_pull_requests
