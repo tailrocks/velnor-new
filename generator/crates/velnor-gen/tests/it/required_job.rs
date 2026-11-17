@@ -218,6 +218,19 @@ fn a_large_plan_cannot_overflow_the_required_jobs_needs_environment() -> TestRes
 }
 
 #[test]
+fn a_package_map_that_does_not_fit_the_needs_environment_is_rejected() -> TestResult {
+    let files = expected_files(&many_members(600)?);
+    assert!(
+        matches!(&files, Err(velnor_gen::GenerateError::Rules(violations))
+            if violations.iter().any(|violation|
+                violation.job == "required"
+                    && matches!(violation.rule, velnor_render::Rule::EnvTooLong(_)))),
+        "the map of every selected package must fit the needs environment"
+    );
+    Ok(())
+}
+
+#[test]
 fn an_env_value_over_the_limit_is_a_rule_violation() {
     use velnor_render::{
         MAX_ENV_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, Value, check_rules,

@@ -2,9 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, RepoFacts, RootSlug, StepKind, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT,
+    CargoCommand, GateNeed, Job, RepoFacts, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
+
+const PACKAGE_ENTRY_BYTES: usize = 43;
 
 pub(crate) fn needs_max_bytes(facts: &RepoFacts, jobs: &[Job]) -> usize {
     jobs.iter().fold(4_usize, |total, job| {
@@ -17,19 +19,20 @@ pub(crate) fn needs_max_bytes(facts: &RepoFacts, jobs: &[Job]) -> usize {
                     output_bytes(facts, slug, *need),
                 ))
             });
-        let tests = job.steps.iter().any(|step| {
-            matches!(
-                step.kind,
-                StepKind::Cargo(
-                    CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. }
-                )
-            )
+        let tests = job.steps.iter().find_map(|step| match &step.kind {
+            StepKind::Cargo(
+                CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. },
+            ) => Some(step.reads.as_ref().map(|plan| plan.slug.clone())),
+            _ => None,
         });
-        let counters = if tests {
-            property_bytes(TESTS_RUN_OUTPUT, 20)
+        let counters = match tests {
+            Some(slug) => property_bytes(TESTS_RUN_OUTPUT, 20)
                 .saturating_add(property_bytes(TESTS_LISTED_OUTPUT, 20))
-        } else {
-            0
+                .saturating_add(property_bytes(
+                    TESTS_BY_PACKAGE_OUTPUT,
+                    package_map_bytes(facts, slug.as_ref()),
+                )),
+            None => 0,
         };
         total
             .saturating_add(64)
@@ -37,6 +40,24 @@ pub(crate) fn needs_max_bytes(facts: &RepoFacts, jobs: &[Job]) -> usize {
             .saturating_add(string_bytes("cancelled"))
             .saturating_add(outputs)
             .saturating_add(counters)
+    })
+}
+
+fn package_map_bytes(facts: &RepoFacts, slug: Option<&RootSlug>) -> usize {
+    let Some(slug) = slug else {
+        return usize::MAX;
+    };
+    let Some(root) = facts
+        .rust_roots
+        .iter()
+        .find(|root| RootSlug::of(&root.manifest) == *slug)
+    else {
+        return usize::MAX;
+    };
+    root.members.iter().fold(0_usize, |total, member| {
+        total
+            .saturating_add(string_bytes(member.name.as_str()))
+            .saturating_add(PACKAGE_ENTRY_BYTES)
     })
 }
 
