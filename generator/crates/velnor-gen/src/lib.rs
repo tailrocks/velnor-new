@@ -110,6 +110,13 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         .as_ref()
         .ok_or(GenerateError::HelperNotPinned)?;
     require_compatible(release.version())?;
+    if (facts.config.on_main == OnMain::Everything || facts.config.full_run != FullRun::Off)
+        && !release.version().at_least((0, 1, 81))
+    {
+        return Err(GenerateError::InputsBuildHelperTooOld(
+            release.version().clone(),
+        ));
+    }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
     }

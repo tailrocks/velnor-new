@@ -79,9 +79,12 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                 assert!(saw_mise);
             }
             repo.files
-                .insert(lock, old.replace("0.1.79", "0.1.80").into_bytes());
+                .insert(lock, old.replace("0.1.81", "0.1.80").into_bytes());
             assert!(workflow(&repo).is_err_and(|error| error.to_string().contains("0.1.81")));
-            repo.files.remove(&path(".velnor/rust-ci.toml")?);
+            repo.files.insert(
+                path(".velnor/rust-ci.toml")?,
+                b"full_run = \"off\"\n".to_vec(),
+            );
             assert!(!workflow(&repo)?.contains("crates-mirror"));
         }
     }

@@ -313,6 +313,10 @@ pub fn release_tag_patterns(root: &str, text: &str) -> Result<BTreeSet<String>, 
         .collect())
 }
 
+pub fn release_pr_branch_prefix(root: &str, text: &str) -> Result<String, ReleaseError> {
+    Ok(read(root, text)?.pr_branch_prefix)
+}
+
 pub(crate) fn root_of(file: &str) -> &str {
     match file.rsplit_once('/') {
         Some((root, _)) if !root.is_empty() => root,

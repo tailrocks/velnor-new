@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    CacheKey, CargoCommand, CratesMirror, GateNeed, HelperCommand, HelperRelease, Job, RepoPath,
+    Step, StepKind, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
 use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane};
@@ -41,17 +41,14 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
-    let restores = job
-        .steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))));
+    let (restores, audit) = crate::base_steps::job_setup(job);
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(with_saved_lane(
-            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            crate::base_steps::audited_lane(admission(job.when, job.gate.as_ref(), job.skip_on_draft), job),
             &job.steps,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
@@ -87,13 +84,13 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             .steps
             .iter()
             .scan(false, |replanned, step| {
-                let setup = match (restores, *replanned) {
-                    (false, _) => Setup::Before,
-                    (true, false) => Setup::Restored,
-                    (true, true) => Setup::Replanned,
-                };
+                let setup = Setup::of(restores, *replanned);
                 *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-                Some(rendered_steps(step, setup))
+                Some(crate::base_steps::audited_save(
+                    job,
+                    step,
+                    rendered_steps(step, setup, audit),
+                ))
             })
             .flatten()
             .collect(),
@@ -101,8 +98,12 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
     }
 }
 
-fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind, step.directory.as_ref())];
+fn rendered_steps(step: &Step, setup: Setup, audit: bool) -> Vec<RenderedStep> {
+    let mut rendered = Vec::new();
+    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
+        rendered.push(cargo_step(&CargoCommand::BuildAll, true));
+    }
+    rendered.push(step_body(&step.kind, step.directory.as_ref(), audit));
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -124,7 +125,7 @@ fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
-        (&step.reads, &step.kind, rendered.first_mut())
+        (&step.reads, &step.kind, rendered.last_mut())
     {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
@@ -135,6 +136,12 @@ fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
                 Value::Expr(format!("${{{{ {read} }}}}")),
             )
         }));
+    }
+    if let Some(verify) = rendered
+        .first()
+        .and_then(|saved| crate::cache_upload::record(&step.kind, saved))
+    {
+        rendered.push(verify);
     }
     rendered
 }
@@ -165,7 +172,7 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
+fn step_body(kind: &StepKind, directory: Option<&RepoPath>, audit: bool) -> RenderedStep {
     match kind {
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
@@ -176,26 +183,21 @@ fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
             ],
             ..RenderedStep::default()
         },
-        StepKind::InstallTools { only } => {
-            let mut with = vec![
-                ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
-                ("cache".to_owned(), Value::Bool(false)),
-            ];
-            if let Some(tool) = only {
-                with.push(("install_args".to_owned(), Value::Text(tool.clone())));
-            }
-            RenderedStep {
-                name: "Install tools".to_owned(),
-                uses: Some(MISE.to_owned()),
-                with,
-                ..RenderedStep::default()
-            }
-        }
+        StepKind::InstallTools { only } => install_tools(only.as_deref()),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
-        StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
+        StepKind::CacheDecide {
+            target,
+            archive,
+            manifests,
+        } => cache_decide(target, archive.as_ref(), manifests),
+        StepKind::RestoredTargets { expiry, targets } => {
+            crate::helper_steps::restored_step(*expiry, targets)
+        }
+        StepKind::CacheResult(uploads) => crate::cache_upload::result(uploads),
+        StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::DeltaPrepare(root) => crate::delta_steps::delta_step(root, "prepare"),
         StepKind::DeltaApply(root) => crate::delta_steps::delta_step(root, "apply"),
@@ -210,16 +212,13 @@ fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
             run: Some(format!("rustup target add {}", targets.join(" "))),
             ..RenderedStep::default()
         },
-        StepKind::Cargo(command) => cargo_step(command),
+        StepKind::Cargo(command) => cargo_step(command, audit),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
-        StepKind::InputsRestore(target) => crate::helper_steps::inputs_step("restore", target, directory),
-StepKind::CratesMirror(mirror) => RenderedStep {
-    name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
-    condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
-    run: Some(format!("velnor-ci crates-mirror --registry {} --cainfo {}", crate::release_steps::shell_word(&mirror.registry), crate::release_steps::shell_word(&mirror.cainfo))),
-    ..RenderedStep::default()
-},
+        StepKind::InputsRestore(target) => {
+            crate::helper_steps::inputs_step("restore", target, directory)
+        }
+        StepKind::CratesMirror(mirror) => crates_mirror_step(mirror),
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),
@@ -245,6 +244,35 @@ StepKind::CratesMirror(mirror) => RenderedStep {
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+    }
+}
+
+fn install_tools(only: Option<&str>) -> RenderedStep {
+    let mut with = vec![
+        ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+        ("cache".to_owned(), Value::Bool(false)),
+    ];
+    if let Some(tool) = only {
+        with.push(("install_args".to_owned(), Value::Text(tool.to_owned())));
+    }
+    RenderedStep {
+        name: "Install tools".to_owned(),
+        uses: Some(MISE.to_owned()),
+        with,
+        ..RenderedStep::default()
+    }
+}
+
+fn crates_mirror_step(mirror: &CratesMirror) -> RenderedStep {
+    RenderedStep {
+        name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
+        condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
+        run: Some(format!(
+            "velnor-ci crates-mirror --registry {} --cainfo {}",
+            crate::release_steps::shell_word(&mirror.registry),
+            crate::release_steps::shell_word(&mirror.cainfo)
+        )),
+        ..RenderedStep::default()
     }
 }
 

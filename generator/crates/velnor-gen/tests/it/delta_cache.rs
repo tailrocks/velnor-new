@@ -8,6 +8,14 @@ use velnor_gen::expected_files;
 use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath};
 use velnor_render::render_key;
 
+fn config_for(version: &str) -> &'static str {
+    if version == "0.1.80" {
+        "on_main = \"affected\"\nfull_run = \"off\"\n"
+    } else {
+        ""
+    }
+}
+
 #[test]
 fn pr_delta_keys_preserve_every_identity_dimension_in_every_restore_fallback() -> TestResult {
     let key = render_key(&CacheKey::Delta {
@@ -105,7 +113,10 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
             assert!(
                 step(&lane, "Save the target cache").is_some_and(|s| !s.contains("pull_request"))
             );
-            assert!(step(&lane, "velnor-ci delta stage").is_some_and(|s| s.contains("--package")));
+            assert!(
+                step(&lane, "velnor-ci delta stage")
+                    .is_some_and(|s| s.contains("VELNOR_DELTA_PACKAGES:"))
+            );
             source_identity(&lane)?;
         }
     }
@@ -194,7 +205,7 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
         } else {
             "0.1.81"
         };
-        let mut repo = pinned(version, "")?;
+        let mut repo = pinned(version, config_for(version))?;
         let path = RepoPath::new(if unsupported == "custom-target" {
             "build.velnor-delta/owned"
         } else {
@@ -230,7 +241,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
         ("0.1.80", true),
         ("0.1.81", true),
     ] {
-        let mut repo = pinned(version, "")?;
+        let mut repo = pinned(version, config_for(version))?;
         if source {
             let lock = repo
                 .files
@@ -242,6 +253,11 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
                     .join("../../samples/helper-source"),
             )?;
             repo.files.insert(velnor_rust::LOCK_PATH, lock);
+            let config = repo
+                .files
+                .get_mut(&velnor_rust::CONFIG_PATH)
+                .ok_or("no config")?;
+            config.extend_from_slice(config_for(version).as_bytes());
         }
         let text = workflow(&repo)?;
         let files = expected_files(&repo)?;
@@ -293,6 +309,29 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             assert!(!cleanup.contains(forbidden), "{forbidden}: {cleanup}");
         }
     }
+    Ok(())
+}
+
+#[test]
+fn a_workspace_with_many_crates_stages_its_delta_through_one_package_variable() -> TestResult {
+    let repo = crate::golden::load(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/lab-150"),
+    )?;
+    let files = expected_files(&repo)?;
+    let text = files
+        .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .ok_or("no rust-ci workflow")?;
+    let stage = step(text, "velnor-ci delta stage").ok_or("no delta stage")?;
+    assert!(!stage.contains("--package"), "{stage}");
+    let packages: Vec<&str> = stage
+        .lines()
+        .skip_while(|line| !line.trim_start().starts_with("VELNOR_DELTA_PACKAGES:"))
+        .skip(1)
+        .take_while(|line| line.starts_with("            "))
+        .map(str::trim)
+        .collect();
+    assert!(packages.contains(&"app"), "{stage}");
+    assert!(packages.contains(&"grow-149"), "{stage}");
     Ok(())
 }
 

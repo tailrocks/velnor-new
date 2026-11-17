@@ -35,7 +35,7 @@ pub(crate) fn release_workflow(
     let reality = Reality { facts, generated };
     let plan =
         ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
-    if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 81)) {
+    if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 82)) {
         return Err(GenerateError::PrOnlyChecksHelperTooOld(
             helper.version().clone(),
         ));
@@ -129,7 +129,8 @@ fn tracked_workflows(view: &RepoView) -> impl Iterator<Item = (String, String)> 
         .iter()
         .filter(|(path, _)| {
             let name = path.as_str();
-            name.starts_with(".github/workflows/")
+            name.strip_prefix(".github/workflows/")
+                .is_some_and(|relative| !relative.contains('/'))
                 && std::path::Path::new(name)
                     .extension()
                     .is_some_and(|ext| ext == "yml" || ext == "yaml")

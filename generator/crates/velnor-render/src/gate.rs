@@ -54,6 +54,16 @@ pub(crate) enum Setup {
     Replanned,
 }
 
+impl Setup {
+    pub(crate) fn of(restores: bool, replanned: bool) -> Self {
+        match (restores, replanned) {
+            (false, _) => Self::Before,
+            (true, false) => Self::Restored,
+            (true, true) => Self::Replanned,
+        }
+    }
+}
+
 pub(crate) const REPLAN_STEP: &str = "replan";
 const BASE_EXPIRED: &str = "steps.restored.outputs.expired == 'true'";
 
@@ -73,6 +83,21 @@ pub(crate) fn plan_source(from: &PlanFrom) -> String {
     match from {
         PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
         PlanFrom::Job(job) => format!("needs.{job}.outputs"),
+    }
+}
+
+fn delta_conditions(when: When, setup: Setup, parts: &mut Vec<String>) {
+    parts.push("github.event_name == 'pull_request'".to_owned());
+    if when != When::PullRequest {
+        parts.push(NOT_CANCELLED.to_owned());
+        parts.push("github.event.pull_request.head.repo.full_name == github.repository".to_owned());
+        parts.push(SETUP_DONE.to_owned());
+        if setup == Setup::Replanned {
+            parts.push(format!("steps.{REPLAN_STEP}.outcome != 'failure'"));
+        }
+    }
+    if when == When::SaveDeltaDecided {
+        parts.push("steps.delta.outputs.save == 'true'".to_owned());
     }
 }
 
@@ -104,9 +129,10 @@ pub(crate) fn condition(
         When::ScheduledOrPush => parts.push(format!(
             "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
         )),
-        When::SaveBase | When::SaveBaseDecided => {
+        When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
+                parts.push("success()".to_owned());
                 parts.push(SETUP_DONE.to_owned());
             }
             if setup == Setup::Replanned {
@@ -114,10 +140,18 @@ pub(crate) fn condition(
             }
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(SAVING_EVENTS.to_owned());
+            if when == When::SaveSources {
+                parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
+            }
             if when == When::SaveBaseDecided {
                 parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
             }
         }
+        When::FullAudit => {
+            let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
+            parts.push(format!("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'{expired})"));
+        },
+        When::FullAuditOrPush => parts.push("(github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')".to_owned()),
         When::BaseExpired => parts.push(BASE_EXPIRED.to_owned()),
         When::SavingRun => {
             parts.push(ON_DEFAULT_BRANCH.to_owned());
@@ -128,20 +162,7 @@ pub(crate) fn condition(
             parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
         }
         When::PullRequest | When::SaveDelta | When::SaveDeltaDecided => {
-            parts.push("github.event_name == 'pull_request'".to_owned());
-            if when != When::PullRequest {
-                parts.push(NOT_CANCELLED.to_owned());
-                parts.push(
-                    "github.event.pull_request.head.repo.full_name == github.repository".to_owned(),
-                );
-                parts.push(SETUP_DONE.to_owned());
-                if setup == Setup::Replanned {
-                    parts.push(format!("steps.{REPLAN_STEP}.outcome != 'failure'"));
-                }
-            }
-            if when == When::SaveDeltaDecided {
-                parts.push("steps.delta.outputs.save == 'true'".to_owned());
-            }
+            delta_conditions(when, setup, &mut parts);
         }
     }
     if skip_draft {

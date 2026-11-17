@@ -10,7 +10,8 @@ use crate::golden::{load, samples};
 use crate::pipeline::{HELPER_LOCK, view, workflow};
 
 fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
-    let mut view = view(roots, None)?;
+    let config = (version == "0.1.80").then_some(b"full_run = \"off\"\n".as_slice());
+    let mut view = view(roots, config)?;
     let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", version, 1);
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
@@ -56,7 +57,7 @@ fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> 
     assert!(job.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
     assert_eq!(
         gate_line(&text)?,
-        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
+        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-lab=lab"
     );
     Ok(())
 }
@@ -123,8 +124,15 @@ fn built_from_source(version: &str) -> Result<String, Box<dyn std::error::Error>
     let mut view = load(&samples().join("helper-source"))?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let bytes = view.files.get(&lock).ok_or("no lock")?;
-    let text = String::from_utf8(bytes.clone())?.replacen("0.1.79", version, 1);
+    let text = String::from_utf8(bytes.clone())?.replacen("0.1.81", version, 1);
     view.files.insert(lock, text.into_bytes());
+    if version == "0.1.80" {
+        let config = view
+            .files
+            .get_mut(&velnor_rust::CONFIG_PATH)
+            .ok_or("no config")?;
+        config.extend_from_slice(b"\nfull_run = \"off\"\n");
+    }
     let mut files = expected_files(&view)?;
     files
         .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)

@@ -280,6 +280,7 @@ impl<'a> ControllerLoop<'a> {
                 image_authority: &self.image_authority,
                 admission_ready: self.admission_ready,
                 control_state: &self.control_state,
+                retirement_budget: Duration::from_secs(120),
             },
             &self.pending_retirements,
             &mut self.connection_sessions,

@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cache;
-pub mod cache_cli;
 pub mod cli;
+mod cli_cache;
+mod cli_release;
 pub mod collect;
 pub mod compare;
 mod configurations;
@@ -24,6 +25,8 @@ pub mod plan;
 pub mod platform;
 pub mod publish;
 pub mod release;
+pub mod release_commit;
+pub mod release_preflight;
 pub mod required;
 pub mod rulesets;
 pub mod scope;

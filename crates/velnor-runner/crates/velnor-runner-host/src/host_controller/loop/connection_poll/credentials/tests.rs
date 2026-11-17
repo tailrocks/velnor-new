@@ -8,7 +8,7 @@ use std::{
 
 use super::{
     RESTORE_ATTEMPT_DEADLINE, RESTORE_RETRY, RestoreMode, guarded_restore,
-    release_suspect_credentials, restore_bound_session, restore_missing,
+    release_suspect_credentials, restore_before_deadline, restore_bound_session,
 };
 use crate::{
     config::HostConfig,
@@ -16,25 +16,6 @@ use crate::{
     journal::{ConnectionJournal, Journal},
     scale_set::EnsureError,
 };
-
-#[tokio::test]
-async fn present_credentials_are_not_reloaded() -> Result<(), ()> {
-    let mut slot = Some(1_u32);
-    restore_missing(&mut slot, async || -> Result<u32, ()> { Err(()) }).await?;
-    assert_eq!(slot, Some(1));
-    Ok(())
-}
-
-#[tokio::test]
-async fn a_failed_restore_keeps_the_poll_held() {
-    let mut slot: Option<u32> = None;
-    assert!(
-        restore_missing(&mut slot, async || -> Result<u32, ()> { Err(()) })
-            .await
-            .is_err()
-    );
-    assert!(slot.is_none());
-}
 
 const CONFIG: &str = r#"schema = 2
 [[connections]]
@@ -138,7 +119,7 @@ impl Gate {
             "conn",
             mode,
             || clock.get(),
-            self.deadline,
+            now + self.deadline,
             &mut self.retry_at,
             &mut self.slot,
             async || {
@@ -241,7 +222,17 @@ async fn the_backoff_starts_after_a_slow_attempt_fails() {
 }
 
 #[tokio::test]
-async fn a_hanging_restore_returns_within_the_deadline_and_backs_off() {
+async fn a_late_success_never_installs_credentials() {
+    let start = Instant::now();
+    let mut gate = Gate::new(None);
+    gate.attempt_takes = Duration::from_secs(11);
+    assert!(!gate.run(true, start, false).await);
+    assert!(gate.slot.is_none());
+    assert_eq!(gate.retry_at, Some(start + Duration::from_secs(41)));
+}
+
+#[tokio::test]
+async fn a_hanging_authority_restore_returns_within_the_deadline_and_backs_off() {
     let start = Instant::now();
     let mut slot: Option<u32> = None;
     let mut retry_at = None;
@@ -250,10 +241,16 @@ async fn a_hanging_restore_returns_within_the_deadline_and_backs_off() {
         "conn",
         RestoreMode::Polling,
         || start,
-        Duration::from_millis(50),
+        start + Duration::from_millis(50),
         &mut retry_at,
         &mut slot,
-        async || -> Result<u32, &str> { std::future::pending().await },
+        async || {
+            restore_before_deadline(
+                tokio::time::Instant::now() + Duration::from_millis(50),
+                async || -> Result<u32, &str> { std::future::pending().await },
+            )
+            .await
+        },
     )
     .await;
     assert!(held);

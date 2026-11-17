@@ -92,7 +92,10 @@ fn target_cache_directories_cannot_overlap_tracked_inputs() -> TestResult {
             .err()
             .map(|error| error.to_string())
             .unwrap_or_default();
-        if !error.contains("target") || !error.contains(tracked) {
+        let folder = target.unwrap_or("target");
+        let refusal =
+            format!("build.target-dir {folder:?} overlaps tracked checkout content or repository");
+        if !error.contains(&refusal) {
             failures.push(format!("{target:?} {tracked}: {error}"));
         }
     }

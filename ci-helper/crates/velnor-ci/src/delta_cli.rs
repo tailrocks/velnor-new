@@ -26,7 +26,9 @@ pub struct DeltaArgs {
     pub staging_dir: PathBuf,
     #[arg(
         long = "package",
-        help = "Workspace crate whose compilation permits saving; repeat for each crate"
+        env = "VELNOR_DELTA_PACKAGES",
+        value_delimiter = '\n',
+        help = "Workspace crate whose compilation permits saving; repeat for each crate, or set VELNOR_DELTA_PACKAGES to one crate per line"
     )]
     pub packages: Vec<String>,
 }

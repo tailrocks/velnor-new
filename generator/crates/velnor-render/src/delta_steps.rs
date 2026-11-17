@@ -3,7 +3,7 @@
 
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
-use velnor_model::CacheRoot;
+use velnor_model::{CacheRoot, PackageName};
 
 pub(crate) fn delta_step(root: &CacheRoot, verb: &str) -> RenderedStep {
     let slug = root.slug();
@@ -34,10 +34,7 @@ fn paths(root: &CacheRoot) -> String {
     )
 }
 
-pub(crate) fn delta_stage(
-    root: &CacheRoot,
-    packages: &[velnor_model::PackageName],
-) -> RenderedStep {
+pub(crate) fn delta_stage(root: &CacheRoot, packages: &[PackageName]) -> RenderedStep {
     let mut step = delta_step(root, "stage");
     step.env.push((
         "EXPECTED_SOURCE_IDENTITY".to_owned(),
@@ -46,11 +43,12 @@ pub(crate) fn delta_stage(
             root.slug()
         )),
     ));
-    if let Some(run) = &mut step.run {
-        for package in packages {
-            run.push_str(" --package ");
-            run.push_str(&shell_word(package.as_str()));
-        }
+    if !packages.is_empty() {
+        let names: Vec<&str> = packages.iter().map(PackageName::as_str).collect();
+        step.env.push((
+            "VELNOR_DELTA_PACKAGES".to_owned(),
+            Value::Text(names.join("\n")),
+        ));
     }
     step
 }

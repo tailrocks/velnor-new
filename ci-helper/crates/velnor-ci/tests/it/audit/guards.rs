@@ -46,6 +46,20 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
         target,
         &["app", "app-it", "app-build", "lib-it", "lib-build"],
     );
+    repo.set_mtime(
+        &format!("{target}/build/lib-0000000000000005/output"),
+        SystemTime::now() + Duration::from_secs(100),
+    );
+    unit(&repo, &format!("{target}/newer-artifact"), "");
+    repo.set_mtime(
+        &format!("{target}/newer-artifact"),
+        SystemTime::now() + Duration::from_secs(200),
+    );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/lib-0000000000000005/output"),
+        None,
+    );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(
@@ -133,11 +147,11 @@ fn two_roots_sharing_a_target_directory_make_the_audit_refuse() {
     repo.write_all(&[
         (
             "rust/.cargo/config.toml",
-            "[build]\ntarget-dir = \"../shared-target\"\n",
+            "[build]\ntarget-dir = \"../shared\"\n",
         ),
         (
             "tools/.cargo/config.toml",
-            "[build]\ntarget-dir = \"../shared-target\"\n",
+            "[build]\ntarget-dir = \"../shared\"\n",
         ),
         (
             "tools/Cargo.toml",
@@ -149,7 +163,7 @@ fn two_roots_sharing_a_target_directory_make_the_audit_refuse() {
     let shared = audit(&repo, &["--write"]);
     assert_eq!(shared.status.code(), Some(1), "{shared:?}");
     assert!(
-        String::from_utf8_lossy(&shared.stderr).contains("so their units cannot be told apart"),
+        String::from_utf8_lossy(&shared.stderr).contains("overlaps tracked checkout content"),
         "{shared:?}"
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
@@ -169,6 +183,11 @@ fn a_build_output_whose_declared_input_changed_since_leaves_the_build_script_unc
         &repo,
         &format!("{target}/build/lib-000000000000000f/output"),
         "cargo:rerun-if-changed=../../shared/build.txt\n",
+    );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/lib-000000000000000f/output"),
+        None,
     );
     repo.set_mtime(
         "shared/build.txt",

@@ -13,6 +13,8 @@ pub(crate) mod command;
 pub(crate) mod hosted_profile;
 #[path = "../homebrew_install.rs"]
 pub(crate) mod install;
+#[path = "../homebrew_qualification_evidence.rs"]
+pub(crate) mod qualification_evidence;
 #[path = "../homebrew_qualification.rs"]
 pub(crate) mod qualification;
 #[path = "../native_check_runtime.rs"]

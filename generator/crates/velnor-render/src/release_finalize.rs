@@ -114,7 +114,7 @@ fn publish(index: usize, package: &str) -> RenderedStep {
             ("TAG", &format!("${{{{ needs.tag.outputs.{package} }}}}")),
         ]),
         run: Some(format!(
-            "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app {RELEASE_APP_SLUG} --no-files"
+            "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --no-files"
         )),
         ..RenderedStep::default()
     }

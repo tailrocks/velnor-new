@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind, TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind,
+    TargetName,
 };
 
 use crate::gate::CACHE_DEBUG_ON;
@@ -14,7 +15,7 @@ const FINGERPRINT_LOG: &str =
 const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
-pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
+pub(crate) fn cargo_step(command: &CargoCommand, audit: bool) -> RenderedStep {
     let (name, run, env): (String, String, Vec<(String, Value)>) = match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => (
@@ -36,7 +37,7 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
             filter,
         ),
         CargoCommand::NextestArchive { file } => (
-            "Build the tests".into(),
+            BUILD_TESTS_STEP.into(),
             format!(
                 "cargo-nextest nextest archive --workspace --locked --archive-file '{}'",
                 file.as_str().replace('\'', "'\\''")
@@ -86,12 +87,29 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
     } else {
         RUN
     };
+    let inventory = inventory_prefix(command, audit);
     RenderedStep {
         name,
         id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
         env: env.into_iter().chain([cache_debug_env()]).collect(),
-        run: Some(format!("{prefix} {run}")),
+        run: Some(format!("{prefix} {inventory}{run}")),
         ..RenderedStep::default()
+    }
+}
+
+fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
+    if audit
+        && !matches!(
+            command,
+            CargoCommand::FmtCheck
+                | CargoCommand::Deny { .. }
+                | CargoCommand::Machete
+                | CargoCommand::NextestRunArchive { .. }
+        )
+    {
+        "velnor-ci inputs build -- "
+    } else {
+        ""
     }
 }
 

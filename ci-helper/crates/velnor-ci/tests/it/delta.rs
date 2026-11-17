@@ -302,6 +302,56 @@ fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
     assert_eq!(manifest(&repo)["base"], "base");
 }
 
+fn stage_crediting(repo: &Repo, identity: &str, packages: &str) -> (Output, String) {
+    let output_file = repo.root().join("delta-output");
+    fs::remove_file(&output_file).ok();
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args([
+            "delta",
+            "stage",
+            "--target-dir",
+            "target",
+            "--staging-dir",
+            "delta",
+        ])
+        .current_dir(repo.root())
+        .env("BASE_CACHE_KEY", "base")
+        .env("EXPECTED_SOURCE_IDENTITY", identity)
+        .env("GITHUB_OUTPUT", &output_file)
+        .env("RUNNER_TEMP", repo.root())
+        .env("VELNOR_DELTA_PACKAGES", packages)
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let written = fs::read_to_string(output_file).unwrap_or_default();
+    (output, written)
+}
+
+#[test]
+fn stage_credits_the_crates_listed_one_per_line_in_the_package_variable() {
+    let repo = Repo::new("delta-package-variable");
+    let (output, prepared) = run(&repo, "prepare", "base");
+    success(&output);
+    let identity = prepared
+        .lines()
+        .find_map(|line| line.strip_prefix("source_identity="))
+        .unwrap_or_default()
+        .to_owned();
+    success(&run(&repo, "apply", "base").0);
+    compiled(&repo);
+    repo.write_unstaged("target/debug/current", "current");
+    let (output, save) = stage_crediting(&repo, &identity, "lib\nother");
+    success(&output);
+    assert_eq!(save, "save=false\n");
+    assert!(!repo.root().join("delta").exists());
+    let (output, save) = stage_crediting(&repo, &identity, "lib\napp\nother");
+    success(&output);
+    assert_eq!(save, "save=true\n");
+    assert_eq!(
+        fs::read_to_string(repo.root().join("delta/files/debug/current")).unwrap_or_default(),
+        "current"
+    );
+}
+
 #[test]
 fn delta_symlinks_never_read_or_overwrite_files_outside_the_cache() {
     let repo = Repo::new("delta-links");
