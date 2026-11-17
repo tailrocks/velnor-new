@@ -93,7 +93,7 @@ fn parse_variable(tail: &str) -> (&str, Option<&str>, usize) {
     (&tail[..end], None, end)
 }
 
-fn valid_name(name: &str) -> bool {
+pub(super) fn valid_name(name: &str) -> bool {
     let mut bytes = name.bytes();
     bytes
         .next()

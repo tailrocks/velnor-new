@@ -58,16 +58,19 @@ global and stage `ARG` defaults are understood). It rejects:
 - `image_context_source_unresolved:<source>`: a `COPY`/`ADD` context source
   cannot be resolved safely to the exact path BuildKit will read. This includes
   unsupported or inherited `ARG`/`ENV` values, injected build arguments,
-  ambiguous quoting or escaping, and source syntax the parser cannot interpret.
+  ambiguous quoting or escaping, multi-declaration `ARG` instructions, and
+  source syntax the parser cannot interpret.
 - `image_escape_directive`: a changed `# escape=` character.
 
 Use a literal source or an `ARG` with a resolvable value in the current stage.
-If the source depends on an inherited environment, an injected build argument,
-or syntax Velnor cannot resolve, rewrite it so the exact context path is
-explicit. Velnor refuses the Dockerfile rather than selecting an incomplete set
-of image inputs. For sources it can resolve, the analyzer reports their
-context-relative paths; affected-image selection uses those paths. `RUN` may use
-the network (for example `apt`); it never receives a secret.
+Declare each `ARG` separately; do not combine multiple declarations on one
+`ARG` instruction. If the source depends on an inherited environment, an
+injected build argument, or syntax Velnor cannot resolve, rewrite it so the
+exact context path is explicit. Velnor refuses the Dockerfile rather than
+selecting an incomplete set of image inputs. For sources it can resolve, the
+analyzer reports their context-relative paths; affected-image selection uses
+those paths. `RUN` may use the network (for example `apt`); it never receives
+a secret.
 
 ## Build jobs (implemented)
 

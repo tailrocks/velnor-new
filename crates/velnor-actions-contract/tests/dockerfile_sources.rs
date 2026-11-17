@@ -197,3 +197,27 @@ fn json_sources_beginning_with_dashes_are_operands() -> Result<(), String> {
     assert_eq!(facts.context_sources.len(), 1);
     Ok(())
 }
+
+#[test]
+fn multiple_argument_names_do_not_override_imported_values_with_fallbacks() {
+    let text = "ARG SRC=actual\nFROM scratch\nARG SRC OTHER\nCOPY ${SRC:-src}/main.txt /dest\n";
+    if let Ok(facts) = analyze_dockerfile(text, &[]) {
+        assert!(
+            facts.context_sources.contains("actual/main.txt"),
+            "{facts:?}"
+        );
+        assert!(!facts.context_sources.contains("src/main.txt"), "{facts:?}");
+    }
+}
+
+#[test]
+fn multiple_argument_defaults_do_not_replace_values_with_fallbacks() {
+    let text = "FROM scratch\nARG OTHER=unused SRC=actual\nCOPY ${SRC:-src}/main.txt /dest\n";
+    if let Ok(facts) = analyze_dockerfile(text, &[]) {
+        assert!(
+            facts.context_sources.contains("actual/main.txt"),
+            "{facts:?}"
+        );
+        assert!(!facts.context_sources.contains("src/main.txt"), "{facts:?}");
+    }
+}

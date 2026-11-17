@@ -60,7 +60,7 @@ mod variable;
 
 pub use runner::analyze_runner_dockerfile;
 use syntax::{check_directives, instructions};
-use variable::{ArgValue, arg_value, is_injected_arg, substitute};
+use variable::{ArgValue, arg_value, is_injected_arg, substitute, valid_name};
 
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
@@ -89,7 +89,7 @@ pub fn analyze_dockerfile(
     check_directives(text)?;
     for (keyword, args) in instructions(text) {
         match keyword.as_str() {
-            "ARG" => state.record_arg(&args),
+            "ARG" => state.record_arg(&args)?,
             "FROM" => state.from(&args)?,
             "ENV" => state.unknown_environment = true,
             "COPY" | "ADD" => state.copy(&keyword, &args)?,
@@ -114,12 +114,13 @@ struct State {
 }
 
 impl State {
-    fn record_arg(&mut self, args: &str) {
+    fn record_arg(&mut self, args: &str) -> Result<(), DockerfileProblem> {
         let token = args.trim();
+        let unresolved = || DockerfileProblem::ContextSourceUnresolved(format!("ARG {args}"));
         let (name, value) = match token.split_once('=') {
             Some((name, value)) => (
                 name,
-                arg_value(value).map_or(ArgValue::Unknown, ArgValue::Known),
+                ArgValue::Known(arg_value(value).ok_or_else(unresolved)?),
             ),
             None if self.inherited_stage => (token, ArgValue::Unknown),
             None => (
@@ -131,6 +132,9 @@ impl State {
                     .unwrap_or(ArgValue::Unset),
             ),
         };
+        if !valid_name(name) {
+            return Err(unresolved());
+        }
         let value = if is_injected_arg(name) {
             ArgValue::Unknown
         } else {
@@ -141,6 +145,7 @@ impl State {
         } else {
             self.global_args.insert(name.to_owned(), value);
         }
+        Ok(())
     }
 
     fn from(&mut self, args: &str) -> Result<(), DockerfileProblem> {
