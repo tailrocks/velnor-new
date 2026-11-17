@@ -3,11 +3,17 @@
 
 use std::collections::BTreeMap;
 
-use serde::Deserialize;
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 use velnor_rust::{PackageCounts, encode_package_counts, package_token};
 
 use crate::logscan::{nextest_summary, strip_ansi};
+
+#[path = "tests_run/listed.rs"]
+mod listed;
+#[cfg(test)]
+mod statuses;
+
+pub(crate) use listed::runnable_matches;
 
 const LINE_LIMIT: usize = 4096;
 const RUN_FLAGS: &[&str] = &[
@@ -119,42 +125,6 @@ fn drop_run_only(run: &[String], index: &mut usize) -> bool {
         *index += 1;
     }
     true
-}
-
-#[must_use]
-pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
-    let listed: Listed = serde_json::from_slice(bytes).ok()?;
-    let mut packages = BTreeMap::new();
-    let mut excluded = BTreeMap::new();
-    for suite in listed.rust_suites.into_values() {
-        if !package_token(&suite.package_name) {
-            return None;
-        }
-        let mut matched = 0u64;
-        let mut mismatched = 0u64;
-        for case in suite.testcases.into_values() {
-            match case.filter_match.status.as_str() {
-                "matches" => matched = matched.checked_add(1)?,
-                "mismatch" => mismatched = mismatched.checked_add(1)?,
-                _ => return None,
-            }
-        }
-        add(&mut packages, &suite.package_name, matched)?;
-        add(&mut excluded, &suite.package_name, mismatched)?;
-    }
-    Some(if packages.is_empty() {
-        excluded
-    } else {
-        packages
-    })
-}
-
-fn add(into: &mut BTreeMap<String, u64>, name: &str, count: u64) -> Option<()> {
-    if count > 0 {
-        let total = into.get(name).copied().unwrap_or(0_u64);
-        into.insert(name.to_owned(), total.checked_add(count)?);
-    }
-    Some(())
 }
 
 #[must_use]
@@ -353,14 +323,31 @@ fn status_line(line: &str) -> Status {
     } else {
         (first, false)
     };
-    if !(matches!(word, "PASS" | "LEAK") || (word == "FAIL" && !retried)) {
-        return Status::Ignore;
-    }
     let Some((_, rest)) = line.split_once(word) else {
         return Status::Ignore;
     };
     let rest = rest.trim_start();
     if !rest.starts_with('[') {
+        return Status::Ignore;
+    }
+    if matches!(word, "SKIP" | "SLOW") {
+        return Status::Ignore;
+    }
+    let counted = matches!(
+        word,
+        "PASS" | "FAIL" | "TIMEOUT" | "TMPASS" | "LEAK" | "LEAK-FAIL" | "SIGSEGV" | "ABORT"
+    );
+    if !counted {
+        return if word
+            .bytes()
+            .all(|byte| byte.is_ascii_uppercase() || byte == b'-')
+        {
+            Status::Poison
+        } else {
+            Status::Ignore
+        };
+    }
+    if retried && word != "PASS" {
         return Status::Ignore;
     }
     parse_status(rest).map_or(Status::Poison, |package| Status::Count { package })
@@ -395,28 +382,4 @@ fn duration_ok(inside: &str) -> bool {
         && fraction.is_none_or(|fraction| {
             !fraction.is_empty() && fraction.bytes().all(|byte| byte.is_ascii_digit())
         })
-}
-
-#[derive(Deserialize)]
-struct Listed {
-    #[serde(rename = "rust-suites")]
-    rust_suites: BTreeMap<String, Suite>,
-}
-
-#[derive(Deserialize)]
-struct Suite {
-    #[serde(rename = "package-name")]
-    package_name: String,
-    testcases: BTreeMap<String, Case>,
-}
-
-#[derive(Deserialize)]
-struct Case {
-    #[serde(rename = "filter-match")]
-    filter_match: FilterMatch,
-}
-
-#[derive(Deserialize)]
-struct FilterMatch {
-    status: String,
 }
