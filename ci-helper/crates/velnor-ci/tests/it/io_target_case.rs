@@ -8,6 +8,35 @@ use std::process::Command;
 use velnor_ci::io::{CaseSensitivity, check_input_target_with, cold_on_failure, restore_inputs};
 
 use crate::io::Repo;
+use crate::support::fresh_dir;
+
+#[test]
+fn checkout_under_a_cargo_ancestor_still_saves_its_default_target() {
+    let parent = fresh_dir("velnor-ci-cargo-ancestor", "parent");
+    let cargo = parent.join(".cargo");
+    fs::create_dir(&cargo).unwrap_or_else(|error| unreachable!("{error}"));
+    let repo = Repo::new_under(&cargo, "project");
+    repo.write(
+        "Cargo.toml",
+        "[package]\nname = 'leaf'\nversion = '0.1.0'\nedition = '2024'\n[workspace]\n",
+    );
+    repo.write("src/lib.rs", "pub fn leaf() -> u8 { 1 }\n");
+    let build = Command::new(env!("CARGO"))
+        .args(["build", "--offline"])
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(build.status.success(), "{build:?}");
+    let save = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["inputs", "save"])
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(save.status.success(), "{save:?}");
+    assert!(repo.root().join("target/.velnor/inputs.tsv").is_file());
+    drop(repo);
+    fs::remove_dir_all(parent).unwrap_or_else(|error| unreachable!("{error}"));
+}
 
 fn case_alias(name: &str) -> Repo {
     let repo = Repo::new(name);

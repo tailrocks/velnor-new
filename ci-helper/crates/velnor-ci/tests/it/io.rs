@@ -170,6 +170,18 @@ impl Repo {
         repo
     }
 
+    pub(crate) fn new_under(parent: &Path, name: &str) -> Self {
+        let repo = Self(fresh_dir_in(
+            parent,
+            &AtomicU64::new(0),
+            "velnor-ci-inputs",
+            name,
+        ));
+        repo.git(&["init", "--quiet"]);
+        repo.write_unstaged(".gitignore", "/target/\n");
+        repo
+    }
+
     pub(crate) fn fork(&self, name: &str) -> Self {
         let copy = Self::empty(name);
         copy_tree(&self.0, &copy.0);

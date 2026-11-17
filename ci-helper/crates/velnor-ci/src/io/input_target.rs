@@ -31,18 +31,17 @@ pub fn check_input_target_with(
     target: &Path,
     probe: &impl Fn(&Path) -> Result<CaseSensitivity, CiError>,
 ) -> Result<(), CiError> {
+    let root = resolve(root)?;
     let path = root.join(target);
     let object = target_object(&path)?;
     let mut targets = vec![object, resolve(&path)?];
     targets.dedup();
     let links = symlink_objects(&path)?;
-    if targets.iter().chain(links.iter()).any(|target| {
-        target.components().any(|part| {
-            part.as_os_str()
-                .as_encoded_bytes()
-                .eq_ignore_ascii_case(b".cargo")
-        })
-    }) {
+    if targets
+        .iter()
+        .chain(links.iter())
+        .any(|target| below_checkout_has_cargo_directory(target, &root))
+    {
         return Err(CiError::new(format!(
             "target directory {} overlaps Cargo configuration",
             path.display()
@@ -54,7 +53,7 @@ pub fn check_input_target_with(
             sensitivity = CaseSensitivity::Insensitive;
         }
     }
-    let top = protect_checkout(root, &targets, &links, sensitivity)?;
+    let top = protect_checkout(&root, &targets, &links, sensitivity)?;
     let mut checked = BTreeSet::from([top]);
     for target in targets.iter().chain(links.iter()) {
         for ancestor in target.ancestors() {
@@ -65,6 +64,23 @@ pub fn check_input_target_with(
         }
     }
     Ok(())
+}
+
+fn below_checkout_has_cargo_directory(path: &Path, root: &Path) -> bool {
+    let shared = path
+        .components()
+        .zip(root.components())
+        .take_while(|(left, right)| {
+            left.as_os_str()
+                .as_encoded_bytes()
+                .eq_ignore_ascii_case(right.as_os_str().as_encoded_bytes())
+        })
+        .count();
+    path.components().skip(shared).any(|part| {
+        part.as_os_str()
+            .as_encoded_bytes()
+            .eq_ignore_ascii_case(b".cargo")
+    })
 }
 
 pub(super) fn check_removal_target(target: &Path) -> Result<(), CiError> {
