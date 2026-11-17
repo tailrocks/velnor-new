@@ -64,6 +64,27 @@ fn external_check_runs_prevent_pr_only_exemptions_regardless_of_result_or_app() 
 }
 
 #[test]
+fn aggregate_external_check_runs_prevent_pr_only_exemptions_on_every_page() {
+    for (page, name) in [(1, "DCO"), (2, "dco")] {
+        let recorded = |name: &str| {
+            let mut recorded = protected();
+            if page == 2 {
+                recorded = recorded.set(
+                    aggregate_path(1),
+                    json!({"total_count": 2, "check_runs": [{"name": "unrelated", "check_suite": {"id": 9}}]}),
+                );
+            }
+            recorded.set(
+                aggregate_path(page),
+                json!({"total_count": page, "check_runs": [{"name": name, "head_sha": super::GREEN, "status": "completed", "conclusion": "failure", "app": {"id": 343_649}, "check_suite": {"id": 9}}]}),
+            )
+        };
+        assert!(allowed(&recorded("unrelated")).is_ok_and(|verdict| verdict.ready));
+        assert_refused(&allowed(&recorded(name)), "PR-only check DCO has");
+    }
+}
+
+#[test]
 fn all_external_check_pages_are_required_even_for_historical_or_incomplete_results() {
     for body in [
         json!({"total_count": 1, "check_runs": [{"name": "unrelated"}]}),
