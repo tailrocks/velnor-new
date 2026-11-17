@@ -88,7 +88,7 @@ pub(crate) fn save_steps(
     ];
     if sources {
         steps.push(Step {
-            when: When::SaveBase,
+            when: When::SaveBaseDecided,
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
                 root: cache_root,
