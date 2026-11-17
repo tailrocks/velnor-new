@@ -11,8 +11,12 @@ use bootstrap_seed::Crash;
 mod db;
 #[path = "bootstrap/guards.rs"]
 mod guards;
+#[path = "bootstrap/inbox.rs"]
+mod inbox;
 #[path = "bootstrap/late.rs"]
 mod late;
+#[path = "bootstrap/receipt_integrity.rs"]
+mod receipt_integrity;
 
 const CRASHED: Pair = Pair {
     reservation: 2,
