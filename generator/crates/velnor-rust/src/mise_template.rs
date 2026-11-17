@@ -9,6 +9,7 @@ use toml::Value;
 use velnor_model::ToolRequest;
 
 use crate::error::Reason;
+use crate::mise_template_context::validate_statements;
 
 #[derive(Deserialize)]
 struct OrderedVars {
@@ -89,8 +90,23 @@ fn render(text: &str, context: &Context) -> Result<String, Reason> {
     if !templated(text) {
         return Ok(text.to_owned());
     }
-    let rendered =
-        Tera::one_off(text, context, false).map_err(|error| invalid(&error.to_string()))?;
+    validate_statements(text).map_err(invalid)?;
+    let mut tera = Tera::default();
+    tera.add_raw_template("version", text)
+        .map_err(|error| invalid(&format!("unsupported version template: {error}")))?;
+    for variable in tera
+        .get_template_variables("version")
+        .map_err(|error| invalid(&error.to_string()))?
+    {
+        if variable != "vars" {
+            return Err(invalid(&format!(
+                "unsupported template context: {variable}"
+            )));
+        }
+    }
+    let rendered = tera
+        .render("version", context)
+        .map_err(|error| invalid(&error.to_string()))?;
     if templated(&rendered) {
         return Err(invalid(&format!("unresolved template {text}")));
     }

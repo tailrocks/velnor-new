@@ -24,6 +24,7 @@ mod mise;
 mod mise_lock;
 mod mise_options;
 mod mise_template;
+mod mise_template_context;
 mod os_pins;
 mod owners;
 mod plan;
