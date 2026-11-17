@@ -3,6 +3,7 @@
 
 use crate::error::CiError;
 use crate::telemetry::{INVOCATIONS, Invocation};
+use std::collections::BTreeSet;
 use std::fs;
 
 pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
@@ -25,17 +26,24 @@ pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
         return Ok(None);
     }
     let mut counts = crate::logscan::LogScan::default();
-    for event in invocations
-        .iter()
-        .filter_map(|invocation| invocation.progress.as_ref())
-        .flatten()
-    {
-        match event.kind {
-            crate::cargo_artifacts::ProgressKind::Compiling => counts.compiling += 1,
-            crate::cargo_artifacts::ProgressKind::Checking => counts.checking += 1,
-            crate::cargo_artifacts::ProgressKind::Documenting => counts.documenting += 1,
-            crate::cargo_artifacts::ProgressKind::Downloaded => counts.downloaded += 1,
+    for invocation in &invocations {
+        let before = counts.crates_compiled();
+        for event in invocation.progress.iter().flatten() {
+            match event.kind {
+                crate::cargo_artifacts::ProgressKind::Compiling => counts.compiling += 1,
+                crate::cargo_artifacts::ProgressKind::Checking => counts.checking += 1,
+                crate::cargo_artifacts::ProgressKind::Documenting => counts.documenting += 1,
+                crate::cargo_artifacts::ProgressKind::Downloaded => counts.downloaded += 1,
+            }
         }
+        let artifacts = invocation
+            .artifacts
+            .iter()
+            .filter(|artifact| !artifact.fresh)
+            .map(|artifact| &artifact.package_id)
+            .collect::<BTreeSet<_>>()
+            .len() as u64;
+        counts.compiling += artifacts.saturating_sub(counts.crates_compiled() - before);
     }
     if !crate::cache::should_save(&counts)
         && invocations

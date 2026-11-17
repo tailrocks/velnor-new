@@ -38,6 +38,7 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         log_end: 0,
         compilations: Vec::new(),
         downloads: Vec::new(),
+        verified_download_archives: None,
         artifacts: Vec::new(),
         progress: Some(Vec::new()),
         capture_complete: false,
@@ -93,6 +94,9 @@ fn execution(argv: &[String]) -> BTreeMap<String, String> {
                     | "RUSTC_WRAPPER"
                     | "RUSTC_WORKSPACE_WRAPPER"
                     | "RUSTC_BOOTSTRAP"
+                    | "CARGO_BUILD_RUSTC"
+                    | "CARGO_BUILD_RUSTC_WRAPPER"
+                    | "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER"
             ) || key.starts_with("CARGO_PROFILE_")
                 || (key.starts_with("CARGO_TARGET_") && key != "CARGO_TARGET_DIR")
                 || matches!(key, "CARGO_BUILD_TARGET" | "CARGO_ENCODED_RUSTFLAGS");

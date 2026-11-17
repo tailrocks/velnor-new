@@ -4,7 +4,7 @@
 use serde_json::json;
 use velnor_ci::cargo_artifacts::{ArtifactTap, CargoArtifact, CargoProgress, ProgressKind};
 
-fn record(fresh: bool) -> serde_json::Value {
+pub(crate) fn record(fresh: bool) -> serde_json::Value {
     json!({
         "reason": "compiler-artifact",
         "package_id": "path+file:///工作/app#0.1.0",
@@ -29,7 +29,7 @@ fn artifacts_preserve_cargo_identity_across_every_chunk_size() {
         .map(|fresh| serde_json::from_value(record(fresh)).expect("valid Cargo artifact"))
         .collect();
     let input = format!(
-        "Compiling app\n  Compiling app v0.1.0 (/工作/app dir)\n{}\nPASS [ 0.125s] (1/2) app::suite test_name\n{{\"reason\":\"build-finished\",\"success\":true}}\n{}",
+        "Compiling app\n  Compiling app v0.1.0 (/工作/app dir)\n{}\nPASS [ 0.125s] (1/2) app::suite test_name\nTRY 1 FAIL [0.250s] app::suite flaky\nTRY 2 PASS [0.500s] app::suite flaky\nFLAKY 2/2 [0.750s] app::suite flaky\n{{\"reason\":\"build-finished\",\"success\":true}}\n{}",
         record(false),
         record(true)
     );
@@ -53,7 +53,11 @@ fn artifacts_preserve_cargo_identity_across_every_chunk_size() {
         );
         assert_eq!(
             batch.tests,
-            [("app::suite test_name".to_owned(), 0.125)],
+            [
+                ("app::suite test_name".to_owned(), 0.125),
+                ("app::suite flaky".to_owned(), 0.250),
+                ("app::suite flaky".to_owned(), 0.500)
+            ],
             "chunk size {size}"
         );
     }
@@ -80,7 +84,7 @@ fn invalid_and_oversized_lines_do_not_hide_the_next_artifact() {
     wrong_type["fresh"] = json!("true");
     let cases = [
         (
-            "plain text\n{broken\nnull\n{\"reason\":\"compiler-message\"}\nCompiling app vbad\nPASS [NaNs] binary test\n".to_owned(),
+            "plain text\n{broken\nnull\n{\"reason\":\"compiler-message\"}\nCompiling app vbad\nPASS [NaNs] binary test\nTRY 0 PASS [1s] binary test\nTRY -1 FAIL [1s] binary test\nTRY nope PASS [1s] binary test\nTRY 1 FLAKY [1s] binary test\n".to_owned(),
             0,
         ),
         (format!("{missing}\n{wrong_type}\n"), 2),

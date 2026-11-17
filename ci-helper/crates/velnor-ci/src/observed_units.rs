@@ -8,38 +8,45 @@ use crate::cargo_artifacts::CargoArtifact;
 use crate::telemetry::Invocation;
 
 fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String> {
-    if artifact.filenames.is_empty()
-        || !artifact.filenames.iter().all(|filename| {
+    let mut filenames: Vec<_> = artifact
+        .filenames
+        .iter()
+        .filter(|filename| {
             let path = Path::new(filename);
             !path.is_absolute()
-                && path.parent().is_some_and(|parent| parent.ends_with("deps"))
-                && (matches!(
-                    path.extension().and_then(|value| value.to_str()),
-                    Some("rmeta" | "rlib")
-                ) || artifact.profile.test
-                    || (artifact.target.kind.iter().any(|kind| kind == "proc-macro")
-                        && matches!(
-                            path.extension().and_then(|value| value.to_str()),
-                            Some("so" | "dylib" | "dll")
-                        )))
-                && path
-                    .file_stem()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| {
-                        name.strip_prefix("lib")
-                            .unwrap_or(name)
-                            .strip_prefix(&artifact.target.name.replace('-', "_"))
-                            .is_some_and(|suffix| suffix.starts_with('-') && suffix.len() > 1)
-                    })
+                && (path.ends_with(
+                    Path::new("doc")
+                        .join(artifact.target.name.replace('-', "_"))
+                        .join("index.html"),
+                ) || (path.parent().is_some_and(|parent| parent.ends_with("deps"))
+                    && (matches!(
+                        path.extension().and_then(|value| value.to_str()),
+                        Some("rmeta" | "rlib")
+                    ) || artifact.profile.test
+                        || (artifact.target.kind.iter().any(|kind| kind == "proc-macro")
+                            && matches!(
+                                path.extension().and_then(|value| value.to_str()),
+                                Some("so" | "dylib" | "dll")
+                            )))
+                    && path
+                        .file_stem()
+                        .and_then(|name| name.to_str())
+                        .is_some_and(|name| {
+                            name.strip_prefix("lib")
+                                .unwrap_or(name)
+                                .strip_prefix(&artifact.target.name.replace('-', "_"))
+                                .is_some_and(|suffix| suffix.starts_with('-') && suffix.len() > 1)
+                        })))
         })
-    {
+        .collect();
+    if filenames.is_empty() {
         return None;
     }
     let mut features = artifact.features.clone();
     features.sort();
     features.dedup();
-    let mut filenames = artifact.filenames.clone();
     filenames.sort();
+    filenames.dedup();
     serde_json::to_string(&(
         &invocation.root,
         &artifact.package_id,
@@ -105,11 +112,41 @@ pub fn normalize(invocation: &mut Invocation, checkout: &Path) {
         }
         relative(&mut artifact.target.src_path);
         relative(&mut artifact.manifest_path);
-        let prefix = format!("path+file://{}", checkout.display());
-        if let Some(suffix) = artifact.package_id.strip_prefix(&prefix)
-            && (suffix.starts_with('/') || suffix.starts_with('#'))
-        {
-            artifact.package_id = format!("path+file://checkout{suffix}");
+        if let Some(package) = checkout_package(&artifact.package_id, checkout) {
+            artifact.package_id = package;
         }
     }
+    if let Ok(root) = Path::new(&invocation.root).strip_prefix(checkout) {
+        invocation.root = if root.as_os_str().is_empty() {
+            ".".to_owned()
+        } else {
+            root.to_string_lossy().into_owned()
+        };
+    }
+}
+
+fn checkout_package(package: &str, checkout: &Path) -> Option<String> {
+    let (path, fragment) = package.strip_prefix("path+file://")?.split_once('#')?;
+    if !path.starts_with('/') {
+        return None;
+    }
+    let mut encoded = path.bytes();
+    let mut decoded = Vec::with_capacity(path.len());
+    while let Some(byte) = encoded.next() {
+        decoded.push(if byte == b'%' {
+            let high = char::from(encoded.next()?).to_digit(16)?;
+            let low = char::from(encoded.next()?).to_digit(16)?;
+            u8::try_from(high * 16 + low).ok()?
+        } else {
+            byte
+        });
+    }
+    let path = String::from_utf8(decoded).ok()?;
+    let relative = Path::new(&path).strip_prefix(checkout).ok()?;
+    let suffix = if relative.as_os_str().is_empty() {
+        String::new()
+    } else {
+        format!("/{}", relative.display())
+    };
+    Some(format!("path+file://checkout{suffix}#{fragment}"))
 }

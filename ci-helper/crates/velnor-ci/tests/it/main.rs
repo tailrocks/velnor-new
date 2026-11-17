@@ -4,6 +4,7 @@
 mod audit;
 mod base_expiry;
 mod cache;
+mod capture_evidence;
 mod cargo_artifacts;
 mod check_configurations;
 mod check_metadata;
@@ -47,8 +48,10 @@ mod release_tag_patterns;
 mod report;
 mod rulesets;
 mod run;
+mod run_archives;
 mod run_capture;
 mod run_env;
+mod run_evidence;
 mod run_group;
 mod run_process;
 mod setup_pure;
