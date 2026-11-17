@@ -123,6 +123,31 @@ fn a_doctest_line_without_a_newline_at_end_of_stream_is_counted() {
 }
 
 #[test]
+fn a_closed_console_with_a_descendant_holding_the_pipe_preserves_the_write_error() {
+    let temp = scratch("console-held");
+    let (reader, writer) = std::io::pipe().unwrap_or_else(|e| unreachable!("{e}"));
+    drop(reader);
+    let output = velnor(&temp, &[], &["sh", "-c", "echo hello; sleep 3 & exit 0"])
+        .stdout(writer)
+        .stderr(Stdio::piped())
+        .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "300")
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("cannot write the command output"),
+        "{output:?}"
+    );
+}
+
+#[test]
+fn a_running_doctest_line_pending_at_grace_does_not_count_without_a_result() {
+    let body = "printf 'running 1 test\\n'; (sleep 3; printf 'test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out\\n') & exit 0";
+    let output = doctests("pending-result", body);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+}
+
+#[test]
 fn a_failed_console_write_fails_a_command_that_exited_zero() {
     let temp = scratch("console");
     let (reader, writer) = std::io::pipe().unwrap_or_else(|e| unreachable!("{e}"));
