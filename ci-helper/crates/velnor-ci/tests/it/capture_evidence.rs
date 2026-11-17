@@ -4,6 +4,7 @@
 use serde_json::json;
 use std::collections::BTreeMap;
 use velnor_ci::cargo_artifacts::{CargoProgress, ProgressKind};
+use velnor_ci::cargo_package::PackageIdentity;
 use velnor_ci::observed_units::{collect, diagnostics, normalize};
 use velnor_ci::progress_evidence::{Evidence, corroborate};
 use velnor_ci::telemetry::Invocation;
@@ -115,6 +116,7 @@ fn canonical_documentation_outputs_identify_repeats_and_keep_purposes_distinct()
 
 #[test]
 fn git_progress_matches_the_repository_and_explicit_revision_without_path_confusion() {
+    assert_package_identity_forms();
     let mut invocation = invocation();
     invocation.artifacts[0].package_id = "git+file:///repo#app@0.1.0".to_owned();
     let mut event = CargoProgress {
@@ -136,4 +138,73 @@ fn git_progress_matches_the_repository_and_explicit_revision_without_path_confus
     assert_eq!(corroborate(&invocation, &event), Evidence::Compiled);
     event.location = Some("/工作/other".to_owned());
     assert_eq!(corroborate(&invocation, &event), Evidence::Unavailable);
+}
+
+fn assert_package_identity_forms() {
+    assert_eq!(
+        PackageIdentity::parse("unsupported?source=query#app@0.1.0")
+            .map(|identity| identity.source),
+        Some(Some("unsupported?source=query"))
+    );
+    assert_eq!(
+        PackageIdentity::parse("app 0.1.0 (git+file:///repo?branch=main#abcdef12)")
+            .map(|identity| identity.source),
+        Some(Some("git+file:///repo?branch=main#abcdef12"))
+    );
+    assert_eq!(
+        PackageIdentity::parse("app 0.1.0").map(|identity| identity.source),
+        Some(None)
+    );
+    let mut invocation = invocation();
+    "library_alias".clone_into(&mut invocation.artifacts[0].target.name);
+    for package in [
+        "path+file:///other-directory#app@0.1.0",
+        "path+file:///app#0.1.0",
+        "path+file:///app?source=query#0.1.0",
+        "path+file:///app/?source=query#0.1.0",
+        "unsupported#app@0.1.0",
+        "app 0.1.0 (path+file:///app)",
+        "app 0.1.0 (git+file:///repo#abcdef12)",
+        "app 0.1.0",
+    ] {
+        package.clone_into(&mut invocation.artifacts[0].package_id);
+        let mut event = CargoProgress {
+            kind: ProgressKind::Compiling,
+            package: "app".to_owned(),
+            version: "0.1.0".to_owned(),
+            location: Some("/工作/app".to_owned()),
+        };
+        invocation.artifacts[0].fresh = false;
+        assert_eq!(
+            corroborate(&invocation, &event),
+            Evidence::Compiled,
+            "{package}"
+        );
+        invocation.artifacts[0].fresh = true;
+        assert_eq!(
+            corroborate(&invocation, &event),
+            Evidence::Fresh,
+            "{package}"
+        );
+        "other".clone_into(&mut event.package);
+        assert_eq!(
+            corroborate(&invocation, &event),
+            Evidence::Unavailable,
+            "{package}"
+        );
+        "app".clone_into(&mut event.package);
+        "9.0.0".clone_into(&mut event.version);
+        assert_eq!(
+            corroborate(&invocation, &event),
+            Evidence::Unavailable,
+            "{package}"
+        );
+        "0.1.0".clone_into(&mut event.version);
+        event.location = Some("/elsewhere".to_owned());
+        assert_eq!(
+            corroborate(&invocation, &event),
+            Evidence::Unavailable,
+            "{package}"
+        );
+    }
 }

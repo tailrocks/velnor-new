@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use crate::cargo_artifacts::{CargoArtifact, CargoProgress, ProgressKind};
+use crate::cargo_package::PackageIdentity;
 use crate::telemetry::Invocation;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,31 +34,22 @@ pub fn corroborate(invocation: &Invocation, progress: &CargoProgress) -> Evidenc
 }
 
 fn matches(artifact: &CargoArtifact, progress: &CargoProgress) -> bool {
+    let Some(package) = PackageIdentity::parse(&artifact.package_id) else {
+        return false;
+    };
     let located = progress.location.as_deref().is_none_or(|location| {
         Path::new(&artifact.manifest_path).parent() == Some(Path::new(location))
-            || git_location(&artifact.package_id, location)
+            || package
+                .source
+                .is_some_and(|source| git_location(source, location))
     });
     if !located {
         return false;
     }
-    if let Some((source, package)) = artifact.package_id.rsplit_once('#') {
-        if let Some((name, version)) = package.rsplit_once('@') {
-            name == progress.package && version == progress.version
-        } else {
-            package == progress.version
-                && source.rsplit('/').next() == Some(progress.package.as_str())
-        }
-    } else {
-        let mut words = artifact.package_id.split_whitespace();
-        words.next() == Some(progress.package.as_str())
-            && words.next() == Some(progress.version.as_str())
-    }
+    package.name == progress.package && package.version == progress.version
 }
 
-fn git_location(package_id: &str, location: &str) -> bool {
-    let Some((source, _)) = package_id.rsplit_once('#') else {
-        return false;
-    };
+fn git_location(source: &str, location: &str) -> bool {
     let Some(source) = source.strip_prefix("git+") else {
         return false;
     };
