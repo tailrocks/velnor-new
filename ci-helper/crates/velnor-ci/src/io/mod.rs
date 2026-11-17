@@ -38,7 +38,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-pub use self::audit::audit_inputs;
+pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
 pub use self::cold::{cold_on_failure, every_root_target, root_target};
 pub use self::inputs::{restore_inputs, save_inputs};
@@ -46,7 +46,7 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    InputsCommand, ReleaseCommand, ReleaseGateArgs,
+    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::compare;
@@ -116,6 +116,33 @@ pub fn main() -> ExitCode {
     }
 }
 
+fn run_decide(args: DecideArgs) -> Result<String, CiError> {
+    let temp = std::env::var_os("RUNNER_TEMP")
+        .filter(|dir| !dir.is_empty())
+        .ok_or_else(|| {
+            CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
+        })?;
+    let log_path = Path::new(&temp).join("velnor-run.log");
+    let log = fs::read(&log_path)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
+    let target = cache_paths::validated(&current_dir()?, &args.target_dir)?;
+    let manifests = cache_paths::list("VELNOR_CACHE_MANIFESTS")?.unwrap_or(args.manifest_path);
+    let refusal = cache_sources::refusal(&current_dir()?, &manifests)?;
+    let sources = refusal.is_none();
+    let decision = if let Some(reason) = refusal {
+        Decision {
+            save: false,
+            report: reason,
+        }
+    } else {
+        let counts = activity::activity()?
+            .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+        cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
+    };
+    append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
+    Ok(decision.report)
+}
+
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
         Command::Report(args) => report::run_report(&args),
@@ -132,9 +159,14 @@ fn run(cli: Cli) -> Result<String, CiError> {
                 || restore_inputs(&root, &args.target_dir),
             )
         }
-        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
-            audit_inputs(&current_dir()?, write)
-        }
+        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => audit_inputs(
+            &current_dir()?,
+            &AuditOptions {
+                write,
+                ..AuditOptions::default()
+            },
+        ),
+        Command::Inputs(InputsCommand::Build(args)) => audit::build(&current_dir()?, &args),
         Command::ReleaseGate(args) => run_release_gate(&args),
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
@@ -147,33 +179,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
-        Command::Cache(CacheCommand::Decide(args)) => {
-            let temp = std::env::var_os("RUNNER_TEMP")
-                .filter(|dir| !dir.is_empty())
-                .ok_or_else(|| {
-                    CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
-                })?;
-            let log_path = Path::new(&temp).join("velnor-run.log");
-            let log = fs::read(&log_path)
-                .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
-            let target = cache_paths::validated(&current_dir()?, &args.target_dir)?;
-            let manifests =
-                cache_paths::list("VELNOR_CACHE_MANIFESTS")?.unwrap_or(args.manifest_path);
-            let refusal = cache_sources::refusal(&current_dir()?, &manifests)?;
-            let sources = refusal.is_none();
-            let decision = if let Some(reason) = refusal {
-                Decision {
-                    save: false,
-                    report: reason,
-                }
-            } else {
-                let counts = activity::activity()?
-                    .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
-                cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
-            };
-            append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
-            Ok(decision.report)
-        }
+        Command::Cache(CacheCommand::Decide(args)) => run_decide(args),
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),

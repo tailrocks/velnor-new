@@ -38,7 +38,11 @@ impl ArtifactFormat {
     }
 }
 
-pub(crate) fn cargo_step(command: &CargoCommand, artifacts: ArtifactFormat) -> RenderedStep {
+pub(crate) fn cargo_step(
+    command: &CargoCommand,
+    audit: bool,
+    artifacts: ArtifactFormat,
+) -> RenderedStep {
     let (name, run, env) = cargo_command(command, artifacts);
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
@@ -49,7 +53,10 @@ pub(crate) fn cargo_step(command: &CargoCommand, artifacts: ArtifactFormat) -> R
         name,
         id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
         env: env.into_iter().chain([cache_debug_env()]).collect(),
-        run: Some(format!("{prefix} {run}")),
+        run: Some(format!(
+            "{prefix} {}{run}",
+            inventory_prefix(command, audit)
+        )),
         ..RenderedStep::default()
     }
 }
@@ -119,6 +126,22 @@ fn cargo_command(
         ),
         CargoCommand::Deny { manifest } => deny(manifest),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+    }
+}
+
+fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
+    if audit
+        && !matches!(
+            command,
+            CargoCommand::FmtCheck
+                | CargoCommand::Deny { .. }
+                | CargoCommand::Machete
+                | CargoCommand::NextestRunArchive { .. }
+        )
+    {
+        "velnor-ci inputs build -- "
+    } else {
+        ""
     }
 }
 

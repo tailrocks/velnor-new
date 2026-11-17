@@ -103,7 +103,8 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
 
 #[test]
 fn a_repository_that_saves_nothing_gets_no_trim_job() -> TestResult {
-    let text = crate::pipeline::workflow(&crate::base_save::pinned("0.1.79", "")?)?;
+    let text =
+        crate::pipeline::workflow(&crate::base_save::pinned("0.1.79", "full_run = \"off\"\n")?)?;
     assert!(!text.contains("rust-trim"), "{text}");
     Ok(())
 }

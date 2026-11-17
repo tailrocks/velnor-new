@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, BaseExpiry, CacheKey, CacheLaneOutput, JobId, RepoPath,
-    SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind, TrimFamily, cache_lane_outputs,
+    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, BaseExpiry, CacheKey, CacheLaneOutput, HelperCommand,
+    JobId, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind, TrimFamily,
+    cache_lane_outputs,
 };
 
 use crate::cache::render_key;
@@ -171,8 +172,36 @@ pub(crate) fn audited_lane(condition: String, job: &velnor_model::Job) -> String
     )
 }
 
-pub(crate) fn audited_save(job: &velnor_model::Job, step: &Step) -> Option<String> {
-    (job.needs.iter().any(|id| id.as_str() == "rust-inputs-audit")
-        && matches!(step.kind, StepKind::CacheDecide { .. } | StepKind::CacheSave(CacheKey::Target { .. })))
-    .then(|| "${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned())
+pub(crate) fn audited_save(
+    job: &velnor_model::Job,
+    step: &Step,
+    mut bodies: Vec<RenderedStep>,
+) -> Vec<RenderedStep> {
+    let audited = job
+        .needs
+        .iter()
+        .any(|id| id.as_str() == "rust-inputs-audit")
+        && matches!(
+            step.kind,
+            StepKind::CacheDecide { .. } | StepKind::CacheSave(CacheKey::Target { .. })
+        );
+    let extra = audited.then(|| "${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned());
+    for body in &mut bodies {
+        body.condition = crate::gate::all_conditions(body.condition.take(), extra.clone());
+    }
+    bodies
+}
+
+pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
+    let has = |wanted: fn(&StepKind) -> bool| job.steps.iter().any(|step| wanted(&step.kind));
+    let restores = has(|kind| {
+        matches!(
+            kind,
+            StepKind::Helper(HelperCommand::Restored(..)) | StepKind::RestoredTargets { .. }
+        )
+    });
+    (
+        restores,
+        has(|kind| *kind == StepKind::Helper(HelperCommand::InputsAudit)),
+    )
 }

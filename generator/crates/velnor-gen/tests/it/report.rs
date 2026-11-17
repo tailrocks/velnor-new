@@ -13,7 +13,12 @@ fn required_check_cannot_duplicate_the_cache_report_display_name() -> TestResult
         ("0.1.81", "Cache", false),
         ("0.1.81", "Gate", true),
     ] {
-        let config = format!("required_check = \"{name}\"\n");
+        let old = if version == "0.1.80" {
+            "full_run = \"off\"\n"
+        } else {
+            ""
+        };
+        let config = format!("{old}required_check = \"{name}\"\n");
         let view = crate::base_save::pinned(version, &config)?;
         let result = velnor_gen::expected_with_notes(&view);
         if valid {
@@ -35,12 +40,17 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
     for helper in ["0.1.80", "0.1.81"] {
         for nextest in ["0.9.122", "0.9.123"] {
             for shape in ["one-job", "lint-test", "groups"] {
-                let config = format!("shape = \"{shape}\"\n");
+                let old = if helper == "0.1.80" {
+                    "full_run = \"off\"\n"
+                } else {
+                    ""
+                };
+                let config = format!("{old}shape = \"{shape}\"\n");
                 let mut view = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
                 for (path, bytes) in &mut view.files {
                     if path.as_str() == ".velnor/rust-ci.lock" {
                         *bytes = String::from_utf8(bytes.clone())?
-                            .replace("0.1.79", helper)
+                            .replace("0.1.81", helper)
                             .into_bytes();
                     } else if path.as_str() == "mise.toml" {
                         *bytes = String::from_utf8(bytes.clone())?

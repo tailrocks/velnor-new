@@ -58,6 +58,16 @@ pub(crate) enum Setup {
     Replanned,
 }
 
+impl Setup {
+    pub(crate) fn of(restores: bool, replanned: bool) -> Self {
+        match (restores, replanned) {
+            (false, _) => Self::Before,
+            (true, false) => Self::Restored,
+            (true, true) => Self::Replanned,
+        }
+    }
+}
+
 pub(crate) const REPLAN_STEP: &str = "replan";
 const BASE_EXPIRED: &str = "steps.restored.outputs.expired == 'true'";
 

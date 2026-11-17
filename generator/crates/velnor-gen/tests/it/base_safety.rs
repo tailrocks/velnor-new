@@ -147,3 +147,34 @@ fn the_required_gate_requires_the_full_run_audit_and_accepts_a_skipped_pr_audit(
     }
     Ok(())
 }
+
+#[test]
+fn the_audit_build_restores_the_target_cache_a_lane_saves() -> TestResult {
+    for shape in ["lint-test", "groups"] {
+        let config = format!("shape = {shape:?}\non_main = 'everything'\n");
+        let all = jobs("0.1.81", &config)?;
+        let owner = |block: &str, name: &str| {
+            let key = step(block, name)?
+                .lines()
+                .find_map(|line| line.trim().strip_prefix("key: ").map(str::to_owned))?;
+            key.trim_matches('\'')
+                .strip_prefix("velnor-tgt-")?
+                .split('.')
+                .next()
+                .map(str::to_owned)
+        };
+        let audit = &all
+            .iter()
+            .find(|(id, _)| id == "rust-inputs-audit")
+            .ok_or("audit")?
+            .1;
+        let restored = owner(audit, "Restore the target cache").ok_or("restore")?;
+        assert!(
+            all.iter().any(|(id, lane)| id != "rust-inputs-audit"
+                && owner(lane, "Save the target cache").as_deref() == Some(restored.as_str())),
+            "{shape}: the audit builds cold from {restored}: {audit}"
+        );
+        assert!(!audit.contains("Save the target cache"), "{audit}");
+    }
+    Ok(())
+}

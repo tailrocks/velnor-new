@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
@@ -41,6 +41,7 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+    let (restores, audit) = crate::base_steps::job_setup(job);
     let artifacts = job
         .steps
         .iter()
@@ -59,12 +60,6 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         .steps
         .iter()
         .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
-    let restores = job.steps.iter().any(|step| {
-        matches!(
-            step.kind,
-            StepKind::Helper(HelperCommand::Restored(..)) | StepKind::RestoredTargets { .. }
-        )
-    });
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -103,7 +98,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             )
             .chain(lane_outputs(&job.steps))
             .collect(),
-        steps: job_steps(job, restores, tests, artifacts),
+        steps: job_steps(job, restores, audit, tests, artifacts),
         ..RenderedJob::default()
     }
 }
@@ -111,26 +106,20 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
 fn job_steps(
     job: &Job,
     restores: bool,
+    audit: bool,
     tests: bool,
     artifacts: ArtifactFormat,
 ) -> Vec<RenderedStep> {
     job.steps
         .iter()
         .scan(false, |replanned, step| {
-            let setup = match (restores, *replanned) {
-                (false, _) => Setup::Before,
-                (true, false) => Setup::Restored,
-                (true, true) => Setup::Replanned,
-            };
+            let setup = Setup::of(restores, *replanned);
             *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-            let mut bodies = rendered_steps(step, setup, tests, artifacts, job.name.as_deref());
-            for body in &mut bodies {
-                body.condition = all_conditions(
-                    body.condition.take(),
-                    crate::base_steps::audited_save(job, step),
-                );
-            }
-            Some(bodies)
+            Some(crate::base_steps::audited_save(
+                job,
+                step,
+                rendered_steps(step, setup, audit, tests, artifacts, job.name.as_deref()),
+            ))
         })
         .flatten()
         .collect()
@@ -139,16 +128,22 @@ fn job_steps(
 fn rendered_steps(
     step: &Step,
     setup: Setup,
+    audit: bool,
     tests: bool,
     artifacts: ArtifactFormat,
     job_name: Option<&str>,
 ) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(
+    let mut rendered = Vec::new();
+    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
+        rendered.push(cargo_step(&CargoCommand::BuildAll, true, artifacts));
+    }
+    rendered.push(step_body(
         &step.kind,
         step.directory.as_ref(),
+        audit,
         tests,
         artifacts,
-    )];
+    ));
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -178,7 +173,7 @@ fn rendered_steps(
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
-        (&step.reads, &step.kind, rendered.first_mut())
+        (&step.reads, &step.kind, rendered.last_mut())
     {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
@@ -221,6 +216,7 @@ fn variable(need: GateNeed) -> &'static str {
 fn step_body(
     kind: &StepKind,
     directory: Option<&RepoPath>,
+    audit: bool,
     tests: bool,
     artifacts: ArtifactFormat,
 ) -> RenderedStep {
@@ -267,7 +263,7 @@ fn step_body(
             run: Some(format!("rustup target add {}", targets.join(" "))),
             ..RenderedStep::default()
         },
-        StepKind::Cargo(command) => cargo_step(command, artifacts),
+        StepKind::Cargo(command) => cargo_step(command, audit, artifacts),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
         StepKind::InputsRestore(target) => {

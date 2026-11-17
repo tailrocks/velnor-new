@@ -29,7 +29,7 @@ fn a_dependency_feature_in_required_features_runs_the_target_in_a_direct_step() 
     )?;
     let text = workflow(&view(&[("a/Cargo.toml", manifest)], vec![a])?)?;
     assert!(
-        text.contains("cargo test -p a --locked --test=custom --features ''foo/bar''"),
+        text.contains("cargo test -p a --locked --message-format=json-render-diagnostics --test=custom --features ''foo/bar''"),
         "{text}"
     );
     assert!(!text.contains("nextest"), "{text}");
@@ -41,7 +41,10 @@ fn a_cdylib_library_with_a_custom_harness_runs_with_cargo_test_lib() -> TestResu
     let manifest = "[package]\nname = \"a\"\n[lib]\ncrate-type = [\"cdylib\"]\nharness = false\n";
     let a = package("a", "a/Cargo.toml", &[], &[("a", TargetKind::Lib, true)])?;
     let text = workflow(&view(&[("a/Cargo.toml", manifest)], vec![a])?)?;
-    assert!(text.contains("cargo test -p a --locked --lib"), "{text}");
+    assert!(
+        text.contains("cargo test -p a --locked --message-format=json-render-diagnostics --lib"),
+        "{text}"
+    );
     assert!(!text.contains("nextest"), "{text}");
     Ok(())
 }

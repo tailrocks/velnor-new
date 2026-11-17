@@ -5,6 +5,7 @@ use crate::base_save::{jobs, steps};
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
 use velnor_model::RepoPath;
+use velnor_rust::CONFIG_PATH;
 
 const TOKENS: [&str; 3] = ["GITHUB_TOKEN", "github.token", "secrets."];
 
@@ -39,8 +40,12 @@ fn report_api_tokens_are_confined_to_a_released_helper_without_repository_code()
             .get_mut(&RepoPath::new(".velnor/rust-ci.lock")?)
             .ok_or("lock")?;
         *lock = String::from_utf8(lock.clone())?
-            .replace("0.1.79", version)
+            .replace("0.1.81", version)
             .into_bytes();
+        if version == "0.1.80" {
+            let config = view.files.get_mut(&CONFIG_PATH).ok_or("config")?;
+            config.extend_from_slice(b"full_run = \"off\"\n");
+        }
         let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
         let jobs = parsed["jobs"].as_object().ok_or("jobs")?;
         let cache = &jobs["cache"];

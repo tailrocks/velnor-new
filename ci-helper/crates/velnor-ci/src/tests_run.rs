@@ -11,6 +11,18 @@ const LINE_LIMIT: usize = 4096;
 
 #[must_use]
 pub fn runs_nextest(command: &[String]) -> bool {
+    let command = if command
+        .first()
+        .and_then(|program| program.rsplit('/').next())
+        == Some("velnor-ci")
+        && command
+            .get(1..4)
+            .is_some_and(|args| args == ["inputs", "build", "--"])
+    {
+        &command[4..]
+    } else {
+        command
+    };
     let program = command
         .first()
         .and_then(|program| program.rsplit('/').next())
