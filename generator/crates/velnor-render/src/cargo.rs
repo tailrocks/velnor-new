@@ -67,9 +67,9 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
             format!("cargo check -p {package} --locked"),
             vec![],
         ),
-        CargoCommand::Build { package } => (
+        CargoCommand::BuildBinary { package, binary } => (
             format!("Build {package}"),
-            format!("cargo build -p {package} --locked"),
+            format!("cargo build -p {package} --bin {binary} --locked"),
             vec![],
         ),
         CargoCommand::BuildAll => (

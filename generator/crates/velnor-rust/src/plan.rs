@@ -6,7 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
     PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    Shape, ShapeDecision, Step, StepKind, TargetName, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -111,8 +111,9 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
         directory: root.manifest.parent(),
-        ..step(StepKind::Cargo(CargoCommand::Build {
+        ..step(StepKind::Cargo(CargoCommand::BuildBinary {
             package: PackageName::from_static(HELPER_PACKAGE),
+            binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
     Job {
