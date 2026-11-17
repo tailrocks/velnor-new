@@ -155,7 +155,7 @@ pub(super) fn profile(configuration: &str) -> &str {
         .map_or(configuration, |(_, profile)| profile)
 }
 
-pub(super) fn split(stem: &str) -> Option<(&str, &str)> {
+fn split(stem: &str) -> Option<(&str, &str)> {
     let (name, hash) = stem.rsplit_once('-')?;
     (!name.is_empty()
         && hash.len() == 16

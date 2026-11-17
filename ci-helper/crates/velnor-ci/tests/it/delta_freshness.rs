@@ -269,28 +269,28 @@ fn changed_source_is_checked_despite_nonempty_incomplete_cached_watchsets() {
 }
 
 #[test]
-fn changed_member_rebuilds_its_dependents_and_preserves_unrelated_units() {
+fn changed_member_rechecks_every_cached_package() {
     let fixture = Fixture::new("delta-selective-members", false);
     fixture.incomplete_watchsets(false);
     fixture.change("app/src/lib.rs", "pub fn value() -> u32 { 3 }\n");
     fixture.restore();
     assert_units(
         &fixture.build(),
-        &["app", "peer"],
-        &["spare", "local", "stable"],
+        &["app", "peer", "spare", "local", "stable"],
+        &[],
     );
 }
 
 #[test]
-fn changed_local_dependency_rebuilds_itself_and_its_workspace_dependents() {
+fn changed_local_dependency_rechecks_every_cached_package() {
     let fixture = Fixture::new("delta-selective-local", false);
     fixture.incomplete_watchsets(false);
     fixture.change("local/src/lib.rs", "pub fn value() -> u32 { 4 }\n");
     fixture.restore();
     assert_units(
         &fixture.build(),
-        &["local", "app", "peer"],
-        &["spare", "stable"],
+        &["app", "peer", "spare", "local", "stable"],
+        &[],
     );
 }
 
@@ -314,9 +314,6 @@ fn repository_root_apply_rechecks_the_nested_target_workspace() {
     );
     let log = String::from_utf8_lossy(&output.stderr);
     assert!(log.contains("nested current source rejected"), "{log}");
-    for name in ["local", "stable"] {
-        assert!(log.contains(&format!("Fresh {name} ")), "{log}");
-    }
 }
 
 #[test]
@@ -332,17 +329,25 @@ fn nested_workspace_parent_configuration_cannot_keep_old_fingerprints() {
     );
 }
 
-#[test]
-fn custom_local_target_inside_a_member_cannot_reuse_rejected_source() {
+fn shared_local_source_is_checked(custom_target: bool) {
     let mut fixture = Fixture::unbuilt("delta-custom-local-target", false);
-    fixture.repo.write(
-        "local/Cargo.toml",
-        "[package]\nname='local'\nversion='0.1.0'\nedition='2024'\n[lib]\npath='../app/src/shared.rs'\n",
-    );
+    if custom_target {
+        fixture.repo.write(
+            "local/Cargo.toml",
+            "[package]\nname='local'\nversion='0.1.0'\nedition='2024'\n[lib]\npath='../app/src/shared.rs'\n",
+        );
+    } else {
+        fixture.repo.write(
+            "local/src/lib.rs",
+            "#[path=\"../../app/src/shared.rs\"]\nmod shared;\npub fn value() -> u32 { shared::value() }\n",
+        );
+    }
     fixture
         .repo
         .write("app/src/shared.rs", "pub fn value() -> u32 { 1 }\n");
     fixture.build_baseline(false);
+    let artifact = fixture.directory.join("target/debug/libspare.rlib");
+    let compiled = fs::read(&artifact).unwrap_or_else(|e| unreachable!("{e}"));
     fixture.incomplete_watchsets(false);
     fixture.restore();
     assert_units(
@@ -360,6 +365,10 @@ fn custom_local_target_inside_a_member_cannot_reuse_rejected_source() {
         "compile_error!(\"custom local source rejected\");\n",
     );
     fixture.restore();
+    assert_eq!(
+        fs::read(&artifact).unwrap_or_else(|e| unreachable!("{e}")),
+        compiled
+    );
     let restored = fixture.build();
     fs::remove_dir_all(fixture.directory.join("target")).unwrap_or_else(|e| unreachable!("{e}"));
     let cold = fixture.build();
@@ -370,4 +379,14 @@ fn custom_local_target_inside_a_member_cannot_reuse_rejected_source() {
         "custom local source was reused: {restored:?}"
     );
     assert!(String::from_utf8_lossy(&restored.stderr).contains("custom local source rejected"));
+}
+
+#[test]
+fn custom_local_target_inside_a_member_cannot_reuse_rejected_source() {
+    shared_local_source_is_checked(true);
+}
+
+#[test]
+fn local_module_inside_a_member_cannot_reuse_rejected_source() {
+    shared_local_source_is_checked(false);
 }
