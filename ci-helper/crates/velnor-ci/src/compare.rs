@@ -120,19 +120,20 @@ fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, JobDuration, Job
 
 fn occurrence_keys(run: &RunMetrics) -> Vec<((String, usize), JobDuration)> {
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
-    run.jobs
-        .iter()
-        .filter(|job| job.ran())
-        .map(|job| {
-            let count = seen.entry(&job.name).or_default();
-            *count += 1;
-            (
-                (job.name.clone(), *count),
+    let mut keys = Vec::new();
+    for job in &run.jobs {
+        let count = seen.entry(job.name.as_str()).or_default();
+        *count += 1;
+        let occurrence = *count;
+        if job.ran() {
+            keys.push((
+                (job.name.clone(), occurrence),
                 job.duration_seconds
                     .map_or(JobDuration::Unmeasured, JobDuration::Measured),
-            )
-        })
-        .collect()
+            ));
+        }
+    }
+    keys
 }
 
 fn job_label(name: &str, occurrence: usize) -> String {

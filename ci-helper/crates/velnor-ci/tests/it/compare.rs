@@ -157,6 +157,56 @@ fn a_changed_job_without_a_measurement_survives_the_display_limit() {
 }
 
 #[test]
+fn a_skipped_occurrence_does_not_renumber_the_jobs_that_follow_it() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let template = a.jobs[0].clone();
+    let mut skipped = template.clone();
+    skipped.name = "Shared".to_owned();
+    skipped.conclusion = "skipped".to_owned();
+    skipped.started = false;
+    skipped.duration_seconds = None;
+    let mut first = template.clone();
+    first.name = "Shared".to_owned();
+    first.duration_seconds = Some(10);
+    let mut second = template;
+    second.name = "Shared".to_owned();
+    second.duration_seconds = Some(20);
+    a.jobs = vec![skipped, second.clone()];
+    b.jobs = vec![first, second];
+
+    let table = rendered(&a, &b);
+    assert!(table.contains("| Shared | - | 10 | +10 |"), "{table}");
+    assert!(!table.contains("occurrence 2"), "{table}");
+}
+
+#[test]
+fn a_job_without_a_measurement_absent_from_the_other_run_survives_the_display_limit() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let template = a.jobs[0].clone();
+    for index in 0..12_u64 {
+        let mut left = template.clone();
+        left.name = format!("job-{index:02}");
+        left.duration_seconds = Some(100);
+        let mut right = left.clone();
+        right.duration_seconds = Some(101 + index);
+        a.jobs.push(left);
+        b.jobs.push(right);
+    }
+    let mut unmeasured = template;
+    unmeasured.name = "job-unmeasured-absent".to_owned();
+    unmeasured.duration_seconds = None;
+    b.jobs.push(unmeasured);
+
+    let table = rendered(&a, &b);
+    assert!(
+        table.contains("| job-unmeasured-absent | - | unmeasured | - |"),
+        "{table}"
+    );
+}
+
+#[test]
 fn metrics_without_a_schema_version_are_rejected() {
     use std::fs;
 
