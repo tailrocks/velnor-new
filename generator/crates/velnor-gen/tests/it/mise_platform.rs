@@ -9,7 +9,12 @@ use velnor_model::{MisePlatform, RepoPath};
 use crate::facts::TestResult;
 use crate::pipeline::view;
 
-fn generate(filter: &str, runner: &str, prebuilt: bool, deny: bool) -> Result<String, String> {
+pub(crate) fn generate(
+    filter: &str,
+    runner: &str,
+    prebuilt: bool,
+    deny: bool,
+) -> Result<String, String> {
     let config = format!("runner = \"{runner}\"\n");
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes())).map_err(|e| e.to_string())?;
     let mise = format!(

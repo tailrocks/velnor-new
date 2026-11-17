@@ -35,6 +35,7 @@ mod lock_affected;
 mod lock_consistency;
 mod main_and_scheduled;
 mod metadata_file;
+mod mise_identity;
 mod mise_platform;
 mod no_programs;
 mod patch;
