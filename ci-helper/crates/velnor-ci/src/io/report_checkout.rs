@@ -47,12 +47,7 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
         .filter(|path| !symlink_locks.contains(path))
         .collect();
     let mut view = RepoView {
-        repository: tracked
-            .top
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned(),
+        repository: velnor_gen::io::repository_name(&tracked.top),
         files: velnor_gen::io::read_files(&tracked.top, &wanted).map_err(ci)?,
         tracked_paths,
         symlinks,

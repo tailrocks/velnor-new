@@ -279,6 +279,24 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
     Ok(())
 }
 
+#[test]
+fn unhosted_origin_cannot_place_a_hashed_full_run_schedule()
+-> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixture("report-unhosted-origin")?;
+    repo.write(".velnor/rust-ci.toml", "full_run = \"weekly\"\n");
+    repo.git(&["add", "."]);
+    repo.git(&["remote", "add", "origin", "file:///nonexistent/demo.git"]);
+    let metrics = observation(&repo, &[], &[])?;
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|error| error.contains("hosted repository")),
+        "{metrics:?}"
+    );
+    Ok(())
+}
+
 fn read(repo: &Repo) -> LaneMetrics {
     serde_json::from_slice(&fs::read(repo.root().join("ci-metrics.json")).unwrap_or_default())
         .unwrap_or_else(|error| unreachable!("{error}"))
