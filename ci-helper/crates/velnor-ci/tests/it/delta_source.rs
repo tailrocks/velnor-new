@@ -17,7 +17,7 @@ pub(super) fn helper(repo: &Repo, arguments: &[&str], expected: Option<&str>) ->
     helper_at(repo, arguments, expected, repo.root())
 }
 
-fn helper_at(
+pub(super) fn helper_at(
     repo: &Repo,
     arguments: &[&str],
     expected: Option<&str>,
