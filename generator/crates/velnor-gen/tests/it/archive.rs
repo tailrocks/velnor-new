@@ -134,7 +134,7 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
                 });
             assert_eq!(reports, block.contains("nextest run"), "{config}: {id}");
             for line in block.lines().filter(|line| line.contains("nextest run")) {
-                assert!(line.contains("--status-level skip"), "{config}: {line}");
+                assert!(line.contains("--status-level pass"), "{config}: {line}");
                 assert!(line.ends_with("--no-tests=pass'"), "{config}: {line}");
             }
         }

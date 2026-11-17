@@ -222,6 +222,22 @@ fn tests_that_were_listed_but_none_ran_fails_and_a_lane_with_no_tests_passes() -
 }
 
 #[test]
+fn a_package_with_a_unicode_name_reconciles_like_any_other() -> TestResult {
+    let run = with(passing(), |run| {
+        run.count = Some("2");
+        run.listed = Some("2");
+        run.packages = Some("café=2/2".to_owned());
+    });
+    expect(&run, true, "Required: pass")?;
+    let run = with(passing(), |run| {
+        run.count = Some("2");
+        run.listed = Some("2");
+        run.packages = Some("a b=2/2".to_owned());
+    });
+    expect(&run, false, "missing or malformed")
+}
+
+#[test]
 fn a_lane_whose_packages_have_no_test_targets_needs_no_count() -> TestResult {
     let run = with(passing(), |run| {
         run.outputs.iter_mut().for_each(|(key, value)| {

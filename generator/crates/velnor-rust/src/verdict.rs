@@ -102,12 +102,12 @@ fn parse_package_counts(text: &str) -> Option<BTreeMap<String, PackageCounts>> {
 
 #[must_use]
 pub fn package_token(name: &str) -> bool {
-    let mut bytes = name.bytes();
-    match bytes.next() {
-        Some(byte) if byte.is_ascii_alphanumeric() || byte == b'_' => {}
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(first) if first.is_alphanumeric() || first == '_' => {}
         _ => return false,
     }
-    bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+    chars.all(|ch| ch.is_alphanumeric() || ch == '_' || ch == '-')
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

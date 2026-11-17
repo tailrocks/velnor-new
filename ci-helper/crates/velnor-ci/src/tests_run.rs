@@ -9,21 +9,31 @@ use velnor_rust::{PackageCounts, encode_package_counts, package_token};
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
-pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
-
 const LINE_LIMIT: usize = 4096;
 const RUN_FLAGS: &[&str] = &[
     "--fail-fast",
+    "--hide-progress-bar",
     "--no-capture",
     "--no-fail-fast",
+    "--no-input-handler",
+    "--no-output-indent",
+    "--no-run",
     "--nocapture",
 ];
 const RUN_OPTIONS: &[&str] = &[
+    "--failure-output",
     "--final-status-level",
+    "--flaky-result",
+    "--max-fail",
+    "--max-progress-running",
     "--message-format",
     "--no-tests",
     "--retries",
     "--status-level",
+    "--stress-count",
+    "--stress-duration",
+    "--success-output",
+    "--test-threads",
 ];
 
 #[must_use]
@@ -115,25 +125,36 @@ fn drop_run_only(run: &[String], index: &mut usize) -> bool {
 pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
     let listed: Listed = serde_json::from_slice(bytes).ok()?;
     let mut packages = BTreeMap::new();
+    let mut excluded = BTreeMap::new();
     for suite in listed.rust_suites.into_values() {
         if !package_token(&suite.package_name) {
             return None;
         }
         let mut matched = 0u64;
+        let mut mismatched = 0u64;
         for case in suite.testcases.into_values() {
             match case.filter_match.status.as_str() {
                 "matches" => matched = matched.checked_add(1)?,
-                "mismatch" => {}
+                "mismatch" => mismatched = mismatched.checked_add(1)?,
                 _ => return None,
             }
         }
-        if matched == 0 {
-            continue;
-        }
-        let total = packages.get(&suite.package_name).copied().unwrap_or(0_u64);
-        packages.insert(suite.package_name, total.checked_add(matched)?);
+        add(&mut packages, &suite.package_name, matched)?;
+        add(&mut excluded, &suite.package_name, mismatched)?;
     }
-    Some(packages)
+    Some(if packages.is_empty() {
+        excluded
+    } else {
+        packages
+    })
+}
+
+fn add(into: &mut BTreeMap<String, u64>, name: &str, count: u64) -> Option<()> {
+    if count > 0 {
+        let total = into.get(name).copied().unwrap_or(0_u64);
+        into.insert(name.to_owned(), total.checked_add(count)?);
+    }
+    Some(())
 }
 
 #[must_use]
@@ -224,12 +245,11 @@ impl SummaryTap {
                 Some(text) => (text, true),
                 None => (part, false),
             };
-            if self.line.len() + text.len() > LINE_LIMIT {
+            let room = LINE_LIMIT.saturating_sub(self.line.len());
+            if text.len() > room {
                 self.overlong = true;
-                self.line.clear();
-            } else if !self.overlong {
-                self.line.extend_from_slice(text);
             }
+            self.line.extend_from_slice(&text[..text.len().min(room)]);
             if ended {
                 self.end_line();
             }
@@ -248,22 +268,26 @@ impl SummaryTap {
     }
 
     fn end_line(&mut self) {
-        if !self.overlong {
-            let line = String::from_utf8_lossy(&self.line);
-            let cleaned = strip_ansi(&line);
-            let trimmed = cleaned.trim_start();
-            if let Some(summary) = nextest_summary(trimmed) {
-                let runs = self.reconcile_runs(summary.tests_run);
-                self.closed = true;
-                self.counts = Some(TestCounts {
-                    run: summary.tests_run,
-                    listed: None,
-                    by_package: None,
-                    runs,
-                });
-            } else if !self.closed {
-                self.note(trimmed);
-            }
+        let line = String::from_utf8_lossy(&self.line);
+        let cleaned = strip_ansi(&line);
+        let trimmed = cleaned.trim_start();
+        let summary = if self.overlong {
+            None
+        } else {
+            nextest_summary(trimmed)
+        };
+        if let Some(summary) = summary {
+            let runs = self.reconcile_runs(summary.tests_run);
+            self.closed = true;
+            self.counts = Some(TestCounts {
+                run: summary.tests_run,
+                listed: None,
+                by_package: None,
+                runs,
+            });
+        } else if !self.closed {
+            let trimmed = trimmed.to_owned();
+            self.note(&trimmed);
         }
         self.line.clear();
         self.overlong = false;
@@ -314,15 +338,28 @@ enum Status {
 }
 
 fn status_line(line: &str) -> Status {
-    let Some(word) = line.split_whitespace().next() else {
+    let mut words = line.split_whitespace();
+    let Some(first) = words.next() else {
         return Status::Ignore;
     };
-    if !matches!(word, "PASS" | "FAIL" | "LEAK") {
+    let (word, retried) = if first == "TRY" {
+        let numbered = words
+            .next()
+            .is_some_and(|attempt| attempt.bytes().all(|byte| byte.is_ascii_digit()));
+        match words.next() {
+            Some(word) if numbered => (word, true),
+            _ => return Status::Ignore,
+        }
+    } else {
+        (first, false)
+    };
+    if !(matches!(word, "PASS" | "LEAK") || (word == "FAIL" && !retried)) {
         return Status::Ignore;
     }
-    let Some(rest) = line.strip_prefix(word).map(str::trim_start) else {
+    let Some((_, rest)) = line.split_once(word) else {
         return Status::Ignore;
     };
+    let rest = rest.trim_start();
     if !rest.starts_with('[') {
         return Status::Ignore;
     }
@@ -335,8 +372,11 @@ fn parse_status(rest: &str) -> Option<String> {
     if !duration_ok(inside) {
         return None;
     }
-    let rest = rest.trim_start().strip_prefix('(')?;
-    let (_, rest) = rest.split_once(')')?;
+    let rest = rest.trim_start();
+    let rest = match rest.strip_prefix('(') {
+        Some(counter) => counter.split_once(')')?.1,
+        None => rest,
+    };
     let binary = rest.split_whitespace().next()?;
     let package = binary.split("::").next()?;
     package_token(package).then(|| package.to_owned())

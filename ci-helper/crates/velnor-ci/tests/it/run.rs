@@ -620,7 +620,103 @@ END";
         assert!(output.status.success(), "{output:?}");
         assert_eq!(
             written,
-            "existing=1\ntests_run=0\ntests_listed=0\ntests_by_package=\n"
+            "existing=1\ntests_run=0\ntests_listed=1\ntests_by_package=gone=0/1\n"
+        );
+    }
+
+    #[test]
+    fn run_counts_status_lines_without_a_progress_counter() {
+        let script = r"cat >&2 <<'END'
+        PASS [   0.012s] kept alpha
+        PASS [   0.012s] kept beta
+     Summary [   0.022s] 2 tests run: 2 passed, 0 skipped
+END";
+        let two = listed(&[("kept", &["alpha", "beta"])]);
+        let (_, written, _) = run_with_output("tests-run-no-counter", script, &two, &NEXTEST_RUN);
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=2\ntests_listed=2\ntests_by_package=kept=2/2\n"
+        );
+    }
+
+    #[test]
+    fn run_counts_a_test_that_passed_on_a_retry_once() {
+        let script = r"cat >&2 <<'END'
+        PASS [   0.012s] (1/2) kept alpha
+ TRY 1 FAIL [   0.012s] (2/2) kept beta
+  TRY 2 PASS [   0.012s] (2/2) kept beta
+     Summary [   0.022s] 2 tests run: 2 passed (1 flaky), 0 skipped
+   FLAKY 2/3 [   0.016s] (2/2) kept beta
+END";
+        let two = listed(&[("kept", &["alpha", "beta"])]);
+        let (_, written, _) = run_with_output("tests-run-retry", script, &two, &NEXTEST_RUN);
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=2\ntests_listed=2\ntests_by_package=kept=2/2\n"
+        );
+    }
+
+    #[test]
+    fn run_counts_a_package_with_a_unicode_name() {
+        let script = r"cat >&2 <<'END'
+        PASS [   0.012s] (1/1) café t::ok
+     Summary [   0.012s] 1 test run: 1 passed, 0 skipped
+END";
+        let one = listed(&[("café", &["t::ok"])]);
+        let (_, written, _) = run_with_output("tests-run-unicode", script, &one, &NEXTEST_RUN);
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=café=1/1\n"
+        );
+    }
+
+    #[test]
+    fn run_counts_a_status_line_longer_than_the_line_limit() {
+        let name = "t".repeat(5000);
+        let script = format!(
+            "{{ printf '        PASS [   0.012s] (1/1) kept {name}\\n'; echo '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped'; }} >&2"
+        );
+        let one = listed(&[("kept", &["x"])]);
+        let (_, written, _) = run_with_output("tests-run-long", &script, &one, &NEXTEST_RUN);
+        assert_eq!(
+            written,
+            "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=kept=1/1\n"
+        );
+    }
+
+    #[test]
+    fn run_lists_without_any_option_only_nextest_run_accepts() {
+        assert_scope(
+            "tests-run-list-reporter",
+            &[
+                "cargo-nextest",
+                "nextest",
+                "run",
+                "--workspace",
+                "--failure-output",
+                "never",
+                "--success-output=final",
+                "--no-output-indent",
+                "--max-fail",
+                "3",
+                "--test-threads",
+                "2",
+                "--flaky-result=pass",
+                "--hide-progress-bar",
+                "-E",
+                "all()",
+            ],
+            &["list", "--workspace", "-E", "all()"],
+            &[
+                "--failure-output",
+                "never",
+                "--success-output=final",
+                "--no-output-indent",
+                "--max-fail",
+                "--test-threads",
+                "--flaky-result=pass",
+                "--hide-progress-bar",
+            ],
         );
     }
 
