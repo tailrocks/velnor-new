@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{Pair, TestResult, binding, scalar, seed};
-use crate::host_controller::{AssignedPopulationAction, plan_assigned_population_with_successors};
+use crate::host_controller::{
+    AssignedPopulationAction, AssignedPopulationBlock, plan_assigned_population_with_successors,
+};
 use crate::journal::{ConnectionJournal, Journal};
 
 pub(super) const PENDING: Pair = Pair {
@@ -67,7 +69,7 @@ pub(super) async fn seed_pending(journal: &Journal) -> TestResult<()> {
 }
 
 pub(super) struct TestPlan {
-    pub(super) blocked: Option<()>,
+    pub(super) blocked: Option<AssignedPopulationBlock>,
     pub(super) actions: Vec<AssignedPopulationAction>,
 }
 
@@ -122,7 +124,7 @@ pub(super) async fn plan(
         &successors,
     );
     Ok(TestPlan {
-        blocked: plan.blocked.map(|_| ()),
+        blocked: plan.blocked,
         actions: plan.actions,
     })
 }

@@ -19,29 +19,43 @@ async fn draining_a_queued_completion_unlocks_interrupted_jit_cleanup_without_an
     ))? {
         return Ok(());
     }
-    let case = Case::new(Schema::Current, JitOutcome::Interrupted, true).await?;
-    seed_unrelated_request(&case).await?;
+    let case = phase(
+        Case::new(Schema::Current, JitOutcome::Interrupted, true).await,
+        "fixture",
+    )?;
+    phase(
+        seed_unrelated_request(&case).await,
+        "unrelated acquired request",
+    )?;
     let body = lifecycle("JobCompleted", 50, false);
-    case.scope.store_completion_inbox(80, &body).await?;
+    phase(
+        case.scope.store_completion_inbox(80, &body).await,
+        "queue completion",
+    )?;
     let owned = case.fixture.objects(CRASH);
     let foreign = case.fixture.objects(FOREIGN);
-    let case = case.reopen(Schema::Current).await?;
-    case.journal
-        .recover_after_restart_without_authority()
-        .await?;
-    let classified = super::shape(&case.journal).await?;
-    assert_waiting(&case, &owned, &foreign).await?;
-    fake::poll(&case, &body).await?;
-    assert_eq!(inbox_count(&case).await?, "0");
-    assert_eq!(
-        scalar(
-            &case.journal,
-            "SELECT CAST(count(*) AS TEXT) FROM connection_request_authorizations WHERE request_id=50 AND completed_message_id=80 AND completed_event_digest IS NOT NULL AND completed_job_id='job-50' AND completed_result='success' AND completed_runner_id IS NULL AND completed_runner_name IS NULL AND completed_intent_id IS NULL"
-        )
-        .await?,
-        "1"
-    );
-    let candidates = case.scope.recoverable_jit_conflict_candidates().await?;
+    let case = phase(
+        case.reopen(Schema::Current).await,
+        "reopen with queued completion",
+    )?;
+    phase(
+        case.journal.recover_after_restart_without_authority().await,
+        "startup classification",
+    )?;
+    let classified = phase(super::shape(&case.journal).await, "classified shape")?;
+    phase(
+        assert_waiting(&case, &owned, &foreign).await,
+        "queued completion fence",
+    )?;
+    phase(
+        fake::poll(&case, &body).await,
+        "scoped completion poll and ack",
+    )?;
+    assert_drained(&case).await?;
+    let candidates = phase(
+        case.scope.recoverable_jit_conflict_candidates().await,
+        "candidate after drain",
+    )?;
     let candidate = candidates.first().ok_or(
         "drained completion inbox did not unlock interrupted JIT cleanup without another restart",
     )?;
@@ -49,35 +63,83 @@ async fn draining_a_queued_completion_unlocks_interrupted_jit_cleanup_without_an
         classified,
         "uncertain/uncertain/jit_uncertain/uncertain/uncertain"
     );
-    let claim = case
-        .scope
-        .claim_jit_conflict_candidate(candidate, 240)
-        .await?
-        .ok_or("cleanup claim after inbox drain")?;
-    super::super::local::ensure_local_absence(
-        &case.runtime()?,
-        &case.docker,
-        &case.scope,
-        &case.engine,
-        &claim,
-    )
-    .await?;
+    let claim = phase(
+        case.scope
+            .claim_jit_conflict_candidate(candidate, 240)
+            .await,
+        "claim after drain",
+    )?
+    .ok_or("cleanup claim after inbox drain")?;
+    finish(&case, &claim, &foreign).await
+}
+
+async fn finish(
+    case: &Case,
+    claim: &crate::journal::JitConflictRecoveryClaim,
+    foreign: &[String],
+) -> TestResult<()> {
+    phase(
+        super::super::local::ensure_local_absence(
+            &phase(case.runtime(), "native cleanup runtime")?,
+            &case.docker,
+            &case.scope,
+            &case.engine,
+            claim,
+        )
+        .await,
+        "local container and storage absence",
+    )?;
     assert_eq!(case.fixture.objects(CRASH), vec![CRASH.network_id()]);
-    assert_blocked(&case).await?;
-    case.remote_and_network(&claim, true).await?;
+    phase(
+        assert_blocked(case).await,
+        "capacity charged after local cleanup",
+    )?;
+    phase(
+        case.remote_and_network(claim, true).await,
+        "remote runner and network absence",
+    )?;
     assert_eq!(case.fixture.objects(CRASH), Vec::<String>::new());
-    assert_blocked(&case).await?;
-    case.settle().await?;
-    let plan = population::plan(&case.journal, &case.scope, 2).await?;
-    assert_eq!(plan.blocked, None);
-    assert!(plan.actions.iter().any(|action| matches!(
-        action,
-        crate::host_controller::AssignedPopulationAction::ContinueExisting {
-            reservation_id: 4,
-            ..
-        }
-    )));
+    phase(
+        assert_blocked(case).await,
+        "capacity charged before metadata settlement",
+    )?;
+    phase(case.settle().await, "metadata settlement")?;
+    assert_eq!(
+        scalar(&case.journal, "SELECT reservation.state||'/'||reservation.local_cleanup_proven||'/'||reservation.remote_cleanup_proven||'/'||intent.cleanup_proven||'/'||jit.state||'/'||metadata.outcome FROM capacity_reservations reservation JOIN connection_intents intent ON intent.id=reservation.intent_id AND intent.connection_id=reservation.connection_id JOIN connection_runner_jits jit ON jit.intent_id=intent.id AND jit.connection_id=intent.connection_id JOIN capacity_reservation_metadata_settlements metadata ON metadata.reservation_id=reservation.id WHERE reservation.id=2 ORDER BY metadata.generation DESC LIMIT 1").await?,
+        "released/1/1/1/conflict_retired/settled"
+    );
+    phase(
+        assert_drained(case).await,
+        "durable completion after cleanup",
+    )?;
+    let plan = phase(
+        population::plan(&case.journal, &case.scope, 2).await,
+        "planning after metadata settlement",
+    )?;
+    assert_eq!(
+        plan.blocked,
+        Some(crate::host_controller::AssignedPopulationBlock::ClosedUnproven)
+    );
+    assert_eq!(
+        plan.actions,
+        Vec::<crate::host_controller::AssignedPopulationAction>::new()
+    );
     assert_eq!(case.fixture.objects(FOREIGN), foreign);
+    Ok(())
+}
+
+fn phase<T, E: std::fmt::Display>(result: Result<T, E>, name: &str) -> TestResult<T> {
+    result.map_err(|error| format!("inbox {name}: {error}").into())
+}
+
+async fn assert_drained(case: &Case) -> TestResult<()> {
+    assert_eq!(
+        phase(inbox_count(case).await, "inbox count after drain")?,
+        "0"
+    );
+    assert_eq!(phase(scalar(&case.journal,
+        "SELECT CAST(count(*) AS TEXT) FROM connection_request_authorizations WHERE request_id=50 AND completed_message_id=80 AND completed_event_digest IS NOT NULL AND completed_job_id='job-50' AND completed_result='success' AND completed_runner_id IS NULL AND completed_runner_name IS NULL AND completed_intent_id IS NULL"
+    ).await, "runnerless completion receipt")?, "1");
     Ok(())
 }
 
@@ -133,7 +195,10 @@ async fn assert_waiting(case: &Case, owned: &[String], foreign: &[String]) -> Te
 async fn assert_blocked(case: &Case) -> TestResult<()> {
     let plan = population::plan(&case.journal, &case.scope, 2).await?;
     assert!(plan.blocked.is_some());
-    assert!(plan.actions.is_empty());
+    assert_eq!(
+        plan.actions,
+        Vec::<crate::host_controller::AssignedPopulationAction>::new()
+    );
     Ok(())
 }
 

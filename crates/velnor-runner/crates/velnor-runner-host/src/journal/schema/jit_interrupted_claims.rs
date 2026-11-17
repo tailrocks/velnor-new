@@ -4,6 +4,8 @@
 use crate::error::HostError;
 
 mod ddl;
+mod v47;
+pub(super) use v47::migrate as migrate_v46_to_v47;
 #[cfg(test)]
 mod migration_tests;
 
@@ -26,7 +28,10 @@ pub(super) async fn versioned_recovery_sql(
     conn: &turso::Connection,
     sql: &str,
 ) -> Result<String, HostError> {
-    if super::journal_version(conn).await? >= 46 {
+    let version = super::journal_version(conn).await?;
+    if version >= 47 {
+        v47::cleanup_sql(sql)
+    } else if version >= 46 {
         Ok(recovery_sql(sql))
     } else {
         Ok(sql.to_owned())
@@ -57,7 +62,13 @@ pub(super) async fn migrate_v45_to_v46(conn: &turso::Connection) -> Result<(), H
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
+    let version = super::journal_version(conn).await?;
     for (kind, name, expected) in ddl::objects() {
+        let expected = if version >= 47 {
+            v47::startup_sql(&expected)
+        } else {
+            expected
+        };
         let mut rows = conn
             .query(
                 "SELECT sql FROM sqlite_schema WHERE type=?1 AND name=?2",
@@ -100,7 +111,7 @@ pub(in crate::journal) async fn recover_at_startup(
         &format!(
             "INSERT INTO physical_attempt_jit_interrupted_claims ({}) {}",
             ddl::COLUMNS,
-            ddl::ELIGIBLE
+            v47::startup_sql(ddl::ELIGIBLE)
         ),
         (),
     )

@@ -203,8 +203,8 @@ async fn rotate(case: &Case) -> TestResult<()> {
     );
     let config: HostConfig = serde_json::from_value(serde_json::json!({
         "schema": 2, "connections": [case.binding], "job_authority_policies": [value],
-        "host": {"max_jobs": 4, "resources": {"runner_cpu_millicores": 2000, "runner_memory_bytes": 4294967296_u64,
-        "dind_cpu_millicores":1000,"dind_memory_bytes":2147483648_u64,"operational_memory_reserve_bytes":1073741824_u64}},
+        "host": {"max_jobs": 4, "resources": {"runner_cpu_millicores": 2000, "runner_memory_bytes": 4_294_967_296_u64,
+        "dind_cpu_millicores":1000,"dind_memory_bytes":2_147_483_648_u64,"operational_memory_reserve_bytes":1_073_741_824_u64}},
         "docker":{"context":"fixture","platform":"linux/amd64","endpoint":"unix:///fixture.sock"}
     }))?;
     case.scope

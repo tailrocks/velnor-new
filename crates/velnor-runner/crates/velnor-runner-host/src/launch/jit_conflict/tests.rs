@@ -171,10 +171,7 @@ fn source_json() -> String {
     )
 }
 
-pub(super) async fn seed_authorized_bound_request(
-    journal: &Journal,
-    pair: Pair,
-) -> TestResult<String> {
+async fn seed_authorized_bound_request(journal: &Journal, pair: Pair) -> TestResult<String> {
     let binding = scalar(
         journal,
         "SELECT binding_digest FROM physical_attempts LIMIT 1",

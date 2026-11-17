@@ -45,43 +45,39 @@ pub(super) fn isolated(name: &str) -> TestResult<bool> {
 pub(super) async fn poll(case: &Case, body: &str) -> TestResult<()> {
     let directory = PathBuf::from(std::env::var_os(DIRECTORY).ok_or("fake directory")?);
     std::fs::write(directory.join("body"), body)?;
+    std::fs::write(directory.join("requests"), "")?;
     let mut admin = Github::new("unrelated", false);
     let mut link = admin.link(&case.binding)?;
     let mut session = session()?;
-    case.journal
-        .configure_capacity_with_operational_limits(
-            crate::journal::CapacityLimits {
-                jobs: 4,
-                cpu_millicores: 8_000,
-                memory_bytes: 16_000_000_000,
-            },
-            crate::journal::OperationalCapacityLimits {
-                cpu_millicores: 0,
-                memory_bytes: 0,
-            },
-        )
-        .await?;
     let nonce = "e".repeat(32);
-    case.scope.prepare_session_create(&nonce).await?;
-    let claim = case
-        .scope
-        .claim_session_create(&nonce)
-        .await?
-        .ok_or("session claim")?;
-    let bound = case
-        .scope
-        .record_created_session(&claim, &session.session_id, 0)
-        .await?;
-    let outcome = crate::launch::poll_scoped_connection_once(
-        &mut link,
-        7,
-        &mut session,
-        &case.scope,
-        bound.intent_id(),
-        bound.allocation(),
-        0,
-    )
-    .await?;
+    super::phase(
+        case.scope.prepare_session_create(&nonce).await,
+        "prepare poll session",
+    )?;
+    let claim = super::phase(
+        case.scope.claim_session_create(&nonce).await,
+        "claim poll session",
+    )?
+    .ok_or("session claim")?;
+    let bound = super::phase(
+        case.scope
+            .record_created_session(&claim, &session.session_id, 0)
+            .await,
+        "bind poll session",
+    )?;
+    let outcome = super::phase(
+        crate::launch::poll_scoped_connection_once(
+            &mut link,
+            7,
+            &mut session,
+            &case.scope,
+            bound.intent_id(),
+            bound.allocation(),
+            0,
+        )
+        .await,
+        "real scoped poll",
+    )?;
     assert_eq!(outcome.message_id, Some(80));
     let requests = std::fs::read_to_string(directory.join("requests"))?;
     assert!(requests.contains("GET https://queue.example.com/messages?"));
