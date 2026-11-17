@@ -104,6 +104,33 @@ fn templated_versions_follow_vars_declaration_order() -> TestResult {
 }
 
 #[test]
+fn templated_versions_use_mise_string_values_for_primitive_vars() -> TestResult {
+    for (value, condition) in [
+        ("24", "vars.n == '24'"),
+        ("true", "vars.n == 'true'"),
+        ("false", "vars.n is undefined"),
+        ("{ value = 24 }", "vars.n == '24'"),
+    ] {
+        let request = format!("version = \"{{% if {condition} %}}24{{% else %}}25{{% endif %}}\"");
+        let vars = format!("[vars]\nn = {value}\n");
+        npm_locked(&request, "", &vars, "24")?;
+        assert!(npm_locked(&request, "", &vars, "25").is_err(), "{value}");
+    }
+    for value in ["24.0", "[24]", "{ nested = 24 }"] {
+        let error = npm_locked(
+            "version = \"{{ vars.n }}\"",
+            "",
+            &format!("[vars]\nn = {value}\n"),
+            "24",
+        )
+        .err()
+        .ok_or("invalid var was accepted")?;
+        assert!(error.to_string().contains("mise.toml"), "{error}");
+    }
+    Ok(())
+}
+
+#[test]
 fn linux_aarch64_uses_arm_policy_tools_and_prebuilts() -> TestResult {
     let platform = velnor_model::MisePlatform::runner("linux-aarch64").ok_or("no platform")?;
     assert_eq!(platform.lock_key(), "linux-arm64");

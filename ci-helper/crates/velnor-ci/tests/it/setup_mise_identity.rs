@@ -78,3 +78,21 @@ fn prepare_uses_rendered_versions_in_vars_declaration_order() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn prepare_uses_mise_string_values_for_primitive_vars() -> TestResult {
+    for (value, condition) in [
+        ("24", "vars.n == '24'"),
+        ("true", "vars.n == 'true'"),
+        ("false", "vars.n is undefined"),
+        ("{ value = 24 }", "vars.n == '24'"),
+    ] {
+        let config = format!(
+            "[tools]\n\"npm:fixture\" = \"{{% if {condition} %}}24{{% else %}}25{{% endif %}}\"\n[vars]\nn = {value}\n"
+        );
+        check(&config, &lock("24", ""), "24")?;
+        assert!(check(&config, &lock("24", ""), "25").is_err(), "{value}");
+        assert!(check(&config, &lock("25", ""), "25").is_err(), "{value}");
+    }
+    Ok(())
+}
