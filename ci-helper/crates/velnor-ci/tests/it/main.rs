@@ -30,6 +30,7 @@ mod plan_git;
 mod plan_main;
 mod platform;
 mod prepare;
+mod prepare_compat;
 mod prepare_components;
 mod prepare_configs;
 mod prepare_inputs;
