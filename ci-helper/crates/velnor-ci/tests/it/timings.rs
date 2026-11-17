@@ -191,10 +191,7 @@ fn only_ordinary_runs_count() {
 
 #[test]
 fn a_pull_request_into_another_branch_is_not_the_default_branch() {
-    let elsewhere = LIST.replace(
-        "\"pull_requests\":[]",
-        "\"pull_requests\":[{\"base\":{\"ref\":\"release\"}}]",
-    );
+    let elsewhere = LIST.replace("\"ref\":\"main\"", "\"ref\":\"release\"");
     let report = gather(&recorded(&elsewhere), &lab(), &roots(), &runner())
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
