@@ -21,6 +21,7 @@ pub(crate) struct CancelledObservation {
     pub(crate) unmounted_left: usize,
     pub(crate) stops: usize,
     pub(crate) volumes_left: usize,
+    pub(crate) present_left: usize,
     pub(crate) phase: String,
     pub(crate) lease: String,
     pub(crate) initializer: String,
@@ -29,11 +30,12 @@ pub(crate) struct CancelledObservation {
 impl CancelledObservation {
     pub(crate) fn encode(&self) -> String {
         format!(
-            "OBS {} {} {} {} {} {} {}",
+            "OBS {} {} {} {} {} {} {} {}",
             self.helpers_left,
             self.unmounted_left,
             self.stops,
             self.volumes_left,
+            self.present_left,
             self.phase,
             self.lease,
             self.initializer
@@ -47,13 +49,14 @@ impl CancelledObservation {
             .map(|(_, rest)| rest)?;
         let mut fields = line.split(' ');
         let mut count = || fields.next()?.parse::<usize>().ok();
-        let (helpers_left, unmounted_left, stops, volumes_left) =
-            (count()?, count()?, count()?, count()?);
+        let (helpers_left, unmounted_left, stops, volumes_left, present_left) =
+            (count()?, count()?, count()?, count()?, count()?);
         Some(Self {
             helpers_left,
             unmounted_left,
             stops,
             volumes_left,
+            present_left,
             phase: fields.next()?.to_owned(),
             lease: fields.next()?.to_owned(),
             initializer: fields.next()?.to_owned(),
@@ -135,7 +138,7 @@ pub(crate) fn run_cancelled_before_start_scenario(
                 && if expect_success {
                     matches!(
                         journal_state(&journal_path).await?[2].as_str(),
-                        "-" | "not_requested/absent"
+                        "-" | "removed/not_requested"
                     )
                 } else {
                     seed::retry_committed(&state_dir, &mut observer).await?
@@ -158,11 +161,13 @@ pub(crate) fn run_cancelled_before_start_scenario(
     })?;
     let guard = stub.state.lock().map_err(|_| "stub state poisoned")?;
     let (helpers_left, unmounted_left, stops, volumes_left) = guard.volumes.counts();
+    let present_left = guard.volumes.present_count();
     Ok(CancelledObservation {
         helpers_left,
         unmounted_left,
         stops,
         volumes_left,
+        present_left,
         phase,
         lease,
         initializer,

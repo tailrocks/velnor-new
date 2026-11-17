@@ -5,9 +5,7 @@ use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 use crate::journal::connection::storage::{in_transaction, read_transaction};
 
-use super::{
-    CLAIM_SECONDS, UnboundContainer, UnboundInitializer, UnboundVolume, unbound_pair, unix_seconds,
-};
+use super::{UnboundContainer, UnboundInitializer, UnboundVolume, unbound_pair};
 
 const IDENTITY: &str = "reservation_id = ?1 AND connection_id = ?2 AND engine_id = ?3 AND docker_root_digest = ?4 AND operation_key = ?5 AND helper_name = ?6 AND COALESCE(helper_id, abort_helper_id, '') = ?7";
 
@@ -169,33 +167,21 @@ impl ConnectionJournal {
         }
         let connection_id = self.connection_id().as_str().to_owned();
         let helper_id = helper.id.as_deref().unwrap_or("");
-        let now = unix_seconds()?;
-        let lease_until = now.checked_add(CLAIM_SECONDS).ok_or(HostError::Journal)?;
         in_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
             let identity = (reservation_id, connection_id.as_str(), engine_id, docker_root_digest, helper.operation_key.as_str(), helper.name.as_str(), helper_id);
-            let claimed = connection
-                .execute(
-                    &format!("UPDATE capacity_reservation_storage_initialization SET abort_claim_generation = abort_claim_generation + 1, abort_lease_until = {lease_until} WHERE {IDENTITY} AND remove_state != 'removed' AND abort_state IN ('not_requested', 'requested', 'remove_requested', 'uncertain') AND abort_lease_until <= {now} AND create_dispatch_state IN ('not_dispatched', 'response_received', 'outcome_unknown')"),
-                    identity,
-                )
-                .await
-                .map_err(|_| HostError::Journal)?;
-            if claimed == 1 {
-                for sql in [
-                    "UPDATE capacity_reservation_storage_initialization SET abort_state = CASE WHEN abort_state = 'remove_requested' THEN 'remove_requested' ELSE 'requested' END WHERE {IDENTITY} AND abort_state IN ('not_requested', 'requested', 'remove_requested', 'uncertain')",
-                    "UPDATE capacity_reservation_storage_initialization SET abort_helper_id = ?7, abort_state = 'remove_requested' WHERE {IDENTITY} AND ?7 != '' AND abort_state IN ('requested', 'remove_requested') AND (abort_helper_id IS NULL OR abort_helper_id = ?7)",
-                    "UPDATE capacity_reservation_storage_initialization SET abort_state = 'absent', abort_lease_until = 0 WHERE {IDENTITY} AND abort_state IN ('requested', 'remove_requested') AND (create_dispatch_state IN ('not_dispatched', 'response_received') OR (create_dispatch_state = 'outcome_unknown' AND abort_state = 'remove_requested' AND abort_helper_id IS NOT NULL))",
-                ] {
-                    connection
-                        .execute(&sql.replace("{IDENTITY}", IDENTITY), identity)
-                        .await
-                        .map_err(|_| HostError::Journal)?;
-                }
+            for sql in [
+                "UPDATE capacity_reservation_storage_initialization SET remove_state = 'requested' WHERE {IDENTITY} AND ?7 != '' AND helper_id = ?7 AND remove_state = 'not_requested' AND result_state = 'confirmed' AND abort_state = 'not_requested' AND EXISTS (SELECT 1 FROM capacity_reservation_storage_handoffs AS handoff WHERE handoff.reservation_id = capacity_reservation_storage_initialization.reservation_id AND handoff.connection_id = capacity_reservation_storage_initialization.connection_id AND handoff.operation_id = capacity_reservation_storage_initialization.operation_id AND handoff.state = 'attached')",
+                "UPDATE capacity_reservation_storage_initialization SET remove_state = 'removed' WHERE {IDENTITY} AND ?7 != '' AND helper_id = ?7 AND remove_state = 'requested' AND result_state = 'confirmed' AND abort_state = 'not_requested'",
+            ] {
+                connection
+                    .execute(&sql.replace("{IDENTITY}", IDENTITY), identity)
+                    .await
+                    .map_err(|_| HostError::Journal)?;
             }
             let mut rows = connection
                 .query(
-                    &format!("SELECT 1 FROM capacity_reservation_storage_initialization WHERE {IDENTITY} AND (remove_state = 'removed' OR abort_state = 'absent')"),
+                    &format!("SELECT 1 FROM capacity_reservation_storage_initialization WHERE {IDENTITY} AND remove_state = 'removed' AND abort_state = 'not_requested'"),
                     identity,
                 )
                 .await

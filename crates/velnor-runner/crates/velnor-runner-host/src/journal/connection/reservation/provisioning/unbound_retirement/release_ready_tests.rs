@@ -31,6 +31,15 @@ async fn a_reservation_is_release_ready_once_completion_settles_its_removed_init
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
     let (scope, engine) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
     seed::initializer(&journal, FAILED, "not_requested", "not_requested").await?;
+    seed::unguarded(
+        &journal,
+        &[format!(
+            "UPDATE capacity_reservation_storage_initialization SET create_dispatch_state = 'response_received', start_state = 'started', result_state = 'confirmed', metadata_layout_digest = '{}', home_device_major = 0, home_device_minor = 1, home_inode = 1, home_mount_id = 1, work_device_major = 0, work_device_minor = 2, work_inode = 2, work_mount_id = 2 WHERE reservation_id = 2",
+            "a".repeat(64)
+        )],
+    )
+    .await?;
+    seed::attach_handoff(&journal, FAILED).await?;
     seed::unguarded(&journal, &QUIESCE.map(str::to_owned)).await?;
     let helper = scope
         .unretired_storage_initializer(

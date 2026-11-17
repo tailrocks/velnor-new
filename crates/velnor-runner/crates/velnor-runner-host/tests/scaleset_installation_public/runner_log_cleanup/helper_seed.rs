@@ -24,11 +24,12 @@ const RUNTIME_IMAGE: &str =
     "sha256:9999999999999999999999999999999999999999999999999999999999999999";
 const HEX64_A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HEX64_B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
-const TABLES: [&str; 4] = [
+const TABLES: [&str; 5] = [
     "resource_probe_operations",
     "host_operation_leases",
     "execution_publication_operations",
     "capacity_reservation_storage_initialization",
+    "capacity_reservation_storage_handoffs",
 ];
 
 pub(super) fn metadata_volume() -> String {
@@ -247,8 +248,34 @@ async fn seed_publication(conn: &turso::Connection, instance_id: &str) -> TestRe
 async fn seed_initializer(conn: &turso::Connection) -> TestResult<()> {
     let root = docker_root_digest();
     conn.execute(
-        "INSERT INTO capacity_reservation_storage_initialization (reservation_id, connection_id, operation_id, generation, engine_id, docker_root_digest, image_runtime_id, image_source_sha, nano_cpus, memory_bytes, pids_limit, home_volume, work_volume, helper_name, helper_id, create_dispatch_state, create_state, start_state, result_state, remove_state, abort_state, operation_key, home_device_major, home_device_minor, home_inode, home_mount_id, work_device_major, work_device_minor, work_inode, work_mount_id) VALUES (2, 'conn-test-1', 1, 1, 'engine-1', ?1, ?2, ?3, 1000000000, 134217728, 4, ?4, ?5, ?6, ?7, 'response_received', 'created', 'started', 'confirmed', 'not_requested', 'not_requested', ?8, 0, 1, 1, 1, 0, 2, 2, 2)",
-        (root.as_str(), RUNTIME_IMAGE, SOURCE_REVISION, format!("{PRIVATE_VOLUME}-home"), format!("{PRIVATE_VOLUME}-work"), INITIALIZER_NAME, INITIALIZER_ID, INITIALIZER_KEY),
+        "INSERT INTO capacity_reservation_storage_initialization (reservation_id, connection_id, operation_id, generation, engine_id, docker_root_digest, image_runtime_id, image_source_sha, nano_cpus, memory_bytes, pids_limit, home_volume, work_volume, layout_version, metadata_volume, metadata_volume_id, metadata_layout_digest, helper_name, helper_id, create_dispatch_state, create_state, start_state, result_state, remove_state, abort_state, operation_key, home_device_major, home_device_minor, home_inode, home_mount_id, work_device_major, work_device_minor, work_inode, work_mount_id) VALUES (2, 'conn-test-1', 1, 1, 'engine-1', ?1, ?2, ?3, 1000000000, 134217728, 4, ?4, ?5, 2, ?6, ?6, ?7, ?8, ?9, 'response_received', 'created', 'started', 'confirmed', 'not_requested', 'not_requested', ?10, 0, 1, 1, 1, 0, 2, 2, 2)",
+        (
+            root.as_str(),
+            RUNTIME_IMAGE,
+            SOURCE_REVISION,
+            format!("{PRIVATE_VOLUME}-home"),
+            format!("{PRIVATE_VOLUME}-work"),
+            metadata_volume(),
+            HEX64_A,
+            INITIALIZER_NAME,
+            INITIALIZER_ID,
+            INITIALIZER_KEY,
+        ),
+    )
+    .await?;
+    conn.execute(
+        "INSERT INTO capacity_reservation_storage_handoffs (reservation_id, connection_id, operation_id, generation, helper_name, helper_id, engine_id, docker_root_digest, metadata_volume_name, metadata_volume_id, operation_key, layout_digest, ready_digest, state, mount_evidence_digest, runner_container_id, dind_container_id) VALUES (2, 'conn-test-1', 1, 1, ?1, ?2, 'engine-1', ?3, ?4, ?4, ?5, ?6, ?7, 'attached', ?7, ?8, ?9)",
+        (
+            INITIALIZER_NAME,
+            INITIALIZER_ID,
+            root.as_str(),
+            metadata_volume(),
+            INITIALIZER_KEY,
+            HEX64_A,
+            HEX64_B,
+            RUNNER_ID,
+            DIND_ID,
+        ),
     )
     .await?;
     Ok(())

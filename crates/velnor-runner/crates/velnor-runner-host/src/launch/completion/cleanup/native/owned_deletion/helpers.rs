@@ -43,6 +43,9 @@ pub(super) async fn remove_volume_helpers(
     if u64::try_from(users.len()).map_or(true, |count| count > MAX_HELPERS_PER_VOLUME) {
         return Err(Failure::not_proven("volume helper bound"));
     }
+    if users.is_empty() {
+        return Ok(());
+    }
     let runtime = context
         .native_cleanup
         .ok_or_else(|| Failure::not_proven("native cleanup capability"))?;
@@ -65,97 +68,35 @@ pub(super) async fn remove_volume_helpers(
         },
     )
     .await?;
-    if !users.is_empty() {
-        let publication = request_effect(
-            context,
-            launch,
-            claim,
-            budget,
-            "volume helper publication lookup",
-            identity,
-            || async { runtime.owned_publication(scope, identity).await },
-        )
-        .await?;
-        let plan = classify_users(
-            context,
-            launch,
-            claim,
-            budget,
-            identity,
-            volume,
-            (users, publication, initializer.clone()),
-        )
-        .await?;
-        for retirement in plan {
-            retire(context, launch, claim, budget, identity, retirement).await?;
-        }
-        let remaining = list_users(context, launch, claim, budget, identity, volume).await?;
-        if !remaining.is_empty() {
-            return Err(Failure::not_proven("volume helper retirement"));
-        }
-    }
-    match initializer {
-        Some(helper) => settle_initializer(context, launch, claim, budget, identity, &helper).await,
-        None => Ok(()),
-    }
-}
-
-async fn settle_initializer(
-    context: &Context<'_>,
-    launch: &CompletedLaunch,
-    claim: CleanupClaim,
-    budget: &mut EffectBudget<'_>,
-    identity: &StorageCleanupIdentity,
-    helper: &UnboundInitializer,
-) -> Result<(), Failure> {
-    let by_name = request_effect(
+    let publication = request_effect(
         context,
         launch,
         claim,
         budget,
-        "initializer name absence",
+        "volume helper publication lookup",
         identity,
-        || async { inspect_container(context.docker, &helper.name).await },
+        || async { runtime.owned_publication(scope, identity).await },
     )
     .await?;
-    let by_id = match helper.id.as_deref() {
-        Some(id) => {
-            request_effect(
-                context,
-                launch,
-                claim,
-                budget,
-                "initializer id absence",
-                identity,
-                || async { inspect_container(context.docker, id).await },
-            )
-            .await?
-        }
-        None => None,
-    };
-    if by_name.is_some() || by_id.is_some() {
-        return Ok(());
-    }
-    let scope = context.journal.connection();
-    request_effect(
+    let plan = classify_users(
         context,
         launch,
         claim,
         budget,
-        "initializer journal settlement",
         identity,
-        || async {
-            scope
-                .settle_removed_storage_initializer(
-                    identity.reservation_id(),
-                    identity.engine_id(),
-                    identity.docker_root_digest(),
-                    helper,
-                )
-                .await
-        },
+        volume,
+        (users, publication, initializer),
     )
-    .await
+    .await?;
+    for retirement in plan {
+        retire(context, launch, claim, budget, identity, retirement).await?;
+    }
+    let remaining = list_users(context, launch, claim, budget, identity, volume).await?;
+    if remaining.is_empty() {
+        Ok(())
+    } else {
+        Err(Failure::not_proven("volume helper retirement"))
+    }
 }
 
 async fn classify_users(
@@ -302,7 +243,7 @@ async fn list_volume_users(docker: &Docker, volume: &str) -> Result<Vec<String>,
         .collect())
 }
 
-async fn stop_helper(context: &Context<'_>, id: &str) -> Result<(), HostError> {
+pub(super) async fn stop_helper(context: &Context<'_>, id: &str) -> Result<(), HostError> {
     within(context.docker.stop_container(
         id,
         Some(StopContainerOptions {

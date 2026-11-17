@@ -27,6 +27,30 @@ fn helper_case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
             }],
             true,
         ),
+        "initializer_volumes_absent" => (
+            vec![HelperSpec {
+                life: Life::Gone,
+                volumes_present: false,
+                ..initializer
+            }],
+            true,
+        ),
+        "initializer_volumes_absent_container_present" => (
+            vec![HelperSpec {
+                volumes_present: false,
+                ..initializer
+            }],
+            true,
+        ),
+        "initializer_never_listed" => (
+            vec![HelperSpec {
+                mounts: false,
+                listed: false,
+                life: Life::Running,
+                ..initializer
+            }],
+            true,
+        ),
         "initializer_running" => (
             vec![HelperSpec {
                 life: Life::Running,
@@ -113,7 +137,7 @@ fn public_cancelled_run_retires_a_journaled_storage_initializer_before_removing_
     let (observed, stderr) = run_helper_case("initializer")?;
     assert_eq!(observed.helpers_left, 0, "{stderr}");
     assert_eq!(observed.volumes_left, 0, "{stderr}");
-    assert_eq!(observed.initializer, "not_requested/absent", "{stderr}");
+    assert_eq!(observed.initializer, "removed/not_requested", "{stderr}");
     assert!(!stderr.contains("UNROUTED"), "{stderr}");
     Ok(())
 }
@@ -124,7 +148,38 @@ fn public_cleanup_settles_an_initializer_whose_container_a_crash_already_removed
     let (observed, stderr) = run_helper_case("initializer_already_removed")?;
     assert_eq!(observed.helpers_left, 0, "{stderr}");
     assert_eq!(observed.volumes_left, 0, "{stderr}");
-    assert_eq!(observed.initializer, "not_requested/absent", "{stderr}");
+    assert_eq!(observed.initializer, "removed/not_requested", "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn public_cleanup_settles_an_initializer_when_every_owned_volume_is_already_absent()
+-> TestResult<()> {
+    let (observed, stderr) = run_helper_case("initializer_volumes_absent")?;
+    assert_eq!(observed.present_left, 0, "{stderr}");
+    assert_eq!(observed.volumes_left, 0, "{stderr}");
+    assert_eq!(observed.initializer, "removed/not_requested", "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn public_cleanup_removes_a_journaled_initializer_when_every_owned_volume_is_already_absent()
+-> TestResult<()> {
+    let (observed, stderr) = run_helper_case("initializer_volumes_absent_container_present")?;
+    assert_eq!(observed.present_left, 0, "{stderr}");
+    assert_eq!(observed.stops, 0, "{stderr}");
+    assert_eq!(observed.volumes_left, 0, "{stderr}");
+    assert_eq!(observed.initializer, "removed/not_requested", "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn public_cleanup_removes_a_journaled_initializer_that_was_never_a_volume_user() -> TestResult<()> {
+    let (observed, stderr) = run_helper_case("initializer_never_listed")?;
+    assert_eq!(observed.present_left, 0, "{stderr}");
+    assert_eq!(observed.stops, 1, "{stderr}");
+    assert_eq!(observed.volumes_left, 0, "{stderr}");
+    assert_eq!(observed.initializer, "removed/not_requested", "{stderr}");
     Ok(())
 }
 
@@ -134,7 +189,7 @@ fn public_cleanup_stops_a_running_storage_initializer_before_removing_it() -> Te
     assert_eq!(observed.stops, 1, "{stderr}");
     assert_eq!(observed.helpers_left, 0, "{stderr}");
     assert_eq!(observed.volumes_left, 0, "{stderr}");
-    assert_eq!(observed.initializer, "not_requested/absent", "{stderr}");
+    assert_eq!(observed.initializer, "removed/not_requested", "{stderr}");
     Ok(())
 }
 

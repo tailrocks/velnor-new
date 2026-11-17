@@ -42,6 +42,8 @@ pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::NativeCompletionReservation;
 pub(crate) use connection::PreJitCleanupSettlementResult;
 pub(crate) use connection::TerminalReplayBinding;
+#[cfg(test)]
+pub(crate) use connection::reservation_release_ready;
 pub(crate) use connection::{
     LocalWorkerExitDisposition, LocalWorkerExitKind, LocalWorkerExitObservation,
     LocalWorkerHealthCandidate,

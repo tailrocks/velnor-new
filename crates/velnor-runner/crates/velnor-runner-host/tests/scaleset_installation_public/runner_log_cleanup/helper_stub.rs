@@ -41,6 +41,7 @@ pub(crate) struct HelperSpec {
     pub(crate) life: Life,
     pub(crate) engine: Option<&'static str>,
     pub(crate) operation: Option<&'static str>,
+    pub(crate) volumes_present: bool,
 }
 
 impl HelperSpec {
@@ -52,6 +53,7 @@ impl HelperSpec {
             life: Life::Created,
             engine: None,
             operation: None,
+            volumes_present: true,
         }
     }
 }
@@ -141,7 +143,11 @@ fn build_helper(index: usize, spec: &HelperSpec, instance_id: &str) -> Helper {
 impl VolumeState {
     pub(super) fn cancelled_before_start(specs: &[HelperSpec], instance_id: &str) -> Self {
         Self {
-            volumes: ROLES.iter().map(|(suffix, _)| volume(suffix)).collect(),
+            volumes: if specs.iter().all(|spec| spec.volumes_present) {
+                ROLES.iter().map(|(suffix, _)| volume(suffix)).collect()
+            } else {
+                Vec::new()
+            },
             helpers: specs
                 .iter()
                 .enumerate()
@@ -178,6 +184,10 @@ impl VolumeState {
                     .iter()
                     .all(|name| name == "unrelated-volume")
             })
+    }
+
+    pub(super) fn present_count(&self) -> usize {
+        self.present().count()
     }
 
     pub(super) fn counts(&self) -> (usize, usize, usize, usize) {

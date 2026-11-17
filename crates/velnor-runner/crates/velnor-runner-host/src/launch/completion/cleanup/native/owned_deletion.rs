@@ -23,6 +23,8 @@ use super::super::super::{Context, EffectBudget, Failure, run_effect};
 mod helpers;
 #[path = "owned_deletion/identity.rs"]
 mod identity;
+#[path = "owned_deletion/initializer.rs"]
+mod initializer;
 #[path = "owned_deletion/retirement.rs"]
 mod retirement;
 #[path = "owned_deletion/runner_logs.rs"]
@@ -234,7 +236,10 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
             return Err(Failure::not_proven("volume absence"));
         }
     }
-    Ok(())
+    Box::pin(initializer::settle_journaled_initializer(
+        context, launch, claim, budget, identity,
+    ))
+    .await
 }
 
 fn validate_volume(
