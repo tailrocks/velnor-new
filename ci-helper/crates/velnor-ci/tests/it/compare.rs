@@ -107,6 +107,86 @@ fn only_the_ten_largest_job_changes_are_listed() {
 }
 
 #[test]
+fn skipped_jobs_are_not_reported_as_unmeasured_changes() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let skipped = &mut a.jobs[0];
+    skipped.conclusion = "skipped".to_owned();
+    skipped.started = false;
+    skipped.duration_seconds = None;
+    b.jobs.remove(0);
+
+    let table = rendered(&a, &b);
+    assert!(!table.contains(&a.jobs[0].name), "{table}");
+    assert!(
+        table.contains(&format!(
+            "| Jobs skipped | {} | {} | -1 |",
+            b.jobs_skipped() + 1,
+            b.jobs_skipped()
+        )),
+        "{table}"
+    );
+}
+
+#[test]
+fn a_changed_job_without_a_measurement_survives_the_display_limit() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let template = a.jobs[0].clone();
+    for index in 0..12_u64 {
+        let mut left = template.clone();
+        left.name = format!("job-{index:02}");
+        left.duration_seconds = Some(100);
+        let mut right = left.clone();
+        right.duration_seconds = Some(101 + index);
+        a.jobs.push(left);
+        b.jobs.push(right);
+    }
+    let mut lost_measurement = template;
+    lost_measurement.name = "job-unmeasured".to_owned();
+    lost_measurement.duration_seconds = Some(1_000);
+    a.jobs.push(lost_measurement.clone());
+    lost_measurement.duration_seconds = None;
+    b.jobs.push(lost_measurement);
+
+    let table = rendered(&a, &b);
+    assert!(
+        table.contains("| job-unmeasured | 1000 | unmeasured | - |"),
+        "{table}"
+    );
+}
+
+#[test]
+fn metrics_without_a_schema_version_are_rejected() {
+    use std::fs;
+
+    use velnor_ci::io::read_metrics;
+
+    let mut old_format =
+        serde_json::to_value(recorded_metrics()).unwrap_or_else(|error| unreachable!("{error}"));
+    old_format
+        .as_object_mut()
+        .unwrap_or_else(|| unreachable!("metrics must serialize as an object"))
+        .remove("schema_version");
+    let directory = crate::support::fresh_dir("velnor-ci-metrics", "old-schema");
+    let path = directory.join("metrics.json");
+    fs::write(
+        &path,
+        serde_json::to_vec(&old_format).unwrap_or_else(|error| unreachable!("{error}")),
+    )
+    .unwrap_or_else(|error| unreachable!("{error}"));
+
+    let result = read_metrics(&path).map(|_| ());
+    fs::remove_dir_all(&directory).unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(
+        result
+            .as_ref()
+            .is_err_and(|error| error.to_string().contains("schema_version")),
+        "{result:?}"
+    );
+}
+
+#[test]
 fn a_measured_zero_job_missing_from_the_other_run_is_not_a_change() {
     let mut a = recorded_metrics();
     let b = recorded_metrics();

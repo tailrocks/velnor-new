@@ -5,8 +5,11 @@ use serde::{Deserialize, Serialize};
 
 use crate::logscan::LogScan;
 
+pub const METRICS_SCHEMA_VERSION: u32 = 2;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RunMetrics {
+    pub schema_version: u32,
     pub repo: String,
     pub run_id: u64,
     pub run_attempt: u32,

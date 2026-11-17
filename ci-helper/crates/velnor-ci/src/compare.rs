@@ -101,13 +101,18 @@ fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, JobDuration, Job
         .filter(|(_, (left, right))| changed_duration(*left, *right))
         .map(|((name, occurrence), (left, right))| (job_label(&name, occurrence), left, right))
         .collect();
-    changed.sort_by_key(|(_, left, right)| {
-        std::cmp::Reverse(
-            match (left.seconds_or_absent(), right.seconds_or_absent()) {
-                (Some(left), Some(right)) => left.abs_diff(right),
-                _ => 0,
-            },
-        )
+    changed.sort_by_key(|(_, left, right)| match (left, right) {
+        (JobDuration::Unmeasured, _) | (_, JobDuration::Unmeasured) => {
+            (false, std::cmp::Reverse(0))
+        }
+        _ => (
+            true,
+            std::cmp::Reverse(
+                left.seconds_or_absent()
+                    .unwrap_or_default()
+                    .abs_diff(right.seconds_or_absent().unwrap_or_default()),
+            ),
+        ),
     });
     changed.truncate(CHANGED_JOBS_SHOWN);
     changed
@@ -117,6 +122,7 @@ fn occurrence_keys(run: &RunMetrics) -> Vec<((String, usize), JobDuration)> {
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
     run.jobs
         .iter()
+        .filter(|job| job.ran())
         .map(|job| {
             let count = seen.entry(&job.name).or_default();
             *count += 1;

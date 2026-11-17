@@ -8,7 +8,7 @@ use crate::github::{
     ApiJob, ApiJobs, ApiRun, ApiStep, GitHub, Repo, job_log_path, jobs_path, parse, run_path,
 };
 use crate::logscan;
-use crate::metrics::{JobMetrics, RunMetrics, StepMetrics};
+use crate::metrics::{JobMetrics, METRICS_SCHEMA_VERSION, RunMetrics, StepMetrics};
 use crate::time::{parse_utc, seconds_between};
 
 pub fn collect(
@@ -49,6 +49,7 @@ pub fn collect(
         .filter(|job| job.ran())
         .try_fold(0_u64, |total, job| total.checked_add(job.duration_seconds?));
     Ok(RunMetrics {
+        schema_version: METRICS_SCHEMA_VERSION,
         repo: repo.to_string(),
         run_id,
         run_attempt: run.run_attempt,
