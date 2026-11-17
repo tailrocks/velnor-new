@@ -22,7 +22,7 @@ pub use plan::{
     Triggers, When, WorkflowPlan,
 };
 pub use repo::{
-    CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
+    CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun, InputRule,
     MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig,
     RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin,
     ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
