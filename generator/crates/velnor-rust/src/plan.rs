@@ -249,7 +249,7 @@ pub(crate) fn setup_roots(
     if lane.from_source || breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));
     }
-    toolchain.push(step(StepKind::Helper(restored(facts, lane))));
+    toolchain.extend(restored(facts, lane));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
