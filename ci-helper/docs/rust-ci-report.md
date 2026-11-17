@@ -24,13 +24,16 @@ changing this contract.
   that invocation.
 - `downloaded` and `slowest_tests` are aggregate display fields. The latter is
   capped at ten entries. `tests_run` is a display-only workflow value.
+- `first_cargo_seconds` measures job start to the first Cargo invocation, or
+  is `null` when the API cannot establish the job start time.
 - `diagnostics` describe optional or incomplete telemetry. `verification_errors`
   mean evidence needed for a warm-cache decision could not be checked; the
   checker fails closed on these errors. `violations` are policy findings.
 
 The checker validates artifact and observed-unit identity across lanes. Cargo
-package identities must be understood before their artifacts can be used to
-classify compilation; unsupported identities become verification errors.
+package identities must provide source, name, and version before their
+artifacts can classify compilation. Source identifiers remain opaque;
+structurally unsupported identities become verification errors.
 Progress text alone cannot prove a download when a source cache was an exact
 hit: a matching archive observation is required. See Cargo's
 [JSON message format](https://doc.rust-lang.org/cargo/reference/external-tools.html#json-messages)
@@ -38,17 +41,17 @@ for the compiler-artifact and build-script records used as input evidence.
 
 ## Producer and enforcement
 
-The report producer is nonfatal so a missing GitHub API token or unavailable
-API does not replace the job's build result with a telemetry failure. API
-lookups are read-only and scoped to the current repository and workflow run.
-Unavailable API fields remain unknown and produce diagnostics; they are not
-reported as zero-byte archives or successful cache saves.
+Generated report and upload steps continue on error. The separate `Cache`
+job reports missing or invalid metrics. API lookups are read-only. Job timing
+comes from the current workflow run; cache sizes come from eligible cache
+entries in the current repository. Fork pull-request report steps receive an
+empty explicit API token. Unavailable API fields remain unknown and produce
+diagnostics; they are not reported as zero-byte archives or successful saves.
 
-The `0.1.81` helper capability gate controls generated cache-save and
-PR-only-check behavior. Cache reporting is descriptive unless a workflow opts
-into blocking on the cache verdict. `strictCache` makes an opted-in cache
-decision fail when the required cache evidence is unknown; it does not turn
-optional telemetry into a required producer step.
+Generated reporting requires helper `0.1.81` or a supported source-built
+helper. The `Cache` job fails on waste or unverifiable required evidence.
+`cache_check_blocks` defaults to `false`; setting it to `true` includes
+`Cache` in both Required's dependencies and its verdict specification.
 
 `velnor-ci report --check <artifacts>` requires metrics for every non-skipped
 lane named by `VELNOR_REPORT_NEEDS`, validates schema and evidence, and
