@@ -46,19 +46,17 @@ an enabled section requires exactly one of the two.
 
 ## 2. Pinned release-plz toolchain selection
 
-The release-plz CLI pin is `0.4.3` (`RELEASE_PLZ_VERSION` in
-`crates/velnor-actions-mise/src/catalog.rs`, and `release-plz` in
-`.velnor/version-policy.toml`). The coordinator checksum of that pin is
-`RELEASE_PLZ_CKSUM`
-(`69bbc232e23322cfaf77a60540e69e2dbd83879e843c4fc9d6ad1ead97d257f6`) in
-`crates/velnor-actions-mise/src/release_plz.rs`. The release path installs
-and runs that CLI through mise. It does not pin `release-plz/action`. No
-runtime `latest` lookup and no recompilation of the coordinator on every
-release.
+The release-plz CLI version and Linux x64 archive URL and SHA-256 come from
+`mise.lock`. The generator validates the lock entry and carries its URL and
+digest into the release plan. Generated release jobs download the archive,
+check it with `sha256sum --check`, and extract it before checkout and release
+credentials.
 
-Generated release steps do not use `release-plz/action`. They invoke the CLI as
-`mise --no-config --no-env --no-hooks exec rust@<catalog Rust pin> release-plz@0.4.3 -- release-plz`,
-then the subcommand.
+`RELEASE_PLZ_CKSUM` in `crates/velnor-actions-mise/src/release_plz.rs` is the
+crates.io checksum for the `release-plz` 0.4.3 source crate. It does not verify
+the GitHub binary archive and the generator does not use it for installation.
+The generated release steps do not use `release-plz/action` or install
+release-plz through mise.
 
 ## 3. Selection contract
 
