@@ -10,7 +10,7 @@ final-status-level = "flaky"
 slow-timeout = { period = "2s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = 'test(repeated_directory_declarations_share_the_audit_scan_budget) | test(distinct_declared_trees_cannot_exceed_the_audit_scan_budget)'
+filter = 'test(repeated_directory_declarations_share_the_audit_scan_budget) | test(distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(directly_named_files_do_not_consume_the_directory_walk_budget)'
 threads-required = "num-test-threads"
 slow-timeout = { period = "120s", terminate-after = 1 }
 

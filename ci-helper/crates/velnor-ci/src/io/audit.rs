@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod build;
 mod freshness;
+mod inventory;
+
+pub(crate) use build::build;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -61,7 +65,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
-        freshness: freshness::Freshness::new(&workspaces)?,
+        freshness: freshness::Freshness::new(&workspaces),
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
@@ -292,7 +296,7 @@ impl Audit<'_> {
         else {
             return Ok(None);
         };
-        if self.changed_since(workspace, &paths, built)? {
+        if self.changed_since(workspace, &paths, built, file)? {
             if !self.owners.of(package, &source).is_empty() {
                 self.stale.push(file.display().to_string());
             }
@@ -332,7 +336,7 @@ impl Audit<'_> {
                     || self.repository.to_path_buf(),
                     |d| self.repository.join(d.as_str()),
                 );
-                if self.changed_since(&base, &paths, built)? {
+                if self.changed_since(&base, &paths, built, file)? {
                     continue;
                 }
                 ran = true;

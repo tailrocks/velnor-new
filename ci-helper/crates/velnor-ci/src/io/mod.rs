@@ -117,6 +117,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
             audit_inputs(&current_dir()?, write)
         }
+        Command::Inputs(InputsCommand::Build(args)) => audit::build(&current_dir()?, &args),
         Command::ReleaseGate(args) => run_release_gate(&args),
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),

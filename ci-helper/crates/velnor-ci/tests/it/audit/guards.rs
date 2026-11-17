@@ -55,6 +55,11 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
         &format!("{target}/newer-artifact"),
         SystemTime::now() + Duration::from_secs(200),
     );
+    super::inventory::build(
+        &repo,
+        &format!("{target}/build/lib-0000000000000005/output"),
+        None,
+    );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(

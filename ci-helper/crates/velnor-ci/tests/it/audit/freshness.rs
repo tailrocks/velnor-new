@@ -21,6 +21,7 @@ fn a_later_workspaces_target_creation_does_not_stale_a_repository_read() {
     unit(&repo, output, "cargo:rerun-if-changed=../..\n");
     let built = UNIX_EPOCH + Duration::from_secs(3_000_000_001);
     repo.set_mtime(output, built);
+    super::inventory::build(&repo, output, None);
     File::open(repo.root().join("second"))
         .and_then(|file| file.set_times(FileTimes::new().set_modified(built)))
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -118,6 +119,7 @@ fn newer_configured_target_artifacts_do_not_hide_a_repository_read() {
         unit(&repo, artifact, "");
         repo.set_mtime(artifact, UNIX_EPOCH + Duration::from_secs(4_000_000_000));
     }
+    super::inventory::build(&repo, &output, Some(&repo.root().join("custom-target")));
     let written = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root().join("custom-target"))
@@ -159,6 +161,13 @@ fn repeated_directory_declarations_share_the_audit_scan_budget() {
         );
         repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
     }
+    for hash in ["008", "018"] {
+        super::inventory::build(
+            &repo,
+            &format!("{target}/build/lib-f000000000000{hash}/output"),
+            None,
+        );
+    }
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(
@@ -187,6 +196,13 @@ fn distinct_declared_trees_cannot_exceed_the_audit_scan_budget() {
             &format!("cargo:rerun-if-changed={declared}\n"),
         );
         repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+    }
+    for hash in ["008", "018"] {
+        super::inventory::build(
+            &repo,
+            &format!("{target}/build/lib-f000000000000{hash}/output"),
+            None,
+        );
     }
     let refused = audit(&repo, &["--write"]);
     assert_eq!(refused.status.code(), Some(1), "{refused:?}");
