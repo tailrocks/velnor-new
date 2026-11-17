@@ -4,9 +4,11 @@
 use std::ffi::OsStr;
 use std::path::Path;
 
-use super::{Error, program};
+use velnor_model::RepositoryIdentity;
 
-pub(super) fn repository_name(root: &Path) -> Result<String, Error> {
+use super::program;
+
+pub(super) fn repository_name(root: &Path) -> RepositoryIdentity {
     let remote = program(
         root,
         "git",
@@ -19,10 +21,10 @@ pub(super) fn repository_name(root: &Path) -> Result<String, Error> {
     .ok()
     .and_then(|bytes| String::from_utf8(bytes).ok());
     match remote.as_deref() {
-        None => Ok(String::new()),
-        Some(url) => repository_path(url).ok_or_else(|| {
-            Error::Repository("origin must identify a hosted repository; local or invalid origins cannot determine its schedule".to_owned())
-        }),
+        None => RepositoryIdentity::default(),
+        Some(url) => {
+            repository_path(url).map_or(RepositoryIdentity::Unhosted, RepositoryIdentity::Named)
+        }
     }
 }
 

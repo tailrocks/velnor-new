@@ -4,13 +4,17 @@
 use std::error::Error;
 use std::fs;
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Output};
 
 use crate::release_symlink::{Scratch, git};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 fn checkout(path: &Path) -> TestResult {
+    checkout_with(path, "full_run = \"weekly\"\n")
+}
+
+fn checkout_with(path: &Path, config: &str) -> TestResult {
     fs::create_dir_all(path.join(".velnor"))?;
     fs::create_dir_all(path.join("src"))?;
     fs::write(
@@ -22,10 +26,10 @@ fn checkout(path: &Path) -> TestResult {
         path.join("Cargo.lock"),
         "version = 4\n\n[[package]]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
     )?;
-    fs::write(path.join(".velnor/rust-ci.toml"), "full_run = \"weekly\"\n")?;
+    fs::write(path.join(".velnor/rust-ci.toml"), config)?;
     fs::write(
         path.join(".velnor/rust-ci.lock"),
-        crate::release_fixture::LOCK,
+        crate::release_fixture::LOCK.replace("0.1.79", "0.1.81"),
     )?;
     let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/full-run-weekly/view");
     fs::copy(sample.join("mise.toml"), path.join("mise.toml"))?;
@@ -35,16 +39,20 @@ fn checkout(path: &Path) -> TestResult {
     Ok(())
 }
 
-fn schedule(path: &Path) -> Result<String, Box<dyn Error>> {
+fn generate(path: &Path) -> Result<Output, Box<dyn Error>> {
     let cargo = Path::new(env!("CARGO"));
     let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
     let search_path = std::env::join_paths([cargo_dir, Path::new("/usr/bin"), Path::new("/bin")])?;
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
+    Ok(Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
         .args(["--root", ".", "generate"])
         .current_dir(path)
         .env("PATH", search_path)
         .env("MISE_TRUSTED_CONFIG_PATHS", path)
-        .output()?;
+        .output()?)
+}
+
+fn schedule(path: &Path) -> Result<String, Box<dyn Error>> {
+    let output = generate(path)?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "{stderr}");
     let workflow = fs::read_to_string(path.join(".github/workflows/rust-ci.yml"))?;
@@ -144,25 +152,41 @@ fn a_checkout_without_an_origin_keeps_its_schedule_when_renamed() -> TestResult 
 }
 
 #[test]
-fn local_origin_is_rejected_instead_of_writing_a_checkout_dependent_schedule() -> TestResult {
+fn local_origin_is_rejected_when_a_hashed_schedule_needs_the_identity() -> TestResult {
     let base = std::env::temp_dir().join(format!("velnor-gen-local-origin-{}", std::process::id()));
     let repo = Scratch(base);
     checkout(&repo.0)?;
     git(&repo.0, &["remote", "add", "origin", "../mirror/app"])?;
-    let cargo = Path::new(env!("CARGO"));
-    let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
-    let search_path = std::env::join_paths([cargo_dir, Path::new("/usr/bin"), Path::new("/bin")])?;
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
-        .args(["--root", ".", "generate"])
-        .current_dir(&repo.0)
-        .env("PATH", search_path)
-        .env("MISE_TRUSTED_CONFIG_PATHS", &repo.0)
-        .output()?;
+    let output = generate(&repo.0)?;
     assert!(
         !output.status.success(),
         "local origin unexpectedly generated a workflow"
     );
     assert!(String::from_utf8_lossy(&output.stderr).contains("origin"));
     assert!(!repo.0.join(".github/workflows/rust-ci.yml").exists());
+    Ok(())
+}
+
+#[test]
+fn local_origin_generates_when_the_schedule_does_not_need_the_identity() -> TestResult {
+    let base = std::env::temp_dir().join(format!("velnor-gen-local-free-{}", std::process::id()));
+    fs::remove_dir_all(&base).ok();
+    let parent = Scratch(base.clone());
+    let off = Scratch(base.join("off"));
+    let cron = Scratch(base.join("cron"));
+    checkout_with(&off.0, "full_run = \"off\"\n")?;
+    checkout_with(&cron.0, "full_run = \"17 3 * * 2\"\n")?;
+    for repo in [&off, &cron] {
+        git(&repo.0, &["remote", "add", "origin", "../mirror/app"])?;
+    }
+    let output = generate(&off.0)?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let workflow = fs::read_to_string(off.0.join(".github/workflows/rust-ci.yml"))?;
+    assert!(!workflow.contains("- cron: "), "{workflow}");
+    assert_eq!(schedule(&cron.0)?, "17 3 * * 2");
+    drop(cron);
+    drop(off);
+    drop(parent);
     Ok(())
 }

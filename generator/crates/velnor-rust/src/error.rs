@@ -21,6 +21,7 @@ pub enum DetectError {
     NestedToolchain { file: RepoPath },
     NoRustRoot,
     JobIdTaken(String),
+    UnhostedOrigin,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -269,6 +270,9 @@ impl fmt::Display for DetectError {
                 "{file} sets up tools for one Cargo root; the generated jobs set up one toolchain and one mise configuration for the repository, so move it to the repository root"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
+            Self::UnhostedOrigin => f.write_str(
+                "origin must identify a hosted repository to place a hashed full_run schedule; point origin at a hosted URL, or set full_run to \"off\" or a cron expression",
+            ),
             Self::JobIdTaken(id) => write!(
                 f,
                 "two generated jobs get the id {id}; rename the folder of a Cargo root or add it to exclude in {CONFIG_PATH}"

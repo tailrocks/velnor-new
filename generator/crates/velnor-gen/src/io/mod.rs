@@ -252,7 +252,7 @@ fn view_from(
     symlinks: BTreeSet<RepoPath>,
 ) -> Result<RepoView, Error> {
     Ok(RepoView {
-        repository: identity::repository_name(root)?,
+        repository: identity::repository_name(root),
         files: read_files(root, &wanted_files(&tracked_paths))?,
         tracked_paths,
         symlinks,
