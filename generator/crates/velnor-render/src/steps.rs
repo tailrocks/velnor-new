@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
     TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
@@ -52,6 +52,10 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         .steps
         .iter()
         .any(|step| step.kind == StepKind::Helper(HelperCommand::Restored));
+    let audit = job
+        .steps
+        .iter()
+        .any(|step| step.kind == StepKind::Helper(HelperCommand::InputsAudit));
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -93,14 +97,18 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         steps: job
             .steps
             .iter()
-            .flat_map(|step| rendered_steps(step, restores))
+            .flat_map(|step| rendered_steps(step, restores, audit))
             .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind)];
+fn rendered_steps(step: &Step, restores: bool, audit: bool) -> Vec<RenderedStep> {
+    let mut rendered = Vec::new();
+    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
+        rendered.push(cargo_step(&CargoCommand::BuildAll, true));
+    }
+    rendered.push(step_body(&step.kind, audit));
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -116,7 +124,7 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
-        (&step.reads, &step.kind, rendered.first_mut())
+        (&step.reads, &step.kind, rendered.last_mut())
     {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
@@ -138,7 +146,7 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind) -> RenderedStep {
+fn step_body(kind: &StepKind, audit: bool) -> RenderedStep {
     match kind {
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
@@ -178,7 +186,7 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             run: Some(format!("rustup target add {}", targets.join(" "))),
             ..RenderedStep::default()
         },
-        StepKind::Cargo(command) => cargo_step(command),
+        StepKind::Cargo(command) => cargo_step(command, audit),
         StepKind::Helper(command) => helper_step(*command),
 StepKind::CratesMirror(mirror) => RenderedStep {
     name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),

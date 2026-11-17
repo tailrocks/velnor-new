@@ -30,10 +30,12 @@ jobs:
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
       rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
       rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
+      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'
       rust_tools_mode: '${{ steps.plan.outputs.rust_tools_mode }}'
       rust_tools_docs: '${{ steps.plan.outputs.rust_tools_docs }}'
       rust_tools_test_filter: '${{ steps.plan.outputs.rust_tools_test_filter }}'
       rust_tools_package_args: '${{ steps.plan.outputs.rust_tools_package_args }}'
+      rust_tools_tests: '${{ steps.plan.outputs.rust_tools_tests }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -42,10 +44,10 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -74,10 +76,10 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -126,6 +128,8 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -187,10 +191,10 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -241,6 +245,9 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-tools-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-
             velnor-tgt-rust-tools-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        working-directory: tools
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -299,10 +306,10 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -371,6 +378,11 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-inputs-audit-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('tools/Cargo.lock') }}-
             velnor-tgt-rust-inputs-audit-tools-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        run: velnor-ci inputs restore
+      - name: velnor-ci inputs restore
+        working-directory: tools
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -378,13 +390,13 @@ jobs:
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo build --workspace --all-targets --locked
+        run: velnor-ci run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo build --workspace --all-targets --locked
+        run: velnor-ci run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked
       - name: velnor-ci inputs audit
         run: velnor-ci inputs audit
       - name: Upload the cargo fingerprint log
@@ -403,12 +415,21 @@ jobs:
       - rust-root
       - rust-tools
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Fail when a Rust job failed or was cancelled
-        if: '${{ contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'') }}'
-        run: exit 1
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
+        with:
+          version: '0.1.81'
+          sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
+          sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
+          sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
+      - name: velnor-ci gate
+        env:
+          NEEDS_JSON: '${{ toJSON(needs) }}'
+          GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-tools=lane:tools --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-tools=tools'
+        run: velnor-ci gate --spec-env GATE_SPEC

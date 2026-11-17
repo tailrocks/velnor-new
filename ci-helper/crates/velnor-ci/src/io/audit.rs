@@ -1,6 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod build;
+mod freshness;
+mod inventory;
+mod options;
+
+pub(crate) use build::build;
+pub use options::AuditOptions;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -22,6 +30,7 @@ pub(super) struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
+    freshness: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
@@ -36,7 +45,7 @@ pub(super) struct Audit<'a> {
     pub(super) built: Vec<Built>,
 }
 
-pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
+pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
     let listed = checkout
@@ -51,13 +60,14 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     let workspaces = facts
         .rust_roots
         .iter()
-        .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
+        .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
         .collect::<Result<Vec<_>, _>>()?;
     apart(&workspaces)?;
     let mut audit = Audit {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
+        freshness: freshness::Freshness::new(&workspaces, options.max_directory_entries),
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
@@ -105,13 +115,13 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     complete(&facts, &workspaces, &audit.built, &platforms)?;
     if !audit.stale.is_empty() {
         return Err(CiError::new(format!(
-            "found stale dep-info {}; rebuild every observed target or delete its stale unit files before auditing inputs",
+            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
             audit.stale.join(", ")
         )));
     }
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
-    if write {
+    if options.write {
         write_lock(&checkout.root.join(INPUTS_LOCK.as_str()), &audit.found)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
@@ -166,7 +176,7 @@ fn complete(
         return Ok(());
     }
     Err(CiError::new(format!(
-        "found no current dep-info {}; run this after cargo build --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
+        "found no current dep-info {}; run this after velnor-ci inputs build -- cargo build --workspace --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
         gaps.join("; ")
     )))
 }
@@ -199,7 +209,7 @@ fn compare(
     .map(|(heading, entries)| format!("{heading}:\n{}", format_inputs_lock(&entries)))
     .collect();
     Err(CiError::new(format!(
-        "{INPUTS_LOCK} is stale; run velnor-ci inputs audit --write after a build of all targets and commit it\n{}",
+        "{INPUTS_LOCK} is stale; run velnor-ci inputs build -- cargo build --workspace --all-targets, then velnor-ci inputs audit --write and commit it\n{}",
         sections.concat().trim_end()
     )))
 }
@@ -288,7 +298,7 @@ impl Audit<'_> {
         else {
             return Ok(None);
         };
-        if changed_since(workspace, &paths, built) {
+        if self.changed_since(workspace, &paths, built, file, false)? {
             if !self.owners.of(package, &source).is_empty() {
                 self.stale.push(file.display().to_string());
             }
@@ -328,7 +338,7 @@ impl Audit<'_> {
                     || self.repository.to_path_buf(),
                     |d| self.repository.join(d.as_str()),
                 );
-                if changed_since(&base, &paths, built) {
+                if self.changed_since(&base, &paths, built, file, true)? {
                     continue;
                 }
                 ran = true;
@@ -374,12 +384,6 @@ impl Audit<'_> {
             &self.targets,
         );
     }
-}
-
-fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
-    paths
-        .iter()
-        .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
 }
 
 fn read(file: &Path) -> Result<String, CiError> {

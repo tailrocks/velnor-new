@@ -26,7 +26,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-pub use self::audit::audit_inputs;
+pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cold::{cold_on_failure, every_root_target, root_target};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::restored::{break_time_ties, break_time_ties_with};
@@ -114,9 +114,14 @@ fn run(cli: Cli) -> Result<String, CiError> {
                 restore_inputs(&root)
             })
         }
-        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
-            audit_inputs(&current_dir()?, write)
-        }
+        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => audit_inputs(
+            &current_dir()?,
+            &AuditOptions {
+                write,
+                ..AuditOptions::default()
+            },
+        ),
+        Command::Inputs(InputsCommand::Build(args)) => audit::build(&current_dir()?, &args),
         Command::ReleaseGate(args) => run_release_gate(&args),
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
