@@ -61,6 +61,7 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
+    HostTupleVersion(String),
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
@@ -84,6 +85,20 @@ impl DetectError {
 }
 
 impl Reason {
+    fn fmt_build_target(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UndeclaredTarget(target) => write!(
+                f,
+                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
+            ),
+            Self::HostTupleVersion(version) => write!(
+                f,
+                "build.target uses host-tuple, which Cargo does not support in Rust {version}; use Rust 1.91.0 or newer"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnpinnedTool(tool) => write!(
@@ -188,10 +203,7 @@ impl fmt::Display for Reason {
                 f,
                 "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
             ),
-            Self::UndeclaredTarget(target) => write!(
-                f,
-                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
-            ),
+            Self::UndeclaredTarget(_) | Self::HostTupleVersion(_) => self.fmt_build_target(f),
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"

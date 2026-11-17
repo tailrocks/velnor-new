@@ -8,11 +8,12 @@ use velnor_model::{
     RustMetadata, RustPackage, RustRoot,
 };
 
+use crate::build_target::sets_build_target;
 use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
-use crate::target_dir::{sets_build_target, target_dir};
+use crate::target_dir::target_dir;
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
