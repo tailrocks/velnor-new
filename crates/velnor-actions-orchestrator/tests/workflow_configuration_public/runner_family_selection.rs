@@ -60,7 +60,7 @@ fn family_qualification_plan_without_base(
 
 pub(super) const HELPER_INPUTS: &str = r#"
 [[stacks.rust.inputs]]
-globs = ["apps/a1/**", "family-guard/**", "family-guarded/**", "images/dind/fixture-unrelated.txt", "images/resource-probe/fixture-unrelated.txt", "scripts/generator-release/source-qualification.sh", "scripts/generator-release/cargo-git-handoff.py", "scripts/generator-release/cargo-source-handoff.sh"]
+globs = ["apps/a1/**", "family-guard/**", "family-guarded/**", "images/dind/fixture-unrelated.txt", "images/runner/ubuntu-26.04/fixture-unrelated.txt", "images/resource-probe/fixture-unrelated.txt", "scripts/generator-release/source-qualification.sh", "scripts/generator-release/cargo-git-handoff.py", "scripts/generator-release/cargo-source-handoff.sh"]
 packages = ["a1"]
 complete = true
 "#;
@@ -148,7 +148,7 @@ fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
 }
 
 #[test]
-fn real_runner_dockerfiles_skip_synthetic_unrelated_input() -> TestResult {
+fn real_runner_dockerfiles_claim_external_base_context() -> TestResult {
     let mut repo = family_workspace(&format!("{DOCS_CONFIG}\n{FAMILY_CONFIG}{HELPER_INPUTS}"))?;
     let root = repo.root();
     populate_family_fixture(root)?;
@@ -162,16 +162,32 @@ fn real_runner_dockerfiles_skip_synthetic_unrelated_input() -> TestResult {
         fs::copy(project.join(path), root.join(path))?;
     }
     put(root, "images/dind/fixture-unrelated.txt", "initial\n")?;
+    put(
+        root,
+        "images/runner/ubuntu-26.04/fixture-unrelated.txt",
+        "initial\n",
+    )?;
     repo.base = commit(root, "real runner Dockerfiles")?;
     for (path, expected) in [
-        ("images/dind/fixture-unrelated.txt", "not_affected"),
+        ("images/dind/fixture-unrelated.txt", "run"),
+        ("images/runner/ubuntu-26.04/fixture-unrelated.txt", "run"),
         ("images/dind/entrypoint.sh", "run"),
         ("images/resource-probe/Dockerfile", "run"),
+        (
+            "images/resource-probe/fixture-unrelated.txt",
+            "not_affected",
+        ),
+        ("apps/a1/src/lib.rs", "not_affected"),
+        ("docs/guide.md", "not_affected"),
     ] {
         let root = repo.root();
         super::workflow_configuration_fixture::git(&["checkout", "--detach", &repo.base], root)?;
         let mut text = fs::read_to_string(root.join(path))?;
-        text.push_str("\n# fixture change\n");
+        text.push_str(if path == "apps/a1/src/lib.rs" {
+            "\npub fn fixture_changed() {}\n"
+        } else {
+            "\n# fixture change\n"
+        });
         put(root, path, &text)?;
         let head = commit(root, "change one context input")?;
         let run = plan(root, "pull_request", Some(&repo.base), &head)?;
