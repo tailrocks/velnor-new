@@ -59,7 +59,11 @@ fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() ->
         .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
         .collect();
     assert_eq!(lanes.len(), 6);
-    assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
+    assert_eq!(
+        text.matches("cargo build -p velnor-ci --bin velnor-ci --locked")
+            .count(),
+        1
+    );
     assert!(!text.contains("Upload velnor-ci"));
     for lane in lanes {
         let header = format!("  {lane}:\n    needs:\n      - rust-plan\n    if:");
