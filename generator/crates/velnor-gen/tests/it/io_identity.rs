@@ -94,6 +94,40 @@ fn schedules_use_the_remote_repository_and_transport_independent_identity() -> T
 }
 
 #[test]
+fn repository_case_does_not_change_schedule_identity() -> TestResult {
+    let base = std::env::temp_dir().join(format!("velnor-gen-case-{}", std::process::id()));
+    fs::remove_dir_all(&base).ok();
+    let parent = Scratch(base.clone());
+    let lowercase = Scratch(base.join("lowercase"));
+    let mixed_case = Scratch(base.join("mixed-case"));
+    checkout(&lowercase.0)?;
+    checkout(&mixed_case.0)?;
+    git(
+        &lowercase.0,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/alice/app.git",
+        ],
+    )?;
+    git(
+        &mixed_case.0,
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/Alice/App.git",
+        ],
+    )?;
+    assert_eq!(schedule(&lowercase.0)?, schedule(&mixed_case.0)?);
+    drop(mixed_case);
+    drop(lowercase);
+    drop(parent);
+    Ok(())
+}
+
+#[test]
 fn a_checkout_without_an_origin_keeps_its_schedule_when_renamed() -> TestResult {
     let base = std::env::temp_dir().join(format!("velnor-gen-no-origin-{}", std::process::id()));
     fs::remove_dir_all(&base).ok();
