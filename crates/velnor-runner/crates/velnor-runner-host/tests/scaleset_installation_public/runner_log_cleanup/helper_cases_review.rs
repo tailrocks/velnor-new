@@ -2,12 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::PRIVATE_VOLUME;
-use super::super::helper_stub::ListedId;
+use super::super::helper_stub::{Life, ListedId};
 use super::{HelperSpec, Kind, TestResult, run_helper_case};
 
 pub(super) fn case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
     let foreign = HelperSpec::of(Kind::Foreign("resource-probe"));
     match name {
+        "publication_already_removed" => Some((
+            vec![HelperSpec {
+                life: Life::Gone,
+                ..HelperSpec::of(Kind::Publication)
+            }],
+            true,
+        )),
         "missing_id" => Some((
             vec![
                 HelperSpec::of(Kind::Publication),
@@ -33,7 +40,7 @@ pub(super) fn case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
 fn missing_foreign_id_preserves_owned_helper_and_reservation() -> TestResult<()> {
     let (observed, stderr) = run_helper_case("missing_id")?;
     assert_eq!(observed.helpers_left, 2, "{stderr}");
-    assert_eq!(observed.volumes_left, 1, "{stderr}");
+    assert_eq!(observed.volumes_left, 5, "{stderr}");
     assert_eq!(observed.phase, "container_created", "{stderr}");
     assert_eq!(observed.lease, "active", "{stderr}");
     assert_eq!(observed.reservation, "uncertain", "{stderr}");

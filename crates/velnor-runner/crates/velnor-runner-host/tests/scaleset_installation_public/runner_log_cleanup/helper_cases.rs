@@ -138,6 +138,15 @@ fn public_cancelled_run_retires_a_journaled_publication_helper_before_removing_v
 }
 
 #[test]
+fn public_cleanup_retires_a_publication_removed_before_journal_retirement() -> TestResult<()> {
+    let (observed, stderr) = run_helper_case("publication_already_removed")?;
+    assert_eq!(observed.phase, "removed", "{stderr}");
+    assert_eq!(observed.lease, "released", "{stderr}");
+    assert_eq!(observed.volumes_left, 0, "{stderr}");
+    Ok(())
+}
+
+#[test]
 fn public_cancelled_run_retires_a_journaled_storage_initializer_before_removing_volumes()
 -> TestResult<()> {
     let (observed, stderr) = run_helper_case("initializer")?;
@@ -231,18 +240,18 @@ fn assert_fails_closed(
 
 #[test]
 fn public_cleanup_fails_closed_on_a_label_lookalike_publication_helper() -> TestResult<()> {
-    assert_fails_closed("lookalike_publication", 1, 1).map(drop)
+    assert_fails_closed("lookalike_publication", 1, 5).map(drop)
 }
 
 #[test]
 fn public_cleanup_fails_closed_on_a_label_lookalike_storage_initializer() -> TestResult<()> {
-    assert_fails_closed("lookalike_initializer", 1, 1).map(drop)
+    assert_fails_closed("lookalike_initializer", 1, 5).map(drop)
 }
 
 #[test]
 fn public_cleanup_deletes_nothing_when_a_foreign_container_sits_beside_a_journaled_helper()
 -> TestResult<()> {
-    let observed = assert_fails_closed("foreign_beside_journaled", 2, 1)?;
+    let observed = assert_fails_closed("foreign_beside_journaled", 2, 5)?;
     assert_eq!(observed.phase, "container_created");
     assert_eq!(observed.lease, "active");
     Ok(())
@@ -251,7 +260,7 @@ fn public_cleanup_deletes_nothing_when_a_foreign_container_sits_beside_a_journal
 #[test]
 fn public_cleanup_fails_closed_on_a_journaled_publication_with_a_foreign_engine_label()
 -> TestResult<()> {
-    assert_fails_closed("journaled_foreign_engine", 1, 1).map(drop)
+    assert_fails_closed("journaled_foreign_engine", 1, 5).map(drop)
 }
 
 #[test]
@@ -262,7 +271,7 @@ fn public_cleanup_fails_closed_on_a_storage_initializer_with_a_foreign_operation
 
 #[test]
 fn public_cleanup_fails_closed_on_a_listed_container_without_the_mount() -> TestResult<()> {
-    assert_fails_closed("listed_unmounted", 1, 1).map(drop)
+    assert_fails_closed("listed_unmounted", 1, 5).map(drop)
 }
 
 #[test]
@@ -271,6 +280,6 @@ fn public_cleanup_fails_closed_when_a_volume_has_too_many_users() -> TestResult<
     assert!(stderr.contains("volume helper bound"), "{stderr}");
     assert_eq!(observed.helpers_left, 5);
     assert_eq!(observed.stops, 0);
-    assert_eq!(observed.volumes_left, 1);
+    assert_eq!(observed.volumes_left, 5);
     Ok(())
 }

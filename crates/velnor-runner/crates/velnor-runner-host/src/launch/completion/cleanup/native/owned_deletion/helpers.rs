@@ -38,12 +38,13 @@ pub(super) async fn remove_volume_helpers(
     budget: &mut EffectBudget<'_>,
     identity: &StorageCleanupIdentity,
     volume: &str,
+    metadata: bool,
 ) -> Result<(), Failure> {
     let users = list_users(context, launch, claim, budget, identity, volume).await?;
     if u64::try_from(users.len()).map_or(true, |count| count > MAX_HELPERS_PER_VOLUME) {
         return Err(Failure::not_proven("volume helper bound"));
     }
-    if users.is_empty() {
+    if users.is_empty() && !metadata {
         return Ok(());
     }
     let runtime = context
@@ -85,7 +86,7 @@ pub(super) async fn remove_volume_helpers(
         budget,
         identity,
         volume,
-        (users, publication, initializer),
+        (users, publication, initializer, metadata),
     )
     .await?;
     for retirement in plan {
@@ -110,9 +111,10 @@ async fn classify_users(
         Vec<String>,
         Option<crate::launch::resource_probe::OwnedPublication>,
         Option<UnboundInitializer>,
+        bool,
     ),
 ) -> Result<Vec<Retirement>, Failure> {
-    let (users, mut publication, initializer) = owned;
+    let (users, mut publication, initializer, metadata) = owned;
     let mut plan = Vec::new();
     for id in users {
         let inspected = request_effect(
@@ -147,6 +149,9 @@ async fn classify_users(
         } else {
             return Err(Failure::not_proven("volume helper ownership"));
         }
+    }
+    if metadata && let Some(owned) = publication {
+        plan.push(Retirement::Publication(owned));
     }
     Ok(plan)
 }

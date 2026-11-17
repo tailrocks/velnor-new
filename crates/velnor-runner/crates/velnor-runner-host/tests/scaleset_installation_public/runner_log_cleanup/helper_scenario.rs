@@ -118,6 +118,9 @@ pub(crate) fn run_cancelled_before_start_scenario(
             &journal_path,
             specs.iter().any(|spec| spec.kind == Kind::Publication),
             specs.iter().any(|spec| spec.kind == Kind::Initializer),
+            specs.iter().any(|spec| {
+                spec.kind == Kind::Publication && spec.life == super::helper_stub::Life::Gone
+            }),
         )
         .await?;
         stub.state

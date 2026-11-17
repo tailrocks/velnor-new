@@ -174,6 +174,7 @@ pub(super) async fn seed_helper_rows(
     journal_path: &Path,
     publication: bool,
     initializer: bool,
+    publication_removed: bool,
 ) -> TestResult<String> {
     let canonical_path = std::fs::canonicalize(journal_path)?;
     let db = turso::Builder::new_local(canonical_path.to_str().ok_or("journal path utf8")?)
@@ -192,6 +193,9 @@ pub(super) async fn seed_helper_rows(
     let triggers = drop_triggers(&conn).await?;
     if publication {
         seed_publication(&conn, &instance_id).await?;
+        if publication_removed {
+            conn.execute("UPDATE resource_probe_operations SET phase = 'remove_requested' WHERE operation_id = ?1", [PUBLICATION_OPERATION]).await?;
+        }
     }
     if initializer {
         seed_initializer(&conn).await?;

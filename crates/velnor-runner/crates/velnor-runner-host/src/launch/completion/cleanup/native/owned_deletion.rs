@@ -186,6 +186,27 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
     pending: &PendingStorageCleanupWitness,
 ) -> Result<(), Failure> {
     let identity = pending.identity();
+    if let Some((role, name)) = identity
+        .volumes()
+        .iter()
+        .find(|(role, _)| *role == StorageRole::EngineMetadata)
+    {
+        let volume = request_effect(
+            context,
+            launch,
+            claim,
+            budget,
+            "volume inspect",
+            identity,
+            || async { inspect_volume(context.docker, name).await },
+        )
+        .await?;
+        if let Some(volume) = volume {
+            validate_volume(&volume, name, *role, identity, context)?;
+        }
+        helpers::remove_volume_helpers(context, launch, claim, budget, identity, name, true)
+            .await?;
+    }
     for (role, name) in identity.volumes() {
         let volume = request_effect(
             context,
@@ -201,7 +222,8 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
             continue;
         };
         validate_volume(&volume, name, *role, identity, context)?;
-        helpers::remove_volume_helpers(context, launch, claim, budget, identity, name).await?;
+        helpers::remove_volume_helpers(context, launch, claim, budget, identity, name, false)
+            .await?;
         request_effect(
             context,
             launch,
