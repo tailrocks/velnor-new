@@ -189,14 +189,16 @@ cargo nextest run --locked
 | `GET /repos/{owner}/{repo}/compare/{base}...{head}` | `--repo`; at most 300 files, on the first page |
 | `GET /repos/{owner}/{repo}/contents/{path}?ref=` | `--repo` |
 | `GET /repos/{owner}/{repo}/pulls?state=open` | `pulls.json` in `--dir`, a JSON array of pull request objects with `number`, `state`, `base.sha` and `head.sha` |
-| `GET /repos/{owner}/{repo}/actions/caches`, `DELETE .../caches/{id}` | `index.json` in `--cache-dir`, the cache server's directory |
+| `GET /repos/{owner}/{repo}/actions/caches`, `DELETE .../caches/{id}` | Control port only, using `index.json` in `--cache-dir`, the cache server's directory |
 | `GET /repos/{owner}/{repo}/actions/runs/{id}`, `.../runs/{id}/attempts/{n}/jobs`, `.../actions/jobs/{id}/logs` | runner.server at `--standin`: its run, its jobs with their timeline records as steps, and the step logs in order. Times are cut to whole seconds, as GitHub reports them. runner.server records no queue time, so a job's `created_at` equals its `started_at` and a local metrics file always has `queue_seconds` 0 |
 
 ```sh
 velnor-local api-stub --listen 127.0.0.1:8080 --repo "$REPO" --dir "$STATE/api" --cache-dir "$STATE/cache" --default-branch main
 ```
 
-`--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500. A diff larger than `--diff-limit-bytes` (256 MiB by default) is a 422. The stub has no authentication, like the cache server's pull request registration: it serves one repository to a trusted local network and listens on `127.0.0.1` unless `--listen` says otherwise.
+`--default-branch` is the branch a contents request without `ref` reads. A missing or malformed `pulls.json` is a 500. A diff larger than `--diff-limit-bytes` (256 MiB by default) is a 422. The stub serves one repository to a trusted local network and listens on `127.0.0.1` unless `--listen` says otherwise.
+
+Cache listing and deletion require `--control-listen` and `--control-token`. The control port requires `Authorization: Bearer <the token in the control-token file>` and returns 401 for a missing or wrong token. The job port refuses cache listing and deletion with 403, even with a valid control token or without a control listener. Other API endpoints remain available on the job port without authentication.
 
 The stub serves one repository: `{owner}/{repo}` selects the cache entries and appears in URLs, and the git repository is always `--repo`. Both processes take an exclusive lock on `index.lock` in the cache directory around every read-modify-write of `index.json`, and the cache server reads `index.json` again under that lock on every request, so a delete through the stub takes effect at once and is never overwritten. A request fails with a JSON error when the index cannot be read.
 

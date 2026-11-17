@@ -91,3 +91,5 @@ A repository with the root `lab/Cargo.toml` and the job `rust-lint`, on `ubuntu-
 - Target: `velnor-tgt-rust-lint.lab.Linux-X64-9f3a1c5e7b2d4a60-<hash of lab/Cargo.lock>-c0ffee-42`
 - Restore tries the Target key, then `velnor-tgt-rust-lint.lab.Linux-X64-9f3a1c5e7b2d4a60-<hash of lab/Cargo.lock>-` (the latest save for this lockfile), then `velnor-tgt-rust-lint.lab.Linux-X64-9f3a1c5e7b2d4a60-` (the latest save for this toolchain and profile).
 - After a dependency bump the lock hash changes: the first two tries miss and the third restores the previous build directory. The workflow file is unchanged.
+
+The new generator supports a runner-scoped [optional crates mirror](../generator/CONFIG.md).

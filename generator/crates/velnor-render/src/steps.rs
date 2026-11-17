@@ -15,8 +15,8 @@ use crate::base_steps::{
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, cargo_step, reports_tests};
 use crate::gate::{
-    PLAN_STEP, REPLAN_STEP, Setup, admission, condition, output, plan_read, plan_source,
-    sources_step, verdict_step,
+    PLAN_STEP, REPLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read,
+    plan_source, sources_step, verdict_step,
 };
 use crate::permission_pairs;
 use crate::rules::{
@@ -137,15 +137,16 @@ fn rendered_steps(
         });
     }
     for body in &mut rendered {
-        if let Some(condition) = condition(
-            step.when,
-            step.gate.as_ref(),
-            setup,
-            step.skip_on_draft,
-            &saved_unless_hit(&step.kind),
-        ) {
-            body.condition = Some(condition);
-        }
+        body.condition = all_conditions(
+            body.condition.take(),
+            condition(
+                step.when,
+                step.gate.as_ref(),
+                setup,
+                step.skip_on_draft,
+                &saved_unless_hit(&step.kind),
+            ),
+        );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
@@ -231,6 +232,12 @@ fn step_body(kind: &StepKind, tests: bool, artifacts: ArtifactFormat) -> Rendere
         },
         StepKind::Cargo(command) => cargo_step(command, artifacts),
         StepKind::Helper(command) => helper_step(*command),
+StepKind::CratesMirror(mirror) => RenderedStep {
+    name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
+    condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
+    run: Some(format!("velnor-ci crates-mirror --registry {} --cainfo {}", crate::release_steps::shell_word(&mirror.registry), crate::release_steps::shell_word(&mirror.cainfo))),
+    ..RenderedStep::default()
+},
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),
