@@ -8,6 +8,7 @@ use velnor_model::{
     RustMetadata, RustPackage, RustRoot,
 };
 
+use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
@@ -208,7 +209,11 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
         .flatten()
         .any(|flags| {
             let text = flags.to_string();
-            text.contains("cap-lints") || text.contains("force-warn") || text.contains("\"@")
+            text.contains("cap-lints")
+                || text.contains("force-warn")
+                || flag_tokens(flags)
+                    .iter()
+                    .any(|token| token.starts_with('@'))
         });
     if caps {
         return Err(DetectError::invalid(file, Reason::CapLints));

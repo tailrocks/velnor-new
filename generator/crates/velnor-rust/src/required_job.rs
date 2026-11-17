@@ -11,6 +11,7 @@ use velnor_model::{
 use crate::harness::uses_nextest;
 use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, job, step};
+use crate::required_size::needs_max_bytes;
 
 const VERDICT_JOB: JobId = JobId::from_static("required");
 
@@ -94,7 +95,10 @@ pub(crate) fn verdict_job(
         let plan = if single { RUST_JOB } else { PLAN_JOB };
         install
             .into_iter()
-            .chain([step(StepKind::Verdict(spec(plan, jobs)))])
+            .chain([step(StepKind::Verdict {
+                spec: spec(plan, jobs),
+                needs_max_bytes: needs_max_bytes(facts, jobs),
+            })])
             .collect()
     } else {
         vec![step(StepKind::FailWhenANeedFailed)]

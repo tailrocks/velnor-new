@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, VerdictSpec, When};
+
+use crate::rules::{RenderedStep, Value};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -12,8 +14,28 @@ const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 pub(crate) const TOOLS_STEP: &str = "tools";
+const NEEDS_JSON: &str = "NEEDS_JSON";
+const GATE_SPEC: &str = "GATE_SPEC";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
+
+pub(crate) fn verdict_step(spec: &VerdictSpec, needs_max_bytes: usize) -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci gate".to_owned(),
+        env: vec![
+            (
+                NEEDS_JSON.to_owned(),
+                Value::BoundedExpr {
+                    text: "${{ toJSON(needs) }}".to_owned(),
+                    max_bytes: needs_max_bytes,
+                },
+            ),
+            (GATE_SPEC.to_owned(), Value::Text(spec.text())),
+        ],
+        run: Some(format!("velnor-ci gate --spec-env {GATE_SPEC}")),
+        ..RenderedStep::default()
+    }
+}
 
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
     need.output_name(slug)
@@ -68,6 +90,17 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
+    }
+}
+
+pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> Option<String> {
+    match (first, second) {
+        (Some(first), Some(second)) => Some(format!(
+            "${{{{ ({}) && ({}) }}}}",
+            first.trim_start_matches("${{ ").trim_end_matches(" }}"),
+            second.trim_start_matches("${{ ").trim_end_matches(" }}")
+        )),
+        (first, second) => first.or(second),
     }
 }
 

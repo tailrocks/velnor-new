@@ -223,6 +223,7 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    CratesMirror(crate::repo::CratesMirror),
     GeneratorCheck,
     InstallHelper(HelperRelease),
     HelperFromArtifact,
@@ -231,7 +232,10 @@ pub enum StepKind {
     },
     FailWhenANeedFailed,
     FailOnDraftRun,
-    Verdict(VerdictSpec),
+    Verdict {
+        spec: VerdictSpec,
+        needs_max_bytes: usize,
+    },
     UploadCargoLog,
 }
 
