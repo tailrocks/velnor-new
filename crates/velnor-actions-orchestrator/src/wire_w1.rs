@@ -25,7 +25,7 @@ use crate::utf8::strings_of_env;
 
 #[must_use]
 pub(crate) fn declared_config_variables(config: &VelnorConfig) -> Vec<String> {
-    let mut names: BTreeSet<String> = config.workflow.lint.variables.iter().cloned().collect();
+    let mut names = BTreeSet::new();
     if let Some(completion) = &config.workflow.review_completion {
         names.insert(completion.app_id_variable.clone());
         names.insert(completion.reviewer_app_id_variable.clone());

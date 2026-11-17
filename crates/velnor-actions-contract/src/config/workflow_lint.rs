@@ -3,14 +3,11 @@
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkflowLintConfig {
     #[serde(default)]
     pub profile: WorkflowLintProfile,
-
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub variables: Vec<String>,
 }
 
 impl WorkflowLintConfig {
