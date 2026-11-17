@@ -61,6 +61,7 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
+    HostTupleVersion(String),
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
@@ -191,6 +192,10 @@ impl fmt::Display for Reason {
             Self::UndeclaredTarget(target) => write!(
                 f,
                 "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
+            ),
+            Self::HostTupleVersion(version) => write!(
+                f,
+                "build.target uses host-tuple, which Cargo does not support in Rust {version}; use Rust 1.91.0 or newer"
             ),
             Self::CargoEnv(name) => write!(
                 f,

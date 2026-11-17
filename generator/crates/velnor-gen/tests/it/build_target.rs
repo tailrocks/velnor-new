@@ -16,6 +16,11 @@ fn with(roots: &[&str], configs: &[(&str, &str)]) -> Result<RepoView, Box<dyn st
         repo.tracked_paths.insert(path(name)?);
         repo.files.insert(path(name)?, text.as_bytes().to_vec());
     }
+    if configs.iter().any(|(name, _)| *name == "mise.toml") {
+        let lock = path("mise.lock")?;
+        repo.tracked_paths.remove(&lock);
+        repo.files.remove(&lock);
+    }
     crate::facts::lock_pinned_tools(&mut repo)?;
     Ok(repo)
 }
@@ -31,6 +36,7 @@ fn refused(repo: &RepoView) -> Option<(String, Option<String>)> {
             match reason {
                 Reason::UndeclaredTarget(name) => Some(name),
                 Reason::InvalidValue { key, .. } => Some(key.to_owned()),
+                Reason::HostTupleVersion(version) => Some(version),
                 _ => None,
             },
         )),
@@ -47,6 +53,123 @@ fn the_host_tuple_target_is_the_runner_host_and_needs_no_declaration() -> TestRe
         let repo = with(&["Cargo.toml"], &[(".cargo/config.toml", text)])?;
         assert!(generate(&repo).is_ok(), "{text}");
     }
+    Ok(())
+}
+
+#[test]
+fn the_host_tuple_target_requires_rust_191_or_newer() -> TestResult {
+    for target in [
+        "[build]\ntarget = \"host-tuple\"\n",
+        "[build]\ntarget = [\"host-tuple\"]\n",
+    ] {
+        for (mise, toolchain) in [
+            (
+                "[tools]\nrust = \"1.90.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                None,
+            ),
+            (
+                "[tools]\nrust = \"1.90.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                Some("1.90.0\n"),
+            ),
+            (
+                "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                Some("1.90.0\n"),
+            ),
+        ] {
+            let mut configs = vec![(".cargo/config.toml", target), ("mise.toml", mise)];
+            if let Some(channel) = toolchain {
+                configs.push(("rust-toolchain", channel));
+            }
+            let repo = with(&["Cargo.toml"], &configs)?;
+            assert_eq!(
+                refused(&repo),
+                Some((".cargo/config.toml".to_owned(), Some("1.90.0".to_owned()))),
+                "{target} {mise} {toolchain:?}"
+            );
+        }
+        for (mise, toolchain) in [
+            (
+                "[tools]\nrust = \"1.91.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                None,
+            ),
+            (
+                "[tools]\nrust = \"1.91.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                Some("1.91.0\n"),
+            ),
+            (
+                "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+                Some("1.91.0\n"),
+            ),
+        ] {
+            let mut configs = vec![(".cargo/config.toml", target), ("mise.toml", mise)];
+            if let Some(channel) = toolchain {
+                configs.push(("rust-toolchain", channel));
+            }
+            let repo = with(&["Cargo.toml"], &configs)?;
+            let result = generate(&repo);
+            assert!(result.is_ok(), "{target} {mise} {toolchain:?}: {result:?}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn an_old_dated_nightly_cannot_use_the_host_tuple_target() -> TestResult {
+    let repo = with(
+        &["Cargo.toml"],
+        &[
+            (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+            (
+                "mise.toml",
+                "[tools]\nrust = \"nightly-2025-01-01\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+            ),
+        ],
+    )?;
+    assert_eq!(
+        refused(&repo),
+        Some((
+            ".cargo/config.toml".to_owned(),
+            Some("nightly-2025-01-01".to_owned())
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn opaque_fixed_rust_selectors_cannot_use_the_host_tuple_target() -> TestResult {
+    let repo = with(
+        &["Cargo.toml"],
+        &[
+            (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+            (
+                "mise.toml",
+                "[tools]\nrust = \"custom-compiler-1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+            ),
+        ],
+    )?;
+    assert_eq!(
+        refused(&repo),
+        Some((
+            ".cargo/config.toml".to_owned(),
+            Some("custom-compiler-1".to_owned())
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_supported_pre_release_nightly_can_use_the_host_tuple_target() -> TestResult {
+    let repo = with(
+        &["Cargo.toml"],
+        &[
+            (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+            (
+                "mise.toml",
+                "[tools]\nrust = \"nightly-2025-10-01\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
+            ),
+        ],
+    )?;
+    assert!(generate(&repo).is_ok());
     Ok(())
 }
 

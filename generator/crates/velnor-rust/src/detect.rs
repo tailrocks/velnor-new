@@ -8,7 +8,7 @@ use velnor_model::{
     RootSlug, RustCiConfig, RustRoot, Toolchain,
 };
 
-use crate::build_target::build_targets;
+use crate::build_target::{build_targets, check_host_tuple_version};
 use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
@@ -133,7 +133,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
-    check_build_targets(view, &rust_roots, toolchain.as_ref())?;
+    check_build_targets(view, &rust_roots, toolchain.as_ref(), &tools)?;
     let helper = view
         .files
         .get(&LOCK_PATH)
@@ -210,9 +210,20 @@ fn check_build_targets(
     view: &RepoView,
     rust_roots: &[RustRoot],
     toolchain: Option<&Toolchain>,
+    tools: &velnor_model::ToolPins,
 ) -> Result<(), DetectError> {
     let declared: Vec<&String> = toolchain.into_iter().flat_map(|t| &t.targets).collect();
+    let rust_version = crate::mise::rust_tool(tools)
+        .and_then(|name| tools.tools.get(name))
+        .and_then(|pin| pin.requested.first())
+        .map(String::as_str)
+        .or_else(|| {
+            toolchain
+                .and_then(|pinned| pinned.channel.as_deref().or_else(|| pinned.path.as_deref()))
+        })
+        .unwrap_or("stable");
     for root in rust_roots {
+        check_host_tuple_version(view, &root.manifest, rust_version)?;
         let missing = build_targets(view, &root.manifest)?
             .into_iter()
             .find(|(_, name)| !declared.contains(&name));
