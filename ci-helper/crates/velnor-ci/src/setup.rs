@@ -226,25 +226,47 @@ pub fn missing_toolchain(
 #[derive(Debug, Default)]
 pub struct DoctestCount {
     line: Vec<u8>,
-    pub ran: u64,
+    running: u64,
+    ignored: u64,
 }
 
 impl DoctestCount {
     pub fn feed(&mut self, chunk: &[u8]) {
         for byte in chunk {
             if *byte == b'\n' {
-                self.ran += doctests_in(&String::from_utf8_lossy(&self.line));
-                self.line.clear();
+                self.end_line();
             } else if self.line.len() < LINE_LIMIT {
                 self.line.push(*byte);
             }
         }
     }
 
-    pub fn finish(&mut self) -> u64 {
-        self.feed(b"\n");
-        self.ran
+    pub fn end_stream(&mut self) {
+        self.end_line();
     }
+
+    #[must_use]
+    pub const fn ran(&self) -> u64 {
+        self.running.saturating_sub(self.ignored)
+    }
+
+    fn end_line(&mut self) {
+        let line = String::from_utf8_lossy(&self.line);
+        self.running += doctests_in(&line);
+        self.ignored += ignored_in(&line);
+        self.line.clear();
+    }
+}
+
+fn ignored_in(line: &str) -> u64 {
+    let clean = crate::logscan::strip_ansi(line);
+    let Some(rest) = clean.trim().strip_prefix("test result:") else {
+        return 0;
+    };
+    rest.split(';')
+        .find_map(|part| part.trim().strip_suffix(" ignored"))
+        .and_then(|count| count.trim().parse().ok())
+        .unwrap_or(0)
 }
 
 fn doctests_in(line: &str) -> u64 {

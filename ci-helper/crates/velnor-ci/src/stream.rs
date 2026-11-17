@@ -12,7 +12,7 @@ const CHUNK: usize = 8192;
 #[derive(Debug, Default)]
 pub struct Pumped {
     pub failure: Option<Error>,
-    pub counts: Option<TestCounts>,
+    pub console: Option<Error>,
 }
 
 pub fn pump<L: Write>(from: impl Read, to: impl Write, log: &Mutex<L>) -> Option<Error> {
@@ -29,9 +29,15 @@ pub fn pump_counted<L: Write>(
     let mut tap = SummaryTap::default();
     let mut buffer = [0_u8; CHUNK];
     let mut failed = None;
+    let mut console = None;
     loop {
         let read = match from.read(&mut buffer) {
-            Ok(0) => break,
+            Ok(0) => {
+                if let Some(Ok(mut seen)) = count.map(Mutex::lock) {
+                    seen.end_stream();
+                }
+                break;
+            }
             Ok(read) => read,
             Err(error) if error.kind() == ErrorKind::Interrupted => continue,
             Err(error) => {
@@ -42,7 +48,11 @@ pub fn pump_counted<L: Write>(
         let chunk = &buffer[..read];
         tap.feed(chunk);
         remember(parsed, tap.counts());
-        to.write_all(chunk).and_then(|()| to.flush()).ok();
+        if console.is_none()
+            && let Err(error) = to.write_all(chunk).and_then(|()| to.flush())
+        {
+            console = Some(error);
+        }
         if let Ok(mut file) = log.lock()
             && let Err(error) = file.write_all(chunk)
         {
@@ -52,11 +62,10 @@ pub fn pump_counted<L: Write>(
             seen.feed(chunk);
         }
     }
-    let counts = tap.finish();
-    remember(parsed, counts);
+    remember(parsed, tap.finish());
     Pumped {
         failure: failed,
-        counts,
+        console,
     }
 }
 

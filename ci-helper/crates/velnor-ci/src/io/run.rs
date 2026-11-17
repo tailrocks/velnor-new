@@ -58,9 +58,13 @@ fn open_log(path: &Path) -> std::io::Result<std::fs::File> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    options.open(path)
+    let file = options.open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    Ok(file)
 }
 
 pub(super) fn run(args: &RunArgs) -> ExitCode {
@@ -107,7 +111,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, counts) = collect(&receiver, &slots);
+    let (mut lost, console, counts) = collect(&receiver, &slots);
     if runs_nextest(&args.command)
         && let Some(counts) = counts
     {
@@ -117,10 +121,20 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let ran = doctests
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .finish();
+        .ran();
     if code == 0 && args.require_doctests && ran == 0 {
         eprintln!("velnor-ci: the command ran 0 doctests, so this step checked nothing");
         code = 1;
+    }
+    if let Some(error) = console {
+        writeln!(
+            std::io::stderr(),
+            "velnor-ci: cannot write the command output: {error}"
+        )
+        .ok();
+        if code == 0 {
+            code = 2;
+        }
     }
     let mut log = log
         .lock()
@@ -191,39 +205,36 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
 
 struct Finished {
     pumped: Pumped,
-    index: usize,
 }
 
 fn collect(
     receiver: &mpsc::Receiver<Finished>,
     slots: &[Arc<Mutex<Option<TestCounts>>>],
-) -> (Option<std::io::Error>, Option<TestCounts>) {
+) -> (
+    Option<std::io::Error>,
+    Option<std::io::Error>,
+    Option<TestCounts>,
+) {
     let mut lost = None;
-    let mut counts = None;
-    let mut open = vec![true; slots.len()];
+    let mut console = None;
     let mut waiting = slots.len();
     let deadline = Instant::now() + pump_grace();
     while waiting > 0 {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
             Ok(finished) => {
                 lost = lost.or(finished.pumped.failure);
-                counts = finished.pumped.counts.or(counts);
-                open[finished.index] = false;
+                console = console.or(finished.pumped.console);
                 waiting -= 1;
             }
             Err(_) => break,
         }
     }
-    for (index, slot) in slots.iter().enumerate() {
-        if open[index]
-            && let Some(parsed) = *slot
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-        {
-            counts = Some(parsed).or(counts);
-        }
-    }
-    (lost, counts)
+    let counts = slots.iter().rev().find_map(|slot| {
+        *slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
+    (lost, console, counts)
 }
 
 #[cfg(unix)]
@@ -249,9 +260,8 @@ fn watch_stream(
     done: &mpsc::Sender<Finished>,
 ) {
     let slot = Arc::new(Mutex::new(None));
-    let index = slots.len();
     slots.push(Arc::clone(&slot));
-    spawn_pump(from, to, log, count, slot, index, done.clone());
+    spawn_pump(from, to, log, count, slot, done.clone());
 }
 
 fn spawn_pump(
@@ -260,12 +270,11 @@ fn spawn_pump(
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
     parsed: Arc<Mutex<Option<TestCounts>>>,
-    index: usize,
     done: mpsc::Sender<Finished>,
 ) {
     let log = Arc::clone(log);
     thread::spawn(move || {
         let pumped = pump_counted(from, to, &log, count.as_deref(), Some(&parsed));
-        done.send(Finished { pumped, index }).ok();
+        done.send(Finished { pumped }).ok();
     });
 }
