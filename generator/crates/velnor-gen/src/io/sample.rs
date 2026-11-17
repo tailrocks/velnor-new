@@ -110,6 +110,10 @@ pub fn relocate_metadata(checkout: &Path, json: &[u8]) -> Result<Vec<u8>, Error>
         prefixes.push(url_path.clone());
         prefixes.push(percent_encode(&url_path));
     }
+    if let Some(authority) = normalized.strip_prefix("//").filter(|rest| !rest.is_empty()) {
+        prefixes.push(authority.to_owned());
+        prefixes.push(percent_encode(authority));
+    }
     relocate(
         &mut value,
         &prefixes.iter().map(String::as_str).collect::<Vec<_>>(),
@@ -141,9 +145,10 @@ fn relocate_text(text: &str, from: &[&str]) -> String {
         let in_file_url = cursor >= "file://".len() && text[..cursor].ends_with("file://");
         let at_boundary = cursor == 0
             || in_file_url
-            || text[..cursor].chars().next_back().is_some_and(|character| {
-                character.is_whitespace() || matches!(character, ';' | ',' | '|' | '=')
-            });
+            || text[..cursor]
+                .char_indices()
+                .next_back()
+                .is_some_and(|(index, character)| starts_path(text, index, character));
         if at_boundary
             && let Some(prefix) = prefixes.iter().find(|prefix| {
                 text[cursor..].strip_prefix(**prefix).is_some_and(|tail| {
@@ -154,11 +159,7 @@ fn relocate_text(text: &str, from: &[&str]) -> String {
             })
         {
             let tail_start = cursor + prefix.len();
-            let tail_end = text[tail_start..]
-                .find(|character: char| {
-                    character.is_whitespace() || matches!(character, ';' | ',' | '|')
-                })
-                .map_or(text.len(), |offset| tail_start + offset);
+            let tail_end = tail_end(text, tail_start);
             let tail = text[tail_start..tail_end].replace('\\', "/");
             output.push_str(SAMPLE_REPOSITORY);
             output.push_str(&tail);
@@ -172,6 +173,37 @@ fn relocate_text(text: &str, from: &[&str]) -> String {
         cursor += character.len_utf8();
     }
     output
+}
+
+fn tail_end(text: &str, start: usize) -> usize {
+    let mut index = start;
+    while let Some(character) = text[index..].chars().next() {
+        if ends_path(text, index, character) {
+            return index;
+        }
+        index += character.len_utf8();
+    }
+    text.len()
+}
+
+fn starts_path(text: &str, index: usize, character: char) -> bool {
+    ends_path(text, index, character) || character == '='
+}
+
+fn ends_path(text: &str, index: usize, character: char) -> bool {
+    character.is_whitespace()
+        || matches!(character, ';' | ',' | '|')
+        || (character == ':' && colon_ends_path(text, index))
+}
+
+fn colon_ends_path(text: &str, index: usize) -> bool {
+    let rest = &text[index + 1..];
+    if rest.starts_with("//") {
+        return false;
+    }
+    rest.starts_with(['/', '\\'])
+        || (rest.starts_with(|character: char| character.is_ascii_alphabetic())
+            && rest[1..].starts_with(':'))
 }
 
 fn relocate(value: &mut serde_json::Value, from: &[&str]) -> Result<(), Error> {
@@ -216,11 +248,11 @@ pub fn write_sample(
     let base = format!("{SAMPLES}/{}", sample_name(name)?);
     let mut files = Vec::new();
     for (path, bytes) in &recording.view {
-        files.push((sample_path(format!("view/{path}"))?, bytes.clone()));
+        files.push((sample_path(format!("{base}/view/{path}"))?, bytes.clone()));
     }
     for (path, bytes) in &recording.metadata {
         files.push((
-            sample_path(format!("cargo-metadata/{path}.json"))?,
+            sample_path(format!("{base}/cargo-metadata/{path}.json"))?,
             bytes.clone(),
         ));
     }
@@ -229,13 +261,16 @@ pub fn write_sample(
         listing.push_str(manifest.as_str());
         listing.push('\n');
     }
-    files.push((RepoPath::from_static("manifests.txt"), listing.into_bytes()));
+    files.push((
+        sample_path(format!("{base}/manifests.txt"))?,
+        listing.into_bytes(),
+    ));
     let directories = [
         sample_path(format!("{base}/view"))?,
         sample_path(format!("{base}/cargo-metadata"))?,
     ];
     for (path, _) in &files {
-        regular_file(root, &sample_path(format!("{base}/{path}"))?)?;
+        regular_file(root, path)?;
     }
     for directory in directories {
         real_directory(root, &directory)?;
@@ -258,9 +293,22 @@ pub fn write_sample(
         }
     }
     for (path, bytes) in files {
-        replace(&prepared.join(path.as_str()), &bytes)?;
+        let relative = sample_relative(&base, &path)?;
+        replace(&prepared.join(relative), &bytes)?;
     }
     staged.publish(&root.join(base), existing.is_some())
+}
+
+fn sample_relative<'a>(base: &str, path: &'a RepoPath) -> Result<&'a str, Error> {
+    path.as_str()
+        .strip_prefix(base)
+        .and_then(|rest| rest.strip_prefix('/'))
+        .ok_or_else(|| {
+            Error::Repository(format!(
+                "a recorded sample file must live in {base}: {}",
+                path.as_str()
+            ))
+        })
 }
 
 fn copy_entry(source: &Path, destination: &Path) -> Result<(), Error> {
