@@ -40,7 +40,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         check_default_branch(&facts.config.default_branch, event)?;
     }
     let name = std::env::var(EVENT_VARIABLE).ok();
-    let full = name.as_deref() == Some(SCHEDULED);
+    let full = args.full || name.as_deref() == Some(SCHEDULED);
     let (selections, changes) = choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
     let steps = facts
         .rust_roots
@@ -128,7 +128,11 @@ fn choose(
     name: Option<&str>,
     event: Option<&Event>,
 ) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet), CiError> {
-    let kind = event_kind(name, !args.changed.is_empty());
+    let kind = if args.full {
+        EventKind::WorkflowDispatch
+    } else {
+        event_kind(name, !args.changed.is_empty())
+    };
     let diff = if selects_by_diff(kind, &facts.config) {
         changes(args, checkout, facts, kind, event)?
     } else {

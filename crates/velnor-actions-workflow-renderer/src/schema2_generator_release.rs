@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{ProductReleasePins, Schema2WorkflowRequest};
-use crate::RenderError;
-use crate::runs_on::runs_on_yaml;
-use crate::yaml::Yaml;
+use crate::{RenderError, runs_on::runs_on_yaml, yaml::Yaml};
 use velnor_actions_contract::ReleaseTarget;
 const MACOS_RUNS_ON: &str = "macos-15";
 const MACOS_INTEL_RUNS_ON: &str = "macos-15-intel";
@@ -26,6 +24,8 @@ mod preview_permissions;
 mod qualification;
 #[path = "schema2_generator_release_source.rs"]
 mod source;
+#[path = "schema2_generator_source_metadata.rs"]
+pub(super) mod source_metadata;
 #[path = "schema2_generator_source_preview.rs"]
 mod source_preview;
 #[path = "schema2_generator_source_preview_mac_proof.rs"]
@@ -35,7 +35,7 @@ mod source_preview_publication;
 #[path = "schema2_generator_source_preview_runtime.rs"]
 mod source_preview_runtime;
 #[path = "schema2_generator_release_workflow_steps.rs"]
-mod workflow_steps;
+pub(super) mod workflow_steps;
 
 pub(super) fn source_preview_jobs(
     pins: &ProductReleasePins,
@@ -174,7 +174,7 @@ pub(super) fn release_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>,
     let mut steps = lint_gate_steps(pins)?;
     steps.push(workflow_steps::bash_step(
         "Check release freshness",
-        "bash scripts/check-freshness.sh",
+        &workflow_steps::credential_free_command("bash scripts/check-freshness.sh"),
     ));
     Ok(steps)
 }
