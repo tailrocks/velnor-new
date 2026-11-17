@@ -314,8 +314,7 @@ fn checkout_depths<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
 }
 
 #[test]
-fn only_the_cache_job_asks_for_pull_requests_access_and_every_other_job_reads_contents_only()
--> TestResult {
+fn only_the_cache_job_asks_for_pull_requests_access_and_others_read_contents() -> TestResult {
     let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let single = workflow(&view(&["Cargo.toml"], None)?)?;
     for text in [&multi, &single] {

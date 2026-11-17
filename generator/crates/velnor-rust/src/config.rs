@@ -148,14 +148,13 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
 }
 
 fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
+    let invalid = |value| Reason::InvalidValue {
+        key: "exclude",
+        value,
+    };
     entries
         .into_iter()
-        .map(|entry| {
-            PathGlob::new(entry.trim_end_matches('/')).map_err(|_| Reason::InvalidValue {
-                key: "exclude",
-                value: entry,
-            })
-        })
+        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
         .collect()
 }
 
