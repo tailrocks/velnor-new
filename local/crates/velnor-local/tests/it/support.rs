@@ -171,11 +171,13 @@ impl Harness {
 #[derive(Debug)]
 pub(crate) struct Stub {
     stub: ApiStub,
+    control: bool,
 }
 
 impl Stub {
     pub(crate) fn new(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
         Self {
+            control: false,
             stub: ApiStub::new(ApiStubConfig {
                 repo: repo.to_owned(),
                 dir: dir.to_owned(),
@@ -190,6 +192,7 @@ impl Stub {
     pub(crate) fn over_standin(standin: Arc<dyn StandIn>) -> Self {
         let dir = temp_dir("standin");
         Self {
+            control: false,
             stub: ApiStub::new(ApiStubConfig {
                 repo: dir.clone(),
                 dir: dir.clone(),
@@ -201,18 +204,31 @@ impl Stub {
         }
     }
 
+    pub(crate) fn control(mut self) -> Self {
+        self.control = true;
+        self
+    }
+
     pub(crate) async fn call(&self, method: &str, path_and_query: &str) -> Reply {
-        let request = Request::builder()
+        let mut request = Request::builder()
             .method(method)
             .uri(path_and_query)
-            .header("host", "api.localhost")
+            .header("host", "api.localhost");
+        if self.control {
+            request = request.header("authorization", "Bearer test-control");
+        }
+        let request = request
             .body(
                 Full::new(Bytes::new())
                     .map_err(|never| match never {})
                     .boxed_unsync(),
             )
             .unwrap_or_else(|e| unreachable!("{e}"));
-        let response = self.stub.handle(request).await;
+        let response = if self.control {
+            self.stub.handle_control("test-control", request).await
+        } else {
+            self.stub.handle(request).await
+        };
         let status = response.status().as_u16();
         let headers = response.headers().clone();
         let body = response
