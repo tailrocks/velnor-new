@@ -206,6 +206,13 @@ fn member(package: &RustPackage, versions: bool) -> Member {
     }
 }
 
+pub fn recorded_roots(recorded: Option<&[u8]>) -> Result<Vec<RepoPath>, MetadataFileError> {
+    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
+    let file: File = serde_json::from_slice(bytes)
+        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+    file.roots.keys().map(|root| path_of(root)).collect()
+}
+
 pub fn recorded_metadata(
     view: &RepoView,
     recorded: Option<&[u8]>,
