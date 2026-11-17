@@ -13,6 +13,7 @@ use super::all_pages;
 #[derive(Deserialize)]
 struct CheckRun {
     name: String,
+    app: CheckApp,
     check_suite: Option<CheckSuiteId>,
 }
 
@@ -61,9 +62,12 @@ pub(super) fn check_names(
     for run in aggregate {
         let suite = run
             .check_suite
+            .as_ref()
             .ok_or_else(|| CiError::new("aggregate check run has no check_suite identity"))?;
         covered.insert(suite.id);
-        names.insert(run.name.to_lowercase());
+        if matches_source(&run, exempt_sources) {
+            names.insert(run.name.to_lowercase());
+        }
     }
     let suites: Vec<CheckSuite> = all_pages(github, "check suites", |page| {
         format!("/repos/{repo}/commits/{sha}/check-suites?per_page=100&page={page}")
@@ -90,9 +94,22 @@ pub(super) fn check_names(
                 suite.id
             )
         })?;
-        names.extend(runs.into_iter().map(|run| run.name.to_lowercase()));
+        names.extend(
+            runs.into_iter()
+                .filter(|run| matches_source(run, exempt_sources))
+                .map(|run| run.name.to_lowercase()),
+        );
     }
     Ok(names)
+}
+
+fn matches_source(run: &CheckRun, sources: &[ApiRequiredCheck]) -> bool {
+    sources.iter().any(|check| {
+        check.context.eq_ignore_ascii_case(&run.name)
+            && check
+                .integration_id
+                .is_none_or(|app| app == -1 || app == run.app.id)
+    })
 }
 
 pub(super) fn require_enforcement(

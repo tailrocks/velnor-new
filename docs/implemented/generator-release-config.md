@@ -5,7 +5,7 @@ By default, `roots = ["."]` lists Cargo roots with `release-plz.toml` files and
 `after = ["Rust CI"]` lists workflow names and must include every push workflow.
 
 `pr_only_checks = ["DCO"]` explicitly exempts names from release push checks;
-it defaults to `[]` and requires pinned `velnor-ci` 0.1.81 or newer. Each name
+it defaults to `[]` and requires pinned `velnor-ci` 0.1.82 or newer. Each name
 is a literal repeated `--pr-only-check` argument; Actions expressions are
 refused. Each name must exactly match a required check on the default branch,
 including case and whitespace. The gate requires at least one applicable,
@@ -32,12 +32,15 @@ remains hidden or unverifiable.
 At least one required push check must remain after exemptions. Stale names or
 removal of the enforced PR rule refuse release. Exempted checks may belong to
 external GitHub Apps. A listed name with a push job, commit status or Checks API
-run on the verified commit refuses release, regardless of its App, status or
-conclusion. The gate enumerates all commit check-run pages, including historical
-runs, and every check-suite page. It separately enumerates runs for suites
-missing from the aggregate response, which GitHub limits to 1,000 suites.
-An unfinished suite from an App that could produce an exempt check refuses
-release. Missing suite status or App metadata also refuses release.
+run from an App that could produce that exempt check on the verified commit
+refuses release, regardless of status or conclusion. GitHub documents that the
+commit check-runs endpoint returns at most the 1,000 most recent check suites
+for a SHA. Its documentation does not specify whether `total_count` includes
+suites outside that returned window. The gate therefore treats the aggregate
+response as incomplete evidence and enumerates the check-suite pages for the
+SHA, then lists runs for suites absent from the aggregate response. An
+unfinished suite from an App that could produce an exempt check refuses release.
+Missing suite status or App metadata also refuses release.
 This conservative match also refuses a same-commit pull request check run.
 An unreadable or incomplete response refuses release. Every other required
 check still needs a successful GitHub Actions push job on the default branch

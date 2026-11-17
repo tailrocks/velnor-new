@@ -21,7 +21,7 @@ fn render(helper: &str, config: &str) -> Result<String, Box<dyn Error>> {
 
 #[test]
 fn absent_and_empty_pr_only_checks_preserve_release_output_for_old_and_new_helpers() -> TestResult {
-    for helper in ["0.1.80", "0.1.81"] {
+    for helper in ["0.1.80", "0.1.81", "0.1.82"] {
         let tree = parse(&render(helper, "")?)?;
         let gate = tree.at(&["jobs", "gate"]).ok_or("no gate")?;
         assert!(gate.get("environment").is_none());
@@ -38,7 +38,7 @@ fn absent_and_empty_pr_only_checks_preserve_release_output_for_old_and_new_helpe
 
 #[test]
 fn pr_only_checks_are_explicit_literal_repeated_flags_in_the_release_gate() -> TestResult {
-    let text = render("0.1.81", "pr_only_checks = [\"DCO\", \"-team's check\"]\n")?;
+    let text = render("0.1.82", "pr_only_checks = [\"DCO\", \"-team's check\"]\n")?;
     let tree = parse(&text)?;
     assert!(tree.scalars().contains(&"velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\" --pr-only-check=DCO --pr-only-check='-team'\\''s check'"));
     let permissions = tree
@@ -101,8 +101,9 @@ fn pr_only_checks_are_explicit_literal_repeated_flags_in_the_release_gate() -> T
 #[test]
 fn pr_only_checks_refuse_old_helpers_and_workflow_expressions() {
     for (helper, config, reason) in [
-        ("0.1.80", "pr_only_checks=['DCO']", "pin-helper 0.1.81"),
-        ("0.1.81", "pr_only_checks=['${{x}}']", "${{"),
+        ("0.1.80", "pr_only_checks=['DCO']", "pin-helper 0.1.82"),
+        ("0.1.81", "pr_only_checks=['DCO']", "pin-helper 0.1.82"),
+        ("0.1.82", "pr_only_checks=['${{x}}']", "${{"),
     ] {
         let error = render(helper, config)
             .err()
