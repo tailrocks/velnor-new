@@ -50,7 +50,10 @@ fn an_even_number_of_runs_takes_the_mean_of_the_middle_two() {
             .map(|run| {
                 let job = run.jobs.iter().find(|j| j.name == name);
                 let step = job.and_then(|j| j.steps.iter().find(|s| s.name == "Lint"));
-                f64::from(u32::try_from(step.map_or(0, |s| s.seconds)).unwrap_or_default())
+                f64::from(
+                    u32::try_from(step.and_then(|s| s.seconds).unwrap_or_default())
+                        .unwrap_or_default(),
+                )
             })
             .collect::<Vec<_>>()
     };
@@ -398,7 +401,7 @@ fn lint_measurement_fake(invalid: &str) -> FakeGitHub {
             }
             (1, "missing") => step["started_at"] = Value::Null,
             (2, "malformed") => step["started_at"] = "not-a-timestamp".into(),
-            (2, "backwards") => step["completed_at"] = "2026-11-14T20:10:17Z".into(),
+            (2, "backwards") => step["completed_at"] = "2026-11-14T00:00:00Z".into(),
             (index, "zero") => {
                 let equal = format!("2026-11-14T20:10:{:02}Z", 18 + index);
                 step["started_at"] = equal.clone().into();
