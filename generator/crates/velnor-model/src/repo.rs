@@ -214,9 +214,15 @@ pub struct ToolPins {
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ToolPin {
-    pub requested: Vec<String>,
+    pub requested: Vec<ToolRequest>,
     pub locked: Vec<ToolLock>,
-    pub os_filters: BTreeMap<String, Vec<String>>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ToolRequest {
+    pub version: String,
+    pub os: Option<Vec<String>>,
+    pub options: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -224,6 +230,7 @@ pub struct ToolLock {
     pub version: String,
     pub specifiers: Vec<String>,
     pub os: Option<Vec<String>>,
+    pub options: BTreeMap<String, String>,
     pub prebuilt: BTreeSet<String>,
 }
 

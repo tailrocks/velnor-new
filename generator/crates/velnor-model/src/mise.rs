@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{ToolLock, ToolPin};
+use std::collections::{BTreeMap, BTreeSet};
+
+use crate::{ToolLock, ToolPin, ToolRequest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MisePlatform<'a> {
@@ -42,7 +44,7 @@ impl MisePlatform<'static> {
             Some(Self::new("linux", if arm { "arm64" } else { "x64" }))
         } else if label.starts_with("macos") {
             let intel =
-                label.ends_with("-13") || label.contains("intel") || label.contains("large");
+                label.ends_with("-13") || label.ends_with("-intel") || label.ends_with("-large");
             Some(Self::new("macos", if intel { "x64" } else { "arm64" }))
         } else if label.starts_with("windows") {
             Some(Self::new("windows", if arm { "arm64" } else { "x64" }))
@@ -68,51 +70,71 @@ fn normalized_arch(arch: &str) -> &str {
     }
 }
 
-impl ToolPin {
+impl ToolRequest {
     #[must_use]
-    pub fn applies_on(&self, request: &str, platform: MisePlatform<'_>) -> bool {
-        self.os_filters
-            .get(request)
+    pub fn applies_on(&self, platform: MisePlatform<'_>) -> bool {
+        self.os
+            .as_ref()
             .is_none_or(|filters| filters.iter().any(|filter| platform.matches(filter)))
     }
+}
 
+impl ToolPin {
     pub fn locked_on(&self, platform: MisePlatform<'_>) -> Result<Vec<&ToolLock>, String> {
         let mut found = Vec::new();
         for request in self
             .requested
             .iter()
-            .filter(|request| self.applies_on(request, platform))
+            .filter(|request| request.applies_on(platform))
         {
-            let candidates: Vec<_> =
-                self.locked
-                    .iter()
-                    .filter(|row| {
-                        row.os.as_ref().is_none_or(|filters| {
+            let option_keys: BTreeSet<_> = self
+                .locked
+                .iter()
+                .flat_map(|row| row.options.keys())
+                .collect();
+            let options: BTreeMap<_, _> = request
+                .options
+                .iter()
+                .filter(|(key, _)| option_keys.contains(key))
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect();
+            let candidates: Vec<_> = self
+                .locked
+                .iter()
+                .filter(|row| {
+                    row.options == options
+                        && row.os.as_ref().is_none_or(|filters| {
                             filters.iter().any(|filter| platform.matches(filter))
-                        }) && if row.specifiers.is_empty() {
-                            version_matches(request, &row.version)
+                        })
+                        && if row.specifiers.is_empty() {
+                            version_matches(&request.version, &row.version)
                         } else {
-                            row.specifiers.contains(request)
+                            row.specifiers.contains(&request.version)
                         }
-                    })
-                    .collect();
+                })
+                .collect();
             let ambiguous = candidates.iter().any(|row| {
                 row.specifiers.is_empty()
                     && self
                         .requested
                         .iter()
-                        .filter(|other| version_matches(other, &row.version))
-                        .count()
+                        .filter(|other| {
+                            other
+                                .options
+                                .iter()
+                                .filter(|(key, _)| option_keys.contains(key))
+                                .eq(options.iter())
+                                && version_matches(&other.version, &row.version)
+                        })
+                        .map(|other| &other.version)
+                        .collect::<BTreeSet<_>>()
+                        .len()
                         > 1
             });
-            if candidates.is_empty()
-                || ambiguous
-                || candidates
-                    .iter()
-                    .any(|row| row.version != candidates[0].version)
-            {
+            if candidates.len() != 1 || ambiguous {
                 return Err(format!(
-                    "request {request} has no unambiguous locked version; regenerate mise.lock with specifiers"
+                    "request {} has no unambiguous locked version; regenerate mise.lock with specifiers",
+                    request.version
                 ));
             }
             found.extend(candidates);

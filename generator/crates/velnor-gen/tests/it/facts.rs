@@ -52,19 +52,33 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
             .collect::<std::collections::BTreeSet<_>>()
         {
             let version = if matches!(
-                request.as_str(),
+                request.version.as_str(),
                 "latest" | "lts" | "stable" | "nightly" | "beta"
             ) {
                 "1.0.0"
             } else {
-                &request
+                &request.version
             };
             write!(
                 lock,
-                "[[tools.{name:?}]]\nversion = {version:?}\nspecifiers = [{request:?}]\n"
+                "[[tools.{name:?}]]\nversion = {version:?}\nspecifiers = [{:?}]\n",
+                request.version
             )?;
-            if let Some(filters) = pin.os_filters.get(&request) {
+            if let Some(filters) = request.os {
                 writeln!(lock, "os = {filters:?}")?;
+            }
+            if !request.options.is_empty() {
+                writeln!(
+                    lock,
+                    "options = {}",
+                    toml::Value::Table(
+                        request
+                            .options
+                            .into_iter()
+                            .map(|(key, value)| (key, toml::Value::String(value)))
+                            .collect()
+                    )
+                )?;
             }
             for platform in ["linux-x64", "macos-arm64"] {
                 write!(

@@ -61,8 +61,8 @@ fn required(pin: &ToolPin, platform: MisePlatform<'_>) -> Result<Vec<String>, Ci
         return Ok(pin
             .requested
             .iter()
-            .filter(|request| pin.applies_on(request, platform))
-            .cloned()
+            .filter(|request| request.applies_on(platform))
+            .map(|request| request.version.clone())
             .collect());
     }
     pin.locked_on(platform)

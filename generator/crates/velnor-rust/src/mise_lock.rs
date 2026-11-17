@@ -66,6 +66,14 @@ fn locked_rows(value: &Value) -> Option<Vec<ToolLock>> {
                 Some(value) => Some(strings(value)?),
                 None => None,
             };
+            let options = match entry.get("options") {
+                Some(Value::Table(options)) => options
+                    .iter()
+                    .map(|(key, value)| value.as_str().map(|value| (key.clone(), value.to_owned())))
+                    .collect::<Option<BTreeMap<_, _>>>()?,
+                None => BTreeMap::new(),
+                _ => return None,
+            };
             let prebuilt = entry
                 .iter()
                 .filter_map(|(key, value)| {
@@ -81,6 +89,7 @@ fn locked_rows(value: &Value) -> Option<Vec<ToolLock>> {
                 version,
                 specifiers,
                 os,
+                options,
                 prebuilt,
             }])
         }

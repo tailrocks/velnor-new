@@ -4,7 +4,7 @@
 use std::fmt::Write;
 
 use velnor_gen::expected_files;
-use velnor_model::RepoPath;
+use velnor_model::{MisePlatform, RepoPath};
 
 use crate::facts::TestResult;
 use crate::pipeline::view;
@@ -95,4 +95,83 @@ fn every_applicable_locked_version_needs_its_own_prebuilt_for_the_runner() -> Te
     repo.files.insert(path, lock.into_bytes());
     assert!(expected_files(&repo).is_ok());
     Ok(())
+}
+
+#[test]
+fn a_prebuilt_is_checked_only_for_the_configured_lock_option_variant() -> TestResult {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    let mise = |flavor| {
+        format!(
+            "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ntool = {{ version = \"1\", flavor = \"{flavor}\" }}\n"
+        )
+    };
+    let lock = |linux, mac| {
+        let mut lock = "[[tools.rust]]\nversion = \"1.99.1\"\n[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\n[tools.\"aqua:nextest-rs/nextest/cargo-nextest\".\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/nextest\"\n".to_owned();
+        for (flavor, prebuilt) in [("linux", linux), ("mac", mac)] {
+            write!(lock, "[[tools.tool]]\nversion = \"1.0.0\"\nspecifiers = [\"1\"]\noptions = {{ flavor = \"{flavor}\" }}\n").unwrap_or_else(|e| unreachable!("{e}"));
+            if prebuilt {
+                lock.push_str("[tools.tool.\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/tool\"\n");
+            }
+        }
+        lock
+    };
+    let config = RepoPath::from_static("mise.toml");
+    let locked = RepoPath::from_static("mise.lock");
+    repo.files
+        .insert(config.clone(), mise("linux").into_bytes());
+    repo.files
+        .insert(locked.clone(), lock(true, false).into_bytes());
+    let linux = expected_files(&repo);
+    assert!(linux.is_ok(), "{linux:?}");
+    repo.files.insert(config, mise("mac").into_bytes());
+    let mac = expected_files(&repo);
+    assert!(mac.is_err_and(|error| error.to_string().contains("prebuilt")));
+    repo.files.insert(locked, lock(true, true).into_bytes());
+    assert!(expected_files(&repo).is_ok());
+    Ok(())
+}
+
+#[test]
+fn macos_large_and_xlarge_use_their_distinct_runner_architectures() {
+    let mut mismatches = Vec::new();
+    for (runner, own, other) in [
+        ("macos-15-large", "macos/x64", "macos/arm64"),
+        ("macos-15-xlarge", "macos/arm64", "macos/x64"),
+    ] {
+        let platform = MisePlatform::runner(runner);
+        if !platform.is_some_and(|platform| platform.matches(own) && !platform.matches(other)) {
+            mismatches.push(format!("{runner} platform: {platform:?}"));
+        }
+        if runner.ends_with("-large") {
+            continue;
+        }
+        let present = generate(own, runner, true, true);
+        if !present
+            .as_ref()
+            .is_ok_and(|text| text.contains("cargo-deny check"))
+        {
+            mismatches.push(format!("{runner} applicable policy: {present:?}"));
+        }
+        let absent = generate(other, runner, true, true);
+        if !absent
+            .as_ref()
+            .is_err_and(|error| error.contains("not pinned"))
+        {
+            mismatches.push(format!(
+                "{runner} foreign policy: {:?}",
+                absent.as_ref().map(|_| "workflow generated")
+            ));
+        }
+        let prebuilt = generate(own, runner, false, false);
+        if !prebuilt
+            .as_ref()
+            .is_err_and(|error| error.contains("prebuilt"))
+        {
+            mismatches.push(format!("{runner} missing prebuilt: {prebuilt:?}"));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "wrong macOS architectures: {mismatches:?}"
+    );
 }

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_ci::error::CiError;
 use velnor_ci::setup::{Reported, check_tools, parse_reported};
-use velnor_model::{MisePlatform, ToolLock, ToolPin, ToolPins};
+use velnor_model::{MisePlatform, ToolLock, ToolPin, ToolPins, ToolRequest};
 
 type Case<'a> = (&'a [&'a str], &'a [&'a str], &'a [(&'a str, bool)], bool);
 
@@ -16,7 +16,13 @@ fn pins(requested: &[&str], locked: &[&str]) -> ToolPins {
         tools: BTreeMap::from([(
             "tool".to_owned(),
             ToolPin {
-                requested: requested.iter().map(|v| (*v).to_owned()).collect(),
+                requested: requested
+                    .iter()
+                    .map(|v| ToolRequest {
+                        version: (*v).to_owned(),
+                        ..ToolRequest::default()
+                    })
+                    .collect(),
                 locked: locked
                     .iter()
                     .map(|v| ToolLock {
@@ -24,7 +30,6 @@ fn pins(requested: &[&str], locked: &[&str]) -> ToolPins {
                         ..ToolLock::default()
                     })
                     .collect(),
-                os_filters: BTreeMap::new(),
             },
         )]),
     }
@@ -101,11 +106,10 @@ fn filtered(requested: &[(&str, &[&str])], locked: &[&str]) -> ToolPins {
         locked,
     );
     if let Some(pin) = pins.tools.get_mut("tool") {
-        for (version, filters) in requested.iter().filter(|(_, f)| !f.is_empty()) {
-            pin.os_filters.insert(
-                (*version).to_owned(),
-                filters.iter().map(|f| (*f).to_owned()).collect(),
-            );
+        for (request, (_, filters)) in pin.requested.iter_mut().zip(requested) {
+            if !filters.is_empty() {
+                request.os = Some(filters.iter().map(|filter| (*filter).to_owned()).collect());
+            }
         }
     }
     pins

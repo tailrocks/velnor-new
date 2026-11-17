@@ -27,7 +27,7 @@ pub use repo::{
     CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
     MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig,
     RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolLock,
-    ToolPin, ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
+    ToolPin, ToolPins, ToolRequest, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
