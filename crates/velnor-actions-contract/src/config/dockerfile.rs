@@ -102,12 +102,14 @@ pub fn analyze_dockerfile(
     Ok(state.facts)
 }
 
+type StageState = (BTreeMap<String, ArgValue>, BTreeMap<String, ArgValue>, bool);
+
 #[derive(Default)]
 struct State {
     facts: DockerfileFacts,
     unknown_environment: bool,
     stage_env: BTreeMap<String, ArgValue>,
-    stage_states: Vec<(BTreeMap<String, ArgValue>, BTreeMap<String, ArgValue>, bool)>,
+    stage_states: Vec<StageState>,
     global_args: BTreeMap<String, ArgValue>,
     stage_args: BTreeMap<String, ArgValue>,
     stages: BTreeMap<String, usize>,
