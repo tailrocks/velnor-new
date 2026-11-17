@@ -1,10 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::Instant;
-
 use bollard::Docker;
-use tokio::time::{Instant as TokioInstant, timeout_at};
+use tokio::time::{Instant, timeout_at};
 
 use crate::{error::HostError, journal::ConnectionJournal, launch::SelectedEngineContext};
 
@@ -18,7 +16,7 @@ pub(crate) async fn abandon_and_retire_unbound_pair_before(
     reservation_id: i64,
 ) -> Result<bool, HostError> {
     timeout_at(
-        TokioInstant::from_std(deadline),
+        deadline,
         abandon_and_retire_unbound_pair(docker, scope, engine, reservation_id),
     )
     .await
@@ -50,7 +48,7 @@ pub(crate) async fn retire_unbound_pair_before(
         return false;
     }
     let retired = timeout_at(
-        TokioInstant::from_std(deadline),
+        deadline,
         Box::pin(retire_unbound_pair(docker, scope, engine, reservation_id)),
     )
     .await;

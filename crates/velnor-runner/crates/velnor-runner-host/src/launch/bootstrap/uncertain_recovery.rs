@@ -94,7 +94,7 @@ impl InitializerRecovery {
         self,
         recovery: &UncertainRecovery<'_>,
         initializer_deadline: Instant,
-        connection_deadline: std::time::Instant,
+        connection_deadline: Instant,
     ) {
         if let Err(error) = recover_absent(
             recovery.docker,
@@ -171,9 +171,9 @@ impl UnboundPairRecovery {
     pub(crate) async fn recover_before(
         self,
         recovery: &UncertainRecovery<'_>,
-        connection_deadline: std::time::Instant,
+        connection_deadline: Instant,
     ) {
-        if std::time::Instant::now() >= connection_deadline {
+        if Instant::now() >= connection_deadline {
             return;
         }
         retire_unbound_pair_before(

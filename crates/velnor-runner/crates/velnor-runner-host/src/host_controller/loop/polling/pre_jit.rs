@@ -20,7 +20,7 @@ pub(super) async fn reconcile(
     pass: usize,
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
-    let deadline = std::time::Instant::now() + context.retirement_budget;
+    let deadline = Instant::now() + context.retirement_budget;
     let recovery = UncertainRecovery {
         docker: context.docker,
         journal: context.journal,
@@ -30,12 +30,7 @@ pub(super) async fn reconcile(
         image_authority: context.image_authority,
         pass,
     };
-    let work = if let Ok(work) = timeout_at(
-        Instant::from_std(deadline),
-        uncertain_recovery_work(&recovery),
-    )
-    .await
-    {
+    let work = if let Ok(work) = timeout_at(deadline, uncertain_recovery_work(&recovery)).await {
         work?
     } else {
         defer(scope);
@@ -43,25 +38,22 @@ pub(super) async fn reconcile(
     };
     let mut initializer_deadline = None;
     for item in work {
-        if std::time::Instant::now() >= deadline {
+        if Instant::now() >= deadline {
             break;
         }
         match item {
             UncertainRecoveryWork::Initializer(initializer) => {
                 let until = *initializer_deadline.get_or_insert_with(|| {
-                    Instant::from_std(deadline).min(Instant::now() + INITIALIZER_RECOVERY_BUDGET)
+                    deadline.min(Instant::now() + INITIALIZER_RECOVERY_BUDGET)
                 });
                 if Instant::now() < until {
                     initializer.recover_before(&recovery, until, deadline).await;
                 }
             }
             UncertainRecoveryWork::AssignedPair(pair) => {
-                if timeout_at(
-                    Instant::from_std(deadline),
-                    Box::pin(pair.recover(&recovery)),
-                )
-                .await
-                .is_err()
+                if timeout_at(deadline, Box::pin(pair.recover(&recovery)))
+                    .await
+                    .is_err()
                 {
                     defer(scope);
                     break;

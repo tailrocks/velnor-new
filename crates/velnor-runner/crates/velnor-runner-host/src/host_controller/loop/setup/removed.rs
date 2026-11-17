@@ -1,13 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::{path::Path, time::Duration};
 
 use bollard::Docker;
-use tokio::time::{Instant as TokioInstant, timeout_at};
+use tokio::time::{Instant, timeout_at};
 
 use crate::{
     config::HostConfig,
@@ -59,11 +56,7 @@ pub(crate) async fn reconcile_removed_at_startup(startup: &RemovedStartup<'_>) {
             image_authority: startup.image_authority,
             pass: 0,
         };
-        let discovered = timeout_at(
-            TokioInstant::from_std(startup.deadline),
-            uncertain_recovery_work(&recovery),
-        )
-        .await;
+        let discovered = timeout_at(startup.deadline, uncertain_recovery_work(&recovery)).await;
         match discovered {
             Ok(Ok(work)) => recover_work(work, &recovery, startup.deadline).await,
             Ok(Err(error)) => {
@@ -97,20 +90,16 @@ async fn recover_work(
         match item {
             UncertainRecoveryWork::Initializer(initializer) => {
                 let until = *initializer_deadline.get_or_insert_with(|| {
-                    TokioInstant::from_std(deadline)
-                        .min(TokioInstant::now() + INITIALIZER_RECOVERY_BUDGET)
+                    deadline.min(Instant::now() + INITIALIZER_RECOVERY_BUDGET)
                 });
-                if TokioInstant::now() < until {
+                if Instant::now() < until {
                     initializer.recover_before(recovery, until, deadline).await;
                 }
             }
             UncertainRecoveryWork::AssignedPair(pair) => {
-                if timeout_at(
-                    TokioInstant::from_std(deadline),
-                    Box::pin(pair.recover(recovery)),
-                )
-                .await
-                .is_err()
+                if timeout_at(deadline, Box::pin(pair.recover(recovery)))
+                    .await
+                    .is_err()
                 {
                     break;
                 }

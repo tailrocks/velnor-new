@@ -107,7 +107,7 @@ impl Controller {
             engine,
             images: &self.images,
             image_authority: &self.image_authority,
-            deadline: Instant::now() + budget,
+            deadline: tokio::time::Instant::now() + budget,
         })
         .await;
     }

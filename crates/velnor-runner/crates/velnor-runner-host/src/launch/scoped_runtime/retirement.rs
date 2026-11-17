@@ -8,7 +8,7 @@ pub(super) async fn retire_pending_pair<P>(
     reservation_id: i64,
 ) {
     if let Err(error) = super::super::bootstrap::abandon_and_retire_unbound_pair_before(
-        context.deadline,
+        tokio::time::Instant::from_std(context.deadline),
         context.docker,
         context.scoped,
         context.engine,

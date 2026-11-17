@@ -24,16 +24,21 @@ use crate::worker::storage_initialization::{
     },
 };
 
+#[cfg(test)]
+mod admission_tests;
+
 pub(crate) async fn recover_absent(
     docker: &Docker,
     journal: &ConnectionJournal,
     reservation_id: i64,
     deadline: Instant,
 ) -> Result<(), HostError> {
-    let candidate = journal
-        .storage_initializer_abort_candidate(reservation_id)
-        .await?
-        .ok_or(HostError::Journal)?;
+    let candidate = bounded_by_deadline(
+        deadline,
+        Box::pin(journal.storage_initializer_abort_candidate(reservation_id)),
+    )
+    .await??
+    .ok_or(HostError::Journal)?;
     bounded_by_deadline(
         deadline,
         Box::pin(async {
@@ -46,7 +51,7 @@ pub(crate) async fn recover_absent(
         return Err(HostError::DockerTimeout);
     }
     let claim = journal
-        .claim_storage_initializer_abort(&candidate)
+        .claim_storage_initializer_abort_before(&candidate, deadline)
         .await?
         .ok_or(HostError::Journal)?;
     let result = if Instant::now() >= deadline {
