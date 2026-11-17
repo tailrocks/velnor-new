@@ -128,10 +128,17 @@ fn aggregate_external_check_runs_prevent_pr_only_exemptions_on_every_page() {
 fn all_external_check_pages_are_required_even_for_historical_or_incomplete_results() {
     for body in [
         json!({"total_count": 1, "check_runs": [{"name": "unrelated"}]}),
-        json!({"total_count": 2, "check_runs": []}),
+        json!({"check_runs": []}),
     ] {
         assert!(allowed(&protected().set(aggregate_path(1), body)).is_err());
     }
+    assert!(
+        allowed(&protected().set(
+            aggregate_path(1),
+            json!({"total_count": 2, "check_runs": []}),
+        ))
+        .is_ok_and(|verdict| verdict.ready)
+    );
     let first =
         json!({"total_count": 2, "check_runs": [{"name": "unrelated", "app": {"id": 343_649}} ]});
     let recorded = || protected().set(checks_path(1), first.clone());
@@ -168,7 +175,7 @@ fn all_external_check_pages_are_required_even_for_historical_or_incomplete_resul
 
 #[test]
 fn an_external_check_in_a_suite_older_than_the_newest_thousand_prevents_exemption() {
-    let history = |dco: bool| {
+    let history = |dco: bool, total: usize| {
         let mut recorded = protected();
         let mut ids: Vec<u64> = (1..=1001).rev().collect();
         for (page, ids) in (1..).zip(ids[..1000].chunks(100)) {
@@ -179,9 +186,13 @@ fn an_external_check_in_a_suite_older_than_the_newest_thousand_prevents_exemptio
                 .collect();
             recorded = recorded.set(
                 aggregate_path(page),
-                json!({"total_count": 1000, "check_runs": runs}),
+                json!({"total_count": total, "check_runs": runs}),
             );
         }
+        recorded = recorded.set(
+            aggregate_path(11),
+            json!({"total_count": total, "check_runs": []}),
+        );
         ids.rotate_right(1);
         for (page, ids) in (1..).zip(ids.chunks(100)) {
             let suites: Vec<Value> = ids
@@ -202,14 +213,22 @@ fn an_external_check_in_a_suite_older_than_the_newest_thousand_prevents_exemptio
         }
         recorded
     };
-    assert!(
-        history(false)
-            .gate_with_budget(100)
-            .is_ok_and(|verdict| verdict.ready)
-    );
+    for (total, budget) in [(1000, 100), (1001, 1100)] {
+        assert!(
+            history(false, total)
+                .gate_with_budget(budget)
+                .is_ok_and(|verdict| verdict.ready)
+        );
+        assert_refused(
+            &history(true, total).gate_with_budget(budget),
+            "PR-only check DCO has",
+        );
+    }
+    let incomplete =
+        history(false, 1001).set(checks_path(1), json!({"total_count": 1, "check_runs": []}));
     assert_refused(
-        &history(true).gate_with_budget(100),
-        "PR-only check DCO has",
+        &incomplete.gate_with_budget(1100),
+        "GitHub lists 1 check runs and returned 0",
     );
 }
 
