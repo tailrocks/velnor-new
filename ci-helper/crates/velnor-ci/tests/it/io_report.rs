@@ -211,6 +211,10 @@ fn local_report_does_not_contact_github_even_with_an_ambient_token() -> ResultTe
         while !stopped.load(std::sync::atomic::Ordering::SeqCst) {
             if let Ok((mut stream, _)) = listener.accept() {
                 contacted = true;
+                stream.set_nonblocking(false).expect("blocking API socket");
+                stream
+                    .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+                    .expect("bounded API request");
                 let mut request = [0; 4096];
                 assert!(
                     stream
