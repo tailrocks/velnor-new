@@ -16,7 +16,10 @@ fn custom_frontends_select_the_whole_context() -> TestResult {
         ("docker.io/docker/dockerfile:1", "not_affected", true),
     ] {
         assert_image_context_selection(
-            &format!("# syntax={frontend}@sha256:{}\nFROM scratch\n", "a".repeat(64)),
+            &format!(
+                "# syntax={frontend}@sha256:{}\nFROM scratch\n",
+                "a".repeat(64)
+            ),
             ("hidden.txt", expected),
             precise,
         )?;
@@ -48,7 +51,9 @@ fn json_copy_options_preserve_source_selection() -> TestResult {
         ("--from=base --chown=1:1 --chmod=0755", "not_affected"),
     ] {
         assert_image_context_selection(
-            &format!("FROM scratch AS base\nFROM scratch\nCOPY {options} [\"src/main.txt\", \"/dest\"]\n"),
+            &format!(
+                "FROM scratch AS base\nFROM scratch\nCOPY {options} [\"src/main.txt\", \"/dest\"]\n"
+            ),
             ("src/main.txt", expected),
             true,
         )?;

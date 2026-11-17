@@ -88,7 +88,7 @@ pub fn analyze_dockerfile(
             .collect(),
         ..State::default()
     };
-    check_directives(text)?;
+    state.facts.claims_whole_context = check_directives(text)?;
     for (keyword, args) in instructions(text) {
         state.instruction(&keyword, &args)?;
     }
@@ -124,7 +124,9 @@ impl State {
                     triggers.extend(parsed);
                 }
             }
-            _ => {}
+            "CMD" | "LABEL" | "MAINTAINER" | "EXPOSE" | "ENTRYPOINT" | "VOLUME" | "USER"
+            | "WORKDIR" | "STOPSIGNAL" | "HEALTHCHECK" | "SHELL" => {}
+            _ => self.facts.claims_whole_context = true,
         }
         Ok(())
     }
@@ -214,24 +216,22 @@ impl State {
     }
 
     fn copy(&mut self, keyword: &str, args: &str) -> Result<(), DockerfileProblem> {
+        let mut from_other = false;
+        let mut args = args.trim_start();
+        while args.starts_with("--") {
+            let (option, remainder) = args.split_once(char::is_whitespace).unwrap_or((args, ""));
+            if let Some(source) = option.strip_prefix("--from=") {
+                from_other = true;
+                self.check_from_source(source)?;
+            }
+            args = remainder.trim_start();
+        }
         let json_form = args.trim_start().starts_with('[');
         if args.contains('\\') || (!json_form && args.contains(['"', '\''])) {
             return Err(DockerfileProblem::ContextSourceUnresolved(args.to_owned()));
         }
-        let mut from_other = false;
-        let mut operands = Vec::new();
-        for token in split_operands(args)
-            .ok_or_else(|| DockerfileProblem::ContextSourceUnresolved(args.to_owned()))?
-        {
-            if json_form {
-                operands.push(token);
-            } else if let Some(source) = token.strip_prefix("--from=") {
-                from_other = true;
-                self.check_from_source(source)?;
-            } else if !token.starts_with("--") {
-                operands.push(token);
-            }
-        }
+        let mut operands = split_operands(args)
+            .ok_or_else(|| DockerfileProblem::ContextSourceUnresolved(args.to_owned()))?;
         let missing_destination = operands.len() < 2;
         if !missing_destination {
             operands.pop();
