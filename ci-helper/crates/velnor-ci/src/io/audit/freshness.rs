@@ -57,39 +57,46 @@ impl Freshness {
             return Ok(*newest);
         }
         self.reserve()?;
+        let include_targets = self.excluded(&key);
         let mut pending = vec![root.to_path_buf()];
         let mut directories = BTreeSet::new();
         let mut newest = SystemTime::UNIX_EPOCH;
-        let mut excluded_root = false;
         while let Some(path) = pending.pop() {
             let canonical = fs::canonicalize(&path)?;
             let metadata = fs::metadata(&canonical)?;
-            if metadata.is_dir()
-                && self
-                    .targets
-                    .iter()
-                    .any(|target| canonical.starts_with(target))
-            {
+            if metadata.is_dir() && !include_targets && self.excluded(&canonical) {
                 if tracked_below(repository, tracked, &path)
                     || tracked_below(repository, tracked, &canonical)
                 {
                     return Err(io::Error::other("target directory contains tracked inputs"));
                 }
-                excluded_root |= path == root;
                 continue;
             }
-            newest = newest.max(metadata.modified()?);
-            if metadata.is_dir() && directories.insert(canonical.clone()) {
+            if metadata.is_dir() {
+                if !directories.insert(canonical) {
+                    continue;
+                }
+                let mut excluded_child = false;
                 for entry in fs::read_dir(path)? {
                     self.reserve()?;
-                    pending.push(entry?.path());
+                    let child = entry?.path();
+                    excluded_child |= !include_targets && self.excluded(&fs::canonicalize(&child)?);
+                    pending.push(child);
+                }
+                if excluded_child {
+                    continue;
                 }
             }
+            newest = newest.max(metadata.modified()?);
         }
-        if !excluded_root {
-            self.newest.insert(key, newest);
-        }
+        self.newest.insert(key, newest);
         Ok(newest)
+    }
+
+    fn excluded(&self, canonical: &Path) -> bool {
+        self.targets
+            .iter()
+            .any(|target| canonical.starts_with(target))
     }
 
     fn reserve(&mut self) -> io::Result<()> {
