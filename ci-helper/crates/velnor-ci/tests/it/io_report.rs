@@ -6,7 +6,7 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::process::{Command, Output};
-use velnor_ci::report::{LaneMetrics, SNAPSHOT};
+use velnor_ci::report::{LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
 
 type ResultTest = Result<(), Box<dyn std::error::Error>>;
 fn cli(repo: &Repo, args: &[&str]) -> Output {
@@ -57,9 +57,11 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     assert!(cli(&repo, &["inputs", "save"]).status.success());
     assert!(cli(&repo, &["inputs", "restore"]).status.success());
     let before = fs::read(repo.root().join(SNAPSHOT))?;
+    let witness = fs::read(repo.root().join(RESTORE_WITNESS))?;
     repo.write("src/lib.rs", "pub fn changed() {}\n");
     assert!(cli(&repo, &["inputs", "save"]).status.success());
     assert_eq!(fs::read(repo.root().join(SNAPSHOT))?, before);
+    assert_eq!(fs::read(repo.root().join(RESTORE_WITNESS))?, witness);
     let fixture = repo.root().join("cargo-fixture");
     symlink("/bin/sh", &fixture)?;
     let script = interrupted_output(&repo)?;
@@ -206,6 +208,7 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
 }
 
 mod policy;
+mod provenance;
 
 fn fixture(name: &str) -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = Repo::new(name);

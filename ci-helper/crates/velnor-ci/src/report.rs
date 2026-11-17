@@ -8,6 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 pub const SCHEMA: u32 = 1;
 pub const SNAPSHOT: &str = "target/.velnor/restored-inputs.tsv";
+pub const RESTORE_WITNESS: &str = "target/.velnor/restored-inputs-witness.tsv";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]

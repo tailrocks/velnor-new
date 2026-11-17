@@ -62,8 +62,49 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     ))
 }
 
+pub(super) fn input_witness(tracked: &Tracked) -> String {
+    let mut inputs: Vec<_> = tracked
+        .files
+        .iter()
+        .chain(&tracked.links)
+        .cloned()
+        .map(|file| SavedInput { file, mtime_ns: 0 })
+        .collect();
+    inputs.extend(tracked.absent.iter().map(|path| SavedInput {
+        file: crate::inputs::TrackedFile {
+            path: path.clone(),
+            blob: String::new(),
+            mode: "absent".to_owned(),
+        },
+        mtime_ns: 0,
+    }));
+    for (marker, count) in [
+        ("unsupported", tracked.unsupported),
+        ("unverifiable-link", tracked.unverifiable_links),
+        ("submodule", tracked.submodules),
+    ] {
+        if count > 0 {
+            inputs.push(SavedInput {
+                file: crate::inputs::TrackedFile {
+                    path: format!("@{marker}"),
+                    blob: count.to_string(),
+                    mode: "marker".to_owned(),
+                },
+                mtime_ns: 0,
+            });
+        }
+    }
+    inputs.sort_by(|left, right| left.file.cmp(&right.file));
+    format_inputs(&inputs)
+}
+
 pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
     match fs::remove_file(root.join(crate::report::SNAPSHOT)) {
+        Ok(()) => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(CiError::new(error.to_string())),
+    }
+    match fs::remove_file(root.join(crate::report::RESTORE_WITNESS)) {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(CiError::new(error.to_string())),
@@ -78,6 +119,11 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
     };
     let saved = parse_inputs(&text)?;
     let (top, tracked) = worktree_files(root)?;
+    fs::write(
+        root.join(crate::report::RESTORE_WITNESS),
+        input_witness(&tracked),
+    )
+    .map_err(|e| CiError::new(format!("cannot preserve input witness: {e}")))?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
         return Ok(format!(

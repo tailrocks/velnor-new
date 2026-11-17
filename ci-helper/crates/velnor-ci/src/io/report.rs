@@ -24,6 +24,38 @@ fn json<T: serde::de::DeserializeOwned>(text: &str) -> Result<T, CiError> {
     serde_json::from_str(text).map_err(ci)
 }
 
+fn invocations() -> (Vec<Invocation>, Vec<String>) {
+    let path = temp(INVOCATIONS);
+    let bytes = match fs::read(&path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return (Vec::new(), Vec::new());
+        }
+        Err(error) => {
+            return (
+                Vec::new(),
+                vec![format!("cannot read {}: {error}", path.display())],
+            );
+        }
+    };
+    let mut records = Vec::new();
+    let mut errors = Vec::new();
+    for (index, line) in bytes.split(|byte| *byte == b'\n').enumerate() {
+        if line.is_empty() {
+            continue;
+        }
+        match serde_json::from_slice(line) {
+            Ok(invocation) => records.push(invocation),
+            Err(error) => errors.push(format!(
+                "{} line {} is invalid: {error}",
+                INVOCATIONS,
+                index + 1
+            )),
+        }
+    }
+    (records, errors)
+}
+
 fn read_log() -> Result<Vec<u8>, CiError> {
     match fs::read(temp("velnor-run.log")) {
         Ok(bytes) => Ok(bytes),
@@ -37,11 +69,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         return check_directory(directory);
     }
     let log_bytes = read_log()?;
-    let invocations = fs::read_to_string(temp(INVOCATIONS))
-        .unwrap_or_default()
-        .lines()
-        .map(json)
-        .collect::<Result<Vec<Invocation>, _>>()?;
+    let (invocations, invocation_errors) = invocations();
     let mut metrics = LaneMetrics {
         schema: SCHEMA,
         lane: env("GITHUB_JOB"),
@@ -52,7 +80,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         slowest_tests: Vec::new(),
         tests_run: env("VELNOR_TESTS_RUN").parse().ok(),
         diagnostics: Vec::new(),
-        verification_errors: Vec::new(),
+        verification_errors: invocation_errors,
         violations: Vec::new(),
     };
     metrics.invocations.retain(|invocation| {
@@ -62,9 +90,11 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
                 .is_some_and(|name| name.to_string_lossy().starts_with("cargo"))
         })
     });
-    if let Err(error) = super::report_inputs::collect_inputs(&mut metrics, &log_bytes) {
+    if !metrics.invocations.is_empty()
+        && let Err(error) = super::report_inputs::collect_inputs(&mut metrics, &log_bytes)
+    {
         metrics
-            .diagnostics
+            .verification_errors
             .push(format!("Restored input provenance unavailable: {error}"));
     }
     activity_metrics(&mut metrics, &log_bytes);
