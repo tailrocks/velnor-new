@@ -7,7 +7,7 @@ use velnor_render::render_key;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-fn with_config(view: &mut RepoView, path: &str, text: &str) -> TestResult {
+pub(crate) fn with_config(view: &mut RepoView, path: &str, text: &str) -> TestResult {
     let path = RepoPath::new(path)?;
     view.tracked_paths.insert(path.clone());
     view.files.insert(path, text.as_bytes().to_vec());

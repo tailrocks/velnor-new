@@ -8,7 +8,7 @@ use velnor_model::{
 
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source};
+use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source, verdict_step};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -31,8 +31,6 @@ const CARGO_LOG_RETENTION_DAYS: u64 = 3;
 const ARCHIVE_RETENTION_DAYS: u64 = 7;
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
-const NEEDS_JSON: &str = "NEEDS_JSON";
-const GATE_SPEC: &str = "GATE_SPEC";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -193,18 +191,10 @@ fn step_body(kind: &StepKind) -> RenderedStep {
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
-        StepKind::Verdict(spec) => RenderedStep {
-            name: "velnor-ci gate".to_owned(),
-            env: vec![
-                (
-                    NEEDS_JSON.to_owned(),
-                    Value::Expr("${{ toJSON(needs) }}".to_owned()),
-                ),
-                (GATE_SPEC.to_owned(), Value::Text(spec.text())),
-            ],
-            run: Some(format!("velnor-ci gate --spec-env {GATE_SPEC}")),
-            ..RenderedStep::default()
-        },
+        StepKind::Verdict {
+            spec,
+            needs_max_bytes,
+        } => verdict_step(spec, *needs_max_bytes),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),
