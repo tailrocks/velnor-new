@@ -42,10 +42,14 @@ pub(crate) fn render_versions(
         toml::from_str(text).map_err(|error| Reason::Syntax(error.message().to_owned()))?;
     let mut vars: Vec<_> = parsed.vars.into_iter().collect();
     vars.sort_by_key(|(_, value)| value.span().start);
-    let mut resolved = toml::Table::new();
+    let mut resolved = BTreeMap::new();
     for (name, value) in vars {
-        let value = render_value(value.into_inner(), &context(&resolved))?;
-        resolved.insert(name, value);
+        if let Some(value) = var_value(value.into_inner())? {
+            let value = render(&value, &context(&resolved))?;
+            resolved.insert(name, value);
+        } else {
+            resolved.remove(&name);
+        }
     }
     let context = context(&resolved);
     for request in versions.values_mut().flatten() {
@@ -54,29 +58,31 @@ pub(crate) fn render_versions(
     Ok(())
 }
 
-fn context(vars: &toml::Table) -> Context {
+fn context(vars: &BTreeMap<String, String>) -> Context {
     let mut context = Context::new();
     context.insert("vars", vars);
     context
 }
 
-fn render_value(value: Value, context: &Context) -> Result<Value, Reason> {
-    Ok(match value {
-        Value::String(text) => Value::String(render(&text, context)?),
-        Value::Array(values) => Value::Array(
-            values
-                .into_iter()
-                .map(|value| render_value(value, context))
-                .collect::<Result<_, _>>()?,
-        ),
-        Value::Table(table) => Value::Table(
-            table
-                .into_iter()
-                .map(|(key, value)| render_value(value, context).map(|value| (key, value)))
-                .collect::<Result<_, _>>()?,
-        ),
-        other => other,
-    })
+fn var_value(value: Value) -> Result<Option<String>, Reason> {
+    match value {
+        Value::String(text) => Ok(Some(text)),
+        Value::Integer(value) => Ok(Some(value.to_string())),
+        Value::Boolean(true) => Ok(Some("true".to_owned())),
+        Value::Boolean(false) => Ok(None),
+        Value::Table(mut table) if table.len() == 1 && table.contains_key("value") => {
+            match table.remove("value") {
+                Some(Value::Table(_)) => {
+                    Err(invalid("vars.value must be a string, integer or boolean"))
+                }
+                Some(value) => var_value(value),
+                None => Err(invalid("vars.value is missing")),
+            }
+        }
+        _ => Err(invalid(
+            "vars must be strings, integers, booleans or a value table; other var directives are unsupported",
+        )),
+    }
 }
 
 fn render(text: &str, context: &Context) -> Result<String, Reason> {
