@@ -677,6 +677,13 @@ changes cannot select different attestation subjects.
 
 ### Artifact download extraction
 
+The pinned [upload-artifact implementation](https://github.com/actions/upload-artifact/blob/cf430e030ddbb5b0abf93d22962f4752f3646cd9/src/shared/upload-artifact.ts)
+uploads through `@actions/artifact`. The toolkit's
+[runtime credential reader](https://github.com/actions/toolkit/blob/main/packages/artifact/src/internal/shared/config.ts)
+uses `ACTIONS_RUNTIME_TOKEN`. Same-run uploads do not require `actions: write`
+on `GITHUB_TOKEN`. Release build jobs grant only `contents: read`; the candidate
+manifest job also grants `actions: read` for artifact downloads.
+
 The [pinned artifact reference](github-actions-artifact-reference.md#artifact-download-extraction-boundary)
 records the download action's extraction and digest boundary. Verify artifact
 producer and identity before download; the digest check runs after extraction.
@@ -732,3 +739,16 @@ These behaviors are GitHub service semantics, so the runner source does not defi
 - Pull-request state: CI jobs exclude a `pull_request` event when `github.event.pull_request.state == 'closed'` or `github.ref` is outside `refs/pull/`. The [GitHub context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context) assigns merged PR events the destination branch ref, independently of the possibly empty PR payload. Open edits still run so base retargeting replaces the previous result. Missing state with a PR ref retains the conservative planning path and Required execution, including for forks.
 - Concurrency: [group names must be unique across workflows](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) to avoid cross-workflow cancellation. The group uses `github.workflow_ref`, the workflow file path, not the display name. Only `pull_request` runs with a PR ref and a state other than `closed` share the PR group and cancel in progress. Other events get a per-run group. GitHub also replaces a pending run in the same group regardless of `cancel-in-progress`, so excluded PR edits require a separate group.
 - `merge_group` and `push` to the configured default branch start the same workflow; `default_branch` is a validated config key and a push to any other branch starts no run.
+
+## Public source artifact admission
+
+A generated inline step uses the pinned GitHub CLI and a step-scoped token to
+read metadata from the fixed `tailrocks/velnor-new` repository through GitHub's
+[Get an artifact endpoint](https://docs.github.com/en/rest/actions/artifacts#get-an-artifact).
+It validates a positive numeric artifact ID before the request, bounds the
+response to 1 MiB and removes stale or incomplete metadata on failure. The
+repository admission script reads only that metadata file without credentials
+or network access. Admission checks the same-run producer identity, artifact
+digest, source locks, size and expiry. An unavailable metadata response takes
+the generator release qualifier's existing source-fetch fallback. The mandatory
+warm qualification fails if it cannot fetch or admit the source artifact.
