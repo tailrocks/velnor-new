@@ -29,7 +29,7 @@ fn artifacts_preserve_cargo_identity_across_every_chunk_size() {
         .map(|fresh| serde_json::from_value(record(fresh)).expect("valid Cargo artifact"))
         .collect();
     let input = format!(
-        "Compiling app\n  Compiling app v0.1.0 (/工作/app dir)\n{}\nPASS [ 0.125s] (1/2) app::suite test_name\nTRY 1 FAIL [0.250s] app::suite flaky\nTRY 2 PASS [0.500s] app::suite flaky\nFLAKY 2/2 [0.750s] app::suite flaky\n{{\"reason\":\"build-finished\",\"success\":true}}\n{}",
+        "Compiling app\n  Compiling app v0.1.0 (/工作/app dir)\n{}\nPASS [ 0.125s] (1/2) app::suite test_name\nTRY 1 FAIL [0.250s] app::suite flaky\nTRY 2 PASS [0.500s] app::suite flaky\nLEAK [0.103s] app::suite leak\nTRY 1 LEAK [0.104s] app::suite retry_leak\nLEAK-FAIL [0.105s] app::suite leak_fail\nTRY 2 LEAK-FAIL [0.106s] app::suite retry_leak_fail\nFLAKY 2/2 [0.750s] app::suite flaky\n{{\"reason\":\"build-finished\",\"success\":true}}\n{}",
         record(false),
         record(true)
     );
@@ -56,7 +56,11 @@ fn artifacts_preserve_cargo_identity_across_every_chunk_size() {
             [
                 ("app::suite test_name".to_owned(), 0.125),
                 ("app::suite flaky".to_owned(), 0.250),
-                ("app::suite flaky".to_owned(), 0.500)
+                ("app::suite flaky".to_owned(), 0.500),
+                ("app::suite leak".to_owned(), 0.103),
+                ("app::suite retry_leak".to_owned(), 0.104),
+                ("app::suite leak_fail".to_owned(), 0.105),
+                ("app::suite retry_leak_fail".to_owned(), 0.106)
             ],
             "chunk size {size}"
         );
@@ -84,7 +88,7 @@ fn invalid_and_oversized_lines_do_not_hide_the_next_artifact() {
     wrong_type["fresh"] = json!("true");
     let cases = [
         (
-            "plain text\n{broken\nnull\n{\"reason\":\"compiler-message\"}\nCompiling app vbad\nPASS [NaNs] binary test\nTRY 0 PASS [1s] binary test\nTRY -1 FAIL [1s] binary test\nTRY nope PASS [1s] binary test\nTRY 1 FLAKY [1s] binary test\n".to_owned(),
+            "plain text\n{broken\nnull\n{\"reason\":\"compiler-message\"}\nCompiling app vbad\nPASS [NaNs] binary test\nLEAK [NaNs] binary test\nLEAK [infs] binary test\nLEAK-FAIL [-1s] binary test\nTRY 0 LEAK [1s] binary test\nTRY nope LEAK-FAIL [1s] binary test\nTRY 0 PASS [1s] binary test\nTRY -1 FAIL [1s] binary test\nTRY nope PASS [1s] binary test\nTRY 1 FLAKY [1s] binary test\n".to_owned(),
             0,
         ),
         (format!("{missing}\n{wrong_type}\n"), 2),

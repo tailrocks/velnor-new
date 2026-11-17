@@ -16,6 +16,52 @@ fn invocation() -> Invocation {
 }
 
 #[test]
+fn dependency_source_identity_ignores_cargo_home_and_retains_package_source_and_version() {
+    let packages = [
+        "registry+https://registry.example/index#app@0.1.0",
+        "registry+https://other.example/index#app@0.1.0",
+        "registry+https://registry.example/index#other@0.1.0",
+        "registry+https://registry.example/index#app@0.2.0",
+        "git+https://git.example/repo?rev=abc#app@0.1.0",
+        "git+https://git.example/other?rev=abc#app@0.1.0",
+    ];
+    let mut units = BTreeMap::new();
+    for package in packages {
+        for home in ["/agent/one/.cargo", "/agent/two/.cargo"] {
+            let mut invocation = invocation();
+            invocation
+                .argv
+                .push(format!("--manifest-path={home}/source/Cargo.toml"));
+            let argv = invocation.argv.clone();
+            let artifact = &mut invocation.artifacts[0];
+            package.clone_into(&mut artifact.package_id);
+            artifact.manifest_path = format!("{home}/source/Cargo.toml");
+            artifact.target.src_path = format!("{home}/source/src/lib.rs");
+            normalize(&mut invocation, std::path::Path::new("/checkout"));
+            assert_eq!(invocation.argv, argv);
+            assert_eq!(invocation.artifacts[0].package_id, package);
+            assert_eq!(
+                invocation.artifacts[0].target.src_path,
+                "package/src/lib.rs"
+            );
+            collect(&invocation, &mut units);
+        }
+    }
+    assert_eq!(units.len(), packages.len());
+    assert!(units.values().all(|(_, count)| *count == 2));
+    let mut different = invocation();
+    packages[0].clone_into(&mut different.artifacts[0].package_id);
+    different.artifacts[0].target.src_path = "/outside/src/lib.rs".to_owned();
+    normalize(&mut different, std::path::Path::new("/checkout"));
+    assert_eq!(
+        different.artifacts[0].target.src_path,
+        "/outside/src/lib.rs"
+    );
+    collect(&different, &mut units);
+    assert_eq!(units.len(), packages.len() + 1);
+}
+
+#[test]
 fn mixed_output_copies_preserve_the_qualified_compilation_identity() {
     let mut invocation = invocation();
     let mut units = BTreeMap::new();

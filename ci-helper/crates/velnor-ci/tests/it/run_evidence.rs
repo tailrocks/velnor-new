@@ -7,6 +7,63 @@ use std::process::Command;
 use velnor_ci::telemetry::Invocation;
 
 #[test]
+fn toolchain_identity_uses_only_the_first_argument_and_preserves_config_values() {
+    let temp = std::env::temp_dir().join(format!("velnor-toolchain-{}", std::process::id()));
+    let mut units = BTreeMap::new();
+    let mut baseline = None;
+    for args in [
+        vec!["check", "--target-dir", "+path", "--config", "+config"],
+        vec!["check", "--target-dir=+path", "--config=+config"],
+        vec![
+            "+nightly",
+            "check",
+            "--target-dir",
+            "+path",
+            "--config",
+            "+config",
+        ],
+    ] {
+        let program = crate::run_capture::fixture(&temp, true, false).expect("fixture");
+        fs::write(&program, "#!/bin/sh\ncat events\n").expect("program");
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["run", "--"])
+            .arg(&program)
+            .args(&args)
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .env("CARGO_HOME", temp.join("cargo-home"))
+            .output()
+            .expect("capture");
+        assert!(output.status.success(), "{output:?}");
+        let text = fs::read_to_string(temp.join("velnor-invocations.jsonl")).expect("record");
+        let invocation: Invocation = serde_json::from_str(text.trim()).expect("invocation");
+        assert_eq!(&invocation.argv[1..], args);
+        assert_eq!(
+            invocation.execution["cargo-config-arguments"],
+            "[\"+config\"]"
+        );
+        assert_eq!(
+            invocation
+                .execution
+                .get("toolchain-argument")
+                .map(String::as_str),
+            (args[0] == "+nightly").then_some("+nightly")
+        );
+        if args[0] == "check" {
+            if let Some(baseline) = &baseline {
+                assert_eq!(&invocation.execution, baseline);
+            } else {
+                baseline = Some(invocation.execution.clone());
+            }
+        }
+        velnor_ci::observed_units::collect(&invocation, &mut units);
+    }
+    assert_eq!(units.len(), 2);
+    assert_eq!(units.values().filter(|(_, count)| *count == 2).count(), 1);
+    fs::remove_dir_all(temp).expect("cleanup");
+}
+
+#[test]
 fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_twice() {
     for (name, fresh, verbose) in [
         ("quiet", false, false),

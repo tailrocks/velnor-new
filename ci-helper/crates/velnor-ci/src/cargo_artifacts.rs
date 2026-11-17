@@ -186,7 +186,9 @@ fn individual_test(line: &str) -> Option<(String, f64)> {
     };
     let rest = line
         .strip_prefix("PASS [")
-        .or_else(|| line.strip_prefix("FAIL ["))?;
+        .or_else(|| line.strip_prefix("FAIL ["))
+        .or_else(|| line.strip_prefix("LEAK ["))
+        .or_else(|| line.strip_prefix("LEAK-FAIL ["))?;
     let (seconds, rest) = rest.split_once("s]")?;
     let seconds = seconds.trim().parse::<f64>().ok()?;
     if !seconds.is_finite() || seconds < 0.0 {

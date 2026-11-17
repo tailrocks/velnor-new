@@ -112,13 +112,14 @@ fn execution(argv: &[String]) -> BTreeMap<String, String> {
     );
     let mut words = argv.iter().take_while(|word| word.as_str() != "--");
     let mut configs = Vec::new();
+    if let Some(toolchain) = argv.get(1).filter(|word| word.starts_with('+')) {
+        settings.insert("toolchain-argument".to_owned(), toolchain.clone());
+    }
     while let Some(word) = words.next() {
         if let Some(config) = word.strip_prefix("--config=") {
             configs.push(config.to_owned());
         } else if word == "--config" {
             configs.extend(words.next().cloned());
-        } else if word.starts_with('+') {
-            settings.insert("toolchain-argument".to_owned(), word.clone());
         }
     }
     settings.insert("cargo-config-arguments".to_owned(), format!("{configs:?}"));
