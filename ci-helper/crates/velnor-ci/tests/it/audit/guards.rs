@@ -46,6 +46,10 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
         target,
         &["app", "app-it", "app-build", "lib-it", "lib-build"],
     );
+    repo.set_mtime(
+        &format!("{target}/build/lib-0000000000000005/output"),
+        SystemTime::now(),
+    );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
     assert_eq!(

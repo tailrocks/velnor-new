@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod freshness;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -280,7 +282,7 @@ impl Audit<'_> {
         else {
             return Ok(None);
         };
-        if changed_since(workspace, &paths, built) {
+        if self.changed_since(workspace, &paths, built) {
             return Ok(None);
         }
         for owner in self.owners.of(package, &source) {
@@ -317,7 +319,7 @@ impl Audit<'_> {
                     || self.repository.to_path_buf(),
                     |d| self.repository.join(d.as_str()),
                 );
-                if changed_since(&base, &paths, built) {
+                if self.changed_since(&base, &paths, built) {
                     continue;
                 }
                 ran = true;
@@ -363,12 +365,6 @@ impl Audit<'_> {
             &self.targets,
         );
     }
-}
-
-fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
-    paths
-        .iter()
-        .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
 }
 
 fn read(file: &Path) -> Result<String, CiError> {
