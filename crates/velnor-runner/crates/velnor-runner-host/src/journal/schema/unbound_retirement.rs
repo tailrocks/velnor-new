@@ -8,12 +8,12 @@ mod dispatch_deadlines;
 mod shape;
 pub(in crate::journal) use shape::UNBOUND_SHAPE;
 
-pub(super) async fn migrate_v49_to_v50(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v49(conn).await?;
+pub(super) async fn migrate_v50_to_v51(conn: &turso::Connection) -> Result<(), HostError> {
+    super::validate_persisted_schema_v50(conn).await?;
     creation_targets::migrate_history(conn).await?;
     creation_targets::install(conn).await?;
     replace_shape_guards(conn, UNBOUND_SHAPE).await?;
-    conn.execute("PRAGMA user_version = 50", ())
+    conn.execute("PRAGMA user_version = 51", ())
         .await
         .map_err(|_| HostError::Journal)?;
     validate(conn).await
@@ -22,16 +22,16 @@ pub(super) async fn migrate_v49_to_v50(conn: &turso::Connection) -> Result<(), H
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
     validate_objects(conn, objects(UNBOUND_SHAPE)).await?;
     creation_targets::validate(conn).await?;
-    if super::journal_version(conn).await? >= 51 {
+    if super::journal_version(conn).await? >= 52 {
         dispatch_deadlines::validate(conn).await?;
     }
     Ok(())
 }
 
-pub(super) async fn migrate_v50_to_v51(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn migrate_v51_to_v52(conn: &turso::Connection) -> Result<(), HostError> {
     validate(conn).await?;
     dispatch_deadlines::install(conn).await?;
-    conn.execute("PRAGMA user_version = 51", ())
+    conn.execute("PRAGMA user_version = 52", ())
         .await
         .map_err(|_| HostError::Journal)?;
     validate(conn).await

@@ -20,6 +20,21 @@ use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 
 impl ConnectionJournal {
+    pub(crate) async fn active_jit_tombstones(
+        &self,
+        now: i64,
+    ) -> Result<Vec<(i64, String, i64)>, HostError> {
+        deadline::active_tombstones(self, now).await
+    }
+
+    pub(crate) async fn complete_jit_tombstone(
+        &self,
+        reservation_id: i64,
+        runner_id: i64,
+    ) -> Result<(), HostError> {
+        deadline::complete(self, reservation_id, runner_id).await
+    }
+
     pub(crate) async fn record_jit_absent_after_deadline(
         &self,
         claim: &JitConflictRecoveryClaim,

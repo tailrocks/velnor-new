@@ -339,7 +339,7 @@ fn bounded_transport(deadline: Instant) -> Option<HttpsTransport> {
     HttpsTransport::with_deadline(GITHUB_API, deadline).ok()
 }
 
-fn repository_scope_matches<T: Transport + ?Sized>(
+pub(super) fn repository_scope_matches<T: Transport + ?Sized>(
     transport: &mut T,
     binding: &RepositoryConnection,
     github_pat: &Secret,

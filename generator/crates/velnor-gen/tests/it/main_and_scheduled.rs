@@ -5,7 +5,8 @@ use std::cell::Cell;
 
 use velnor_gen::notes;
 use velnor_model::{
-    AllTrigger, ChangeSet, CronExpr, EventKind, FullRun, OnMain, RepoFacts, RustSelection,
+    AllTrigger, ChangeSet, CronExpr, EventKind, FullRun, OnMain, RepoFacts, RepositoryIdentity,
+    RustSelection,
 };
 use velnor_rust::{CONFIG_PATH, DetectError, Reason, detect, plan, select_event};
 
@@ -21,7 +22,7 @@ fn detect_with(config: &str, repository: &str) -> Result<RepoFacts, DetectError>
         &[],
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
-    repository.clone_into(&mut view.repository);
+    view.repository = RepositoryIdentity::Named(repository.to_owned());
     view.tracked_paths.insert(CONFIG_PATH);
     view.files.insert(CONFIG_PATH, config.as_bytes().to_vec());
     detect(&view)

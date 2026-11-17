@@ -16,35 +16,25 @@ use std::sync::{
 #[tokio::test(flavor = "multi_thread")]
 async fn an_undispatched_jit_releases_at_its_deadline_and_quarantines_late_registration()
 -> TestResult<()> {
-    Box::pin(delayed_registration(false)).await
+    Box::pin(delayed_registration(false, false)).await
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn a_crash_before_the_post_commit_stamp_gets_one_bounded_recovery_deadline() -> TestResult<()>
 {
-    Box::pin(delayed_registration(true)).await
+    Box::pin(delayed_registration(true, false)).await
 }
 
-async fn delayed_registration(missing_stamp: bool) -> TestResult<()> {
-    let (mut case, original_commit_time, commit_observed_at) =
+#[tokio::test(flavor = "multi_thread")]
+async fn a_late_registration_tombstone_expires_twenty_four_hours_after_the_claim() -> TestResult<()>
+{
+    Box::pin(delayed_registration(false, true)).await
+}
+
+async fn delayed_registration(missing_stamp: bool, expire: bool) -> TestResult<()> {
+    let (case, original_commit_time, commit_observed_at) =
         Box::pin(restarted_case(missing_stamp)).await?;
-    let candidates = case.scope.recoverable_jit_conflict_candidates().await?;
-    let claim = case
-        .scope
-        .claim_jit_conflict_candidate(
-            candidates.first().ok_or("interrupted cleanup candidate")?,
-            240,
-        )
-        .await?
-        .ok_or("interrupted cleanup claim")?;
-    super::super::local::ensure_local_absence(
-        &case.runtime()?,
-        &case.docker,
-        &case.scope,
-        &case.engine,
-        &claim,
-    )
-    .await?;
+    let claim = Box::pin(recovery_claim(&case)).await?;
     let foreign = case.fixture.objects(FOREIGN);
     let name = format!("v{}", CRASH.nonce());
     let mut admin = Github::new(&name, false);
@@ -99,8 +89,136 @@ async fn delayed_registration(missing_stamp: bool) -> TestResult<()> {
     super::super::ensure_network_absence(&case.docker, &case.scope, &case.engine, &claim).await?;
     case.settle().await?;
     assert!(commit_observed_at >= original_commit_time);
-    assert_late_runner_quarantined(&mut case, &mut admin, name).await?;
+    Box::pin(assert_late_registration(
+        case,
+        admin,
+        commit_observed_at,
+        name,
+        expire,
+        foreign,
+    ))
+    .await
+}
+
+async fn recovery_claim(case: &Case) -> TestResult<crate::journal::JitConflictRecoveryClaim> {
+    let candidates = case.scope.recoverable_jit_conflict_candidates().await?;
+    let claim = case
+        .scope
+        .claim_jit_conflict_candidate(
+            candidates.first().ok_or("interrupted cleanup candidate")?,
+            240,
+        )
+        .await?
+        .ok_or("interrupted cleanup claim")?;
+    super::super::local::ensure_local_absence(
+        &case.runtime()?,
+        &case.docker,
+        &case.scope,
+        &case.engine,
+        &claim,
+    )
+    .await?;
+    Ok(claim)
+}
+
+async fn assert_late_registration(
+    case: Case,
+    mut admin: Github,
+    commit_observed_at: i64,
+    name: String,
+    expire: bool,
+    foreign: Vec<String>,
+) -> TestResult<()> {
+    let mut case = Box::pin(case.reopen(Schema::Current)).await?;
+    Box::pin(reconcile_tombstones(
+        &case,
+        &mut admin,
+        commit_observed_at + 60,
+    ))
+    .await?;
+    if expire {
+        let lookups = admin.lookups.len();
+        Box::pin(reconcile_tombstones(
+            &case,
+            &mut admin,
+            commit_observed_at + 86_399,
+        ))
+        .await?;
+        assert_eq!(admin.lookups.len(), lookups + 1);
+        admin.runners.insert(21, (name, 7));
+        Box::pin(reconcile_tombstones(
+            &case,
+            &mut admin,
+            commit_observed_at + 86_400,
+        ))
+        .await?;
+        assert!(admin.runners.contains_key(&21));
+        assert_eq!(admin.lookups.len(), lookups + 1);
+    } else {
+        Box::pin(assert_late_runner_quarantined(
+            &mut case,
+            &mut admin,
+            name.clone(),
+        ))
+        .await?;
+        Box::pin(reconcile_tombstones(
+            &case,
+            &mut admin,
+            commit_observed_at + 61,
+        ))
+        .await?;
+        assert!(!admin.runners.contains_key(&21));
+        assert_eq!(
+            scalar(
+                &case.journal,
+                "SELECT CAST(COUNT(*) AS TEXT) FROM jit_absent_after_deadline"
+            )
+            .await?,
+            "1"
+        );
+        assert_eq!(scalar(&case.journal, "SELECT CAST(runner_id AS TEXT) FROM jit_tombstone_completions WHERE reservation_id=2").await?, "21");
+        let case = Box::pin(case.reopen(Schema::Current)).await?;
+        admin.runners.insert(21, (name, 7));
+        let lookups = admin.lookups.len();
+        Box::pin(reconcile_tombstones(
+            &case,
+            &mut admin,
+            commit_observed_at + 62,
+        ))
+        .await?;
+        assert_eq!(admin.lookups.len(), lookups);
+        assert!(admin.runners.contains_key(&21));
+        assert!(admin.runners.contains_key(&99));
+        return assert_released(case, foreign).await;
+    }
     assert_released(case, foreign).await
+}
+
+async fn reconcile_tombstones(case: &Case, admin: &mut Github, now: i64) -> TestResult<()> {
+    let mut identity = Github::new("unused", false);
+    let mut link = admin.link(&case.binding)?;
+    let pat = Secret::new("pat");
+    let context = ReconcileContext {
+        docker: &case.docker,
+        journal: &case.journal,
+        scope: &case.scope,
+        binding: &case.binding,
+        set_id: 7,
+        link: &mut link,
+        github_pat: &pat,
+        selected: &case.engine,
+        images: &case.images,
+        image_authority: &case.authority,
+    };
+    super::super::tombstones::reconcile_admin_with_clock(
+        &context,
+        &mut identity,
+        admin,
+        &Secret::new("admin"),
+        || Ok(now),
+    )
+    .await?;
+    Ok(())
 }
 
 async fn restarted_case(missing_stamp: bool) -> TestResult<(Case, i64, i64)> {

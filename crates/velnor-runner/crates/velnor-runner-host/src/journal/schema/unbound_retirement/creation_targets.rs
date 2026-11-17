@@ -140,7 +140,7 @@ pub(super) async fn install(conn: &turso::Connection) -> Result<(), HostError> {
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    let current = super::super::journal_version(conn).await? >= 51;
+    let current = super::super::journal_version(conn).await? >= 52;
     super::validate_objects(
         conn,
         if current {

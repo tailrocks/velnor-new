@@ -3,6 +3,11 @@
 
 mod local;
 mod remote;
+mod tombstones;
+
+pub(crate) async fn reconcile_tombstones(context: ReconcileContext<'_>) -> Result<(), HostError> {
+    tombstones::reconcile(&context).await
+}
 
 #[cfg(test)]
 mod tests;
