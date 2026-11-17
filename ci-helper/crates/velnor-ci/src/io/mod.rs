@@ -5,12 +5,16 @@ mod audit;
 mod build_inputs;
 mod cold;
 mod configurations;
+mod crates_mirror;
+mod crates_mirror_dispatch;
+mod crates_mirror_mise;
 mod git;
 mod http;
 mod inputs;
 mod manifests;
 mod plan;
 mod release;
+mod required;
 mod restored;
 mod run;
 mod setup;
@@ -43,6 +47,7 @@ use clap::{CommandFactory, FromArgMatches};
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
+const SUMMARY_VARIABLE: &str = "GITHUB_STEP_SUMMARY";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
 const SOURCE_LIMIT: u64 = 1 << 20;
 const SOURCE_TOTAL_LIMIT: u64 = 8 << 20;
@@ -72,6 +77,9 @@ where
 
 #[must_use]
 pub fn main() -> ExitCode {
+    if crates_mirror::is_wrapper() {
+        return crates_mirror::run();
+    }
     let cli = match parse_cli(std::env::args_os()) {
         Ok(cli) => cli,
         Err(error) if error.use_stderr() => {
@@ -115,7 +123,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
+        Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
