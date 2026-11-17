@@ -292,6 +292,21 @@ fn all_pages<T: DeserializeOwned>(
     what: &str,
     path: impl Fn(u32) -> String,
 ) -> Result<Vec<T>, CiError> {
+    pages(github, what, path, EmptyPage::Reject)
+}
+
+#[derive(Clone, Copy)]
+enum EmptyPage {
+    Reject,
+    Discard,
+}
+
+fn pages<T: DeserializeOwned>(
+    github: &dyn GitHub,
+    what: &str,
+    path: impl Fn(u32) -> String,
+    empty_page: EmptyPage,
+) -> Result<Vec<T>, CiError> {
     let mut all = Vec::new();
     let mut expected = None;
     for page in 1.. {
@@ -306,6 +321,9 @@ fn all_pages<T: DeserializeOwned>(
         all.extend(items);
         if all.len() == total_count {
             break;
+        }
+        if empty && matches!(empty_page, EmptyPage::Discard) {
+            return Ok(Vec::new());
         }
         if empty || all.len() > total_count {
             return Err(CiError::new(format!(

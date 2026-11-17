@@ -22,8 +22,10 @@ GitHub [returns `bypass_actors` only with ruleset write access](https://docs.git
 so configured exemptions make the generated gate use the existing release App
 from the `release` environment's `RELEASE_APP_ID` and
 `RELEASE_APP_PRIVATE_KEY` secrets. The App installation needs repository
-`administration: read` and `actions`, `contents`, `statuses`, and `checks`
-read permissions. The gate requests these permissions on a token scoped to
+`administration: write` and `actions`, `contents`, `statuses`, and `checks`
+read permissions. Administration write is needed to expose `bypass_actors`;
+see the [ruleset API evidence](../proposed/github-actions-reference.md#rulesets-api-bypass_actors-visibility).
+The gate requests these permissions on a token scoped to
 the current repository. It checks out nothing and runs only the pinned helper.
 The job's own `GITHUB_TOKEN` retains read permissions. Without exemptions,
 the gate uses `github.token` and needs neither the App nor the environment.

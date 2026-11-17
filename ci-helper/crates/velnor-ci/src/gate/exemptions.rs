@@ -8,7 +8,7 @@ use serde::Deserialize;
 use crate::error::CiError;
 use crate::github::{ApiRequiredCheck, ApiRule, GitHub, Repo, parse};
 
-use super::all_pages;
+use super::{EmptyPage, all_pages, pages};
 
 #[derive(Deserialize)]
 struct CheckRun {
@@ -69,9 +69,14 @@ pub(super) fn check_names(
             .map(|run| run.check_suite_id)
         })
         .transpose()?;
-    let aggregate: Vec<CheckRun> = all_pages(github, "aggregate check runs", |page| {
-        format!("/repos/{repo}/commits/{sha}/check-runs?filter=all&per_page=100&page={page}")
-    })?;
+    let aggregate: Vec<CheckRun> = pages(
+        github,
+        "aggregate check runs",
+        |page| {
+            format!("/repos/{repo}/commits/{sha}/check-runs?filter=all&per_page=100&page={page}")
+        },
+        EmptyPage::Discard,
+    )?;
     let mut covered = BTreeSet::new();
     let mut names = BTreeSet::new();
     for run in aggregate {
