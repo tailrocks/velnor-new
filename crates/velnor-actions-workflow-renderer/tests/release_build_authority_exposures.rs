@@ -5,18 +5,21 @@ use super::*;
 
 fn rejects_scope(scope: &str) -> Result<(), Box<dyn Error>> {
     let files = release_files()?;
+    let mut missed = Vec::new();
     for expression in [
         "${{ github.token }}",
         "${{ secrets.RELEASE_CREDENTIAL }}",
         "${{ github['token'] }}",
         "${{ secrets['ANOTHER_PRIVATE_VALUE'] }}",
+        "${{ format('}}{0}', github.token) }}",
+        "${{ toJSON(github) }}",
     ] {
         let mut workflow = json!({"jobs": {"build": {"permissions": {"contents": "read"}, "steps": [{"run": "env -u GITHUB_TOKEN -u GH_TOKEN mbx build"}]}}});
         match scope {
             "workflow" => workflow["env"] = json!({"PRIVATE_VALUE": expression}),
             "job" => workflow["jobs"]["build"]["env"] = json!({"PRIVATE_VALUE": expression}),
             "step" => {
-                workflow["jobs"]["build"]["steps"][0]["env"] = json!({"PRIVATE_VALUE": expression})
+                workflow["jobs"]["build"]["steps"][0]["env"] = json!({"PRIVATE_VALUE": expression});
             }
             "with" => {
                 workflow["jobs"]["build"]["steps"][0] = json!({"uses": "./.github/actions/generator-release-build-linux", "with": {"private-value": expression}});
@@ -24,14 +27,41 @@ fn rejects_scope(scope: &str) -> Result<(), Box<dyn Error>> {
             "run" => {
                 workflow["jobs"]["build"]["steps"][0]["run"] = json!(format!(
                     "env -u GITHUB_TOKEN -u GH_TOKEN mbx build --value '{expression}'"
-                ))
+                ));
             }
             _ => unreachable!(),
         }
+        if violations(&workflow, &files)? != ["build"] {
+            missed.push(expression);
+        }
+    }
+    assert!(missed.is_empty(), "{scope} missed {missed:?}");
+    Ok(())
+}
+
+#[test]
+fn release_authority_rejects_credentials_in_checked_out_relative_program()
+-> Result<(), Box<dyn Error>> {
+    let files = release_files()?;
+    let workflow = json!({"jobs": {"build": {"permissions": {"contents": "read"}, "steps": [{"uses": CHECKOUT_USES}, {"run": "./build.sh", "env": {"PRIVATE_VALUE": "${{ github.token }}"}}]}}});
+    assert_eq!(violations(&workflow, &files)?, ["build"]);
+    Ok(())
+}
+
+#[test]
+fn release_authority_rejects_credentials_passed_to_reusable_repository_jobs()
+-> Result<(), Box<dyn Error>> {
+    let mut files = release_files()?;
+    files.push(RenderedFile {
+        path: ".github/workflows/reusable-build.yml".to_owned(),
+        bytes: json!({"jobs": {"execute": {"steps": [{"run": "mbx build"}]}}}).to_string(),
+    });
+    for expression in ["${{ github.token }}", "${{ secrets.PRIVATE_VALUE }}"] {
+        let workflow = json!({"jobs": {"build": {"uses": "./.github/workflows/reusable-build.yml", "with": {"private-value": expression}}}});
         assert_eq!(
             violations(&workflow, &files)?,
-            ["build"],
-            "{scope} {expression}"
+            ["build/execute"],
+            "{expression}"
         );
     }
     Ok(())
