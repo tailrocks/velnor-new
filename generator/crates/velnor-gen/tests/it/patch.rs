@@ -125,6 +125,64 @@ fn a_change_reaches_a_member_through_a_package_patched_in_cargo_configuration() 
 }
 
 #[test]
+fn absolute_patch_paths_are_rejected_and_relative_paths_remain_scoped() -> TestResult {
+    for folder in [
+        "/Users/me/proj/crates/mid",
+        "/vendor/mid",
+        "/",
+        "C:/vendor/mid",
+        "c:/vendor/mid",
+        r"C:\vendor\mid",
+        r"\\server\share\mid",
+        r"\vendor\mid",
+        "C:vendor/mid",
+    ] {
+        let config = format!("[patch.crates-io]\nmid = {{ path = '{folder}' }}\n");
+        let view = repo(
+            vec![
+                ("Cargo.toml", vec![lib("root", "Cargo.toml")?]),
+                (
+                    "a/Cargo.toml",
+                    vec![uses(lib("app", "a/app/Cargo.toml")?, &["mid"])?],
+                ),
+                (
+                    "vendor/Cargo.toml",
+                    vec![lib("mid", "vendor/mid/Cargo.toml")?],
+                ),
+            ],
+            &[(".cargo/config.toml", &config)],
+        )?;
+        match detect(&view) {
+            Err(DetectError::Invalid {
+                path,
+                reason: Reason::InvalidPatch(key),
+            }) => {
+                assert_eq!(path.as_str(), ".cargo/config.toml");
+                assert_eq!(key, "patch.crates-io.mid");
+            }
+            other => return Err(format!("{folder}: {other:?}").into()),
+        }
+    }
+    for (folder, expected) in [("../vendor/mid", true), ("../../outside", false)] {
+        let manifest = format!("[patch.crates-io]\nmid = {{ path = \"{folder}\" }}\n");
+        let facts = detect(&two_roots(&[("a/Cargo.toml", &manifest)])?)?;
+        let dependencies = &facts.rust_roots[0].members[0].dependencies;
+        assert_eq!(
+            dependencies
+                .iter()
+                .any(|d| d.manifest.as_str() == "vendor/mid/Cargo.toml"),
+            expected
+        );
+        assert!(
+            !dependencies
+                .iter()
+                .any(|d| d.manifest.as_str() == "outside/Cargo.toml")
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_malformed_patch_table_is_an_error_naming_the_file_and_the_key() -> TestResult {
     let cases = [
         ("a/Cargo.toml", "patch = 1\n", Some("patch")),

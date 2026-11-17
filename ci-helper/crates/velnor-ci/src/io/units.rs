@@ -262,8 +262,25 @@ fn host_platform(root: &Path) -> Result<Platform, CiError> {
     Ok(Platform::parse(triple, &printed))
 }
 
-pub(super) fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
-    let output = Command::new("cargo")
+pub(super) struct MetadataInvocation<'a> {
+    pub(super) executable: &'a str,
+    pub(super) arguments: &'a [String],
+    pub(super) directory: &'a Path,
+}
+
+pub(super) fn workspace(
+    manifest: &Path,
+    invocation: Option<&MetadataInvocation<'_>>,
+) -> Result<Workspace, CiError> {
+    let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
+    if let Some(invocation) = invocation {
+        command
+            .args(invocation.arguments)
+            .current_dir(invocation.directory);
+    } else {
+        command.current_dir(manifest.parent().unwrap_or(manifest));
+    }
+    let output = command
         .args([
             "metadata",
             "--format-version",
@@ -273,7 +290,6 @@ pub(super) fn workspace(manifest: &Path) -> Result<Workspace, CiError> {
         ])
         .arg("--manifest-path")
         .arg(manifest)
-        .current_dir(manifest.parent().unwrap_or(manifest))
         .output()
         .map_err(|e| CiError::new(format!("cannot run cargo metadata: {e}")))?;
     if !output.status.success() {

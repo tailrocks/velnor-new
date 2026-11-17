@@ -8,7 +8,7 @@ use std::time::SystemTime;
 use velnor_model::RepoPath;
 use velnor_rust::{Located, dep_info_paths, locate};
 
-use super::{Audit, changed_since, modified};
+use super::{Audit, modified};
 use crate::error::CiError;
 use crate::io::{SOURCE_LIMIT, SOURCE_TOTAL_LIMIT};
 
@@ -28,7 +28,10 @@ impl Audit<'_> {
         else {
             return Ok(None);
         };
-        if changed_since(workspace, &paths, built) {
+        if self.changed_since(workspace, &paths, built, file, false)? {
+            if !self.owners.of(package, &source).is_empty() {
+                self.stale.push(file.display().to_string());
+            }
             return Ok(None);
         }
         for owner in self.owners.of(package, &source) {

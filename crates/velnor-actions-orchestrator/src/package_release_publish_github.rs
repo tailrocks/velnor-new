@@ -292,6 +292,11 @@ impl GitHubApi {
         limit: usize,
         accept: &str,
     ) -> Result<Vec<u8>, OrchestratorError> {
+        if let Some(bytes) =
+            crate::homebrew::qualification_evidence::request(&request_args, accept, limit)?
+        {
+            return Ok(bytes);
+        }
         let args = gh_api_arguments(request_args, accept);
         let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
             .map_err(|_| internal("package_publish_gh_unavailable"))?;
@@ -316,3 +321,7 @@ impl GitHubApi {
         Ok(result.stdout)
     }
 }
+
+#[cfg(test)]
+#[path = "homebrew_qualification_evidence_tests.rs"]
+mod homebrew_evidence_tests;

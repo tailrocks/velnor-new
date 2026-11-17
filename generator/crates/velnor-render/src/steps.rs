@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, condition, output, plan_source, verdict_step};
+use crate::gate::{
+    PLAN_STEP, TOOLS_STEP, all_conditions, condition, output, plan_source, verdict_step,
+};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -50,6 +52,10 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         .steps
         .iter()
         .any(|step| step.kind == StepKind::Helper(HelperCommand::Restored));
+    let audit = job
+        .steps
+        .iter()
+        .any(|step| step.kind == StepKind::Helper(HelperCommand::InputsAudit));
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -87,14 +93,18 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         steps: job
             .steps
             .iter()
-            .flat_map(|step| rendered_steps(step, restores))
+            .flat_map(|step| rendered_steps(step, restores, audit))
             .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind)];
+fn rendered_steps(step: &Step, restores: bool, audit: bool) -> Vec<RenderedStep> {
+    let mut rendered = Vec::new();
+    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
+        rendered.push(cargo_step(&CargoCommand::BuildAll, true));
+    }
+    rendered.push(step_body(&step.kind, audit));
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -103,15 +113,14 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         });
     }
     for body in &mut rendered {
-        if let Some(condition) =
-            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft)
-        {
-            body.condition = Some(condition);
-        }
+        body.condition = all_conditions(
+            body.condition.take(),
+            condition(step.when, step.gate.as_ref(), restores, step.skip_on_draft),
+        );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
-        (&step.reads, &step.kind, rendered.first_mut())
+        (&step.reads, &step.kind, rendered.last_mut())
     {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
@@ -133,7 +142,7 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind) -> RenderedStep {
+fn step_body(kind: &StepKind, audit: bool) -> RenderedStep {
     match kind {
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
@@ -173,8 +182,14 @@ fn step_body(kind: &StepKind) -> RenderedStep {
             run: Some(format!("rustup target add {}", targets.join(" "))),
             ..RenderedStep::default()
         },
-        StepKind::Cargo(command) => cargo_step(command),
+        StepKind::Cargo(command) => cargo_step(command, audit),
         StepKind::Helper(command) => helper_step(*command),
+StepKind::CratesMirror(mirror) => RenderedStep {
+    name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
+    condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
+    run: Some(format!("velnor-ci crates-mirror --registry {} --cainfo {}", crate::release_steps::shell_word(&mirror.registry), crate::release_steps::shell_word(&mirror.cainfo))),
+    ..RenderedStep::default()
+},
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),

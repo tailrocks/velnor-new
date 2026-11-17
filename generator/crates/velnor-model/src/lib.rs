@@ -16,13 +16,13 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
-    Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType,
-    Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
-    Triggers, When, WorkflowPlan,
+    Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand,
+    HelperRelease, Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform,
+    PullRequestType, Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
-    CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
+    CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun, InputRule,
     MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig,
     RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin,
     ToolPins, Toolchain, UnownedPackage, Unread, Weakening,

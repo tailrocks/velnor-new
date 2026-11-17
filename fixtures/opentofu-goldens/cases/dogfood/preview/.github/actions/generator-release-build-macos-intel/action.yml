@@ -57,12 +57,12 @@ runs:
       env:
         VELNOR_RUST_VERSION: ${{ env.VELNOR_TOOL_RUST }}
       shell: bash
-      run: bash scripts/generator-release/stable-source-producer.sh
+      run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/generator-release/stable-source-producer.sh
       continue-on-error: true
     - name: Verify staged source identity
       id: sources-identity
       shell: bash
-      run: "set -eu\ntest \"$(/usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py \"$RUNNER_TEMP/stable-cargo-sources\")\" = \"$STABLE_SOURCES_TREE\"\ntest \"$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)\" = \"$STABLE_SOURCES_ROOT_LOCK\"\ntest \"$(shasum -a 256 crates/velnor-runner/Cargo.lock | cut -d ' ' -f 1)\" = \"$STABLE_SOURCES_RUNNER_LOCK\"\nprintf 'tree=%s\\nroot_lock=%s\\nrunner_lock=%s\\nattempt=%s\\n' \"$STABLE_SOURCES_TREE\" \"$STABLE_SOURCES_ROOT_LOCK\" \"$STABLE_SOURCES_RUNNER_LOCK\" \"$STABLE_SOURCES_ATTEMPT\" >> \"$GITHUB_OUTPUT\""
+      run: "set -eu\ntest \"$(env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py \"$RUNNER_TEMP/stable-cargo-sources\")\" = \"$STABLE_SOURCES_TREE\"\ntest \"$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)\" = \"$STABLE_SOURCES_ROOT_LOCK\"\ntest \"$(shasum -a 256 crates/velnor-runner/Cargo.lock | cut -d ' ' -f 1)\" = \"$STABLE_SOURCES_RUNNER_LOCK\"\nprintf 'tree=%s\\nroot_lock=%s\\nrunner_lock=%s\\nattempt=%s\\n' \"$STABLE_SOURCES_TREE\" \"$STABLE_SOURCES_ROOT_LOCK\" \"$STABLE_SOURCES_RUNNER_LOCK\" \"$STABLE_SOURCES_ATTEMPT\" >> \"$GITHUB_OUTPUT\""
       if: ${{ env.STABLE_SOURCES_TREE != '' }}
       continue-on-error: true
     - name: Retain locked Cargo sources

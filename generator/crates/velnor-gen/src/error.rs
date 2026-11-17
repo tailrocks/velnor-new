@@ -20,6 +20,8 @@ pub enum GenerateError {
     ReleaseToolchainPath,
     HelperNotPinned,
     ReleaseHelperTooOld(HelperVersion),
+    MirrorHelperTooOld(HelperVersion),
+    InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
@@ -52,9 +54,14 @@ impl fmt::Display for GenerateError {
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
             ),
+            Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
+            Self::InputsBuildHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot record pre-build directory inventories for inputs audit; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
+            ),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
+                "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {
