@@ -56,7 +56,7 @@ impl fmt::Display for GenerateError {
             Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
+                "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {
