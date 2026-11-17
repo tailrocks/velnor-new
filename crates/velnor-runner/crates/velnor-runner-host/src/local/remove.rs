@@ -24,7 +24,7 @@ pub(super) async fn remove_labelled(
     docker: &Docker,
     labels: &[String],
 ) -> Result<Removed, HostError> {
-    let filters = HashMap::from([("label".to_owned(), labels.to_vec())]);
+    let filters = label_filters(labels)?;
     remove_matching(docker, filters, None).await
 }
 
@@ -33,9 +33,16 @@ pub(super) async fn remove_audited(
     labels: &[String],
     path: &Path,
 ) -> Result<Removed, HostError> {
-    let filters = HashMap::from([("label".to_owned(), labels.to_vec())]);
+    let filters = label_filters(labels)?;
     let mut audit = Audit::open(path, filters.clone()).await?;
     remove_matching(docker, filters, Some(&mut audit)).await
+}
+
+fn label_filters(labels: &[String]) -> Result<HashMap<String, Vec<String>>, HostError> {
+    if labels.is_empty() || labels.iter().any(String::is_empty) {
+        return Err(HostError::Ownership);
+    }
+    Ok(HashMap::from([("label".to_owned(), labels.to_vec())]))
 }
 
 async fn remove_matching(
@@ -147,3 +154,7 @@ pub(super) async fn labelled_agents(
     agents.dedup();
     Ok(agents)
 }
+
+#[cfg(test)]
+#[path = "remove_tests.rs"]
+mod tests;

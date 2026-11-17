@@ -7,8 +7,7 @@ use std::sync::Mutex;
 use bollard::Docker;
 use bollard::errors::Error;
 use bollard::query_parameters::{
-    ListContainersOptions, ListVolumesOptions, RemoveContainerOptions, RemoveImageOptions,
-    RemoveVolumeOptions,
+    ListContainersOptions, ListVolumesOptions, RemoveContainerOptions, RemoveVolumeOptions,
 };
 use velnor_runner_host::local::ENVIRONMENT_LABEL;
 
@@ -167,7 +166,7 @@ async fn cleanup(
     attempted(
         removed(
             docker
-                .remove_image(image, None::<RemoveImageOptions>, None)
+                .remove_image(image, Some(super::untag_only()), None)
                 .await
                 .map(|_| ()),
         ),

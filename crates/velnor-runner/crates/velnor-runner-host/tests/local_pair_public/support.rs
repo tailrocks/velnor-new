@@ -7,7 +7,9 @@ use std::fmt::Write as _;
 
 use bollard::Docker;
 use bollard::models::NetworkCreateRequest;
-use bollard::query_parameters::{BuildImageOptions, ListContainersOptions, ListVolumesOptions};
+use bollard::query_parameters::{
+    BuildImageOptions, ListContainersOptions, ListVolumesOptions, RemoveImageOptions,
+};
 use futures_util::StreamExt;
 use velnor_runner_host::local::{ENVIRONMENT_LABEL, LocalPairRequest};
 
@@ -97,6 +99,13 @@ pub(crate) async fn build_program(
         .await?
         .id
         .ok_or_else(|| "built image has no id".into())
+}
+
+pub(crate) fn untag_only() -> RemoveImageOptions {
+    RemoveImageOptions {
+        noprune: true,
+        ..Default::default()
+    }
 }
 
 pub(crate) fn request(environment: &str, network: &str, image: &str) -> LocalPairRequest {
