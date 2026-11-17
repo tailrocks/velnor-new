@@ -19,17 +19,38 @@ pub(crate) fn samples() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples")
 }
 
-fn sample_dirs() -> Result<Vec<PathBuf>, Box<dyn Error>> {
+pub(crate) fn sample_dirs(samples: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let mut dirs = Vec::new();
-    for entry in fs::read_dir(samples())? {
+    for entry in fs::read_dir(samples)? {
         let entry = entry?;
-        if !entry.file_type()?.is_dir() {
+        let name = entry.file_name();
+        let kind = entry.file_type()?;
+        if kind.is_dir() && name.to_string_lossy().starts_with(".velnor-gen-") {
+            continue;
+        }
+        if !kind.is_dir() {
             return Err(format!("{} is not a real directory", entry.path().display()).into());
         }
         dirs.push(entry.path());
     }
     dirs.sort();
     Ok(dirs)
+}
+
+#[test]
+fn abandoned_sample_staging_directories_are_not_golden_samples() -> TestResult {
+    let root =
+        std::env::temp_dir().join(format!("velnor-gen-golden-staging-{}", std::process::id()));
+    if root.exists() {
+        fs::remove_dir_all(&root)?;
+    }
+    let samples = root.join("samples");
+    fs::create_dir_all(samples.join("valid-sample"))?;
+    fs::create_dir_all(samples.join(".velnor-gen-123-0"))?;
+    let result = sample_dirs(&samples)?;
+    fs::remove_dir_all(&root)?;
+    assert_eq!(result, vec![samples.join("valid-sample")]);
+    Ok(())
 }
 
 fn files_under(directory: &Path) -> Result<BTreeMap<RepoPath, Vec<u8>>, Box<dyn Error>> {
@@ -145,7 +166,7 @@ fn mismatches(
 #[test]
 fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
     let update = std::env::var_os("UPDATE_GOLDENS").is_some();
-    let samples = sample_dirs()?;
+    let samples = sample_dirs(&samples())?;
     assert!(!samples.is_empty(), "no sample recorded");
     let mut failures = Vec::new();
     for sample in &samples {
@@ -211,7 +232,7 @@ fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestR
         .map(str::to_owned)
         .collect();
     let mut present = BTreeSet::new();
-    for sample in sample_dirs()? {
+    for sample in sample_dirs(&samples())? {
         for path in expected_with_notes(&load(&sample)?)
             .map(|(files, _)| files)?
             .keys()

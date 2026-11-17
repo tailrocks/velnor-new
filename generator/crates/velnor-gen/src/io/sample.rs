@@ -5,7 +5,6 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU64, Ordering};
 
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{MetadataError, cargo_files, manifests, wanted_files};
@@ -13,11 +12,18 @@ use velnor_rust::{MetadataError, cargo_files, manifests, wanted_files};
 use crate::expected_with_notes;
 
 use super::{Error, read_view, regular_file, replace, toplevel};
+use staged::StagedSample;
+
+mod staged;
 
 pub const SAMPLES: &str = "generator/samples";
 pub const SAMPLE_REPOSITORY: &str = "/repo";
 
-pub fn record_sample(destination: &Path, checkout: &Path, name: &str) -> Result<(), Error> {
+pub fn record_sample(
+    destination: &Path,
+    checkout: &Path,
+    name: &str,
+) -> Result<SampleWriteOutcome, Error> {
     let name = sample_name(name)?;
     let destination = toplevel(destination)?;
     let checkout = toplevel(checkout)?;
@@ -67,19 +73,39 @@ pub struct Recording {
 }
 
 pub fn relocate_metadata(checkout: &Path, json: &[u8]) -> Result<Vec<u8>, Error> {
-    let from = checkout
+    let checkout = checkout
         .to_str()
-        .ok_or_else(|| Error::Repository("the checkout path is not UTF-8".to_owned()))?
-        .trim_end_matches('/');
-    if from.is_empty() {
+        .ok_or_else(|| Error::Repository("the checkout path is not UTF-8".to_owned()))?;
+    let from = checkout.trim_end_matches(['/', '\\']);
+    let is_drive_root = from.len() == 2
+        && from.as_bytes()[0].is_ascii_alphabetic()
+        && from.as_bytes()[1] == b':'
+        && from.len() < checkout.len();
+    if from.is_empty() || is_drive_root {
         return Err(Error::Repository(
             "a checkout at the filesystem root cannot be recorded".to_owned(),
         ));
     }
     let mut value: serde_json::Value = serde_json::from_slice(json)
         .map_err(|e| Error::Metadata(MetadataError::Invalid(e.to_string())))?;
+    let normalized = from.replace('\\', "/");
     let encoded = percent_encode(from);
-    relocate(&mut value, &[from, &encoded])?;
+    let encoded_normalized = percent_encode(&normalized);
+    let mut prefixes = vec![
+        from.to_owned(),
+        normalized.clone(),
+        encoded,
+        encoded_normalized,
+    ];
+    if normalized != from {
+        let url_path = format!("/{normalized}");
+        prefixes.push(url_path.clone());
+        prefixes.push(percent_encode(&url_path));
+    }
+    relocate(
+        &mut value,
+        &prefixes.iter().map(String::as_str).collect::<Vec<_>>(),
+    )?;
     let mut bytes = serde_json::to_vec_pretty(&value)
         .map_err(|e| Error::Metadata(MetadataError::Invalid(e.to_string())))?;
     bytes.push(b'\n');
@@ -99,18 +125,45 @@ fn percent_encode(text: &str) -> String {
 }
 
 fn relocate_text(text: &str, from: &[&str]) -> String {
-    let start = text.find("file://").map_or(0, |at| at + "file://".len());
-    let path = &text[start..];
-    for prefix in from {
-        if let Some(tail) = path.strip_prefix(prefix)
-            && (tail.is_empty()
-                || tail.starts_with('/')
-                || (start > 0 && tail.starts_with(['#', '?'])))
+    let mut prefixes = from.to_vec();
+    prefixes.sort_by_key(|prefix| std::cmp::Reverse(prefix.len()));
+    let mut output = String::with_capacity(text.len());
+    let mut cursor = 0;
+    while cursor < text.len() {
+        let in_file_url = cursor >= "file://".len() && text[..cursor].ends_with("file://");
+        let at_boundary = cursor == 0
+            || in_file_url
+            || text[..cursor].chars().next_back().is_some_and(|character| {
+                character.is_whitespace() || matches!(character, ';' | ',' | '|')
+            });
+        if at_boundary
+            && let Some(prefix) = prefixes.iter().find(|prefix| {
+                text[cursor..].strip_prefix(**prefix).is_some_and(|tail| {
+                    tail.is_empty()
+                        || tail.starts_with(['/', '\\'])
+                        || (in_file_url && tail.starts_with(['#', '?']))
+                })
+            })
         {
-            return format!("{}{SAMPLE_REPOSITORY}{tail}", &text[..start]);
+            let tail_start = cursor + prefix.len();
+            let tail_end = text[tail_start..]
+                .find(|character: char| {
+                    character.is_whitespace() || matches!(character, ';' | ',' | '|')
+                })
+                .map_or(text.len(), |offset| tail_start + offset);
+            let tail = text[tail_start..tail_end].replace('\\', "/");
+            output.push_str(SAMPLE_REPOSITORY);
+            output.push_str(&tail);
+            cursor = tail_end;
+            continue;
         }
+        let Some(character) = text[cursor..].chars().next() else {
+            break;
+        };
+        output.push(character);
+        cursor += character.len_utf8();
     }
-    text.to_owned()
+    output
 }
 
 fn relocate(value: &mut serde_json::Value, from: &[&str]) -> Result<(), Error> {
@@ -138,7 +191,20 @@ fn relocate(value: &mut serde_json::Value, from: &[&str]) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn write_sample(root: &Path, name: &str, recording: &Recording) -> Result<(), Error> {
+#[derive(Debug, PartialEq, Eq)]
+pub enum SampleWriteOutcome {
+    Recorded,
+    RecordedWithCleanupFailure {
+        staging_path: PathBuf,
+        error: String,
+    },
+}
+
+pub fn write_sample(
+    root: &Path,
+    name: &str,
+    recording: &Recording,
+) -> Result<SampleWriteOutcome, Error> {
     let base = format!("{SAMPLES}/{}", sample_name(name)?);
     let mut files = Vec::new();
     for (path, bytes) in &recording.view {
@@ -169,7 +235,10 @@ pub fn write_sample(root: &Path, name: &str, recording: &Recording) -> Result<()
     let existing = real_directory(root, &sample_path(base.clone())?)?;
     let samples = root.join(SAMPLES);
     fs::create_dir_all(&samples).map_err(|e| Error::File(samples.clone(), e))?;
-    let staged = StagedSample::new(&samples)?;
+    let staging = samples
+        .parent()
+        .ok_or_else(|| Error::Repository("the samples directory has no parent".to_owned()))?;
+    let staged = StagedSample::new(staging)?;
     let prepared = staged.path.join("new");
     fs::create_dir(&prepared).map_err(|e| Error::File(prepared.clone(), e))?;
     if let Some(existing) = &existing {
@@ -187,96 +256,6 @@ pub fn write_sample(root: &Path, name: &str, recording: &Recording) -> Result<()
         replace(&prepared.join(path.as_str()), &bytes)?;
     }
     staged.publish(&root.join(base), existing.is_some())
-}
-
-struct StagedSample {
-    path: PathBuf,
-    cleanup: bool,
-}
-
-impl StagedSample {
-    fn new(samples: &Path) -> Result<Self, Error> {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        loop {
-            let next = NEXT.fetch_add(1, Ordering::Relaxed);
-            let path = samples.join(format!(".velnor-gen-{}-{next}", std::process::id()));
-            match fs::create_dir(&path) {
-                Ok(()) => {
-                    return Ok(Self {
-                        path,
-                        cleanup: true,
-                    });
-                }
-                Err(error) if error.kind() == ErrorKind::AlreadyExists => {}
-                Err(error) => return Err(Error::File(path, error)),
-            }
-        }
-    }
-
-    fn publish(mut self, destination: &Path, exists: bool) -> Result<(), Error> {
-        let previous = self.path.join("previous");
-        if exists {
-            fs::rename(destination, &previous).map_err(|e| Error::File(destination.into(), e))?;
-        }
-        if let Err(error) = fs::rename(self.path.join("new"), destination) {
-            if exists && let Err(rollback) = fs::rename(&previous, destination) {
-                self.cleanup = false;
-                return Err(Error::Repository(format!(
-                    "could not publish sample: {error}; could not restore it: {rollback}; original sample remains at {}",
-                    previous.display()
-                )));
-            }
-            return Err(Error::File(destination.into(), error));
-        }
-        Ok(())
-    }
-}
-
-impl Drop for StagedSample {
-    fn drop(&mut self) {
-        if self.cleanup
-            && let Err(error) = remove_staging(&self.path)
-        {
-            writeln!(
-                std::io::stderr(),
-                "velnor-gen: could not remove sample staging directory {}: {error}",
-                self.path.display()
-            )
-            .ok();
-        }
-    }
-}
-
-fn remove_staging(path: &Path) -> std::io::Result<()> {
-    writable_tree(path)?;
-    fs::remove_dir_all(path)
-}
-
-fn writable_tree(path: &Path) -> std::io::Result<()> {
-    let metadata = fs::symlink_metadata(path)?;
-    if metadata.is_symlink() {
-        return Ok(());
-    }
-    #[cfg(unix)]
-    if metadata.is_dir() {
-        use std::os::unix::fs::PermissionsExt;
-
-        let mut permissions = metadata.permissions();
-        permissions.set_mode(permissions.mode() | 0o700);
-        fs::set_permissions(path, permissions)?;
-    }
-    #[cfg(windows)]
-    if metadata.permissions().readonly() {
-        let mut permissions = metadata.permissions();
-        permissions.set_readonly(false);
-        fs::set_permissions(path, permissions)?;
-    }
-    if metadata.is_dir() {
-        for entry in fs::read_dir(path)? {
-            writable_tree(&entry?.path())?;
-        }
-    }
-    Ok(())
 }
 
 fn copy_entry(source: &Path, destination: &Path) -> Result<(), Error> {
