@@ -49,6 +49,7 @@ mod rulesets;
 mod run;
 mod run_env;
 mod run_group;
+mod run_summary;
 mod setup_pure;
 mod support;
 mod ties;
