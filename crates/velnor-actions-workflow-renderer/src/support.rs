@@ -25,6 +25,10 @@ pub(crate) const LINT_JOB_ID: &str = "jactionlint";
 
 pub(crate) const LINT_DISPLAY_NAME: &str = "Jactionlint";
 
+const ALINT_LINE_CAP_PROBE_SCRIPT: &str = "scripts/alint-line-cap-probe.sh";
+
+const ALINT_LINE_CAP_PROBE_CONDITION: &str = "hashFiles('scripts/alint-line-cap-probe.sh') != ''";
+
 pub(crate) fn merge_consumer_verify(
     jobs: &mut BTreeMap<String, Job>,
     support: Option<&VelnorSupportWorkflow>,
@@ -185,14 +189,17 @@ pub(crate) fn alint_job(ctx: &RenderContext) -> Result<Job, RenderError> {
                     env: BTreeMap::new(),
                 },
             },
-            steps::shell_step(
-                "Check the Rust line cap with probe files",
-                vec![
-                    "bash".to_owned(),
-                    "scripts/alint-line-cap-probe.sh".to_owned(),
-                ],
-                BTreeMap::new(),
-            )?,
+            Step {
+                condition: Some(ALINT_LINE_CAP_PROBE_CONDITION.to_owned()),
+                ..steps::shell_step(
+                    "Check the Rust line cap with probe files",
+                    vec![
+                        "bash".to_owned(),
+                        ALINT_LINE_CAP_PROBE_SCRIPT.to_owned(),
+                    ],
+                    BTreeMap::new(),
+                )?
+            },
         ],
     })
 }
