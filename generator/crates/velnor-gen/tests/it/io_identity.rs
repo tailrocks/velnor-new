@@ -142,3 +142,27 @@ fn a_checkout_without_an_origin_keeps_its_schedule_when_renamed() -> TestResult 
     drop(repo);
     Ok(())
 }
+
+#[test]
+fn local_origin_is_rejected_instead_of_writing_a_checkout_dependent_schedule() -> TestResult {
+    let base = std::env::temp_dir().join(format!("velnor-gen-local-origin-{}", std::process::id()));
+    let repo = Scratch(base);
+    checkout(&repo.0)?;
+    git(&repo.0, &["remote", "add", "origin", "../mirror/app"])?;
+    let cargo = Path::new(env!("CARGO"));
+    let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
+    let search_path = std::env::join_paths([cargo_dir, Path::new("/usr/bin"), Path::new("/bin")])?;
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
+        .args(["--root", ".", "generate"])
+        .current_dir(&repo.0)
+        .env("PATH", search_path)
+        .env("MISE_TRUSTED_CONFIG_PATHS", &repo.0)
+        .output()?;
+    assert!(
+        !output.status.success(),
+        "local origin unexpectedly generated a workflow"
+    );
+    assert!(String::from_utf8_lossy(&output.stderr).contains("origin"));
+    assert!(!repo.0.join(".github/workflows/rust-ci.yml").exists());
+    Ok(())
+}

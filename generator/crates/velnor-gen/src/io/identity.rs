@@ -4,9 +4,9 @@
 use std::ffi::OsStr;
 use std::path::Path;
 
-use super::program;
+use super::{Error, program};
 
-pub(super) fn repository_name(root: &Path) -> String {
+pub(super) fn repository_name(root: &Path) -> Result<String, Error> {
     let remote = program(
         root,
         "git",
@@ -18,20 +18,31 @@ pub(super) fn repository_name(root: &Path) -> String {
     )
     .ok()
     .and_then(|bytes| String::from_utf8(bytes).ok());
-    remote
-        .as_deref()
-        .and_then(repository_path)
-        .unwrap_or_default()
+    match remote.as_deref() {
+        None => Ok(String::new()),
+        Some(url) => repository_path(url).ok_or_else(|| {
+            Error::Repository("origin must identify a hosted repository; local or invalid origins cannot determine its schedule".to_owned())
+        }),
+    }
 }
 
 fn repository_path(url: &str) -> Option<String> {
     let remote = url.trim().trim_end_matches('/');
-    let path = if let Some((_, path)) = remote.split_once("://") {
-        path.split_once('/')?.1
-    } else if let Some((_, path)) = remote.split_once(':') {
+    let path = if let Some((scheme, path)) = remote.split_once("://") {
+        if scheme.eq_ignore_ascii_case("file") {
+            return None;
+        }
+        let (host, path) = path.split_once('/')?;
+        if host.is_empty() {
+            return None;
+        }
         path
     } else {
-        remote
+        let (host, path) = remote.split_once(':')?;
+        if host.is_empty() || host.contains('/') || host.contains('\\') {
+            return None;
+        }
+        path
     };
     let parts: Vec<&str> = path
         .trim_start_matches('/')
