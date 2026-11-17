@@ -228,6 +228,7 @@ pub struct ToolRequest {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ToolLock {
     pub version: String,
+    pub backend: Option<String>,
     pub specifiers: Vec<String>,
     pub os: Option<Vec<String>>,
     pub options: BTreeMap<String, String>,

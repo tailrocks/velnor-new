@@ -71,6 +71,7 @@ version = \"0.9.151\"
             ("node", &pin(&["20", "22"], &[])),
             ("rust", &{
                 let mut rust = pin(&["1.99.1"], &["1.99.1"]);
+                rust.locked[0].backend = Some("core:rust".to_owned());
                 rust.requested[0]
                     .options
                     .insert("profile".to_owned(), "minimal".to_owned());

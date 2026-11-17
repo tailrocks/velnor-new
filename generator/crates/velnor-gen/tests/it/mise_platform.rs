@@ -175,3 +175,45 @@ fn macos_large_and_xlarge_use_their_distinct_runner_architectures() {
         "wrong macOS architectures: {mismatches:?}"
     );
 }
+
+#[test]
+fn a_configured_backend_option_cannot_disappear_from_the_lock_identity() -> TestResult {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    let config = RepoPath::from_static("mise.toml");
+    let locked = RepoPath::from_static("mise.lock");
+    let original_config = String::from_utf8(repo.files.get(&config).ok_or("no config")?.clone())?;
+    let original_lock = String::from_utf8(repo.files.get(&locked).ok_or("no lock")?.clone())?;
+    let row = "[[tools.tool]]\nversion = \"1.0.0\"\nspecifiers = [\"1\"]\n[tools.tool.\"platforms.linux-x64\"]\nurl = \"https://fixtures.invalid/tool\"\n";
+    repo.files.insert(
+        config.clone(),
+        format!("{original_config}tool = {{ version = \"1\", flavor = \"linux\" }}\n").into_bytes(),
+    );
+    repo.files
+        .insert(locked.clone(), format!("{original_lock}{row}").into_bytes());
+    let missing = expected_files(&repo);
+    assert!(
+        missing.is_err(),
+        "missing option identity: {:?}",
+        missing.as_ref().map(|_| "workflow generated")
+    );
+    let recorded = row.replace(
+        "specifiers = [\"1\"]",
+        "specifiers = [\"1\"]\noptions = { flavor = \"linux\" }",
+    );
+    repo.files.insert(
+        locked.clone(),
+        format!("{original_lock}{recorded}").into_bytes(),
+    );
+    assert!(expected_files(&repo).is_ok());
+    repo.files.insert(
+        config,
+        format!(
+            "{original_config}tool = {{ version = \"1\", lazy = true, depends = [\"rust\"] }}\n"
+        )
+        .into_bytes(),
+    );
+    repo.files
+        .insert(locked, format!("{original_lock}{row}").into_bytes());
+    assert!(expected_files(&repo).is_ok());
+    Ok(())
+}

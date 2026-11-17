@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 
 use crate::{ToolLock, ToolPin, ToolRequest};
 
@@ -87,22 +87,11 @@ impl ToolPin {
             .iter()
             .filter(|request| request.applies_on(platform))
         {
-            let option_keys: BTreeSet<_> = self
-                .locked
-                .iter()
-                .flat_map(|row| row.options.keys())
-                .collect();
-            let options: BTreeMap<_, _> = request
-                .options
-                .iter()
-                .filter(|(key, _)| option_keys.contains(key))
-                .map(|(key, value)| (key.clone(), value.clone()))
-                .collect();
             let candidates: Vec<_> = self
                 .locked
                 .iter()
                 .filter(|row| {
-                    row.options == options
+                    options_match(request, row)
                         && row.os.as_ref().is_none_or(|filters| {
                             filters.iter().any(|filter| platform.matches(filter))
                         })
@@ -119,11 +108,7 @@ impl ToolPin {
                         .requested
                         .iter()
                         .filter(|other| {
-                            other
-                                .options
-                                .iter()
-                                .filter(|(key, _)| option_keys.contains(key))
-                                .eq(options.iter())
+                            options_match(other, row)
                                 && version_matches(&other.version, &row.version)
                         })
                         .map(|other| &other.version)
@@ -141,6 +126,18 @@ impl ToolPin {
         }
         Ok(found)
     }
+}
+
+fn options_match(request: &ToolRequest, row: &ToolLock) -> bool {
+    let packslip = row
+        .backend
+        .as_deref()
+        .is_some_and(|backend| backend.starts_with("packslip:"));
+    request
+        .options
+        .iter()
+        .filter(|(key, _)| !(packslip && key.as_str() == "workflow"))
+        .eq(row.options.iter())
 }
 
 fn version_matches(request: &str, version: &str) -> bool {

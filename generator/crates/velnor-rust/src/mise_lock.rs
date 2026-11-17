@@ -58,6 +58,10 @@ fn locked_rows(value: &Value) -> Option<Vec<ToolLock>> {
             .map(|rows| rows.concat()),
         Value::Table(entry) => {
             let version = entry.get("version")?.as_str()?.to_owned();
+            let backend = match entry.get("backend") {
+                Some(value) => Some(value.as_str()?.to_owned()),
+                None => None,
+            };
             let specifiers = match entry.get("specifiers") {
                 Some(value) => strings(value)?,
                 None => Vec::new(),
@@ -87,6 +91,7 @@ fn locked_rows(value: &Value) -> Option<Vec<ToolLock>> {
                 .collect();
             Some(vec![ToolLock {
                 version,
+                backend,
                 specifiers,
                 os,
                 options,

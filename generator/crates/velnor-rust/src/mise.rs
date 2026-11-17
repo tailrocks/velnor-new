@@ -213,7 +213,7 @@ fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
         Some(Value::Table(tools)) => tools
             .iter()
             .map(|(name, value)| {
-                version_list(value)
+                version_list(value, RUST_TOOLS.contains(&name.as_str()))
                     .map(|list| (name.clone(), list))
                     .ok_or_else(|| Reason::InvalidValue {
                         key: "tools",
@@ -241,18 +241,18 @@ fn os_names(entry: &toml::Table) -> Option<Vec<String>> {
     }
 }
 
-fn version_list(value: &Value) -> Option<Vec<ToolRequest>> {
+fn version_list(value: &Value, rust: bool) -> Option<Vec<ToolRequest>> {
     match value {
         Value::String(version) => Some(vec![plain(version.clone())]),
         Value::Array(items) => items
             .iter()
-            .map(version_list)
+            .map(|value| version_list(value, rust))
             .collect::<Option<Vec<_>>>()
             .map(|lists| lists.concat()),
         Value::Table(entry) => {
             let mut list = entry
                 .get("version")
-                .map_or_else(|| source_request(entry), version_list)?;
+                .map_or_else(|| source_request(entry), |value| version_list(value, rust))?;
             if let Some(names) = os_names(entry) {
                 for request in &mut list {
                     request.os.get_or_insert_with(|| names.clone());
@@ -261,16 +261,22 @@ fn version_list(value: &Value) -> Option<Vec<ToolRequest>> {
             let options: BTreeMap<_, _> = entry
                 .iter()
                 .filter(|(key, _)| {
-                    !["version", "os", "ref", "path", "prefix"].contains(&key.as_str())
+                    !([
+                        "version",
+                        "os",
+                        "ref",
+                        "path",
+                        "prefix",
+                        "depends",
+                        "install_env",
+                        "lazy",
+                        "lazy_bins",
+                        "auto_update",
+                    ]
+                    .contains(&key.as_str())
+                        || (rust && key.as_str() == "mr_boxington"))
                 })
-                .map(|(key, value)| {
-                    (
-                        key.clone(),
-                        value
-                            .as_str()
-                            .map_or_else(|| value.to_string(), str::to_owned),
-                    )
-                })
+                .map(|(key, value)| (key.clone(), option_value(key, value, rust)))
                 .collect();
             for request in &mut list {
                 request.options.extend(options.clone());
@@ -279,6 +285,29 @@ fn version_list(value: &Value) -> Option<Vec<ToolRequest>> {
         }
         _ => None,
     }
+}
+
+fn option_value(key: &str, value: &Value, rust: bool) -> String {
+    if rust && ["components", "targets"].contains(&key) {
+        let values: Option<Vec<&str>> = match value {
+            Value::String(text) => Some(text.split(',').collect()),
+            Value::Array(values) => values.iter().map(Value::as_str).collect(),
+            _ => None,
+        };
+        if let Some(values) = values {
+            return values
+                .into_iter()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+                .collect::<std::collections::BTreeSet<_>>()
+                .into_iter()
+                .collect::<Vec<_>>()
+                .join(",");
+        }
+    }
+    value
+        .as_str()
+        .map_or_else(|| value.to_string(), str::to_owned)
 }
 
 fn source_request(entry: &toml::Table) -> Option<Vec<ToolRequest>> {

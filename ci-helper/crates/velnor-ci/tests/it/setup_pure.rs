@@ -301,3 +301,60 @@ fn ambiguous_legacy_lock_rows_refuse_until_the_requests_are_recorded() {
         Ok(())
     );
 }
+
+#[test]
+fn prepare_refuses_a_configured_backend_option_missing_from_the_lock_identity() {
+    let config = "[tools]\ntool = { version = \"1\", flavor = \"linux\" }\n";
+    let row = "[[tools.tool]]\nversion = \"1.0.0\"\nspecifiers = [\"1\"]\n";
+    let installed =
+        parse_reported(&reported(&[("1.0.0", true)])).unwrap_or_else(|e| unreachable!("{e}"));
+    let platform = MisePlatform::new("linux", "x86_64");
+    let missing = check_tools(&parsed_tools(config, row), &installed, platform);
+    assert!(missing.is_err(), "missing option identity: {missing:?}");
+    let recorded = format!("{row}options = {{ flavor = \"linux\" }}\n");
+    assert_eq!(
+        check_tools(&parsed_tools(config, &recorded), &installed, platform),
+        Ok(())
+    );
+    let controls = "[tools]\ntool = { version = \"1\", lazy = true, depends = [\"rust\"] }\n";
+    assert_eq!(
+        check_tools(&parsed_tools(controls, row), &installed, platform),
+        Ok(())
+    );
+}
+
+#[test]
+fn documented_rust_and_packslip_controls_preserve_their_recorded_artifact_identity() {
+    let cases = [
+        (
+            "rust",
+            "[tools]\nrust = { version = \"1.99.1\", profile = \"minimal\", components = [\"rustfmt\", \"clippy\", \"clippy\"], targets = [\"x86_64-unknown-linux-gnu\", \"aarch64-unknown-linux-gnu\"], mr_boxington = true }\n",
+            "[[tools.rust]]\nversion = \"1.99.1\"\nbackend = \"core:rust\"\nspecifiers = [\"1.99.1\"]\noptions = { profile = \"minimal\", components = \"clippy,rustfmt\", targets = \"aarch64-unknown-linux-gnu,x86_64-unknown-linux-gnu\" }\n",
+            "1.99.1",
+        ),
+        (
+            "mr-boxington",
+            "[tools]\nmr-boxington = { version = \"1.29.2\", workflow = \"release.yml@refs/heads/main\" }\n",
+            "[[tools.mr-boxington]]\nversion = \"1.29.2\"\nbackend = \"packslip:github.com/jdx/mr-boxington\"\nspecifiers = [\"1.29.2\"]\n",
+            "1.29.2",
+        ),
+    ];
+    let mut mismatches = Vec::new();
+    for (name, config, lock, version) in cases {
+        let installed = parse_reported(&format!(
+            "{{\"{name}\":[{{\"version\":\"{version}\",\"installed\":true}}]}}"
+        ))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+        if let Err(error) = check_tools(
+            &parsed_tools(config, lock),
+            &installed,
+            MisePlatform::new("linux", "x86_64"),
+        ) {
+            mismatches.push(format!("{name}: {error}"));
+        }
+    }
+    assert!(
+        mismatches.is_empty(),
+        "wrong control identities: {mismatches:?}"
+    );
+}
