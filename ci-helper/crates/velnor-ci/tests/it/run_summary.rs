@@ -48,6 +48,7 @@ fn nextest(name: &str, body: &str) -> (Output, String) {
     script(&temp, "cargo-nextest", body);
     fs::write(temp.join("github-output"), "").unwrap_or_else(|e| unreachable!("{e}"));
     let output = velnor(&temp, &[], &NEXTEST)
+        .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "300")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let written = fs::read_to_string(temp.join("github-output")).unwrap_or_default();
@@ -201,7 +202,7 @@ fn a_log_that_is_a_fifo_without_a_reader_is_refused_without_starting_the_command
         if let Some(status) = child.try_wait().unwrap_or_else(|e| unreachable!("{e}")) {
             break Some(status);
         }
-        if started.elapsed() > Duration::from_secs(5) {
+        if started.elapsed() > Duration::from_secs(1) {
             child.kill().ok();
             child.wait().ok();
             break None;
