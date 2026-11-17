@@ -9,6 +9,10 @@ use crate::{
 };
 use serde_json::json;
 use std::collections::BTreeMap;
+use std::sync::{
+    Arc,
+    atomic::{AtomicI64, Ordering},
+};
 use velnor_runner_github::workflow_run::{RepositoryTarget, get_repository_scope};
 use velnor_runner_github::{
     AdminConnectionCall, Exchange, Method, SessionRequest, Transport, TransportFail,
@@ -18,6 +22,7 @@ use velnor_runner_github::{
 pub(super) struct Github {
     pub(super) runners: BTreeMap<i64, (String, i64)>,
     pub(super) lookups: Vec<String>,
+    pub(super) lookup_clock: Option<(Arc<AtomicI64>, i64)>,
 }
 
 impl Github {
@@ -29,6 +34,7 @@ impl Github {
         Self {
             runners,
             lookups: Vec::new(),
+            lookup_clock: None,
         }
     }
     pub(super) fn link(&mut self, binding: &RepositoryConnection) -> TestResult<Link> {
@@ -69,6 +75,9 @@ impl Transport for Github {
                 json!({"id":42,"name":"repo","full_name":"owner/repo","private":true,"owner":{"login":"owner"}}),
             ),
             (Method::Get, path) if path.ends_with("/agents") => {
+                if let Some((clock, after_lookup)) = &self.lookup_clock {
+                    clock.store(*after_lookup, Ordering::SeqCst);
+                }
                 let query = request.query.as_deref().unwrap_or_default();
                 let name = query
                     .split('&')

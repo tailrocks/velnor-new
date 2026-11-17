@@ -102,10 +102,16 @@ enum JitOutcome {
 }
 
 async fn seed_claim(journal: &Journal, pair: Pair) -> TestResult<()> {
-    seed_jit(journal, pair, JitOutcome::Interrupted).await
+    seed_jit(journal, pair, JitOutcome::Interrupted)
+        .await
+        .map(|_| ())
 }
 
-async fn seed_jit(journal: &Journal, pair: Pair, outcome: JitOutcome) -> TestResult<()> {
+async fn seed_jit(
+    journal: &Journal,
+    pair: Pair,
+    outcome: JitOutcome,
+) -> TestResult<Option<crate::journal::RunnerJitClaim>> {
     let authority = seed_authorized_bound_request(journal, pair).await?;
     let config: crate::config::RepositoryConnection = serde_json::from_str(
         &scalar(journal, "SELECT identity FROM connection_scopes LIMIT 1").await?,
@@ -123,7 +129,7 @@ async fn seed_jit(journal: &Journal, pair: Pair, outcome: JitOutcome) -> TestRes
         .await?
         .ok_or("real JIT claim refused complete bound fixture")?;
     match outcome {
-        JitOutcome::Interrupted => {}
+        JitOutcome::Interrupted => return Ok(Some(claim)),
         JitOutcome::Conflict => {
             scope
                 .mark_runner_jit_conflict_received(claim, pair.reservation, 1, &authority)
@@ -142,7 +148,7 @@ async fn seed_jit(journal: &Journal, pair: Pair, outcome: JitOutcome) -> TestRes
                 .await?;
         }
     }
-    Ok(())
+    Ok(None)
 }
 
 async fn shape(journal: &Journal) -> TestResult<String> {

@@ -17,6 +17,8 @@ mod launch;
 pub(crate) mod pr_source_transition;
 mod read;
 pub(in crate::journal) mod request_lifecycle;
+#[cfg(test)]
+pub(crate) use request_lifecycle::RunnerJitClaim;
 
 mod resource_probe;
 mod scale_set_create;

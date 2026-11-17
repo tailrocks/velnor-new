@@ -14,6 +14,7 @@ mod driver;
 mod execution_authorization;
 mod execution_publication;
 pub(in crate::journal) mod image_import;
+mod jit_claim_deadline;
 mod jit_conflict_recovery;
 mod jit_conflict_settlement;
 pub(in crate::journal) mod jit_interrupted_claims;
@@ -128,12 +129,18 @@ async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostE
     validate_persisted_schema_v42(conn).await?;
     unbound_retirement::validate(conn).await?;
     jit_interrupted_claims::validate(conn).await?;
-    jit_interrupted_claims::validate_initial_absence(conn).await
+    jit_claim_deadline::validate(conn).await
 }
 
+#[cfg(test)]
 async fn validate_persisted_schema_v48(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v46(conn).await?;
     jit_interrupted_claims::validate_initial_absence(conn).await
+}
+
+async fn validate_persisted_schema_v49(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v46(conn).await?;
+    jit_claim_deadline::validate(conn).await
 }
 
 #[cfg(test)]
