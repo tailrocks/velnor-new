@@ -92,8 +92,15 @@ fn fetch_jobs(
         let ApiJobs { total_count, jobs } = parse(&body, "jobs")?;
         let empty = jobs.is_empty();
         all.extend(jobs);
-        if empty || all.len() >= total_count {
+        if all.len() >= total_count {
             return Ok(all);
+        }
+        if empty {
+            return Err(CiError::new(format!(
+                "run {run_id} lists {total_count} jobs and returned {} by page {page}; \
+                 refusing incomplete jobs data",
+                all.len()
+            )));
         }
         page += 1;
     }
