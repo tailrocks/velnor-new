@@ -42,24 +42,34 @@ pub(super) fn verify_all(
         "repos/{}/attestations/sha256:{digest}?per_page=100&predicate_type=https%3A%2F%2Fslsa.dev%2Fprovenance%2Fv1",
         identity.repository
     );
-    let args = ["api", "--paginate", "--slurp", &endpoint]
-        .into_iter()
-        .map(OsString::from)
-        .collect();
-    let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
-        .map_err(|_| internal("package_attestation_gh_unavailable"))?;
-    let timeout = deadline
-        .remaining()
-        .map(|remaining| remaining.min(VERIFY_TIMEOUT))
-        .map_err(|_| internal("package_verification_deadline"))?;
-    let output = exec
-        .command_with_github_token(&ToolCatalog::pinned(), identity.source_token)
-        .and_then(|command| command.run_bounded(VERIFY_OUTPUT_LIMIT, timeout))
-        .map_err(|_| internal("package_attestation_lookup_failed"))?;
-    if !output.success || output.stdout.is_empty() {
-        return Err(internal("package_attestation_lookup_failed"));
-    }
-    let pages: Vec<Page> = serde_json::from_slice(&output.stdout)
+    let offline = crate::homebrew::qualification_evidence::read(
+        "application/vnd.github+json",
+        &format!("repos/{}/attestations/sha256:{digest}", identity.repository),
+        VERIFY_OUTPUT_LIMIT,
+    )?;
+    let output_bytes = if let Some(bytes) = offline {
+        bytes
+    } else {
+        let args = ["api", "--paginate", "--slurp", &endpoint]
+            .into_iter()
+            .map(OsString::from)
+            .collect();
+        let exec = PinnedToolExec::new(vec![PinnedTool::Gh], OsStr::new("gh"), args)
+            .map_err(|_| internal("package_attestation_gh_unavailable"))?;
+        let timeout = deadline
+            .remaining()
+            .map(|remaining| remaining.min(VERIFY_TIMEOUT))
+            .map_err(|_| internal("package_verification_deadline"))?;
+        let output = exec
+            .command_with_github_token(&ToolCatalog::pinned(), identity.source_token)
+            .and_then(|command| command.run_bounded(VERIFY_OUTPUT_LIMIT, timeout))
+            .map_err(|_| internal("package_attestation_lookup_failed"))?;
+        if !output.success || output.stdout.is_empty() {
+            return Err(internal("package_attestation_lookup_failed"));
+        }
+        output.stdout
+    };
+    let pages: Vec<Page> = serde_json::from_slice(&output_bytes)
         .map_err(|_| internal("package_attestation_lookup_invalid"))?;
     if pages.is_empty() {
         return Err(internal("package_attestation_lookup_invalid"));

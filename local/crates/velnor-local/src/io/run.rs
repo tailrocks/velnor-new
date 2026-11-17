@@ -24,6 +24,11 @@ use tokio::net::TcpListener;
 
 pub use restore::RestoreOnly;
 
+enum Listener {
+    Job,
+    Control(Arc<str>),
+}
+
 use super::env::{DockerCli, Environment};
 use super::{Body, CacheServer, Config, api_stub, drive};
 use crate::cli::{
@@ -142,16 +147,27 @@ async fn run_cache_server(args: CacheServerArgs) -> std::io::Result<()> {
         .restore_only
         .then(|| Arc::new(RestoreOnly::new(config.token_key.clone())));
     let server = CacheServer::open(config).await?;
-    serve("cache-server", args.listen, &args.control, move |request| {
-        let (server, restoring) = (Arc::clone(&server), restoring.clone());
-        async move {
-            let handle = |request| async move { server.handle(request).await };
-            match restoring {
-                Some(restoring) => restoring.handle(request, handle).await,
-                None => handle(request).await,
+    serve(
+        "cache-server",
+        args.listen,
+        &args.control,
+        move |request, listener| {
+            let (server, restoring) = (Arc::clone(&server), restoring.clone());
+            async move {
+                let handle = |request| async move { server.handle(request).await };
+                let restore = |request| async move {
+                    match restoring {
+                        Some(restoring) => restoring.handle(request, handle).await,
+                        None => handle(request).await,
+                    }
+                };
+                match listener {
+                    Listener::Job => restore(request).await,
+                    Listener::Control(token) => guarded(&token, request, restore).await,
+                }
             }
-        }
-    })
+        },
+    )
     .await
 }
 
@@ -166,10 +182,20 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
             Arc::new(api_stub::HttpStandIn::new(&address)) as Arc<dyn api_stub::StandIn>
         }),
     }));
-    serve("api-stub", args.listen, &args.control, move |request| {
-        let stub = Arc::clone(&stub);
-        async move { stub.handle(request).await }
-    })
+    serve(
+        "api-stub",
+        args.listen,
+        &args.control,
+        move |request, listener| {
+            let stub = Arc::clone(&stub);
+            async move {
+                match listener {
+                    Listener::Job => stub.handle(request).await,
+                    Listener::Control(token) => stub.handle_control(&token, request).await,
+                }
+            }
+        },
+    )
     .await
 }
 
@@ -206,26 +232,29 @@ async fn serve<H, F>(
     handler: H,
 ) -> std::io::Result<()>
 where
-    H: Fn(Request<Body>) -> F + Clone + Send + Sync + 'static,
+    H: Fn(Request<Body>, Listener) -> F + Clone + Send + Sync + 'static,
     F: Future<Output = Response<Body>> + Send + 'static,
 {
     if let (Some(address), Some(path)) = (control.control_listen, &control.control_token) {
         let token: Arc<str> = fs::read_to_string(path).await?.trim().into();
         let inner = handler.clone();
-        let guarded_handler = move |request| {
+        let control_handler = move |request| {
             let (token, inner) = (Arc::clone(&token), inner.clone());
-            async move { guarded(&token, request, inner).await }
+            async move { inner(request, Listener::Control(token)).await }
         };
         let control_name = format!("{name} control");
         tokio::spawn(async move {
-            if let Err(error) = listen_on(&control_name, address, guarded_handler).await {
+            if let Err(error) = listen_on(&control_name, address, control_handler).await {
                 eprintln!("velnor-local {control_name}: {error}");
             }
         });
-        let open_handler = move |request| open(request, handler.clone());
+        let open_handler = move |request| {
+            let handler = handler.clone();
+            open(request, move |request| handler(request, Listener::Job))
+        };
         return listen_on(name, listen, open_handler).await;
     }
-    listen_on(name, listen, handler).await
+    listen_on(name, listen, move |request| handler(request, Listener::Job)).await
 }
 
 async fn listen_on<H, F>(name: &str, listen: SocketAddr, handler: H) -> std::io::Result<()>

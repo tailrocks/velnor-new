@@ -7,6 +7,7 @@ use velnor_release::{ReleasePlan, RootPlan};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 
+pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
 const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 const APP_TOKEN_VERSION: &str = "v3.3.0";
 pub(crate) const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
@@ -139,7 +140,7 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     }
 }
 
-pub(crate) fn refuse_commands(roots: &[RootPlan], tags_released_version: bool) -> RenderedStep {
+pub(crate) fn refuse_commands(roots: &[RootPlan], tag_job: bool) -> RenderedStep {
     let files: Vec<String> = roots
         .iter()
         .map(|root| shell_word(&join(&root.root, RELEASE_PLZ_FILE)))
@@ -161,6 +162,17 @@ pub(crate) fn refuse_commands(roots: &[RootPlan], tags_released_version: bool) -
                 })
         })
         .collect();
+    let prefixes: Vec<String> = roots
+        .iter()
+        .filter(|_| tag_job)
+        .map(|root| {
+            format!(
+                "--branch-prefix {} {}",
+                shell_word(&join(&root.root, RELEASE_PLZ_FILE)),
+                shell_word(&root.pr_branch_prefix)
+            )
+        })
+        .collect();
     let mut env = variables(&[
         ("GITHUB_TOKEN", "${{ github.token }}"),
         ("REPOSITORY", "${{ github.repository }}"),
@@ -174,8 +186,13 @@ pub(crate) fn refuse_commands(roots: &[RootPlan], tags_released_version: bool) -
             .iter()
             .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
     );
+    let name = if prefixes.is_empty() {
+        "Refuse a release-plz config that runs commands, changes the tag patterns or names another registry"
+    } else {
+        "Refuse a release-plz config that runs commands, changes the tag patterns or the branch prefixes or names another registry"
+    };
     RenderedStep {
-        name: "Refuse a release-plz config that runs commands, changes the tag patterns or names another registry".to_owned(),
+        name: name.to_owned(),
         env,
         run: Some(
             std::iter::once(format!(
@@ -183,8 +200,9 @@ pub(crate) fn refuse_commands(roots: &[RootPlan], tags_released_version: bool) -
                 files.join(" ")
             ))
             .chain(tags)
-            .chain(["--repo \"$REPOSITORY\" --manifests".to_owned()])
-            .chain(tags_released_version.then(|| "--released-versions".to_owned()))
+            .chain(prefixes)
+            .chain(["--repo=\"$REPOSITORY\" --manifests".to_owned()])
+            .chain(tag_job.then(|| "--released-versions".to_owned()))
             .collect::<Vec<_>>()
             .join(" "),
         ),

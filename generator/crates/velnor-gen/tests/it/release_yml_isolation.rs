@@ -140,10 +140,13 @@ fn a_build_checks_that_the_tag_it_built_is_the_commit_the_gate_verified() -> Tes
     assert_eq!(all[0].get("id").and_then(Node::text), Some("source"));
     assert!(uses(&all[0]).is_some_and(|u| u.starts_with("actions/checkout@")));
     let check = &all[1];
-    assert_eq!(run(check), "test \"$CHECKED_OUT\" = \"$COMMIT\"");
+    assert_eq!(
+        run(check),
+        "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\""
+    );
     assert_eq!(
         check.at(&["env", "COMMIT"]).and_then(Node::text),
-        Some("${{ github.event.workflow_run.head_sha }}")
+        Some("${{ needs.tag.outputs.app_commit }}")
     );
     assert_eq!(
         check.at(&["env", "CHECKED_OUT"]).and_then(Node::text),

@@ -63,11 +63,11 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
         target("rust-lint", "Cargo.toml")?,
         RenderedKey {
             key: format!(
-                "velnor-tgt-rust-lint-root-{HOST}-{COMPAT}-{lock}-${{{{ github.sha }}}}-${{{{ github.run_id }}}}"
+                "velnor-tgt-rust-lint.root.{HOST}-{COMPAT}-{lock}-${{{{ github.sha }}}}-${{{{ github.run_id }}}}"
             ),
             restore_keys: vec![
-                format!("velnor-tgt-rust-lint-root-{HOST}-{COMPAT}-{lock}-"),
-                format!("velnor-tgt-rust-lint-root-{HOST}-{COMPAT}-"),
+                format!("velnor-tgt-rust-lint.root.{HOST}-{COMPAT}-{lock}-"),
+                format!("velnor-tgt-rust-lint.root.{HOST}-{COMPAT}-"),
             ],
         }
     );
@@ -258,9 +258,10 @@ fn every_lane_restores_sources_then_its_own_target_between_prepare_and_restored(
         );
         assert!(restored.is_some_and(|restored| restored + 1 < steps.len()));
     }
-    assert!(text.contains("velnor-tgt-rust-lint-root-root-"));
-    assert!(text.contains("velnor-tgt-rust-lint-lab-lab-"));
-    assert!(text.contains("path: lab/target\n"));
+    assert!(text.contains("velnor-tgt-rust-lint-root.root."));
+    assert!(text.contains("velnor-tgt-rust-lint-lab.lab."));
+    assert!(text.contains("lab/target"));
+    assert!(!text.contains("target/.velnor/inputs.tsv"));
     assert!(
         !lane_steps(&text, "rust-plan")
             .iter()

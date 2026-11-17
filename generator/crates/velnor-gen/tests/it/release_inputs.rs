@@ -162,7 +162,7 @@ fn the_release_workflow_follows_the_configured_default_branch() -> TestResult {
     view.tracked_paths.insert(velnor_rust::CONFIG_PATH);
     view.files.insert(
         velnor_rust::CONFIG_PATH,
-        b"default_branch = \"trunk\"\n".to_vec(),
+        b"default_branch = \"trunk\"\nfull_run = \"off\"\n".to_vec(),
     );
     let files = expected_files(&view)?;
     let text = files
@@ -186,7 +186,7 @@ fn a_default_branch_with_shell_or_filter_characters_reaches_the_shell_only_throu
         view.tracked_paths.insert(velnor_rust::CONFIG_PATH);
         view.files.insert(
             velnor_rust::CONFIG_PATH,
-            format!("default_branch = \"{name}\"\n").into_bytes(),
+            format!("default_branch = \"{name}\"\nfull_run = \"off\"\n").into_bytes(),
         );
         let files = expected_files(&view)?;
         let text = files
@@ -203,7 +203,7 @@ fn a_default_branch_with_shell_or_filter_characters_reaches_the_shell_only_throu
     view.tracked_paths.insert(velnor_rust::CONFIG_PATH);
     view.files.insert(
         velnor_rust::CONFIG_PATH,
-        b"default_branch = \"release/c++\"\n".to_vec(),
+        b"default_branch = \"release/c++\"\nfull_run = \"off\"\n".to_vec(),
     );
     let files = expected_files(&view)?;
     let text = files

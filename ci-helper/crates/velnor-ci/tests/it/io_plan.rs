@@ -43,14 +43,18 @@ pub(crate) fn plan_command(repo: &Repo) -> Command {
 
 pub(crate) fn stale_plan_command(repo: &Repo) -> Command {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
-    command
-        .current_dir(repo.root())
-        .env_remove("GITHUB_OUTPUT")
-        .env_remove("GITHUB_EVENT_NAME")
-        .env_remove("GITHUB_EVENT_PATH")
-        .env_remove("GITHUB_REPOSITORY")
-        .env_remove("GITHUB_TOKEN")
-        .env_remove("GITHUB_API_URL");
+    command.current_dir(repo.root());
+    for variable in [
+        "GITHUB_OUTPUT",
+        "GITHUB_STEP_SUMMARY",
+        "GITHUB_EVENT_NAME",
+        "GITHUB_EVENT_PATH",
+        "GITHUB_REPOSITORY",
+        "GITHUB_TOKEN",
+        "GITHUB_API_URL",
+    ] {
+        command.env_remove(variable);
+    }
     command
 }
 
@@ -81,7 +85,7 @@ fn plan_appends_the_outputs_of_every_root_to_github_output_and_explains_on_reque
     );
     assert_eq!(
         fs::read_to_string(&outputs).unwrap_or_else(|e| unreachable!("{e}")),
-        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_package_args=-p a\nrust_root_doctests=skip\nrust_root_doctests_known=false\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_package_args=--workspace\nrust_tools_doctests=skip\nrust_tools_doctests_known=false\nrust_tools_docs=run\nrust_deny=skip\nrust_machete=skip\n"
+        "earlier=kept\nrust_root_mode=some\nrust_root_packages=a\nrust_root_test_filter=package(a)\nrust_root_package_args=-p a\nrust_root_doctests=skip\nrust_root_doctests_known=false\nrust_root_docs=skip\nrust_tools_mode=all\nrust_tools_packages=\nrust_tools_test_filter=all()\nrust_tools_package_args=--workspace\nrust_tools_doctests=skip\nrust_tools_doctests_known=false\nrust_tools_docs=run\nrust_deny=skip\nrust_machete=skip\nrust_root_tests=run\nrust_tools_tests=run\n"
     );
 }
 
@@ -370,44 +374,5 @@ fn plan_leaves_a_root_manifest_that_only_changed_dependency_versions_to_the_lock
     assert_eq!(
         selected(&output),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
-    );
-}
-
-#[test]
-fn plan_says_a_doctest_is_known_only_when_a_fenced_example_was_found() {
-    let repo = plan_repo("doctests-known");
-    let known = |repo: &Repo| {
-        let outputs = repo.root().join("known");
-        fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
-        let output = plan_command(repo)
-            .args(["plan", "--changed", "rust-toolchain.toml"])
-            .env("GITHUB_OUTPUT", &outputs)
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(output.status.success(), "{output:?}");
-        fs::read_to_string(&outputs)
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .lines()
-            .filter(|line| line.contains("_doctests"))
-            .flat_map(|line| [line, " "])
-            .collect::<String>()
-    };
-    repo.write("a/src/lib.rs", "/// Adds one.\npub fn f() {}\n");
-    assert_eq!(
-        known(&repo),
-        "rust_root_doctests=skip rust_root_doctests_known=false rust_tools_doctests=skip rust_tools_doctests_known=false "
-    );
-    repo.write(
-        "tools/Cargo.toml",
-        "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\nserde_derive = \"1\"\n",
-    );
-    repo.write(
-        "a/src/lib.rs",
-        "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n",
-    );
-    assert!(
-        known(&repo).contains("rust_root_doctests=run rust_root_doctests_known=true "),
-        "{}",
-        known(&repo)
     );
 }

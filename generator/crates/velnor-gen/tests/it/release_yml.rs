@@ -137,7 +137,7 @@ fn release_yml_gate_checks_the_commit_ci_ran_on_and_exports_ready() -> TestResul
         .ok_or("no gate step")?;
     assert_eq!(
         check.get("run").and_then(Node::text),
-        Some("velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"")
+        Some("velnor-ci release-gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\"")
     );
     assert_eq!(
         check.at(&["env", "COMMIT"]).and_then(Node::text),

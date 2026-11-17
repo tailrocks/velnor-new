@@ -3,10 +3,10 @@
 
 use crate::build_profile::BuildProfile;
 use crate::sha256::sha256_hex;
+use velnor_model::CACHE_COMPAT_LENGTH;
 
 pub const COMPAT_SCHEMA: u32 = 1;
 pub const BUILD_DRIVER: &str = "cargo";
-const COMPAT_LENGTH: usize = 16;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CompatInputs {
@@ -47,5 +47,5 @@ pub fn compat(inputs: &CompatInputs) -> String {
         .map(|(name, value)| format!("{name}:{}:{value}\n", value.len()))
         .collect::<Vec<_>>()
         .concat();
-    sha256_hex(canonical.as_bytes())[..COMPAT_LENGTH].to_owned()
+    sha256_hex(canonical.as_bytes())[..CACHE_COMPAT_LENGTH].to_owned()
 }

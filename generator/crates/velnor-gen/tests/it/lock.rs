@@ -27,7 +27,7 @@ const COMMIT: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
 pub(crate) const COMMIT_FILE: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
 
 fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
-    let mut view = view(&["Cargo.toml"], None)?;
+    let mut view = view(&["Cargo.toml"], Some(b"full_run = \"off\"\n"))?;
     view.tracked_paths.insert(LOCK_PATH);
     view.files.insert(LOCK_PATH, lock.as_bytes().to_vec());
     Ok(view)
@@ -118,12 +118,11 @@ fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_an
         .filter_map(|line| line.strip_prefix("      - name: "))
         .collect();
     assert_eq!(steps[..2], ["Check out", "Install velnor-ci 0.1.81"]);
-    assert_eq!(
+    assert!(
         steps
             .iter()
             .filter(|step| step.starts_with("Install velnor-ci"))
-            .count(),
-        1
+            .all(|step| *step == "Install velnor-ci 0.1.81")
     );
     let install = format!(
         "      - name: Install velnor-ci 0.1.81

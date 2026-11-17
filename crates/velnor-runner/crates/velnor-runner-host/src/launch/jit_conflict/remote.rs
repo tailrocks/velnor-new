@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use crate::{
     config::RepositoryConnection,
@@ -17,8 +17,8 @@ use velnor_runner_github::{
 
 use super::ReconcileContext;
 
-const OPERATION_CAP_SECONDS: u64 = 60;
-const CLAIM_LEASE_SAFETY_MARGIN_SECONDS: i64 = 15;
+mod budget;
+use budget::operation_deadline;
 
 pub(super) async fn reconcile(
     context: &ReconcileContext<'_>,
@@ -74,6 +74,36 @@ where
     I: Transport + ?Sized,
     A: Transport + ?Sized,
 {
+    reconcile_admin_with_clock(
+        context,
+        claim,
+        identity_transport,
+        transport,
+        admin_token,
+        || {
+            SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_err(|_| HostError::Identity)
+                .and_then(|duration| {
+                    i64::try_from(duration.as_secs()).map_err(|_| HostError::Identity)
+                })
+        },
+    )
+    .await
+}
+
+pub(super) async fn reconcile_admin_with_clock<I, A>(
+    context: &ReconcileContext<'_>,
+    claim: &JitConflictRecoveryClaim,
+    identity_transport: &mut I,
+    transport: &mut A,
+    admin_token: &Secret,
+    clock: impl FnOnce() -> Result<i64, HostError>,
+) -> Result<bool, HostError>
+where
+    I: Transport + ?Sized,
+    A: Transport + ?Sized,
+{
     context.scope.validate_jit_conflict_claim(claim).await?;
     if context.scope.jit_conflict_delete_started(claim).await? {
         let Some(target) = context.scope.jit_conflict_delete_target(claim).await? else {
@@ -99,34 +129,40 @@ where
         Some(None) => PriorObservation::Absent,
         Some(Some(runner)) => PriorObservation::Found(runner),
     };
+    let observed_at = clock()?;
     let Ok((observed, receipt)) = lookup(transport, claim.requested_name(), admin_token) else {
         return Ok(false);
     };
-    match observed {
-        Some(runner) => {
-            reconcile_target(
-                context,
-                claim,
-                identity_transport,
-                transport,
-                admin_token,
-                prior,
-                RunnerObservation { runner, receipt },
-            )
-            .await
+    if let Some(runner) = observed {
+        reconcile_target(
+            context,
+            claim,
+            identity_transport,
+            transport,
+            admin_token,
+            prior,
+            RunnerObservation { runner, receipt },
+        )
+        .await
+    } else {
+        if !claim.allows_initial_remote_absence()
+            && !context
+                .scope
+                .record_jit_absent_after_deadline(claim, observed_at)
+                .await?
+        {
+            return Ok(false);
         }
-        None => {
-            reconcile_initial_absence(
-                context,
-                claim,
-                identity_transport,
-                transport,
-                admin_token,
-                prior,
-                receipt,
-            )
-            .await
-        }
+        reconcile_initial_absence(
+            context,
+            claim,
+            identity_transport,
+            transport,
+            admin_token,
+            prior,
+            receipt,
+        )
+        .await
     }
 }
 
@@ -303,7 +339,7 @@ fn bounded_transport(deadline: Instant) -> Option<HttpsTransport> {
     HttpsTransport::with_deadline(GITHUB_API, deadline).ok()
 }
 
-fn repository_scope_matches<T: Transport + ?Sized>(
+pub(super) fn repository_scope_matches<T: Transport + ?Sized>(
     transport: &mut T,
     binding: &RepositoryConnection,
     github_pat: &Secret,
@@ -324,30 +360,6 @@ fn repository_scope_matches<T: Transport + ?Sized>(
         github_pat.expose(),
     )
     .is_ok()
-}
-
-fn operation_deadline(claim: &JitConflictRecoveryClaim) -> Result<Instant, HostError> {
-    let monotonic_now = Instant::now();
-    let wall_now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| HostError::Identity)?;
-    let now_seconds = i64::try_from(wall_now.as_secs()).map_err(|_| HostError::Identity)?;
-    operation_deadline_at(claim.lease_until(), now_seconds, monotonic_now)
-}
-
-fn operation_deadline_at(
-    lease_until: i64,
-    now_seconds: i64,
-    monotonic_now: Instant,
-) -> Result<Instant, HostError> {
-    let remaining = lease_until
-        .checked_sub(now_seconds)
-        .and_then(|seconds| seconds.checked_sub(CLAIM_LEASE_SAFETY_MARGIN_SECONDS))
-        .filter(|seconds| *seconds > 0)
-        .ok_or(HostError::Identity)?;
-    let budget = Duration::from_secs(u64::try_from(remaining).map_err(|_| HostError::Identity)?)
-        .min(Duration::from_secs(OPERATION_CAP_SECONDS));
-    monotonic_now.checked_add(budget).ok_or(HostError::Identity)
 }
 
 fn context_matches_claim(context: &ReconcileContext<'_>, claim: &JitConflictRecoveryClaim) -> bool {

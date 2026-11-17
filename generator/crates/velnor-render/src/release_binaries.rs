@@ -4,7 +4,8 @@
 use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
-use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER};
+use crate::release_outputs::commit_output;
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
@@ -81,16 +82,7 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
             id: Some("source".to_owned()),
             ..checkout(&tagged_source(binary), 1)
         },
-        RenderedStep {
-            env: variables(&[
-                ("COMMIT", VERIFIED_COMMIT),
-                ("CHECKED_OUT", "${{ steps.source.outputs.commit }}"),
-            ]),
-            ..command(
-                "Check that the tag is the commit the gate verified".to_owned(),
-                "test \"$CHECKED_OUT\" = \"$COMMIT\"".to_owned(),
-            )
-        },
+        same_commit(binary),
     ];
     if linux {
         steps.push(command(
@@ -134,6 +126,23 @@ fn build(binary: &BinaryPlan, platform: Platform) -> RenderedJob {
             format!("build-{}-{suffix}", binary.package),
             binary,
             Vec::new(),
+        )
+    }
+}
+
+fn same_commit(binary: &BinaryPlan) -> RenderedStep {
+    let expected = format!(
+        "${{{{ needs.tag.outputs.{} }}}}",
+        commit_output(&binary.package)
+    );
+    RenderedStep {
+        env: variables(&[
+            ("COMMIT", &expected),
+            ("CHECKED_OUT", "${{ steps.source.outputs.commit }}"),
+        ]),
+        ..command(
+            "Check that the tag is on the verified commit itself".to_owned(),
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"".to_owned(),
         )
     }
 }
@@ -193,7 +202,7 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             ),
         ]),
         run: Some(format!(
-            "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app {RELEASE_APP_SLUG} --dir {DIST} {}",
+            "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
             assets(binary).join(" ")
         )),
         ..RenderedStep::default()

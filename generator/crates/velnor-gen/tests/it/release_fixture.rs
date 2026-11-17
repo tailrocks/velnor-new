@@ -90,7 +90,7 @@ pub(crate) fn release_view(
         roots.iter().map(|root| join_manifest(root.dir)).collect()
     };
     let refs: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let mut view = view(&refs, None)?;
+    let mut view = view(&refs, Some(b"full_run = \"off\"\n"))?;
     for (root, manifest) in roots.iter().zip(&manifests) {
         let metadata = view
             .rust_metadata

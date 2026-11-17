@@ -4,13 +4,15 @@
 use velnor_runner_host::HostError;
 use velnor_runner_host::local::{StartFailure, start_pair};
 
-use bollard::query_parameters::RemoveImageOptions;
-
-use super::support::{Fixture, Program, TestResult, build_program, labelled, request, suffix};
+use super::support::{
+    Fixture, Program, TestResult, build_program, labelled, request, suffix, untag_only,
+};
 
 #[tokio::test]
 async fn local_pair_start_refuses_a_runner_that_exits_at_once_and_cleans_up() -> TestResult<()> {
-    let fixture = Fixture::new().await?;
+    let Some(fixture) = Fixture::new().await? else {
+        return Ok(());
+    };
     let tag = format!("velnor-local-test-exiter:{}", suffix()?);
     let built = build_program(&fixture.docker, &tag, Program::Exit).await;
     let failed = match &built {
@@ -24,7 +26,7 @@ async fn local_pair_start_refuses_a_runner_that_exits_at_once_and_cleans_up() ->
     let left = labelled(&fixture.docker, &fixture.environment).await;
     let removed = fixture
         .docker
-        .remove_image(&tag, None::<RemoveImageOptions>, None)
+        .remove_image(&tag, Some(untag_only()), None)
         .await;
     fixture.finish().await?;
     built?;

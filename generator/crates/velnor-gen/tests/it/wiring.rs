@@ -59,11 +59,13 @@ fn the_documentation_step_builds_the_workspace_and_an_empty_selection_skips_it()
     let doc = step(&single, "Documentation");
     let condition = doc.join("\n");
     assert!(
-        condition.contains("steps.plan.outputs.rust_root_package_args != ''"),
+        condition.contains("(steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args) != ''"),
         "{condition}"
     );
     assert!(
-        condition.contains("steps.plan.outputs.rust_root_docs == 'run'"),
+        condition.contains(
+            "(steps.replan.outputs.rust_root_docs || steps.plan.outputs.rust_root_docs) == 'run'"
+        ),
         "{condition}"
     );
     assert!(!condition.contains("PACKAGE_ARGS"), "{condition}");
@@ -74,7 +76,7 @@ fn the_documentation_step_builds_the_workspace_and_an_empty_selection_skips_it()
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let doc = step(&lanes, "Documentation").join("\n");
     assert!(
-        doc.contains("needs.rust-plan.outputs.rust_root_package_args != ''"),
+        doc.contains("(steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != ''"),
         "{doc}"
     );
     assert!(!doc.contains("PACKAGE_ARGS"), "{doc}");
@@ -90,7 +92,7 @@ fn nextest_builds_the_workspace_and_reads_the_filter_the_plan_selected() -> Test
     let test = step(&single, "Test");
     let joined = test.join("\n");
     assert!(
-        joined.contains("TEST_FILTER: '${{ steps.plan.outputs.rust_root_test_filter }}'"),
+        joined.contains("TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || steps.plan.outputs.rust_root_test_filter }}'"),
         "{joined}"
     );
     assert!(!joined.contains("PACKAGE_ARGS"), "{joined}");
@@ -105,14 +107,39 @@ fn nextest_builds_the_workspace_and_reads_the_filter_the_plan_selected() -> Test
 
 #[test]
 fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestResult {
-    let mut files = view(&["Cargo.toml"], None)?;
+    let mut files = view(
+        &["lab/Cargo.toml"],
+        Some(b"skip_draft_pull_requests = true\n"),
+    )?;
     with_doctest_library(&mut files)?;
     let text = text(&files)?;
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked"
+        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics"
     );
+    assert_eq!(text.matches("cargo test --doc").count(), 1);
+    let steps: Vec<&str> = text.split("\n      - ").collect();
+    let index = steps
+        .iter()
+        .position(|body| body.contains("name: Doctests\n"))
+        .ok_or("no doctests")?;
+    let build = steps.get(index - 1).ok_or("no preparatory build")?;
+    assert!(
+        build.contains("velnor-ci inputs build -- cargo build --workspace --all-targets --locked"),
+        "{build}"
+    );
+    for line in steps[index].lines().filter(|line| {
+        line.trim_start().starts_with("if:") || line.trim_start().starts_with("working-directory:")
+    }) {
+        assert!(build.lines().any(|candidate| candidate == line), "{line}");
+    }
+    files.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"off\"\n".to_vec(),
+    );
+    let off = self::text(&files)?;
+    assert_eq!(off.matches("cargo test --doc").count(), 1);
     Ok(())
 }
 
@@ -274,18 +301,18 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         .split("\n  rust-inputs-audit:\n")
         .nth(1)
         .ok_or("no audit job")?
-        .split("\n  required:\n")
+        .split("\n  rust-trim:\n")
         .next()
         .ok_or("no audit job")?;
     assert!(
         audit.contains(
-            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'push')) }}'"
+            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')) }}'"
         ),
         "{audit}"
     );
     assert_eq!(
         audit
-            .matches("run: velnor-ci run -- cargo build --workspace --all-targets --locked")
+            .matches("run: 'velnor-ci run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'")
             .count(),
         2,
         "{audit}"
@@ -302,10 +329,36 @@ fn the_multi_root_audit_job_follows_the_schedule_policy() -> TestResult {
     let scheduled = text(&view(&roots, Some(b"full_run = \"nightly\"\n".as_slice()))?)?;
     assert!(scheduled.contains("rust-inputs-audit:"), "{scheduled}");
     assert!(
-        scheduled.contains("if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && (github.event_name == 'schedule') }}'"),
+        scheduled.contains("if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}'"),
         "{scheduled}"
     );
     let off = text(&view(&roots, Some(b"full_run = \"off\"\n".as_slice()))?)?;
-    assert!(!off.contains("inputs audit"), "{off}");
+    assert!(off.contains("rust-inputs-audit:"), "{off}");
+    assert!(
+        off.contains(
+            "((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}'"
+        ),
+        "{off}"
+    );
+    Ok(())
+}
+
+#[test]
+fn an_inputs_audit_records_pre_build_inventories() -> TestResult {
+    let mut repo = crate::lock::locked("0.1.81")?;
+    repo.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"nightly\"\n".to_vec(),
+    );
+    let text = workflow(&repo)?;
+    assert!(
+        text.contains("velnor-ci run -- velnor-ci inputs build -- cargo-clippy"),
+        "{text}"
+    );
+    assert!(
+        text.contains("velnor-ci run -- velnor-ci inputs build -- cargo-nextest nextest run"),
+        "{text}"
+    );
+    assert!(text.contains("run: velnor-ci inputs audit\n"), "{text}");
     Ok(())
 }

@@ -182,7 +182,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
     assert_eq!(
         runs(build),
         [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add aarch64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target aarch64-unknown-linux-musl --target-dir target",
@@ -205,7 +205,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
         Some("error")
     );
     let publish = job(&tree, "publish-app")?;
-    assert!(runs(publish)[0].ends_with(" --dir dist rg-linux-arm64.tar.gz"));
+    assert!(runs(publish)[0].ends_with(" --dir=dist rg-linux-arm64.tar.gz"));
     Ok(())
 }
 
@@ -216,7 +216,7 @@ fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory(
     assert_eq!(
         runs(build),
         [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
@@ -317,7 +317,7 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
         assert_eq!(
             runs(publish),
             [format!(
-                "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app velnor-release --dir dist {files}"
+                "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app=velnor-release --dir=dist {files}"
             )]
         );
         let command = steps(publish).last().ok_or("no steps")?;
@@ -350,7 +350,10 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
 fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> TestResult {
     let (_, tree) = two_binaries()?;
     let outputs = job(&tree, "tag")?.get("outputs").ok_or("no outputs")?;
-    assert_eq!(outputs.keys(), ["app", "tools"]);
+    assert_eq!(
+        outputs.keys(),
+        ["app", "tools", "app_commit", "tools_commit"]
+    );
     for package in ["app", "tools"] {
         assert_eq!(
             outputs.get(package).and_then(Node::text),

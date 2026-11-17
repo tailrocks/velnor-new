@@ -7,15 +7,31 @@ use std::io::ErrorKind;
 use std::path::{Component, Path};
 
 use super::http::{DEFAULT_TIMEOUT, HttpGitHub};
-use crate::cli::{CheckConfigArgs, PublishArgs, RecordArgs};
+use crate::cli::{CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
-    CargoPathEntry, PlainName, check_cargo_discovery, check_config, check_manifests,
-    check_tag_patterns, publishes_to_crates_io, record,
+    CargoPathEntry, PlainName, check_branch_prefixes, check_cargo_discovery, check_config,
+    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
+use crate::release_commit::tagged_commits;
+use crate::release_preflight::check_release_source;
 use crate::rulesets::check_tag_rulesets;
+
+pub(super) fn run_preflight(args: &PreflightArgs) -> Result<String, CiError> {
+    let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+    check_release_source(
+        &github,
+        &Repo::parse(&args.repo)?,
+        &args.verified_commit,
+        &args.branch_prefixes,
+    )?;
+    Ok(format!(
+        "release-plz would tag the verified commit {}\n",
+        args.verified_commit
+    ))
+}
 
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args
@@ -27,7 +43,17 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
         })
         .collect::<Result<Vec<_>, CiError>>()?;
-    let lines = record(&outputs)?;
+    let tags = recorded(&outputs)?;
+    let mut lines = tag_lines(&tags);
+    if let (Some(repo), Some(verified)) = (&args.repo, &args.verified_commit) {
+        let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+        lines.push_str(&tagged_commits(
+            &github,
+            &Repo::parse(repo)?,
+            verified,
+            &tags,
+        )?);
+    }
     super::append_outputs(&lines)?;
     Ok(lines)
 }
@@ -75,6 +101,7 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         let publishes = publishes_to_crates_io(&root_of(&top, path), text, metadata)?;
         check_cargo_discovery(entries, publishes)?;
     }
+    check_branch_prefixes(&files, &args.branch_prefixes())?;
     let patterns = args.tag_patterns();
     check_tag_patterns(&files, &patterns)?;
     if let Some(repo) = &args.repo {

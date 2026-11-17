@@ -7,7 +7,6 @@ mod error;
 pub mod io;
 mod release;
 mod workflow_triggers;
-mod yaml_scalar;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
@@ -70,7 +69,9 @@ pub fn expected_with_notes(
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
     files.extend(release::release_workflow(view, &facts, helper, &files)?);
-    Ok((files, facts.timings_notes))
+    let mut notes = facts.timings_notes;
+    notes.extend(facts.private_sources);
+    Ok((files, notes))
 }
 
 pub fn plan_generate(

@@ -7,11 +7,32 @@ use velnor_render::render_key;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-fn with_config(view: &mut RepoView, path: &str, text: &str) -> TestResult {
+pub(crate) fn with_config(view: &mut RepoView, path: &str, text: &str) -> TestResult {
     let path = RepoPath::new(path)?;
     view.tracked_paths.insert(path.clone());
     view.files.insert(path, text.as_bytes().to_vec());
     Ok(())
+}
+
+fn target_cache_paths(text: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+    let workflow: serde_json::Value = serde_saphyr::from_str(text)?;
+    let jobs = workflow["jobs"].as_object().ok_or("jobs")?;
+    let mut paths = Vec::new();
+    for job in jobs.values() {
+        for step in job["steps"].as_array().ok_or("steps")? {
+            if matches!(
+                step["name"].as_str(),
+                Some("Restore the target cache" | "Save the target cache")
+            ) {
+                let path = step["with"]["path"].as_str().ok_or("cache path")?;
+                paths.push(path.lines().map(str::to_owned).collect());
+            }
+        }
+    }
+    if paths.is_empty() {
+        return Err("no target cache paths".into());
+    }
+    Ok(paths)
 }
 
 fn sources_key(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -91,8 +112,11 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
         "[build]\ntarget-dir = \"out\"\n",
     )?;
     let text = workflow(&one)?;
-    assert!(text.contains("path: out\n"), "{text}");
-    assert!(!text.contains("path: target\n"), "{text}");
+    assert!(
+        target_cache_paths(&text)?
+            .iter()
+            .all(|paths| { paths == &["out"] })
+    );
 
     let mut nested = view(&["Cargo.toml", "lab/Cargo.toml", "tools/Cargo.toml"], None)?;
     with_config(
@@ -116,13 +140,25 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
         "[build]\ntarget-dir = \"ignored\"\n",
     )?;
     let text = workflow(&nested)?;
-    assert!(text.contains("path: shared\n"), "{text}");
-    assert!(text.contains("path: out/lab\n"), "{text}");
-    assert!(text.contains("path: tools/build\n"), "{text}");
-    assert!(!text.contains("path: lab/target\n"), "{text}");
+    let paths = target_cache_paths(&text)?;
+    assert!(paths.contains(&vec!["shared".to_owned()]));
+    assert!(paths.contains(&vec!["out/lab".to_owned()]));
+    assert!(paths.contains(&vec!["tools/build".to_owned()]));
+    assert!(!paths.contains(&vec!["lab/target".to_owned()]));
 
     let plain = workflow(&view(&["lab/Cargo.toml"], None)?)?;
-    assert!(plain.contains("path: lab/target\n"), "{plain}");
+    assert!(
+        target_cache_paths(&plain)?
+            .iter()
+            .all(|paths| paths == &["lab/target"])
+    );
+
+    let root_default = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert!(
+        target_cache_paths(&root_default)?
+            .iter()
+            .all(|paths| paths == &["target"])
+    );
     Ok(())
 }
 

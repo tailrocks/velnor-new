@@ -27,6 +27,18 @@ use super::{HOST_CONFIG, TestResult};
 const TOKEN: &str = "0123456789abcdef0123456789abcdef";
 const UNCERTAIN: &str = "uncertain/00/uncertain/0/1/none/";
 
+#[path = "removed/deadline.rs"]
+mod deadline;
+
+#[path = "removed/fairness.rs"]
+mod fairness;
+
+#[path = "removed/initializer_deadline.rs"]
+mod initializer_deadline;
+
+#[path = "removed/shared_budget.rs"]
+mod shared_budget;
+
 impl Controller {
     fn remove_connection(&mut self) -> TestResult<()> {
         let kept = HOST_CONFIG.replace("conn-test-1", "conn-other-1");
@@ -66,6 +78,7 @@ impl Controller {
             image_authority: &self.image_authority,
             admission_ready: true,
             control_state: &control_state,
+            retirement_budget: Duration::from_secs(120),
         };
         let pending = vec![self.prepared.binding.clone()];
         let mut connections = vec![self.prepared];
@@ -94,7 +107,7 @@ impl Controller {
             engine,
             images: &self.images,
             image_authority: &self.image_authority,
-            deadline: Instant::now() + budget,
+            deadline: tokio::time::Instant::now() + budget,
         })
         .await;
     }
@@ -109,12 +122,16 @@ struct Restarted {
 }
 
 async fn restarted_with_a_removed_connection() -> TestResult<(Restarted, Controller)> {
+    restarted_with_removed_pairs(&[FAILED]).await
+}
+
+async fn restarted_with_removed_pairs(pairs: &[seed::Pair]) -> TestResult<(Restarted, Controller)> {
     let dir = tempfile::tempdir()?;
     let socket = dir.path().join("docker.sock");
-    let fixture = FixtureDocker::start(&socket, &[FAILED])?;
+    let fixture = FixtureDocker::start(&socket, pairs)?;
     let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
     let journal = Journal::open(&dir.path().join("launch.db")).await?;
-    let (scope, engine) = seed::started_pairs(&journal, &docker, &[FAILED]).await?;
+    let (scope, engine) = seed::started_pairs(&journal, &docker, pairs).await?;
     journal.recover_after_restart_without_authority().await?;
     assert_eq!(
         seed::text(&journal, seed::RESERVATION, FAILED.reservation).await?,

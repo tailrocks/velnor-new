@@ -8,9 +8,10 @@ use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
+use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
-    app_token, checkout, expression, install_release_plz, label, permissions, refuse_commands,
-    release_plz_arguments, release_plz_step, shell_word, variables,
+    APP_TOKEN_OUTPUT, app_token, checkout, expression, install_release_plz, label, permissions,
+    refuse_commands, release_plz_arguments, release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -40,11 +41,12 @@ pub fn render_release(
     helper: &HelperRelease,
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
-    let mut jobs = vec![
-        gate(plan, helper),
-        release_pr(plan, helper),
-        tag(plan, helper),
-    ];
+    let tag_job = tag(plan, helper);
+    let collisions = output_collisions(plan, &tag_job.id);
+    if !collisions.is_empty() {
+        return Err(collisions);
+    }
+    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper), tag_job];
     jobs.extend(binary_jobs(plan, helper));
     jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
@@ -112,39 +114,48 @@ fn escape_filter(name: &str) -> String {
 }
 
 fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
-    let mut command = "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned();
+    let mut command = "velnor-ci release-gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\"".to_owned();
+    let mut scopes = vec![
+        ("actions", "read"),
+        ("contents", "read"),
+        ("statuses", "read"),
+    ];
+    let mut steps = vec![install_helper(helper)];
+    let mut token = "${{ github.token }}";
+    if !plan.pr_only_checks.is_empty() {
+        scopes.push(("checks", "read"));
+        let mut app_scopes = scopes.clone();
+        app_scopes.push(("administration", "write"));
+        steps.push(app_token(&app_scopes));
+        token = APP_TOKEN_OUTPUT;
+    }
     for name in &plan.pr_only_checks {
         command.push_str(" --pr-only-check=");
         command.push_str(&shell_word(name));
     }
+    steps.push(RenderedStep {
+        id: Some("gate".to_owned()),
+        name: "Check that every required check passed on the commit".to_owned(),
+        env: variables(&[
+            ("GITHUB_TOKEN", token),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
+        ]),
+        run: Some(command),
+        ..RenderedStep::default()
+    });
     RenderedJob {
         id: "gate".to_owned(),
         condition: Some(expression(FROM_A_PASSED_PUSH)),
-        permissions: permissions(&[
-            ("actions", "read"),
-            ("contents", "read"),
-            ("statuses", "read"),
-        ]),
+        permissions: permissions(&scopes),
+        environment: (!plan.pr_only_checks.is_empty()).then(|| ENVIRONMENT.to_owned()),
         outputs: vec![(
             "ready".to_owned(),
             "${{ steps.gate.outputs.ready }}".to_owned(),
         )],
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: GATE_TIMEOUT_MINUTES,
-        steps: vec![
-            install_helper(helper),
-            RenderedStep {
-                id: Some("gate".to_owned()),
-                name: "Check that every required check passed on the commit".to_owned(),
-                env: variables(&[
-                    ("GITHUB_TOKEN", "${{ github.token }}"),
-                    ("REPOSITORY", "${{ github.repository }}"),
-                    ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
-                ]),
-                run: Some(command),
-                ..RenderedStep::default()
-            },
-        ],
+        steps,
         ..RenderedJob::default()
     }
 }
@@ -211,6 +222,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
     steps.push(refuse_commands(&plan.roots, true));
+    steps.push(source_preflight(plan));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),
@@ -227,14 +239,9 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             ),
         )
     }));
-    steps.push(RenderedStep {
-        id: Some("record".to_owned()),
-        name: "Record the released packages".to_owned(),
-        run: Some(format!("velnor-ci release record {}", files.join(" "))),
-        ..RenderedStep::default()
-    });
+    steps.push(record(&files));
     only_while_newest(&mut steps);
-    let mut scopes = vec![("contents", "read")];
+    let mut scopes = vec![("contents", "read"), ("pull-requests", "read")];
     if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
         scopes.push(("id-token", "write"));
     }
@@ -253,6 +260,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
                 let output = format!("${{{{ steps.record.outputs.{package} }}}}");
                 (package, output)
             })
+            .chain(commit_outputs(plan))
             .collect(),
         timeout_minutes: u16::try_from(
             u64::from(TAG_JOB_BASE_MINUTES).saturating_add(publish_budget_minutes(&plan.roots)),
@@ -260,6 +268,44 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         .unwrap_or(u16::MAX),
         steps,
         ..after_the_gate("tag")
+    }
+}
+
+fn source_preflight(plan: &ReleasePlan) -> RenderedStep {
+    let prefixes = plan
+        .roots
+        .iter()
+        .map(|root| format!("--branch-prefix={}", shell_word(&root.pr_branch_prefix)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    RenderedStep {
+        name: "Check that release-plz would tag the verified commit".to_owned(),
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", VERIFIED_COMMIT),
+        ]),
+        run: Some(format!(
+            "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {prefixes}"
+        )),
+        ..RenderedStep::default()
+    }
+}
+
+fn record(files: &[String]) -> RenderedStep {
+    let files = files.join(" ");
+    RenderedStep {
+        id: Some("record".to_owned()),
+        name: "Record the released packages and the commits their tags are on".to_owned(),
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", VERIFIED_COMMIT),
+        ]),
+        run: Some(format!(
+            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {files}"
+        )),
+        ..RenderedStep::default()
     }
 }
 

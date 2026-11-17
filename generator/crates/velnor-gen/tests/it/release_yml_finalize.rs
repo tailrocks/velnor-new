@@ -57,7 +57,7 @@ fn a_package_without_a_binaries_entry_is_published_by_the_guarded_helper_command
         publish.get("run").and_then(Node::text),
         Some(
             format!(
-                "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app {APP_SLUG} --no-files"
+                "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={APP_SLUG} --no-files"
             )
             .as_str()
         )
@@ -122,7 +122,7 @@ fn packages_with_a_binaries_entry_are_not_finalized() -> TestResult {
     );
     assert_eq!(
         job(&mixed, "tag")?.get("outputs").map(Node::keys),
-        Some(vec!["tools", "app"])
+        Some(vec!["tools", "app", "tools_commit"])
     );
     Ok(())
 }

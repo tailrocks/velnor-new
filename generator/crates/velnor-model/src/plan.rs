@@ -3,18 +3,17 @@
 
 use std::collections::BTreeMap;
 
-use crate::cache::CacheKey;
 use crate::cron::CronExpr;
-use crate::ids::{
-    CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RootSlug, RunnerLabel,
-    Sha256, TargetName,
-};
+use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::TargetKind;
+use crate::steps::StepKind;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
-
+pub const BUILD_TESTS_STEP: &str = "Build the tests";
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
+pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
+pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -129,7 +128,10 @@ impl Gate {
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
-            GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+            GateNeed::TestFilter
+            | GateNeed::PackageArgs
+            | GateNeed::DoctestsKnown
+            | GateNeed::TestsExpected => {
                 vec![own(self.need)]
             }
         }
@@ -147,12 +149,34 @@ pub enum GateNeed {
     Deny,
     Machete,
     Policy,
+    TestsExpected,
 }
 
 impl GateNeed {
     #[must_use]
     pub fn is_global(self) -> bool {
         matches!(self, Self::Deny | Self::Machete | Self::Policy)
+    }
+
+    #[must_use]
+    pub fn output_name(self, slug: &RootSlug) -> String {
+        let name = match self {
+            Self::Selected => "mode",
+            Self::Doctests => "doctests",
+            Self::DoctestsKnown => "doctests_known",
+            Self::Docs => "docs",
+            Self::TestFilter => "test_filter",
+            Self::PackageArgs => "package_args",
+            Self::Deny => "deny",
+            Self::Machete => "machete",
+            Self::Policy => "policy",
+            Self::TestsExpected => "tests",
+        };
+        if self.is_global() {
+            format!("rust_{name}")
+        } else {
+            format!("rust_{slug}_{name}")
+        }
     }
 }
 
@@ -167,125 +191,19 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    Finalizer,
+    Always,
     Scheduled,
     ScheduledOrPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StepKind {
-    Checkout {
-        depth: u32,
-    },
-    InstallTools {
-        only: Option<String>,
-    },
-    CacheRestore(CacheKey),
-    CacheSave(CacheKey),
-    RustComponents(Vec<String>),
-    RustTargets(Vec<String>),
-    UploadArchive {
-        name: String,
-        file: RepoPath,
-    },
-    DownloadArchive {
-        name: String,
-        into: Option<RepoPath>,
-    },
-    Cargo(CargoCommand),
-    Helper(HelperCommand),
-    GeneratorCheck,
-    InstallHelper(HelperRelease),
-    HelperFromArtifact,
-    PublishHelper {
-        binary: RepoPath,
-    },
-    FailWhenANeedFailed,
-    FailOnDraftRun,
-    UploadCargoLog,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HelperCommand {
-    Plan,
-    Prepare,
-    CheckMetadata,
-    Restored,
-    InputsSave,
-    InputsRestore,
-    InputsAudit,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HelperRelease {
-    version: HelperVersion,
-    action: CommitSha,
-    digests: BTreeMap<Platform, Sha256>,
-}
-
-impl HelperRelease {
-    pub fn new(
-        version: HelperVersion,
-        action: CommitSha,
-        digests: BTreeMap<Platform, Sha256>,
-    ) -> Result<Self, InvalidId> {
-        if digests.is_empty() {
-            return Err(InvalidId {
-                kind: "HelperRelease",
-                value: version.to_string(),
-            });
-        }
-        Ok(Self {
-            version,
-            action,
-            digests,
-        })
-    }
-
-    #[must_use]
-    pub fn version(&self) -> &HelperVersion {
-        &self.version
-    }
-
-    #[must_use]
-    pub fn action(&self) -> &CommitSha {
-        &self.action
-    }
-
-    #[must_use]
-    pub fn digests(&self) -> &BTreeMap<Platform, Sha256> {
-        &self.digests
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Platform {
-    LinuxX64,
-    LinuxArm64,
-    MacosArm64,
-}
-
-impl Platform {
-    pub const ALL: [Self; 3] = [Self::LinuxX64, Self::LinuxArm64, Self::MacosArm64];
-
-    #[must_use]
-    pub const fn file_suffix(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "linux-x64",
-            Self::LinuxArm64 => "linux-arm64",
-            Self::MacosArm64 => "macos-arm64",
-        }
-    }
-
-    #[must_use]
-    pub const fn runner_key(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "Linux-X64",
-            Self::LinuxArm64 => "Linux-ARM64",
-            Self::MacosArm64 => "macOS-ARM64",
-        }
-    }
+    SaveBase,
+    SaveBaseDecided,
+    SaveSources,
+    FullAudit,
+    FullAuditOrPush,
+    BaseExpired,
+    SavingRun,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -301,6 +219,7 @@ pub enum CargoCommand {
         package: PackageName,
     },
     BuildAll,
+    NextestBuild,
     NextestRun {
         filter: FilterRef,
     },
