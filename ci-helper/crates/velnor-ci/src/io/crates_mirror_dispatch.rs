@@ -10,6 +10,8 @@ use super::crates_mirror::{CONFIG_ENV, REAL_ENV, WRAPPER_ENV, failed};
 use super::crates_mirror_mise::{self as mise, LaunchPhase};
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
+const SAVED: &str = "velnor-cargo-real";
+const RESERVED: [&str; 3] = ["cargo", "config.toml", "config.toml.velnor-crates-mirror"];
 
 pub(super) fn forward() -> Result<ExitStatus, CiError> {
     let wrapper = PathBuf::from(
@@ -63,7 +65,7 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         )?,
     };
     cargo.executable = std::fs::canonicalize(cargo.executable).map_err(|error| failed(&error))?;
-    let executable = linked_cargo(&cargo.executable, &wrapper)?;
+    let directory = linked_toolchain(&cargo.executable, &wrapper)?;
     let path = std::env::join_paths(
         wrapper
             .parent()
@@ -71,7 +73,7 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
             .chain(paths.iter().map(PathBuf::as_path)),
     )
     .map_err(|error| CiError::new(format!("cannot configure Cargo PATH: {error}")))?;
-    let mut command = Command::new(executable);
+    let mut command = Command::new(directory.join(SAVED));
     if let Some(toolchain) = cargo.toolchain {
         command.env("RUSTUP_TOOLCHAIN", toolchain);
     }
@@ -87,19 +89,15 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
         .args(args)
         .env("PATH", path)
         .env(REAL_ENV, cargo.executable)
-        .env("CARGO", wrapper)
+        .env("CARGO", directory.join("cargo"))
         .status()
         .map_err(|error| failed(&error))
 }
 
 fn find_cargo(paths: &[PathBuf], wrapper: &Path, phase: &LaunchPhase) -> Result<PathBuf, CiError> {
-    let wrapper = std::fs::canonicalize(wrapper).map_err(|error| failed(&error))?;
     for path in paths {
         let cargo = path.join("cargo");
-        if !cargo.is_file()
-            || !is_executable(&cargo)
-            || std::fs::canonicalize(&cargo).is_ok_and(|cargo| cargo == wrapper)
-        {
+        if !cargo.is_file() || !is_executable(&cargo) || same_file(&cargo, wrapper) {
             continue;
         }
         if !matches!(phase, LaunchPhase::Outer) && proxy(&cargo, "mise")?.is_some() {
@@ -107,32 +105,95 @@ fn find_cargo(paths: &[PathBuf], wrapper: &Path, phase: &LaunchPhase) -> Result<
         }
         return Ok(cargo);
     }
-    Err(CiError::new("cannot find cargo outside the mirror wrapper"))
+    saved_cargo(wrapper).ok_or_else(|| CiError::new("cannot find cargo outside the mirror wrapper"))
 }
 
-fn linked_cargo(cargo: &Path, wrapper: &Path) -> Result<PathBuf, CiError> {
-    let cargo = std::fs::canonicalize(cargo).map_err(|e| failed(&e))?;
-    let directory = wrapper
+fn saved_cargo(wrapper: &Path) -> Option<PathBuf> {
+    let beside_self = std::env::current_exe()
+        .ok()
+        .and_then(|executable| std::fs::canonicalize(executable).ok())
+        .and_then(|executable| executable.parent().map(|directory| directory.join(SAVED)));
+    let beside_wrapper = wrapper.parent().map(|directory| directory.join(SAVED));
+    [beside_self, beside_wrapper]
+        .into_iter()
+        .flatten()
+        .find(|saved| saved.is_file())
+}
+
+fn linked_toolchain(cargo: &Path, wrapper: &Path) -> Result<PathBuf, CiError> {
+    let parent = wrapper
         .parent()
-        .ok_or_else(|| CiError::new("invalid Cargo wrapper path"))?
-        .join(velnor_rust::sha256_hex(
-            cargo.as_os_str().as_encoded_bytes(),
-        ));
-    std::fs::create_dir_all(&directory).map_err(|e| failed(&e))?;
-    let executable = directory.join("velnor-cargo-real");
-    if !executable.is_file() {
-        match std::fs::hard_link(&cargo, &executable) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
-            Err(_) => {
-                let staged = directory.join(format!("velnor-cargo-real-{}", std::process::id()));
-                std::fs::copy(&cargo, &staged)
-                    .and_then(|_| std::fs::rename(staged, &executable))
-                    .map_err(|e| failed(&e))?;
-            }
+        .ok_or_else(|| CiError::new("invalid Cargo wrapper path"))?;
+    let directory = parent.join(velnor_rust::sha256_hex(
+        cargo.as_os_str().as_encoded_bytes(),
+    ));
+    std::fs::create_dir_all(&directory).map_err(|error| failed(&error))?;
+    save_executable(cargo, &directory.join(SAVED))?;
+    save_executable(wrapper, &directory.join("cargo"))?;
+    let bin = cargo
+        .parent()
+        .ok_or_else(|| CiError::new("invalid Cargo toolchain path"))?;
+    stage_view(bin, &directory)?;
+    stage_view(bin, parent)?;
+    stage_view_entry(&directory.join(SAVED), &parent.join(SAVED))?;
+    Ok(directory)
+}
+
+fn save_executable(source: &Path, target: &Path) -> Result<(), CiError> {
+    if target.is_file() {
+        return Ok(());
+    }
+    match std::fs::hard_link(source, target) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Ok(()),
+        Err(_) => {
+            let name = target
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned();
+            let staged =
+                target.with_file_name(format!("{name}.velnor-save-{}", std::process::id()));
+            std::fs::copy(source, &staged)
+                .and_then(|_| std::fs::rename(staged, target))
+                .map_err(|error| failed(&error))
         }
     }
-    Ok(executable)
+}
+
+fn stage_view(bin: &Path, target: &Path) -> Result<(), CiError> {
+    let entries = std::fs::read_dir(bin).map_err(|error| failed(&error))?;
+    for entry in entries {
+        let entry = entry.map_err(|error| failed(&error))?;
+        let name = entry.file_name();
+        let text = name.to_string_lossy();
+        if RESERVED.contains(&text.as_ref())
+            || text.starts_with("velnor-")
+            || text.starts_with("mise-")
+        {
+            continue;
+        }
+        if !entry.metadata().map_err(|error| failed(&error))?.is_file() {
+            continue;
+        }
+        stage_view_entry(&entry.path(), &target.join(name))?;
+    }
+    Ok(())
+}
+
+fn stage_view_entry(source: &Path, target: &Path) -> Result<(), CiError> {
+    if same_file(source, target) {
+        return Ok(());
+    }
+    let name = target
+        .file_name()
+        .unwrap_or_default()
+        .to_string_lossy()
+        .into_owned();
+    let staged = target.with_file_name(format!(".{name}.velnor-view-{}", std::process::id()));
+    std::fs::remove_file(&staged).ok();
+    std::os::unix::fs::symlink(source, &staged).map_err(|error| failed(&error))?;
+    std::fs::rename(&staged, target).map_err(|error| failed(&error))
 }
 
 struct ResolvedCargo {
