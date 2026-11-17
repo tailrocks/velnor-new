@@ -133,8 +133,7 @@ fn a_source_root_used_as_the_target_excludes_its_generated_artifacts() {
     );
 }
 
-#[test]
-fn directly_named_files_do_not_consume_the_directory_walk_budget() {
+fn named_files() -> Repo {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
     fs::create_dir_all(repo.root().join("shared/many")).unwrap_or_else(|e| unreachable!("{e}"));
@@ -144,20 +143,52 @@ fn directly_named_files_do_not_consume_the_directory_walk_budget() {
         UNIX_EPOCH + Duration::from_secs(1_000_000_000),
     );
     let mut output = String::new();
-    for index in 0..100_001 {
-        fs::hard_link(
-            repo.root().join("shared/many/seed"),
-            repo.root().join(format!("shared/many/{index}")),
-        )
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    for index in 0..16 {
+        unit(&repo, &format!("shared/many/{index}"), "");
+        repo.set_mtime(
+            &format!("shared/many/{index}"),
+            UNIX_EPOCH + Duration::from_secs(1_000_000_000),
+        );
         writeln!(output, "cargo:rerun-if-changed=../../shared/many/{index}")
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
     unit(&repo, OUTPUT, &output);
     build(&repo, OUTPUT, None);
+    repo
+}
+
+fn named_files_lock(repo: &Repo) {
+    let mut expected: Vec<_> = (0..16)
+        .map(|index| format!("shared/many/{index}\tlib\n"))
+        .collect();
+    expected.sort();
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        expected.concat()
+    );
+}
+
+#[test]
+fn directly_named_files_are_fresh_without_a_directory_scan() {
+    let repo = named_files();
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
-    assert!(repo.root().join(".velnor/rust-inputs.lock").is_file());
+    named_files_lock(&repo);
+}
+
+#[test]
+fn directly_named_files_do_not_consume_the_directory_walk_budget() {
+    let repo = named_files();
+    let written = velnor_ci::io::audit_inputs(
+        repo.root(),
+        &velnor_ci::io::AuditOptions {
+            write: true,
+            max_directory_entries: 8,
+        },
+    );
+    assert!(written.is_ok(), "{written:?}");
+    named_files_lock(&repo);
 }
 
 #[test]

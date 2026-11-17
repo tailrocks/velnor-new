@@ -21,11 +21,11 @@ pub(super) struct Freshness {
 }
 
 impl Freshness {
-    pub(super) fn new(workspaces: &[Workspace]) -> Self {
+    pub(super) fn new(workspaces: &[Workspace], max_directory_entries: usize) -> Self {
         Self {
             targets: inventory::exclusions(workspaces),
             directories: BTreeMap::new(),
-            remaining: inventory::LIMIT,
+            remaining: max_directory_entries,
         }
     }
 

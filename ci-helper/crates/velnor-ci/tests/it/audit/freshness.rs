@@ -137,7 +137,7 @@ fn newer_configured_target_artifacts_do_not_hide_a_repository_read() {
 #[test]
 fn repeated_directory_declarations_share_the_audit_scan_budget() {
     let repo = workspace_below_the_root();
-    populate(&repo, "shared/many", 50_001);
+    populate(&repo, "shared/many", 5);
     repo.write("shared/many/read.txt", "read");
     repo.set_mtime(
         "shared/many/read.txt",
@@ -168,8 +168,14 @@ fn repeated_directory_declarations_share_the_audit_scan_budget() {
             None,
         );
     }
-    let written = audit(&repo, &["--write"]);
-    assert!(written.status.success(), "{written:?}");
+    let written = velnor_ci::io::audit_inputs(
+        repo.root(),
+        &velnor_ci::io::AuditOptions {
+            write: true,
+            max_directory_entries: 8,
+        },
+    );
+    assert!(written.is_ok(), "{written:?}");
     assert_eq!(
         fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
             .unwrap_or_else(|e| unreachable!("{e}")),
@@ -181,7 +187,7 @@ fn repeated_directory_declarations_share_the_audit_scan_budget() {
 fn distinct_declared_trees_cannot_exceed_the_audit_scan_budget() {
     let repo = workspace_below_the_root();
     for directory in ["shared/first", "shared/second"] {
-        populate(&repo, directory, 50_001);
+        populate(&repo, directory, 5);
     }
     let target = "rust/target/debug";
     own_units(&repo, target, &[]);
@@ -204,10 +210,17 @@ fn distinct_declared_trees_cannot_exceed_the_audit_scan_budget() {
             None,
         );
     }
-    let refused = audit(&repo, &["--write"]);
-    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    let refused = velnor_ci::io::audit_inputs(
+        repo.root(),
+        &velnor_ci::io::AuditOptions {
+            write: true,
+            max_directory_entries: 8,
+        },
+    );
     assert!(
-        String::from_utf8_lossy(&refused.stderr).contains("freshness scan limit"),
+        refused
+            .as_ref()
+            .is_err_and(|error| error.to_string().contains("freshness scan limit")),
         "{refused:?}"
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());

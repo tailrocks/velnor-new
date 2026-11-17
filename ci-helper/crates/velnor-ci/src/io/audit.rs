@@ -4,8 +4,10 @@
 mod build;
 mod freshness;
 mod inventory;
+mod options;
 
 pub(crate) use build::build;
+pub use options::AuditOptions;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -43,7 +45,7 @@ pub(super) struct Audit<'a> {
     pub(super) built: Vec<Built>,
 }
 
-pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
+pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
     let listed = checkout
@@ -65,7 +67,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
-        freshness: freshness::Freshness::new(&workspaces),
+        freshness: freshness::Freshness::new(&workspaces, options.max_directory_entries),
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
@@ -119,7 +121,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     }
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
-    if write {
+    if options.write {
         write_lock(&checkout.root.join(INPUTS_LOCK.as_str()), &audit.found)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
