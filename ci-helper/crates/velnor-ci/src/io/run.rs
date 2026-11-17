@@ -19,7 +19,7 @@ use super::append_outputs;
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::{Pumped, pump_counted, separate_group};
-use crate::tests_run::{output_line, runs_nextest};
+use crate::tests_run::{TestCounts, output_lines, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -29,6 +29,13 @@ const SIGNAL_BASE: i32 = 128;
 const PUMP_GRACE: Duration = Duration::from_secs(2);
 const TERMINAL_VARIABLE: &str = "VELNOR_CI_RUN_TERMINAL";
 const CONTROLLING_TERMINAL: &str = "/dev/tty";
+const STEP_FILE_VARIABLES: [&str; 5] = [
+    "GITHUB_OUTPUT",
+    "GITHUB_ENV",
+    "GITHUB_PATH",
+    "GITHUB_STEP_SUMMARY",
+    "GITHUB_STATE",
+];
 const PUMP_GRACE_VARIABLE: &str = "VELNOR_CI_RUN_PUMP_GRACE_MS";
 
 fn pump_grace() -> Duration {
@@ -85,15 +92,13 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
     let (sender, receiver) = mpsc::channel();
-    let mut streams = 0;
+    let mut slots = Vec::new();
     if let Some(from) = child.stdout.take() {
-        streams += 1;
         let counted = args.require_doctests.then(|| Arc::clone(&doctests));
-        spawn_pump(from, std::io::stdout(), &log, counted, sender.clone());
+        watch_stream(&mut slots, from, std::io::stdout(), &log, counted, &sender);
     }
     if let Some(from) = child.stderr.take() {
-        streams += 1;
-        spawn_pump(from, std::io::stderr(), &log, None, sender.clone());
+        watch_stream(&mut slots, from, std::io::stderr(), &log, None, &sender);
     }
     drop(sender);
     let handle = signals.handle();
@@ -102,11 +107,11 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, tests_run) = collect(&receiver, streams);
+    let (mut lost, counts) = collect(&receiver, &slots);
     if runs_nextest(&args.command)
-        && let Some(tests_run) = tests_run
+        && let Some(counts) = counts
     {
-        append_outputs(&output_line(tests_run))
+        append_outputs(&output_lines(counts))
             .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
     }
     let ran = doctests
@@ -151,6 +156,11 @@ fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, Stri
         .args(&argv[1..])
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if runs_nextest(argv) {
+        for name in STEP_FILE_VARIABLES {
+            command.env_remove(name);
+        }
+    }
     if own_group {
         command.process_group(0);
     }
@@ -179,23 +189,41 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     });
 }
 
+struct Finished {
+    pumped: Pumped,
+    index: usize,
+}
+
 fn collect(
-    receiver: &mpsc::Receiver<Pumped>,
-    streams: usize,
-) -> (Option<std::io::Error>, Option<u64>) {
+    receiver: &mpsc::Receiver<Finished>,
+    slots: &[Arc<Mutex<Option<TestCounts>>>],
+) -> (Option<std::io::Error>, Option<TestCounts>) {
     let mut lost = None;
-    let mut tests_run = None;
+    let mut counts = None;
+    let mut open = vec![true; slots.len()];
+    let mut waiting = slots.len();
     let deadline = Instant::now() + pump_grace();
-    for _ in 0..streams {
+    while waiting > 0 {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(pumped) => {
-                lost = lost.or(pumped.failure);
-                tests_run = pumped.tests_run.or(tests_run);
+            Ok(finished) => {
+                lost = lost.or(finished.pumped.failure);
+                counts = finished.pumped.counts.or(counts);
+                open[finished.index] = false;
+                waiting -= 1;
             }
             Err(_) => break,
         }
     }
-    (lost, tests_run)
+    for (index, slot) in slots.iter().enumerate() {
+        if open[index]
+            && let Some(parsed) = *slot
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
+            counts = Some(parsed).or(counts);
+        }
+    }
+    (lost, counts)
 }
 
 #[cfg(unix)]
@@ -212,16 +240,32 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
+fn watch_stream(
+    slots: &mut Vec<Arc<Mutex<Option<TestCounts>>>>,
+    from: impl Read + Send + 'static,
+    to: impl Write + Send + 'static,
+    log: &Arc<Mutex<std::fs::File>>,
+    count: Option<Arc<Mutex<DoctestCount>>>,
+    done: &mpsc::Sender<Finished>,
+) {
+    let slot = Arc::new(Mutex::new(None));
+    let index = slots.len();
+    slots.push(Arc::clone(&slot));
+    spawn_pump(from, to, log, count, slot, index, done.clone());
+}
+
 fn spawn_pump(
     from: impl Read + Send + 'static,
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
-    done: mpsc::Sender<Pumped>,
+    parsed: Arc<Mutex<Option<TestCounts>>>,
+    index: usize,
+    done: mpsc::Sender<Finished>,
 ) {
     let log = Arc::clone(log);
     thread::spawn(move || {
-        done.send(pump_counted(from, to, &log, count.as_deref()))
-            .ok();
+        let pumped = pump_counted(from, to, &log, count.as_deref(), Some(&parsed));
+        done.send(Finished { pumped, index }).ok();
     });
 }
