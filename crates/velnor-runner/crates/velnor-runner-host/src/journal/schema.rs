@@ -23,6 +23,8 @@ pub(in crate::journal) use driver::bootstrap_historical_v45;
 pub(in crate::journal) use driver::bootstrap_historical_v46;
 #[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v47;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v48;
 mod migration;
 mod physical_attempts;
 
