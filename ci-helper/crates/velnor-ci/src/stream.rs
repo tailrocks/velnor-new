@@ -43,7 +43,7 @@ pub fn pump_counted<L: Write>(
             Err(error) if error.kind() == ErrorKind::Interrupted => continue,
             Err(error) => {
                 failed = failed.or(Some(error));
-                publish(reported, &failed, &console);
+                publish(reported, failed.as_ref(), console.as_ref());
                 break;
             }
         };
@@ -54,13 +54,13 @@ pub fn pump_counted<L: Write>(
             && let Err(error) = to.write_all(chunk).and_then(|()| to.flush())
         {
             console = Some(error);
-            publish(reported, &failed, &console);
+            publish(reported, failed.as_ref(), console.as_ref());
         }
         if let Ok(mut file) = log.lock()
             && let Err(error) = file.write_all(chunk)
         {
             failed.get_or_insert(error);
-            publish(reported, &failed, &console);
+            publish(reported, failed.as_ref(), console.as_ref());
         }
         if let Some(Ok(mut seen)) = count.map(Mutex::lock) {
             seen.feed(chunk);
@@ -73,18 +73,12 @@ pub fn pump_counted<L: Write>(
     }
 }
 
-fn publish(reported: Option<&Mutex<Pumped>>, failure: &Option<Error>, console: &Option<Error>) {
+fn publish(reported: Option<&Mutex<Pumped>>, failure: Option<&Error>, console: Option<&Error>) {
     if let Some(reported) = reported
         && let Ok(mut reported) = reported.lock()
     {
-        reported.failure = reported
-            .failure
-            .take()
-            .or_else(|| failure.as_ref().map(copy_error));
-        reported.console = reported
-            .console
-            .take()
-            .or_else(|| console.as_ref().map(copy_error));
+        reported.failure = reported.failure.take().or_else(|| failure.map(copy_error));
+        reported.console = reported.console.take().or_else(|| console.map(copy_error));
     }
 }
 

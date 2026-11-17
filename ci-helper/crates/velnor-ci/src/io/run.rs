@@ -5,7 +5,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode, Stdio};
+use std::process::{Child, Command, ExitCode, Stdio};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -95,40 +95,14 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
-    let (sender, receiver) = mpsc::channel();
-    let mut slots = Vec::new();
-    let mut reports = Vec::new();
-    if let Some(from) = child.stdout.take() {
-        let counted = args.require_doctests.then(|| Arc::clone(&doctests));
-        watch_stream(
-            &mut slots,
-            &mut reports,
-            from,
-            std::io::stdout(),
-            &log,
-            counted,
-            &sender,
-        );
-    }
-    if let Some(from) = child.stderr.take() {
-        watch_stream(
-            &mut slots,
-            &mut reports,
-            from,
-            std::io::stderr(),
-            &log,
-            None,
-            &sender,
-        );
-    }
-    drop(sender);
+    let pumps = start_pumps(&mut child, &log, args.require_doctests, &doctests);
     let handle = signals.handle();
     forward(signals, pid, own_group);
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, console, counts) = collect(&receiver, &slots, &reports);
+    let (mut lost, console, counts) = collect(&pumps.receiver, &pumps.slots, &pumps.reports);
     if runs_nextest(&args.command)
         && let Some(counts) = counts
     {
@@ -166,6 +140,52 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
             Ok(ExitCode::from(u8::try_from(code).unwrap_or(1)))
         }
         None => Ok(ExitCode::from(u8::try_from(code).unwrap_or(1))),
+    }
+}
+
+struct Pumps {
+    receiver: mpsc::Receiver<()>,
+    slots: Vec<Arc<Mutex<Option<TestCounts>>>>,
+    reports: Vec<Arc<Mutex<Pumped>>>,
+}
+
+fn start_pumps(
+    child: &mut Child,
+    log: &Arc<Mutex<std::fs::File>>,
+    require_doctests: bool,
+    doctests: &Arc<Mutex<DoctestCount>>,
+) -> Pumps {
+    let (sender, receiver) = mpsc::channel();
+    let mut slots = Vec::new();
+    let mut reports = Vec::new();
+    if let Some(from) = child.stdout.take() {
+        let counted = require_doctests.then(|| Arc::clone(doctests));
+        watch_stream(
+            &mut slots,
+            &mut reports,
+            from,
+            std::io::stdout(),
+            log,
+            counted,
+            &sender,
+        );
+    }
+    if let Some(from) = child.stderr.take() {
+        watch_stream(
+            &mut slots,
+            &mut reports,
+            from,
+            std::io::stderr(),
+            log,
+            None,
+            &sender,
+        );
+    }
+    drop(sender);
+    Pumps {
+        receiver,
+        slots,
+        reports,
     }
 }
 
