@@ -68,42 +68,46 @@ fn steps(workflow: &Value) -> Result<&Vec<Value>, Box<dyn Error>> {
 }
 
 #[test]
-fn every_trusted_helper_use_checks_its_pinned_copy_and_requires_verification_success() -> TestResult
-{
+fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> TestResult {
     let workflow = workflow(&"a".repeat(64))?;
     let steps = steps(&workflow)?;
     let mut seen = Vec::new();
-    for (index, step) in steps.iter().enumerate() {
+    for step in steps {
         let Some(run) = step["run"].as_str() else {
             continue;
         };
-        if !run.starts_with("velnor-ci ") && !run.starts_with("\"$VELNOR_HELPER\" ") {
+        if !run.starts_with("velnor-ci ") && step["env"]["VELNOR_HELPER"].is_null()
+            || step["env"]["VELNOR_HELPER_SOURCE"].is_string()
+        {
             continue;
         }
+        assert_eq!(run.lines().count(), 1, "{run}");
+        let mut rest = run;
+        for operation in [
+            "VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d \"$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX\")",
+            "VELNOR_HELPER_COPY=$(/usr/bin/mktemp \"$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX\")",
+            "/bin/cp \"$VELNOR_HELPER\" \"$VELNOR_HELPER_COPY\"",
+            "/bin/chmod 500 \"$VELNOR_HELPER_COPY\"",
+            "\"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\"",
+            "exec \"$VELNOR_HELPER_COPY\" ",
+        ] {
+            rest = rest
+                .strip_prefix(operation)
+                .ok_or_else(|| format!("missing {operation}: {run}"))?;
+            if !operation.starts_with("exec ") {
+                rest = rest
+                    .strip_prefix(" && ")
+                    .ok_or("operation not conditional")?;
+            }
+        }
+        assert_eq!(step["env"]["VELNOR_HELPER_TEMP"], "${{ runner.temp }}");
         assert!(
-            run.starts_with("\"$VELNOR_HELPER\" "),
-            "helper resolved through PATH: {run}"
+            !step["if"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("velnor-helper-check")
         );
-        let verify = steps
-            .get(index.checked_sub(1).ok_or("no verifier")?)
-            .ok_or("no verifier")?;
-        let id = verify["id"].as_str().ok_or("verifier has no id")?;
-        let condition = step["if"].as_str().ok_or("helper has no verifier guard")?;
-        assert!(
-            condition.contains(&format!("steps.{id}.outcome == 'success'")),
-            "{condition}"
-        );
-        let helper = step["env"]["VELNOR_HELPER"]
-            .as_str()
-            .ok_or("no helper path")?;
-        assert!(helper.starts_with("${{ runner.temp }}/"), "{helper}");
-        assert!(
-            helper.contains("${{ github.run_id }}")
-                && helper.contains("${{ github.run_attempt }}")
-                && helper.contains("${{ github.job }}")
-        );
-        assert_eq!(verify["env"]["VELNOR_HELPER"], helper);
-        let digest = verify["env"]["VELNOR_HELPER_SHA256"]
+        let digest = step["env"]["VELNOR_HELPER_SHA256"]
             .as_str()
             .ok_or("no digest")?;
         for (os, arch, pin) in [
@@ -119,28 +123,23 @@ fn every_trusted_helper_use_checks_its_pinned_copy_and_requires_verification_suc
             );
         }
         assert!(digest.ends_with(" || '' }}"), "{digest}");
-        let check = verify["run"].as_str().ok_or("no checksum command")?;
-        assert!(check.contains("$VELNOR_HELPER_SHA256") && check.contains("$VELNOR_HELPER"));
-        seen.push(run);
+        seen.push(rest);
     }
-    for command in [" plan", " run --", " crates-mirror ", " gate "] {
+    for command in ["plan ", "run --", "crates-mirror ", "gate "] {
         assert!(
-            seen.iter().any(|run| run.contains(command)),
+            seen.iter().any(|run| run.starts_with(command)),
             "missing {command}: {seen:?}"
         );
     }
     let gate = steps
         .iter()
-        .find(|step| {
-            step["run"]
-                .as_str()
-                .is_some_and(|run| run.contains(" gate "))
-        })
+        .find(|step| step["name"] == "velnor-ci gate")
         .ok_or("no gate")?;
+    assert_eq!(gate["if"], "${{ always() }}");
     assert!(
-        gate["if"]
-            .as_str()
-            .is_some_and(|condition| condition.contains("always()"))
+        !steps
+            .iter()
+            .any(|step| step["name"] == "Verify the released helper")
     );
     Ok(())
 }
@@ -238,9 +237,6 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
                 .is_some_and(|run| run.ends_with(" plan --explain"))
         })
         .ok_or("no plan use")?;
-    let verify = steps
-        .get(use_index.checked_sub(1).ok_or("no verifier")?)
-        .ok_or("no verifier")?;
     for step in &steps[..use_index] {
         if step["run"].is_string() {
             let result = execute(step, &root, &shadows, &digest)?;
@@ -250,9 +246,6 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
                 String::from_utf8_lossy(&result.stderr)
             );
         }
-    }
-    for invalid in ["", &"0".repeat(64)] {
-        assert!(!execute(verify, &root, &shadows, invalid)?.status.success());
     }
     let genuine = execute(&steps[use_index], &root, &shadows, &digest)?;
     assert!(genuine.status.success());
@@ -276,15 +269,16 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
     );
     fs::set_permissions(installed, fs::Permissions::from_mode(0o700))?;
     fs::write(installed, BAD)?;
-    let rejected = execute(verify, &root, &shadows, &digest)?;
+    let rejected = execute(&steps[use_index], &root, &shadows, &digest)?;
     assert!(!rejected.status.success());
     assert!(!String::from_utf8_lossy(&rejected.stdout).contains("replaced-helper"));
-    let verifier_id = verify["id"].as_str().ok_or("no verifier id")?;
-    assert!(
-        steps[use_index]["if"].as_str().is_some_and(
-            |guard| guard.contains(&format!("steps.{verifier_id}.outcome == 'success'"))
-        )
-    );
+    for invalid in ["", &"0".repeat(64)] {
+        assert!(
+            !execute(&steps[use_index], &root, &shadows, invalid)?
+                .status
+                .success()
+        );
+    }
     fs::set_permissions(
         installed.parent().ok_or("no installed parent")?,
         fs::Permissions::from_mode(0o700),
