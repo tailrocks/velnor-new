@@ -24,6 +24,7 @@ pub(super) struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
+    freshness: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
@@ -60,6 +61,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
+        freshness: freshness::Freshness::new(&workspaces)?,
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
@@ -290,7 +292,7 @@ impl Audit<'_> {
         else {
             return Ok(None);
         };
-        if self.changed_since(workspace, &paths, built) {
+        if self.changed_since(workspace, &paths, built)? {
             if !self.owners.of(package, &source).is_empty() {
                 self.stale.push(file.display().to_string());
             }
@@ -330,7 +332,7 @@ impl Audit<'_> {
                     || self.repository.to_path_buf(),
                     |d| self.repository.join(d.as_str()),
                 );
-                if self.changed_since(&base, &paths, built) {
+                if self.changed_since(&base, &paths, built)? {
                     continue;
                 }
                 ran = true;

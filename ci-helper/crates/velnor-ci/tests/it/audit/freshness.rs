@@ -2,9 +2,134 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, File, FileTimes};
+use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::{audit, own_units, unit, workspace_below_the_root};
+
+#[test]
+fn a_target_directory_containing_tracked_inputs_cannot_hide_changed_sources() {
+    let repo = workspace_below_the_root();
+    let target = "debug";
+    own_units(&repo, target, &[]);
+    let output = format!("{target}/build/lib-f000000000000008/output");
+    unit(&repo, &output, "cargo:rerun-if-changed=../../shared\n");
+    repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+    repo.set_mtime(
+        "shared/build.txt",
+        UNIX_EPOCH + Duration::from_secs(4_000_000_000),
+    );
+    let refused = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .env("CARGO_TARGET_DIR", repo.root())
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
+fn newer_configured_target_artifacts_do_not_hide_a_repository_read() {
+    let repo = workspace_below_the_root();
+    let target = "custom-target/debug";
+    own_units(&repo, target, &[]);
+    let output = format!("{target}/build/lib-f000000000000008/output");
+    unit(&repo, &output, "cargo:rerun-if-changed=../..\n");
+    repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+    for artifact in ["custom-target/newer-artifact", "rust/target/newer-artifact"] {
+        unit(&repo, artifact, "");
+        repo.set_mtime(artifact, UNIX_EPOCH + Duration::from_secs(4_000_000_000));
+    }
+    let written = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .env("CARGO_TARGET_DIR", repo.root().join("custom-target"))
+        .args(["inputs", "audit", "--write"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        ".\tlib\n"
+    );
+}
+
+#[test]
+fn repeated_directory_declarations_share_the_audit_scan_budget() {
+    let repo = workspace_below_the_root();
+    populate(&repo, "shared/many", 50_001);
+    repo.write("shared/many/read.txt", "read");
+    repo.set_mtime(
+        "shared/many/read.txt",
+        UNIX_EPOCH + Duration::from_secs(2_500_000_000),
+    );
+    let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
+    let earlier = format!("{target}/build/app-f000000000000018/output");
+    unit(
+        &repo,
+        &earlier,
+        "cargo:rerun-if-changed=../../shared/many\n",
+    );
+    repo.set_mtime(&earlier, UNIX_EPOCH + Duration::from_secs(2_000_000_000));
+    for (hash, declared) in [("008", "../../shared/many"), ("018", "../../shared/./many")] {
+        let output = format!("{target}/build/lib-f000000000000{hash}/output");
+        unit(
+            &repo,
+            &output,
+            &format!("cargo:rerun-if-changed={declared}\n"),
+        );
+        repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+    }
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        "shared/many\tlib\n"
+    );
+}
+
+#[test]
+fn distinct_declared_trees_cannot_exceed_the_audit_scan_budget() {
+    let repo = workspace_below_the_root();
+    for directory in ["shared/first", "shared/second"] {
+        populate(&repo, directory, 50_001);
+    }
+    let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
+    for (hash, declared) in [
+        ("008", "../../shared/first"),
+        ("018", "../../shared/second"),
+    ] {
+        let output = format!("{target}/build/lib-f000000000000{hash}/output");
+        unit(
+            &repo,
+            &output,
+            &format!("cargo:rerun-if-changed={declared}\n"),
+        );
+        repo.set_mtime(&output, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
+    }
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr).contains("freshness scan limit"),
+        "{refused:?}"
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+fn populate(repo: &crate::io::Repo, directory: &str, count: usize) {
+    let directory = repo.root().join(directory);
+    fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+    let seed = directory.join("seed");
+    fs::write(&seed, "").unwrap_or_else(|e| unreachable!("{e}"));
+    for index in 0..count {
+        fs::hard_link(&seed, directory.join(index.to_string()))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+}
 
 #[test]
 fn a_deleted_tracked_dep_info_input_prevents_writing_the_inputs_lock() {

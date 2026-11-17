@@ -48,7 +48,12 @@ fn audit_refuses_a_package_without_a_current_unit_and_counts_a_read_of_the_whole
     );
     repo.set_mtime(
         &format!("{target}/build/lib-0000000000000005/output"),
-        SystemTime::now(),
+        SystemTime::now() + Duration::from_secs(100),
+    );
+    unit(&repo, &format!("{target}/newer-artifact"), "");
+    repo.set_mtime(
+        &format!("{target}/newer-artifact"),
+        SystemTime::now() + Duration::from_secs(200),
     );
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
