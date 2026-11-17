@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use similar::TextDiff;
 use velnor_gen::expected_with_notes;
 use velnor_gen::io::{Error as IoError, SAMPLE_REPOSITORY};
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
 use velnor_rust::{manifests, metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -134,11 +134,13 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         rust_metadata.insert(workspace, metadata);
     }
     let view = RepoView {
-        repository: sample
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned(),
+        repository: RepositoryIdentity::Named(
+            sample
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+        ),
         files,
         tracked_paths,
         symlinks,
