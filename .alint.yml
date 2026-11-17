@@ -166,20 +166,11 @@ rules:
     level: error
     message: "Stray package-lock.json. Only the root lock and qualification/testcontainers/package-lock.json are allowed."
 
-  # Hard size limits for new handwritten code, physical lines (RQ §5).
-  # Scoped to Velnor-owned product paths; fixtures are test inputs and
-  # lockfiles/vendored/generated output are classified elsewhere, so they
-  # are excluded here rather than relabeled (ARCH-1.12, RQ-5.2).
   - id: rust-max-lines
     kind: file_max_lines
     paths:
       include:
-        - "crates/velnor-actions-*/**/*.rs"
-        - "crates/velnor-archive-guard/**/*.rs"
-        - "crates/velnor-runner/crates/*/**/*.rs"
-        - "ci-helper/crates/*/**/*.rs"
-        - "generator/crates/*/**/*.rs"
-        - "local/crates/*/**/*.rs"
+        - "**/*.rs"
       exclude:
         - "**/fixtures/**"
         - "**/testdata/**"
