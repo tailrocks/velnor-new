@@ -114,6 +114,7 @@ velnor-resource-probe = { version = "=0.1.0", path = "../velnor-resource-probe" 
 security-framework = { version = "=3.7.0" }
 
 [dev-dependencies]
+bollard = { workspace = true, features = ["http"] }
 tokio = { workspace = true, features = ["test-util"] }
 
 [[test]]

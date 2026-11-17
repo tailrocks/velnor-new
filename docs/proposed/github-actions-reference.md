@@ -701,6 +701,13 @@ The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-r
 
 ## Generated Rust CI workflow events and concurrency
 
+The runner's [`toJSON` implementation](https://github.com/actions/runner/blob/main/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/ToJson.cs)
+serializes nested mappings with two spaces per level, LF newlines, a space after
+each colon, and commas between entries. The Required gate's environment size
+estimate includes this formatting and JSON string escaping for job identifiers,
+output names, and output values. The expression stays in `env`; the shell command
+contains no interpolated expressions.
+
 These behaviors are GitHub service semantics, so the runner source does not define them. The generator relies on the GitHub documentation below and tests the rendered text, not the service.
 
 - Pull-request activity types: the [`pull_request` event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request) lists `opened`, `synchronize`, `reopened`, `ready_for_review`, `edited` and `converted_to_draft`. The generator lists the first five always (`edited` also fires when the base branch is retargeted, so a green result for the old base is replaced, as docs/implemented/affected-selection.md requires). It adds `converted_to_draft` only with `skip_draft_pull_requests`, so a running non-draft run is cancelled by the replacement run that skips its jobs.

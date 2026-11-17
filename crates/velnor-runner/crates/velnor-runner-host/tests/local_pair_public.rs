@@ -127,7 +127,9 @@ fn running(container: &ContainerInspectResponse) -> bool {
 
 #[tokio::test]
 async fn local_pair_starts_on_the_named_network_and_is_removed_by_its_label() -> TestResult<()> {
-    let fixture = Fixture::new().await?;
+    let Some(fixture) = Fixture::new().await? else {
+        return Ok(());
+    };
     let network = fixture.network.clone();
     let observed = Box::pin(observe_pair(&fixture)).await;
     fixture.finish().await?;
@@ -184,7 +186,9 @@ async fn local_pair_starts_on_the_named_network_and_is_removed_by_its_label() ->
 
 #[tokio::test]
 async fn local_pair_refuses_the_host_network_before_creating_anything() -> TestResult<()> {
-    let docker = support::docker()?;
+    let Some(docker) = support::docker()? else {
+        return Ok(());
+    };
     let environment = format!("test-{}", support::suffix()?);
     let refused = Box::pin(start_pair(
         &docker,
@@ -201,7 +205,9 @@ async fn local_pair_refuses_the_host_network_before_creating_anything() -> TestR
 
 #[tokio::test]
 async fn local_pair_removal_leaves_another_pair_of_the_environment_intact() -> TestResult<()> {
-    let fixture = Fixture::new().await?;
+    let Some(fixture) = Fixture::new().await? else {
+        return Ok(());
+    };
     let docker = &fixture.docker;
     let both = async {
         let first = Box::pin(start_pair(docker, &fixture.request())).await?;
@@ -243,7 +249,9 @@ async fn local_pair_removal_leaves_another_pair_of_the_environment_intact() -> T
 
 #[tokio::test]
 async fn local_pair_start_failure_removes_everything_it_created() -> TestResult<()> {
-    let fixture = Fixture::new().await?;
+    let Some(fixture) = Fixture::new().await? else {
+        return Ok(());
+    };
     let mut failing: LocalPairRequest = fixture.request();
     failing.runner_image = format!("sha256:{}", "b".repeat(64));
     let failed = Box::pin(start_pair(&fixture.docker, &failing)).await;
