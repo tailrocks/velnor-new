@@ -38,12 +38,10 @@ dispatch charset/order, schedule and environment safety.
 
 ## Coordinator argv (`velnor-actions-mise`)
 
-`impl_mise_release_plz.rs`: exact `0.4.3` pin (`RELEASE_PLZ_VERSION`), full SHA-256 `69bbc232e23322cfaf77a60540e69e2dbd83879e843c4fc9d6ad1ead97d257f6` (`RELEASE_PLZ_CKSUM`),
-release-pr/release argv shapes, phase separation, explicit `--config`,
-token/OIDC constructor split, trusted-publishing gate, pinned coordinator
-command, policy/freshness mirrors. `impl_mise_release_modes.rs` adds:
-dry-run snapshot without token, auth no-blend/no-fallback, single `-p`
-semantics, spaced-path argv safety, coordinator payload equality past `--`.
+`release_plz.rs` defines the release-plz request types and the
+`RELEASE_PLZ_CKSUM` constant. That constant is the crates.io source-crate
+checksum for release-plz 0.4.3. The repository does not consume it. Generated
+release steps instead verify the archive digest carried by the release plan.
 
 ## Workflow rendering (`velnor-actions-workflow-renderer`)
 

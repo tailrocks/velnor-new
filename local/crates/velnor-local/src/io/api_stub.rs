@@ -64,6 +64,25 @@ impl ApiStub {
     }
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {
+        let route = rest::route(request.method().as_str(), request.uri().path());
+        if matches!(route, Api::CacheList | Api::CacheDelete { .. }) {
+            return super::json_response(
+                403,
+                &json!({"message": "this path is served only on the control port"}),
+            );
+        }
+        self.dispatch(request, route).await
+    }
+
+    pub async fn handle_control(&self, token: &str, request: Request<Body>) -> Response<Body> {
+        super::guarded(token, request, |request| async move {
+            let route = rest::route(request.method().as_str(), request.uri().path());
+            self.dispatch(request, route).await
+        })
+        .await
+    }
+
+    async fn dispatch(&self, request: Request<Body>, route: Api) -> Response<Body> {
         let method = request.method().as_str().to_owned();
         let path = request.uri().path().to_owned();
         let host = request
@@ -82,7 +101,6 @@ impl ApiStub {
                 repository: &repository,
             },
         };
-        let route = rest::route(&method, &path);
         if let Api::JobLog { id } = route {
             let log = self.job_log(id).await;
             eprintln!("{method} {path} {}", if log.is_some() { 200 } else { 404 });

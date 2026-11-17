@@ -14,6 +14,7 @@ use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
+use crate::required_job::{expose_in_single, gate_outputs, has_gate, verdict_job};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
 use crate::shape::decide_shape;
@@ -22,7 +23,6 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
 const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
@@ -65,25 +65,24 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .config
         .skip_draft_pull_requests
         .then(|| step(StepKind::FailOnDraftRun));
+    let gate = has_gate(facts);
     if !single {
-        let used = used_outputs(&jobs);
+        let mut used = used_outputs(&jobs);
+        if gate {
+            used.extend(gate_outputs(&jobs));
+            used.sort();
+            used.dedup();
+        }
         jobs.insert(0, plan_job(facts, used));
+    } else if gate {
+        expose_in_single(&mut jobs);
     }
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
     upload_cargo_logs(&mut jobs);
-    jobs.push(Job {
-        name: Some(facts.config.required_check.clone()),
-        skip_on_draft: false,
-        needs: jobs.iter().map(|job| job.id.clone()).collect(),
-        when: When::NotCancelled,
-        steps: draft_guard
-            .into_iter()
-            .chain([step(StepKind::FailWhenANeedFailed)])
-            .collect(),
-        ..job(facts, VERDICT_JOB)
-    });
+    let required = verdict_job(facts, &jobs, single, draft_guard);
+    jobs.push(required);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
@@ -165,6 +164,15 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step
     steps
 }
 
+pub(crate) fn mirror_step(facts: &RepoFacts) -> Option<Step> {
+    facts
+        .config
+        .crates_mirror
+        .as_ref()
+        .filter(|mirror| mirror.runner == facts.config.runner)
+        .map(|mirror| step(StepKind::CratesMirror(mirror.clone())))
+}
+
 pub(crate) fn tools_cache_key() -> CacheKey {
     CacheKey::Tools { host: Host }
 }
@@ -207,10 +215,17 @@ pub(crate) fn setup_roots(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = [tools_restore(facts), tools_install(facts)]
-        .into_iter()
-        .flatten()
-        .collect();
+    let mut toolchain: Vec<Step> = [
+        mirror_step(facts),
+        tools_restore(facts),
+        tools_install(facts),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !facts.tools.tools.is_empty() {
+        toolchain.extend(mirror_step(facts));
+    }
     let declared = facts.toolchain.as_ref();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> = declared

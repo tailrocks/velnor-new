@@ -138,9 +138,9 @@ publish_features = ["pty"]
 
 `publish_features` requests verification with the feature; consumers still
 choose their own features. Keep `release-pr` and `release` invocations
-separate. When using the upstream Action, always set `command` and the exact
-binary `version`. Do not invent repeated package flags and do not treat JSON
-output as a no-side-effect release plan.
+separate. Generated steps run the pinned coordinator binary directly and do
+not use the upstream Action's `command` or `version` inputs. Do not invent
+repeated package flags or treat JSON output as a no-side-effect release plan.
 
 ## 7. Workflow boundaries and per-job permissions
 

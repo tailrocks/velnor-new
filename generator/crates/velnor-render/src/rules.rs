@@ -29,6 +29,7 @@ pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
 pub(crate) const MAX_WORKFLOW_BYTES: usize = 500_000;
 pub const MAX_CACHE_KEY_CHARACTERS: usize = 512;
+pub const MAX_ENV_CHARACTERS: usize = 100_000;
 
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
@@ -37,6 +38,7 @@ const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<("
 pub enum Value {
     Text(String),
     Expr(String),
+    BoundedExpr { text: String, max_bytes: usize },
     Int(u64),
     Bool(bool),
 }
@@ -99,6 +101,7 @@ pub enum Rule {
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
+    EnvTooLong(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -147,6 +150,10 @@ impl fmt::Display for RuleViolation {
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
+            ),
+            Rule::EnvTooLong(length) => write!(
+                f,
+                "an env value can expand to {length} UTF-8 bytes, and the limit is {MAX_ENV_CHARACTERS}; the required gate's needs JSON includes every dependency's outputs, so reduce the Cargo roots or package outputs"
             ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
@@ -246,7 +253,23 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     {
         rules.push(Rule::CacheKeyTooLong(length));
     }
+    if let Some(length) = longest_env(step)
+        && length > MAX_ENV_CHARACTERS
+    {
+        rules.push(Rule::EnvTooLong(length));
+    }
     rules
+}
+
+fn longest_env(step: &RenderedStep) -> Option<usize> {
+    step.env
+        .iter()
+        .filter_map(|(_, value)| match value {
+            Value::Text(text) => Some(text.len()),
+            Value::BoundedExpr { max_bytes, .. } => Some(*max_bytes),
+            _ => None,
+        })
+        .max()
 }
 
 fn run_rules(run: &str, rules: &mut Vec<Rule>) {
