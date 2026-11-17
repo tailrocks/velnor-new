@@ -8,6 +8,54 @@ use super::scoped_workspace::{DOCS_CONFIG, TestResult, commit, plan, put, scoped
 
 const IMAGE_CONFIG: &str = "\n[[images]]\nid = \"app\"\nrepository = \"ghcr.io/acme/app\"\ndockerfile = \"image/Dockerfile\"\ncontext = \"image\"\nplatforms = [\"linux_amd64\"]\n";
 
+#[test]
+fn custom_frontends_select_the_whole_context() -> TestResult {
+    for (frontend, expected, precise) in [
+        ("example/frontend", "run", false),
+        ("docker/dockerfile:1", "not_affected", true),
+        ("docker.io/docker/dockerfile:1", "not_affected", true),
+    ] {
+        assert_image_context_selection(
+            &format!("# syntax={frontend}@sha256:{}\nFROM scratch\n", "a".repeat(64)),
+            ("hidden.txt", expected),
+            precise,
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn unknown_instructions_select_the_whole_context() -> TestResult {
+    for (instruction, expected, precise) in [
+        ("READCONTEXT hidden.txt", "run", false),
+        ("WORKDIR /app", "not_affected", true),
+    ] {
+        assert_image_context_selection(
+            &format!("FROM scratch\n{instruction}\n"),
+            ("hidden.txt", expected),
+            precise,
+        )?;
+    }
+    Ok(())
+}
+
+#[test]
+fn json_copy_options_preserve_source_selection() -> TestResult {
+    for (options, expected) in [
+        ("--chown=1:1", "run"),
+        ("--chmod=0755", "run"),
+        ("--chown=1:1 --chmod=0755", "run"),
+        ("--from=base --chown=1:1 --chmod=0755", "not_affected"),
+    ] {
+        assert_image_context_selection(
+            &format!("FROM scratch AS base\nFROM scratch\nCOPY {options} [\"src/main.txt\", \"/dest\"]\n"),
+            ("src/main.txt", expected),
+            true,
+        )?;
+    }
+    Ok(())
+}
+
 const COPY_CASES: [(&str, &str, &str, bool); 11] = [
     (
         "JSON source beginning with dashes",
