@@ -203,7 +203,7 @@ fn configured_target_is_expired_and_removed_on_restoration_failure() {
                 .unwrap_or_else(|e| unreachable!("{e}"));
             let blob = String::from_utf8_lossy(&blob.stdout).trim().to_owned();
             let mut entry = format!("100644,{blob},").into_bytes();
-            entry.extend_from_slice(b"non-utf8-\xff");
+            entry.extend_from_slice(b"build-cache/non-utf8-\xff");
             let status = Command::new("git")
                 .args(["update-index", "--add", "--cacheinfo"])
                 .arg(OsStr::from_bytes(&entry))
@@ -225,7 +225,8 @@ fn configured_target_is_expired_and_removed_on_restoration_failure() {
         if invalid_path {
             assert!(!output.status.success(), "{output:?}");
             assert!(
-                String::from_utf8_lossy(&output.stderr).contains("contains checkout files"),
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("cache target contains tracked content"),
                 "{output:?}"
             );
             assert_eq!(
