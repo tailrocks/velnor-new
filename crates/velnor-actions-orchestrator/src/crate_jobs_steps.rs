@@ -13,6 +13,7 @@ pub(super) fn repository_fixture_steps(
 ) -> Result<Vec<Step>, OrchestratorError> {
     if input.policy == WorkflowPolicy::VelnorRepositoryV1
         && model.package_name == "velnor-actions-orchestrator"
+        && model.manifest == "crates/velnor-actions-orchestrator/Cargo.toml"
     {
         return Ok(vec![
             velnor_actions_workflow_renderer::repository_nonrust_fixture_step(
