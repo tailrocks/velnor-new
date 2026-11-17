@@ -211,7 +211,7 @@ async fn replacement(
 #[tokio::test]
 async fn atomic_decision_publication_keeps_empty_and_partial_data_from_guest_outcomes()
 -> TestResult<()> {
-    let Some(mut scenario) = Scenario::new().await? else {
+    let Some(mut scenario) = Scenario::new_with_guest_hook().await? else {
         return Ok(());
     };
     let _binary = crate::support::job_hook_binary()?;
