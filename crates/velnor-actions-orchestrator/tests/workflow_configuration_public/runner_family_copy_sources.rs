@@ -287,3 +287,21 @@ fn unused_complex_arguments_preserve_precise_selection() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn unused_quoted_argument_values_do_not_poison_other_expansions() -> TestResult {
+    for prefix in [
+        "ARG CONFIG=foo\" bar\"\nARG BASE=scratch\nFROM $BASE\n",
+        "ARG CONFIG=foo\\ bar\nARG BASE=scratch\nFROM $BASE\n",
+        "FROM scratch\nARG CONFIG=foo\" bar\"\n",
+    ] {
+        for keyword in ["COPY", "ADD"] {
+            assert_image_context_selection(
+                &format!("{prefix}{keyword} ${{SRC:-src}}/main.txt /dest\n"),
+                ("src/main.txt", "run"),
+                true,
+            )?;
+        }
+    }
+    Ok(())
+}
