@@ -60,7 +60,8 @@ fn a_different_render_is_a_failure_and_leaves_expected_alone_unless_updating() -
     let failures = check_sample(&copy.0, update_requested(Some(OsStr::new("0"))))?;
     assert_eq!(failures.len(), 1, "{failures:?}");
     assert_eq!(fs::read_to_string(&workflow)?, "stale\n");
-    assert!(check_sample(&copy.0, update_requested(Some(OsStr::new("1"))))?.is_empty());
+    let updated = check_sample(&copy.0, update_requested(Some(OsStr::new("1"))))?;
+    assert_eq!(updated.len(), 0, "{updated:?}");
     assert_ne!(fs::read_to_string(&workflow)?, "stale\n");
     Ok(())
 }
