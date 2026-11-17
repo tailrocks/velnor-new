@@ -206,10 +206,14 @@ fn normalized_copy_paths_select_the_image_job() -> TestResult {
                 "image/Dockerfile",
                 &format!("FROM scratch\nARG SRC=src\n{keyword} {source} /dest\n"),
             )?;
+            commit(repo.root(), "parent Dockerfile source baseline")?;
             let error = velnor_actions_orchestrator::prepare(repo.root())
                 .err()
                 .ok_or("parent source accepted")?;
-            assert!(error.to_string().contains("image_context_escape"));
+            assert!(
+                error.to_string().contains("image_context_escape"),
+                "{error}"
+            );
         }
     }
     Ok(())

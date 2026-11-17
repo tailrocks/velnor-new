@@ -324,10 +324,14 @@ fn parent_components_refuse_before_normalization_or_unknown_context() -> Result<
             assert!(facts.context_sources.contains("dir/file"));
         }
         let text = format!("FROM scratch\n{keyword} ../file\n");
-        assert!(matches!(
-            analyze_dockerfile(&text, &[]),
-            Err(DockerfileProblem::ContextEscape(_))
-        ));
+        assert!(
+            matches!(
+                analyze_dockerfile(&text, &[]),
+                Err(DockerfileProblem::ContextEscape(_))
+            ),
+            "{text}: {:?}",
+            analyze_dockerfile(&text, &[])
+        );
     }
     Ok(())
 }
