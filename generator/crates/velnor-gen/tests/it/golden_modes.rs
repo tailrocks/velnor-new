@@ -77,3 +77,13 @@ fn a_sample_that_records_a_cargo_symlink_is_refused_like_the_live_checkout() -> 
     ));
     Ok(())
 }
+
+#[test]
+fn a_sample_without_a_symlink_sidecar_is_rejected() -> TestResult {
+    let copy = Copy::of("release-bin", "missing-symlink-sidecar")?;
+    let symlinks = copy.0.join("symlinks.txt");
+    fs::write(&symlinks, "")?;
+    fs::remove_file(symlinks)?;
+    assert!(load(&copy.0).is_err());
+    Ok(())
+}
