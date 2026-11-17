@@ -10,6 +10,7 @@ use crate::error::HostError;
 
 mod authority;
 mod channel;
+mod cleanup_audit;
 mod decide;
 mod layout;
 mod minted;

@@ -4,6 +4,7 @@
 pub mod api_stub;
 pub mod authority;
 pub mod checkout;
+mod cleanup;
 pub mod doctor;
 mod drive;
 pub mod env;
