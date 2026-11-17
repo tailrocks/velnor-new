@@ -111,3 +111,132 @@ fn a_non_utf8_tracked_path_outside_target_allows_verified_cold_deletion() {
     );
     repo.git(&["ls-files", "--error-unmatch", "src/lib.rs"]);
 }
+
+fn reject_target_under_tracked_cache_link(destination: &str, spelling: &str, operation: &str) {
+    let repo = Repo::new("cold-tracked-cache-link");
+    let external = (destination == "external").then(|| Repo::new("cold-external-cache"));
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    let source_time = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    repo.set_mtime("src/lib.rs", source_time);
+    let cache = external.as_ref().map_or_else(
+        || repo.root().join("cache-real"),
+        |repo| repo.root().join("cache"),
+    );
+    std::fs::create_dir_all(cache.join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(cache.join("target/stale"), b"cached artifact\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(cache.join("sibling-sentinel"), b"sibling artifact\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(&cache, repo.root().join("cache"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    repo.git(&["add", "--force", "cache"]);
+    if spelling.starts_with("alias/") {
+        std::os::unix::fs::symlink("cache", repo.root().join("alias"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let index =
+        std::fs::read(repo.root().join(".git/index")).unwrap_or_else(|e| unreachable!("{e}"));
+    let source =
+        std::fs::read(repo.root().join("src/lib.rs")).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = helper(&repo, &["inputs", operation, "--target-dir", spelling]);
+    assert_eq!(
+        std::fs::read(cache.join("target/stale")).unwrap_or_default(),
+        b"cached artifact\n",
+        "{destination} {spelling} {operation}"
+    );
+    assert_eq!(
+        std::fs::read(cache.join("sibling-sentinel")).unwrap_or_default(),
+        b"sibling artifact\n",
+        "{destination} {spelling} {operation}"
+    );
+    assert!(
+        !output.status.success(),
+        "{destination} {spelling} {operation}: {output:?}"
+    );
+    assert_eq!(
+        std::fs::read_link(repo.root().join("cache")).ok(),
+        Some(cache.clone())
+    );
+    assert_eq!(
+        std::fs::read_link(repo.root().join("alias")).ok(),
+        spelling
+            .starts_with("alias/")
+            .then(|| std::path::PathBuf::from("cache"))
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join(".git/index")).ok(),
+        Some(index)
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join("src/lib.rs")).ok(),
+        Some(source)
+    );
+    assert_eq!(repo.mtime("src/lib.rs"), source_time);
+    assert!(!cache.join("target/.velnor/inputs.tsv").exists());
+}
+
+#[test]
+fn missing_snapshot_restore_rejects_external_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("external", "cache/target", "restore");
+}
+
+#[test]
+fn missing_snapshot_restore_rejects_internal_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("internal", "cache/target", "restore");
+}
+
+#[test]
+fn missing_snapshot_restore_rejects_external_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("external", "alias/target", "restore");
+}
+
+#[test]
+fn missing_snapshot_restore_rejects_internal_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("internal", "alias/target", "restore");
+}
+
+#[test]
+fn save_rejects_external_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("external", "cache/target", "save");
+}
+
+#[test]
+fn save_rejects_internal_tracked_cache_target() {
+    reject_target_under_tracked_cache_link("internal", "cache/target", "save");
+}
+
+#[test]
+fn save_rejects_external_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("external", "alias/target", "save");
+}
+
+#[test]
+fn save_rejects_internal_target_through_untracked_alias() {
+    reject_target_under_tracked_cache_link("internal", "alias/target", "save");
+}
+
+#[test]
+fn a_local_missing_snapshot_removes_only_its_target() {
+    let local = Repo::new("cold-local-cache");
+    local.write("src/lib.rs", "pub fn one() {}\n");
+    local.write_unstaged("cache/target/stale", "cached artifact\n");
+    local.write_unstaged("cache/sibling-sentinel", "sibling artifact\n");
+    let output = helper(
+        &local,
+        &["inputs", "restore", "--target-dir", "cache/target"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{output:?}");
+    assert!(stdout.contains("building cold"), "{stdout}");
+    assert!(!local.root().join("cache/target").exists());
+    assert_eq!(
+        std::fs::read(local.root().join("cache/sibling-sentinel")).unwrap_or_default(),
+        b"sibling artifact\n"
+    );
+    assert!(
+        !local
+            .root()
+            .join("cache/target/.velnor/inputs.tsv")
+            .exists()
+    );
+}
