@@ -5,8 +5,7 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 
 use bollard::query_parameters::{
-    ListContainersOptions, ListVolumesOptions, RemoveContainerOptions, RemoveImageOptions,
-    RemoveVolumeOptions,
+    ListContainersOptions, ListVolumesOptions, RemoveContainerOptions, RemoveVolumeOptions,
 };
 use velnor_runner_host::local::ENVIRONMENT_LABEL;
 
@@ -97,7 +96,7 @@ fn sweep(environment: &str, image: &str, networks: &[String]) {
             let _removed = docker.remove_network(network).await;
         }
         let _removed = docker
-            .remove_image(image, None::<RemoveImageOptions>, None)
+            .remove_image(image, Some(super::untag_only()), None)
             .await;
     });
 }
