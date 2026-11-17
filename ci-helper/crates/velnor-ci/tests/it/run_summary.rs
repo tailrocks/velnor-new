@@ -21,7 +21,11 @@ fn scratch(name: &str) -> PathBuf {
 
 fn script(temp: &Path, name: &str, body: &str) {
     let program = temp.join(name);
-    fs::write(&program, format!("#!/bin/sh\n{body}\n")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(
+        &program,
+        format!("#!/bin/sh\nif [ \"$2\" = list ]; then exit 1; fi\n{body}\n"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&program, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
 }

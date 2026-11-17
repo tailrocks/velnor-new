@@ -50,6 +50,7 @@ mod main_and_scheduled;
 mod metadata_file;
 mod mise_names;
 mod needs_size;
+mod needs_size_plan;
 mod no_programs;
 mod patch;
 mod pipeline;
