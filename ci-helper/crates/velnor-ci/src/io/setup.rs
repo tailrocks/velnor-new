@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::Command;
 
 use velnor_gen::io::read_files;
-use velnor_model::{RepoPath, ToolPins, Toolchain};
+use velnor_model::{MisePlatform, RepoPath, ToolPins, Toolchain};
 use velnor_rust::{
     BUILD_DRIVER, CONFIG_PATH, CompatInputs, TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, build_profile,
     ci_debuginfo, compat, mise_files, tool_pins, toolchain,
@@ -74,7 +74,7 @@ fn check_pinned_tools(root: &Path, pins: &ToolPins) -> Result<(), CiError> {
     check_tools(
         pins,
         &parse_reported(&String::from_utf8_lossy(&output.stdout))?,
-        std::env::consts::OS,
+        MisePlatform::new(std::env::consts::OS, std::env::consts::ARCH),
     )
 }
 

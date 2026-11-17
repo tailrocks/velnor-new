@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::RunnerLabel;
+use velnor_model::ToolLock;
 
 use crate::error::Reason;
 use crate::toml_file::table;
@@ -12,53 +12,82 @@ use crate::toml_file::table;
 const PLATFORM_PREFIX: &str = "platforms.";
 const RUSTUP_TOOLS: [&str; 2] = ["rust", "core:rust"];
 
-pub(crate) fn prebuilt_platforms(
-    bytes: &[u8],
-) -> Result<BTreeMap<String, BTreeSet<String>>, Reason> {
+pub(crate) fn locked_tools(bytes: &[u8]) -> Result<BTreeMap<String, Vec<ToolLock>>, Reason> {
     let parsed = table(bytes)?;
-    let Some(Value::Table(tools)) = parsed.get("tools") else {
-        return Ok(BTreeMap::new());
-    };
-    Ok(tools
-        .iter()
-        .map(|(name, entry)| {
-            let entries: Vec<&Value> = match entry {
-                Value::Array(items) => items.iter().collect(),
-                other => vec![other],
+    match parsed.get("tools") {
+        None => Ok(BTreeMap::new()),
+        Some(Value::Table(tools)) => tools
+            .iter()
+            .map(|(name, value)| {
+                locked_rows(value)
+                    .map(|rows| (name.clone(), rows))
+                    .ok_or_else(|| Reason::InvalidValue {
+                        key: "tools",
+                        value: name.clone(),
+                    })
+            })
+            .collect(),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "tools",
+            value: other.to_string(),
+        }),
+    }
+}
+
+fn strings(value: &Value) -> Option<Vec<String>> {
+    match value {
+        Value::String(text) => Some(vec![text.clone()]),
+        Value::Array(items) => items
+            .iter()
+            .map(|item| item.as_str().map(str::to_owned))
+            .collect(),
+        _ => None,
+    }
+}
+
+fn locked_rows(value: &Value) -> Option<Vec<ToolLock>> {
+    match value {
+        Value::String(version) => Some(vec![ToolLock {
+            version: version.clone(),
+            ..ToolLock::default()
+        }]),
+        Value::Array(items) => items
+            .iter()
+            .map(locked_rows)
+            .collect::<Option<Vec<_>>>()
+            .map(|rows| rows.concat()),
+        Value::Table(entry) => {
+            let version = entry.get("version")?.as_str()?.to_owned();
+            let specifiers = match entry.get("specifiers") {
+                Some(value) => strings(value)?,
+                None => Vec::new(),
             };
-            let platforms = entries
-                .into_iter()
-                .filter_map(Value::as_table)
-                .flat_map(|entry| entry.iter())
+            let os = match entry.get("os") {
+                Some(value) => Some(strings(value)?),
+                None => None,
+            };
+            let prebuilt = entry
+                .iter()
                 .filter_map(|(key, value)| {
                     let platform = key.strip_prefix(PLATFORM_PREFIX)?;
                     value
                         .as_table()?
-                        .get("url")
-                        .and_then(Value::as_str)
+                        .get("url")?
+                        .as_str()
                         .map(|_| platform.to_owned())
                 })
                 .collect();
-            (name.clone(), platforms)
-        })
-        .collect())
+            Some(vec![ToolLock {
+                version,
+                specifiers,
+                os,
+                prebuilt,
+            }])
+        }
+        _ => None,
+    }
 }
 
 pub(crate) fn is_rustup_tool(name: &str) -> bool {
     RUSTUP_TOOLS.contains(&name)
-}
-
-pub(crate) fn lock_platform(runner: &RunnerLabel) -> Option<&'static str> {
-    let label = runner.as_str().to_ascii_lowercase();
-    let arm = label.contains("arm");
-    if label.starts_with("ubuntu") || label.starts_with("linux") {
-        Some(if arm { "linux-arm64" } else { "linux-x64" })
-    } else if label.starts_with("macos") {
-        let intel = label.ends_with("-13") || label.contains("intel") || label.contains("large");
-        Some(if intel { "macos-x64" } else { "macos-arm64" })
-    } else if label.starts_with("windows") {
-        Some("windows-x64")
-    } else {
-        None
-    }
 }

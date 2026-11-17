@@ -4,11 +4,11 @@
 use std::collections::BTreeMap;
 
 use toml::Value;
-use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
+use velnor_model::{MisePlatform, RepoFacts, RepoPath, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
-use crate::mise_lock::{is_rustup_tool, lock_platform, prebuilt_platforms};
+use crate::mise_lock::{is_rustup_tool, locked_tools};
 use crate::toml_file::table;
 
 pub static MISE_CONFIGS: [RepoPath; 2] = [
@@ -79,12 +79,11 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
             ));
         }
     }
-    let (mut locked, mut prebuilt) = match files.get(&MISE_LOCK) {
-        Some(lock) => (
-            versions(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
-            prebuilt_platforms(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?,
-        ),
-        None => Default::default(),
+    let mut locked = match files.get(&MISE_LOCK) {
+        Some(lock) => {
+            locked_tools(lock).map_err(|reason| DetectError::invalid(&MISE_LOCK, reason))?
+        }
+        None => BTreeMap::new(),
     };
     Ok(ToolPins {
         locked_file: files.contains_key(&MISE_LOCK),
@@ -95,21 +94,14 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
         tools: requested
             .into_iter()
             .map(|(name, requested)| {
-                let locked = locked
-                    .remove(&name)
-                    .unwrap_or_default()
-                    .into_iter()
-                    .map(|request| request.version)
-                    .collect();
+                let locked = locked.remove(&name).unwrap_or_default();
                 let (requested, os_filters) = split_requests(&requested);
-                let prebuilt = prebuilt.remove(&name).unwrap_or_default();
                 (
                     name,
                     ToolPin {
                         requested,
                         locked,
                         os_filters,
-                        prebuilt,
                     },
                 )
             })
@@ -166,26 +158,35 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
 }
 
 fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
-    let Some(platform) = lock_platform(&facts.config.runner) else {
+    let Some(platform) = MisePlatform::runner(facts.config.runner.as_str()) else {
         return Ok(());
     };
-    let os = platform.split('-').next().unwrap_or(platform);
-    let source_built = facts.tools.tools.iter().find(|(name, pin)| {
-        let filtered_out = !pin.os_filters.is_empty()
-            && pin.os_filters.len() == pin.requested.len()
-            && pin
-                .os_filters
-                .values()
-                .all(|names| !names.iter().any(|filter| filter == os));
-        !is_rustup_tool(name) && !filtered_out && !pin.prebuilt.contains(platform)
-    });
-    match source_built {
-        Some((tool, _)) => Err(DetectError::ToolNotPrebuilt {
-            tool: tool.clone(),
-            platform: platform.to_owned(),
-        }),
-        None => Ok(()),
+    let key = platform.lock_key();
+    for (name, pin) in &facts.tools.tools {
+        if is_rustup_tool(name) {
+            continue;
+        }
+        let rows = pin.locked_on(platform).map_err(|value| {
+            DetectError::invalid(
+                &MISE_LOCK,
+                Reason::InvalidValue {
+                    key: "tools",
+                    value: format!("{name}: {value}"),
+                },
+            )
+        })?;
+        let needed = pin
+            .requested
+            .iter()
+            .any(|request| pin.applies_on(request, platform));
+        if needed && (rows.is_empty() || rows.iter().any(|row| !row.prebuilt.contains(&key))) {
+            return Err(DetectError::ToolNotPrebuilt {
+                tool: name.clone(),
+                platform: key,
+            });
+        }
     }
+    Ok(())
 }
 
 fn toolchain_conflict(facts: &RepoFacts) -> Option<(String, String)> {

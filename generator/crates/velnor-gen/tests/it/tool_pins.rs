@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::ToolPin;
+use velnor_model::{ToolLock, ToolPin};
 use velnor_rust::{DetectError, Reason, detect};
 
 use crate::facts::{TestResult, lib, path, repo};
@@ -10,7 +10,13 @@ fn pin(requested: &[&str], locked: &[&str]) -> ToolPin {
     let owned = |items: &[&str]| items.iter().map(|item| (*item).to_owned()).collect();
     ToolPin {
         requested: owned(requested),
-        locked: owned(locked),
+        locked: locked
+            .iter()
+            .map(|version| ToolLock {
+                version: (*version).to_owned(),
+                ..ToolLock::default()
+            })
+            .collect(),
         ..ToolPin::default()
     }
 }

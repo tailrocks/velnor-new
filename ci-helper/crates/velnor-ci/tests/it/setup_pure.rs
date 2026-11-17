@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_ci::error::CiError;
 use velnor_ci::setup::{Reported, check_tools, parse_reported};
-use velnor_model::{ToolPin, ToolPins};
+use velnor_model::{MisePlatform, ToolLock, ToolPin, ToolPins};
 
 type Case<'a> = (&'a [&'a str], &'a [&'a str], &'a [(&'a str, bool)], bool);
 
@@ -17,16 +17,21 @@ fn pins(requested: &[&str], locked: &[&str]) -> ToolPins {
             "tool".to_owned(),
             ToolPin {
                 requested: requested.iter().map(|v| (*v).to_owned()).collect(),
-                locked: locked.iter().map(|v| (*v).to_owned()).collect(),
+                locked: locked
+                    .iter()
+                    .map(|v| ToolLock {
+                        version: (*v).to_owned(),
+                        ..ToolLock::default()
+                    })
+                    .collect(),
                 os_filters: BTreeMap::new(),
-                ..ToolPin::default()
             },
         )]),
     }
 }
 
 fn check(pins: &ToolPins, reported: &Reported) -> Result<(), CiError> {
-    check_tools(pins, reported, "linux")
+    check_tools(pins, reported, MisePlatform::new("linux", "x86_64"))
 }
 
 fn reported(versions: &[(&str, bool)]) -> String {
@@ -113,15 +118,37 @@ fn a_request_filtered_to_another_os_is_not_required_here() {
         parse_reported(&reported(&[("1.23.4", true)])).unwrap_or_else(|e| unreachable!("{e}"));
     let mac =
         parse_reported(&reported(&[("1.22.9", true)])).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(check_tools(&filtered(&both, &[]), &linux, "linux"), Ok(()));
-    assert_eq!(check_tools(&filtered(&both, &[]), &mac, "macos"), Ok(()));
     assert_eq!(
-        check_tools(&filtered(&both, &["1.22.9", "1.23.4"]), &linux, "linux"),
+        check_tools(
+            &filtered(&both, &[]),
+            &linux,
+            MisePlatform::new("linux", "x86_64")
+        ),
         Ok(())
     );
-    let error = check_tools(&filtered(&both, &[]), &mac, "linux")
-        .err()
-        .unwrap_or_else(|| unreachable!("the applicable version is missing"));
+    assert_eq!(
+        check_tools(
+            &filtered(&both, &[]),
+            &mac,
+            MisePlatform::new("macos", "aarch64")
+        ),
+        Ok(())
+    );
+    assert_eq!(
+        check_tools(
+            &filtered(&both, &["1.22.9", "1.23.4"]),
+            &linux,
+            MisePlatform::new("linux", "x86_64")
+        ),
+        Ok(())
+    );
+    let error = check_tools(
+        &filtered(&both, &[]),
+        &mac,
+        MisePlatform::new("linux", "x86_64"),
+    )
+    .err()
+    .unwrap_or_else(|| unreachable!("the applicable version is missing"));
     assert!(error.to_string().contains("1.23"), "{error}");
 }
 
@@ -137,4 +164,136 @@ fn overlapping_requests_each_need_their_own_installed_entry() {
         .unwrap_or_else(|| unreachable!("request 1 has no entry"));
     assert!(error.to_string().contains("pinned 1,"), "{error}");
     assert_eq!(check(&pins(&["1", "1.22"], &[]), &wide), Ok(()));
+}
+
+#[test]
+fn mise_platform_filters_require_only_tools_for_the_current_os_and_architecture() {
+    let cases = [
+        ("unix", "linux", "x86_64", true),
+        ("unix", "macos", "aarch64", true),
+        ("unix", "windows", "x86_64", false),
+        ("win", "windows", "x86_64", true),
+        ("linux/x64", "linux", "x86_64", true),
+        ("linux/x64", "linux", "aarch64", false),
+        ("linux/arm64", "linux", "aarch64", true),
+        ("linux/arm64", "linux", "x86_64", false),
+        ("macos/arm64", "macos", "x86_64", false),
+        ("darwin/aarch64", "macos", "aarch64", true),
+        ("linux/amd64", "linux", "x86_64", true),
+    ];
+    let absent = Reported::new();
+    let mismatches: Vec<_> = cases
+        .into_iter()
+        .filter(|(filter, os, arch, required)| {
+            check_tools(
+                &filtered(&[("1.0.0", &[*filter])], &["1.0.0"]),
+                &absent,
+                MisePlatform::new(os, arch),
+            )
+            .is_err()
+                != *required
+        })
+        .collect();
+    assert!(
+        mismatches.is_empty(),
+        "wrong platform decisions: {mismatches:?}"
+    );
+}
+
+fn parsed_tools(config: &str, lock: &str) -> ToolPins {
+    let files = BTreeMap::from([
+        (
+            velnor_model::RepoPath::from_static("mise.toml"),
+            config.as_bytes().to_vec(),
+        ),
+        (
+            velnor_model::RepoPath::from_static("mise.lock"),
+            lock.as_bytes().to_vec(),
+        ),
+    ]);
+    velnor_rust::tool_pins(&files).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn resolved_lock_rows_follow_their_exact_requests_instead_of_overlapping_versions() {
+    let cases = [
+        ("lts", "24.11.1", "1.2.3"),
+        ("stable", "1.99.1", "1.2.3"),
+        ("nightly", "1.100.0-nightly", "1.2.3"),
+        ("latest", "9.9.9", "1.2.3"),
+        ("1.22", "1.22.9", "1"),
+    ];
+    let mut mismatches = Vec::new();
+    for (mac_request, mac_version, linux_request) in cases {
+        let linux_version = if linux_request == "1" {
+            "1.26.0"
+        } else {
+            linux_request
+        };
+        let config = format!(
+            "[tools]\ntool = [{{ version = \"{mac_request}\", os = [\"macos\"] }}, {{ version = \"{linux_request}\", os = [\"linux\"] }}]\n"
+        );
+        let lock = format!(
+            "[[tools.tool]]\nversion = \"{mac_version}\"\nspecifiers = [\"{mac_request}\"]\n[[tools.tool]]\nversion = \"{linux_version}\"\nspecifiers = [\"{linux_request}\"]\n"
+        );
+        let pins = parsed_tools(&config, &lock);
+        for (os, version) in [("macos", mac_version), ("linux", linux_version)] {
+            let installed = parse_reported(&reported(&[(version, true)]))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            if let Err(error) = check_tools(&pins, &installed, MisePlatform::new(os, "x86_64")) {
+                mismatches.push(format!("{mac_request}/{linux_request} on {os}: {error}"));
+            }
+        }
+    }
+    assert!(mismatches.is_empty(), "wrong resolved rows: {mismatches:?}");
+}
+
+#[test]
+fn a_locked_alias_filtered_to_another_os_requires_nothing_here() {
+    let mut errors = Vec::new();
+    for alias in ["lts", "stable", "nightly", "beta"] {
+        let config = format!("[tools]\ntool = {{ version = \"{alias}\", os = [\"macos\"] }}\n");
+        let lock = format!("[[tools.tool]]\nversion = \"24.11.1\"\nspecifiers = [\"{alias}\"]\n");
+        if let Err(error) = check_tools(
+            &parsed_tools(&config, &lock),
+            &Reported::new(),
+            MisePlatform::new("linux", "x86_64"),
+        ) {
+            errors.push(format!("{alias}: {error}"));
+        }
+    }
+    assert!(errors.is_empty(), "foreign aliases required: {errors:?}");
+}
+
+#[test]
+fn architecture_specific_requests_require_their_own_resolved_lock_rows() {
+    let config = "[tools]\ntool = [{ version = \"1\", os = [\"linux/x64\"] }, { version = \"2\", os = [\"linux/arm64\"] }]\n";
+    let lock = "[[tools.tool]]\nversion = \"1.0.0\"\nspecifiers = [\"1\"]\n[[tools.tool]]\nversion = \"2.0.0\"\nspecifiers = [\"2\"]\n";
+    let pins = parsed_tools(config, lock);
+    for (arch, right, wrong) in [("x86_64", "1.0.0", "2.0.0"), ("aarch64", "2.0.0", "1.0.0")] {
+        let right =
+            parse_reported(&reported(&[(right, true)])).unwrap_or_else(|e| unreachable!("{e}"));
+        let wrong =
+            parse_reported(&reported(&[(wrong, true)])).unwrap_or_else(|e| unreachable!("{e}"));
+        let platform = MisePlatform::new("linux", arch);
+        assert_eq!(check_tools(&pins, &right, platform), Ok(()), "{arch}");
+        assert!(check_tools(&pins, &wrong, platform).is_err(), "{arch}");
+    }
+}
+
+#[test]
+fn ambiguous_legacy_lock_rows_refuse_until_the_requests_are_recorded() {
+    let config = "[tools]\ntool = [{ version = \"latest\", os = [\"macos\"] }, { version = \"1.2.3\", os = [\"linux\"] }]\n";
+    let ambiguous = "[[tools.tool]]\nversion = \"9.9.9\"\n[[tools.tool]]\nversion = \"1.2.3\"\n";
+    let both = parse_reported(&reported(&[("9.9.9", true), ("1.2.3", true)]))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let platform = MisePlatform::new("macos", "aarch64");
+    assert!(check_tools(&parsed_tools(config, ambiguous), &both, platform).is_err());
+    let recorded = "[[tools.tool]]\nversion = \"9.9.9\"\nspecifiers = [\"latest\"]\n[[tools.tool]]\nversion = \"1.2.3\"\nspecifiers = [\"1.2.3\"]\n";
+    let latest =
+        parse_reported(&reported(&[("9.9.9", true)])).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        check_tools(&parsed_tools(config, recorded), &latest, platform),
+        Ok(())
+    );
 }

@@ -4,6 +4,7 @@
 mod cache;
 mod cron;
 mod ids;
+mod mise;
 mod plan;
 mod repo;
 mod selection;
@@ -15,6 +16,7 @@ pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
     RunnerLabel, Sha256, TargetName,
 };
+pub use mise::MisePlatform;
 pub use plan::{
     Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
     Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType,
@@ -24,8 +26,8 @@ pub use plan::{
 pub use repo::{
     CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
     MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig,
-    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin,
-    ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
+    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolLock,
+    ToolPin, ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
