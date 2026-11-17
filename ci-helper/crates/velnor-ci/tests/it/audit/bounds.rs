@@ -44,7 +44,10 @@ fn an_excessively_deep_target_directory_returns_an_error_and_keeps_the_inputs_lo
         String::from_utf8_lossy(&output.stderr).contains("target directory depth exceeds 64"),
         "{output:?}"
     );
-    assert_eq!(fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")), before);
+    assert_eq!(
+        fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")),
+        before
+    );
 }
 
 #[test]
@@ -71,6 +74,12 @@ fn dep_info_over_the_source_limit_returns_an_error_and_keeps_the_inputs_lock() {
     assert_eq!(output.status.code(), Some(1), "{output:?}");
     let error = String::from_utf8_lossy(&output.stderr);
     assert!(error.contains(dep_info), "{output:?}");
-    assert!(error.contains("larger than 1048576 bytes"), "{output:?}");
-    assert_eq!(fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")), before);
+    assert!(
+        error.contains("dep-info file exceeds 1048576 bytes"),
+        "{output:?}"
+    );
+    assert_eq!(
+        fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")),
+        before
+    );
 }

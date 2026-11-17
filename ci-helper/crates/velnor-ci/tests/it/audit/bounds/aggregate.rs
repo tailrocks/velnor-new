@@ -11,11 +11,7 @@ const FILE_LIMIT: usize = 1 << 20;
 fn dep_info_budget_is_shared_across_cargo_roots() {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
-    unit(
-        &repo,
-        ".gitignore",
-        "target/\ntarget-tools/\n",
-    );
+    unit(&repo, ".gitignore", "target/\ntarget-tools/\n");
     unit(
         &repo,
         "tools/Cargo.toml",
@@ -68,8 +64,14 @@ fn dep_info_budget_is_shared_across_cargo_roots() {
     let over_limit = audit(&repo, &["--write"]);
     assert_eq!(over_limit.status.code(), Some(1), "{over_limit:?}");
     let error = String::from_utf8_lossy(&over_limit.stderr);
-    assert!(error.contains("aggregate dep-info data exceeds 8388608 bytes"), "{error}");
-    assert_eq!(fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")), before);
+    assert!(
+        error.contains("aggregate target data exceeds 8388608 bytes"),
+        "{error}"
+    );
+    assert_eq!(
+        fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")),
+        before
+    );
 }
 
 fn write_dep_info_files(

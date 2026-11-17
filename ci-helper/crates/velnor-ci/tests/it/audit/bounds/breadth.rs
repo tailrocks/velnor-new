@@ -38,8 +38,14 @@ fn target_directory_count_is_bounded_without_removing_the_existing_lock() {
     let beyond_limit = audit(&repo, &["--write"]);
     assert_eq!(beyond_limit.status.code(), Some(1), "{beyond_limit:?}");
     let error = String::from_utf8_lossy(&beyond_limit.stderr);
-    assert!(error.contains("target directory traversal exceeds 4096 directories"), "{error}");
-    assert_eq!(fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")), before);
+    assert!(
+        error.contains("target directory traversal exceeds 4096 directories"),
+        "{error}"
+    );
+    assert_eq!(
+        fs::read(lock).unwrap_or_else(|e| unreachable!("{e}")),
+        before
+    );
 }
 
 fn directory_count(root: &Path) -> usize {

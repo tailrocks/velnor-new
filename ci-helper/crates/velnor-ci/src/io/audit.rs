@@ -9,15 +9,16 @@ use std::time::SystemTime;
 use velnor_gen::io::read_checkout;
 use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
 use velnor_rust::{
-    INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
-    locate, parse_inputs_lock, rerun_if_changed, unlisted,
+    INPUTS_LOCK, Located, Owner, Owners, add_reads, detect, format_inputs_lock, locate,
+    parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
 use super::units::{UnitFile, Workspace, apart, platforms, profile, unit_files, workspace};
-use super::{SOURCE_LIMIT, read_limited};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 use crate::platform::Platforms;
+
+mod dep_info;
 
 pub(super) struct Audit<'a> {
     repository: &'a Path,
@@ -32,6 +33,7 @@ pub(super) struct Audit<'a> {
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
+    target_bytes: u64,
     units: usize,
     pub(super) built: Vec<Built>,
 }
@@ -73,6 +75,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
             })
             .collect(),
         found: CompileInputs::new(),
+        target_bytes: 0,
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
     };
@@ -266,31 +269,6 @@ impl Audit<'_> {
         Ok(())
     }
 
-    pub(super) fn dep_info(
-        &mut self,
-        workspace: &Path,
-        file: &Path,
-        package: Option<&str>,
-    ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
-        let text = read(file)?;
-        let built = modified(file)?;
-        let paths = dep_info_paths(&text);
-        let Some(Located::Inside(source)) = paths
-            .first()
-            .map(|source| locate(self.repository, workspace, source))
-        else {
-            return Ok(None);
-        };
-        if changed_since(workspace, &paths, built) {
-            return Ok(None);
-        }
-        for owner in self.owners.of(package, &source) {
-            self.credit(&owner, workspace, &paths, false);
-        }
-        self.units += 1;
-        Ok(Some((source, built)))
-    }
-
     fn build_output(
         &mut self,
         index: usize,
@@ -298,7 +276,7 @@ impl Audit<'_> {
         configuration: &str,
         package: &str,
     ) -> Result<bool, CiError> {
-        let text = read(file)?;
+        let text = self.build_output_text(file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
         let mut current = false;
@@ -370,15 +348,6 @@ fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
     paths
         .iter()
         .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
-}
-
-fn read(file: &Path) -> Result<String, CiError> {
-    let handle = fs::File::open(file)
-        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
-    let bytes = read_limited(handle, SOURCE_LIMIT)
-        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
-    String::from_utf8(bytes)
-        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))
 }
 
 fn modified(path: &Path) -> Result<SystemTime, CiError> {

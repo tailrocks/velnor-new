@@ -17,6 +17,7 @@ use crate::error::CiError;
 use crate::platform::{Platform, Platforms};
 
 const MAX_TARGET_DEPTH: usize = 64;
+const MAX_TARGET_DIRECTORIES: usize = 4096;
 
 #[derive(Deserialize)]
 pub(super) struct Workspace {
@@ -55,6 +56,7 @@ pub(super) enum UnitFile {
 pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
     let mut found = Vec::new();
     let mut pending = vec![(target.to_path_buf(), 0)];
+    let mut directories = 1;
     while let Some((directory, depth)) = pending.pop() {
         let entries = match fs::read_dir(&directory) {
             Ok(entries) => entries,
@@ -74,12 +76,19 @@ pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiEr
                 .file_type()
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
             if kind.is_dir() && entry.file_name() != "incremental" {
-                if depth == MAX_TARGET_DEPTH {
+                if depth >= MAX_TARGET_DEPTH {
                     return Err(CiError::new(format!(
-                        "cannot read {}: target directory depth exceeds {MAX_TARGET_DEPTH}",
+                        "target directory depth exceeds {MAX_TARGET_DEPTH} at {}",
                         path.display()
                     )));
                 }
+                if directories == MAX_TARGET_DIRECTORIES {
+                    return Err(CiError::new(format!(
+                        "target directory traversal exceeds {MAX_TARGET_DIRECTORIES} directories at {}",
+                        path.display()
+                    )));
+                }
+                directories += 1;
                 pending.push((path, depth + 1));
             } else if let Some(unit) = path
                 .strip_prefix(target)
