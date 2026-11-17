@@ -102,7 +102,7 @@ pub(super) async fn resume_local_absence(
         if rows.next().await.map_err(|_| HostError::Journal)?.is_some() {
             return Err(HostError::Identity);
         }
-        if local == 0 && cleanup == 0 && witness == 0 {
+        if local == 0 && cleanup == 0 && witness == 1 {
             return Ok(false);
         }
         if local != 1 || cleanup != 1 || witness != 1 {

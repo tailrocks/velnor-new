@@ -47,8 +47,8 @@ pub(super) fn binding(pair: Pair) -> CleanupObserverBinding {
             .map(|(index, (name, role))| CleanupVolume {
                 role: role.to_owned(),
                 mountpoint: format!("/var/lib/docker/volumes/{name}/_data"),
-                mount_device: [0, 38],
-                statx_device: [0, 38],
+                mount_device: [0, [55, 51, 52, 56, 38][index]],
+                statx_device: [0, [55, 51, 52, 56, 38][index]],
                 inode: 101 + u64::try_from(index).expect("volume index"),
             })
             .collect(),

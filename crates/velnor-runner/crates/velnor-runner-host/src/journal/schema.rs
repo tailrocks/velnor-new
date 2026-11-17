@@ -16,6 +16,9 @@ mod execution_publication;
 pub(in crate::journal) mod image_import;
 mod jit_conflict_recovery;
 mod jit_conflict_settlement;
+pub(in crate::journal) mod jit_interrupted_claims;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v45;
 mod migration;
 mod physical_attempts;
 
@@ -53,7 +56,7 @@ pub(super) use unbound_retirement::UNBOUND_SHAPE;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 45;
+pub(super) const JOURNAL_VERSION: i64 = 46;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -116,7 +119,8 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v45(conn).await
+    validate_persisted_schema_v45(conn).await?;
+    jit_interrupted_claims::validate(conn).await
 }
 
 mod legacy_validation;
