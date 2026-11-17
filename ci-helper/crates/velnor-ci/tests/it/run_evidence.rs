@@ -121,7 +121,7 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
         assert!(decision.status.success(), "{decision:?}");
         assert_eq!(
             fs::read_to_string(temp.join("outputs")).expect("outputs"),
-            format!("save={}\n", !fresh),
+            format!("save={}\nsources=true\n", !fresh),
             "{name}"
         );
         if !fresh {
@@ -278,7 +278,7 @@ fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
         if active {
             assert_eq!(
                 fs::read_to_string(temp.join("outputs")).expect("outputs"),
-                "save=true\n"
+                "save=true\nsources=true\n"
             );
         } else {
             assert!(String::from_utf8_lossy(&decision.stderr).contains("rejected"));

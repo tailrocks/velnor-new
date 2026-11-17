@@ -78,7 +78,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
             assert!(decision.status.success(), "{decision:?}");
             assert_eq!(
                 fs::read_to_string(temp.join("cache-outputs")).expect("cache output"),
-                "save=true\n"
+                "save=true\nsources=true\n"
             );
         } else {
             assert!(
@@ -99,7 +99,7 @@ pub(crate) fn fixture(
     if temp.exists() {
         fs::remove_dir_all(temp)?;
     }
-    fs::create_dir_all(temp)?;
+    fs::create_dir_all(temp.join("target/debug/deps"))?;
     let git = Command::new("git")
         .args(["init", "-q"])
         .current_dir(temp)
