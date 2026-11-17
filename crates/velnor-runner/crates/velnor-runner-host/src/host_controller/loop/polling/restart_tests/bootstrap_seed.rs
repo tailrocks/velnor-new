@@ -104,7 +104,7 @@ async fn initialize(journal: &Journal, pair: Pair, confirmed: bool) -> TestResul
     if confirmed {
         let r = pair.reservation;
         seed::unguarded(journal, &[
-            format!("UPDATE capacity_reservation_storage_initialization SET start_state='started',result_state='confirmed',home_device_major=0,home_device_minor=1,home_inode=1,home_mount_id=1,work_device_major=0,work_device_minor=2,work_inode=2,work_mount_id=2,metadata_layout_digest='{}' WHERE reservation_id={r}", "a".repeat(64)),
+            format!("UPDATE capacity_reservation_storage_initialization SET create_dispatch_state='response_received',start_state='started',result_state='confirmed',home_device_major=0,home_device_minor=1,home_inode=1,home_mount_id=1,work_device_major=0,work_device_minor=2,work_inode=2,work_mount_id=2,metadata_layout_digest='{}' WHERE reservation_id={r}", "a".repeat(64)),
             format!("INSERT INTO capacity_reservation_storage_handoffs (reservation_id,connection_id,operation_id,generation,helper_name,helper_id,engine_id,docker_root_digest,metadata_volume_name,metadata_volume_id,operation_key,layout_digest,ready_digest,state) SELECT reservation_id,connection_id,operation_id,generation,helper_name,helper_id,engine_id,docker_root_digest,metadata_volume,metadata_volume_id,operation_key,metadata_layout_digest,'{}','ready_held' FROM capacity_reservation_storage_initialization WHERE reservation_id={r}", "a".repeat(64)),
         ]).await?;
     }
