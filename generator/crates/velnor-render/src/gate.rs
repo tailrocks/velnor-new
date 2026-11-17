@@ -1,18 +1,23 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, VerdictSpec, When};
+
+use crate::rules::{RenderedStep, Value};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
 pub(crate) const CACHE_DEBUG_ON: &str = "vars.VELNOR_CACHE_DEBUG == '1'";
 const NOT_CANCELLED: &str = "!cancelled()";
+const ALWAYS: &str = "always()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const BASE_STEP: &str = "base";
 const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
+const NEEDS_JSON: &str = "NEEDS_JSON";
+const GATE_SPEC: &str = "GATE_SPEC";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
@@ -24,11 +29,21 @@ pub(crate) fn sources_save_step(slug: &RootSlug) -> String {
     format!("sources_save_{slug}")
 }
 
-pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
-    if need.is_global() {
-        format!("rust_{}", need_name(need))
-    } else {
-        format!("rust_{slug}_{}", need_name(need))
+pub(crate) fn verdict_step(spec: &VerdictSpec, needs_max_bytes: usize) -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci gate".to_owned(),
+        env: vec![
+            (
+                NEEDS_JSON.to_owned(),
+                Value::BoundedExpr {
+                    text: "${{ toJSON(needs) }}".to_owned(),
+                    max_bytes: needs_max_bytes,
+                },
+            ),
+            (GATE_SPEC.to_owned(), Value::Text(spec.text())),
+        ],
+        run: Some(format!("velnor-ci gate --spec-env {GATE_SPEC}")),
+        ..RenderedStep::default()
     }
 }
 
@@ -50,24 +65,14 @@ pub(crate) fn plan_read(source: &str, key: &str, setup: Setup) -> String {
     }
 }
 
+pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
+    need.output_name(slug)
+}
+
 pub(crate) fn plan_source(from: &PlanFrom) -> String {
     match from {
         PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
         PlanFrom::Job(job) => format!("needs.{job}.outputs"),
-    }
-}
-
-fn need_name(need: GateNeed) -> &'static str {
-    match need {
-        GateNeed::Selected => "mode",
-        GateNeed::Doctests => "doctests",
-        GateNeed::DoctestsKnown => "doctests_known",
-        GateNeed::Docs => "docs",
-        GateNeed::TestFilter => "test_filter",
-        GateNeed::PackageArgs => "package_args",
-        GateNeed::Deny => "deny",
-        GateNeed::Machete => "machete",
-        GateNeed::Policy => "policy",
     }
 }
 
@@ -81,6 +86,7 @@ pub(crate) fn condition(
     let mut parts = Vec::new();
     match when {
         When::Success => {}
+        When::Always => parts.push(ALWAYS.to_owned()),
         When::NotCancelled => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
@@ -148,6 +154,17 @@ pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> St
     }
 }
 
+pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> Option<String> {
+    match (first, second) {
+        (Some(first), Some(second)) => Some(format!(
+            "${{{{ ({}) && ({}) }}}}",
+            first.trim_start_matches("${{ ").trim_end_matches(" }}"),
+            second.trim_start_matches("${{ ").trim_end_matches(" }}")
+        )),
+        (first, second) => first.or(second),
+    }
+}
+
 fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
@@ -187,7 +204,10 @@ fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
                 format!("(contains({args}, ' -p {package} ') || contains({args}, ' --workspace '))")
             }));
         }
-        GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+        GateNeed::TestFilter
+        | GateNeed::PackageArgs
+        | GateNeed::DoctestsKnown
+        | GateNeed::TestsExpected => {
             parts.push(format!("{} != ''", read(gate.need)));
         }
     }

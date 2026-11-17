@@ -15,8 +15,8 @@ const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-pub(crate) fn writes_base(facts: &RepoFacts, lane: &Lane) -> bool {
-    facts.private_sources.is_none() && (lane.from_source || has_saving_helper(facts))
+pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
+    facts.private_sources.is_none() && has_saving_helper(facts)
 }
 
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
@@ -26,8 +26,8 @@ pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
         .is_some_and(|helper| helper.version().at_least(SAVING_HELPER))
 }
 
-pub(crate) fn restored(facts: &RepoFacts, lane: &Lane) -> Vec<Step> {
-    let expiry = expiry(facts, lane);
+pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
+    let expiry = expiry(facts);
     let replan = (expiry != BaseExpiry::Never).then(|| Step {
         when: When::BaseExpired,
         ..step(StepKind::Helper(HelperCommand::PlanFull))
@@ -44,8 +44,8 @@ pub(crate) fn saving_run(run: Step) -> Step {
     }
 }
 
-fn expiry(facts: &RepoFacts, lane: &Lane) -> BaseExpiry {
-    if !writes_base(facts, lane) {
+fn expiry(facts: &RepoFacts) -> BaseExpiry {
+    if !writes_base(facts) {
         return BaseExpiry::Never;
     }
     BaseExpiry::OnDefaultBranch
@@ -59,7 +59,7 @@ pub(crate) fn save_steps(
     archive: Option<RepoPath>,
     sources: bool,
 ) -> Vec<Step> {
-    if !writes_base(facts, lane) {
+    if !writes_base(facts) {
         return Vec::new();
     }
     let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
@@ -72,7 +72,7 @@ pub(crate) fn save_steps(
         Step {
             directory: root.manifest.parent(),
             when: When::SaveBase,
-            ..step(StepKind::Helper(HelperCommand::InputsSave))
+            ..step(StepKind::InputsSave(root.target_dir.clone()))
         },
         Step {
             when: When::SaveBase,

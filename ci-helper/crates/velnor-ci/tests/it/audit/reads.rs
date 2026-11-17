@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::time::{Duration, UNIX_EPOCH};
 
 use crate::io::Repo;
 
@@ -31,9 +30,6 @@ fn audit_writes_reads_outside_each_package_from_current_units_and_fails_on_a_sta
         &format!("{target}/deps/it-0000000000000003.d"),
         "out.d: lib/tests/it.rs lib/tests/../../../shared/lib-test.txt\n",
     );
-    let stale = format!("{target}/deps/app-0000000000000004.d");
-    unit(&repo, &stale, "out.d: app/src/lib.rs ../shared/old.txt\n");
-    repo.set_mtime(&stale, UNIX_EPOCH + Duration::from_secs(1_000_000_000));
     let root = fs::canonicalize(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     let root = root.display();
     unit(

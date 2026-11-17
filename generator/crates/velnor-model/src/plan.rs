@@ -3,18 +3,19 @@
 
 use std::collections::BTreeMap;
 
-use crate::cache::CacheKey;
 use crate::cron::CronExpr;
 use crate::ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RootSlug, RunnerLabel,
     Sha256, TargetName,
 };
 use crate::repo::TargetKind;
+use crate::steps::StepKind;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
 
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
+pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -129,7 +130,10 @@ impl Gate {
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
-            GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+            GateNeed::TestFilter
+            | GateNeed::PackageArgs
+            | GateNeed::DoctestsKnown
+            | GateNeed::TestsExpected => {
                 vec![own(self.need)]
             }
         }
@@ -147,12 +151,34 @@ pub enum GateNeed {
     Deny,
     Machete,
     Policy,
+    TestsExpected,
 }
 
 impl GateNeed {
     #[must_use]
     pub fn is_global(self) -> bool {
         matches!(self, Self::Deny | Self::Machete | Self::Policy)
+    }
+
+    #[must_use]
+    pub fn output_name(self, slug: &RootSlug) -> String {
+        let name = match self {
+            Self::Selected => "mode",
+            Self::Doctests => "doctests",
+            Self::DoctestsKnown => "doctests_known",
+            Self::Docs => "docs",
+            Self::TestFilter => "test_filter",
+            Self::PackageArgs => "package_args",
+            Self::Deny => "deny",
+            Self::Machete => "machete",
+            Self::Policy => "policy",
+            Self::TestsExpected => "tests",
+        };
+        if self.is_global() {
+            format!("rust_{name}")
+        } else {
+            format!("rust_{slug}_{name}")
+        }
     }
 }
 
@@ -167,6 +193,7 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    Always,
     Scheduled,
     ScheduledOrPush,
     CacheDebug,
@@ -175,71 +202,6 @@ pub enum When {
     SaveBaseDecided,
     BaseExpired,
     SavingRun,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StepKind {
-    Checkout {
-        depth: u32,
-    },
-    InstallTools {
-        only: Option<String>,
-    },
-    CacheRestore(CacheKey),
-    CacheSave(CacheKey),
-    CacheDecide {
-        target: RepoPath,
-        archive: Option<RepoPath>,
-    },
-    CacheTrim {
-        lane: JobId,
-        family: TrimFamily,
-    },
-    RustComponents(Vec<String>),
-    RustTargets(Vec<String>),
-    UploadArchive {
-        name: String,
-        file: RepoPath,
-    },
-    DownloadArchive {
-        name: String,
-        into: Option<RepoPath>,
-    },
-    Cargo(CargoCommand),
-    Helper(HelperCommand),
-    GeneratorCheck,
-    InstallHelper(HelperRelease),
-    HelperFromArtifact,
-    PublishHelper {
-        binary: RepoPath,
-    },
-    FailWhenANeedFailed,
-    FailOnDraftRun,
-    UploadCargoLog,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrimFamily {
-    Target,
-    Sources,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BaseExpiry {
-    Never,
-    OnDefaultBranch,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HelperCommand {
-    Plan,
-    PlanFull,
-    Prepare,
-    CheckMetadata,
-    Restored(BaseExpiry),
-    InputsSave,
-    InputsRestore,
-    InputsAudit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
