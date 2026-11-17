@@ -302,17 +302,34 @@ fn archived_test_jobs() -> FakeGitHub {
         let path = jobs_path(&repo, id, 1, 1);
         let mut jobs: Value =
             serde_json::from_str(&fake.get_text(&path)).unwrap_or_else(|e| unreachable!("{e}"));
-        let template = jobs["jobs"]
+        let job_list = jobs["jobs"]
+            .as_array_mut()
+            .unwrap_or_else(|| unreachable!());
+        let at = job_list
+            .iter()
+            .position(|job| job["name"] == "rust-root")
+            .unwrap_or_else(|| unreachable!());
+        let template = job_list[at].clone();
+        let lint = template["steps"]
             .as_array()
-            .and_then(|jobs| jobs.iter().find(|job| job["name"] == "rust-root"))
+            .and_then(|steps| steps.iter().find(|step| step["name"] == "Lint"))
             .cloned()
             .unwrap_or_else(|| unreachable!());
+        let mut lint_job = template.clone();
+        lint_job["name"] = "rust-lint".into();
+        lint_job["steps"] = json!([lint]);
+        job_list[at] = lint_job;
+        let lint_id = template["id"].as_u64().unwrap_or_default();
+        fake.respond(
+            job_log_path(&repo, lint_id),
+            "##[group]Run cargo-clippy clippy --workspace\n",
+        );
         let build_seconds = [7, 9, 11][index];
         let test_seconds = [3, 5, 7][index];
         for (job_id, name, step, log) in [
             (
                 10_000 + index as u64,
-                "rust-test-root",
+                "rust-test",
                 "Build the tests",
                 format!(
                     "##[group]Run cargo-nextest nextest archive\nFinished `test` profile [unoptimized + debuginfo] target(s) in {build_seconds}.00s\n"
@@ -320,7 +337,7 @@ fn archived_test_jobs() -> FakeGitHub {
             ),
             (
                 11_000 + index as u64,
-                "rust-test-default-root",
+                "rust-test-default",
                 "Test",
                 format!(
                     "##[group]Run cargo-nextest nextest run\nPASS [ {test_seconds}.00s] (1/1) lab::bin/lab\nSummary [ {test_seconds}.00s] 1 test run: 1 passed, 0 skipped\n"
@@ -351,8 +368,13 @@ fn archived_test_jobs() -> FakeGitHub {
 
 #[test]
 fn grouped_test_timings_use_the_archive_build_and_default_group_execution_jobs() {
-    let report = gather(&archived_test_jobs(), &lab(), &roots(), &runner())
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    let report = gather(
+        &archived_test_jobs(),
+        &lab(),
+        &[root("Cargo.toml")],
+        &runner(),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     let timing = &report.timings[&root("Cargo.toml")];
     assert_eq!(timing.test_build_seconds, 9);
     assert_eq!(timing.test_seconds, 5);
