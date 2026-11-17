@@ -275,3 +275,22 @@ fn a_target_dir_with_glob_characters_is_uploaded_literally() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn the_host_tuple_build_target_does_not_refuse_the_helper() -> TestResult {
+    let host = "[build]\ntarget = \"host-tuple\"\n";
+    for files in [
+        vec![(".cargo/config.toml", host)],
+        vec![
+            (
+                ".cargo/config.toml",
+                "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n",
+            ),
+            ("ci-helper/.cargo/config.toml", host),
+        ],
+    ] {
+        let result = expected_files(&helper_with_configs(&files)?);
+        assert!(result.is_ok(), "{files:?}: {:?}", result.err());
+    }
+    Ok(())
+}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod build_target;
 mod cache_compat;
 mod cache_key_defects;
 mod cache_keys;
@@ -33,6 +34,7 @@ mod lock_affected;
 mod lock_consistency;
 mod main_and_scheduled;
 mod metadata_file;
+mod mise_names;
 mod no_programs;
 mod patch;
 mod pipeline;

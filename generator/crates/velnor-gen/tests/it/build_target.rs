@@ -1,0 +1,126 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use velnor_gen::{GenerateError, expected_with_notes};
+use velnor_model::RepoView;
+use velnor_rust::{DetectError, Reason};
+
+use crate::facts::{TestResult, path};
+use crate::pipeline::view;
+
+const SMALL: &str = "[build]\ntarget = \"thumbv6m-none-eabi\"\n";
+
+fn with(roots: &[&str], configs: &[(&str, &str)]) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let mut repo = view(roots, None)?;
+    for (name, text) in configs {
+        repo.tracked_paths.insert(path(name)?);
+        repo.files.insert(path(name)?, text.as_bytes().to_vec());
+    }
+    crate::facts::lock_pinned_tools(&mut repo)?;
+    Ok(repo)
+}
+
+fn generate(repo: &RepoView) -> Result<(), GenerateError> {
+    expected_with_notes(repo).map(|_| ())
+}
+
+fn refused(repo: &RepoView) -> Option<(String, Option<String>)> {
+    match generate(repo) {
+        Err(GenerateError::Detect(DetectError::Invalid { path, reason })) => Some((
+            path.to_string(),
+            match reason {
+                Reason::UndeclaredTarget(name) => Some(name),
+                Reason::InvalidValue { key, .. } => Some(key.to_owned()),
+                _ => None,
+            },
+        )),
+        _ => None,
+    }
+}
+
+#[test]
+fn the_host_tuple_target_is_the_runner_host_and_needs_no_declaration() -> TestResult {
+    for text in [
+        "[build]\ntarget = \"host-tuple\"\n",
+        "[build]\ntarget = [\"host-tuple\"]\n",
+    ] {
+        let repo = with(&["Cargo.toml"], &[(".cargo/config.toml", text)])?;
+        assert!(generate(&repo).is_ok(), "{text}");
+    }
+    Ok(())
+}
+
+#[test]
+fn only_a_config_that_applies_to_a_root_names_its_targets() -> TestResult {
+    for file in [
+        "vendor/.cargo/config.toml",
+        "lab/crates/foo/.cargo/config.toml",
+    ] {
+        let repo = with(&["lab/Cargo.toml"], &[(file, SMALL)])?;
+        assert!(generate(&repo).is_ok(), "{file}");
+    }
+    let applied = with(&["lab/Cargo.toml"], &[("lab/.cargo/config.toml", SMALL)])?;
+    assert_eq!(
+        refused(&applied),
+        Some((
+            "lab/.cargo/config.toml".to_owned(),
+            Some("thumbv6m-none-eabi".to_owned())
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_nearer_string_replaces_an_ancestor_string_and_arrays_are_joined() -> TestResult {
+    let host = "[build]\ntarget = \"host-tuple\"\n";
+    let replaced = with(
+        &["lab/Cargo.toml"],
+        &[
+            (".cargo/config.toml", SMALL),
+            ("lab/.cargo/config.toml", host),
+        ],
+    )?;
+    assert!(generate(&replaced).is_ok());
+    let joined = with(
+        &["lab/Cargo.toml"],
+        &[
+            (
+                ".cargo/config.toml",
+                "[build]\ntarget = [\"thumbv6m-none-eabi\"]\n",
+            ),
+            (
+                "lab/.cargo/config.toml",
+                "[build]\ntarget = [\"host-tuple\"]\n",
+            ),
+        ],
+    )?;
+    assert_eq!(
+        refused(&joined),
+        Some((
+            ".cargo/config.toml".to_owned(),
+            Some("thumbv6m-none-eabi".to_owned())
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_build_target_that_is_not_a_string_or_array_of_strings_is_refused() -> TestResult {
+    for text in [
+        "[build]\ntarget = 1\n",
+        "[build]\ntarget = true\n",
+        "[build.target]\nname = \"x\"\n",
+        "[build]\ntarget = [1]\n",
+    ] {
+        let repo = with(&["Cargo.toml"], &[(".cargo/config.toml", text)])?;
+        assert_eq!(
+            refused(&repo),
+            Some((
+                ".cargo/config.toml".to_owned(),
+                Some("build.target".to_owned())
+            )),
+            "{text}"
+        );
+    }
+    Ok(())
+}

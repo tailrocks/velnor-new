@@ -4,6 +4,7 @@
 mod audit_job;
 mod build_profile;
 mod build_script;
+mod build_target;
 mod cargo_lock;
 mod classify;
 mod compat;
