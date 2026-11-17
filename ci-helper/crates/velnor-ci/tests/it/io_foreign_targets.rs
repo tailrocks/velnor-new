@@ -4,6 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
+use std::time::{Duration, UNIX_EPOCH};
 
 use crate::io::Repo;
 
@@ -96,14 +97,7 @@ fn foreign_target(owner: &Repo, shape: &str) -> (PathBuf, PathBuf, PathBuf) {
 fn foreign_checkout_targets_are_preserved_by_save_and_restore() {
     let mut failures = Vec::new();
     for operation in ["save", "restore"] {
-        for shape in [
-            "checkout",
-            "container",
-            "source",
-            "linked",
-            "bare",
-            "symlink",
-        ] {
+        for shape in ["checkout", "source", "linked", "bare", "symlink"] {
             let root = Repo::new("foreign-caller");
             root.write("src/lib.rs", "caller checkout\n");
             let owner = plain_owner();
@@ -129,6 +123,42 @@ fn foreign_checkout_targets_are_preserved_by_save_and_restore() {
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+#[test]
+fn warm_inputs_preserve_a_nested_checkout_and_cold_restore_refuses_to_remove_it() {
+    let root = Repo::new("nested-warm-caller");
+    root.write("src/lib.rs", "caller checkout\n");
+    let saved_time = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+    root.set_mtime("src/lib.rs", saved_time);
+    let owner = plain_owner();
+    let (target, foreign, marker) = foreign_target(&owner, "container");
+    let original_marker = fs::read(&marker).unwrap_or_else(|e| unreachable!("{e}"));
+    let saved = helper(root.root(), "save", &target);
+    assert!(saved.status.success(), "{saved:?}");
+    let snapshot = target.join(".velnor/inputs.tsv");
+    let saved_snapshot = fs::read(&snapshot).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_ne!(saved_snapshot, [] as [u8; 0]);
+    root.set_mtime("src/lib.rs", saved_time + Duration::from_secs(100));
+    let restored = helper(root.root(), "restore", &target);
+    assert!(restored.status.success(), "{restored:?}");
+    assert_eq!(root.mtime("src/lib.rs"), saved_time);
+    let tied = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("restored")
+        .current_dir(root.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(tied.status.success(), "{tied:?}");
+    assert_eq!(fs::read(&snapshot).unwrap_or_default(), saved_snapshot);
+    fs::write(&snapshot, "invalid\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let cold = helper(root.root(), "restore", &target);
+    assert!(!cold.status.success(), "{cold:?}");
+    assert_eq!(fs::read(&snapshot).unwrap_or_default(), b"invalid\n");
+    assert_eq!(fs::read(&marker).unwrap_or_default(), original_marker);
+    assert_eq!(
+        fs::read(foreign.join("src/lib.rs")).unwrap_or_default(),
+        b"foreign checkout\n"
+    );
 }
 
 #[test]

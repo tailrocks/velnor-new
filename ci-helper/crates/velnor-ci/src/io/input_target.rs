@@ -26,8 +26,15 @@ pub(super) fn check_target(root: &Path, target: &Path) -> Result<(), CiError> {
             }
         }
     }
-    for target in &targets {
-        protect_tree(target)?;
+    Ok(())
+}
+
+pub(super) fn check_removal_target(target: &Path) -> Result<(), CiError> {
+    let object = target_object(target)?;
+    let resolved = resolve(target)?;
+    protect_tree(&object)?;
+    if resolved != object {
+        protect_tree(&resolved)?;
     }
     Ok(())
 }

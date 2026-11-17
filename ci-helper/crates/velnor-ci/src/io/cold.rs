@@ -5,7 +5,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
-use super::input_target::check_target;
+use super::input_target::{check_removal_target, check_target};
 use super::inputs::tracked_paths;
 use super::restored_targets::{self, Pending};
 use crate::error::CiError;
@@ -20,6 +20,9 @@ pub fn cold_on_failure(
         Ok(report) => return Ok(report),
         Err(e) => e,
     };
+    for target in targets {
+        check_removal_target(target)?;
+    }
     for target in targets {
         match fs::remove_dir_all(target) {
             Ok(()) => {}
