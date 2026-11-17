@@ -21,7 +21,7 @@ use crate::io::Scratch;
 const GOOD: &str = "#!/bin/sh\nprintf 'released-helper\\n'\n";
 const BAD: &str = "#!/bin/sh\nprintf 'replaced-helper\\n'\n";
 
-fn workflow(digest: &str) -> Result<Value, Box<dyn Error>> {
+pub(crate) fn workflow(digest: &str) -> Result<Value, Box<dyn Error>> {
     let release = HelperRelease::new(
         HelperVersion::new("1.2.3")?,
         CommitSha::new("1793cf84b5924e2542a03b0fb2580e7395b2f4cb")?,
@@ -61,7 +61,7 @@ fn workflow(digest: &str) -> Result<Value, Box<dyn Error>> {
     )?)
 }
 
-fn steps(workflow: &Value) -> Result<&Vec<Value>, Box<dyn Error>> {
+pub(crate) fn steps(workflow: &Value) -> Result<&Vec<Value>, Box<dyn Error>> {
     workflow["jobs"]["format"]["steps"]
         .as_array()
         .ok_or_else(|| "no steps".into())
@@ -81,6 +81,10 @@ fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> Tes
         {
             continue;
         }
+        assert_eq!(
+            step["shell"],
+            "/bin/bash --noprofile --norc -p -e -o pipefail {0}"
+        );
         assert_eq!(run.lines().count(), 1, "{run}");
         let mut rest = run;
         for operation in [
@@ -150,16 +154,30 @@ fn execute(
     shadows: &Path,
     digest: &str,
 ) -> Result<Output, Box<dyn Error>> {
-    let mut command = Command::new("/bin/bash");
-    command.args([
-        "--noprofile",
-        "--norc",
-        "-e",
-        "-o",
-        "pipefail",
-        "-c",
-        step["run"].as_str().ok_or("no run")?,
-    ]);
+    execute_environment(step, root, shadows, digest, &[])
+}
+
+pub(crate) fn execute_environment(
+    step: &Value,
+    root: &Path,
+    shadows: &Path,
+    digest: &str,
+    environment: &[(&str, &str)],
+) -> Result<Output, Box<dyn Error>> {
+    let script = root.join("invocation.sh");
+    fs::write(&script, step["run"].as_str().ok_or("no run")?)?;
+    let shell = step["shell"]
+        .as_str()
+        .unwrap_or("/bin/bash --noprofile --norc -e -o pipefail {0}");
+    let mut words = shell.split_whitespace();
+    let mut command = Command::new(words.next().ok_or("no shell executable")?);
+    for word in words {
+        command.arg(if word == "{0}" {
+            script.as_os_str()
+        } else {
+            word.as_ref()
+        });
+    }
     command
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", shadows.display()));
@@ -192,10 +210,11 @@ fn execute(
             command.env(key, text);
         }
     }
+    command.envs(environment.iter().copied());
     Ok(command.output()?)
 }
 
-fn fixture() -> Result<(Scratch, String), Box<dyn Error>> {
+pub(crate) fn fixture() -> Result<(Scratch, String), Box<dyn Error>> {
     let scratch = Scratch::new("helper-integrity")?;
     let root = scratch.outside();
     let source = root.join("velnor-ci-bin/velnor-ci");

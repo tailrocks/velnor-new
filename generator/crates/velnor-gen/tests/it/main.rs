@@ -26,6 +26,7 @@ mod harness_kinds;
 mod harness_undecided;
 mod helper_integrity;
 mod helper_source;
+mod helper_startup;
 
 mod inputs;
 mod io;
