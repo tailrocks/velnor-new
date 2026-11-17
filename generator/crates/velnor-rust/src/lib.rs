@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit_job;
+mod base_cache;
 mod build_profile;
 mod build_script;
 mod build_target;
@@ -28,6 +29,7 @@ mod os_pins;
 mod owners;
 mod plan;
 mod policy;
+mod private_sources;
 mod reads;
 mod repo_profile;
 mod required_job;
@@ -87,3 +89,5 @@ pub use verdict::{
     package_token, verdict,
 };
 pub use weaken::introduced;
+
+pub use private_sources::{cacheable_config, cacheable_lock};

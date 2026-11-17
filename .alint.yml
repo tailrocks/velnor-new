@@ -153,6 +153,7 @@ rules:
         - ci-helper/Cargo.lock
         - generator/Cargo.lock
         - local/Cargo.lock
+        - "generator/samples/**/Cargo.lock"
     level: error
     message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock, ci-helper/Cargo.lock, generator/Cargo.lock and local/Cargo.lock are resolved."
 

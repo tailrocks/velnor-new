@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod boundary;
+mod bounds;
 mod build_clock;
 mod freshness;
 mod gated;

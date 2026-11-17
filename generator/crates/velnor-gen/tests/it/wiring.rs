@@ -59,11 +59,13 @@ fn the_documentation_step_builds_the_workspace_and_an_empty_selection_skips_it()
     let doc = step(&single, "Documentation");
     let condition = doc.join("\n");
     assert!(
-        condition.contains("steps.plan.outputs.rust_root_package_args != ''"),
+        condition.contains("(steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args) != ''"),
         "{condition}"
     );
     assert!(
-        condition.contains("steps.plan.outputs.rust_root_docs == 'run'"),
+        condition.contains(
+            "(steps.replan.outputs.rust_root_docs || steps.plan.outputs.rust_root_docs) == 'run'"
+        ),
         "{condition}"
     );
     assert!(!condition.contains("PACKAGE_ARGS"), "{condition}");
@@ -74,7 +76,7 @@ fn the_documentation_step_builds_the_workspace_and_an_empty_selection_skips_it()
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let doc = step(&lanes, "Documentation").join("\n");
     assert!(
-        doc.contains("needs.rust-plan.outputs.rust_root_package_args != ''"),
+        doc.contains("(steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != ''"),
         "{doc}"
     );
     assert!(!doc.contains("PACKAGE_ARGS"), "{doc}");
@@ -90,7 +92,7 @@ fn nextest_builds_the_workspace_and_reads_the_filter_the_plan_selected() -> Test
     let test = step(&single, "Test");
     let joined = test.join("\n");
     assert!(
-        joined.contains("TEST_FILTER: '${{ steps.plan.outputs.rust_root_test_filter }}'"),
+        joined.contains("TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || steps.plan.outputs.rust_root_test_filter }}'"),
         "{joined}"
     );
     assert!(!joined.contains("PACKAGE_ARGS"), "{joined}");
@@ -138,10 +140,6 @@ fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestRes
     );
     let off = self::text(&files)?;
     assert_eq!(off.matches("cargo test --doc").count(), 1);
-    assert!(
-        !off.contains("cargo build --workspace --all-targets"),
-        "{off}"
-    );
     Ok(())
 }
 
@@ -303,12 +301,12 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         .split("\n  rust-inputs-audit:\n")
         .nth(1)
         .ok_or("no audit job")?
-        .split("\n  required:\n")
+        .split("\n  rust-trim:\n")
         .next()
         .ok_or("no audit job")?;
     assert!(
         audit.contains(
-            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'push')) }}'"
+            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')) }}'"
         ),
         "{audit}"
     );
@@ -331,11 +329,17 @@ fn the_multi_root_audit_job_follows_the_schedule_policy() -> TestResult {
     let scheduled = text(&view(&roots, Some(b"full_run = \"nightly\"\n".as_slice()))?)?;
     assert!(scheduled.contains("rust-inputs-audit:"), "{scheduled}");
     assert!(
-        scheduled.contains("if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && (github.event_name == 'schedule') }}'"),
+        scheduled.contains("if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}'"),
         "{scheduled}"
     );
     let off = text(&view(&roots, Some(b"full_run = \"off\"\n".as_slice()))?)?;
-    assert!(!off.contains("inputs audit"), "{off}");
+    assert!(off.contains("rust-inputs-audit:"), "{off}");
+    assert!(
+        off.contains(
+            "((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}'"
+        ),
+        "{off}"
+    );
     Ok(())
 }
 

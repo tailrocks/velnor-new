@@ -171,6 +171,12 @@ impl PlanOutput {
                         deny || machete
                     }
                     JobCondition::Schedule => event_is(event, &[SCHEDULE])?,
+                    JobCondition::ScheduleOrDispatch => {
+                        event_is(event, &[SCHEDULE, "workflow_dispatch"])?
+                    }
+                    JobCondition::ScheduleOrPushOrDispatch => {
+                        event_is(event, &[SCHEDULE, PUSH, "workflow_dispatch"])?
+                    }
                     JobCondition::ScheduleOrPush => event_is(event, &[SCHEDULE, PUSH])?,
                 };
             }

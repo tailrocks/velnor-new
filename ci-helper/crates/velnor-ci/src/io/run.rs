@@ -205,10 +205,21 @@ fn has_terminal() -> bool {
 }
 
 fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, String)> {
+    let cargo = Path::new(&argv[0])
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "cargo" || name.starts_with("cargo-"));
+    if cargo && argv.iter().any(|arg| arg == "--quiet" || arg == "-q") {
+        return Err((
+            2,
+            "quiet commands cannot provide cache compilation evidence".to_owned(),
+        ));
+    }
     let own_group = separate_group(has_terminal());
     let mut command = Command::new(&argv[0]);
     command
         .args(&argv[1..])
+        .env("CARGO_TERM_QUIET", "false")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
     if runs_nextest(argv) {

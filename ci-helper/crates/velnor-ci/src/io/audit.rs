@@ -17,14 +17,16 @@ use std::time::SystemTime;
 use velnor_gen::io::read_checkout;
 use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
 use velnor_rust::{
-    INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
-    locate, parse_inputs_lock, rerun_if_changed, unlisted,
+    INPUTS_LOCK, Located, Owner, Owners, add_reads, detect, format_inputs_lock, locate,
+    parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
 use super::units::{UnitFile, Workspace, apart, platforms, profile, unit_files, workspace};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 use crate::platform::Platforms;
+
+mod dep_info;
 
 pub(super) struct Audit<'a> {
     repository: &'a Path,
@@ -40,6 +42,7 @@ pub(super) struct Audit<'a> {
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
+    target_bytes: u64,
     stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,
@@ -83,6 +86,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
             })
             .collect(),
         found: CompileInputs::new(),
+        target_bytes: 0,
         stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
@@ -113,12 +117,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         })
         .collect::<Result<Vec<_>, _>>()?;
     complete(&facts, &workspaces, &audit.built, &platforms)?;
-    if !audit.stale.is_empty() {
-        return Err(CiError::new(format!(
-            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
-            audit.stale.join(", ")
-        )));
-    }
+    audit.check_stale()?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if options.write {
@@ -215,6 +214,16 @@ fn compare(
 }
 
 impl Audit<'_> {
+    fn check_stale(&self) -> Result<(), CiError> {
+        if self.stale.is_empty() {
+            return Ok(());
+        }
+        Err(CiError::new(format!(
+            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
+            self.stale.join(", ")
+        )))
+    }
+
     fn record(
         &mut self,
         workspace: &Path,
@@ -283,34 +292,6 @@ impl Audit<'_> {
         Ok(())
     }
 
-    pub(super) fn dep_info(
-        &mut self,
-        workspace: &Path,
-        file: &Path,
-        package: Option<&str>,
-    ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
-        let text = read(file)?;
-        let built = modified(file)?;
-        let paths = dep_info_paths(&text);
-        let Some(Located::Inside(source)) = paths
-            .first()
-            .map(|source| locate(self.repository, workspace, source))
-        else {
-            return Ok(None);
-        };
-        if self.changed_since(workspace, &paths, built, file, false)? {
-            if !self.owners.of(package, &source).is_empty() {
-                self.stale.push(file.display().to_string());
-            }
-            return Ok(None);
-        }
-        for owner in self.owners.of(package, &source) {
-            self.credit(&owner, workspace, &paths, false);
-        }
-        self.units += 1;
-        Ok(Some((source, built)))
-    }
-
     fn build_output(
         &mut self,
         index: usize,
@@ -318,7 +299,7 @@ impl Audit<'_> {
         configuration: &str,
         package: &str,
     ) -> Result<bool, CiError> {
-        let text = read(file)?;
+        let text = self.build_output_text(file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
         let mut current = false;
@@ -384,11 +365,6 @@ impl Audit<'_> {
             &self.targets,
         );
     }
-}
-
-fn read(file: &Path) -> Result<String, CiError> {
-    fs::read_to_string(file)
-        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))
 }
 
 fn modified(path: &Path) -> Result<SystemTime, CiError> {

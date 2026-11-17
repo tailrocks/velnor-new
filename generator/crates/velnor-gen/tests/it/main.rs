@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod base_cache_rules;
+mod base_expiry;
+mod base_safety;
+mod base_save;
+mod base_token;
 mod build_target;
 mod cache_compat;
 mod cache_key_defects;
@@ -32,6 +37,9 @@ mod inputs;
 mod io;
 mod io_files;
 mod io_manifests;
+mod io_record;
+mod io_record_boundaries;
+
 mod job_setup;
 mod job_shape;
 mod lock;
@@ -86,6 +94,7 @@ mod tool_pins;
 mod toolchain;
 mod toolchain_components;
 mod tools_cache;
+mod trim_job;
 mod unowned;
 mod version;
 mod weaken;
