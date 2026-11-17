@@ -111,6 +111,44 @@ fn scoped_snapshots_can_stage_a_nested_target_with_other_tracked_workspaces() {
     assert_eq!(values, "save=true\n");
 }
 
+#[test]
+fn absent_tracked_inputs_cannot_change_node_kind_before_delta_staging() {
+    for transition in ["regular-link", "regular-directory", "link-regular"] {
+        let (repo, _) = fixture("delta-source-node-kind");
+        let missing = repo.root().join("missing");
+        if transition == "link-regular" {
+            std::os::unix::fs::symlink("src/main.rs", &missing)
+                .unwrap_or_else(|error| unreachable!("{error}"));
+        } else {
+            repo.write_unstaged("missing", "tracked input");
+        }
+        repo.git(&["add", "missing"]);
+        fs::remove_file(&missing).unwrap_or_else(|error| unreachable!("{error}"));
+        fs::remove_dir_all(repo.root().join("target"))
+            .unwrap_or_else(|error| unreachable!("{error}"));
+        let expected = prepare(&repo);
+        delta(&repo, "apply", None);
+        let built = cargo(&repo);
+        success(&built);
+        repo.write_unstaged("velnor-run.log", &String::from_utf8_lossy(&built.stderr));
+        match transition {
+            "regular-link" => std::os::unix::fs::symlink("src/main.rs", &missing)
+                .unwrap_or_else(|error| unreachable!("{error}")),
+            "regular-directory" => {
+                fs::create_dir(&missing).unwrap_or_else(|error| unreachable!("{error}"))
+            }
+            _ => repo.write_unstaged("missing", "now a regular file"),
+        }
+        save_inputs(&repo);
+        assert_eq!(
+            delta(&repo, "stage", Some(&expected)),
+            "save=false\n",
+            "{transition}"
+        );
+        assert!(!repo.root().join("delta").exists());
+    }
+}
+
 fn future_time(path: &Path) {
     File::open(path)
         .and_then(|file| {
@@ -216,4 +254,12 @@ fn future_restore(layer: &str) {
         "{layer}: {}",
         String::from_utf8_lossy(&output.stdout)
     );
+    if layer == "unsupported-base" {
+        repo.write_unstaged("src/main.rs", SOURCE_A);
+        let rebuilt = cargo(&repo);
+        success(&rebuilt);
+        repo.write_unstaged("velnor-run.log", &String::from_utf8_lossy(&rebuilt.stderr));
+        save_inputs(&repo);
+        assert_eq!(delta(&repo, "stage", Some(&expected)), "save=false\n");
+    }
 }
