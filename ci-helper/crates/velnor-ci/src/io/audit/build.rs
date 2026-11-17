@@ -83,6 +83,7 @@ impl Builder<'_> {
         replayable: bool,
         invalidate: bool,
     ) -> Result<(), CiError> {
+        self.targets.extend(generated::proven(&self.workspaces)?);
         for _ in 0..if replayable { 2 } else { 1 } {
             let declared = self.declared()?;
             self.targets.extend(

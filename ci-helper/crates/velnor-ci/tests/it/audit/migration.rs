@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod targets;
+
 use std::fs;
 use std::process::{Command, Output};
 
@@ -301,67 +303,4 @@ fn cargo_toolchain_and_global_options_keep_compiler_discovery_enabled() {
         assert_eq!(runs(&repo), 2, "{prefix:?}");
         assert_fresh(&repo, "");
     }
-}
-
-#[test]
-fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes() {
-    use std::time::{Duration, UNIX_EPOCH};
-
-    let repo = cargo_project(InputDirectory::Repository);
-    repo.write(".velnor/prepare", "");
-    repo.write_unstaged("rust/target/runs.txt", "0");
-    let version = Command::new("rustc")
-        .arg("-vV")
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(version.status.success(), "{version:?}");
-    let version = String::from_utf8(version.stdout).unwrap_or_else(|e| unreachable!("{e}"));
-    let host = version
-        .lines()
-        .find_map(|line| line.strip_prefix("host: "))
-        .unwrap_or_else(|| unreachable!("{version}"));
-    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .current_dir(repo.root().join("rust"))
-        .env("CARGO_TARGET_DIR", repo.root())
-        .args([
-            "inputs",
-            "build",
-            "--",
-            "cargo",
-            "build",
-            "--workspace",
-            "--all-targets",
-            "--offline",
-            "--target",
-            host,
-        ])
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(built.status.success(), "{built:?}");
-    let artifact = format!("{host}/debug/new-artifact");
-    repo.write_unstaged(&artifact, "generated");
-    repo.set_mtime(&artifact, UNIX_EPOCH + Duration::from_secs(4_000_000_000));
-    let check = || {
-        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-            .current_dir(repo.root())
-            .env("CARGO_TARGET_DIR", repo.root())
-            .args(["inputs", "audit", "--write"])
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-    };
-    let written = check();
-    assert!(written.status.success(), "{written:?}");
-    let lock = repo.root().join(".velnor/rust-inputs.lock");
-    assert_eq!(
-        fs::read_to_string(&lock).unwrap_or_else(|e| unreachable!("{e}")),
-        ".\tapp\n"
-    );
-    fs::remove_file(&lock).unwrap_or_else(|e| unreachable!("{e}"));
-    repo.set_mtime(
-        "shared/value.txt",
-        UNIX_EPOCH + Duration::from_secs(4_000_000_000),
-    );
-    let stale = check();
-    assert_eq!(stale.status.code(), Some(1), "{stale:?}");
-    assert!(!lock.exists());
 }
