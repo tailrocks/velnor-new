@@ -66,7 +66,7 @@ fn pr_only_checks_are_explicit_literal_repeated_flags_in_the_release_gate() -> T
         ("private-key", "${{ secrets.RELEASE_APP_PRIVATE_KEY }}"),
         ("owner", "${{ github.repository_owner }}"),
         ("repositories", "${{ github.event.repository.name }}"),
-        ("permission-administration", "read"),
+        ("permission-administration", "write"),
         ("permission-actions", "read"),
         ("permission-contents", "read"),
         ("permission-statuses", "read"),
