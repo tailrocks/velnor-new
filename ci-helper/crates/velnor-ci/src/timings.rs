@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 use std::time::Duration;
 
-use velnor_model::{LINT_STEP, RepoPath, RepoView, RunnerLabel, TEST_STEP, Timings, WORKFLOW_PATH};
+use velnor_model::{
+    BUILD_TESTS_STEP, LINT_STEP, RepoPath, RepoView, RunnerLabel, TEST_STEP, Timings, WORKFLOW_PATH,
+};
 use velnor_rust::{TIMINGS_PATH, detect, root_job_ids};
 
 use crate::collect::collect;
@@ -140,13 +142,10 @@ fn is_ordinary(run: &ApiListedRun, default_branch: &str) -> bool {
     run.run_attempt == 1
         && match run.event.as_str() {
             "push" => run.head_branch.as_deref() == Some(default_branch),
-            "pull_request" => {
-                run.pull_requests.is_empty()
-                    || run
-                        .pull_requests
-                        .iter()
-                        .any(|pull| pull.base.name == default_branch)
-            }
+            "pull_request" => run
+                .pull_requests
+                .iter()
+                .any(|pull| pull.base.name == default_branch),
             _ => false,
         }
 }
@@ -157,18 +156,23 @@ fn sample(
     several_roots: bool,
     runner: &RunnerLabel,
 ) -> Option<Sample> {
-    let [single, lint_job, test_job] = root_job_ids(root, several_roots);
-    let step_in = |jobs: [&str; 2], step: &str| -> Option<&StepMetrics> {
+    let [single, lint_job, test_job, group_job] = root_job_ids(root, several_roots);
+    let step_in = |jobs: &[&str], step: &str| -> Option<&StepMetrics> {
         run.jobs
             .iter()
             .filter(|job| jobs.contains(&job.name.as_str()) && on_runner(job, runner))
             .find_map(|job| ran_step(job, step))
     };
-    let lint = step_in([single.as_str(), lint_job.as_str()], LINT_STEP)?;
-    let test = step_in([single.as_str(), test_job.as_str()], TEST_STEP)?;
+    let lint = step_in(&[single.as_str(), lint_job.as_str()], LINT_STEP)?;
+    let (build, test) = if let Some(test) = step_in(&[group_job.as_str()], TEST_STEP) {
+        (step_in(&[test_job.as_str()], BUILD_TESTS_STEP)?, test)
+    } else {
+        let test = step_in(&[single.as_str(), test_job.as_str()], TEST_STEP)?;
+        (test, test)
+    };
     Some(Sample {
-        lint_build: lint.seconds,
-        test_build: *test.log.finished_seconds.first()?,
+        lint_build: lint.seconds?,
+        test_build: *build.log.finished_seconds.first()?,
         tests: test.log.nextest.first()?.seconds,
         binaries: test.log.binary_seconds.clone(),
     })
@@ -182,7 +186,11 @@ fn on_runner(job: &JobMetrics, runner: &RunnerLabel) -> bool {
 
 fn ran_step<'a>(job: &'a JobMetrics, name: &str) -> Option<&'a StepMetrics> {
     job.ran()
-        .then(|| job.steps.iter().find(|step| step.name == name))
+        .then(|| {
+            job.steps
+                .iter()
+                .find(|step| step.name == name && step.seconds.is_some())
+        })
         .flatten()
 }
 
