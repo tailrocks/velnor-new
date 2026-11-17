@@ -3,6 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -81,6 +82,17 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         let (workspace, metadata) = reduce_metadata(Path::new(SAMPLE_REPOSITORY), json)?;
         rust_metadata.insert(workspace, metadata);
     }
+    let mut symlinks = BTreeSet::new();
+    match fs::read_to_string(sample.join("symlinks.txt")) {
+        Ok(text) => {
+            for line in text.lines() {
+                symlinks.insert(RepoPath::new(line)?);
+            }
+        }
+        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+    }
+    tracked_paths.extend(symlinks.iter().cloned());
     let view = RepoView {
         repository: sample
             .file_name()
@@ -89,7 +101,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
             .into_owned(),
         files,
         tracked_paths,
-        symlinks: BTreeSet::new(),
+        symlinks,
         rust_metadata,
     };
     for manifest in metadata_roots(&view)? {
@@ -142,21 +154,29 @@ fn mismatches(
         .collect()
 }
 
+pub(crate) fn update_requested(value: Option<&OsStr>) -> bool {
+    value == Some(OsStr::new("1"))
+}
+
+pub(crate) fn check_sample(sample: &Path, update: bool) -> Result<Vec<String>, Box<dyn Error>> {
+    let generated = expected_with_notes(&load(sample)?).map(|(files, _)| files)?;
+    let expected_dir = sample.join("expected");
+    if update {
+        rewrite(&expected_dir, &generated)?;
+        return Ok(Vec::new());
+    }
+    let name = sample.file_name().unwrap_or_default().to_string_lossy();
+    Ok(mismatches(&name, &generated, &files_under(&expected_dir)?))
+}
+
 #[test]
 fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
-    let update = std::env::var_os("UPDATE_GOLDENS").is_some();
+    let update = update_requested(std::env::var_os("UPDATE_GOLDENS").as_deref());
     let samples = sample_dirs()?;
     assert!(!samples.is_empty(), "no sample recorded");
     let mut failures = Vec::new();
     for sample in &samples {
-        let generated = expected_with_notes(&load(sample)?).map(|(files, _)| files)?;
-        let expected_dir = sample.join("expected");
-        if update {
-            rewrite(&expected_dir, &generated)?;
-        } else {
-            let name = sample.file_name().unwrap_or_default().to_string_lossy();
-            failures.extend(mismatches(&name, &generated, &files_under(&expected_dir)?));
-        }
+        failures.extend(check_sample(sample, update)?);
     }
     assert!(
         failures.is_empty(),

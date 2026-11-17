@@ -18,6 +18,7 @@ mod events_policy;
 mod facts;
 mod freshness;
 mod golden;
+mod golden_modes;
 mod harness;
 mod harness_kinds;
 mod harness_undecided;

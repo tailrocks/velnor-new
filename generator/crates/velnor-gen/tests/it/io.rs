@@ -190,6 +190,7 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
                 RepoPath::new("Cargo.toml")?,
                 RepoPath::new("lab/Cargo.toml")?,
             ],
+            symlinks: vec![RepoPath::new(".cargo")?],
             metadata: files(&[("lab/Cargo.toml", "{}\n")])?,
         },
     )?;
@@ -197,6 +198,7 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
         fs::read_to_string(sample.join("manifests.txt"))?,
         "Cargo.toml\nlab/Cargo.toml\n"
     );
+    assert_eq!(fs::read_to_string(sample.join("symlinks.txt"))?, ".cargo\n");
     assert_eq!(
         fs::read_to_string(sample.join("view/mise.toml"))?,
         "[tools]\n"
