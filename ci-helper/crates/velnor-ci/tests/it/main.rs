@@ -13,6 +13,7 @@ mod configuration_targets;
 mod delta;
 mod delta_availability;
 mod delta_binding;
+mod delta_freshness;
 mod delta_integrity;
 mod delta_metadata;
 mod delta_source;
