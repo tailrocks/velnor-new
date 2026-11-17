@@ -42,22 +42,32 @@ lexically confined: no absolute, empty, `.` or `..` segments, no expressions.
 
 ## Dockerfile rules
 
-`analyze_dockerfile` is a static parse (continuations, heredocs and global `ARG`
-defaults are understood). It rejects:
+`analyze_dockerfile` is a static parse (continuations, heredocs, and resolvable
+global and stage `ARG` defaults are understood). It rejects:
 
 - `image_base_unpinned`: any external `FROM`, `COPY --from` or `RUN --mount=from`
   image without `@sha256:<64 hex>`. Earlier stage names, stage indexes and
   `scratch` are exempt.
-- `image_base_unresolved`: a `FROM` that names an `ARG` with no default.
+- `image_base_unresolved`: a `FROM` value cannot be resolved safely. An unset
+  `ARG` uses a `:-` fallback when one is present; without a usable fallback, or
+  when an argument value is unknown, the analyzer rejects the `FROM`.
 - `image_syntax_unpinned`: a `# syntax=` frontend that is not digest-pinned.
 - `image_secret_mount`: `RUN --mount=type=secret` or `type=ssh`.
 - `image_add_remote_source`: `ADD` of a URL or git source.
 - `image_context_escape`: a `COPY`/`ADD` source containing `..`.
+- `image_context_source_unresolved:<source>`: a `COPY`/`ADD` context source
+  cannot be resolved safely to the exact path BuildKit will read. This includes
+  unsupported or inherited `ARG`/`ENV` values, injected build arguments,
+  ambiguous quoting or escaping, and source syntax the parser cannot interpret.
 - `image_escape_directive`: a changed `# escape=` character.
 
-It also reports the context-relative `COPY`/`ADD` sources, which drive affected
-selection. `RUN` may use the network (for example `apt`); it never receives a
-secret.
+Use a literal source or an `ARG` with a resolvable value in the current stage.
+If the source depends on an inherited environment, an injected build argument,
+or syntax Velnor cannot resolve, rewrite it so the exact context path is
+explicit. Velnor refuses the Dockerfile rather than selecting an incomplete set
+of image inputs. For sources it can resolve, the analyzer reports their
+context-relative paths; affected-image selection uses those paths. `RUN` may use
+the network (for example `apt`); it never receives a secret.
 
 ## Build jobs (implemented)
 

@@ -8,7 +8,31 @@ use super::scoped_workspace::{DOCS_CONFIG, TestResult, commit, plan, put, scoped
 
 const IMAGE_CONFIG: &str = "\n[[images]]\nid = \"app\"\nrepository = \"ghcr.io/acme/app\"\ndockerfile = \"image/Dockerfile\"\ncontext = \"image\"\nplatforms = [\"linux_amd64\"]\n";
 
-const COPY_CASES: [(&str, &str, &str, bool); 7] = [
+const COPY_CASES: [(&str, &str, &str, bool); 11] = [
+    (
+        "JSON source beginning with dashes",
+        "COPY [\"--src/main.txt\", \"/main.txt\"]",
+        "--src/main.txt",
+        true,
+    ),
+    (
+        "declared unset default",
+        "ARG SRC\nCOPY ${SRC:-src}/main.txt /main.txt",
+        "src/main.txt",
+        true,
+    ),
+    (
+        "SOURCE_SHA default",
+        "ARG SOURCE_SHA=src\nCOPY ${SOURCE_SHA}/main.txt /main.txt",
+        "src/main.txt",
+        true,
+    ),
+    (
+        "VELNOR_SOURCE_SHA default",
+        "ARG VELNOR_SOURCE_SHA=src\nCOPY ${VELNOR_SOURCE_SHA}/main.txt /main.txt",
+        "src/main.txt",
+        true,
+    ),
     (
         "stage arg",
         "ARG SRC=src\nCOPY ${SRC}/main.txt /main.txt",
@@ -66,6 +90,11 @@ fn image_tracks_expanded_copy_sources() -> TestResult {
         let input_path = format!("image/{input}");
         put(root, &input_path, "initial\n")?;
         repo.base = commit(root, "Dockerfile source baseline")?;
+        if known {
+            let prepared = velnor_actions_orchestrator::prepare(repo.root())?;
+            let jobs = velnor_actions_orchestrator::finalized_jobs(&prepared)?;
+            assert!(jobs.contains_key("image-app-amd64"), "{label}");
+        }
         for (path, expected) in [
             (input_path.as_str(), "run"),
             (
@@ -89,32 +118,6 @@ fn image_tracks_expanded_copy_sources() -> TestResult {
                 run.jobs()?.get("image-app-amd64").map(String::as_str),
                 Some(expected),
                 "{label}: {path}"
-            );
-        }
-    }
-    Ok(())
-}
-
-#[test]
-fn image_does_not_trust_defaults_for_fixed_build_args() -> TestResult {
-    for arg in ["SOURCE_SHA", "VELNOR_SOURCE_SHA"] {
-        let mut repo = scoped_workspace(&format!("{DOCS_CONFIG}\n{IMAGE_CONFIG}"))?;
-        let root = repo.root();
-        put(
-            root,
-            "image/Dockerfile",
-            &format!("FROM scratch\nARG {arg}=wrong\nCOPY ${{{arg}}}/main.txt /main.txt\n"),
-        )?;
-        put(root, "image/src/main.txt", "initial\n")?;
-        repo.base = commit(root, "fixed build arg baseline")?;
-        let root = repo.root();
-        put(root, "image/src/main.txt", "changed\n")?;
-        let head = commit(root, "change effective source")?;
-        if let Ok(run) = plan(root, "pull_request", Some(&repo.base), &head) {
-            assert_eq!(
-                run.jobs()?.get("image-app-amd64").map(String::as_str),
-                Some("run"),
-                "{arg}"
             );
         }
     }

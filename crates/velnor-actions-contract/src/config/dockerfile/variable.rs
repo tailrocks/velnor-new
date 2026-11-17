@@ -6,9 +6,7 @@ use std::collections::BTreeMap;
 pub(super) fn is_injected_arg(name: &str) -> bool {
     matches!(
         name,
-        "SOURCE_SHA"
-            | "VELNOR_SOURCE_SHA"
-            | "BUILDPLATFORM"
+        "BUILDPLATFORM"
             | "TARGETPLATFORM"
             | "BUILDOS"
             | "BUILDARCH"
@@ -17,6 +15,13 @@ pub(super) fn is_injected_arg(name: &str) -> bool {
             | "TARGETARCH"
             | "TARGETVARIANT"
     )
+}
+
+#[derive(Clone)]
+pub(super) enum ArgValue {
+    Unset,
+    Known(String),
+    Unknown,
 }
 
 pub(super) fn arg_value(value: &str) -> Option<String> {
@@ -38,24 +43,24 @@ pub(super) fn arg_value(value: &str) -> Option<String> {
     Some(value.to_owned())
 }
 
-pub(super) fn substitute(raw: &str, args: &BTreeMap<String, Option<String>>) -> Option<String> {
+pub(super) fn substitute(raw: &str, args: &BTreeMap<String, ArgValue>) -> Option<String> {
     let mut out = String::new();
     let mut rest = raw;
     while let Some(at) = rest.find('$') {
         out.push_str(&rest[..at]);
         let tail = &rest[at + 1..];
         let (name, default, consumed) = parse_variable(tail);
-        if name.is_empty() || consumed == 0 {
+        if !valid_name(name) || consumed == 0 {
             return None;
         }
         if is_injected_arg(name) {
             return None;
         }
         let value = match args.get(name) {
-            Some(Some(value)) if value.is_empty() && default.is_some() => default?,
-            Some(Some(value)) => value,
-            Some(None) => return None,
-            None => default?,
+            Some(ArgValue::Known(value)) if value.is_empty() && default.is_some() => default?,
+            Some(ArgValue::Known(value)) => value,
+            Some(ArgValue::Unknown) => return None,
+            Some(ArgValue::Unset) | None => default?,
         };
         if value.contains(['$', '\\', '\'', '"']) {
             return None;
@@ -72,6 +77,9 @@ fn parse_variable(tail: &str) -> (&str, Option<&str>, usize) {
         && let Some(end) = body.find('}')
     {
         let inner = &body[..end];
+        if inner.contains(['$', '{']) {
+            return ("", None, 0);
+        }
         let (name, default) = match inner.split_once(":-") {
             Some((name, default)) => (name, Some(default)),
             None => (inner, None),
@@ -83,4 +91,12 @@ fn parse_variable(tail: &str) -> (&str, Option<&str>, usize) {
         .position(|b| !(b.is_ascii_alphanumeric() || b == b'_'))
         .unwrap_or(tail.len());
     (&tail[..end], None, end)
+}
+
+fn valid_name(name: &str) -> bool {
+    let mut bytes = name.bytes();
+    bytes
+        .next()
+        .is_some_and(|byte| byte.is_ascii_alphabetic() || byte == b'_')
+        && bytes.all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
 }

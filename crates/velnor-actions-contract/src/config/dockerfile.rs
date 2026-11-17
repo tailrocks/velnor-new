@@ -60,7 +60,7 @@ mod variable;
 
 pub use runner::analyze_runner_dockerfile;
 use syntax::{check_directives, instructions};
-use variable::{arg_value, is_injected_arg, substitute};
+use variable::{ArgValue, arg_value, is_injected_arg, substitute};
 
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
@@ -106,8 +106,8 @@ struct State {
     in_stage: bool,
     unknown_environment: bool,
     inherited_stage: bool,
-    global_args: BTreeMap<String, Option<String>>,
-    stage_args: BTreeMap<String, Option<String>>,
+    global_args: BTreeMap<String, ArgValue>,
+    stage_args: BTreeMap<String, ArgValue>,
     stages: BTreeSet<String>,
     stage_count: usize,
     known_contexts: BTreeSet<String>,
@@ -117,18 +117,25 @@ impl State {
     fn record_arg(&mut self, args: &str) {
         let token = args.trim();
         let (name, value) = match token.split_once('=') {
-            Some((name, value)) => (name, arg_value(value)),
-            None if self.inherited_stage => (token, None),
+            Some((name, value)) => (
+                name,
+                arg_value(value).map_or(ArgValue::Unknown, ArgValue::Known),
+            ),
+            None if self.inherited_stage => (token, ArgValue::Unknown),
             None => (
                 token,
                 self.stage_args
                     .get(token)
                     .or_else(|| self.global_args.get(token))
                     .cloned()
-                    .flatten(),
+                    .unwrap_or(ArgValue::Unset),
             ),
         };
-        let value = if is_injected_arg(name) { None } else { value };
+        let value = if is_injected_arg(name) {
+            ArgValue::Unknown
+        } else {
+            value
+        };
         if self.in_stage {
             self.stage_args.insert(name.to_owned(), value);
         } else {
@@ -165,9 +172,8 @@ impl State {
     }
 
     fn copy(&mut self, keyword: &str, args: &str) -> Result<(), DockerfileProblem> {
-        if args.contains('\\')
-            || (!args.trim_start().starts_with('[') && args.contains(['"', '\'']))
-        {
+        let json_form = args.trim_start().starts_with('[');
+        if args.contains('\\') || (!json_form && args.contains(['"', '\''])) {
             return Err(DockerfileProblem::ContextSourceUnresolved(args.to_owned()));
         }
         let mut from_other = false;
@@ -175,7 +181,9 @@ impl State {
         for token in split_operands(args)
             .ok_or_else(|| DockerfileProblem::ContextSourceUnresolved(args.to_owned()))?
         {
-            if let Some(source) = token.strip_prefix("--from=") {
+            if json_form {
+                operands.push(token);
+            } else if let Some(source) = token.strip_prefix("--from=") {
                 from_other = true;
                 self.check_from_source(source)?;
             } else if !token.starts_with("--") {
@@ -197,7 +205,7 @@ impl State {
             }
             let source = substitute(&source, &self.stage_args)
                 .ok_or_else(|| DockerfileProblem::ContextSourceUnresolved(source.clone()))?;
-            if !args.trim_start().starts_with('[') && source.chars().any(char::is_whitespace) {
+            if !json_form && source.chars().any(char::is_whitespace) {
                 return Err(DockerfileProblem::ContextSourceUnresolved(source));
             }
             if keyword == "ADD" && is_remote(&source) {
