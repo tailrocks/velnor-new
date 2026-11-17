@@ -10,14 +10,17 @@ use std::path::{Path, PathBuf};
 
 use similar::TextDiff;
 use velnor_gen::expected_with_notes;
-use velnor_gen::io::SAMPLE_REPOSITORY;
+use velnor_gen::io::{Error as IoError, SAMPLE_REPOSITORY};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{manifests, metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 pub(crate) fn samples() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples")
+    match std::env::var_os("VELNOR_GOLDEN_SAMPLES_ROOT") {
+        Some(root) => PathBuf::from(root),
+        None => Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples"),
+    }
 }
 
 fn sample_dirs() -> Result<Vec<PathBuf>, Box<dyn Error>> {
@@ -72,16 +75,6 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
     for line in fs::read_to_string(sample.join("manifests.txt"))?.lines() {
         tracked_paths.insert(RepoPath::new(line)?);
     }
-    let files = wanted_files(&tracked_paths)
-        .into_iter()
-        .chain(manifests(&tracked_paths))
-        .filter_map(|path| recorded.get(&path).map(|bytes| (path, bytes.clone())))
-        .collect();
-    let mut rust_metadata = BTreeMap::new();
-    for json in files_under(&sample.join("cargo-metadata"))?.values() {
-        let (workspace, metadata) = reduce_metadata(Path::new(SAMPLE_REPOSITORY), json)?;
-        rust_metadata.insert(workspace, metadata);
-    }
     let mut symlinks = BTreeSet::new();
     let symlinks_file = sample.join("symlinks.txt");
     match fs::symlink_metadata(&symlinks_file) {
@@ -91,10 +84,34 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
             }
         }
         Ok(_) => return Err(format!("{} is not a regular file", symlinks_file.display()).into()),
-        Err(error) if error.kind() == ErrorKind::NotFound => {}
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return Err(format!("{} is missing", symlinks_file.display()).into());
+        }
         Err(error) => return Err(error.into()),
     }
     tracked_paths.extend(symlinks.iter().cloned());
+    let wanted: BTreeSet<RepoPath> = wanted_files(&tracked_paths)
+        .into_iter()
+        .chain(manifests(&tracked_paths))
+        .collect();
+    for link in &symlinks {
+        if wanted.contains(link) {
+            return Err(Box::new(IoError::NotRegular(link.clone())));
+        }
+    }
+    let files = wanted
+        .iter()
+        .filter_map(|path| {
+            recorded
+                .get(path)
+                .map(|bytes| (path.clone(), bytes.clone()))
+        })
+        .collect();
+    let mut rust_metadata = BTreeMap::new();
+    for json in files_under(&sample.join("cargo-metadata"))?.values() {
+        let (workspace, metadata) = reduce_metadata(Path::new(SAMPLE_REPOSITORY), json)?;
+        rust_metadata.insert(workspace, metadata);
+    }
     let view = RepoView {
         repository: sample
             .file_name()

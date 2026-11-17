@@ -18,7 +18,7 @@
 
 ## Samples
 
-A sample is a folder `samples/<name>/` with `view/` (the files the generator reads), `manifests.txt` (the tracked `Cargo.toml` and `Cargo.lock` paths), an optional `symlinks.txt` (the tracked symbolic links, which may be empty; when present, it must be a regular file), `cargo-metadata/<root>.json` (recorded output) and `expected/` (the files the generator must write).
+A sample is a folder `samples/<name>/` with `view/` (the files the generator reads), `manifests.txt` (the tracked `Cargo.toml` and `Cargo.lock` paths), `symlinks.txt` (the tracked symbolic links, which may be empty but must be a regular file), `cargo-metadata/<root>.json` (recorded output) and `expected/` (the files the generator must write). A sample without `symlinks.txt` is rejected, and a sample that records a symbolic link where the generator reads a file is rejected too, because a live checkout with that link is refused.
 
 Record a sample from a real checkout. Never type one by hand.
 
@@ -33,3 +33,5 @@ cd generator && UPDATE_GOLDENS=1 cargo nextest run
 ```
 
 The check `generator-samples` lints every `expected/` workflow with `jactionlint`.
+
+The golden tests read the samples from `VELNOR_GOLDEN_SAMPLES_ROOT` when it is set, so a test can run the golden binary against a temporary copy of a sample.

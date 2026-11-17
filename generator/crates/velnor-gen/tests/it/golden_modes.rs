@@ -80,13 +80,35 @@ fn a_sample_that_records_a_cargo_symlink_is_refused_like_the_live_checkout() -> 
 }
 
 #[test]
-fn a_sample_without_a_symlink_sidecar_has_no_symlinks() -> TestResult {
+fn a_sample_without_a_symlink_sidecar_is_rejected() -> TestResult {
     let copy = Copy::of("release-bin", "missing-symlink-sidecar")?;
     let symlinks = copy.0.join("symlinks.txt");
     fs::write(&symlinks, "")?;
     fs::remove_file(symlinks)?;
-    assert!(load(&copy.0)?.symlinks.is_empty());
-    assert!(expected_with_notes(&load(&copy.0)?).is_ok());
+    let error = load(&copy.0)
+        .err()
+        .ok_or("a sample without a symlink sidecar was accepted")?;
+    assert!(error.to_string().contains("symlinks.txt"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn a_symlink_at_a_wanted_file_path_is_refused_like_the_live_checkout() -> TestResult {
+    let copy = Copy::of("release-bin", "wanted-symlink")?;
+    for path in [
+        "rust-toolchain.toml",
+        ".velnor/rust-ci.toml",
+        ".cargo/config.toml",
+        "mise.lock",
+        ".github/workflows/ci.yml",
+        "Cargo.toml",
+    ] {
+        fs::write(copy.0.join("symlinks.txt"), format!("{path}\n"))?;
+        let error = load(&copy.0)
+            .err()
+            .ok_or(format!("a symlink at {path} was accepted"))?;
+        assert!(error.to_string().contains(path), "{error}");
+    }
     Ok(())
 }
 
