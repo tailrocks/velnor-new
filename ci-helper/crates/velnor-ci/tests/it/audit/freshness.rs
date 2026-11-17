@@ -59,7 +59,11 @@ fn a_newer_descendant_of_an_explicit_target_directory_prevents_writing_the_input
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
     let output = "rust/target/debug/build/lib-f000000000000008/output";
-    unit(&repo, output, "cargo:rerun-if-changed=../target/generated\n");
+    unit(
+        &repo,
+        output,
+        "cargo:rerun-if-changed=../target/generated\n",
+    );
     let built = UNIX_EPOCH + Duration::from_secs(3_000_000_001);
     repo.set_mtime(output, built);
     unit(&repo, "rust/target/generated/nested/value.txt", "newer");
