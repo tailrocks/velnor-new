@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::io::Read;
+use std::io::{Read, Write};
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -80,6 +80,27 @@ pub(super) fn read<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, CiErr
     let file = fs::File::open(path).map_err(|e| failure(path, &e))?;
     serde_json::from_slice(&super::read_limited(file, METADATA_LIMIT)?)
         .map_err(|e| CiError::new(format!("invalid delta metadata: {e}")))
+}
+
+pub(super) fn replace(path: &Path, bytes: Option<&[u8]>) -> Result<(), CiError> {
+    if let Some(parent) = path.parent() {
+        safe_path(parent)?;
+        fs::create_dir_all(parent).map_err(|e| failure(parent, &e))?;
+    }
+    match fs::remove_file(path) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(failure(path, &error)),
+    }
+    if let Some(bytes) = bytes {
+        fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .and_then(|mut file| file.write_all(bytes))
+            .map_err(|e| failure(path, &e))?;
+    }
+    Ok(())
 }
 
 pub(super) fn validate(path: &Path) -> Result<(), CiError> {

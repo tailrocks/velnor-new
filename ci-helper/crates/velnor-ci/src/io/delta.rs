@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use super::delta_snapshot::{self as snapshot, BASELINE, REMOVED, Snapshot};
@@ -49,24 +48,12 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         remove(&args.staging_dir)?;
         "no matching delta; using the base build directory\n".to_owned()
     };
-    let marker = args.target_dir.join(MARKER);
-    safe_path(&marker)?;
-    create_parent(&marker)?;
-    fs::write(&marker, "").map_err(|e| failure(&marker, &e))?;
-    let path = args.target_dir.join(BASELINE);
-    match fs::remove_file(&path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(failure(&path, &error)),
-    }
-    if let Ok(bytes) = baseline.and_then(|baseline| snapshot::encode(&baseline)) {
-        fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(&path)
-            .and_then(|mut file| file.write_all(&bytes))
-            .map_err(|e| failure(&path, &e))?;
-    } else {
+    snapshot::replace(&args.target_dir.join(MARKER), Some(b""))?;
+    let bytes = baseline
+        .and_then(|baseline| snapshot::encode(&baseline))
+        .ok();
+    snapshot::replace(&args.target_dir.join(BASELINE), bytes.as_deref())?;
+    if bytes.is_none() {
         report.push_str("::notice::base inventory unavailable; this run will save no delta\n");
     }
     Ok(report)

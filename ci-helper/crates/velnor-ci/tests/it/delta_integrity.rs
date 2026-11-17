@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, File};
+use std::os::unix::fs::OpenOptionsExt;
 use std::time::{Duration, SystemTime};
 
 use crate::delta::{compiled, run, set_time, success, time};
@@ -174,19 +175,43 @@ fn invalid_removals_cannot_delete_outside_files_and_invalid_inventories_refuse_s
         assert_eq!(saved, "save=false\n");
         assert!(!repo.root().join("delta").exists());
     }
-    for inherited in ["symlink", "fifo"] {
-        invalid_metadata(&repo, "target/.velnor/delta-baseline.json", inherited);
-        success(&run(&repo, "apply", "base").0);
-        assert_eq!(fs::read_to_string(&absolute).unwrap_or_default(), "safe");
-        assert!(
-            fs::symlink_metadata(repo.root().join("target/.velnor/delta-baseline.json"))
-                .unwrap_or_else(|e| unreachable!("{e}"))
-                .is_file()
-        );
-        compiled(&repo);
-        let (output, saved) = run(&repo, "stage", "base");
-        success(&output);
-        assert_eq!(saved, "save=true\n");
+    inherited_metadata_is_replaced(&repo);
+}
+
+fn inherited_metadata_is_replaced(repo: &Repo) {
+    let names = [
+        "target/.velnor/delta-marker",
+        "target/.velnor/delta-baseline.json",
+    ];
+    for name in names {
+        for inherited in ["fifo", "symlink"] {
+            invalid_metadata(repo, name, inherited);
+            let reader = (inherited == "fifo").then(|| {
+                File::options()
+                    .read(true)
+                    .custom_flags(libc::O_NONBLOCK)
+                    .open(repo.root().join(name))
+                    .unwrap_or_else(|e| unreachable!("{e}"))
+            });
+            success(&run(repo, "apply", "base").0);
+            drop(reader);
+            assert_eq!(
+                fs::read_to_string(repo.root().join("outside/untouched")).unwrap_or_default(),
+                "safe"
+            );
+            for rewritten in names {
+                assert!(
+                    fs::symlink_metadata(repo.root().join(rewritten))
+                        .unwrap_or_else(|e| unreachable!("{e}"))
+                        .is_file(),
+                    "{rewritten} must be replaced with a regular file after inheriting {inherited} at {name}"
+                );
+            }
+            compiled(repo);
+            let (output, saved) = run(repo, "stage", "base");
+            success(&output);
+            assert_eq!(saved, "save=true\n");
+        }
     }
 }
 
