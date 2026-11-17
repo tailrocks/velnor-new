@@ -39,14 +39,15 @@ impl MisePlatform<'static> {
     #[must_use]
     pub fn runner(label: &str) -> Option<Self> {
         let label = label.to_ascii_lowercase();
+        let has_token = |token| label.split('-').any(|part| part == token);
         let arm = label.contains("arm") || label.contains("aarch64");
-        if label.starts_with("ubuntu") || label.starts_with("linux") {
+        if has_token("ubuntu") || has_token("linux") {
             Some(Self::new("linux", if arm { "arm64" } else { "x64" }))
-        } else if label.starts_with("macos") {
+        } else if has_token("macos") {
             let intel =
                 label.ends_with("-13") || label.ends_with("-intel") || label.ends_with("-large");
             Some(Self::new("macos", if intel { "x64" } else { "arm64" }))
-        } else if label.starts_with("windows") {
+        } else if has_token("windows") {
             Some(Self::new("windows", if arm { "arm64" } else { "x64" }))
         } else {
             None

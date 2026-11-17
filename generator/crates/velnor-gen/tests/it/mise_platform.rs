@@ -60,6 +60,18 @@ fn generator_policy_tools_follow_mise_os_and_architecture_filters() -> TestResul
 }
 
 #[test]
+fn self_hosted_labels_preserve_os_filter_matching() -> TestResult {
+    let runner = "self-hosted-linux-x64";
+    let linux = generate("linux", runner, true, true)?;
+    assert!(linux.contains("cargo-deny check"));
+    assert!(
+        generate("macos", runner, true, true)
+            .is_err_and(|error| error.contains("cargo-deny is not pinned"))
+    );
+    Ok(())
+}
+
+#[test]
 fn an_applicable_mise_filter_cannot_skip_the_missing_prebuilt_error() {
     let cases = [
         ("linux/x64", "ubuntu-latest"),
