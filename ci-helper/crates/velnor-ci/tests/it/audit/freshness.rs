@@ -25,6 +25,24 @@ fn a_deleted_tracked_dep_info_input_prevents_writing_the_inputs_lock() {
 }
 
 #[test]
+fn a_deleted_declared_directory_with_tracked_inputs_prevents_writing_the_inputs_lock() {
+    let repo = workspace_below_the_root();
+    repo.write("shared/assets/nested/logo.txt", "original");
+    let target = "rust/target/debug";
+    own_units(&repo, target, &[]);
+    unit(
+        &repo,
+        &format!("{target}/build/lib-f000000000000008/output"),
+        "cargo:rerun-if-changed=../../shared/assets\n",
+    );
+    fs::remove_dir_all(repo.root().join("shared/assets")).unwrap_or_else(|e| unreachable!("{e}"));
+
+    let deleted = audit(&repo, &["--write"]);
+    assert_eq!(deleted.status.code(), Some(1), "{deleted:?}");
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
 fn a_changed_file_inside_a_declared_directory_prevents_writing_the_inputs_lock() {
     let repo = workspace_below_the_root();
     repo.write("shared/assets/nested/logo.txt", "original");

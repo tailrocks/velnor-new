@@ -22,7 +22,13 @@ impl Audit<'_> {
                 Err(error) => {
                     error.kind() != io::ErrorKind::NotFound
                         || match locate(self.repository, base, raw) {
-                            Located::Inside(path) => self.tracked.contains(&path),
+                            Located::Inside(path) => self
+                                .tracked
+                                .range(path.clone()..)
+                                .take_while(|tracked| tracked.as_str().starts_with(path.as_str()))
+                                .any(|tracked| {
+                                    Path::new(tracked.as_str()).starts_with(path.as_str())
+                                }),
                             Located::Repository => true,
                             Located::Outside => false,
                         }
