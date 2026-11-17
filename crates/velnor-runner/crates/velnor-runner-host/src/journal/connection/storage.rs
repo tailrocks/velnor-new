@@ -3,6 +3,10 @@
 
 use sha2::{Digest, Sha256};
 use std::ops::AsyncFnOnce;
+use tokio::{
+    sync::OwnedMutexGuard,
+    time::{Instant, timeout_at},
+};
 
 use crate::error::HostError;
 
@@ -10,7 +14,29 @@ pub(in crate::journal) async fn in_transaction<T>(
     journal: &crate::journal::Journal,
     operation: impl AsyncFnOnce(&turso::Connection) -> Result<T, HostError>,
 ) -> Result<T, HostError> {
-    let _write = journal.write_guard().await;
+    let write = journal.write_guard().await;
+    Box::pin(execute_transaction(journal, write, operation)).await
+}
+
+pub(in crate::journal) async fn in_transaction_before<T>(
+    journal: &crate::journal::Journal,
+    deadline: Instant,
+    operation: impl AsyncFnOnce(&turso::Connection) -> Result<T, HostError>,
+) -> Result<T, HostError> {
+    let write = timeout_at(deadline, journal.write_guard())
+        .await
+        .map_err(|_| HostError::DockerTimeout)?;
+    if Instant::now() >= deadline {
+        return Err(HostError::DockerTimeout);
+    }
+    Box::pin(execute_transaction(journal, write, operation)).await
+}
+
+async fn execute_transaction<T>(
+    journal: &crate::journal::Journal,
+    _write: OwnedMutexGuard<()>,
+    operation: impl AsyncFnOnce(&turso::Connection) -> Result<T, HostError>,
+) -> Result<T, HostError> {
     journal.sync_lineage().await?;
     let connection = journal.connection().await?;
     connection

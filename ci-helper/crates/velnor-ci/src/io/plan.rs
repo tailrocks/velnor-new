@@ -11,16 +11,19 @@ use velnor_model::{
 };
 use velnor_rust::{
     cargo_files, detect, introduced, member_sources, optional_steps, policy_runs, root_sources,
-    select_event, selects_by_diff, unknown_paths, unread_packages,
+    select_event, selects_by_diff, tests_expected, unknown_paths, unread_packages,
 };
 
 use super::{
-    EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, SOURCE_TOTAL_LIMIT, append_outputs, current_dir, git,
+    EVENT_VARIABLE, SCHEDULED, SOURCE_LIMIT, SOURCE_TOTAL_LIMIT, SUMMARY_VARIABLE, append_outputs,
+    append_to, current_dir, git,
 };
 use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
+use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
-use crate::plan::{Steps, explain, outputs, warnings, weakened};
+use crate::plan::{Steps, explain, outputs, tests_outputs, warnings, weakened};
+use crate::summary::summary;
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
 const LOCK_FILE: &str = "Cargo.lock";
@@ -37,7 +40,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         check_default_branch(&facts.config.default_branch, event)?;
     }
     let name = std::env::var(EVENT_VARIABLE).ok();
-    let full = name.as_deref() == Some(SCHEDULED);
+    let full = args.full || name.as_deref() == Some(SCHEDULED);
     let (selections, changes) = choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
     let steps = facts
         .rust_roots
@@ -76,8 +79,22 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         .values()
         .any(|selection| !matches!(selection, RustSelection::None));
     let policy = policy_runs(facts.policy, &changes.paths, everything, selected);
-    let outputs = outputs(&selections, &steps, policy)?;
+    let expected: BTreeMap<RepoPath, bool> = facts
+        .rust_roots
+        .iter()
+        .map(|root| {
+            let tests = selections
+                .get(&root.manifest)
+                .is_some_and(|selection| tests_expected(&facts, root, selection));
+            (root.manifest.clone(), tests)
+        })
+        .collect();
+    let outputs = outputs(&selections, &steps, policy)? + &tests_outputs(&expected);
     append_outputs(&outputs)?;
+    append_to(
+        SUMMARY_VARIABLE,
+        &summary(&facts.rust_roots, &selections, &steps),
+    )?;
     let new = introduced(&facts, &changes);
     let report = if args.explain {
         explain(
@@ -111,7 +128,11 @@ fn choose(
     name: Option<&str>,
     event: Option<&Event>,
 ) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet), CiError> {
-    let kind = event_kind(name, !args.changed.is_empty());
+    let kind = if args.full {
+        EventKind::WorkflowDispatch
+    } else {
+        event_kind(name, !args.changed.is_empty())
+    };
     let diff = if selects_by_diff(kind, &facts.config) {
         changes(args, checkout, facts, kind, event)?
     } else {
@@ -131,7 +152,10 @@ fn changes(
         match event_changes(checkout, facts, kind, event) {
             Ok(found) => found,
             Err(error) => {
-                eprintln!("velnor-ci: {error}; every package is selected");
+                eprintln!(
+                    "{}",
+                    stderr_line(&format!("{error}; every package is selected"))
+                );
                 return Ok(None);
             }
         }
