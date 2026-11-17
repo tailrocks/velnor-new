@@ -97,7 +97,6 @@ runs:
       run: mise --no-config --no-env --no-hooks install gh@2.103.3
     - name: Admit exact same-run Cargo source artifact
       env:
-        GH_TOKEN: ${{ github.token }}
         SOURCES_ID: ${{ inputs.sources_id }}
         SOURCES_DIGEST: ${{ inputs.sources_digest }}
         SOURCES_TREE: ${{ inputs.sources_tree }}

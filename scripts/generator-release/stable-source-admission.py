@@ -39,7 +39,7 @@ def admit():
         raise ValueError("repository")
     request = urllib.request.Request(
         "https://api.github.com/repos/tailrocks/velnor-new/actions/artifacts/" + artifact_id,
-        headers={"Authorization": "Bearer " + value["GH_TOKEN"], "Accept": "application/vnd.github+json", "User-Agent": "velnor-stable-source-admission"},
+        headers={"Accept": "application/vnd.github+json", "User-Agent": "velnor-stable-source-admission"},
     )
     with urllib.request.urlopen(request, timeout=30) as response:
         raw = response.read(1048577)

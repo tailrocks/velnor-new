@@ -171,7 +171,6 @@ fn warm_steps(platform: Platform, producer: &str) -> Vec<Yaml> {
         "Admit same-run source artifact",
         "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
         &[
-            ("GH_TOKEN", "${{ github.token }}"),
             ("SOURCES_ID", &values[0]),
             ("SOURCES_DIGEST", &values[1]),
             ("SOURCES_TREE", &values[2]),

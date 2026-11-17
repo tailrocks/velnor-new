@@ -120,7 +120,6 @@ pub(super) fn source_steps(product: ProductAsset, pins: &ProductReleasePins) -> 
         "Admit exact same-run Cargo source artifact",
         "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
         vec![
-            ("GH_TOKEN", "${{ github.token }}"),
             ("SOURCES_ID", "${{ inputs.sources_id }}"),
             ("SOURCES_DIGEST", "${{ inputs.sources_digest }}"),
             ("SOURCES_TREE", "${{ inputs.sources_tree }}"),
