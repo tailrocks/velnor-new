@@ -14,10 +14,19 @@ mod partial;
 mod reads;
 mod stand_ins;
 
+use std::ffi::OsStr;
 use std::fs;
 use std::process::{Command, Output};
 
 use crate::io::Repo;
+
+pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
+    let mut command = Command::new(program);
+    command
+        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
+        .env("MBX_SHARE_OUT_DIR", "0");
+    command
+}
 
 pub(super) fn audit(repo: &Repo, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))

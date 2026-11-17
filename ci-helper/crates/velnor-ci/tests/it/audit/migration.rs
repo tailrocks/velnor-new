@@ -4,9 +4,9 @@
 mod targets;
 
 use std::fs;
-use std::process::{Command, Output};
+use std::process::Output;
 
-use super::{audit, own_units, workspace_below_the_root};
+use super::{audit, command, own_units, workspace_below_the_root};
 use crate::io::Repo;
 
 #[derive(Clone, Copy)]
@@ -59,11 +59,11 @@ fn cargo_project(input: InputDirectory) -> Repo {
 
 fn build(repo: &Repo, wrapped: bool) -> Output {
     let mut command = if wrapped {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        let mut command = command(env!("CARGO_BIN_EXE_velnor-ci"));
         command.args(["inputs", "build", "--", "cargo"]);
         command
     } else {
-        Command::new("cargo")
+        command("cargo")
     };
     command
         .current_dir(repo.root().join("rust"))
@@ -121,7 +121,7 @@ fn a_clean_cargo_build_discovers_generated_directory_inputs_before_a_verified_re
 fn an_arbitrary_command_that_discovers_a_directory_is_executed_once() {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
-    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci")).current_dir(repo.root().join("rust")).args(["inputs", "build", "--", "sh", "-c", "printf run >> target/runs.txt; mkdir -p target/generated; printf 'cargo:rerun-if-changed=../target/generated\\n' > target/debug/build/lib-f000000000000008/output; touch -m -t 206501010000 target/debug/build/lib-f000000000000008/output"]).output().unwrap_or_else(|e| unreachable!("{e}"));
+    let built = command(env!("CARGO_BIN_EXE_velnor-ci")).current_dir(repo.root().join("rust")).args(["inputs", "build", "--", "sh", "-c", "printf run >> target/runs.txt; mkdir -p target/generated; printf 'cargo:rerun-if-changed=../target/generated\\n' > target/debug/build/lib-f000000000000008/output; touch -m -t 206501010000 target/debug/build/lib-f000000000000008/output"]).output().unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
         fs::read_to_string(repo.root().join("rust/target/runs.txt"))
             .unwrap_or_else(|e| unreachable!("{e}")),
@@ -156,7 +156,7 @@ fn records_execution() {
     std::fs::OpenOptions::new().create(true).append(true).open(file).unwrap().write_all(b"run").unwrap();
 }
 "#);
-    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
         .env_remove("NEXTEST_PROFILE")
         .current_dir(repo.root().join("rust"))
         .args([
@@ -235,7 +235,7 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
     let before_app = identity(&app);
     let before_lib = identity(&lib);
     let partial = || {
-        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        command(env!("CARGO_BIN_EXE_velnor-ci"))
             .current_dir(repo.root().join("rust"))
             .args([
                 "inputs",
@@ -283,24 +283,36 @@ fn a_partial_build_never_invalidates_an_unselected_packages_output() {
     assert_fresh(&repo, "shared\tapp\nshared\tlib\n");
 }
 
+fn compiler_discovery_with(prefix: &[&str]) {
+    let repo = cargo_project(InputDirectory::Generated);
+    let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root().join("rust"))
+        .args(["inputs", "build", "--", "cargo"])
+        .args(prefix)
+        .args(["build", "--workspace", "--all-targets", "--offline"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(built.status.success(), "{prefix:?}: {built:?}");
+    assert_eq!(runs(&repo), 2, "{prefix:?}");
+    assert_fresh(&repo, "");
+}
+
 #[test]
-fn cargo_toolchain_and_global_options_keep_compiler_discovery_enabled() {
-    for prefix in [
-        vec!["+1.99.1"],
-        vec!["-v"],
-        vec!["--color", "never"],
-        vec!["--config", "build.jobs=1"],
-    ] {
-        let repo = cargo_project(InputDirectory::Generated);
-        let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-            .current_dir(repo.root().join("rust"))
-            .args(["inputs", "build", "--", "cargo"])
-            .args(&prefix)
-            .args(["build", "--workspace", "--all-targets", "--offline"])
-            .output()
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(built.status.success(), "{prefix:?}: {built:?}");
-        assert_eq!(runs(&repo), 2, "{prefix:?}");
-        assert_fresh(&repo, "");
-    }
+fn a_cargo_toolchain_override_keeps_compiler_discovery_enabled() {
+    compiler_discovery_with(&["+1.99.1"]);
+}
+
+#[test]
+fn cargo_verbosity_keeps_compiler_discovery_enabled() {
+    compiler_discovery_with(&["-v"]);
+}
+
+#[test]
+fn a_cargo_color_option_keeps_compiler_discovery_enabled() {
+    compiler_discovery_with(&["--color", "never"]);
+}
+
+#[test]
+fn a_cargo_config_option_keeps_compiler_discovery_enabled() {
+    compiler_discovery_with(&["--config", "build.jobs=1"]);
 }

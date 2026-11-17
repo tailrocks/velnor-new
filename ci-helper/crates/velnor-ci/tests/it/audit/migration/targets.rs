@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::process::Command;
 
+use super::super::command;
 use super::{InputDirectory, cargo_project};
 
 #[test]
@@ -13,7 +13,7 @@ fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_chang
     let repo = cargo_project(InputDirectory::Repository);
     repo.write(".velnor/prepare", "");
     repo.write_unstaged("rust/target/runs.txt", "0");
-    let version = Command::new("rustc")
+    let version = command("rustc")
         .arg("-vV")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -24,7 +24,7 @@ fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_chang
         .find_map(|line| line.strip_prefix("host: "))
         .unwrap_or_else(|| unreachable!("{version}"));
     let compile = || {
-        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        command(env!("CARGO_BIN_EXE_velnor-ci"))
             .current_dir(repo.root().join("rust"))
             .env("CARGO_TARGET_DIR", repo.root())
             .args([
@@ -61,7 +61,7 @@ fn a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_chang
     repo.write_unstaged(&artifact, "generated");
     repo.set_mtime(&artifact, UNIX_EPOCH + Duration::from_secs(4_000_000_000));
     let check = || {
-        Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        command(env!("CARGO_BIN_EXE_velnor-ci"))
             .current_dir(repo.root())
             .env("CARGO_TARGET_DIR", repo.root())
             .args(["inputs", "audit", "--write"])
@@ -90,7 +90,7 @@ fn an_unproven_cached_target_cannot_hide_a_source_file() {
     let repo = cargo_project(InputDirectory::Repository);
     repo.write(".velnor/prepare", "");
     repo.write_unstaged("rust/target/runs.txt", "0");
-    let version = Command::new("rustc")
+    let version = command("rustc")
         .arg("-vV")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
@@ -100,7 +100,7 @@ fn an_unproven_cached_target_cannot_hide_a_source_file() {
         .lines()
         .find_map(|line| line.strip_prefix("host: "))
         .unwrap_or_else(|| unreachable!("{version}"));
-    let plain = Command::new("cargo")
+    let plain = command("cargo")
         .current_dir(repo.root().join("rust"))
         .env("CARGO_TARGET_DIR", repo.root())
         .args([
@@ -116,7 +116,7 @@ fn an_unproven_cached_target_cannot_hide_a_source_file() {
     assert!(plain.status.success(), "{plain:?}");
     let source = format!("{host}/source.txt");
     repo.write_unstaged(&source, "source");
-    let wrapped = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let wrapped = command(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root().join("rust"))
         .env("CARGO_TARGET_DIR", repo.root())
         .args([
@@ -137,7 +137,7 @@ fn an_unproven_cached_target_cannot_hide_a_source_file() {
         fs::read_to_string(repo.root().join(&source)).unwrap_or_else(|e| unreachable!("{e}")),
         "source"
     );
-    let audited = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let audited = command(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root())
         .args(["inputs", "audit", "--write"])

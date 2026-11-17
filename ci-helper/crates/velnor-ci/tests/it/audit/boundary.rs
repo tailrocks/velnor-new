@@ -2,9 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::process::Command;
 
-use super::{audit, own_units, workspace_below_the_root};
+use super::{audit, command, own_units, workspace_below_the_root};
 
 #[test]
 fn compiler_flags_after_the_separator_remain_test_payload() {
@@ -27,14 +26,14 @@ fn main() {
 }
 "#);
     let driver = repo.root().join("driver/cargo");
-    let compiled = Command::new("rustc")
+    let compiled = command("rustc")
         .current_dir(repo.root())
         .args(["--edition=2024", "driver/cargo.rs", "-o"])
         .arg(&driver)
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(compiled.status.success(), "{compiled:?}");
-    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root().join("rust"))
         .args(["inputs", "build", "--"])
         .arg(&driver)
@@ -59,7 +58,7 @@ fn main() {
 #[test]
 fn an_arbitrary_commands_manifest_argument_is_passed_through_unchanged() {
     let repo = workspace_below_the_root();
-    let echoed = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let echoed = command(env!("CARGO_BIN_EXE_velnor-ci"))
         .current_dir(repo.root())
         .args([
             "inputs",
