@@ -136,6 +136,13 @@ async fn validate_persisted_schema_v48(conn: &turso::Connection) -> Result<(), H
     jit_interrupted_claims::validate_initial_absence(conn).await
 }
 
+#[cfg(test)]
+pub(in crate::journal) async fn validate_historical_v48_for_test(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v48(conn).await
+}
+
 async fn validate_persisted_schema_v46(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v45(conn).await?;
     jit_interrupted_claims::validate(conn).await

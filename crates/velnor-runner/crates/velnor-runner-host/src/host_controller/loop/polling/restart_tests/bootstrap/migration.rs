@@ -9,7 +9,7 @@ use crate::launch::bootstrap::historical_v48;
 
 async fn historical() -> TestResult<(Prepared, crate::journal::UnboundRetirementClaim)> {
     let case = prepare(Crash::NetworkCreate, false).await?;
-    super::seed::unguarded(&case.journal, &["UPDATE capacity_reservation_storage_initialization SET remove_state='removed',abort_state='absent',abort_lease_until=0 WHERE reservation_id=2".to_owned()]).await?;
+    super::seed::unguarded(&case.journal, &["UPDATE capacity_reservation_storage_initialization SET abort_state='absent',abort_claim_generation=1,abort_helper_id=helper_id,abort_lease_until=0 WHERE reservation_id=2".to_owned()]).await?;
     case.fixture.remove_container(&CRASHED.helper_id());
     case.fixture.remove_network(CRASHED);
     let claim = historical_v48::retire_before_settlement(
@@ -21,6 +21,10 @@ async fn historical() -> TestResult<(Prepared, crate::journal::UnboundRetirement
     .await
     .map_err(|e| format!("historical retirement protocol: {e}"))?;
     assert_eq!(db::number(&case.journal, "SELECT COUNT(*) FROM capacity_reservation_networks WHERE reservation_id=2 AND network_id IS NULL AND remove_state='removed'").await?, 1);
+    case.journal
+        .validate_historical_v48_for_test()
+        .await
+        .map_err(|e| format!("validating active historical fixture: {e}"))?;
     Ok((case, claim))
 }
 
@@ -165,6 +169,10 @@ async fn historical_settled_null_network_reopens_with_unchanged_terminal_proof()
     historical_v48::settle(&case.scope, &claim)
         .await
         .map_err(|e| format!("historical settlement: {e}"))?;
+    case.journal
+        .validate_historical_v48_for_test()
+        .await
+        .map_err(|e| format!("validating settled historical fixture: {e}"))?;
     let before = terminal_history(&case).await?;
     let state = db::creation_state(&case.journal).await?;
     let case = case

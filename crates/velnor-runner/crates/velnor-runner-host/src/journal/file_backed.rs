@@ -55,6 +55,11 @@ pub struct Journal {
 
 impl Journal {
     #[cfg(test)]
+    pub(crate) async fn validate_historical_v48_for_test(&self) -> Result<(), HostError> {
+        schema::validate_historical_v48_for_test(&self.connection().await?).await
+    }
+
+    #[cfg(test)]
     pub(crate) async fn open_historical_v48_for_test(path: &Path) -> Result<Self, HostError> {
         let journal = Self {
             file: JournalFile::open(path).await?,
