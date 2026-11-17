@@ -266,6 +266,11 @@ fn step_body(
             crate::helper_steps::inputs_step("restore", target, directory)
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::TestSetup { name, run } => RenderedStep {
+            name: name.clone(),
+            run: Some(run.clone()),
+            ..RenderedStep::default()
+        },
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),
