@@ -140,7 +140,8 @@ fn parse_duration(text: &str) -> Option<f64> {
     (tokens > 0).then_some(total)
 }
 
-fn nextest_test(line: &str) -> Option<(String, f64)> {
+#[must_use]
+pub fn nextest_test(line: &str) -> Option<(String, f64)> {
     let rest = line
         .strip_prefix("PASS [")
         .or_else(|| line.strip_prefix("FAIL ["))?;
@@ -153,6 +154,34 @@ fn nextest_test(line: &str) -> Option<(String, f64)> {
     };
     let binary = rest.split_whitespace().next()?;
     Some((binary.to_owned(), seconds))
+}
+
+#[must_use]
+pub fn named_crate(line: &str) -> Option<(String, String, bool)> {
+    let line = strip_ansi(strip_timestamp(line));
+    let line = line.trim_start();
+    let (rest, downloaded) = ["Compiling", "Checking", "Documenting", "Downloaded"]
+        .into_iter()
+        .find_map(|word| {
+            line.strip_prefix(&format!("{word} "))
+                .map(|rest| (rest, word == "Downloaded"))
+        })?;
+    let mut words = rest.split_whitespace();
+    let name = words.next()?;
+    let version = words.next()?.strip_prefix('v')?;
+    Some((name.to_owned(), version.to_owned(), downloaded))
+}
+
+#[must_use]
+pub fn individual_test(line: &str) -> Option<(String, f64)> {
+    let line = strip_ansi(strip_timestamp(line));
+    let line = line.trim_start();
+    let (_, seconds) = nextest_test(line)?;
+    let rest = line.split_once("s]")?.1.trim_start();
+    let rest = rest.strip_prefix('(').map_or(Some(rest), |rest| {
+        rest.split_once(')').map(|(_, rest)| rest.trim_start())
+    })?;
+    Some((rest.to_owned(), seconds))
 }
 
 #[must_use]

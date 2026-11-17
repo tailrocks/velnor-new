@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod activity;
+mod archive_witness;
 mod audit;
 mod build_inputs;
 mod cache;
@@ -13,11 +15,17 @@ mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
 mod git;
+mod git_witness;
 mod http;
 mod inputs;
 mod manifests;
 mod plan;
+pub mod pump;
+mod recording;
 mod release;
+mod report;
+mod report_checkout;
+mod report_inputs;
 mod required;
 mod restored;
 mod run;
@@ -110,6 +118,7 @@ pub fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
+        Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save(args)) => {
@@ -157,12 +166,11 @@ fn run(cli: Cli) -> Result<String, CiError> {
                     save: false,
                     report: reason,
                 },
-                None => decide(
-                    Some(&String::from_utf8_lossy(&log)),
-                    &target,
-                    args.archive.as_deref(),
-                    now_seconds(),
-                )?,
+                None => {
+                    let counts = activity::activity()?
+                        .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+                    cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
+                }
             };
             append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
             Ok(decision.report)

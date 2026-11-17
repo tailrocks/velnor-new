@@ -9,6 +9,11 @@ use velnor_model::{InvalidId, RepoPath};
 use crate::error::CiError;
 use crate::release::PlainName;
 
+mod gate;
+mod report;
+pub use gate::GateArgs;
+pub use report::ReportArgs;
+
 #[derive(Debug, Parser)]
 #[command(
     name = "velnor-ci",
@@ -21,6 +26,10 @@ pub struct Cli {
 
 #[derive(Debug, Subcommand)]
 pub enum Command {
+    #[command(
+        about = "Write ci-metrics.json and the lane summary; --check checks lane artifacts for cache waste"
+    )]
+    Report(ReportArgs),
     #[command(subcommand, about = "Collect and compare run metrics")]
     Bench(BenchCommand),
     #[command(
@@ -172,16 +181,6 @@ fn base_file(text: &str) -> Result<BaseFile, String> {
         path: RepoPath::new(path).map_err(|e| e.to_string())?,
         file: PathBuf::from(file),
     })
-}
-
-#[derive(Debug, Args)]
-pub struct GateArgs {
-    #[arg(
-        long,
-        value_name = "VARIABLE",
-        help = "The environment variable that holds the gate spec the generator wrote: --plan <job>, then --job <ID=WHEN> for every job of needs (WHEN is always, or conditions joined by +: lane:<root>, policy, schedule, schedule-or-push) and --tests <ID=ROOT> for each job whose tests_run output counts the tests of the root"
-    )]
-    pub spec_env: String,
 }
 
 #[derive(Debug, Args)]

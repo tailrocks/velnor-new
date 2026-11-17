@@ -16,9 +16,10 @@ use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use super::append_outputs;
+use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
-use crate::stream::{Pumped, pump_counted, separate_group};
+use crate::stream::separate_group;
 use crate::tests_run::{TestCounts, output_lines, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -37,6 +38,11 @@ const STEP_FILE_VARIABLES: [&str; 5] = [
     "GITHUB_STATE",
 ];
 const PUMP_GRACE_VARIABLE: &str = "VELNOR_CI_RUN_PUMP_GRACE_MS";
+
+struct Pumps {
+    receiver: mpsc::Receiver<(usize, bool)>,
+    slots: Vec<Arc<Mutex<Capture>>>,
+}
 
 fn pump_grace() -> Duration {
     std::env::var(PUMP_GRACE_VARIABLE)
@@ -75,6 +81,9 @@ pub(super) fn run(args: &RunArgs) -> ExitCode {
 
 fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let path = log_path()?;
+    let started = Instant::now();
+    let mut invocation =
+        super::recording::start_invocation(&args.command).map_err(|e| (2, e.to_string()))?;
     let mut log =
         open_log(&path).map_err(|e| (2, format!("cannot open {}: {e}", path.display())))?;
     let write_error = |e: std::io::Error| (2, format!("cannot write {}: {e}", path.display()));
@@ -85,30 +94,31 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         args.command.len() - 1
     )
     .map_err(write_error)?;
+    invocation.log_start =
+        usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
     let signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|e| (2, format!("cannot watch for SIGINT and SIGTERM: {e}")))?;
+    let archives = super::archive_witness::ArchiveWitness::start(&args.command);
+    let git = super::git_witness::GitWitness::start(&args.command);
     let (mut child, own_group) = spawn_child(&args.command)?;
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
-    let (sender, receiver) = mpsc::channel();
-    let mut slots = Vec::new();
-    if let Some(from) = child.stdout.take() {
-        let counted = args.require_doctests.then(|| Arc::clone(&doctests));
-        watch_stream(&mut slots, from, std::io::stdout(), &log, counted, &sender);
-    }
-    if let Some(from) = child.stderr.take() {
-        watch_stream(&mut slots, from, std::io::stderr(), &log, None, &sender);
-    }
-    drop(sender);
+    let Pumps { receiver, slots } = start_pumps(&mut child, &log, &doctests, args.require_doctests);
     let handle = signals.handle();
     forward(signals, pid, own_group);
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, counts) = collect(&receiver, &slots);
-    if runs_nextest(&args.command)
+    let (mut lost, counts) = collect(&receiver, &slots, &mut invocation);
+    if !invocation.capture_complete {
+        eprintln!(
+            "velnor-ci: output capture incomplete; a stream did not reach EOF before the deadline"
+        );
+    }
+    if invocation.capture_complete
+        && runs_nextest(&args.command)
         && let Some(counts) = counts
     {
         append_outputs(&output_lines(counts))
@@ -127,6 +137,17 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Err(error) = writeln!(log, "velnor-ci run: exit {code}") {
         lost = lost.or(Some(error));
+    }
+    invocation.log_end =
+        usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
+    invocation.verified_download_archives = archives.finish();
+    invocation.verified_git_downloads = git.finish();
+    invocation.seconds = started.elapsed().as_secs_f64();
+    if let Err(error) = super::recording::save_invocation(&invocation) {
+        if code == 0 {
+            return Err((2, error.to_string()));
+        }
+        eprintln!("velnor-ci: {error}");
     }
     match lost {
         Some(error) if code == 0 => Err(write_error(error)),
@@ -200,41 +221,50 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     });
 }
 
-struct Finished {
-    pumped: Pumped,
-    index: usize,
-}
-
 fn collect(
-    receiver: &mpsc::Receiver<Finished>,
-    slots: &[Arc<Mutex<Option<TestCounts>>>],
+    receiver: &mpsc::Receiver<(usize, bool)>,
+    slots: &[Arc<Mutex<Capture>>],
+    invocation: &mut crate::telemetry::Invocation,
 ) -> (Option<std::io::Error>, Option<TestCounts>) {
-    let mut lost = None;
-    let mut counts = None;
-    let mut open = vec![true; slots.len()];
-    let mut waiting = slots.len();
     let deadline = Instant::now() + pump_grace();
-    while waiting > 0 {
+    let mut open = vec![true; slots.len()];
+    let mut completed = 0;
+    let mut counts = None;
+    for _ in 0..slots.len() {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(finished) => {
-                lost = lost.or(finished.pumped.failure);
-                counts = finished.pumped.counts.or(counts);
-                open[finished.index] = false;
-                waiting -= 1;
+            Ok((index, complete)) => {
+                completed += usize::from(complete);
+                open[index] = false;
+                counts = slots[index]
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .counts
+                    .or(counts);
             }
             Err(_) => break,
         }
     }
+    invocation.capture_complete = completed == slots.len();
+    let mut failure = None;
     for (index, slot) in slots.iter().enumerate() {
-        if open[index]
-            && let Some(parsed) = *slot
+        let captured = std::mem::take(
+            &mut *slot
                 .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-        {
-            counts = Some(parsed).or(counts);
+                .unwrap_or_else(std::sync::PoisonError::into_inner),
+        );
+        if open[index] {
+            counts = captured.counts.or(counts);
         }
+        failure = failure.or(captured.failure);
+        invocation.artifacts.extend(captured.observations.artifacts);
+        invocation
+            .progress
+            .get_or_insert_with(Vec::new)
+            .extend(captured.observations.progress);
+        invocation.tests.extend(captured.observations.tests);
+        invocation.rejected += captured.observations.rejected;
     }
-    (lost, counts)
+    (failure, counts)
 }
 
 #[cfg(unix)]
@@ -252,31 +282,39 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
 }
 
 fn watch_stream(
-    slots: &mut Vec<Arc<Mutex<Option<TestCounts>>>>,
+    slots: &mut Vec<Arc<Mutex<Capture>>>,
     from: impl Read + Send + 'static,
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
-    done: &mpsc::Sender<Finished>,
+    done: &mpsc::Sender<(usize, bool)>,
 ) {
-    let slot = Arc::new(Mutex::new(None));
+    let capture = Arc::new(Mutex::new(Capture::default()));
     let index = slots.len();
-    slots.push(Arc::clone(&slot));
-    spawn_pump(from, to, log, count, slot, index, done.clone());
+    slots.push(Arc::clone(&capture));
+    let log = Arc::clone(log);
+    let done = done.clone();
+    thread::spawn(move || {
+        let complete = pump_counted(from, to, &log, count.as_deref(), &capture);
+        done.send((index, complete)).ok();
+    });
 }
 
-fn spawn_pump(
-    from: impl Read + Send + 'static,
-    to: impl Write + Send + 'static,
+fn start_pumps(
+    child: &mut std::process::Child,
     log: &Arc<Mutex<std::fs::File>>,
-    count: Option<Arc<Mutex<DoctestCount>>>,
-    parsed: Arc<Mutex<Option<TestCounts>>>,
-    index: usize,
-    done: mpsc::Sender<Finished>,
-) {
-    let log = Arc::clone(log);
-    thread::spawn(move || {
-        let pumped = pump_counted(from, to, &log, count.as_deref(), Some(&parsed));
-        done.send(Finished { pumped, index }).ok();
-    });
+    doctests: &Arc<Mutex<DoctestCount>>,
+    require_doctests: bool,
+) -> Pumps {
+    let (sender, receiver) = mpsc::channel();
+    let mut slots = Vec::new();
+    if let Some(from) = child.stdout.take() {
+        let counted = require_doctests.then(|| Arc::clone(doctests));
+        watch_stream(&mut slots, from, std::io::stdout(), log, counted, &sender);
+    }
+    if let Some(from) = child.stderr.take() {
+        watch_stream(&mut slots, from, std::io::stderr(), log, None, &sender);
+    }
+    drop(sender);
+    Pumps { receiver, slots }
 }
