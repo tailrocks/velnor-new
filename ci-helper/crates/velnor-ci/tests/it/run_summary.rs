@@ -55,12 +55,15 @@ fn nextest(name: &str, body: &str) -> (Output, String) {
     (output, written)
 }
 
-fn doctests(name: &str, body: &str) -> Output {
-    let temp = scratch(name);
-    velnor(&temp, &["--require-doctests"], &["sh", "-c", body])
+fn doctests_in(temp: &Path, body: &str) -> Output {
+    velnor(temp, &["--require-doctests"], &["sh", "-c", body])
         .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "300")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn doctests(name: &str, body: &str) -> Output {
+    doctests_in(&scratch(name), body)
 }
 
 #[test]
@@ -100,6 +103,55 @@ exit 0";
 }
 
 #[test]
+fn a_doctest_step_that_ran_zero_doctests_fails() {
+    let temp = scratch("doctests-zero");
+    let zero = "printf '   Doc-tests a\\n\\nrunning 0 tests\\n\\ntest result: ok. 0 passed\\n'";
+    let output = doctests_in(&temp, zero);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("0 doctests"),
+        "{output:?}"
+    );
+    assert_eq!(
+        output.stdout,
+        "   Doc-tests a\n\nrunning 0 tests\n\ntest result: ok. 0 passed\n".as_bytes()
+    );
+    let none = doctests_in(&temp, "true");
+    assert_eq!(none.status.code(), Some(1), "{none:?}");
+}
+
+#[test]
+fn a_doctest_step_that_ran_a_doctest_passes_and_a_failing_one_keeps_its_code() {
+    let temp = scratch("doctests-some");
+    let ran = "printf 'running 0 tests\\ntest result: ok. 0 passed\\nrunning 1 test\\ntest x ... ok\\ntest result: ok. 1 passed\\n'";
+    assert_eq!(doctests_in(&temp, ran).status.code(), Some(0));
+    let split = "printf 'running 0 tests\\ntest result: ok. 0 passed\\nrunn'; printf 'ing 3 tests\\ntest result: ok. 3 passed\\n'";
+    assert_eq!(doctests_in(&temp, split).status.code(), Some(0));
+    let failing = "printf 'running 0 tests\\n'; exit 101";
+    assert_eq!(doctests_in(&temp, failing).status.code(), Some(101));
+}
+
+#[test]
+fn a_doctest_flag_set_to_false_does_not_require_a_doctest() {
+    let temp = scratch("doctests-false");
+    for (value, code) in [("false", 0), ("true", 1)] {
+        let output = velnor(&temp, &[&format!("--require-doctests={value}")], &["true"])
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(output.status.code(), Some(code), "{value} {output:?}");
+    }
+}
+
+#[test]
+fn a_run_without_the_flag_does_not_count_doctests() {
+    let temp = scratch("doctests-off");
+    let output = velnor(&temp, &[], &["sh", "-c", "printf 'running 0 tests\\n'"])
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+}
+
+#[test]
 fn an_ignored_doctest_does_not_count_as_a_doctest_that_ran() {
     let ignored = "printf 'running 1 test\\ntest src/lib.rs - example (line 1) ... ignored\\ntest result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out\\n'";
     let output = doctests("ignored", ignored);
@@ -126,8 +178,29 @@ fn a_doctest_line_still_being_written_when_the_grace_ends_is_not_counted() {
 }
 
 #[test]
-fn a_doctest_line_without_a_newline_at_end_of_stream_is_counted() {
+fn a_doctest_header_without_a_result_does_not_count_at_end_of_stream() {
     let output = doctests("eof", "printf 'running 2 tests'");
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+}
+
+#[test]
+fn a_truncated_doctest_transcript_does_not_count_as_a_doctest_that_ran() {
+    let truncated = "printf 'running 1 test\\ntest src/lib.rs - example (line 1) ... ok\\n'";
+    let output = doctests("truncated", truncated);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+}
+
+#[test]
+fn an_ignored_doctest_without_a_result_line_does_not_count_at_end_of_stream() {
+    let ignored = "printf 'running 1 test\\ntest src/lib.rs - example (line 1) ... ignored\\n'";
+    let output = doctests("ignored-eof", ignored);
+    assert_eq!(output.status.code(), Some(1), "{output:?}");
+}
+
+#[test]
+fn a_doctest_result_without_a_trailing_newline_counts_at_end_of_stream() {
+    let body = "printf 'running 1 test\\ntest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out'";
+    let output = doctests("eof-result", body);
     assert_eq!(output.status.code(), Some(0), "{output:?}");
 }
 
