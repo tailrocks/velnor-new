@@ -171,6 +171,8 @@ jobs:
     outputs:
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
+      # jactionlint ignore=unused-job-output
+      tests_listed: '${{ steps.test.outputs.tests_listed }}'
       base_prefix: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
@@ -391,6 +393,8 @@ jobs:
     outputs:
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
+      # jactionlint ignore=unused-job-output
+      tests_listed: '${{ steps.test.outputs.tests_listed }}'
       base_prefix: 'velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
@@ -557,6 +561,8 @@ jobs:
     outputs:
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
+      # jactionlint ignore=unused-job-output
+      tests_listed: '${{ steps.test.outputs.tests_listed }}'
       base_prefix: 'velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
@@ -765,6 +771,8 @@ jobs:
     outputs:
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
+      # jactionlint ignore=unused-job-output
+      tests_listed: '${{ steps.test.outputs.tests_listed }}'
       base_prefix: 'velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
@@ -949,6 +957,8 @@ jobs:
     outputs:
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
+      # jactionlint ignore=unused-job-output
+      tests_listed: '${{ steps.test.outputs.tests_listed }}'
       base_prefix: 'velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'

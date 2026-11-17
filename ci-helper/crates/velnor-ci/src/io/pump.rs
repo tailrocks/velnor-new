@@ -6,24 +6,24 @@ use std::sync::Mutex;
 
 use crate::cargo_artifacts::{ArtifactBatch, ArtifactTap};
 use crate::setup::DoctestCount;
-use crate::tests_run::SummaryTap;
+use crate::tests_run::{SummaryTap, TestCounts};
 
 const CHUNK: usize = 8192;
 
 #[derive(Debug, Default)]
 pub(super) struct Capture {
     pub failure: Option<Error>,
-    pub tests_run: Option<u64>,
+    pub counts: Option<TestCounts>,
     pub observations: ArtifactBatch,
 }
 
 impl Capture {
-    fn publish(&mut self, batch: ArtifactBatch, tests_run: Option<u64>) {
+    fn publish(&mut self, batch: ArtifactBatch, counts: Option<TestCounts>) {
         self.observations.artifacts.extend(batch.artifacts);
         self.observations.progress.extend(batch.progress);
         self.observations.tests.extend(batch.tests);
         self.observations.rejected += batch.rejected;
-        self.tests_run = tests_run.or(self.tests_run);
+        self.counts = counts.or(self.counts);
     }
 }
 
@@ -66,7 +66,7 @@ pub(super) fn pump_counted<L: Write>(
         capture
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .publish(artifacts.take_ready(), tap.tests_run());
+            .publish(artifacts.take_ready(), tap.counts());
         to.write_all(chunk).and_then(|()| to.flush()).ok();
         let failure = log
             .lock()
@@ -89,14 +89,10 @@ pub(super) fn pump_counted<L: Write>(
     } else {
         artifacts.take_ready()
     };
-    let tests_run = if complete {
-        tap.finish()
-    } else {
-        tap.tests_run()
-    };
+    let counts = if complete { tap.finish() } else { tap.counts() };
     capture
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .publish(batch, tests_run);
+        .publish(batch, counts);
     complete
 }

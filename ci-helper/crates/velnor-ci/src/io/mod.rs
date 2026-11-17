@@ -15,6 +15,7 @@ mod plan;
 pub mod pump;
 mod recording;
 mod release;
+mod required;
 mod restored;
 mod run;
 mod setup;
@@ -48,6 +49,7 @@ use clap::{CommandFactory, FromArgMatches};
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
+const SUMMARY_VARIABLE: &str = "GITHUB_STEP_SUMMARY";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
 const SOURCE_LIMIT: u64 = 1 << 20;
 const SOURCE_TOTAL_LIMIT: u64 = 8 << 20;
@@ -120,6 +122,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),

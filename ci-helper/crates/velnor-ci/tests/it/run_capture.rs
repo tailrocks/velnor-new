@@ -6,6 +6,8 @@ use std::os::unix::fs::PermissionsExt;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 
+const TEST_OUTPUT: &str = "tests_run=17\ntests_listed=17\n";
+
 #[test]
 fn completed_observations_survive_a_descendant_holding_the_stream_open() {
     for (name, active, held) in [
@@ -62,7 +64,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         assert_eq!(invocation["capture_complete"], !held);
         assert_eq!(
             fs::read_to_string(temp.join("outputs")).unwrap_or_default(),
-            if active { "tests_run=17\n" } else { "" }
+            if active { TEST_OUTPUT } else { "" }
         );
         let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["cache", "decide", "--target-dir", "target"])
