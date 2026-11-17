@@ -10,18 +10,24 @@ use crate::toml_file::table;
 const HOST: &str = "host-tuple";
 const KEY: &str = "build.target";
 
+struct ConfigTargets {
+    named: Vec<(RepoPath, String)>,
+    configured: bool,
+    host: Option<RepoPath>,
+}
+
 pub(crate) fn build_targets(
     view: &RepoView,
     manifest: &RepoPath,
 ) -> Result<Vec<(RepoPath, String)>, DetectError> {
-    config_targets(view, manifest).map(|(named, _, _)| named)
+    config_targets(view, manifest).map(|config| config.named)
 }
 
 pub(crate) fn host_tuple_config(
     view: &RepoView,
     manifest: &RepoPath,
 ) -> Result<Option<RepoPath>, DetectError> {
-    config_targets(view, manifest).map(|(_, _, host)| host)
+    config_targets(view, manifest).map(|config| config.host)
 }
 
 pub(crate) fn check_host_tuple_version(
@@ -96,10 +102,7 @@ fn release_channel(version: &str) -> Option<(u16, u16)> {
     Some((major, minor))
 }
 
-fn config_targets(
-    view: &RepoView,
-    manifest: &RepoPath,
-) -> Result<(Vec<(RepoPath, String)>, bool, Option<RepoPath>), DetectError> {
+fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets, DetectError> {
     let mut named = Vec::new();
     let mut kind = None;
     let mut scalar_seen = false;
@@ -151,9 +154,13 @@ fn config_targets(
         }
     }
     named.retain(|(_, name)| name != HOST);
-    Ok((named, configured, host))
+    Ok(ConfigTargets {
+        named,
+        configured,
+        host,
+    })
 }
 
 pub(crate) fn sets_build_target(view: &RepoView, manifest: &RepoPath) -> Result<bool, DetectError> {
-    config_targets(view, manifest).map(|(_, configured, _)| configured)
+    config_targets(view, manifest).map(|config| config.configured)
 }

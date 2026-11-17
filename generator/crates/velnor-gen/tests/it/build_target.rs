@@ -137,23 +137,23 @@ fn an_old_dated_nightly_cannot_use_the_host_tuple_target() -> TestResult {
 
 #[test]
 fn opaque_fixed_rust_selectors_cannot_use_the_host_tuple_target() -> TestResult {
-    let repo = with(
-        &["Cargo.toml"],
-        &[
-            (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
-            (
-                "mise.toml",
-                "[tools]\nrust = \"custom-compiler-1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
-            ),
-        ],
-    )?;
-    assert_eq!(
-        refused(&repo),
-        Some((
-            ".cargo/config.toml".to_owned(),
-            Some("custom-compiler-1".to_owned())
-        ))
-    );
+    for selector in ["custom-compiler-1", "nightly-2025-99-99"] {
+        let mise = format!(
+            "[tools]\nrust = \"{selector}\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+        );
+        let repo = with(
+            &["Cargo.toml"],
+            &[
+                (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+                ("mise.toml", &mise),
+            ],
+        )?;
+        assert_eq!(
+            refused(&repo),
+            Some((".cargo/config.toml".to_owned(), Some(selector.to_owned()))),
+            "{selector}"
+        );
+    }
     Ok(())
 }
 
@@ -170,6 +170,24 @@ fn a_supported_pre_release_nightly_can_use_the_host_tuple_target() -> TestResult
         ],
     )?;
     assert!(generate(&repo).is_ok());
+    Ok(())
+}
+
+#[test]
+fn floating_rust_channels_can_use_the_host_tuple_target() -> TestResult {
+    for channel in ["stable", "beta", "nightly"] {
+        let mise = format!(
+            "[tools]\nrust = \"{channel}\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n"
+        );
+        let repo = with(
+            &["Cargo.toml"],
+            &[
+                (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+                ("mise.toml", &mise),
+            ],
+        )?;
+        assert!(generate(&repo).is_ok(), "{channel}");
+    }
     Ok(())
 }
 
