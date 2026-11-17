@@ -156,6 +156,15 @@ fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> 
             .diagnostics
             .push("Job start to first cargo is unavailable".to_owned());
     }
+    cache_metrics(metrics, steps, &github, &repo)
+}
+
+fn cache_metrics(
+    metrics: &mut LaneMetrics,
+    steps: &Value,
+    github: &impl GitHub,
+    repo: &Repo,
+) -> Result<(), CiError> {
     let default = env("VELNOR_REPORT_DEFAULT_BRANCH");
     for cache in &mut metrics.caches {
         let saving = env("GITHUB_REF") == format!("refs/heads/{default}")
@@ -170,17 +179,26 @@ fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> 
         } else {
             continue;
         };
+        if key.is_empty() {
+            cache.bytes = None;
+            metrics
+                .diagnostics
+                .push("Cache inventory key unavailable".to_owned());
+            continue;
+        }
         let listing: Value = json(&github.get(&format!(
             "/repos/{repo}/actions/caches?key={}&per_page=100",
             crate::cache::encode(key)
         ))?)?;
-        let entry = listing["actions_caches"].as_array().and_then(|entries| {
-            entries.iter().find(|entry| {
-                entry["key"].as_str() == Some(key)
-                    && (!saving || entry["ref"].as_str() == Some(&env("GITHUB_REF")))
-            })
-        });
-        if saving && cache.save != SaveOutcome::Failed {
+        let entry = match inventory_entry(&listing, key, saving) {
+            Ok(entry) => entry,
+            Err(error) => {
+                cache.bytes = None;
+                metrics.diagnostics.push(error.to_string());
+                continue;
+            }
+        };
+        if saving && cache.save == SaveOutcome::Unknown {
             cache.save = if entry.is_some() {
                 SaveOutcome::Saved
             } else {
@@ -190,6 +208,38 @@ fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> 
         cache.bytes = entry.and_then(|entry| entry["size_in_bytes"].as_u64());
     }
     Ok(())
+}
+
+fn inventory_entry<'a>(
+    listing: &'a Value,
+    key: &str,
+    saving: bool,
+) -> Result<Option<&'a Value>, CiError> {
+    let unknown = || ci(format!("Cache inventory identity unknown for {key}"));
+    let entries = listing["actions_caches"].as_array().ok_or_else(unknown)?;
+    if listing["total_count"].as_u64() != u64::try_from(entries.len()).ok() {
+        return Err(unknown());
+    }
+    let mut refs = vec![env("GITHUB_REF")];
+    if !saving {
+        refs.extend(
+            [env("GITHUB_BASE_REF"), env("VELNOR_REPORT_DEFAULT_BRANCH")]
+                .into_iter()
+                .filter(|branch| !branch.is_empty())
+                .map(|branch| format!("refs/heads/{branch}")),
+        );
+    }
+    let mut eligible = entries.iter().filter(|entry| {
+        entry["key"].as_str() == Some(key)
+            && entry["ref"]
+                .as_str()
+                .is_some_and(|reference| refs.iter().any(|allowed| allowed == reference))
+    });
+    let entry = eligible.next();
+    if eligible.next().is_some() {
+        return Err(unknown());
+    }
+    Ok(entry)
 }
 
 fn check_directory(directory: &Path) -> Result<String, CiError> {

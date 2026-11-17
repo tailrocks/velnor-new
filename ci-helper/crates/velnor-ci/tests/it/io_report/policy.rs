@@ -53,7 +53,7 @@ fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTe
                 ),
                 (
                     "/repos/owner/repo/actions/caches?key=key&per_page=100".to_owned(),
-                    json!({"actions_caches":entries}).to_string(),
+                    json!({"total_count":entries.as_array().map_or(0, Vec::len),"actions_caches":entries}).to_string(),
                 ),
             ]));
             command
@@ -97,6 +97,105 @@ fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTe
         std::fs::remove_file(repo.root().join("ci-metrics.json"))?;
     }
     Ok(())
+}
+
+#[test]
+fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> super::ResultTest {
+    let repo = Repo::new("report-cache-inventory");
+    let mut responses = BTreeMap::from([(
+        "/repos/owner/repo/actions/runs/1/attempts/1/jobs?per_page=100&page=1".to_owned(),
+        json!({"total_count":0,"jobs":[]}).to_string(),
+    )]);
+    let mut caches = Vec::new();
+    let mut steps = serde_json::Map::new();
+    for (key, refs, truncated, saving) in [
+        ("unique", vec!["foreign", "main"], false, false),
+        ("base", vec!["foreign", "release"], false, false),
+        ("ambiguous", vec!["main", "main"], false, false),
+        ("save-ambiguous", vec!["main", "main"], false, true),
+        ("truncated", vec!["main"], true, false),
+        ("save-truncated", vec![], true, true),
+        ("", vec![], false, true),
+    ] {
+        let mut entries: Vec<_> = refs.iter().enumerate().map(|(index, branch)| {
+            json!({"key":key,"ref":format!("refs/heads/{branch}"),"version":format!("v{index}"),"size_in_bytes":10 + index})
+        }).collect();
+        entries.push(
+            json!({"key":format!("{key}-prefix"),"ref":"refs/heads/main","size_in_bytes":99}),
+        );
+        if key.is_empty() {
+            entries.clear();
+        }
+        responses.insert(
+            format!("/repos/owner/repo/actions/caches?key={key}&per_page=100"),
+            json!({"total_count":entries.len() + usize::from(truncated),"actions_caches":entries})
+                .to_string(),
+        );
+        caches.push(json!({"family":"target","root":".","restore_step":key,"save_step":format!("save-{key}"),"requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}));
+        steps.insert(
+            key.to_owned(),
+            json!({"outputs":{"cache-primary-key":key,"cache-matched-key":key}}),
+        );
+        if saving {
+            steps.insert(format!("save-{key}"), json!({"outcome":"success"}));
+        }
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("report")
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env("GITHUB_JOB", "rust")
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_BASE_REF", "release")
+        .env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
+        .env("GITHUB_REPOSITORY", "owner/repo")
+        .env("GITHUB_RUN_ID", "1")
+        .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("GITHUB_TOKEN", "fixture")
+        .env("GITHUB_API_URL", crate::io::serve(responses))
+        .env("VELNOR_REPORT_CACHES", json!(caches).to_string())
+        .env("VELNOR_REPORT_STEPS", json!(steps).to_string())
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    let metrics = read(&repo);
+    assert_inventory(&metrics);
+    Ok(())
+}
+
+fn assert_inventory(metrics: &velnor_ci::report::LaneMetrics) {
+    assert_eq!(metrics.caches.len(), 7);
+    for (cache, expected_bytes) in
+        metrics
+            .caches
+            .iter()
+            .zip([Some(11), Some(11), None, None, None, None, None])
+    {
+        assert_eq!(cache.bytes, expected_bytes, "{}", cache.requested_key);
+        assert_eq!(
+            cache.save,
+            if cache.requested_key.starts_with("save-") || cache.requested_key.is_empty() {
+                SaveOutcome::Unknown
+            } else {
+                SaveOutcome::NotAttempted
+            }
+        );
+        if expected_bytes.is_none() {
+            assert!(
+                metrics
+                    .diagnostics
+                    .iter()
+                    .any(
+                        |diagnostic| diagnostic.contains(if cache.requested_key.is_empty() {
+                            "Cache inventory key unavailable"
+                        } else {
+                            &cache.requested_key
+                        })
+                    ),
+                "{:?}",
+                metrics.diagnostics
+            );
+        }
+    }
 }
 
 #[test]
