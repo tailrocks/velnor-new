@@ -326,3 +326,6 @@ mod velnor_gen_workflows;
 
 #[path = "workflow_configuration_public/runner_family_copy_sources.rs"]
 mod runner_family_copy_sources;
+
+#[path = "workflow_configuration_public/image_platform_selection.rs"]
+mod image_platform_selection;

@@ -43,12 +43,7 @@ fn args_are_scoped_to_each_stage_and_globals_need_redeclaration() -> Result<(), 
 #[test]
 fn unknown_inherited_values_never_narrow_context_sources() -> Result<(), String> {
     for text in [
-        "FROM scratch AS base\nARG SRC=src\nFROM base\nCOPY ${SRC:-other}/main.txt /dest\n"
-            .to_owned(),
-        "FROM scratch AS base\nENV SRC=src\nFROM base\nCOPY ${SRC:-other}/main.txt /dest\n"
-            .to_owned(),
-        "FROM scratch AS base\nARG SRC=src\nFROM base\nARG SRC\nCOPY ${SRC:-other}/main.txt /dest\n"
-            .to_owned(),
+        "FROM scratch AS base\nARG SRC=bad\"value\"\nFROM base\nCOPY ${SRC:-other}/main.txt /dest\n".to_owned(),
         format!(
             "FROM example@sha256:{}\nARG SRC=src\nCOPY $SRC/main.txt /dest\n",
             "a".repeat(64)
@@ -59,6 +54,36 @@ fn unknown_inherited_values_never_narrow_context_sources() -> Result<(), String>
     let text = "ARG SRC=global\nFROM scratch\nARG SRC=src\nARG SRC\nCOPY $SRC/main.txt /dest\n";
     let facts = analyze_dockerfile(text, &[]).map_err(|e| format!("{e:?}"))?;
     assert!(facts.context_sources.contains("src/main.txt"));
+    Ok(())
+}
+
+#[test]
+fn local_stages_inherit_arguments_and_environment_without_cross_stage_leaks() -> Result<(), String>
+{
+    for base in ["base", "0"] {
+        for declaration in [
+            "ARG SRC=src",
+            "ENV SRC=src",
+            "ARG SRC=src\nENV OTHER=value",
+            "ARG SRC=wrong\nENV SRC=src",
+        ] {
+            let text =
+                format!("FROM scratch AS base\n{declaration}\nFROM {base}\nCOPY $SRC/file /dest\n");
+            let facts = analyze_dockerfile(&text, &[]).map_err(|e| format!("{e:?}"))?;
+            assert!(!facts.claims_whole_context, "{text}: {facts:?}");
+            assert!(
+                facts.context_sources.contains("src/file"),
+                "{text}: {facts:?}"
+            );
+        }
+    }
+    let text = "FROM scratch AS base\nENV MODE=prod\nARG SRC=src\nFROM base\nARG SRC=src\nCOPY $SRC/file /dest\n";
+    let facts = analyze_dockerfile(text, &[]).map_err(|e| format!("{e:?}"))?;
+    assert!(!facts.claims_whole_context, "{facts:?}");
+    assert!(facts.context_sources.contains("src/file"), "{facts:?}");
+    let text = "FROM scratch AS base\nARG SRC=src\nFROM scratch\nCOPY ${SRC:-other}/file /dest\n";
+    let facts = analyze_dockerfile(text, &[]).map_err(|e| format!("{e:?}"))?;
+    assert!(facts.context_sources.contains("other/file"), "{facts:?}");
     Ok(())
 }
 

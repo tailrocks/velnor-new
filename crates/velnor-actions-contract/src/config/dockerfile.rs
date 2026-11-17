@@ -9,6 +9,8 @@ pub struct DockerfileFacts {
 
     pub context_sources: BTreeSet<String>,
 
+    pub context_source_excludes: BTreeMap<String, Vec<BTreeSet<String>>>,
+
     pub claims_whole_context: bool,
 
     pub named_contexts: BTreeSet<String>,
@@ -56,13 +58,18 @@ impl DockerfileProblem {
     }
 }
 
+mod environment;
+mod exclusions;
 mod runner;
 mod syntax;
 mod variable;
 
 pub use runner::analyze_runner_dockerfile;
 use syntax::{check_directives, instructions};
-use variable::{ArgValue, arg_value, arg_words, is_injected_arg, substitute, valid_name};
+use variable::{
+    ArgValue, arg_value, arg_words, is_injected_arg, substitute, substitute_with_unknown,
+    valid_name,
+};
 
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
@@ -99,7 +106,8 @@ pub fn analyze_dockerfile(
 struct State {
     facts: DockerfileFacts,
     unknown_environment: bool,
-    inherited_stage: bool,
+    stage_env: BTreeMap<String, ArgValue>,
+    stage_states: Vec<(BTreeMap<String, ArgValue>, BTreeMap<String, ArgValue>, bool)>,
     global_args: BTreeMap<String, ArgValue>,
     stage_args: BTreeMap<String, ArgValue>,
     stages: BTreeMap<String, usize>,
@@ -112,7 +120,7 @@ impl State {
         match keyword {
             "ARG" => self.record_arg(args)?,
             "FROM" => self.from(args)?,
-            "ENV" => self.unknown_environment = true,
+            "ENV" => self.record_env(args),
             "COPY" | "ADD" => self.copy(keyword, args)?,
             "RUN" => self.run(args)?,
             "ONBUILD" => {
@@ -143,7 +151,6 @@ impl State {
                     name,
                     arg_value(value).map_or(ArgValue::Unknown, ArgValue::Known),
                 ),
-                None if self.inherited_stage => (token, ArgValue::Unknown),
                 None => (
                     token,
                     self.stage_args
@@ -177,7 +184,13 @@ impl State {
         };
         let reference = substitute(raw, &self.global_args)
             .ok_or_else(|| DockerfileProblem::ImageBaseUnresolved(raw.to_owned()))?;
-        self.stage_args.clear();
+        if !self.triggers.is_empty() {
+            self.stage_states.push((
+                self.stage_args.clone(),
+                self.stage_env.clone(),
+                self.unknown_environment,
+            ));
+        }
         let local = self
             .stages
             .get(&reference.to_ascii_lowercase())
@@ -188,8 +201,14 @@ impl State {
                     .ok()
                     .filter(|&index| index < self.triggers.len())
             });
-        self.inherited_stage = local.is_some();
-        self.unknown_environment = reference != "scratch";
+        if let Some(index) = local {
+            (self.stage_args, self.stage_env, self.unknown_environment) =
+                self.stage_states[index].clone();
+        } else {
+            self.stage_args.clear();
+            self.stage_env.clear();
+            self.unknown_environment = reference != "scratch";
+        }
         if reference != "scratch" && local.is_none() {
             require_pinned(&reference)?;
             self.facts.external_images.insert(reference);
@@ -198,9 +217,16 @@ impl State {
         if let Some(index) = local {
             for (keyword, args) in self.triggers[index].clone() {
                 match keyword.as_str() {
-                    "COPY" | "ADD" | "RUN" | "ARG" | "ENV" => {
-                        self.instruction(&keyword, &args)?;
+                    "COPY" | "ADD" | "RUN" | "ENV" => {
+                        let saved_args = self.stage_args.clone();
+                        for value in self.stage_args.values_mut() {
+                            *value = ArgValue::Unknown;
+                        }
+                        let result = self.instruction(&keyword, &args);
+                        self.stage_args = saved_args;
+                        result?;
                     }
+                    "ARG" => self.instruction(&keyword, &args)?,
                     _ => self.facts.claims_whole_context = true,
                 }
             }
@@ -217,12 +243,28 @@ impl State {
 
     fn copy(&mut self, keyword: &str, args: &str) -> Result<(), DockerfileProblem> {
         let mut from_other = false;
+        let mut excludes = BTreeSet::new();
         let mut args = args.trim_start();
         while args.starts_with("--") {
             let (option, remainder) = args.split_once(char::is_whitespace).unwrap_or((args, ""));
             if let Some(source) = option.strip_prefix("--from=") {
                 from_other = true;
                 self.check_from_source(source)?;
+            }
+            if let Some(pattern) = option.strip_prefix("--exclude=") {
+                let supported = !pattern.is_empty()
+                    && pattern.bytes().all(|b| {
+                        b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'*')
+                    })
+                    && pattern.bytes().filter(|b| *b == b'*').count() <= 1
+                    && (!pattern.contains('*') || pattern.starts_with('*'));
+                if supported {
+                    excludes.insert(pattern.to_owned());
+                } else {
+                    self.facts.claims_whole_context = true;
+                }
+            } else if option.starts_with("--exclude") {
+                self.facts.claims_whole_context = true;
             }
             args = remainder.trim_start();
         }
@@ -247,14 +289,9 @@ impl State {
             if keyword == "ADD" && is_remote(&source) {
                 return Err(DockerfileProblem::RemoteAdd(source));
             }
-            if self.unknown_environment && source.contains('$') {
-                if keyword == "ADD" {
-                    return Err(DockerfileProblem::RemoteAdd(source));
-                }
-                self.facts.claims_whole_context |= !from_other;
-                continue;
-            }
-            let Some(source) = substitute(&source, &self.stage_args) else {
+            let Some(source) =
+                substitute_with_unknown(&source, &self.variables(), self.unknown_environment)
+            else {
                 if keyword == "ADD" {
                     return Err(DockerfileProblem::RemoteAdd(source));
                 }
@@ -269,7 +306,13 @@ impl State {
                 return Err(DockerfileProblem::RemoteAdd(source));
             }
             if !from_other {
-                self.facts.context_sources.insert(normalize_source(&source));
+                let source = normalize_source(&source);
+                self.facts.context_sources.insert(source.clone());
+                self.facts
+                    .context_source_excludes
+                    .entry(source)
+                    .or_default()
+                    .push(excludes.clone());
             }
         }
         self.facts.claims_whole_context |= missing_destination;

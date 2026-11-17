@@ -86,6 +86,14 @@ pub(super) fn arg_value(value: &str) -> Option<String> {
 }
 
 pub(super) fn substitute(raw: &str, args: &BTreeMap<String, ArgValue>) -> Option<String> {
+    substitute_with_unknown(raw, args, false)
+}
+
+pub(super) fn substitute_with_unknown(
+    raw: &str,
+    args: &BTreeMap<String, ArgValue>,
+    unknown_missing: bool,
+) -> Option<String> {
     let mut out = String::new();
     let mut rest = raw;
     while let Some(at) = rest.find('$') {
@@ -102,6 +110,7 @@ pub(super) fn substitute(raw: &str, args: &BTreeMap<String, ArgValue>) -> Option
             Some(ArgValue::Known(value)) if value.is_empty() && default.is_some() => default?,
             Some(ArgValue::Known(value)) => value,
             Some(ArgValue::Unknown) => return None,
+            None if unknown_missing => return None,
             Some(ArgValue::Unset) | None => default?,
         };
         if value.contains(['$', '\\', '\'', '"']) {

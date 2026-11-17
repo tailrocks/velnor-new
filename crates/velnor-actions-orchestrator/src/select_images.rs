@@ -4,9 +4,9 @@
 use std::collections::BTreeSet;
 use std::path::Path;
 
-use velnor_actions_contract::config::analyze_dockerfile;
+use velnor_actions_contract::config::{DockerfileFacts, analyze_dockerfile};
 use velnor_actions_contract::{
-    ImageConfig, ImagePrebuilt, JobDisposition, PlanJob, WorkflowEvent, selects_affected_work,
+    ImageConfig, ImagePlatform, ImagePrebuilt, JobDisposition, PlanJob, WorkflowEvent, selects_affected_work,
 };
 
 use crate::discover::Discovery;
@@ -40,7 +40,9 @@ impl Claims {
             || changed.iter().any(|path| {
                 self.paths
                     .iter()
-                    .any(|claim| path == claim || path.starts_with(&format!("{claim}/")))
+                    .any(|claim| path == claim
+                        || path.starts_with(&format!("{claim}/"))
+                        || claim.starts_with(&format!("{path}/")))
             })
     }
 }
@@ -56,18 +58,18 @@ pub(crate) fn dispositions(
 ) -> Vec<PlanJob> {
     let mut jobs = Vec::new();
     for image in images {
-        let selected = match (selects_affected_work(event), affected, &evidence.paths) {
-            (true, Some(packages), Some(changed)) => {
-                image_selected(root, image, discovery, packages, changed)
-            }
-            _ => true,
-        };
-        let disposition = if selected {
-            JobDisposition::Run
-        } else {
-            JobDisposition::NotAffected
-        };
         for platform in &image.platforms {
+            let selected = match (selects_affected_work(event), affected, &evidence.paths) {
+                (true, Some(packages), Some(changed)) => {
+                    image_selected(root, image, *platform, discovery, packages, changed)
+                }
+                _ => true,
+            };
+            let disposition = if selected {
+                JobDisposition::Run
+            } else {
+                JobDisposition::NotAffected
+            };
             jobs.push(PlanJob {
                 lane: None,
                 job_id: image.build_job_id(*platform),
@@ -86,11 +88,12 @@ pub(crate) fn dispositions(
 fn image_selected(
     root: &Path,
     image: &ImageConfig,
+    platform: ImagePlatform,
     discovery: &Discovery,
     packages: &BTreeSet<String>,
     changed: &BTreeSet<String>,
 ) -> bool {
-    let Some(claims) = claims(root, image) else {
+    let Some(claims) = claims(root, image, platform, changed) else {
         return true;
     };
     claims.touched_by(changed) || prebuilt_selected(image, discovery, packages)
@@ -114,7 +117,12 @@ fn prebuilt_selected(
     ids.peek().is_none() || ids.any(|id| packages.contains(id))
 }
 
-fn claims(root: &Path, image: &ImageConfig) -> Option<Claims> {
+fn claims(
+    root: &Path,
+    image: &ImageConfig,
+    platform: ImagePlatform,
+    changed: &BTreeSet<String>,
+) -> Option<Claims> {
     let mut claims = Claims::default();
     let context = image.context.as_str();
     let under = |relative: &str| {
@@ -127,7 +135,8 @@ fn claims(root: &Path, image: &ImageConfig) -> Option<Claims> {
         }
     };
     claims.claim(&under(".dockerignore"));
-    for dockerfile in image.dockerfile.paths() {
+    {
+        let dockerfile = image.dockerfile.for_platform(platform)?;
         claims.claim(dockerfile);
         claims.claim(&format!("{dockerfile}.dockerignore"));
         let Ok(RepoRead::Text(text)) = read_repo_file(root, dockerfile, MAX_DOCKERFILE_BYTES)
@@ -138,11 +147,41 @@ fn claims(root: &Path, image: &ImageConfig) -> Option<Claims> {
         if facts.claims_whole_context || text.contains("--mount") {
             claims.claim(context);
         }
-        for source in &facts.context_sources {
-            claims.claim(&under(source_root(source)));
-        }
+        claim_context_sources(&mut claims, &facts, context, changed);
     }
     Some(claims)
+}
+
+fn claim_context_sources(
+    claims: &mut Claims,
+    facts: &DockerfileFacts,
+    context: &str,
+    changed: &BTreeSet<String>,
+) {
+    for source in &facts.context_sources {
+        let root = source_root(source);
+        let claim = if context == "." {
+            root.to_owned()
+        } else if root.is_empty() || root == "." {
+            context.to_owned()
+        } else {
+            format!("{context}/{root}")
+        };
+        if changed.iter().any(|path| {
+            let relative = if context == "." {
+                Some(path.as_str())
+            } else {
+                path.strip_prefix(context).and_then(|path| path.strip_prefix('/'))
+            };
+            relative.is_some_and(|path| {
+                (root.is_empty() || root == "." || path == root || path.strip_prefix(root).is_some_and(|rest| rest.starts_with('/')))
+                    && !facts.source_excludes_path(source, path)
+                    || root.strip_prefix(path).is_some_and(|rest| rest.starts_with('/'))
+            })
+        }) {
+            claims.claim(&claim);
+        }
+    }
 }
 
 fn source_root(source: &str) -> &str {
@@ -162,7 +201,7 @@ fn runner_family_disposition(
 ) -> PlanJob {
     let selected = match (selects_affected_work(event), affected, &evidence.paths) {
         (true, Some(packages), Some(changed)) => {
-            runner_family_claims(root).is_none_or(|claims| claims.touched_by(changed))
+            runner_family_claims(root, changed).is_none_or(|claims| claims.touched_by(changed))
                 || runner_family_prebuilt_selected(discovery, packages)
         }
         _ => true,
@@ -196,7 +235,7 @@ fn runner_family_prebuilt_selected(discovery: &Discovery, packages: &BTreeSet<St
     })
 }
 
-fn runner_family_claims(root: &Path) -> Option<Claims> {
+fn runner_family_claims(root: &Path, changed: &BTreeSet<String>) -> Option<Claims> {
     let mut claims = Claims::default();
     for path in velnor_archive_guard::source_claims(root).ok()? {
         claims.claim(&path);
@@ -248,9 +287,7 @@ fn runner_family_claims(root: &Path) -> Option<Claims> {
         if facts.claims_whole_context || text.contains("--mount") {
             claims.claim(context);
         }
-        for source in &facts.context_sources {
-            claims.claim(&format!("{context}/{}", source_root(source)));
-        }
+        claim_context_sources(&mut claims, &facts, context, changed);
     }
     Some(claims)
 }

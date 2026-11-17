@@ -205,7 +205,7 @@ fn runner_family_with_unrecognized_copy_runs_conservatively() -> TestResult {
     Ok(())
 }
 
-fn assert_image_context_selection(
+pub(super) fn assert_image_context_selection(
     dockerfile: &str,
     input: (&str, &str),
     precise: bool,

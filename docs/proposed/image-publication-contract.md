@@ -55,22 +55,19 @@ global and stage `ARG` defaults are understood). It rejects:
 - `image_secret_mount`: `RUN --mount=type=secret` or `type=ssh`.
 - `image_add_remote_source`: `ADD` of a URL or git source.
 - `image_context_escape`: a `COPY`/`ADD` source containing `..`.
-- `image_context_source_unresolved:<source>`: a `COPY`/`ADD` context source
-  cannot be resolved safely to the exact path BuildKit will read. This includes
-  unsupported or inherited `ARG`/`ENV` values, injected build arguments,
-  ambiguous quoting or escaping, multi-declaration `ARG` instructions, and
-  source syntax the parser cannot interpret.
+- `image_context_source_unresolved:<source>`: a `COPY`/`ADD` operand has
+  unsupported quoting or escaping, cannot be parsed as operands, or expands to
+  whitespace in shell form; an `ARG` declaration is empty, malformed, or has
+  an invalid name.
 - `image_escape_directive`: a changed `# escape=` character.
 
-Use a literal source or an `ARG` with a resolvable value in the current stage.
-Declare each `ARG` separately; do not combine multiple declarations on one
-`ARG` instruction. If the source depends on an inherited environment, an
-injected build argument, or syntax Velnor cannot resolve, rewrite it so the
-exact context path is explicit. Velnor refuses the Dockerfile rather than
-selecting an incomplete set of image inputs. For sources it can resolve, the
-analyzer reports their context-relative paths; affected-image selection uses
-those paths. `RUN` may use the network (for example `apt`); it never receives
-a secret.
+For a `COPY` source that depends on an unknown or unsupported value, the
+analyzer claims the whole context so affected-image selection remains
+conservative. An unresolved `ADD` source is rejected as
+`image_add_remote_source` because it could resolve to a remote input. A `COPY`
+from another stage does not claim a local context source. Resolved local sources
+are reported as context-relative paths. `RUN` may use the network (for example
+`apt`); it never receives a secret.
 
 ## Build jobs (implemented)
 
