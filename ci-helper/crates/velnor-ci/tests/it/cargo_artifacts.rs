@@ -4,7 +4,7 @@
 use serde_json::json;
 use velnor_ci::cargo_artifacts::{ArtifactTap, CargoArtifact, CargoProgress, ProgressKind};
 
-fn record(fresh: bool) -> serde_json::Value {
+pub(crate) fn record(fresh: bool) -> serde_json::Value {
     json!({
         "reason": "compiler-artifact",
         "package_id": "path+file:///工作/app#0.1.0",

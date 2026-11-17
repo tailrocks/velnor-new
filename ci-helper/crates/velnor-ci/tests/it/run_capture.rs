@@ -90,7 +90,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
     }
 }
 
-fn fixture(
+pub(crate) fn fixture(
     temp: &std::path::Path,
     active: bool,
     held: bool,

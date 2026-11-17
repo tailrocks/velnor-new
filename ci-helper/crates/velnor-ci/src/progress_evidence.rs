@@ -35,6 +35,7 @@ pub fn corroborate(invocation: &Invocation, progress: &CargoProgress) -> Evidenc
 fn matches(artifact: &CargoArtifact, progress: &CargoProgress) -> bool {
     let located = progress.location.as_deref().is_none_or(|location| {
         Path::new(&artifact.manifest_path).parent() == Some(Path::new(location))
+            || git_location(&artifact.package_id, location)
     });
     if !located {
         return false;
@@ -51,6 +52,26 @@ fn matches(artifact: &CargoArtifact, progress: &CargoProgress) -> bool {
         words.next() == Some(progress.package.as_str())
             && words.next() == Some(progress.version.as_str())
     }
+}
+
+fn git_location(package_id: &str, location: &str) -> bool {
+    let Some((source, _)) = package_id.rsplit_once('#') else {
+        return false;
+    };
+    let Some(source) = source.strip_prefix("git+") else {
+        return false;
+    };
+    let Some((repository, revision)) = location.rsplit_once('#') else {
+        return false;
+    };
+    if source != repository {
+        return false;
+    }
+    let expected = source
+        .split_once('?')
+        .and_then(|(_, query)| query.split('&').find_map(|part| part.strip_prefix("rev=")))
+        .filter(|value| value.len() >= 7 && value.bytes().all(|byte| byte.is_ascii_hexdigit()));
+    expected.is_none_or(|expected| !revision.is_empty() && expected.starts_with(revision))
 }
 
 #[must_use]
