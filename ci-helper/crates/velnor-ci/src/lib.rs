@@ -3,6 +3,7 @@
 
 pub mod cache;
 pub mod cargo_artifacts;
+pub mod cargo_package;
 pub mod cli;
 pub mod collect;
 pub mod compare;
