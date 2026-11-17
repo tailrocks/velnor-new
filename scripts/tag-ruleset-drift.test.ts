@@ -23,7 +23,8 @@ if (typeof inputs.script !== "string") throw new Error("Drift script is missing"
 const execute = new Function("github", "context", "process", `return (async () => {${inputs.script}\n})();`);
 type Ruleset = Omit<typeof recorded, "bypass_actors" | "conditions"> & { conditions: { ref_name: { include: string[]; exclude: string[] } }; bypass_actors?: unknown[] };
 const baseline = (): Ruleset => structuredClone(recorded), actor = { actor_id: 5762496, actor_type: "Integration", bypass_mode: "always" };
-const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", rules: [{ type: "creation" }], bypass_actors: [{ ...actor }] });
+const releaseRefs = ["refs/tags/rust-ci-v*", "refs/tags/velnor-ci-v*", "refs/tags/velnor-gen-v*"] satisfies [string, string, string];
+const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", conditions: { ref_name: { include: [...releaseRefs], exclude: [] } }, rules: [{ type: "creation" }], bypass_actors: [{ ...actor }] });
 type Scenario = { rulesets?: Ruleset[]; token?: string; failure?: "" | "list" | "detail" };
 async function run({ rulesets = [baseline(), release()], token = "admin-read-token", failure = "" }: Scenario = {}) {
   const detailed: number[] = [];
@@ -48,6 +49,25 @@ async function run({ rulesets = [baseline(), release()], token = "admin-read-tok
 }
 test("the recorded protection and pinned release app prove the expected tag policy", async () => {
   expect(await run()).toEqual([recorded.id, recorded.id + 1]);
+  const reordered = release();
+  reordered.conditions.ref_name.include.reverse();
+  expect(await run({ rulesets: [baseline(), reordered] })).toEqual([recorded.id, recorded.id + 1]);
+});
+test.each([
+  ["no creation rule", { rules: [] }],
+  ["an update rule instead of creation", { rules: [{ type: "update" }] }],
+  ["a narrowed release ref set", { conditions: { ref_name: { include: [releaseRefs[0]], exclude: [] } } }],
+  ["all tags instead of release refs", { conditions: { ref_name: { include: ["~ALL"], exclude: [] } } }],
+  ["an extra release ref", { conditions: { ref_name: { include: [...releaseRefs, "refs/tags/extra-v*"], exclude: [] } } }],
+  ["an excluded release ref", { conditions: { ref_name: { include: [...releaseRefs], exclude: [releaseRefs[0]] } } }],
+  ["a duplicate ref hiding an absent ref", { conditions: { ref_name: { include: [releaseRefs[0], releaseRefs[0], releaseRefs[2]], exclude: [] } } }],
+] satisfies [string, Partial<Ruleset>][]) ("release-tags rejects %s", async (_name, changed) => {
+  await expect(run({ rulesets: [baseline(), { ...release(), ...changed }] })).rejects.toThrow("release-tags must protect creation of exactly the release tag refs");
+});
+test("an unreadable release ref condition cannot prove creation protection", async () => {
+  const rule = release();
+  Reflect.deleteProperty(rule, "conditions");
+  await expect(run({ rulesets: [baseline(), rule] })).rejects.toThrow("release-tags must protect creation of exactly the release tag refs");
 });
 test("a bypass actor added to the recorded immutability ruleset fails", async () => {
   const rule = baseline();
