@@ -129,6 +129,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - id: save_tools
@@ -352,6 +354,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         working-directory: xtask
         run: rustup component add clippy rustfmt
@@ -558,6 +562,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - id: save_tools

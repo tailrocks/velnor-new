@@ -350,3 +350,50 @@ fn a_cargo_config_may_not_weaken_what_the_checks_run() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn mise_is_the_only_rust_installer_and_runs_rustup_init_past_the_mirror_wrapper() -> TestResult {
+    const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'\ncainfo = '/opt/velnor/crates-mirror/ca-bundle.pem'\n";
+    for config in [
+        "runner = 'mirror-box'\n".to_owned(),
+        format!("runner = 'mirror-box'\n{MIRROR}"),
+        format!("runner = 'mirror-box'\nshape = 'groups'\n{MIRROR}"),
+    ] {
+        let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+        let lock = RepoPath::new(".velnor/rust-ci.lock")?;
+        let old = String::from_utf8(repo.files[&lock].clone())?;
+        repo.files
+            .insert(lock, old.replace("0.1.79", "0.1.81").into_bytes());
+        let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
+        let mut installs = 0;
+        for (job_id, job) in yaml["jobs"].as_object().ok_or("jobs missing")? {
+            for step in job["steps"].as_array().ok_or("steps missing")? {
+                let uses = step["uses"].as_str().unwrap_or_default();
+                let run = step["run"].as_str().unwrap_or_default();
+                if uses.starts_with("jdx/mise-action@") {
+                    installs += 1;
+                    assert_eq!(
+                        step["env"]["RUSTUP_INIT_SKIP_PATH_CHECK"], "yes",
+                        "{job_id}: {step}"
+                    );
+                    assert!(step["continue-on-error"].is_null(), "{job_id}: {step}");
+                }
+                assert!(
+                    !uses.starts_with("dtolnay/rust-toolchain"),
+                    "{job_id}: {step}"
+                );
+                for installer in [
+                    "rustup-init",
+                    "rustup toolchain install",
+                    "rustup default",
+                    "rustup update",
+                    "sh.rustup.rs",
+                ] {
+                    assert!(!run.contains(installer), "{job_id}: {step}");
+                }
+            }
+        }
+        assert!(installs > 0);
+    }
+    Ok(())
+}

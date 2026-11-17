@@ -85,6 +85,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: rustup component add clippy rustfmt

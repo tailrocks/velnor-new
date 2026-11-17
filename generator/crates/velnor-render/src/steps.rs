@@ -304,6 +304,10 @@ fn install_tools(only: Option<&str>) -> RenderedStep {
         name: "Install tools".to_owned(),
         uses: Some(MISE.to_owned()),
         with,
+        env: vec![(
+            "RUSTUP_INIT_SKIP_PATH_CHECK".to_owned(),
+            Value::Text("yes".to_owned()),
+        )],
         ..RenderedStep::default()
     }
 }

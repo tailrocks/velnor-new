@@ -120,6 +120,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
@@ -317,6 +319,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
@@ -513,6 +517,8 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'aqua:nextest-rs/nextest/cargo-nextest'
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Download the tests
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -603,6 +609,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         working-directory: lab
         run: rustup component add clippy rustfmt
@@ -789,6 +797,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         working-directory: lab
         run: rustup component add clippy rustfmt
@@ -985,6 +995,8 @@ jobs:
           version: '2026.11.1'
           cache: false
           install_args: 'aqua:nextest-rs/nextest/cargo-nextest'
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Download the tests
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
         with:
@@ -1070,6 +1082,8 @@ jobs:
         with:
           version: '2026.11.1'
           cache: false
+        env:
+          RUSTUP_INIT_SKIP_PATH_CHECK: 'yes'
       - name: Add Rust components
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
