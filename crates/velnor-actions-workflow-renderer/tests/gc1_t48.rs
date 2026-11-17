@@ -303,3 +303,6 @@ mod runner_image_artifact_guard_public;
 
 #[path = "gc1_t48_release_supersession.rs"]
 mod gc1_t48_release_supersession;
+
+#[path = "release_build_authority.rs"]
+mod release_build_authority;

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod archive;
+mod build_target;
 mod cache_compat;
 mod cache_key_defects;
 mod cache_key_inputs;
@@ -21,6 +22,8 @@ mod events_policy;
 mod facts;
 mod freshness;
 mod golden;
+mod golden_env;
+mod golden_modes;
 mod harness;
 mod harness_kinds;
 mod harness_undecided;
@@ -36,6 +39,7 @@ mod lock_affected;
 mod lock_consistency;
 mod main_and_scheduled;
 mod metadata_file;
+mod mise_names;
 mod no_programs;
 mod patch;
 mod pipeline;
@@ -61,6 +65,7 @@ mod release_yml_limits;
 mod release_yml_quoting;
 mod release_yml_security;
 mod render_empty_key;
+mod repo_profile_include;
 mod repo_sample;
 mod required_gate;
 mod required_gate_lanes;

@@ -106,7 +106,7 @@ pub(super) fn with_needs(mut fields: Vec<(String, Yaml)>, needs: &str) -> Vec<(S
 }
 
 pub(super) fn build_permissions() -> Yaml {
-    perm(&[("actions", "write"), ("contents", "read")])
+    perm(&[("contents", "read")])
 }
 
 pub(super) fn attest_permissions() -> Yaml {
