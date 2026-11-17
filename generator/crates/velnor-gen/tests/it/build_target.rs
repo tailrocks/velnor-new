@@ -105,6 +105,58 @@ fn a_nearer_string_replaces_an_ancestor_string_and_arrays_are_joined() -> TestRe
 }
 
 #[test]
+fn cargo_target_config_types_must_match_across_applicable_configs() -> TestResult {
+    for configs in [
+        [
+            (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+            (
+                "lab/.cargo/config.toml",
+                "[build]\ntarget = [\"host-tuple\"]\n",
+            ),
+        ],
+        [
+            (".cargo/config.toml", "[build]\ntarget = [\"host-tuple\"]\n"),
+            (
+                "lab/.cargo/config.toml",
+                "[build]\ntarget = \"host-tuple\"\n",
+            ),
+        ],
+    ] {
+        let repo = with(&["lab/Cargo.toml"], &configs)?;
+        assert_eq!(
+            refused(&repo),
+            Some((
+                ".cargo/config.toml".to_owned(),
+                Some("build.target".to_owned())
+            )),
+            "{configs:?}"
+        );
+    }
+    for configs in [
+        [
+            (".cargo/config.toml", "[build]\ntarget = \"host-tuple\"\n"),
+            (
+                "lab/.cargo/config.toml",
+                "[build]\ntarget = \"host-tuple\"\n",
+            ),
+        ],
+        [
+            (".cargo/config.toml", "[build]\ntarget = [\"host-tuple\"]\n"),
+            (
+                "lab/.cargo/config.toml",
+                "[build]\ntarget = [\"host-tuple\"]\n",
+            ),
+        ],
+    ] {
+        assert!(
+            generate(&with(&["lab/Cargo.toml"], &configs)?).is_ok(),
+            "{configs:?}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_build_target_that_is_not_a_string_or_array_of_strings_is_refused() -> TestResult {
     for text in [
         "[build]\ntarget = 1\n",

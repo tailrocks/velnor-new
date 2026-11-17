@@ -14,12 +14,23 @@ pub(crate) fn build_targets(
     view: &RepoView,
     manifest: &RepoPath,
 ) -> Result<Vec<(RepoPath, String)>, DetectError> {
+    config_targets(view, manifest).map(|(named, _)| named)
+}
+
+fn config_targets(
+    view: &RepoView,
+    manifest: &RepoPath,
+) -> Result<(Vec<(RepoPath, String)>, bool), DetectError> {
     let mut named = Vec::new();
+    let mut kind = None;
+    let mut scalar_seen = false;
+    let mut configured = false;
     for (file, bytes, _) in nearest_first(view, manifest) {
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
         let Some(value) = parsed.get("build").and_then(|build| build.get("target")) else {
             continue;
         };
+        configured = true;
         let invalid = || {
             DetectError::invalid(
                 file,
@@ -31,22 +42,34 @@ pub(crate) fn build_targets(
         };
         match value {
             toml::Value::String(one) => {
-                named.push((file.clone(), one.clone()));
-                break;
+                if kind == Some(true) {
+                    return Err(invalid());
+                }
+                kind = Some(false);
+                if !scalar_seen {
+                    named.push((file.clone(), one.clone()));
+                    scalar_seen = true;
+                }
             }
             toml::Value::Array(many) => {
+                if kind == Some(false) {
+                    return Err(invalid());
+                }
+                kind = Some(true);
                 for item in many {
                     let name = item.as_str().ok_or_else(invalid)?;
-                    named.push((file.clone(), name.to_owned()));
+                    if !scalar_seen {
+                        named.push((file.clone(), name.to_owned()));
+                    }
                 }
             }
             _ => return Err(invalid()),
         }
     }
     named.retain(|(_, name)| name != HOST);
-    Ok(named)
+    Ok((named, configured))
 }
 
 pub(crate) fn sets_build_target(view: &RepoView, manifest: &RepoPath) -> Result<bool, DetectError> {
-    build_targets(view, manifest).map(|named| !named.is_empty())
+    config_targets(view, manifest).map(|(_, configured)| configured)
 }

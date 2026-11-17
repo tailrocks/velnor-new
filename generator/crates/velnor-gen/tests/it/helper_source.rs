@@ -218,6 +218,21 @@ fn the_upload_path_follows_the_repository_target_dir() -> TestResult {
 }
 
 #[test]
+fn the_rendered_default_helper_upload_uses_the_cargo_host_output_path() -> TestResult {
+    let text = text_of(&sample(None)?)?;
+    let upload = text
+        .split("- name: Upload velnor-ci")
+        .nth(1)
+        .ok_or("no upload")?;
+    let upload = upload.split("- name:").next().unwrap_or_default();
+    assert!(
+        upload.contains("path: ci-helper/target/debug/velnor-ci"),
+        "{upload}"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_build_target_in_any_config_of_the_helper_root_refuses_the_helper() -> TestResult {
     let triple = "[build]\ntarget = \"aarch64-unknown-linux-gnu\"\n";
     let array = "[build]\ntarget = [\"aarch64-unknown-linux-gnu\"]\n";
@@ -277,7 +292,7 @@ fn a_target_dir_with_glob_characters_is_uploaded_literally() -> TestResult {
 }
 
 #[test]
-fn the_host_tuple_build_target_does_not_refuse_the_helper() -> TestResult {
+fn the_host_tuple_build_target_refuses_a_helper_without_publishing_a_wrong_path() -> TestResult {
     let host = "[build]\ntarget = \"host-tuple\"\n";
     for files in [
         vec![(".cargo/config.toml", host)],
@@ -289,8 +304,19 @@ fn the_host_tuple_build_target_does_not_refuse_the_helper() -> TestResult {
             ("ci-helper/.cargo/config.toml", host),
         ],
     ] {
-        let result = expected_files(&helper_with_configs(&files)?);
-        assert!(result.is_ok(), "{files:?}: {:?}", result.err());
+        let error = expected_files(&helper_with_configs(&files)?)
+            .err()
+            .ok_or("accepted helper target that cannot resolve the runner host upload path")?;
+        assert!(
+            matches!(
+                error,
+                velnor_gen::GenerateError::Detect(DetectError::Invalid {
+                    reason: Reason::HelperTarget(_),
+                    ..
+                })
+            ),
+            "{files:?}: {error:?}"
+        );
     }
     Ok(())
 }
