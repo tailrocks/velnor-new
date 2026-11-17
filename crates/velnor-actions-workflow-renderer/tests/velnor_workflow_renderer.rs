@@ -69,7 +69,7 @@ mod agents_md_public;
 
 mod bounded_test_support;
 
-use velnor_actions_workflow_renderer::RenderError;
+use velnor_actions_workflow_renderer::{RenderError, VERIFY_VERIFIER_SHELL};
 mod yaml {
     pub(crate) use velnor_actions_workflow_renderer::Yaml;
 }
