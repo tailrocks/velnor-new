@@ -83,12 +83,14 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         rust_metadata.insert(workspace, metadata);
     }
     let mut symlinks = BTreeSet::new();
-    match fs::read_to_string(sample.join("symlinks.txt")) {
-        Ok(text) => {
-            for line in text.lines() {
+    let symlinks_file = sample.join("symlinks.txt");
+    match fs::symlink_metadata(&symlinks_file) {
+        Ok(metadata) if metadata.is_file() => {
+            for line in fs::read_to_string(&symlinks_file)?.lines() {
                 symlinks.insert(RepoPath::new(line)?);
             }
         }
+        Ok(_) => return Err(format!("{} is not a regular file", symlinks_file.display()).into()),
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
