@@ -100,4 +100,6 @@ pub mod workflow_size;
 #[path = "../src/workflow_timeout.rs"]
 mod workflow_timeout;
 
+mod job_condition_eval;
+mod qualification_skipped_jobs;
 mod stable_sources_qualification_graph;

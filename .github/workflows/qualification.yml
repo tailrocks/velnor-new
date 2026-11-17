@@ -1876,3 +1876,11 @@ jobs:
       - name: Measure offline archive guard build
         shell: bash
         run: "set -eu\nCARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\""
+  mode-guard:
+    name: Qualification / mode guard
+    if: "!((inputs.mode == 'both') || (inputs.mode == 'features' || inputs.mode == 'js') || (inputs.mode == 'features' || inputs.mode == 'services') || (inputs.mode == 'features' || inputs.mode == 'artifacts') || (inputs.mode == 'features' || inputs.mode == 'buildx') || (inputs.mode == 'negative') || (inputs.mode == 'composite') || (inputs.mode == 'js-pin') || (inputs.mode == 'docker-action') || (inputs.mode == 'container') || (inputs.mode == 'outputs') || (inputs.mode == 'mask') || (inputs.mode == 'cache' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)) || (inputs.mode == 'cache') || (inputs.mode == 'empty-cache' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)) || (inputs.mode == 'oidc') || (inputs.mode == 'post-fail') || (inputs.mode == 'cancel') || (inputs.mode == 'compose') || (inputs.mode == 'bind') || (inputs.mode == 'cancel-service') || (inputs.mode == 'testcontainers') || (inputs.mode == 'submodule') || (inputs.mode == 'ports') || (inputs.mode == 'pressure') || (inputs.mode == 'secret') || ((inputs.mode == 'cache' || inputs.mode == 'empty-cache' || inputs.mode == 'mbx-cache-roundtrip') && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)) || (inputs.mode == 'mbx-cache-roundtrip' && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)) || (inputs.mode == 'mise-pin') || (inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)))"
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Reject a dispatch that selects no qualification job
+        run: "echo '::error title=qualification_dispatch_selects_no_job::This dispatch selects no qualification job: the mode is not one of the declared modes, or stable-sources was dispatched from the default branch or a non-branch ref. Every job would be skipped and a skipped run reports success.' && exit 1"

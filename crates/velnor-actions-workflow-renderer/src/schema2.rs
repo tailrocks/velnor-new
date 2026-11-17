@@ -44,6 +44,8 @@ pub(crate) mod job_image_candidate;
 mod mbx_qualification;
 #[path = "schema2_mise_pin_qualification.rs"]
 mod mise_pin_qualification;
+#[path = "schema2_mode_guard.rs"]
+mod mode_guard;
 #[path = "schema2_product_release.rs"]
 mod product_release;
 #[path = "schema2_product_release_family.rs"]
@@ -275,6 +277,7 @@ fn qualification(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> 
         })?;
         jobs.extend(stable_sources_qualification::jobs(pins)?);
     }
+    jobs.extend(mode_guard::job(&jobs, &hosted)?);
     Ok(document("Qualification", mode_trigger(), jobs))
 }
 

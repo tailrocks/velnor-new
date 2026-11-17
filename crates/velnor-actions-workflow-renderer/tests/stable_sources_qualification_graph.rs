@@ -5,7 +5,7 @@ use std::{collections::BTreeSet, error::Error, io};
 use velnor_actions_contract::RoutingWorkflow;
 use velnor_actions_workflow_renderer::{Schema2WorkflowRequest, render_schema2_workflows};
 
-fn request(generator: bool) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
+pub(crate) fn request(generator: bool) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     let mut workflows = BTreeSet::from([RoutingWorkflow::Qualification]);
     if generator {
         workflows.insert(RoutingWorkflow::GeneratorRelease);
