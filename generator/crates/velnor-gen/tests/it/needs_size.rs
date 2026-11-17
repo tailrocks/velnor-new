@@ -4,26 +4,11 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value, json};
-use velnor_model::{RepoPath, StepKind, WorkflowPlan};
+use velnor_model::{StepKind, WorkflowPlan};
 use velnor_render::{MAX_ENV_CHARACTERS, RenderedJob, RenderedWorkflow, Rule, rendered_workflow};
 
 use crate::facts::TestResult;
-use crate::pipeline::{HELPER_LOCK, view};
-
-fn saving_plan(roots: usize, blocks: bool) -> Result<WorkflowPlan, Box<dyn std::error::Error>> {
-    let manifests: Vec<_> = (0..roots)
-        .map(|index| format!("root_{index:02}_{}/Cargo.toml", "x".repeat(150)))
-        .collect();
-
-    let mut view = view(
-        &manifests.iter().map(String::as_str).collect::<Vec<_>>(),
-        Some(format!("shape = \"lint-test\"\ncache_check_blocks = {blocks}\n").as_bytes()),
-    )?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
-    view.files
-        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
-    Ok(velnor_rust::plan(&velnor_rust::detect(&view)?))
-}
+use crate::needs_size_plan::{Packages, saving_plan, test_packages, worst_package_counts};
 
 fn required_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
     plan.jobs
@@ -56,7 +41,7 @@ fn cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs() 
     for (roots, rejected) in [(2, false), (28, false), (38, true)] {
         let plan = saving_plan(roots, false)?;
         let workflow = rendered_workflow(&plan);
-        let actual = realized_needs(&workflow, "cache")?;
+        let actual = realized_needs(&workflow, "cache", &test_packages(roots, false)?)?;
         let bound = cache_bound(&plan)?;
         assert!(
             actual <= bound,
@@ -106,8 +91,15 @@ fn blocking_cache_adds_its_outputless_context_to_required_without_changing_the_c
 -> TestResult {
     let advisory = saving_plan(2, false)?;
     let blocking = saving_plan(2, true)?;
-    let payload_growth = realized_needs(&rendered_workflow(&blocking), "required")?
-        - realized_needs(&rendered_workflow(&advisory), "required")?;
+    let payload_growth = realized_needs(
+        &rendered_workflow(&blocking),
+        "required",
+        &test_packages(2, true)?,
+    )? - realized_needs(
+        &rendered_workflow(&advisory),
+        "required",
+        &test_packages(2, false)?,
+    )?;
     let budget_growth = required_bound(&blocking)? - required_bound(&advisory)?;
     assert!(payload_growth > 0);
     assert!(
@@ -145,6 +137,7 @@ fn realized_output(
     name: &str,
     text: &str,
     job: &RenderedJob,
+    packages: &Packages,
 ) -> Result<String, Box<dyn std::error::Error>> {
     if matches!(name, "target_key" | "sources_key") {
         let id = text
@@ -171,7 +164,7 @@ fn realized_output(
             let end = key[start..].find(" }}").ok_or("hash expression")? + start + 3;
             key.replace_range(start..end, &"f".repeat(64));
         }
-        return realized_output("base_prefix", &key, job);
+        return realized_output("base_prefix", &key, job, packages);
     }
     if matches!(name, "base_prefix" | "sources_prefix") && text.starts_with("velnor-") {
         let value = text
@@ -190,6 +183,10 @@ fn realized_output(
     if matches!(name, "tests_run" | "tests_listed") {
         assert_eq!(expression, format!("steps.test.outputs.{name}"));
         return Ok(u64::MAX.to_string());
+    }
+    if name == "tests_by_package" {
+        assert_eq!(expression, "steps.test.outputs.tests_by_package");
+        return worst_package_counts(packages.get(&job.id).ok_or("test packages")?);
     }
     if matches!(name, "base_save" | "sources_saved") {
         check_cache_expression(name, expression)?;
@@ -253,6 +250,7 @@ fn workflow_jobs(workflow: &RenderedWorkflow) -> BTreeMap<&str, &RenderedJob> {
 fn realized_needs(
     workflow: &RenderedWorkflow,
     consumer: &str,
+    packages: &Packages,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     let jobs = workflow_jobs(workflow);
     let mut needs = Map::new();
@@ -261,7 +259,12 @@ fn realized_needs(
     for id in dependencies {
         let mut outputs = Map::new();
         for (name, text) in &jobs.get(id.as_str()).ok_or("producer job")?.outputs {
-            let value = realized_output(name, text, jobs.get(id.as_str()).ok_or("producer job")?)?;
+            let value = realized_output(
+                name,
+                text,
+                jobs.get(id.as_str()).ok_or("producer job")?,
+                packages,
+            )?;
             assert!(!value.contains("${{"), "{name}: {value}");
             outputs.insert(name.clone(), Value::String(value));
         }
@@ -332,7 +335,7 @@ fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_co
     for roots in [22, 24, 26] {
         let plan = saving_plan(roots, false)?;
         let workflow = rendered_workflow(&plan);
-        let actual = realized_needs(&workflow, "required")?;
+        let actual = realized_needs(&workflow, "required", &test_packages(roots, false)?)?;
         let bound = required_bound(&plan)?;
         assert!(
             actual <= bound,
