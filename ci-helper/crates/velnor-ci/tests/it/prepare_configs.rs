@@ -221,6 +221,20 @@ fn prepare_refuses_an_untracked_config_that_includes_another_file() {
 }
 
 #[test]
+fn prepare_ignores_include_in_a_config_toml_shadowed_by_config() {
+    let run = run_with(
+        "prepare_ignores_include_in_shadowed",
+        "Cargo.toml",
+        |base| {
+            write(base, ".cargo/config", "[net]\noffline = true\n");
+            write(base, ".cargo/config.toml", "include = [\"hidden.toml\"]\n");
+        },
+    );
+    let stderr = String::from_utf8_lossy(&run.output.stderr).into_owned();
+    assert!(run.output.status.success(), "{stderr}");
+}
+
+#[test]
 fn config_shadows_config_toml_in_prepare() {
     let only_off = compat_with(
         "config_shadows_config_toml_in_prepare",

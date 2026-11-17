@@ -54,7 +54,7 @@ pub fn check_runtime_configs(
     files: &BTreeMap<RepoPath, Vec<u8>>,
     tracked: &BTreeSet<RepoPath>,
 ) -> Result<(), DetectError> {
-    for (file, bytes) in files {
+    for (file, bytes) in effective_configs(files) {
         if let Ok(parsed) = table(bytes)
             && parsed.contains_key("include")
         {
