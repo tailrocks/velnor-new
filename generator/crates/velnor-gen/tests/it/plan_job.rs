@@ -25,8 +25,9 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 14] = [
+const LANE_SETUP: [&str; 15] = [
     "Check out",
+    "Resolve released helper tools",
     "Install velnor-ci 0.1.79",
     "Create the released helper directory",
     "Copy the released helper",
@@ -49,9 +50,10 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     assert!(!text.contains("rust-plan"), "{text}");
     let steps = steps_of(&text, "rust");
     assert_eq!(
-        steps[..6],
+        steps[..7],
         [
             "Check out",
+            "Resolve released helper tools",
             "Install velnor-ci 0.1.79",
             "Create the released helper directory",
             "Copy the released helper",
@@ -89,7 +91,14 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
 -> TestResult {
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let plan_steps = steps_of(&text, "rust-plan");
-    assert_eq!(plan_steps[..2], ["Check out", "Install velnor-ci 0.1.79"]);
+    assert_eq!(
+        plan_steps[..3],
+        [
+            "Check out",
+            "Resolve released helper tools",
+            "Install velnor-ci 0.1.79"
+        ]
+    );
     assert_eq!(plan_steps.last(), Some(&"velnor-ci plan"));
     let plan_job = &text[text.find("  rust-plan:").unwrap_or_default()
         ..text.find("  rust-root:").unwrap_or_default()];

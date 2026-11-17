@@ -6,7 +6,7 @@ use crate::helper_integrity::{execute_environment, fixture, steps, workflow};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 
-const SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
+const SHELL: &str = "bash --noprofile --norc -p -e -o pipefail {0}";
 
 pub(crate) fn native_helper(root: &std::path::Path) -> Result<String, Box<dyn std::error::Error>> {
     let source = root.join("velnor-ci-bin/velnor-ci");

@@ -293,7 +293,6 @@ fn install_helper_renders_the_pinned_uses_step_with_the_release_tag_and_every_di
     let text = files.get(&WORKFLOW_PATH).ok_or("no workflow")?;
     let expected = format!(
         "\
-    steps:
       - name: Install velnor-ci 1.2.3
         uses: {SETUP_ACTION}@{SETUP_COMMIT}  # rust-ci-v1.2.3
         with:

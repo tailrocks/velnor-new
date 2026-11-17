@@ -28,6 +28,7 @@ mod helper_integrity;
 mod helper_perl_environment;
 mod helper_source;
 mod helper_startup;
+mod helper_tool_paths;
 mod helper_workflow_size;
 
 mod inputs;

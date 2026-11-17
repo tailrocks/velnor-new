@@ -95,18 +95,18 @@ fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> Tes
         }
         assert_eq!(
             step["shell"],
-            "/bin/bash --noprofile --norc -p -e -o pipefail {0}"
+            "bash --noprofile --norc -p -e -o pipefail {0}"
         );
         assert_eq!(run.lines().count(), 1, "{run}");
         let rest = run
             .strip_prefix(
-                "/bin/bash --noprofile --norc -p -e -o pipefail -c \"$VELNOR_HELPER_LAUNCHER\" -- ",
+                "\"$VELNOR_HELPER_BASH\" --noprofile --norc -p -e -o pipefail -c \"$VELNOR_HELPER_LAUNCHER\" -- ",
             )
             .ok_or("missing trusted invocation")?;
         let launcher = step["env"]["VELNOR_HELPER_LAUNCHER"]
             .as_str()
             .ok_or("no launcher")?;
-        assert!(launcher.contains("/usr/bin/env -i PATH=/usr/bin:/bin"));
+        assert!(launcher.contains("\"$VELNOR_HELPER_ENV\" -i PATH=/usr/bin:/bin"));
         assert!(launcher.ends_with("exec \"$VELNOR_HELPER_COPY\" \"$@\""));
         assert_eq!(step["env"]["VELNOR_HELPER_TEMP"], "${{ runner.temp }}");
         assert!(
@@ -170,11 +170,28 @@ pub(crate) fn execute_environment(
 ) -> Result<Output, Box<dyn Error>> {
     let script = root.join("invocation.sh");
     fs::write(&script, step["run"].as_str().ok_or("no run")?)?;
+    let env_file = root.join("helper-tools.env");
+    let mut bindings: BTreeMap<String, String> = fs::read_to_string(&env_file)
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect();
+    bindings.extend(
+        environment
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
+    );
     let shell = step["shell"]
         .as_str()
         .unwrap_or("/bin/bash --noprofile --norc -e -o pipefail {0}");
     let mut words = shell.split_whitespace();
-    let mut command = Command::new(words.next().ok_or("no shell executable")?);
+    let program = words.next().ok_or("no shell executable")?;
+    let mut command = Command::new(if program == "bash" {
+        "/bin/bash"
+    } else {
+        program
+    });
     for word in words {
         command.arg(if word == "{0}" {
             script.as_os_str()
@@ -182,32 +199,29 @@ pub(crate) fn execute_environment(
             word.as_ref()
         });
     }
+    let path = if step["env"]["VELNOR_HELPER_INSTALL_TOOLS"].is_string() {
+        "/usr/bin:/bin".to_owned()
+    } else {
+        format!("{}:/usr/bin:/bin", shadows.display())
+    };
     command
         .env_clear()
-        .env("PATH", format!("{}:/usr/bin:/bin", shadows.display()))
-        .envs(environment.iter().copied());
+        .env("PATH", path)
+        .env("GITHUB_ENV", env_file)
+        .envs(&bindings);
     if let Some(env) = step["env"].as_object() {
         for (key, value) in env {
             let text = value.as_str().ok_or("non-string environment")?;
             let text = if key == "VELNOR_HELPER_SHA256" {
                 digest.to_owned()
-            } else if key == "VELNOR_HELPER_CHECKSUM" {
-                assert!(text.contains("/usr/bin/shasum"));
-                if text == "/usr/bin/shasum" {
-                    text
-                } else if cfg!(target_os = "macos") {
-                    "/usr/bin/shasum"
-                } else {
-                    "/usr/bin/sha256sum"
-                }
-                .to_owned()
-            } else if key == "VELNOR_HELPER_CHECKSUM_ARGUMENTS" {
-                if cfg!(target_os = "macos") || text.starts_with("-a 256") {
-                    "-a 256 --check --status"
-                } else {
-                    "--check --status"
-                }
-                .to_owned()
+            } else if let Some(name) = text
+                .strip_prefix("${{ env.")
+                .and_then(|text| text.strip_suffix(" }}"))
+            {
+                bindings
+                    .get(name)
+                    .ok_or("missing installed tool binding")?
+                    .clone()
             } else {
                 text.replace("${{ runner.temp }}", root.to_str().ok_or("non-UTF8 root")?)
                     .replace("${{ github.run_id }}", "42")
