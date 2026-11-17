@@ -77,6 +77,10 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                     .ok_or("no delta condition")?;
                 if name == "Restore the delta cache" {
                     assert!(
+                        condition.contains("steps.delta_base_root.outcome == ''success''"),
+                        "{condition}"
+                    );
+                    assert!(
                         condition.contains("steps.target_root.outputs.cache-matched-key != ''''"),
                         "{condition}"
                     );
@@ -90,6 +94,11 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                     );
                 }
             }
+            let prepare = step(&lane, "velnor-ci delta prepare").ok_or("no prepare")?;
+            assert!(
+                prepare.contains("--target-dir target --staging-dir target.velnor-delta"),
+                "{prepare}"
+            );
             assert_delta_saves_are_not_cancelled(&lane)?;
             let stage = at("velnor-ci delta stage")?;
             assert_eq!(order[stage - 1], "velnor-ci inputs save");

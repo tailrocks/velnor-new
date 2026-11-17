@@ -13,7 +13,7 @@ use crate::io::Repo;
 const SOURCE_A: &str = "fn main() {}\n";
 const SOURCE_B: &str = "compile_error!(\"uncompiled future source\");\nfn main() {}\n";
 
-fn helper(repo: &Repo, arguments: &[&str], expected: Option<&str>) -> (Output, String) {
+pub(super) fn helper(repo: &Repo, arguments: &[&str], expected: Option<&str>) -> (Output, String) {
     helper_at(repo, arguments, expected, repo.root())
 }
 
@@ -43,7 +43,7 @@ fn helper_at(
     (output, values)
 }
 
-fn prepare(repo: &Repo) -> String {
+pub(super) fn prepare(repo: &Repo) -> String {
     prepared(helper(repo, &["delta", "prepare"], None))
 }
 
@@ -56,7 +56,7 @@ fn prepared((output, values): (Output, String)) -> String {
         .to_owned()
 }
 
-fn delta(repo: &Repo, verb: &str, expected: Option<&str>) -> String {
+pub(super) fn delta(repo: &Repo, verb: &str, expected: Option<&str>) -> String {
     let (output, values) = helper(
         repo,
         &[
@@ -75,7 +75,7 @@ fn delta(repo: &Repo, verb: &str, expected: Option<&str>) -> String {
     values
 }
 
-fn cargo(repo: &Repo) -> Output {
+pub(super) fn cargo(repo: &Repo) -> Output {
     Command::new("cargo")
         .args(["build", "--offline", "--verbose", "--color", "never"])
         .current_dir(repo.root())
@@ -86,7 +86,7 @@ fn cargo(repo: &Repo) -> Output {
         .unwrap_or_else(|error| unreachable!("{error}"))
 }
 
-fn fixture(name: &str) -> (Repo, String) {
+pub(super) fn fixture(name: &str) -> (Repo, String) {
     let repo = Repo::new(name);
     repo.write_all(&[
         (
@@ -119,11 +119,11 @@ fn fixture(name: &str) -> (Repo, String) {
     (repo, expected)
 }
 
-fn save_inputs(repo: &Repo) {
+pub(super) fn save_inputs(repo: &Repo) {
     success(&helper(repo, &["inputs", "save"], None).0);
 }
 
-fn next_push(repo: &Repo) -> Output {
+pub(super) fn next_push(repo: &Repo) -> Output {
     fs::remove_dir_all(repo.root().join("target")).unwrap_or_else(|error| unreachable!("{error}"));
     delta(repo, "apply", None);
     success(&helper(repo, &["inputs", "restore"], None).0);

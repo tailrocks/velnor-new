@@ -11,6 +11,7 @@ mod collect;
 mod compare;
 mod configuration_targets;
 mod delta;
+mod delta_binding;
 mod delta_integrity;
 mod delta_source;
 mod delta_tree;
