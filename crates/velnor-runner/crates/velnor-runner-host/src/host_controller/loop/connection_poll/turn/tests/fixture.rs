@@ -137,6 +137,7 @@ impl Fixture {
             image_authority: &self.image_authority,
             admission_ready: true,
             control_state: &self.control,
+            retirement_budget: std::time::Duration::from_secs(120),
         };
         Ok(super::poll_connection(
             &mut self.prepared,

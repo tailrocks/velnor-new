@@ -4,10 +4,12 @@
 mod audit_job;
 mod build_profile;
 mod build_script;
+mod cargo_flags;
 mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_mirror;
 mod credentials;
 mod detect;
 mod doc_steps;

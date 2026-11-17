@@ -64,6 +64,12 @@ These are review criteria, not new runtime behavior or cache capacity. Existing
 [cache decisions](cache-decisions.md) and stricter
 [compiled-state admission](compiled-state-persistence.md#budget) remain binding.
 
+### Runner-scoped crates mirror
+
+The official runner [sets the runner environment context](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/JobRunner.cs#L150-L156) from the job message before executing steps. GitHub’s [runner context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#runner-context) defines `runner.environment` as `github-hosted` or `self-hosted` and permits the runner context in step conditions.
+
+The new generator emits mirror setup only for the configured matching runner label. Every emitted mirror step additionally requires `runner.environment == 'self-hosted'` and excludes fork pull requests by requiring the pull-request head repository to match `github.repository`. Label spelling alone cannot establish the runner environment: new hosted labels and custom scale-set names remain protected by the runtime condition. An absent or unrecognized runner environment skips mirror setup.
+
 ### Ledger event and source identity
 
 The runner's [`GitHubContext.GetRuntimeEnvironmentVariables`](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs)
@@ -697,7 +703,17 @@ on `sha256sum`.
 ## Tag ruleset drift
 
 The maintenance drift job uses the [pinned github-script API client](https://github.com/actions/github-script/blob/3a2844b7e9c422d3c10d287c895573f7108da1b3/README.md#this-action) and its pagination plugin without checkout.
-The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential requests Administration read permission.
+The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential needs Administration write permission.
+
+## Rulesets API: bypass_actors visibility
+
+GitHub's [repository ruleset endpoint](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) says `bypass_actors` is returned only when the requester has write access to the ruleset. The [branch rules endpoint](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch) returns effective rules and does not document bypass actors. The release gate requests Administration write because it requires an explicit array.
+
+## PR-only check exemption contracts
+
+The [Checks API](https://docs.github.com/en/rest/checks/runs) limits the commit-reference check-runs endpoint to the 1,000 most recent check suites for a SHA. To inspect the full history, enumerate check suites for the reference and list check runs for each suite; both suite and run listings are paginated, with at most 100 items per page. A check run includes its suite identity and the suite includes its App identity. An unfinished suite from the App that owns an exempted required check cannot establish that the check is absent. The endpoint requires `checks: read` for fine-grained GitHub App tokens.
+
+The [Rules API](https://docs.github.com/en/rest/repos/rules) returns the effective rules for a branch with their ruleset IDs and source identities. Fetch each candidate ruleset with `includes_parents=true` (the default) and verify that its ID, source, source type, target and rules match the effective rule. A repository ruleset response can omit `bypass_actors` unless the credential has write access to that ruleset, even when the request succeeds; absence is unknown, not proof that bypass is disabled. Organization and enterprise ruleset details may be unavailable without the necessary permissions or a supporting GitHub plan; inaccessible details cannot authorize an exemption. An active branch ruleset must explicitly return an empty `bypass_actors` list to prove non-bypassable pull-request and required-status-check enforcement. GitHub defines `pull_request` and `required_status_checks` as distinct rules; verify both rules in the effective enforcement used for the exemption. The ruleset read endpoint documents `Metadata: read` for fine-grained tokens, but visibility of bypass actors has the stricter write-access condition.
 
 ## Generated Rust CI workflow events and concurrency
 
