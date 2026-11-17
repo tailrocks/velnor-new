@@ -15,7 +15,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job], from_source: bool) -> O
     if facts.rust_roots.len() == 1 && !jobs.iter().any(|job| job.needs.contains(&AUDIT_JOB)) {
         return None;
     }
-    let when = audit_when(facts)?;
+    let when = audit_when(facts);
     let lane = Lane {
         slug: RootSlug::from_static("inputs_audit"),
         plan: Some(PLAN_JOB),
@@ -68,10 +68,10 @@ pub(crate) enum AuditLocation {
     Separate,
 }
 
-pub(crate) fn audit_when(facts: &RepoFacts) -> Option<velnor_model::When> {
+pub(crate) fn audit_when(facts: &RepoFacts) -> velnor_model::When {
     use velnor_model::{OnMain, When};
-    Some(match facts.config.on_main {
+    match facts.config.on_main {
         OnMain::Everything => When::FullAuditOrPush,
         OnMain::Affected => When::FullAudit,
-    })
+    }
 }

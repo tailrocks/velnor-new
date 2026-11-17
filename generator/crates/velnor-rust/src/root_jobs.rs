@@ -121,7 +121,7 @@ impl RootJobs<'_> {
         if self.audit == AuditLocation::Separate {
             return None;
         }
-        let when = audit_when(self.facts)?;
+        let when = audit_when(self.facts);
         Some(Step {
             when,
             gate: self.lane.steps(),
