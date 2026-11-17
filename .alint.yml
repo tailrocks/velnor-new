@@ -174,17 +174,12 @@ rules:
     kind: file_max_lines
     paths:
       include:
-        - "crates/velnor-actions-*/src/**/*.rs"
-        - "crates/velnor-actions-*/tests/**/*.rs"
+        - "crates/velnor-actions-*/**/*.rs"
         - "crates/velnor-archive-guard/**/*.rs"
-        - "crates/velnor-runner/crates/*/src/**/*.rs"
-        - "crates/velnor-runner/crates/*/tests/**/*.rs"
-        - "ci-helper/crates/*/src/**/*.rs"
-        - "ci-helper/crates/*/tests/**/*.rs"
-        - "generator/crates/*/src/**/*.rs"
-        - "generator/crates/*/tests/**/*.rs"
-        - "local/crates/*/src/**/*.rs"
-        - "local/crates/*/tests/**/*.rs"
+        - "crates/velnor-runner/crates/*/**/*.rs"
+        - "ci-helper/crates/*/**/*.rs"
+        - "generator/crates/*/**/*.rs"
+        - "local/crates/*/**/*.rs"
       exclude:
         - "**/fixtures/**"
         - "**/testdata/**"

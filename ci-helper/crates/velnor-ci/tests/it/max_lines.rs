@@ -2,28 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
-use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 const CONFIG: &str = include_str!("../../../../../.alint.yml");
-const OVERSIZED: &str =
-    include_str!("../../../../../fixtures/alint-negative/rust-max-lines/oversized.rs");
-const SAMPLE: &str = r#"version: 1
-rules:
-  - id: rust-max-lines
-    kind: file_max_lines
-    paths:
-      include:
-        - "ci-helper/crates/*/src/**/*.rs"
-        - "ci-helper/crates/*/tests/**/*.rs"
-      exclude:
-        - "**/fixtures/**"
-        - "**/testdata/**"
-    max_lines: 400
-    level: error
-    message: "Rust source exceeds 400 physical lines"
-"#;
 
 fn rust_max_lines_rule(config: &str) -> &str {
     let marker = "  - id: rust-max-lines\n";
@@ -35,22 +17,11 @@ fn rust_max_lines_rule(config: &str) -> &str {
     &rest[..end]
 }
 
-fn header_value<'text>(text: &'text str, key: &str) -> &'text str {
-    let first = text
-        .lines()
-        .next()
-        .unwrap_or_else(|| unreachable!("header"));
-    let rest = first
-        .strip_prefix("// ")
-        .unwrap_or_else(|| unreachable!("header"));
-    let (name, value) = rest
-        .split_once(": ")
-        .unwrap_or_else(|| unreachable!("header"));
-    if name == key {
-        value
-    } else {
-        unreachable!("{name}")
-    }
+fn configured_max_lines(rule: &str) -> usize {
+    rule.lines()
+        .find_map(|line| line.trim().strip_prefix("max_lines:"))
+        .and_then(|value| value.trim().parse().ok())
+        .unwrap_or_else(|| unreachable!("max_lines"))
 }
 
 fn write_file(path: &Path, text: &str) {
@@ -59,18 +30,24 @@ fn write_file(path: &Path, text: &str) {
     fs::write(path, text).unwrap_or_else(|error| unreachable!("{error}"));
 }
 
-fn sample_tree() -> PathBuf {
+fn sample_tree(rule: &str) -> PathBuf {
     let root = std::env::temp_dir().join(format!("velnor-alint-cap-{}", std::process::id()));
     if root.exists() {
         fs::remove_dir_all(&root).unwrap_or_else(|error| unreachable!("{error}"));
     }
     let filler = |count: usize| "// filler\n".repeat(count);
-    write_file(&root.join(".alint.yml"), SAMPLE);
+    let config = format!("version: 1\nrules:\n  - id: rust-max-lines\n{rule}");
+    write_file(&root.join(".alint.yml"), &config);
     write_file(
         &root.join("ci-helper/crates/demo/src/over.rs"),
         &filler(401),
     );
     write_file(&root.join("ci-helper/crates/demo/src/ok.rs"), &filler(400));
+    write_file(&root.join("ci-helper/crates/demo/build.rs"), &filler(401));
+    write_file(
+        &root.join("ci-helper/crates/demo/examples/demo.rs"),
+        &filler(401),
+    );
     write_file(
         &root.join("ci-helper/crates/demo/fixtures/skip.rs"),
         &filler(500),
@@ -82,24 +59,31 @@ fn sample_tree() -> PathBuf {
     root
 }
 
-fn alint_installed() -> bool {
-    match Command::new("alint").arg("--version").output() {
-        Ok(output) => output.status.success(),
-        Err(error) if error.kind() == ErrorKind::NotFound => false,
-        Err(error) => unreachable!("{error}"),
+#[test]
+fn a_401_line_file_fails_the_rust_max_lines_lint() {
+    let rule = rust_max_lines_rule(CONFIG);
+    assert_eq!(configured_max_lines(rule), 400);
+    for glob in [
+        "\"crates/velnor-actions-*/**/*.rs\"",
+        "\"crates/velnor-runner/crates/*/**/*.rs\"",
+        "\"ci-helper/crates/*/**/*.rs\"",
+        "\"generator/crates/*/**/*.rs\"",
+        "\"local/crates/*/**/*.rs\"",
+    ] {
+        assert!(rule.contains(glob), "{glob} missing from {rule}");
     }
-}
 
-fn alint_rejects_401_lines() {
-    if !alint_installed() {
-        return;
-    }
-    let root = sample_tree();
-    let config = root.join(".alint.yml");
+    let installed = Command::new("alint")
+        .arg("--version")
+        .output()
+        .unwrap_or_else(|error| panic!("alint must be installed to run this test: {error}"));
+    assert!(installed.status.success(), "{installed:?}");
+
+    let root = sample_tree(rule);
     let output = Command::new("alint")
         .arg("check")
         .arg("--config")
-        .arg(&config)
+        .arg(root.join(".alint.yml"))
         .arg("--fail-on-warning")
         .arg("--format")
         .arg("json")
@@ -115,29 +99,16 @@ fn alint_rejects_401_lines() {
         stdout.contains("ci-helper/crates/demo/src/over.rs"),
         "{stdout}"
     );
+    assert!(
+        stdout.contains("ci-helper/crates/demo/build.rs"),
+        "{stdout}"
+    );
+    assert!(
+        stdout.contains("ci-helper/crates/demo/examples/demo.rs"),
+        "{stdout}"
+    );
     assert!(!stdout.contains("demo/src/ok.rs"), "{stdout}");
     assert!(!stdout.contains("fixtures/skip.rs"), "{stdout}");
     assert!(!stdout.contains("testdata/skip.rs"), "{stdout}");
     fs::remove_dir_all(&root).unwrap_or_else(|error| unreachable!("{error}"));
-}
-
-#[test]
-fn a_401_line_file_fails_the_rust_max_lines_lint() {
-    let rule = rust_max_lines_rule(CONFIG);
-    for needle in [
-        "\"ci-helper/crates/*/src/**/*.rs\"",
-        "\"ci-helper/crates/*/tests/**/*.rs\"",
-        "\"**/fixtures/**\"",
-        "\"**/testdata/**\"",
-        "max_lines: 400",
-    ] {
-        assert!(rule.contains(needle), "{needle} missing from {rule}");
-    }
-    let expected: usize = header_value(OVERSIZED, "expected-lines")
-        .parse()
-        .unwrap_or_else(|_| unreachable!("line-count header"));
-    assert_eq!(OVERSIZED.lines().count(), expected);
-    assert_eq!(expected, 401);
-    assert_eq!("// filler\n".repeat(400).lines().count(), 400);
-    alint_rejects_401_lines();
 }
