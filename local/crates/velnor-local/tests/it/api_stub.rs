@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::os::unix::fs::PermissionsExt;
 use std::time::Duration;
 
 use serde_json::{Value, json};
@@ -13,21 +12,18 @@ use crate::support::{Harness, MAIN, PULL_2, Stub, temp_dir};
 const LIMIT: u64 = 10_000_000_000;
 const CACHES: &str = "/repos/tailrocks/velnor-lab/actions/caches";
 
+mod cache;
+mod listener;
+
+use cache::{archives, keys, mode};
+
 fn stub_over(harness: &Harness, name: &str) -> Stub {
     Stub::new(
         &temp_dir(&format!("{name}-repo")),
         &temp_dir(&format!("{name}-state")),
         harness.dir(),
     )
-}
-
-fn keys(list: &Value) -> Vec<String> {
-    list["actions_caches"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|entry| entry["key"].as_str().map(str::to_owned))
-        .collect()
+    .control()
 }
 
 async fn job_cache_request_preserves_archives(name: &str, method: &str) {
@@ -35,7 +31,11 @@ async fn job_cache_request_preserves_archives(name: &str, method: &str) {
     harness.register(2).await;
     let saved = harness.save(MAIN, "tools", b"1234").await;
     harness.save(PULL_2, "pr-tools", b"5678").await;
-    let stub = stub_over(&harness, name);
+    let stub = Stub::new(
+        &temp_dir(&format!("{name}-repo")),
+        &temp_dir(&format!("{name}-state")),
+        harness.dir(),
+    );
     let before = archives(&harness);
     let id = saved["entry_id"].as_str().unwrap_or_default();
     let path = if method == "GET" {
@@ -47,10 +47,7 @@ async fn job_cache_request_preserves_archives(name: &str, method: &str) {
 
     assert_eq!(refused.status, 403);
     assert_eq!(archives(&harness), before);
-    for (git_ref, key, bytes) in [
-        (MAIN, "tools", b"1234"),
-        (PULL_2, "pr-tools", b"5678"),
-    ] {
+    for (git_ref, key, bytes) in [(MAIN, "tools", b"1234"), (PULL_2, "pr-tools", b"5678")] {
         let restored = harness.restore(git_ref, key).await;
         let url = restored["signed_download_url"].as_str().unwrap_or_default();
         assert_eq!(restored["ok"], true);
@@ -269,11 +266,6 @@ async fn saves_and_stub_deletes_running_together_lose_no_update() {
     assert_eq!(harness.restore(MAIN, "new-3").await["ok"], true);
 }
 
-fn mode(path: &std::path::Path, mode: u32) {
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(mode))
-        .unwrap_or_else(|e| unreachable!("{e}"));
-}
-
 async fn failed_delete_keeps_the_entry_and_its_archive(name: &str, locked: &str) {
     let harness = Harness::new(name, LIMIT).await;
     harness.save(MAIN, "tools", b"1234").await;
@@ -303,16 +295,6 @@ async fn a_delete_that_cannot_remove_the_archive_fails_and_keeps_the_entry() {
 #[tokio::test]
 async fn a_delete_whose_index_write_fails_puts_the_archive_back() {
     failed_delete_keeps_the_entry_and_its_archive("api-keep-index", ".").await;
-}
-
-fn archives(harness: &Harness) -> Vec<std::path::PathBuf> {
-    let mut paths: Vec<std::path::PathBuf> = std::fs::read_dir(harness.dir().join("archives"))
-        .into_iter()
-        .flatten()
-        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
-        .collect();
-    paths.sort();
-    paths
 }
 
 #[tokio::test]
