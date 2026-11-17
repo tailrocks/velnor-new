@@ -1528,6 +1528,7 @@ crates/velnor-actions-workflow-renderer/src/schema2_generator_release_manifest_p
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_qualification.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_source.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_release_workflow_steps.rs
+crates/velnor-actions-workflow-renderer/src/schema2_generator_source_metadata.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview.rs
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_artifact.py
 crates/velnor-actions-workflow-renderer/src/schema2_generator_source_preview_authority.py
