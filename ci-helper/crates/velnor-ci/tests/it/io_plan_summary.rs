@@ -3,6 +3,7 @@
 
 use std::fs;
 
+use crate::io::Repo;
 use crate::io_plan::{plan_command, plan_repo};
 
 fn run(changed: &str, event: Option<&str>, name: &str) -> (String, String) {
@@ -56,4 +57,43 @@ fn a_root_that_selects_nothing_says_so_and_expects_no_tests() {
 fn a_selected_root_expects_its_tests() {
     let (outputs, _) = run("a/src/lib.rs", None, "summary-tests");
     assert!(outputs.contains("rust_root_tests=run\n"), "{outputs}");
+}
+
+#[test]
+fn plan_says_a_doctest_is_known_only_when_a_fenced_example_was_found() {
+    let repo = plan_repo("doctests-known");
+    let known = |repo: &Repo| {
+        let outputs = repo.root().join("known");
+        fs::write(&outputs, "").unwrap_or_else(|e| unreachable!("{e}"));
+        let output = plan_command(repo)
+            .args(["plan", "--changed", "rust-toolchain.toml"])
+            .env("GITHUB_OUTPUT", &outputs)
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{output:?}");
+        fs::read_to_string(&outputs)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .lines()
+            .filter(|line| line.contains("_doctests"))
+            .flat_map(|line| [line, " "])
+            .collect::<String>()
+    };
+    repo.write("a/src/lib.rs", "/// Adds one.\npub fn f() {}\n");
+    assert_eq!(
+        known(&repo),
+        "rust_root_doctests=skip rust_root_doctests_known=false rust_tools_doctests=skip rust_tools_doctests_known=false "
+    );
+    repo.write(
+        "tools/Cargo.toml",
+        "[package]\nname = \"t\"\nedition = \"2024\"\n\n[dependencies]\na = { path = \"../a\" }\nserde_derive = \"1\"\n",
+    );
+    repo.write(
+        "a/src/lib.rs",
+        "/// ```\n/// assert!(true);\n/// ```\npub fn f() {}\n",
+    );
+    assert!(
+        known(&repo).contains("rust_root_doctests=run rust_root_doctests_known=true "),
+        "{}",
+        known(&repo)
+    );
 }

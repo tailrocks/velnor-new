@@ -52,7 +52,8 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "rust-test-default-lab",
             "rust-inputs-audit",
             "rust-trim",
-            "required"
+            "required",
+            "cache"
         ]
     );
     let block = |id: &str| {
@@ -113,7 +114,11 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
         ("shape = \"groups\"\n", 2),
     ] {
         let jobs = rendered(config)?;
-        let text: String = jobs.iter().map(|(_, block)| block.as_str()).collect();
+        let text: String = jobs
+            .iter()
+            .filter(|(id, _)| id != "cache")
+            .map(|(_, block)| block.as_str())
+            .collect();
         assert_eq!(text.matches("name: Upload the tests\n").count(), archives);
         assert_eq!(
             text.matches("uses: actions/download-artifact@").count(),

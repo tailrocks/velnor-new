@@ -9,7 +9,7 @@ use crate::run::scratch;
 use crate::run_nextest::{NEXTEST_RUN, execute_nextest, fake_nextest, listed};
 
 #[test]
-fn run_writes_the_counts_when_a_descendant_keeps_the_summary_pipe_open() {
+fn run_withholds_counts_and_packages_when_a_descendant_keeps_the_summary_pipe_open() {
     let script = "echo '     Summary [   0.001s] 3 tests run: 3 passed, 0 skipped' >&2\n\
 sleep 30 &\n\
 exit 0";
@@ -17,7 +17,7 @@ exit 0";
     let (output, written, _, elapsed) =
         execute_nextest("tests-run-held", script, &three, &NEXTEST_RUN, Some("300"));
     assert_eq!(output.status.code(), Some(0), "{output:?}");
-    assert_eq!(written, "existing=1\ntests_run=3\ntests_listed=3\n");
+    assert_eq!(written, "existing=1\n");
     assert!(elapsed < std::time::Duration::from_secs(15), "{elapsed:?}");
 }
 

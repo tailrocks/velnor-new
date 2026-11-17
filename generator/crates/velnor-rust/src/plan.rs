@@ -10,12 +10,12 @@ use velnor_model::{
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::{restored, trim_job};
+use crate::base_cache::restored;
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
-use crate::required_job::{expose_in_single, gate_outputs, has_gate, verdict_job};
+use crate::required_job::{expose_in_single, gate_outputs, has_gate};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
 use crate::shape::decide_shape;
@@ -81,10 +81,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root));
     }
     upload_cargo_logs(&mut jobs);
-    let required = verdict_job(facts, &jobs, single, draft_guard);
-    let trim = trim_job(facts, &jobs);
-    jobs.extend(trim);
-    jobs.push(required);
+    crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
@@ -135,11 +132,9 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
         return Err(DetectError::JobIdTaken(job.id.to_string()));
     }
     let name = &facts.config.required_check;
-    if plan
-        .jobs
-        .iter()
-        .any(|job| job.name.is_none() && job.id.as_str() == name)
-    {
+    if plan.jobs.iter().any(|job| {
+        job.id.as_str() != "required" && job.name.as_deref().unwrap_or(job.id.as_str()) == name
+    }) {
         return Err(DetectError::invalid(
             &CONFIG_PATH,
             Reason::InvalidValue {

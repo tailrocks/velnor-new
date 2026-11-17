@@ -14,8 +14,9 @@ use velnor_resource_probe::job_hook::{Challenge, Decision, canonical_json, sha25
 use crate::docker_client::docker_deadline;
 use crate::error::HostError;
 
+use super::io::{MetadataUpload, upload_to_metadata};
 use super::layout;
-use super::pair::{LocalPair, upload_to_metadata};
+use super::pair::LocalPair;
 
 const CHALLENGE_LIMIT: usize = 8 * 1024;
 const DECISION_LIMIT: usize = 8 * 1024;
@@ -76,14 +77,12 @@ async fn publish(
     name: &str,
     bytes: &[u8],
 ) -> Result<(), HostError> {
-    let archive = layout::control_archive(name, bytes)?;
-    let purpose = name.trim_end_matches(".json");
     upload_to_metadata(
         docker,
         pair.request(),
         pair.name(),
         pair.metadata_volume(),
-        (purpose, archive),
+        MetadataUpload::Control { name, bytes },
     )
     .await
 }
