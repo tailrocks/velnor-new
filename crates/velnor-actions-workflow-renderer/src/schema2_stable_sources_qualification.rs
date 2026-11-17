@@ -1,13 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::generator_release::workflow_steps::credential_free_command;
 use super::{ProductReleasePins, features};
 use crate::{RenderError, yaml::Yaml};
 use velnor_actions_contract::{JobTimeout, ReleaseTarget};
 
 const GATE: &str = "inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)";
 const PREPARE: &str = "bash scripts/generator-release/stable-source-consumer.sh";
-const GUARD: &str = "set -eu\nCARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"";
+const GUARD: &str = "env CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"";
 
 #[derive(Clone, Copy)]
 struct Platform {
@@ -75,11 +76,11 @@ fn producer(platform: Platform, pins: &ProductReleasePins) -> Result<(String, Ya
     let mut steps = setup(platform.producer_target, pins)?;
     steps.push(shell(
         "Prepare cold producer sources",
-        "bash scripts/generator-release/stable-source-producer.sh",
+        &credential_free_command("bash scripts/generator-release/stable-source-producer.sh"),
         &[("VELNOR_RUST_VERSION", &pins.rust_version)],
     ));
     let identity = r#"set -eu
-test "$(/usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py "$RUNNER_TEMP/stable-cargo-sources")" = "$STABLE_SOURCES_TREE"
+test "$(env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py "$RUNNER_TEMP/stable-cargo-sources")" = "$STABLE_SOURCES_TREE"
 test "$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_ROOT_LOCK"
 test "$(shasum -a 256 crates/velnor-runner/Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_RUNNER_LOCK"
 printf 'tree=%s\nroot_lock=%s\nrunner_lock=%s\nattempt=%s\n' "$STABLE_SOURCES_TREE" "$STABLE_SOURCES_ROOT_LOCK" "$STABLE_SOURCES_RUNNER_LOCK" "$STABLE_SOURCES_ATTEMPT" >> "$GITHUB_OUTPUT""#;
@@ -132,7 +133,7 @@ fn consumer(
     }
     steps.push(shell(
         "Measure source preparation",
-        PREPARE,
+        &credential_free_command(PREPARE),
         &[
             ("VELNOR_RUST_VERSION", &pins.rust_version),
             (
@@ -148,7 +149,11 @@ fn consumer(
     ));
     let expected = if warm { "1" } else { "0" };
     steps.push(shell("Require source provenance and fetch mode", &format!("set -eu\nevidence=\"$RUNNER_TEMP/source-qualification-artifacts/cargo-fetch-lock-identity.txt\"\ngrep -Fx 'source_artifact_admitted={expected}' \"$evidence\"\ngrep -Fx 'fetch_mode=Cargo.toml:{}' \"$evidence\"\ngrep -Fx 'fetch_mode=crates/velnor-runner/Cargo.toml:{}' \"$evidence\"", if warm { "offline" } else { "network" }, if warm { "offline" } else { "network" }), &[]));
-    steps.push(shell("Measure offline archive guard build", GUARD, &[]));
+    steps.push(shell(
+        "Measure offline archive guard build",
+        &credential_free_command(GUARD),
+        &[],
+    ));
     Ok(features::finish(
         &format!("stable-sources-{}-{state}", platform.id),
         fields,
@@ -180,7 +185,9 @@ fn warm_steps(
     )?);
     let admission = shell(
         "Admit same-run source artifact",
-        "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
+        &credential_free_command(
+            "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
+        ),
         &[
             (
                 "SOURCES_METADATA",

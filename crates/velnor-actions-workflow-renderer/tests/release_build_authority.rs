@@ -7,6 +7,9 @@ use serde_json::{Value, json};
 #[path = "release_build_authority_exposures.rs"]
 mod exposures;
 
+#[path = "release_build_credential_stripping.rs"]
+mod stripping;
+
 fn release_files() -> Result<Vec<RenderedFile>, Box<dyn Error>> {
     let mut request = request()?;
     request.workflows.extend([

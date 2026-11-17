@@ -35,7 +35,7 @@ mod source_preview_publication;
 #[path = "schema2_generator_source_preview_runtime.rs"]
 mod source_preview_runtime;
 #[path = "schema2_generator_release_workflow_steps.rs"]
-mod workflow_steps;
+pub(super) mod workflow_steps;
 
 pub(super) fn source_preview_jobs(
     pins: &ProductReleasePins,
@@ -174,7 +174,7 @@ pub(super) fn release_gate_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>,
     let mut steps = lint_gate_steps(pins)?;
     steps.push(workflow_steps::bash_step(
         "Check release freshness",
-        "bash scripts/check-freshness.sh",
+        &workflow_steps::credential_free_command("bash scripts/check-freshness.sh"),
     ));
     Ok(steps)
 }

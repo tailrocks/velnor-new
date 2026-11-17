@@ -121,7 +121,9 @@ pub(super) fn source_steps(
 ) -> Result<Vec<Yaml>, RenderError> {
     let mut admission = workflow_steps::bash_step_with_env(
         "Admit exact same-run Cargo source artifact",
-        "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
+        &workflow_steps::credential_free_command(
+            "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
+        ),
         vec![
             ("SOURCES_METADATA", super::source_metadata::PATH),
             ("SOURCES_ID", "${{ inputs.sources_id }}"),
@@ -160,7 +162,9 @@ pub(super) fn source_steps(
         download,
         workflow_steps::bash_step_with_env(
             "Prepare complete locked Cargo sources",
-            "bash scripts/generator-release/stable-source-consumer.sh",
+            &workflow_steps::credential_free_command(
+                "bash scripts/generator-release/stable-source-consumer.sh",
+            ),
             vec![
                 ("SOURCES_TREE", "${{ inputs.sources_tree }}"),
                 (

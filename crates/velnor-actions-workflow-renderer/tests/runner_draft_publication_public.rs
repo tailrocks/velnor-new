@@ -54,7 +54,17 @@ fn pins() -> ProductReleasePins {
         macos_x86_64_setup: setup,
         install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.2"]),
         install_build_tools_argv: argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"]),
-        install_qualify_tools_argv: argv(&["mise", "install", "opentofu@1.13.2"]),
+        install_qualify_tools_argv: [
+            "mise",
+            "install",
+            "rust@1.91.0",
+            "bun@1.4.4",
+            "jactionlint@2.103.2",
+            "shellcheck@0.11.0",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         qualify_mbx_action_steps: [fixture_step(), fixture_step(), fixture_step()],
         install_runner_build_tools_argv: install_runner_build_tools_argv(),
         install_gh_argv: argv(&["mise", "install", "gh@2.103.2"]),

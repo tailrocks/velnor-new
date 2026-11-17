@@ -14,6 +14,12 @@ use super::super::features::CHECKOUT_USES;
 const GH_COMMAND_TIMEOUT_SECONDS: u16 = 60;
 const GH_COMMAND_KILL_AFTER_SECONDS: u16 = 5;
 
+pub(in super::super) fn credential_free_command(command: &str) -> String {
+    let mut words = crate::toolchain_env::with_env_unset_argv(&[]);
+    words.push(command.to_owned());
+    words.join(" ")
+}
+
 pub(super) fn command_step(name: &str, argv: &[String]) -> Result<Yaml, RenderError> {
     if matches!(
         name,
@@ -361,7 +367,7 @@ pub(super) fn source_identity_step() -> Yaml {
         "sources-identity",
         "Verify staged source identity",
         r#"set -eu
-test "$(/usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py "$RUNNER_TEMP/stable-cargo-sources")" = "$STABLE_SOURCES_TREE"
+test "$(env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py "$RUNNER_TEMP/stable-cargo-sources")" = "$STABLE_SOURCES_TREE"
 test "$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_ROOT_LOCK"
 test "$(shasum -a 256 crates/velnor-runner/Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_RUNNER_LOCK"
 printf 'tree=%s\nroot_lock=%s\nrunner_lock=%s\nattempt=%s\n' "$STABLE_SOURCES_TREE" "$STABLE_SOURCES_ROOT_LOCK" "$STABLE_SOURCES_RUNNER_LOCK" "$STABLE_SOURCES_ATTEMPT" >> "$GITHUB_OUTPUT""#,
