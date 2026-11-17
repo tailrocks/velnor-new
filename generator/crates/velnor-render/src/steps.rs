@@ -11,7 +11,10 @@ use crate::base_steps::{
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, admission, condition, output, plan_source, sources_step};
+use crate::gate::{
+    PLAN_STEP, REPLAN_STEP, Setup, TOOLS_STEP, admission, condition, output, plan_read,
+    plan_source, sources_save_step, sources_step,
+};
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
@@ -75,13 +78,22 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         steps: job
             .steps
             .iter()
-            .flat_map(|step| rendered_steps(step, restores))
+            .scan(false, |replanned, step| {
+                let setup = match (restores, *replanned) {
+                    (false, _) => Setup::Before,
+                    (true, false) => Setup::Restored,
+                    (true, true) => Setup::Replanned,
+                };
+                *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+                Some(rendered_steps(step, setup))
+            })
+            .flatten()
             .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
+fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
     let mut rendered = vec![step_body(&step.kind)];
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
@@ -94,7 +106,7 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         if let Some(condition) = condition(
             step.when,
             step.gate.as_ref(),
-            restores,
+            setup,
             step.skip_on_draft,
             &saved_unless_hit(&step.kind),
         ) {
@@ -108,9 +120,10 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
             let key = output(&plan.slug, *need);
+            let read = plan_read(&source, &key, setup);
             (
                 variable(*need).to_owned(),
-                Value::Expr(format!("${{{{ {source}.{key} }}}}")),
+                Value::Expr(format!("${{{{ {read} }}}}")),
             )
         }));
     }
@@ -286,6 +299,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         id: match key {
             CacheKey::Tools { .. } if fallbacks => Some(TOOLS_STEP.to_owned()),
             CacheKey::Sources { root, .. } if fallbacks => Some(sources_step(root.slug())),
+            CacheKey::Sources { root, .. } => Some(sources_save_step(root.slug())),
             _ => None,
         },
         name: format!("{verb} the {} cache", key.family()),
@@ -298,6 +312,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
 fn helper_arguments(command: HelperCommand) -> &'static str {
     match command {
         HelperCommand::Plan => "plan",
+        HelperCommand::PlanFull => "plan --full",
         HelperCommand::Prepare => "prepare",
         HelperCommand::CheckMetadata => "check-metadata",
         HelperCommand::Restored(..) => "restored",
@@ -364,6 +379,7 @@ fn helper_step(command: HelperCommand) -> RenderedStep {
     let arguments = helper_arguments(command);
     let (id, env) = match command {
         HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
+        HelperCommand::PlanFull => (Some(REPLAN_STEP), Vec::new()),
         HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
         HelperCommand::Restored(expiry) => (Some(RESTORED_STEP), base_age(expiry)),
         _ => (None, Vec::new()),

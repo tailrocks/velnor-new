@@ -56,7 +56,7 @@ pub enum Command {
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(
-        about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold"
+        about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored,
     #[command(
@@ -132,6 +132,11 @@ pub struct PlanArgs {
         help = "Print each selected package with its reason, and the trigger when a root selects everything, instead of the outputs"
     )]
     pub explain: bool,
+    #[arg(
+        long,
+        help = "Select everything, as a scheduled run does, whatever the event and the changed files"
+    )]
+    pub full: bool,
     #[arg(
         long = "base-file",
         value_name = "PATH=FILE",

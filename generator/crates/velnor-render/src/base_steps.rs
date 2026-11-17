@@ -5,12 +5,14 @@ use velnor_model::{BaseExpiry, CacheKey, JobId, RepoPath, Step, StepKind, TrimFa
 
 use crate::cache::render_key;
 use crate::gate::BASE_STEP;
+use crate::gate::sources_save_step;
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 
 const BASE_SAVE_OUTPUT: &str = "base_save";
 const BASE_PREFIX_OUTPUT: &str = "base_prefix";
 const SOURCES_PREFIX_OUTPUT: &str = "sources_prefix";
+const SOURCES_SAVED_OUTPUT: &str = "sources_saved";
 const MAX_BASE_AGE_DAYS: u64 = 7;
 const BASE_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
 const DEFAULT_BRANCH_REF: &str =
@@ -44,6 +46,12 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }));
     let target = prefix(|key| matches!(key, CacheKey::Target { .. })).filter(|_| decides);
     let sources = prefix(|key| matches!(key, CacheKey::Sources { .. })).filter(|_| decides);
+    let saved = steps.iter().find_map(|step| match &step.kind {
+        StepKind::CacheSave(CacheKey::Sources { root, .. }) if decides => {
+            Some(sources_save_step(root.slug()))
+        }
+        _ => None,
+    });
     target
         .map(|prefix| {
             [
@@ -57,13 +65,21 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         .into_iter()
         .flatten()
         .chain(sources.map(|prefix| (SOURCES_PREFIX_OUTPUT.to_owned(), prefix)))
+        .chain(saved.map(|id| {
+            (
+                SOURCES_SAVED_OUTPUT.to_owned(),
+                format!("${{{{ steps.{id}.outcome == 'success' }}}}"),
+            )
+        }))
         .collect()
 }
 
 pub(crate) fn trimmed_lane(lane: &JobId, family: TrimFamily) -> String {
     match family {
         TrimFamily::Target => format!("needs.{lane}.outputs.{BASE_SAVE_OUTPUT} == 'true'"),
-        TrimFamily::Sources => format!("needs.{lane}.outputs.{SOURCES_PREFIX_OUTPUT} != ''"),
+        TrimFamily::Sources => format!(
+            "needs.{lane}.outputs.{SOURCES_PREFIX_OUTPUT} != '' && needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true'"
+        ),
     }
 }
 
@@ -96,20 +112,15 @@ pub(crate) fn cache_trim(lane: &JobId, family: TrimFamily) -> RenderedStep {
 }
 
 pub(crate) fn base_age(expiry: BaseExpiry) -> Vec<(String, Value)> {
-    let on = match expiry {
-        BaseExpiry::Never => return Vec::new(),
-        BaseExpiry::OnDefaultBranch => DEFAULT_BRANCH_REF.to_owned(),
-        BaseExpiry::OnDispatch => {
-            format!("{DEFAULT_BRANCH_REF} && github.event_name == 'workflow_dispatch'")
-        }
-        BaseExpiry::OnDefaultBranchExceptPush => {
-            format!("{DEFAULT_BRANCH_REF} && github.event_name != 'push'")
-        }
-    };
-    vec![(
-        BASE_AGE_VARIABLE.to_owned(),
-        Value::Expr(format!("${{{{ {on} && '{MAX_BASE_AGE_DAYS}' || '0' }}}}")),
-    )]
+    match expiry {
+        BaseExpiry::Never => Vec::new(),
+        BaseExpiry::OnDefaultBranch => vec![(
+            BASE_AGE_VARIABLE.to_owned(),
+            Value::Expr(format!(
+                "${{{{ {DEFAULT_BRANCH_REF} && '{MAX_BASE_AGE_DAYS}' || '0' }}}}"
+            )),
+        )],
+    }
 }
 
 pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {

@@ -301,24 +301,6 @@ fn a_repository_without_private_dependencies_renders_no_visibility_condition() -
 }
 
 #[test]
-fn an_affected_only_push_never_expires_the_base_but_a_dispatch_does() -> TestResult {
-    let all = jobs("0.1.81", "on_main = \"affected\"\nfull_run = \"off\"\n")?;
-    let (_, lane) = all.iter().find(|(id, _)| id == "rust").ok_or("no lane")?;
-    let restored = step(lane, "velnor-ci restored").ok_or("no restored")?;
-    let limit = restored
-        .lines()
-        .find(|line| line.contains("VELNOR_BASE_MAX_AGE_DAYS"))
-        .ok_or("no limit")?;
-    assert!(
-        limit.contains("github.event_name == ''workflow_dispatch''"),
-        "{limit}"
-    );
-    assert!(!limit.contains("push"), "{limit}");
-    assert!(!limit.contains("!= ''push''"), "{limit}");
-    Ok(())
-}
-
-#[test]
 fn the_trim_job_also_prunes_the_sources_family_of_the_lane_that_saves_it() -> TestResult {
     let all = jobs("0.1.81", "shape = \"lint-test\"\n")?;
     let lane = |id: &str| {

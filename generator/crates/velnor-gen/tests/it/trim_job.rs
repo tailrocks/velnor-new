@@ -145,7 +145,9 @@ fn the_budget_runs_without_a_save_and_each_trim_keeps_its_lane_guard(block: &str
             ),
             (
                 format!("Delete the older {id} sources entries"),
-                format!("needs.{id}.outputs.sources_prefix != ''''"),
+                format!(
+                    "needs.{id}.outputs.sources_prefix != '''' && needs.{id}.outputs.sources_saved == ''true''"
+                ),
             ),
         ] {
             let command = step(block, &name).unwrap_or("");
@@ -342,5 +344,43 @@ fn the_pull_request_check_flags_a_lane_that_holds_actions_write_and_passes_the_g
     assert_eq!(pull_request_writers(&broken), ["rust"]);
     let unguarded = text.replace(&format!("({EVENTS})"), "true");
     assert_eq!(pull_request_writers(&unguarded), ["rust-trim"]);
+    Ok(())
+}
+
+#[test]
+fn a_run_that_saved_only_sources_still_admits_the_trim_job_and_trims_them() -> TestResult {
+    let all = jobs("0.1.81", "shape = \"lint-test\"\n")?;
+    let find = |id: &str| {
+        all.iter()
+            .find(|(job, _)| job == id)
+            .map(|(_, block)| block.as_str())
+            .ok_or("missing job")
+    };
+    let test = find("rust-test")?;
+    let save = step(test, "Save the sources cache").ok_or("no sources save")?;
+    let id = save
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("id: sources_save_"))
+        .ok_or("the sources save has no id")?;
+    assert!(
+        test.contains(&format!(
+            "      sources_saved: '${{{{ steps.sources_save_{id}.outcome == ''success'' }}}}'\n"
+        )),
+        "{test}"
+    );
+    assert!(!find("rust-lint")?.contains("sources_saved"));
+    let trim = find("rust-trim")?;
+    let condition = job_if(trim);
+    assert!(!condition.contains("needs."), "{condition}");
+    let prune =
+        step(trim, "Delete the older rust-test sources entries").ok_or("no sources trim")?;
+    assert!(prune.contains("sources_prefix"), "{prune}");
+    assert!(
+        prune.contains("needs.rust-test.outputs.sources_saved == ''true''"),
+        "{prune}"
+    );
+    assert!(!prune.contains("base_save"), "{prune}");
+    let budget = step(trim, "Enforce the repository cache budget").ok_or("no budget")?;
+    assert!(!budget.contains("    if:"), "{budget}");
     Ok(())
 }

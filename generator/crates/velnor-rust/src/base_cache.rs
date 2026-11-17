@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, CacheRoot, FullRun, HelperCommand, Host, Job, JobId, OnMain,
-    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
+    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, PermissionScope,
+    Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -26,8 +26,15 @@ pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
         .is_some_and(|helper| helper.version().at_least(SAVING_HELPER))
 }
 
-pub(crate) fn restored(facts: &RepoFacts, lane: &Lane) -> HelperCommand {
-    HelperCommand::Restored(expiry(facts, lane))
+pub(crate) fn restored(facts: &RepoFacts, lane: &Lane) -> Vec<Step> {
+    let expiry = expiry(facts, lane);
+    let replan = (expiry != BaseExpiry::Never).then(|| Step {
+        when: When::BaseExpired,
+        ..step(StepKind::Helper(HelperCommand::PlanFull))
+    });
+    std::iter::once(step(StepKind::Helper(HelperCommand::Restored(expiry))))
+        .chain(replan)
+        .collect()
 }
 
 pub(crate) fn saving_run(run: Step) -> Step {
@@ -41,11 +48,7 @@ fn expiry(facts: &RepoFacts, lane: &Lane) -> BaseExpiry {
     if !writes_base(facts, lane) {
         return BaseExpiry::Never;
     }
-    match (facts.config.on_main, &facts.config.full_run) {
-        (OnMain::Everything, _) => BaseExpiry::OnDefaultBranch,
-        (OnMain::Affected, FullRun::Off) => BaseExpiry::OnDispatch,
-        (OnMain::Affected, _) => BaseExpiry::OnDefaultBranchExceptPush,
-    }
+    BaseExpiry::OnDefaultBranch
 }
 
 pub(crate) fn save_steps(
