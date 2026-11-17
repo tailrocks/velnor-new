@@ -286,7 +286,7 @@ fn a_compliant_workflow_is_accepted() {
 }
 
 #[test]
-fn install_helper_renders_one_pinned_uses_step_with_the_release_tag_and_every_digest() -> TestResult
+fn install_helper_renders_the_pinned_uses_step_with_the_release_tag_and_every_digest() -> TestResult
 {
     let files = render(&plan(vec![StepKind::InstallHelper(release()?)])?)
         .map_err(|found| format!("{found:?}"))?;
@@ -304,7 +304,7 @@ fn install_helper_renders_one_pinned_uses_step_with_the_release_tag_and_every_di
         "a".repeat(64),
         "b".repeat(64)
     );
-    assert!(text.ends_with(&expected), "{text}");
+    assert!(text.contains(&expected), "{text}");
     Ok(())
 }
 

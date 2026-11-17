@@ -111,7 +111,7 @@ fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestRes
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked"
+        "\"$VELNOR_HELPER\" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked"
     );
     Ok(())
 }
@@ -173,7 +173,7 @@ fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult
         .collect::<Vec<_>>()
         .join("\n");
     assert!(!job.contains("needs:"), "{job}");
-    assert!(job.contains("run: velnor-ci plan"), "{job}");
+    assert!(job.contains(r#"run: '"$VELNOR_HELPER" plan"#), "{job}");
     let deny = step(&job, "Dependency policy").join("\n");
     assert!(deny.contains("steps.plan.outcome == 'success'"), "{deny}");
     assert!(
@@ -210,7 +210,10 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
     track(&mut files, "deny.toml", "")?;
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let job = policy_job(&text(&files)?);
-    assert!(job.contains("velnor-ci run -- cargo-deny check"), "{job}");
+    assert!(
+        job.contains(r#""$VELNOR_HELPER" run -- cargo-deny check"#),
+        "{job}"
+    );
     assert!(
         job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' check"),
         "{job}"
@@ -260,13 +263,17 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
     let config = Some(b"on_main = \"everything\"\n".as_slice());
     let single = text(&view(&["Cargo.toml"], config)?)?;
     assert_eq!(
-        single.matches("run: velnor-ci inputs audit").count(),
+        single
+            .matches(r#"run: '"$VELNOR_HELPER" inputs audit"#)
+            .count(),
         1,
         "{single}"
     );
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], config)?)?;
     assert_eq!(
-        lanes.matches("run: velnor-ci inputs audit").count(),
+        lanes
+            .matches(r#"run: '"$VELNOR_HELPER" inputs audit"#)
+            .count(),
         1,
         "{lanes}"
     );
@@ -285,14 +292,22 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
     );
     assert_eq!(
         audit
-            .matches("run: velnor-ci run -- cargo build --workspace --all-targets --locked")
+            .matches(
+                r#"run: '"$VELNOR_HELPER" run -- cargo build --workspace --all-targets --locked"#
+            )
             .count(),
         2,
         "{audit}"
     );
     assert!(audit.contains("working-directory: lab"), "{audit}");
     assert!(audit.trim_end().ends_with("overwrite: true"), "{audit}");
-    assert!(audit.contains("run: velnor-ci inputs audit\n"), "{audit}");
+    assert!(
+        audit.contains(
+            r#"run: '"$VELNOR_HELPER" inputs audit'
+"#
+        ),
+        "{audit}"
+    );
     Ok(())
 }
 

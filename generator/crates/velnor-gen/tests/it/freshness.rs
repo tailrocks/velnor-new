@@ -56,9 +56,24 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
             .iter()
             .position(|name| *name == "velnor-ci restored")
             .ok_or("no restored step")?;
-        assert_eq!(order[restored - 2], "Restore the target cache", "{lane}");
-        assert_eq!(order[restored - 1], "velnor-ci inputs restore", "{lane}");
-        assert_eq!(order[restored + 1], "Format", "{lane}");
+        let target = order
+            .iter()
+            .position(|name| *name == "Restore the target cache")
+            .ok_or("no target cache")?;
+        let input_restore = order
+            .iter()
+            .position(|name| *name == "velnor-ci inputs restore")
+            .ok_or("no input restore")?;
+        assert!(
+            target < input_restore && input_restore < restored,
+            "{lane}: {order:?}"
+        );
+        assert!(
+            order[restored + 1..]
+                .iter()
+                .any(|name| name.starts_with("Format")),
+            "{lane}: {order:?}"
+        );
     }
     let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
     let audited = named(audit, "velnor-ci inputs restore");
@@ -93,7 +108,7 @@ fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestRes
     let text = workflow(&view(&["Cargo.toml"], None)?)?;
     let cargo: Vec<&str> = steps(&text)
         .into_iter()
-        .filter(|step| step.contains("run: velnor-ci run -- cargo"))
+        .filter(|step| step.contains(r#"run: '"$VELNOR_HELPER" run -- cargo"#))
         .collect();
     assert_ne!(cargo.len(), 0);
     for step in cargo {
@@ -275,7 +290,7 @@ fn compile_steps_build_the_whole_workspace_because_a_narrower_package_set_unifie
             .lines()
             .filter_map(|line| line.trim().strip_prefix("run: "))
             .map(|run| run.trim_matches('\''))
-            .filter(|run| run.starts_with("velnor-ci run"))
+            .filter(|run| run.starts_with("\"$VELNOR_HELPER\" run"))
             .filter(|run| {
                 run.contains("clippy")
                     || run.contains("nextest")

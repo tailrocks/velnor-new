@@ -127,7 +127,7 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
     }
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
     assert!(verdict.contains("Install velnor-ci 0.1.81"));
-    assert!(verdict.contains("velnor-ci gate --spec-env GATE_SPEC"));
+    assert!(verdict.contains("\"$VELNOR_HELPER\" gate --spec-env GATE_SPEC"));
     assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
     assert!(!verdict.contains("Check out"));
     assert!(!verdict.contains("download-artifact"));
@@ -190,7 +190,7 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     assert_eq!(text.matches("Install velnor-ci").count(), 4);
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
     assert!(verdict.contains("Install velnor-ci 0.1.81"));
-    assert!(verdict.contains("velnor-ci gate --spec-env GATE_SPEC"));
+    assert!(verdict.contains("\"$VELNOR_HELPER\" gate --spec-env GATE_SPEC"));
     assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
     assert!(!verdict.contains("Check out"));
     assert!(!verdict.contains("download-artifact"));

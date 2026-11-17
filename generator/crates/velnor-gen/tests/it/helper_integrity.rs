@@ -106,9 +106,19 @@ fn every_trusted_helper_use_checks_its_pinned_copy_and_requires_verification_suc
         let digest = verify["env"]["VELNOR_HELPER_SHA256"]
             .as_str()
             .ok_or("no digest")?;
-        for pin in ["a".repeat(64), "1".repeat(64), "2".repeat(64)] {
-            assert!(digest.contains(&pin), "{digest}");
+        for (os, arch, pin) in [
+            ("Linux", "X64", "a".repeat(64)),
+            ("Linux", "ARM64", "1".repeat(64)),
+            ("macOS", "ARM64", "2".repeat(64)),
+        ] {
+            assert!(
+                digest.contains(&format!(
+                    "runner.os == '{os}' && runner.arch == '{arch}' && '{pin}'"
+                )),
+                "{digest}"
+            );
         }
+        assert!(digest.ends_with(" || '' }}"), "{digest}");
         let check = verify["run"].as_str().ok_or("no checksum command")?;
         assert!(check.contains("$VELNOR_HELPER_SHA256") && check.contains("$VELNOR_HELPER"));
         seen.push(run);
@@ -159,6 +169,21 @@ fn execute(
             let text = value.as_str().ok_or("non-string environment")?;
             let text = if key == "VELNOR_HELPER_SHA256" {
                 digest.to_owned()
+            } else if key == "VELNOR_HELPER_CHECKSUM" {
+                assert!(text.contains("/usr/bin/sha256sum") && text.contains("/usr/bin/shasum"));
+                if cfg!(target_os = "macos") {
+                    "/usr/bin/shasum"
+                } else {
+                    "/usr/bin/sha256sum"
+                }
+                .to_owned()
+            } else if key == "VELNOR_HELPER_CHECKSUM_ARGUMENTS" {
+                if cfg!(target_os = "macos") {
+                    "-a 256 --check --status"
+                } else {
+                    "--check --status"
+                }
+                .to_owned()
             } else {
                 text.replace("${{ runner.temp }}", root.to_str().ok_or("non-UTF8 root")?)
                     .replace("${{ github.run_id }}", "42")
@@ -171,8 +196,7 @@ fn execute(
     Ok(command.output()?)
 }
 
-#[test]
-fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestResult {
+fn fixture() -> Result<(Scratch, String), Box<dyn Error>> {
     let scratch = Scratch::new("helper-integrity")?;
     let root = scratch.outside();
     let source = root.join("velnor-ci-bin/velnor-ci");
@@ -189,8 +213,6 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
         .next()
         .ok_or("no digest")?
         .to_owned();
-    let workflow = workflow(&digest)?;
-    let steps = steps(&workflow)?;
     let shadows = root.join("shadows");
     fs::create_dir(&shadows)?;
     for program in ["velnor-ci", "sha256sum", "shasum"] {
@@ -198,6 +220,16 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
         fs::write(&file, BAD)?;
         fs::set_permissions(&file, fs::Permissions::from_mode(0o700))?;
     }
+    Ok((scratch, digest))
+}
+
+#[test]
+fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestResult {
+    let (scratch, digest) = fixture()?;
+    let root = scratch.outside();
+    let shadows = root.join("shadows");
+    let workflow = workflow(&digest)?;
+    let steps = steps(&workflow)?;
     let use_index = steps
         .iter()
         .position(|step| {
@@ -218,6 +250,9 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
                 String::from_utf8_lossy(&result.stderr)
             );
         }
+    }
+    for invalid in ["", &"0".repeat(64)] {
+        assert!(!execute(verify, &root, &shadows, invalid)?.status.success());
     }
     let genuine = execute(&steps[use_index], &root, &shadows, &digest)?;
     assert!(genuine.status.success());

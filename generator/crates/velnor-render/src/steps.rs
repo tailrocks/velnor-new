@@ -83,11 +83,10 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                     }),
             )
             .collect(),
-        steps: job
-            .steps
-            .iter()
-            .flat_map(|step| rendered_steps(step, restores))
-            .collect(),
+        steps: crate::helper_integrity::secure_steps(
+            job,
+            job.steps.iter().flat_map(|step| rendered_steps(step, restores)).collect(),
+        ),
         ..RenderedJob::default()
     }
 }
