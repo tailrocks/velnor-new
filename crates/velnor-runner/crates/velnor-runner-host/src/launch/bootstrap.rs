@@ -39,7 +39,9 @@ pub(crate) use unbound_retirement::{
     InitializerPlan, abandon_and_retire_unbound_pair_before, plan_initializer_removal,
     retire_unbound_pair, retire_uncertain_unbound_pairs,
 };
-pub(crate) use uncertain_recovery::{UncertainRecovery, recover_uncertain_reservations};
+pub(crate) use uncertain_recovery::{
+    INITIALIZER_RECOVERY_BUDGET, UncertainRecovery, UncertainRecoveryWork, uncertain_recovery_work,
+};
 
 pub(crate) use publication::job_facts_publication;
 pub(in crate::launch) use storage::StorageObservationContext;

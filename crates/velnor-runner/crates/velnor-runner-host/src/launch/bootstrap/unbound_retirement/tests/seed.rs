@@ -8,7 +8,9 @@ use crate::config::{
     ConnectionId, KeychainReference, RepositoryConnection, ScaleSetSelector, SourcePolicy,
     SourcePolicyMode, WorkflowEvent,
 };
-use crate::journal::{ConnectionJournal, Journal};
+use crate::journal::{
+    AssignmentKey, ConnectionJournal, IntentState, Journal, PhysicalRunnerJitState,
+};
 use crate::launch::SelectedEngineContext;
 
 use super::TestResult;
@@ -333,3 +335,46 @@ pub(crate) async fn text(journal: &Journal, sql: &str, reservation: i64) -> Test
 }
 
 pub(crate) const RESERVATION: &str = "SELECT r.state || '/' || r.remote_cleanup_proven || r.local_cleanup_proven || '/' || i.state || '/' || i.cleanup_proven || '/' || (SELECT COUNT(*) FROM physical_attempt_current AS c WHERE c.reservation_id = r.id) || '/' || COALESCE((SELECT outcome FROM physical_attempt_terminal_proofs AS p WHERE p.reservation_id = r.id), 'none') || '/' || COALESCE((SELECT group_concat(phase) FROM (SELECT phase FROM capacity_reservation_unbound_retirement_progress AS g WHERE g.reservation_id = r.id ORDER BY phase)), '') FROM capacity_reservations AS r JOIN connection_intents AS i ON i.id = r.intent_id WHERE r.id = ?1";
+
+pub(crate) async fn assigned_pair(
+    journal: &Journal,
+    scope: &ConnectionJournal,
+    pair: Pair,
+) -> TestResult<()> {
+    let identity = scope
+        .assignment_identity(AssignmentKey::Remote {
+            kind: "runner".to_owned(),
+            subject: pair.nonce(),
+        })
+        .await?;
+    let assignment_key = identity.storage_key();
+    unguarded(
+        journal,
+        &[
+            format!(
+                "UPDATE connection_intents SET assignment_key = '{assignment_key}' WHERE id = (SELECT intent_id FROM capacity_reservations WHERE id = {})",
+                pair.reservation
+            ),
+            format!(
+                "UPDATE capacity_reservations SET assignment_key = '{assignment_key}' WHERE id = {}",
+                pair.reservation
+            ),
+            format!(
+                "INSERT INTO connection_request_authorizations (connection_id, scale_set_id, request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json, acquire_state) SELECT attempt.connection_id, attempt.scale_set_id, attempt.witness_request_id, 0, 'branch_restricted', 'created_empty_exclusive_admin_session_v1', attempt.binding_digest, attempt.source_digest, '{{}}', 'authorized' FROM physical_attempts AS attempt JOIN physical_attempt_current AS current ON current.lineage_id = attempt.lineage_id AND current.generation = attempt.generation AND current.reservation_id = attempt.reservation_id AND current.intent_id = attempt.intent_id WHERE attempt.reservation_id = {}",
+                pair.reservation
+            ),
+        ],
+    )
+    .await?;
+    let reservation = scope
+        .physical_runner_reservations()
+        .await?
+        .into_iter()
+        .find(|reservation| reservation.reservation_id == pair.reservation)
+        .ok_or("assigned reservation missing")?;
+    assert_eq!(reservation.ownership.assignment(), Some(&identity));
+    assert_eq!(reservation.jit_state, PhysicalRunnerJitState::Absent);
+    assert_eq!(reservation.intent_state, Some(IntentState::Uncertain));
+    assert!(reservation.acquired_request.is_none());
+    Ok(())
+}
