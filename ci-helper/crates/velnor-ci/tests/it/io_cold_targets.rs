@@ -136,7 +136,8 @@ fn restored_validates_every_configured_target_before_removing_any_cache() {
         let output = helper(&repo, &["restored"]);
         assert!(!output.status.success(), "{target}: {output:?}");
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains("contains checkout files"),
+            String::from_utf8_lossy(&output.stderr)
+                .contains("overlaps tracked checkout content or repository control paths"),
             "{target}: {output:?}"
         );
         assert!(repo.root().join("cache dir").is_dir());
