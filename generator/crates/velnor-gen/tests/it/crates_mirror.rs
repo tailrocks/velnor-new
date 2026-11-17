@@ -8,6 +8,31 @@ const MIRROR: &str = "[crates_mirror]\nrunner = 'mirror-box'\nregistry = 'sparse
 
 const MIRROR_GUARD: &str = "${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}";
 
+fn mirrored_repo(
+    runner: &str,
+    mirror_runner: &str,
+    shape: &str,
+) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
+    let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
+    repo.files
+        .get_mut(&path("mise.toml")?)
+        .ok_or("mise.toml missing")?
+        .extend_from_slice(b"cargo-machete = '0.9.1'\n");
+    repo.files.insert(
+        path(".velnor/rust-ci.toml")?,
+        format!(
+            "runner = '{runner}'\n{shape}{}",
+            MIRROR.replace("mirror-box", mirror_runner)
+        )
+        .into_bytes(),
+    );
+    let lock = path(".velnor/rust-ci.lock")?;
+    let old = String::from_utf8(repo.files[&lock].clone())?;
+    repo.files
+        .insert(lock, old.replace("0.1.79", "0.1.81").into_bytes());
+    Ok(repo)
+}
+
 #[test]
 fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
     for (runner, mirror_runner, enabled) in [
@@ -19,23 +44,9 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
         ("ubuntu-latest", "mirror-box", false),
     ] {
         for shape in ["", "shape = 'groups'\n"] {
-            let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
-            repo.files
-                .get_mut(&path("mise.toml")?)
-                .ok_or("mise.toml missing")?
-                .extend_from_slice(b"cargo-machete = '0.9.1'\n");
-            repo.files.insert(
-                path(".velnor/rust-ci.toml")?,
-                format!(
-                    "runner = '{runner}'\n{shape}{}",
-                    MIRROR.replace("mirror-box", mirror_runner)
-                )
-                .into_bytes(),
-            );
+            let mut repo = mirrored_repo(runner, mirror_runner, shape)?;
             let lock = path(".velnor/rust-ci.lock")?;
             let old = String::from_utf8(repo.files[&lock].clone())?;
-            repo.files
-                .insert(lock.clone(), old.replace("0.1.79", "0.1.81").into_bytes());
             let text = workflow(&repo)?;
             assert_eq!(
                 text.contains("\"$VELNOR_HELPER_LAUNCHER\" -- crates-mirror"),

@@ -19,6 +19,7 @@ mod compile_inputs;
 mod concurrency;
 mod crates_mirror;
 mod credential_hooks;
+mod default_branch;
 mod detect;
 mod doc_steps;
 mod drift;
@@ -40,6 +41,7 @@ mod helper_tool_paths;
 mod helper_workflow_size;
 
 mod inputs;
+mod inputs_audit_pin;
 mod io;
 mod io_files;
 mod io_identity;
