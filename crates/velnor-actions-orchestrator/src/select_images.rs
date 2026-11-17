@@ -133,7 +133,7 @@ fn claims(root: &Path, image: &ImageConfig) -> Option<Claims> {
             return None;
         };
         let facts = analyze_dockerfile(&text, &[]).ok()?;
-        if text.contains("--mount") {
+        if facts.claims_whole_context || text.contains("--mount") {
             claims.claim(context);
         }
         for source in &facts.context_sources {
@@ -243,7 +243,7 @@ fn runner_family_claims(root: &Path) -> Option<Claims> {
         };
         let policy = velnor_actions_contract::runner_publication_dockerfile_context(role)?;
         let facts = policy.analyze(&text).ok()?;
-        if text.contains("--mount") {
+        if facts.claims_whole_context || text.contains("--mount") {
             claims.claim(context);
         }
         for source in &facts.context_sources {

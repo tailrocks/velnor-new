@@ -14,6 +14,16 @@ pub(super) fn is_injected_arg(name: &str) -> bool {
             | "TARGETOS"
             | "TARGETARCH"
             | "TARGETVARIANT"
+            | "HTTP_PROXY"
+            | "HTTPS_PROXY"
+            | "FTP_PROXY"
+            | "NO_PROXY"
+            | "ALL_PROXY"
+            | "http_proxy"
+            | "https_proxy"
+            | "ftp_proxy"
+            | "no_proxy"
+            | "all_proxy"
     )
 }
 

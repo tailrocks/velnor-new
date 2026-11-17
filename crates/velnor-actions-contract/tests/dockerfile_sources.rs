@@ -1,5 +1,12 @@
 use velnor_actions_contract::config::analyze_dockerfile;
 
+fn rejects_or_claims_whole_context(text: &str) -> bool {
+    match analyze_dockerfile(text, &[]) {
+        Ok(facts) => facts.claims_whole_context || facts.context_sources.contains("."),
+        Err(_) => true,
+    }
+}
+
 #[test]
 fn copy_and_add_expand_stage_arguments_and_defaults() -> Result<(), String> {
     for instruction in [
@@ -27,11 +34,9 @@ fn args_are_scoped_to_each_stage_and_globals_need_redeclaration() -> Result<(), 
     let facts = analyze_dockerfile(text, &[]).map_err(|e| format!("{e:?}"))?;
     assert!(facts.context_sources.contains("src/main.txt"));
     assert!(facts.context_sources.contains("other/main.txt"));
-    let unresolved =
-        analyze_dockerfile("ARG SRC=src\nFROM scratch\nCOPY $SRC/main.txt /dest\n", &[]);
-    assert!(
-        unresolved.is_err() || unresolved.is_ok_and(|facts| facts.context_sources.contains("."))
-    );
+    assert!(rejects_or_claims_whole_context(
+        "ARG SRC=src\nFROM scratch\nCOPY $SRC/main.txt /dest\n"
+    ));
     Ok(())
 }
 
@@ -49,7 +54,7 @@ fn unknown_inherited_values_never_narrow_context_sources() -> Result<(), String>
             "a".repeat(64)
         ),
     ] {
-        assert!(analyze_dockerfile(&text, &[]).is_err(), "{text}");
+        assert!(rejects_or_claims_whole_context(&text), "{text}");
     }
     let text = "ARG SRC=global\nFROM scratch\nARG SRC=src\nARG SRC\nCOPY $SRC/main.txt /dest\n";
     let facts = analyze_dockerfile(text, &[]).map_err(|e| format!("{e:?}"))?;
@@ -96,7 +101,7 @@ fn json_commas_are_part_of_the_source_and_quoted_defaults_are_not_guessed() -> R
 fn injected_build_args_and_quoted_json_sources_remain_unresolved() {
     for name in ["TARGETARCH", "BUILDPLATFORM"] {
         let text = format!("FROM scratch\nARG {name}=default\nCOPY ${name}/main.txt /dest\n");
-        assert!(analyze_dockerfile(&text, &[]).is_err(), "{name}");
+        assert!(rejects_or_claims_whole_context(&text), "{name}");
     }
     for name in ["SOURCE_SHA", "VELNOR_SOURCE_SHA"] {
         let text = format!("FROM scratch\nARG {name}=src\nCOPY ${name}/main.txt /dest\n");
@@ -160,7 +165,7 @@ fn unsupported_global_argument_value_does_not_fall_back_to_scratch() {
         let text = format!(
             "FROM scratch\nARG SRC=some\"thing\"\n{keyword} ${{SRC:-src}}/main.txt /dest\n"
         );
-        assert!(analyze_dockerfile(&text, &[]).is_err(), "{text}");
+        assert!(rejects_or_claims_whole_context(&text), "{text}");
     }
 }
 
@@ -172,14 +177,14 @@ fn unsupported_variable_modifiers_do_not_narrow_sources() {
         "${SRC?other:-src}",
     ] {
         let text = format!("FROM scratch\nARG SRC=actual\nCOPY {expression}/main.txt /dest\n");
-        assert!(analyze_dockerfile(&text, &[]).is_err(), "{expression}");
+        assert!(rejects_or_claims_whole_context(&text), "{expression}");
     }
 }
 
 #[test]
 fn nested_variable_defaults_do_not_narrow_sources() {
     let text = "FROM scratch\nARG SRC=actual\nCOPY ${SRC:-${OTHER:-src}}/main.txt /dest\n";
-    assert!(analyze_dockerfile(text, &[]).is_err());
+    assert!(rejects_or_claims_whole_context(text));
 }
 
 #[test]
@@ -201,7 +206,9 @@ fn json_sources_beginning_with_dashes_are_operands() -> Result<(), String> {
 #[test]
 fn multiple_argument_names_do_not_override_imported_values_with_fallbacks() {
     let text = "ARG SRC=actual\nFROM scratch\nARG SRC OTHER\nCOPY ${SRC:-src}/main.txt /dest\n";
-    if let Ok(facts) = analyze_dockerfile(text, &[]) {
+    if let Ok(facts) = analyze_dockerfile(text, &[])
+        && !facts.claims_whole_context
+    {
         assert!(
             facts.context_sources.contains("actual/main.txt"),
             "{facts:?}"
@@ -213,7 +220,9 @@ fn multiple_argument_names_do_not_override_imported_values_with_fallbacks() {
 #[test]
 fn multiple_argument_defaults_do_not_replace_values_with_fallbacks() {
     let text = "FROM scratch\nARG OTHER=unused SRC=actual\nCOPY ${SRC:-src}/main.txt /dest\n";
-    if let Ok(facts) = analyze_dockerfile(text, &[]) {
+    if let Ok(facts) = analyze_dockerfile(text, &[])
+        && !facts.claims_whole_context
+    {
         assert!(
             facts.context_sources.contains("actual/main.txt"),
             "{facts:?}"
