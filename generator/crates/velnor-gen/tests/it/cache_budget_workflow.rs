@@ -97,7 +97,7 @@ fn scheduled_budget_runs_after_writers_even_when_a_sibling_or_all_saves_are_skip
         }
     }
     assert!(writers > 1);
-    let old = render("0.1.80", "")?;
+    let old = render("0.1.80", "full_run = \"off\"\n")?;
     assert!(!old.contains("cache budget"));
     assert!(!old.contains("rust-trim:"));
     Ok(())
@@ -107,8 +107,10 @@ fn scheduled_budget_runs_after_writers_even_when_a_sibling_or_all_saves_are_skip
 fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestResult {
     for bytes in [0_u64, 8_000_000_000] {
         for version in ["0.1.80", "0.1.81"] {
-            let mut repo =
-                crate::base_save::pinned(version, &format!("cache_budget_bytes = {bytes}\n"))?;
+            let mut repo = crate::base_save::pinned(
+                version,
+                &format!("full_run = \"off\"\ncache_budget_bytes = {bytes}\n"),
+            )?;
             repo.files
                 .insert(RepoPath::new("mise.toml")?, b"[tools]\n".to_vec());
             repo.files.insert(

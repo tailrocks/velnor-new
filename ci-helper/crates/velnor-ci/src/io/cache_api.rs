@@ -8,7 +8,7 @@ use serde::Deserialize;
 use velnor_rust::{CacheEntry, budget_plan, cache_family, delta_pull_request};
 
 use crate::cache::{MAX_PAGES, stale_entries};
-use crate::cli::BudgetArgs;
+use crate::cli_cache::BudgetArgs;
 use crate::error::CiError;
 use crate::github::{GitHubWrite, Repo};
 use crate::time::parse_utc;

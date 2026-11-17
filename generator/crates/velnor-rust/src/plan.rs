@@ -15,6 +15,7 @@ use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
 use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
+use crate::required_job::{expose_in_single, gate_outputs, has_gate, verdict_job};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
 use crate::shape::decide_shape;
@@ -22,8 +23,8 @@ use crate::shape::decide_shape;
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
+pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
-const VERDICT_JOB: JobId = JobId::from_static("required");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
 const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
@@ -53,9 +54,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
-    if suffixed {
-        jobs.extend(audit_job(facts, helper_root.is_some()));
-    }
+    jobs.extend(audit_job(facts, &jobs, helper_root.is_some()));
     if facts.policy.any() {
         jobs.push(policy_job(
             facts,
@@ -66,28 +65,26 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .config
         .skip_draft_pull_requests
         .then(|| step(StepKind::FailOnDraftRun));
+    let gate = has_gate(facts);
     if !single {
-        let used = used_outputs(&jobs);
+        let mut used = used_outputs(&jobs);
+        if gate {
+            used.extend(gate_outputs(&jobs));
+            used.sort();
+            used.dedup();
+        }
         jobs.insert(0, plan_job(facts, used));
+    } else if gate {
+        expose_in_single(&mut jobs);
     }
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
     upload_cargo_logs(&mut jobs);
-    let verdict_needs: Vec<JobId> = jobs.iter().map(|job| job.id.clone()).collect();
+    let required = verdict_job(facts, &jobs, single, draft_guard);
     let trim = trim_job(facts, &jobs);
     jobs.extend(trim);
-    jobs.push(Job {
-        name: Some(facts.config.required_check.clone()),
-        skip_on_draft: false,
-        needs: verdict_needs,
-        when: When::NotCancelled,
-        steps: draft_guard
-            .into_iter()
-            .chain([step(StepKind::FailWhenANeedFailed)])
-            .collect(),
-        ..job(facts, VERDICT_JOB)
-    });
+    jobs.push(required);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
         triggers: Triggers {
@@ -169,6 +166,15 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step
     steps
 }
 
+pub(crate) fn mirror_step(facts: &RepoFacts) -> Option<Step> {
+    facts
+        .config
+        .crates_mirror
+        .as_ref()
+        .filter(|mirror| mirror.runner == facts.config.runner)
+        .map(|mirror| step(StepKind::CratesMirror(mirror.clone())))
+}
+
 pub(crate) fn tools_cache_key() -> CacheKey {
     CacheKey::Tools { host: Host }
 }
@@ -189,14 +195,19 @@ pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
 }
 
 pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId) -> Vec<Step> {
-    setup_roots(facts, std::slice::from_ref(root), lane, job)
+    setup_roots(
+        facts,
+        std::slice::from_ref(root),
+        lane,
+        std::slice::from_ref(job),
+    )
 }
 
 pub(crate) fn setup_roots(
     facts: &RepoFacts,
     roots: &[RustRoot],
     lane: &Lane,
-    job: &JobId,
+    families: &[JobId],
 ) -> Vec<Step> {
     let root = &roots[0];
     let mut steps = head(
@@ -211,10 +222,17 @@ pub(crate) fn setup_roots(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = [tools_restore(facts), tools_install(facts)]
-        .into_iter()
-        .flatten()
-        .collect();
+    let mut toolchain: Vec<Step> = [
+        mirror_step(facts),
+        tools_restore(facts),
+        tools_install(facts),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !facts.tools.tools.is_empty() {
+        toolchain.extend(mirror_step(facts));
+    }
     let declared = facts.toolchain.as_ref();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> = declared
@@ -243,7 +261,7 @@ pub(crate) fn setup_roots(
     }
     toolchain.extend(tools_save(facts));
     toolchain.push(step(StepKind::Helper(HelperCommand::Prepare)));
-    for root in roots {
+    for (root, family) in roots.iter().zip(families) {
         let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
         toolchain.extend([
             Step {
@@ -255,7 +273,7 @@ pub(crate) fn setup_roots(
                 root: cache_root.clone(),
             })),
             step(StepKind::CacheRestore(CacheKey::Target {
-                job: job.clone(),
+                job: family.clone(),
                 root: cache_root,
                 host: Host,
             })),
@@ -264,7 +282,7 @@ pub(crate) fn setup_roots(
     if lane.from_source || breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));
     }
-    toolchain.extend(restored(facts, lane));
+    toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
@@ -282,7 +300,13 @@ fn upload_cargo_logs(jobs: &mut [Job]) {
             let gate = job
                 .steps
                 .iter()
-                .find(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))))
+                .find(|step| {
+                    matches!(
+                        step.kind,
+                        StepKind::Helper(HelperCommand::Restored(..))
+                            | StepKind::RestoredTargets { .. }
+                    )
+                })
                 .and_then(|step| step.gate.clone());
             job.steps.push(Step {
                 when: When::CacheDebug,
@@ -303,7 +327,7 @@ fn breaks_ties(facts: &RepoFacts) -> bool {
 fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
     roots.iter().map(|root| Step {
         directory: root.manifest.parent(),
-        ..step(StepKind::Helper(HelperCommand::InputsRestore))
+        ..step(StepKind::InputsRestore(root.target_dir.clone()))
     })
 }
 

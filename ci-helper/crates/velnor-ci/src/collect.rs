@@ -8,7 +8,7 @@ use crate::github::{
     ApiJob, ApiJobs, ApiRun, ApiStep, GitHub, Repo, job_log_path, jobs_path, parse, run_path,
 };
 use crate::logscan;
-use crate::metrics::{JobMetrics, RunMetrics, StepMetrics};
+use crate::metrics::{JobMetrics, METRICS_SCHEMA_VERSION, RunMetrics, StepMetrics};
 use crate::time::{parse_utc, seconds_between};
 
 pub fn collect(
@@ -47,9 +47,9 @@ pub fn collect(
     let runner_seconds = jobs
         .iter()
         .filter(|job| job.ran())
-        .map(|job| job.duration_seconds)
-        .sum();
+        .try_fold(0_u64, |total, job| total.checked_add(job.duration_seconds?));
     Ok(RunMetrics {
+        schema_version: METRICS_SCHEMA_VERSION,
         repo: repo.to_string(),
         run_id,
         run_attempt: run.run_attempt,
@@ -76,6 +76,7 @@ pub fn setup_seconds(job: &ApiJob) -> Option<u64> {
     let done = step.completed_at.as_deref()?;
     (step.conclusion.as_deref() == Some("success"))
         .then(|| seconds_between(Some(started), Some(done)))
+        .flatten()
 }
 
 fn fetch_jobs(
@@ -134,7 +135,7 @@ fn job_metrics(
             seconds_between(job.started_at.as_deref(), job.completed_at.as_deref()),
         )
     } else {
-        (0, 0)
+        (None, None)
     };
     let steps = job
         .steps
@@ -144,7 +145,7 @@ fn job_metrics(
             log: step_logs.get(&index).cloned().unwrap_or_default(),
             name: step.name.clone(),
             seconds: if step.conclusion.as_deref() == Some("skipped") {
-                0
+                None
             } else {
                 seconds_between(step.started_at.as_deref(), step.completed_at.as_deref())
             },

@@ -6,9 +6,6 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use velnor_model::{InvalidId, RepoPath};
 
-use crate::error::CiError;
-use crate::release::PlainName;
-
 #[derive(Debug, Parser)]
 #[command(
     name = "velnor-ci",
@@ -29,9 +26,13 @@ pub enum Command {
     )]
     Inputs(InputsCommand),
     #[command(
-        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and all required checks outside the explicit --pr-only-check list passed in push jobs on that branch at the exact commit; ready=false while a check is unfinished; exit 1 on a failed check, invalid exemption or off-branch commit. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
+        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and all required checks outside the explicit --pr-only-check list passed in push jobs on that branch at the exact commit; ready=false while a check is unfinished; exit 1 on a failed check, invalid exemption or off-branch commit. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read; PR-only exemptions also need checks: read and visible ruleset bypass_actors metadata"
     )]
     ReleaseGate(ReleaseGateArgs),
+    #[command(
+        about = "The required check: read the needs context from NEEDS_JSON, and the spec in the variable --spec-env names, and the plan outputs of the plan job the spec names, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and the test jobs of every selected package with tests ran at least one test. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
+    )]
+    Gate(GateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
     CheckTag(CheckTagArgs),
     #[command(
@@ -48,6 +49,10 @@ pub enum Command {
     )]
     Prepare,
     #[command(
+        about = "Write the crates mirror under $RUNNER_TEMP and install a Cargo wrapper for every working directory and Cargo home"
+    )]
+    CratesMirror(CratesMirrorArgs),
+    #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
     CheckMetadata,
@@ -58,7 +63,7 @@ pub enum Command {
     #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
-    Restored,
+    Restored(crate::cli_cache::RestoredArgs),
     #[command(
         subcommand,
         about = "Decide whether the run saves the build directory, and delete the older entries of its family"
@@ -167,152 +172,58 @@ fn base_file(text: &str) -> Result<BaseFile, String> {
 }
 
 #[derive(Debug, Args)]
+pub struct GateArgs {
+    #[arg(
+        long,
+        value_name = "VARIABLE",
+        help = "The environment variable that holds the gate spec the generator wrote: --plan <job>, then --job <ID=WHEN> for every job of needs (WHEN is always, or conditions joined by +: lane:<root>, policy, schedule, schedule-or-push) and --tests <ID=ROOT> for each job whose tests_run output counts the tests of the root"
+    )]
+    pub spec_env: String,
+}
+
+#[derive(Debug, Args)]
 pub struct CheckTagArgs {
     #[arg(help = "The release tag")]
     pub tag: String,
 }
 
-#[derive(Debug, Args)]
-pub struct ReleaseGateArgs {
-    #[arg(long, help = "Repository as owner/name")]
-    pub repo: String,
-    #[arg(long, help = "Full SHA of the commit that is about to be released")]
-    pub sha: String,
-    #[arg(
-        long,
-        help = "Required check enforced only on pull requests; repeat for each check"
-    )]
-    pub pr_only_check: Vec<String>,
-}
-
-#[derive(Debug, Subcommand)]
-pub enum ReleaseCommand {
-    #[command(
-        about = "Read what release-plz release -o json printed, one file per Cargo root, and print and write to $GITHUB_OUTPUT one line <package>=<tag> for each package it released; exit 1 when a package or a tag appears twice, a package holds anything but ASCII letters, digits, '.', '_' and '-', or a tag holds anything but those and '+' (build metadata)"
-    )]
-    Record(RecordArgs),
-    #[command(
-        about = "Publish the draft release of a tag. Check each named file and SHA256SUMS in the directory as sha256sum --check --strict does, find the one draft release with the tag, which the GitHub App's bot must have created, upload the files and SHA256SUMS, and un-draft it only when it holds exactly those files with those digests; with --no-files, name and read no file and un-draft it only when it holds no asset. Exit 1 before any change on a missing, unlisted or changed file, on a published release or a second draft with the tag, on a draft that the App did not create, and on an asset that is not one of the files. Reads GITHUB_TOKEN, which needs contents: write"
-    )]
-    Publish(PublishArgs),
-    #[command(
-        about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
-    )]
-    CheckConfig(CheckConfigArgs),
-}
+pub use crate::cli_release::{
+    CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand, ReleaseGateArgs,
+};
 
 #[derive(Debug, Args)]
-pub struct CheckConfigArgs {
-    #[arg(required = true, help = "release-plz.toml files to check")]
-    pub files: Vec<PathBuf>,
-    #[arg(
-        long = "tag-pattern",
-        num_args = 2,
-        value_names = ["FILE", "PATTERN"],
-        action = clap::ArgAction::Append,
-        requires = "repo",
-        help = "A git_tag_name pattern the tag rulesets were provisioned for; when given, every file must hold exactly the patterns listed for it"
-    )]
-    tag_pattern_words: Vec<String>,
-    #[arg(
-        long,
-        value_name = "OWNER/NAME",
-        requires = "tag_pattern_words",
-        help = "With --tag-pattern, the repository whose active tag rulesets must hold a creation, update and deletion rule for every listed pattern"
-    )]
-    pub repo: Option<String>,
-    #[arg(
-        long,
-        help = "Read the Cargo workspace of each file's folder with cargo metadata --no-deps --offline, which runs no repository code, and refuse a released package whose package.publish names a registry other than crates-io, a [[package]] that is not a member of its workspace, or a package that two roots release; needs RUSTUP_TOOLCHAIN"
-    )]
-    pub manifests: bool,
-    #[arg(
-        long,
-        requires = "manifests",
-        help = "With --manifests, also refuse a package whose current version would give a tag git cannot create; only for the job that tags the version already committed"
-    )]
-    pub released_versions: bool,
-}
-
-impl CheckConfigArgs {
-    #[must_use]
-    pub fn tag_patterns(&self) -> Vec<(String, String)> {
-        self.tag_pattern_words
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .map(|[file, pattern]| (file.clone(), pattern.clone()))
-            .collect()
-    }
-}
-
-#[derive(Debug, Args)]
-pub struct RecordArgs {
-    #[arg(
-        required = true,
-        help = "Files that hold the JSON release-plz release -o json printed"
-    )]
-    pub outputs: Vec<PathBuf>,
-}
-
-#[derive(Debug, Args)]
-pub struct PublishArgs {
-    #[arg(long, help = "Repository as owner/name")]
-    pub repo: String,
-    #[arg(long, value_parser = tag, help = "Tag of the draft release")]
-    pub tag: PlainName,
-    #[arg(
-        long,
-        value_parser = app,
-        help = "Slug of the GitHub App whose bot, <slug>[bot], created the draft release"
-    )]
-    pub app: PlainName,
-    #[arg(
-        long,
-        default_value = ".",
-        help = "Directory that holds the files and SHA256SUMS"
-    )]
-    pub dir: PathBuf,
-    #[arg(
-        long,
-        conflicts_with = "files",
-        help = "Publish a release that must hold no asset at all; no file or SHA256SUMS is read"
-    )]
-    pub no_files: bool,
-    #[arg(
-        required_unless_present = "no_files",
-        value_parser = file_name,
-        help = "Exact names of the files to publish besides SHA256SUMS"
-    )]
-    pub files: Vec<PlainName>,
-}
-
-fn tag(text: &str) -> Result<PlainName, CiError> {
-    PlainName::tag(text)
-}
-
-fn app(text: &str) -> Result<PlainName, CiError> {
-    PlainName::new("App slug", text)
-}
-
-fn file_name(text: &str) -> Result<PlainName, CiError> {
-    PlainName::new("file", text)
+pub struct InputTimesArgs {
+    #[arg(long, default_value = "target")]
+    pub target_dir: PathBuf,
 }
 
 #[derive(Debug, Subcommand)]
 pub enum InputsCommand {
     #[command(
+        about = "Capture directory inputs and bind them to build outputs for inputs audit. Known Cargo compiler commands may run twice to establish inventories; tests precompile and execute once, and arbitrary commands execute once. Bootstrap uses --workspace or explicit -p package selections and refuses to invalidate unselected packages"
+    )]
+    Build(InputsBuildArgs),
+    #[command(
         about = "Write target/.velnor/inputs.tsv: path, blob id of the bytes on disk, modification time in nanoseconds and mode of every regular tracked file in the worktree; paths a TSV field cannot hold are counted and left out"
     )]
-    Save,
+    Save(InputTimesArgs),
     #[command(
         about = "Set the saved modification time on every tracked file whose path, bytes on disk and mode equal the saved ones; report changed, new, deleted, absent and left-out files"
     )]
-    Restore,
+    Restore(InputTimesArgs),
     #[command(
-        about = "Run after a build of all targets in every Cargo root: read cargo's dep-info and build script output, and exit 1 when .velnor/rust-inputs.lock does not list a file that a package read at compile time from outside its own directory, lists a line nothing reads, or the build is incomplete: every unit an all-targets build makes (each target, its test harness when it is tested, each build script run, and the library and build script run of each path dependency outside the workspaces wherever cargo built it) needs a current unit, identified by cargo's fingerprint, in each dev-profile directory (debug or <triple>/debug) that holds a test harness of a member, with proc-macro libraries in the host debug directory (targets that need features are skipped). A unit with a cargo fingerprint and no dep-info, and Cargo roots whose target directories hold one another, are refused. Only the features, target and profile of that build are seen. Files that tests read at run time, and files a build script reads without naming them with cargo:rerun-if-changed, are not seen here; declare them with [[inputs]] in .velnor/rust-ci.toml"
+        about = "Run after velnor-ci inputs build -- cargo build --workspace --all-targets in every Cargo root: read cargo's dep-info and build script output, and exit 1 when .velnor/rust-inputs.lock does not list a file that a package read at compile time from outside its own directory, lists a line nothing reads, or the build is incomplete: every unit an all-targets build makes (each target, its test harness when it is tested, each build script run, and the library and build script run of each path dependency outside the workspaces wherever cargo built it) needs a current unit, identified by cargo's fingerprint, in each dev-profile directory (debug or <triple>/debug) that holds a test harness of a member, with proc-macro libraries in the host debug directory (targets that need features are skipped). A unit with a cargo fingerprint and no dep-info, and Cargo roots whose target directories hold one another, are refused. Only the features, target and profile of that build are seen. Files that tests read at run time, and files a build script reads without naming them with cargo:rerun-if-changed, are not seen here; declare them with [[inputs]] in .velnor/rust-ci.toml"
     )]
     Audit(AuditArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct InputsBuildArgs {
+    /// Additional source directory outside the repository to inventory before the build; repeat for each directory
+    #[arg(long)]
+    pub directory: Vec<PathBuf>,
+    #[arg(last = true, required = true, num_args = 1.., value_name = "COMMAND")]
+    pub command: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -324,46 +235,7 @@ pub struct AuditArgs {
     pub write: bool,
 }
 
-#[derive(Debug, Subcommand)]
-pub enum CacheCommand {
-    #[command(
-        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
-    )]
-    Decide(DecideArgs),
-    #[command(
-        about = "Delete all but the newest entries whose key starts with --prefix on $GITHUB_REF, through the GitHub API; reads GITHUB_TOKEN, which needs actions: write, and GITHUB_REPOSITORY. A failed call prints a warning and exits 0"
-    )]
-    Trim(TrimArgs),
-    #[command(about = "Enforce the repository cache budget while protecting newest bases")]
-    Budget(BudgetArgs),
-}
-
-#[derive(Debug, Args)]
-pub struct BudgetArgs {
-    #[arg(long)]
-    pub dry_run: bool,
-    #[arg(long, help = "Repository as owner/name, default GITHUB_REPOSITORY")]
-    pub repo: Option<String>,
-    #[arg(long, default_value_t = velnor_rust::DEFAULT_CACHE_BUDGET_BYTES, value_parser = clap::value_parser!(u64).range(0..=velnor_rust::DEFAULT_CACHE_BUDGET_BYTES))]
-    pub budget_bytes: u64,
-}
-
-#[derive(Debug, Args)]
-pub struct DecideArgs {
-    #[arg(long, help = "The build directory the cache saves")]
-    pub target_dir: PathBuf,
-    #[arg(long, help = "A nextest archive file to remove before the save")]
-    pub archive: Option<PathBuf>,
-}
-
-#[derive(Debug, Args)]
-pub struct TrimArgs {
-    #[arg(long, help = "Key prefix of the family to trim")]
-    pub prefix: String,
-    #[arg(long, help = "Entries to keep, default 2")]
-    pub keep: Option<usize>,
-}
-
+pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 #[derive(Debug, Subcommand)]
 pub enum BenchCommand {
     #[command(about = "Turn a workflow run into a metrics file; reads GITHUB_TOKEN")]
@@ -390,4 +262,12 @@ pub struct CompareArgs {
     pub a: PathBuf,
     #[arg(help = "Metrics file of the second run")]
     pub b: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct CratesMirrorArgs {
+    #[arg(long)]
+    pub registry: String,
+    #[arg(long)]
+    pub cainfo: PathBuf,
 }

@@ -395,5 +395,6 @@ fn positive_poll_context<'a>(context: &ConnectionPollContext<'a>) -> PositivePol
         state: context.state,
         image_authority: context.image_authority,
         admission_ready: context.admission_ready,
+        retirement_budget: context.retirement_budget,
     }
 }

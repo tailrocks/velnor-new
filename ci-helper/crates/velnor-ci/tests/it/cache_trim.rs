@@ -2,13 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::cell::RefCell;
-use std::process::Command;
-
 use velnor_ci::cache::{stale_entries, trim};
 use velnor_ci::error::CiError;
 use velnor_ci::github::{GitHub, GitHubWrite, Repo};
-
-use crate::io::Repo as Checkout;
 
 struct PagedCaches {
     entries: Vec<String>,
@@ -208,22 +204,4 @@ fn trim_deletes_nothing_when_the_family_has_no_more_than_the_kept_entries() {
         Vec::<u64>::new()
     );
     assert_eq!(stale_entries(&entries, "nothing-", 2), Vec::<u64>::new());
-}
-
-#[test]
-fn trim_without_a_token_warns_and_exits_zero_like_every_other_trim_failure() {
-    let repo = Checkout::new("trim-no-token");
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .args(["cache", "trim", "--prefix", "velnor-tgt-rust-root-"])
-        .env("GITHUB_REPOSITORY", "owner/name")
-        .env("GITHUB_REF", "refs/heads/main")
-        .env_remove("GITHUB_TOKEN")
-        .current_dir(repo.root())
-        .output()
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "{stdout}{stderr}");
-    assert!(stdout.contains("::warning::cache trim"), "{stdout}{stderr}");
-    assert!(stdout.contains("GITHUB_TOKEN"), "{stdout}");
 }

@@ -12,8 +12,9 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 16] = [
+const KEYS: [&str; 17] = [
     "runner",
+    "crates_mirror",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -35,6 +36,7 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 #[derive(Deserialize)]
 struct RawConfig {
     runner: Option<String>,
+    crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -118,6 +120,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
+        crates_mirror: raw
+            .crates_mirror
+            .map(crate::config_mirror::mirror)
+            .transpose()
+            .map_err(invalid)?,
         nextest_harnesses,
         default_branch,
         skip_draft_pull_requests: raw
@@ -134,19 +141,20 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
         runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
         timeout_minutes,
-        exclude: raw
-            .exclude
-            .into_iter()
-            .map(|entry| {
-                PathGlob::new(entry.trim_end_matches('/')).map_err(|_| {
-                    invalid(Reason::InvalidValue {
-                        key: "exclude",
-                        value: entry,
-                    })
-                })
-            })
-            .collect::<Result<_, _>>()?,
+        exclude: excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
+    entries
+        .into_iter()
+        .map(|entry| {
+            PathGlob::new(entry.trim_end_matches('/')).map_err(|_| Reason::InvalidValue {
+                key: "exclude",
+                value: entry,
+            })
+        })
+        .collect()
 }
 
 fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {

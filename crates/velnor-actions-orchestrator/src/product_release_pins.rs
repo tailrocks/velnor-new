@@ -91,6 +91,7 @@ pub(crate) fn resolve(
         verify_rust_argv: crate::workflow::verify_rust_argv(&catalog),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
         gh_version: catalog.version(PinnedTool::Gh).to_owned(),
+        bun_version: catalog.version(PinnedTool::Bun).to_owned(),
     })
 }
 

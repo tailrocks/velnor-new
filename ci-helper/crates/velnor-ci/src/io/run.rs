@@ -5,7 +5,7 @@ use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, ExitCode, Stdio};
+use std::process::{Child, Command, ExitCode, Stdio};
 use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -19,7 +19,7 @@ use super::append_outputs;
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::{Pumped, pump_counted, separate_group};
-use crate::tests_run::{output_line, runs_nextest};
+use crate::tests_run::{TestCounts, output_lines, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -29,6 +29,13 @@ const SIGNAL_BASE: i32 = 128;
 const PUMP_GRACE: Duration = Duration::from_secs(2);
 const TERMINAL_VARIABLE: &str = "VELNOR_CI_RUN_TERMINAL";
 const CONTROLLING_TERMINAL: &str = "/dev/tty";
+const STEP_FILE_VARIABLES: [&str; 5] = [
+    "GITHUB_OUTPUT",
+    "GITHUB_ENV",
+    "GITHUB_PATH",
+    "GITHUB_STEP_SUMMARY",
+    "GITHUB_STATE",
+];
 const PUMP_GRACE_VARIABLE: &str = "VELNOR_CI_RUN_PUMP_GRACE_MS";
 
 fn pump_grace() -> Duration {
@@ -51,9 +58,13 @@ fn open_log(path: &Path) -> std::io::Result<std::fs::File> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    options.open(path)
+    let file = options.open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    Ok(file)
 }
 
 pub(super) fn run(args: &RunArgs) -> ExitCode {
@@ -84,38 +95,37 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
-    let (sender, receiver) = mpsc::channel();
-    let mut streams = 0;
-    if let Some(from) = child.stdout.take() {
-        streams += 1;
-        let counted = args.require_doctests.then(|| Arc::clone(&doctests));
-        spawn_pump(from, std::io::stdout(), &log, counted, sender.clone());
-    }
-    if let Some(from) = child.stderr.take() {
-        streams += 1;
-        spawn_pump(from, std::io::stderr(), &log, None, sender.clone());
-    }
-    drop(sender);
+    let pumps = start_pumps(&mut child, &log, args.require_doctests, &doctests);
     let handle = signals.handle();
     forward(signals, pid, own_group);
     let status = child.wait();
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, tests_run) = collect(&receiver, streams);
+    let (mut lost, console, counts) = collect(&pumps.receiver, &pumps.slots, &pumps.reports);
     if runs_nextest(&args.command)
-        && let Some(tests_run) = tests_run
+        && let Some(counts) = counts
     {
-        append_outputs(&output_line(tests_run))
+        append_outputs(&output_lines(counts))
             .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
     }
     let ran = doctests
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .finish();
+        .ran();
     if code == 0 && args.require_doctests && ran == 0 {
         eprintln!("velnor-ci: the command ran 0 doctests, so this step checked nothing");
         code = 1;
+    }
+    if let Some(error) = console {
+        writeln!(
+            std::io::stderr(),
+            "velnor-ci: cannot write the command output: {error}"
+        )
+        .ok();
+        if code == 0 {
+            code = 2;
+        }
     }
     let mut log = log
         .lock()
@@ -133,6 +143,52 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     }
 }
 
+struct Pumps {
+    receiver: mpsc::Receiver<()>,
+    slots: Vec<Arc<Mutex<Option<TestCounts>>>>,
+    reports: Vec<Arc<Mutex<Pumped>>>,
+}
+
+fn start_pumps(
+    child: &mut Child,
+    log: &Arc<Mutex<std::fs::File>>,
+    require_doctests: bool,
+    doctests: &Arc<Mutex<DoctestCount>>,
+) -> Pumps {
+    let (sender, receiver) = mpsc::channel();
+    let mut slots = Vec::new();
+    let mut reports = Vec::new();
+    if let Some(from) = child.stdout.take() {
+        let counted = require_doctests.then(|| Arc::clone(doctests));
+        watch_stream(
+            &mut slots,
+            &mut reports,
+            from,
+            std::io::stdout(),
+            log,
+            counted,
+            &sender,
+        );
+    }
+    if let Some(from) = child.stderr.take() {
+        watch_stream(
+            &mut slots,
+            &mut reports,
+            from,
+            std::io::stderr(),
+            log,
+            None,
+            &sender,
+        );
+    }
+    drop(sender);
+    Pumps {
+        receiver,
+        slots,
+        reports,
+    }
+}
+
 fn has_terminal() -> bool {
     match std::env::var(TERMINAL_VARIABLE).as_deref() {
         Ok("1") => true,
@@ -145,12 +201,28 @@ fn has_terminal() -> bool {
 }
 
 fn spawn_child(argv: &[String]) -> Result<(std::process::Child, bool), (u8, String)> {
+    let cargo = Path::new(&argv[0])
+        .file_name()
+        .and_then(|name| name.to_str())
+        .is_some_and(|name| name == "cargo" || name.starts_with("cargo-"));
+    if cargo && argv.iter().any(|arg| arg == "--quiet" || arg == "-q") {
+        return Err((
+            2,
+            "quiet commands cannot provide cache compilation evidence".to_owned(),
+        ));
+    }
     let own_group = separate_group(has_terminal());
     let mut command = Command::new(&argv[0]);
     command
         .args(&argv[1..])
+        .env("CARGO_TERM_QUIET", "false")
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
+    if runs_nextest(argv) {
+        for name in STEP_FILE_VARIABLES {
+            command.env_remove(name);
+        }
+    }
     if own_group {
         command.process_group(0);
     }
@@ -180,22 +252,38 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
 }
 
 fn collect(
-    receiver: &mpsc::Receiver<Pumped>,
-    streams: usize,
-) -> (Option<std::io::Error>, Option<u64>) {
-    let mut lost = None;
-    let mut tests_run = None;
+    receiver: &mpsc::Receiver<()>,
+    slots: &[Arc<Mutex<Option<TestCounts>>>],
+    reports: &[Arc<Mutex<Pumped>>],
+) -> (
+    Option<std::io::Error>,
+    Option<std::io::Error>,
+    Option<TestCounts>,
+) {
+    let mut waiting = slots.len();
     let deadline = Instant::now() + pump_grace();
-    for _ in 0..streams {
+    while waiting > 0 {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(pumped) => {
-                lost = lost.or(pumped.failure);
-                tests_run = pumped.tests_run.or(tests_run);
+            Ok(()) => {
+                waiting -= 1;
             }
             Err(_) => break,
         }
     }
-    (lost, tests_run)
+    let counts = slots.iter().rev().find_map(|slot| {
+        *slot
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    });
+    let mut lost = None;
+    let mut console = None;
+    for report in reports {
+        if let Ok(mut report) = report.lock() {
+            lost = lost.or(report.failure.take());
+            console = console.or(report.console.take());
+        }
+    }
+    (lost, console, counts)
 }
 
 #[cfg(unix)]
@@ -212,16 +300,41 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
     status.code().unwrap_or(1)
 }
 
+fn watch_stream(
+    slots: &mut Vec<Arc<Mutex<Option<TestCounts>>>>,
+    reports: &mut Vec<Arc<Mutex<Pumped>>>,
+    from: impl Read + Send + 'static,
+    to: impl Write + Send + 'static,
+    log: &Arc<Mutex<std::fs::File>>,
+    count: Option<Arc<Mutex<DoctestCount>>>,
+    done: &mpsc::Sender<()>,
+) {
+    let reported = Arc::new(Mutex::new(Pumped::default()));
+    reports.push(Arc::clone(&reported));
+    let parsed = Arc::new(Mutex::new(None));
+    slots.push(parsed.clone());
+    spawn_pump(from, to, log, count, parsed, reported, done.clone());
+}
+
 fn spawn_pump(
     from: impl Read + Send + 'static,
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
-    done: mpsc::Sender<Pumped>,
+    parsed: Arc<Mutex<Option<TestCounts>>>,
+    reported: Arc<Mutex<Pumped>>,
+    done: mpsc::Sender<()>,
 ) {
     let log = Arc::clone(log);
     thread::spawn(move || {
-        done.send(pump_counted(from, to, &log, count.as_deref()))
-            .ok();
+        pump_counted(
+            from,
+            to,
+            &log,
+            count.as_deref(),
+            Some(&parsed),
+            Some(&reported),
+        );
+        done.send(()).ok();
     });
 }

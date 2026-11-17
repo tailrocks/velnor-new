@@ -32,10 +32,10 @@ fn lane(config: &str, id: &str) -> Result<String, Box<dyn std::error::Error>> {
 fn a_lane_keeps_read_only_contents_and_publishes_its_trim_prefix_and_save_decision() -> TestResult {
     let block = lane("", "rust")?;
     assert!(
-        block.contains("    permissions:\n      contents: read\n    outputs:"),
+        block.contains("    permissions:\n      actions: read\n      contents: read\n    outputs:"),
         "{block}"
     );
-    assert!(!block.contains("actions:"), "{block}");
+    assert!(!block.contains("actions: write"), "{block}");
     assert!(
         block.contains("      base_save: '${{ steps.base.outputs.save }}'\n"),
         "{block}"
@@ -104,7 +104,8 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
 
 #[test]
 fn a_repository_that_saves_nothing_gets_no_trim_job() -> TestResult {
-    let text = crate::pipeline::workflow(&crate::base_save::pinned("0.1.79", "")?)?;
+    let text =
+        crate::pipeline::workflow(&crate::base_save::pinned("0.1.79", "full_run = \"off\"\n")?)?;
     assert!(!text.contains("rust-trim"), "{text}");
     Ok(())
 }
@@ -146,7 +147,7 @@ fn the_budget_runs_without_a_save_and_each_trim_keeps_its_lane_guard(block: &str
             (
                 format!("Delete the older {id} sources entries"),
                 format!(
-                    "needs.{id}.outputs.sources_prefix != '''' && needs.{id}.outputs.sources_saved == ''true''"
+                    "needs.{id}.outputs.sources_prefix != '''' && (needs.{id}.outputs.sources_saved == ''true'' || needs.{id}.outputs.sources_key != '''')"
                 ),
             ),
         ] {
@@ -208,13 +209,21 @@ fn position(order: &[String], name: &str) -> Result<usize, Box<dyn std::error::E
 }
 
 #[test]
-fn the_target_is_saved_after_the_test_build_and_before_any_test_runs() -> TestResult {
+fn target_publication_follows_its_test_build_and_input_audit() -> TestResult {
     for (config, id) in [("", "rust"), ("shape = \"lint-test\"\n", "rust-test")] {
         let order = names(&lane(config, id)?);
         let build = position(&order, "Build the tests")?;
         let save = position(&order, "Save the target cache")?;
         let run = position(&order, "Test")?;
-        assert!(build < save && save < run, "{id}: {order:?}");
+        assert!(build < save, "{id}: {order:?}");
+        if id == "rust" {
+            assert!(
+                run < save && position(&order, "velnor-ci inputs audit")? < save,
+                "{order:?}"
+            );
+        } else {
+            assert!(save < run, "{order:?}");
+        }
     }
     let order = names(&lane("", "rust")?);
     for name in ["Lint", "Documentation"] {
@@ -337,7 +346,7 @@ fn the_pull_request_check_flags_a_lane_that_holds_actions_write_and_passes_the_g
     let text = crate::pipeline::workflow(&crate::base_save::pinned("0.1.81", "")?)?;
     let rust_permissions = format!("  rust:\n    if: '${{{{ {ADMISSION} }}}}'\n    permissions:\n");
     let broken = text.replace(
-        &format!("{rust_permissions}      contents: read\n"),
+        &format!("{rust_permissions}      actions: read\n      contents: read\n"),
         &format!("{rust_permissions}      actions: write\n"),
     );
     assert_ne!(broken, text);

@@ -7,6 +7,8 @@ mod ids;
 mod plan;
 mod repo;
 mod selection;
+mod steps;
+mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
 pub use cron::CronExpr;
@@ -15,18 +17,21 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, BaseExpiry, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand,
-    HelperRelease, Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform,
-    PullRequestType, Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, Triggers,
-    TrimFamily, When, WorkflowPlan,
+    Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperRelease,
+    Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType,
+    Shape, ShapeDecision, Step, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When,
+    WorkflowPlan,
 };
 pub use repo::{
-    CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
-    MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView, RustCiConfig,
-    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, Timings, ToolPin,
-    ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
+    CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun, InputRule,
+    MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
+    TargetKind, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };
+pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
+
+pub use steps::{BaseExpiry, HelperCommand, StepKind, TrimFamily};

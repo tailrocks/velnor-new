@@ -4,6 +4,7 @@
 /ci-helper/target/
 /local/target/
 /.velnor/archive-guard/
+/generator/samples/.velnor-gen-*/
 .DS_Store
 __pycache__/
 .cache/

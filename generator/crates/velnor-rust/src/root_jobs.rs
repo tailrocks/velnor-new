@@ -4,21 +4,21 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, CustomHarness, FilterRef, FullRun, HelperCommand, Job, JobId, OnMain,
-    PackageName, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind,
-    When,
+    CargoCommand, CustomHarness, FilterRef, HelperCommand, Job, JobId, PackageName, RepoFacts,
+    RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, When,
 };
 
+use crate::audit_job::{AuditLocation, audit_when};
 use crate::base_cache::{save_steps, saving_run};
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
 use crate::mise::nextest_tool;
 use crate::plan::{
-    CHECKOUT_DEPTH, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup, step, tools_restore,
+    CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job,
+    mirror_step, setup, step, tools_restore,
 };
 
-const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
 const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
 
@@ -27,6 +27,7 @@ struct RootJobs<'a> {
     root: &'a RustRoot,
     lane: &'a Lane,
     suffixed: bool,
+    audit: AuditLocation,
     nextest: bool,
     doctests: bool,
 }
@@ -43,6 +44,13 @@ pub(crate) fn root_jobs(
         root,
         lane,
         suffixed,
+        audit: if suffixed
+            || (decision.shape != Shape::OneJob && crate::base_cache::writes_base(facts))
+        {
+            AuditLocation::Separate
+        } else {
+            AuditLocation::Inline
+        },
         nextest: root
             .members
             .iter()
@@ -83,13 +91,26 @@ impl RootJobs<'_> {
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
         Job {
+            permissions: crate::base_cache::lane_permissions(self.facts),
             needs: self
                 .lane
                 .plan
                 .clone()
                 .into_iter()
                 .chain(self.lane.from_source.then_some(HELPER_JOB))
+                .chain(
+                    ((self.audit == AuditLocation::Separate)
+                        && crate::base_cache::writes_base(self.facts))
+                    .then_some(crate::audit_job::AUDIT_JOB),
+                )
                 .collect(),
+            when: if (self.audit == AuditLocation::Separate)
+                && crate::base_cache::writes_base(self.facts)
+            {
+                When::NotCancelled
+            } else {
+                When::Success
+            },
             gate: self.lane.job(),
             steps,
             ..job(self.facts, id)
@@ -97,7 +118,7 @@ impl RootJobs<'_> {
     }
 
     fn audit(&self) -> Option<Step> {
-        if self.facts.rust_roots.len() != 1 {
+        if self.audit == AuditLocation::Separate {
             return None;
         }
         let when = audit_when(self.facts)?;
@@ -204,9 +225,9 @@ impl RootJobs<'_> {
                     .map(skip_on_draft)
                     .map(saving_run),
             );
-            steps.extend(saves.iter().cloned());
             steps.extend(self.cargo(self.tests()).map(skip_on_draft));
             steps.extend(self.audit());
+            steps.extend(saves.iter().cloned());
         } else if saves.is_empty() {
             steps.extend(self.cargo(self.tests()).map(skip_on_draft));
             steps.extend(self.audit());
@@ -221,9 +242,9 @@ impl RootJobs<'_> {
                 }
             }
             steps.extend(self.cargo(workspace).map(skip_on_draft));
-            steps.extend(saves);
             steps.extend(self.cargo(after).map(skip_on_draft));
             steps.extend(self.audit());
+            steps.extend(saves);
         }
         Job {
             skip_on_draft: false,
@@ -298,19 +319,19 @@ impl RootJobs<'_> {
         );
         build.extend(self.audit());
         let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
+        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),
             ..restore
         }));
-        group.extend([
-            self.gated(StepKind::InstallTools {
-                only: nextest_tool(&self.facts.tools).map(str::to_owned),
-            }),
-            self.gated(StepKind::DownloadArchive {
-                name: artifact,
-                into: self.root.manifest.parent(),
-            }),
-        ]);
+        group.push(self.gated(StepKind::InstallTools {
+            only: nextest_tool(&self.facts.tools).map(str::to_owned),
+        }));
+        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
+        group.push(self.gated(StepKind::DownloadArchive {
+            name: artifact,
+            into: self.root.manifest.parent(),
+        }));
         group.extend(
             self.cargo(vec![CargoCommand::NextestRunArchive {
                 file: ARCHIVE_FILE,
@@ -324,14 +345,6 @@ impl RootJobs<'_> {
         let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
         group_job.needs.push(build_id.clone());
         [self.lane_job(build_id, build), group_job]
-    }
-}
-
-pub(crate) fn audit_when(facts: &RepoFacts) -> Option<When> {
-    match (facts.config.on_main, &facts.config.full_run) {
-        (OnMain::Everything, _) => Some(When::ScheduledOrPush),
-        (OnMain::Affected, FullRun::Off) => None,
-        (OnMain::Affected, _) => Some(When::Scheduled),
     }
 }
 

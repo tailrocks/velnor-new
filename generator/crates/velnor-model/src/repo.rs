@@ -10,11 +10,30 @@ use crate::plan::{HelperRelease, Shape};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
-    pub repository: String,
+    pub repository: RepositoryIdentity,
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub symlinks: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepositoryIdentity {
+    Named(String),
+    Unhosted,
+}
+
+impl Default for RepositoryIdentity {
+    fn default() -> Self {
+        Self::Named(String::new())
+    }
+}
+
+impl FullRun {
+    #[must_use]
+    pub fn is_hashed(&self) -> bool {
+        matches!(self, Self::Hourly | Self::Nightly | Self::Weekly)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -224,6 +243,7 @@ pub struct ToolPin {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
+    pub crates_mirror: Option<CratesMirror>,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -273,6 +293,7 @@ impl Default for RustCiConfig {
     fn default() -> Self {
         Self {
             runner: RunnerLabel::from_static("ubuntu-latest"),
+            crates_mirror: None,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),
@@ -290,4 +311,11 @@ impl Default for RustCiConfig {
             cache_budget_bytes: 8_000_000_000,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CratesMirror {
+    pub runner: RunnerLabel,
+    pub registry: String,
+    pub cainfo: String,
 }

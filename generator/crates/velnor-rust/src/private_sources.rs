@@ -38,6 +38,11 @@ fn locked_source(lock: &RepoPath, bytes: &[u8]) -> Option<String> {
     let Ok(document) = table(bytes) else {
         return Some(format!("{lock} is unreadable"));
     };
+    if document.contains_key("patch") {
+        return Some(format!(
+            "{lock} has patches whose sources are not proven public"
+        ));
+    }
     document
         .get("package")
         .and_then(toml::Value::as_array)
@@ -54,7 +59,7 @@ fn locked_source(lock: &RepoPath, bytes: &[u8]) -> Option<String> {
 
 fn configured_source(path: &RepoPath, bytes: &[u8]) -> Option<String> {
     let Ok(document) = table(bytes) else {
-        return None;
+        return Some(format!("{path} is unreadable"));
     };
     ["registries", "source"]
         .into_iter()
@@ -65,4 +70,30 @@ fn configured_source(path: &RepoPath, bytes: &[u8]) -> Option<String> {
                 .is_some_and(|entries| !entries.is_empty())
         })
         .map(|section| format!("{path} declares [{section}]"))
+}
+
+pub fn cacheable_lock(text: &str) -> Result<bool, crate::lock::LockError> {
+    let lock = crate::cargo_lock::CargoLock::parse(text)?;
+    Ok(lock.patch.is_none()
+        && lock.packages.iter().all(|package| {
+            package
+                .source
+                .as_deref()
+                .is_none_or(|source| PUBLIC_SOURCES.contains(&source))
+        }))
+}
+
+pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {
+    let document: toml::Table = toml::from_str(text)
+        .map_err(|error| crate::lock::LockError::new(error.message().to_owned()))?;
+    Ok(![
+        "source",
+        "registries",
+        "registry",
+        "include",
+        "patch",
+        "paths",
+    ]
+    .iter()
+    .any(|key| document.contains_key(*key)))
 }

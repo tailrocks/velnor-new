@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{BaseExpiry, CacheKey, JobId, RepoPath, Step, StepKind, TrimFamily};
+use velnor_model::{
+    BaseExpiry, CacheKey, HelperCommand, JobId, RepoPath, Step, StepKind, TrimFamily,
+};
 
 use crate::cache::render_key;
+use crate::cache_upload::SOURCES_KEY_OUTPUT;
 use crate::gate::BASE_STEP;
 use crate::gate::sources_save_step;
 use crate::release_steps::shell_word;
@@ -18,10 +21,24 @@ const BASE_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
 const DEFAULT_BRANCH_REF: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
-pub(crate) fn cache_decide(target: &RepoPath, archive: Option<&RepoPath>) -> RenderedStep {
+pub(crate) fn cache_decide(
+    target: &RepoPath,
+    archive: Option<&RepoPath>,
+    manifests: &[RepoPath],
+) -> RenderedStep {
     RenderedStep {
         id: Some(BASE_STEP.to_owned()),
         name: "Decide whether to save the build directory".to_owned(),
+        env: vec![(
+            "VELNOR_CACHE_MANIFESTS".to_owned(),
+            Value::Text(
+                manifests
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
+        )],
         run: Some(format!(
             "velnor-ci cache decide --target-dir {}{}",
             shell_word(target.as_str()),
@@ -52,6 +69,21 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         }
         _ => None,
     });
+    let keys = [TrimFamily::Target, TrimFamily::Sources]
+        .into_iter()
+        .filter_map(|family| {
+            steps.iter().find_map(|step| match &step.kind {
+                StepKind::CacheSave(key) => crate::cache_upload::key_id(key)
+                    .filter(|_| crate::cache_upload::family_of(key) == Some(family))
+                    .map(|id| {
+                        (
+                            crate::cache_upload::key_output(family).to_owned(),
+                            format!("${{{{ steps.{id}.outputs.key }}}}"),
+                        )
+                    }),
+                _ => None,
+            })
+        });
     target
         .map(|prefix| {
             [
@@ -64,6 +96,7 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         })
         .into_iter()
         .flatten()
+        .chain(keys)
         .chain(sources.map(|prefix| (SOURCES_PREFIX_OUTPUT.to_owned(), prefix)))
         .chain(saved.map(|id| {
             (
@@ -78,7 +111,7 @@ pub(crate) fn trimmed_lane(lane: &JobId, family: TrimFamily) -> String {
     match family {
         TrimFamily::Target => format!("needs.{lane}.outputs.{BASE_SAVE_OUTPUT} == 'true'"),
         TrimFamily::Sources => format!(
-            "needs.{lane}.outputs.{SOURCES_PREFIX_OUTPUT} != '' && needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true'"
+            "needs.{lane}.outputs.{SOURCES_PREFIX_OUTPUT} != '' && (needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true' || needs.{lane}.outputs.{SOURCES_KEY_OUTPUT} != '')"
         ),
     }
 }
@@ -121,6 +154,61 @@ pub(crate) fn base_age(expiry: BaseExpiry) -> Vec<(String, Value)> {
             )),
         )],
     }
+}
+
+pub(crate) fn audited_lane(condition: String, job: &velnor_model::Job) -> String {
+    if !job
+        .steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
+    {
+        return condition;
+    }
+    if !job
+        .needs
+        .iter()
+        .any(|id| id.as_str() == "rust-inputs-audit")
+    {
+        return condition;
+    }
+    let inner = condition.trim_start_matches("${{ ").trim_end_matches(" }}");
+    format!(
+        "${{{{ {inner} && (needs.rust-inputs-audit.result == 'success' || needs.rust-inputs-audit.result == 'skipped') }}}}"
+    )
+}
+
+pub(crate) fn audited_save(
+    job: &velnor_model::Job,
+    step: &Step,
+    mut bodies: Vec<RenderedStep>,
+) -> Vec<RenderedStep> {
+    let audited = job
+        .needs
+        .iter()
+        .any(|id| id.as_str() == "rust-inputs-audit")
+        && matches!(
+            step.kind,
+            StepKind::CacheDecide { .. } | StepKind::CacheSave(CacheKey::Target { .. })
+        );
+    let extra = audited.then(|| "${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned());
+    for body in &mut bodies {
+        body.condition = crate::gate::all_conditions(body.condition.take(), extra.clone());
+    }
+    bodies
+}
+
+pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
+    let has = |wanted: fn(&StepKind) -> bool| job.steps.iter().any(|step| wanted(&step.kind));
+    let restores = has(|kind| {
+        matches!(
+            kind,
+            StepKind::Helper(HelperCommand::Restored(..)) | StepKind::RestoredTargets { .. }
+        )
+    });
+    (
+        restores,
+        has(|kind| *kind == StepKind::Helper(HelperCommand::InputsAudit)),
+    )
 }
 
 pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {

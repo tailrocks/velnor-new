@@ -51,6 +51,7 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "rust-test-lab",
             "rust-test-default-lab",
             "rust-inputs-audit",
+            "rust-trim",
             "required"
         ]
     );
@@ -125,10 +126,16 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
             .collect();
         assert_eq!(testing.len(), 2, "{config}: {testing:?}");
         for (id, block) in &jobs {
-            let reports =
-                block.contains("      tests_run: '${{ steps.test.outputs.tests_run }}'\n");
+            let reports = ["tests_run", "tests_listed"].iter().all(|name| {
+                block.contains(&format!(
+                    "      {name}: '${{{{ steps.test.outputs.{name} }}}}'\n"
+                ))
+            });
             assert_eq!(reports, block.contains("nextest run"), "{config}: {id}");
-            for line in block.lines().filter(|line| line.contains("nextest run")) {
+            for line in block
+                .lines()
+                .filter(|line| line.contains("nextest run") && !line.contains("--no-run"))
+            {
                 assert!(line.ends_with("--no-tests=pass'"), "{config}: {line}");
             }
         }

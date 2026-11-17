@@ -15,8 +15,8 @@ const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-pub(crate) fn writes_base(facts: &RepoFacts, lane: &Lane) -> bool {
-    facts.private_sources.is_none() && (lane.from_source || has_saving_helper(facts))
+pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
+    facts.private_sources.is_none() && has_saving_helper(facts)
 }
 
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
@@ -26,15 +26,25 @@ pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
         .is_some_and(|helper| helper.version().at_least(SAVING_HELPER))
 }
 
-pub(crate) fn restored(facts: &RepoFacts, lane: &Lane) -> Vec<Step> {
-    let expiry = expiry(facts, lane);
+pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
+    let expiry = expiry(facts);
     let replan = (expiry != BaseExpiry::Never).then(|| Step {
         when: When::BaseExpired,
         ..step(StepKind::Helper(HelperCommand::PlanFull))
     });
-    std::iter::once(step(StepKind::Helper(HelperCommand::Restored(expiry))))
-        .chain(replan)
-        .collect()
+    let restore = if has_saving_helper(facts) {
+        StepKind::RestoredTargets {
+            expiry,
+            targets: facts
+                .rust_roots
+                .iter()
+                .map(|root| root.target_dir.clone())
+                .collect(),
+        }
+    } else {
+        StepKind::Helper(HelperCommand::Restored(expiry))
+    };
+    std::iter::once(step(restore)).chain(replan).collect()
 }
 
 pub(crate) fn saving_run(run: Step) -> Step {
@@ -44,8 +54,8 @@ pub(crate) fn saving_run(run: Step) -> Step {
     }
 }
 
-fn expiry(facts: &RepoFacts, lane: &Lane) -> BaseExpiry {
-    if !writes_base(facts, lane) {
+fn expiry(facts: &RepoFacts) -> BaseExpiry {
+    if !writes_base(facts) {
         return BaseExpiry::Never;
     }
     BaseExpiry::OnDefaultBranch
@@ -59,7 +69,7 @@ pub(crate) fn save_steps(
     archive: Option<RepoPath>,
     sources: bool,
 ) -> Vec<Step> {
-    if !writes_base(facts, lane) {
+    if !writes_base(facts) {
         return Vec::new();
     }
     let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
@@ -72,11 +82,16 @@ pub(crate) fn save_steps(
         Step {
             directory: root.manifest.parent(),
             when: When::SaveBase,
-            ..step(StepKind::Helper(HelperCommand::InputsSave))
+            ..step(StepKind::InputsSave(root.target_dir.clone()))
         },
         Step {
             when: When::SaveBase,
             ..step(StepKind::CacheDecide {
+                manifests: facts
+                    .rust_roots
+                    .iter()
+                    .map(|root| root.manifest.clone())
+                    .collect(),
                 target: root.target_dir.clone(),
                 archive,
             })
@@ -88,7 +103,7 @@ pub(crate) fn save_steps(
     ];
     if sources {
         steps.push(Step {
-            when: When::SaveBase,
+            when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
                 root: cache_root,
@@ -116,11 +131,21 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         })
         .map(|job| job.id.clone())
         .collect();
+    let uploads: Vec<(JobId, TrimFamily)> = jobs.iter().flat_map(lane_uploads).collect();
+    let verifies = uploads.iter().map(|(lane, family)| {
+        step(StepKind::CacheVerify {
+            lane: lane.clone(),
+            family: *family,
+        })
+    });
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
+        .chain(verifies)
+        .chain([step(StepKind::CacheResult(uploads.clone()))])
         .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
         .collect();
     Some(Job {
+        name: Some("Cache".to_owned()),
         needs,
         when: When::SaveBase,
         skip_on_draft: false,
@@ -138,12 +163,13 @@ fn is_decide(step: &Step) -> bool {
 }
 
 fn lane_trims(lane: &Job) -> Vec<Step> {
-    let family = |family| Step {
-        ..step(StepKind::CacheTrim {
-            lane: lane.id.clone(),
-            family,
-        })
-    };
+    lane_uploads(lane)
+        .into_iter()
+        .map(|(lane, family)| step(StepKind::CacheTrim { lane, family }))
+        .collect()
+}
+
+fn lane_uploads(lane: &Job) -> Vec<(JobId, TrimFamily)> {
     let saves_sources = lane
         .steps
         .iter()
@@ -151,8 +177,16 @@ fn lane_trims(lane: &Job) -> Vec<Step> {
     lane.steps
         .iter()
         .any(is_decide)
-        .then(|| family(TrimFamily::Target))
+        .then(|| (lane.id.clone(), TrimFamily::Target))
         .into_iter()
-        .chain(saves_sources.then(|| family(TrimFamily::Sources)))
+        .chain(saves_sources.then(|| (lane.id.clone(), TrimFamily::Sources)))
         .collect()
+}
+
+pub(crate) fn lane_permissions(facts: &RepoFacts) -> Permissions {
+    let mut permissions = BTreeMap::from([(PermissionScope::Contents, Access::Read)]);
+    if writes_base(facts) {
+        permissions.insert(PermissionScope::Actions, Access::Read);
+    }
+    Permissions(permissions)
 }

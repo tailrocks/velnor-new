@@ -5,10 +5,24 @@ use velnor_model::TESTS_RUN_OUTPUT;
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
+pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
+
 const LINE_LIMIT: usize = 4096;
 
 #[must_use]
 pub fn runs_nextest(command: &[String]) -> bool {
+    let command = if command
+        .first()
+        .and_then(|program| program.rsplit('/').next())
+        == Some("velnor-ci")
+        && command
+            .get(1..4)
+            .is_some_and(|args| args == ["inputs", "build", "--"])
+    {
+        &command[4..]
+    } else {
+        command
+    };
     let program = command
         .first()
         .and_then(|program| program.rsplit('/').next())
@@ -18,16 +32,33 @@ pub fn runs_nextest(command: &[String]) -> bool {
         && command.get(2).map(String::as_str) == Some("run")
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TestCounts {
+    pub run: u64,
+    pub listed: Option<u64>,
+}
+
 #[must_use]
-pub fn output_line(tests_run: u64) -> String {
-    format!("{TESTS_RUN_OUTPUT}={tests_run}\n")
+pub fn output_lines(counts: TestCounts) -> String {
+    let run = format!("{TESTS_RUN_OUTPUT}={}\n", counts.run);
+    match counts.listed {
+        Some(listed) => format!("{run}{TESTS_LISTED_OUTPUT}={listed}\n"),
+        None => run,
+    }
+}
+
+fn skipped(line: &str) -> Option<u64> {
+    let (_, tail) = line.split_once(" run:")?;
+    tail.split(',')
+        .find_map(|part| part.trim().strip_suffix(" skipped"))
+        .and_then(|count| count.trim().parse().ok())
 }
 
 #[derive(Debug, Default)]
 pub struct SummaryTap {
     line: Vec<u8>,
     overlong: bool,
-    tests_run: Option<u64>,
+    counts: Option<TestCounts>,
 }
 
 impl SummaryTap {
@@ -50,9 +81,14 @@ impl SummaryTap {
     }
 
     #[must_use]
-    pub fn finish(mut self) -> Option<u64> {
+    pub const fn counts(&self) -> Option<TestCounts> {
+        self.counts
+    }
+
+    #[must_use]
+    pub fn finish(mut self) -> Option<TestCounts> {
         self.end_line();
-        self.tests_run
+        self.counts
     }
 
     fn end_line(&mut self) {
@@ -60,7 +96,11 @@ impl SummaryTap {
             let line = String::from_utf8_lossy(&self.line);
             let cleaned = strip_ansi(&line);
             if let Some(summary) = nextest_summary(cleaned.trim_start()) {
-                self.tests_run = Some(summary.tests_run);
+                self.counts = Some(TestCounts {
+                    run: summary.tests_run,
+                    listed: skipped(cleaned.trim_start())
+                        .and_then(|skipped| skipped.checked_add(summary.tests_run)),
+                });
             }
         }
         self.line.clear();

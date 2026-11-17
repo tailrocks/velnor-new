@@ -41,6 +41,7 @@ fn decide(repo: &Checkout, log: Option<&str>) -> (Output, String) {
 }
 
 fn seed(repo: &Checkout) {
+    repo.write_unstaged("Cargo.lock", "version = 4\n");
     repo.write_unstaged("target/debug/incremental/app-1/work", "x");
     repo.write_unstaged("target/debug/deps/libapp.rlib", "rlib");
     repo.write_unstaged("nextest-archive.tar.zst", "archive");
@@ -53,7 +54,7 @@ fn a_run_that_compiled_a_crate_saves_after_dropping_what_must_not_be_cached() {
     let (output, written) = decide(&repo, Some(COMPILED));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{stdout}");
-    assert_eq!(written, "save=true\n");
+    assert_eq!(written, "save=true\nsources=true\n");
     assert!(stdout.contains("1 crates compiled"), "{stdout}");
     assert!(stdout.contains(" bytes"), "{stdout}");
     assert!(!repo.root().join("target/debug/incremental").exists());
@@ -73,7 +74,7 @@ fn a_build_script_incremental_directory_survives_while_cargo_incremental_state_i
     let (output, written) = decide(&repo, Some(COMPILED));
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{stdout}");
-    assert_eq!(written, "save=true\n");
+    assert_eq!(written, "save=true\nsources=true\n");
     assert!(!repo.root().join("target/debug/incremental").exists());
     assert!(
         !repo
@@ -90,17 +91,16 @@ fn a_build_script_incremental_directory_survives_while_cargo_incremental_state_i
 }
 
 #[test]
-fn a_warm_run_or_a_run_with_no_log_saves_nothing_and_removes_nothing() {
-    for log in [Some(WARM), None] {
-        let repo = Checkout::new("decide-warm");
-        seed(&repo);
-        let (output, written) = decide(&repo, log);
-        assert!(output.status.success());
-        assert_eq!(written, "save=false\n");
-        assert!(repo.root().join("target/debug/incremental").is_dir());
-        assert!(repo.root().join("nextest-archive.tar.zst").is_file());
-        assert!(!repo.root().join("target/.velnor/born").exists());
-    }
+fn a_warm_run_saves_nothing_and_removes_nothing() {
+    let log = Some(WARM);
+    let repo = Checkout::new("decide-warm");
+    seed(&repo);
+    let (output, written) = decide(&repo, log);
+    assert!(output.status.success());
+    assert_eq!(written, "save=false\nsources=true\n");
+    assert!(repo.root().join("target/debug/incremental").is_dir());
+    assert!(repo.root().join("nextest-archive.tar.zst").is_file());
+    assert!(!repo.root().join("target/.velnor/born").exists());
 }
 
 #[test]
@@ -179,6 +179,23 @@ fn restored_keeps_an_old_build_directory_when_no_limit_is_set() {
 }
 
 #[test]
+fn the_born_date_expires_after_exactly_the_limit_and_an_unreadable_one_expires_at_once() {
+    let born = date_text(NOW);
+    assert!(!born_expired(&born, NOW + 7 * DAY, 7));
+    assert!(born_expired(&born, NOW + 8 * DAY, 7));
+    assert!(born_expired("garbage", NOW, 7));
+    assert!(born_expired("", NOW, 7));
+}
+
+#[test]
+fn dates_are_written_as_the_utc_calendar_day() {
+    assert_eq!(date_text(0), "1970-01-01");
+    assert_eq!(date_text(951_782_400 + 3_600), "2000-02-29");
+    assert_eq!(date_text(NOW - 1), "2026-11-16");
+    assert_eq!(date_text(NOW), "2026-11-17");
+}
+
+#[test]
 fn restored_treats_a_build_directory_saved_without_a_born_file_as_expired() {
     let repo = Checkout::new("expire-unborn");
     repo.write("src/lib.rs", "pub fn one() {}\n");
@@ -204,18 +221,128 @@ fn restored_keeps_a_build_directory_without_a_born_file_when_no_limit_is_set() {
 }
 
 #[test]
-fn the_born_date_expires_after_exactly_the_limit_and_an_unreadable_one_expires_at_once() {
-    let born = date_text(NOW);
-    assert!(!born_expired(&born, NOW + 7 * DAY, 7));
-    assert!(born_expired(&born, NOW + 8 * DAY, 7));
-    assert!(born_expired("garbage", NOW, 7));
-    assert!(born_expired("", NOW, 7));
+fn trim_without_a_token_fails() {
+    let repo = Checkout::new("trim-no-token");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["cache", "trim", "--prefix", "velnor-tgt-rust-root-"])
+        .env("GITHUB_REPOSITORY", "owner/name")
+        .env("GITHUB_REF", "refs/heads/main")
+        .env_remove("GITHUB_TOKEN")
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stdout}{stderr}");
+    assert!(stderr.contains("GITHUB_TOKEN"), "{stderr}");
 }
 
 #[test]
-fn dates_are_written_as_the_utc_calendar_day() {
-    assert_eq!(date_text(0), "1970-01-01");
-    assert_eq!(date_text(951_782_400 + 3_600), "2000-02-29");
-    assert_eq!(date_text(NOW - 1), "2026-11-16");
-    assert_eq!(date_text(NOW), "2026-11-17");
+fn a_non_utf8_child_log_still_saves_compiled_crates() {
+    let repo = Checkout::new("decide-non-utf8");
+    seed(&repo);
+    let temp = repo.root().join("runner-temp");
+    fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut bytes = vec![0xff, b'\n'];
+    bytes.extend_from_slice(COMPILED.as_bytes());
+    fs::write(temp.join("velnor-run.log"), bytes).unwrap_or_else(|e| unreachable!("{e}"));
+    let (output, written) = decide(&repo, None);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\nsources=true\n");
+}
+
+#[test]
+fn cache_decision_rechecks_changed_lock_sources_before_saving() {
+    for source in [
+        "registry+https://github.com/rust-lang/crates.io-index",
+        "sparse+https://index.crates.io/",
+    ] {
+        check_source(source, true);
+    }
+}
+
+#[test]
+fn cache_decision_refuses_git_sources() {
+    check_source("git+https://github.com/owner/private#123", false);
+}
+
+#[test]
+fn cache_decision_refuses_alternate_registries() {
+    check_source("registry+https://private.example/index", false);
+}
+
+fn check_source(source: &str, public: bool) {
+    let repo = Checkout::new("decide-private");
+    seed(&repo);
+    repo.write_unstaged(
+        "Cargo.lock",
+        &format!(
+            "version = 4\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = {source:?}\n"
+        ),
+    );
+    let (output, written) = decide(&repo, Some(COMPILED));
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        written,
+        format!("save={public}\nsources={public}\n"),
+        "{output:?}"
+    );
+    if !public {
+        assert!(
+            String::from_utf8_lossy(&output.stdout).contains("not proven public"),
+            "{output:?}"
+        );
+    }
+}
+
+#[test]
+fn missing_run_log_fails_without_publishing_a_decision() {
+    log_error(false);
+}
+
+#[test]
+fn unreadable_run_log_fails_without_publishing_a_decision() {
+    log_error(true);
+}
+
+fn log_error(unreadable: bool) {
+    let repo = Checkout::new("decide-log-error");
+    seed(&repo);
+    if unreadable {
+        fs::create_dir_all(repo.root().join("runner-temp/velnor-run.log"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    let (output, written) = decide(&repo, None);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(written.is_empty(), "{written}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("velnor-run.log"),
+        "{output:?}"
+    );
+    assert!(repo.root().join("target/debug/incremental").exists());
+}
+
+#[test]
+fn cache_decision_refuses_locks_that_cannot_prove_public_sources() {
+    for mode in ["missing", "malformed", "unreadable", "unused-private-patch"] {
+        let repo = Checkout::new("decide-lock-refusal");
+        seed(&repo);
+        repo.git(&["add", "Cargo.lock"]);
+        match mode {
+            "missing" => fs::remove_file(repo.root().join("Cargo.lock"))
+                .unwrap_or_else(|e| unreachable!("{e}")),
+            "malformed" => repo.write_unstaged("Cargo.lock", "not a lock file"),
+            "unreadable" => {
+                fs::remove_file(repo.root().join("Cargo.lock"))
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+                fs::create_dir(repo.root().join("Cargo.lock"))
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+            }
+            _ => repo.write_unstaged("Cargo.lock", "version = 4\n[[patch.unused]]\nname = \"secret\"\nversion = \"1.0.0\"\nsource = \"git+https://example.com/private#123\"\n"),
+        }
+        let (output, written) = decide(&repo, Some(COMPILED));
+        assert!(output.status.success(), "{mode}: {output:?}");
+        assert_eq!(written, "save=false\nsources=false\n", "{mode}: {output:?}");
+        assert!(repo.root().join("target/debug/incremental").is_dir());
+    }
 }

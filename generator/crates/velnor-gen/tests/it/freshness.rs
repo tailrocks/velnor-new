@@ -5,6 +5,10 @@ use velnor_gen::notes;
 use velnor_model::{RepoPath, RepoView, Target, TargetKind, TargetName};
 use velnor_rust::silent_build_scripts;
 
+use std::fs;
+use std::os::unix::fs::symlink;
+use std::process::Command;
+
 use crate::facts::TestResult;
 use crate::lock::locked;
 use crate::pipeline::{view, workflow};
@@ -36,6 +40,10 @@ fn names_of(lane: &str) -> Vec<&str> {
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
     let mut repo = locked("0.1.81")?;
+    repo.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"nightly\"\n".to_vec(),
+    );
     let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     repo.rust_metadata = more.rust_metadata;
     repo.tracked_paths.extend(more.tracked_paths);
@@ -174,6 +182,91 @@ fn a_directive_only_named_in_text_is_not_one_the_build_script_emits() -> TestRes
         assert_eq!(silent_build_scripts(&repo).len(), 1, "{source}");
         assert_eq!(notes(&repo)?.len(), 1, "{source}");
     }
+    Ok(())
+}
+
+#[test]
+fn generate_rejects_a_build_script_that_is_a_filesystem_symlink() -> TestResult {
+    use crate::release_symlink::{Scratch, git};
+
+    let root = std::env::temp_dir().join(format!(
+        "velnor-gen-build-script-link-{}",
+        std::process::id()
+    ));
+    fs::remove_dir_all(&root).ok();
+    let scratch = Scratch(root.clone());
+    fs::create_dir_all(root.join(".velnor"))?;
+    fs::write(
+        root.join("Cargo.toml"),
+        "[package]\nname = \"fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\nbuild = \"build.rs\"\n",
+    )?;
+    fs::create_dir_all(root.join("src"))?;
+    fs::write(root.join("src/lib.rs"), "")?;
+    fs::write(
+        root.join("Cargo.lock"),
+        "version = 4\n\n[[package]]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
+    )?;
+    fs::write(root.join(".velnor/rust-ci.toml"), "full_run = \"off\"\n")?;
+    fs::write(
+        root.join(".velnor/rust-ci.lock"),
+        crate::release_fixture::LOCK,
+    )?;
+    let sample =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/helper-source/view");
+    fs::copy(sample.join("mise.toml"), root.join("mise.toml"))?;
+    fs::copy(sample.join("mise.lock"), root.join("mise.lock"))?;
+    fs::write(root.join("build.rs"), "fn main() {}\n")?;
+    git(&root, &["init", "--quiet"])?;
+    git(&root, &["add", "--all"])?;
+
+    let cargo = std::path::Path::new(env!("CARGO"));
+    let cargo_dir = cargo.parent().ok_or("cargo executable has no parent")?;
+    let search_path = std::env::join_paths([
+        cargo_dir,
+        std::path::Path::new("/usr/bin"),
+        std::path::Path::new("/bin"),
+    ])?;
+    let generate = || {
+        Command::new(env!("CARGO_BIN_EXE_velnor-gen"))
+            .args(["--root", ".", "generate"])
+            .current_dir(&root)
+            .env("PATH", &search_path)
+            .env("MISE_TRUSTED_CONFIG_PATHS", &root)
+            .output()
+    };
+    let silent = generate()?;
+    let silent_stderr = String::from_utf8_lossy(&silent.stderr);
+    assert!(silent.status.success(), "{silent_stderr}");
+    assert!(
+        silent_stderr.contains("build.rs of package fixture"),
+        "{silent_stderr}"
+    );
+
+    fs::write(
+        root.join("build.rs"),
+        "fn main() { println!(\"cargo:rerun-if-changed=build.rs\"); }\n",
+    )?;
+    git(&root, &["add", "build.rs"])?;
+    let declared = generate()?;
+    let declared_stderr = String::from_utf8_lossy(&declared.stderr);
+    assert!(declared.status.success(), "{declared_stderr}");
+    assert!(
+        !declared_stderr.contains("build.rs of package fixture"),
+        "{declared_stderr}"
+    );
+
+    fs::remove_file(root.join("build.rs"))?;
+    fs::write(root.join("actual.rs"), "fn main() {}\n")?;
+    symlink("actual.rs", root.join("build.rs"))?;
+    git(&root, &["add", "--all"])?;
+    let output = generate()?;
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("build.rs goes through a symbolic link or is not a regular file"),
+        "{stderr}"
+    );
+    drop(scratch);
     Ok(())
 }
 

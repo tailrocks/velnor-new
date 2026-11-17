@@ -58,14 +58,6 @@ jobs:
             if (releases.length !== 1 || releases[0].target !== 'tag' || releases[0].enforcement !== 'active') {
               throw new Error('release-tags must be exactly one active tag ruleset');
             }
-            const expectedReleaseRefs = ['refs/tags/rust-ci-v*', 'refs/tags/velnor-ci-v*', 'refs/tags/velnor-gen-v*'];
-            const releaseRefs = releases[0].conditions?.ref_name;
-            if (!Array.isArray(releaseRefs?.include) || releaseRefs.include.length !== expectedReleaseRefs.length
-                || !expectedReleaseRefs.every(ref => releaseRefs.include.includes(ref))
-                || !Array.isArray(releaseRefs.exclude) || releaseRefs.exclude.length !== 0
-                || !Array.isArray(releases[0].rules) || !releases[0].rules.some(rule => rule.type === 'creation')) {
-              throw new Error('release-tags must protect creation of exactly the release tag refs');
-            }
             for (const ruleset of rulesets) {
               if (expectedBypassActors.has(ruleset.name) || ruleset.rules?.some(rule => ['update', 'deletion'].includes(rule.type))) {
                 if (!Array.isArray(ruleset.bypass_actors)) {

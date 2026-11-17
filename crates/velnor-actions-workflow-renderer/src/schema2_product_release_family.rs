@@ -227,7 +227,7 @@ fn publish_script_for(
             &if runner {
                 eligibility::runner_publisher_definition()
             } else {
-                eligibility::publisher_definition()
+                eligibility::publisher_definition_source_free()
             },
         )
         .replace(
