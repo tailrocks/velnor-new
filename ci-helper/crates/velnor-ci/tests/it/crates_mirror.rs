@@ -7,6 +7,7 @@ use std::process::Command;
 
 use crate::io::Repo;
 
+mod cargo_directory;
 mod fixture;
 mod mise;
 mod setup;
