@@ -22,7 +22,7 @@ impl ConnectionJournal {
             return Err(HostError::Identity);
         }
         let connection_id = self.connection_id().as_str().to_owned();
-        in_transaction(self.journal_ref(), async |connection| {
+        let claim = in_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
             let Some(context) =
                 hold_context(connection, &connection_id, reservation_id).await?
@@ -69,7 +69,16 @@ impl ConnectionJournal {
                 storage_plan,
             }))
         })
-        .await
+        .await?;
+        if claim.is_some() {
+            self.anchor_bootstrap_create_clock(
+                reservation_id,
+                crate::journal::UnboundResourceKind::Container,
+                container_role(role),
+            )
+            .await?;
+        }
+        Ok(claim)
     }
 
     pub(crate) async fn record_bootstrap_container_created(

@@ -33,6 +33,7 @@ struct Normalizer {
     names: BTreeSet<String>,
     mappings: BTreeMap<String, (Kind, Vec<Line>)>,
     runs: BTreeMap<String, String>,
+    env: BTreeMap<String, String>,
     nodes: usize,
     bytes: usize,
 }
@@ -95,6 +96,9 @@ impl Normalizer {
                 continue;
             }
             let mut line = line.clone();
+            if shape::is_helper_env(&line, &path) {
+                self.resolve_env(&mut line, block_end(lines, index) != index + 1)?;
+            }
             if shape::is_run(&line, &path)
                 && let Some((_, value)) = mapping_entry(&line.content)
             {
@@ -118,6 +122,36 @@ impl Normalizer {
             index += 1;
         }
         Ok(output)
+    }
+
+    fn resolve_env(
+        &mut self,
+        line: &mut Line,
+        has_children: bool,
+    ) -> Result<(), OrchestratorError> {
+        let Some((key, value)) = mapping_entry(&line.content) else {
+            return Ok(());
+        };
+        if !value.starts_with(['&', '*']) {
+            return Ok(());
+        }
+        if has_children {
+            return Err(fail("env_scalar_children_unsupported"));
+        }
+        if let Some(definition) = value.strip_prefix('&') {
+            let Some((name, scalar)) = definition.split_once(' ') else {
+                return Err(fail("env_scalar_anchor_malformed"));
+            };
+            if !shape::valid_name(name) || !single_quoted_scalar(scalar.trim()) {
+                return Err(fail("env_scalar_anchor_malformed"));
+            }
+            if !self.names.insert(name.to_owned()) {
+                return Err(fail("duplicate_anchor"));
+            }
+        }
+        let resolved = run_anchor::resolve_run_scalar(value, &mut self.env)?;
+        line.content = format!("{key}: {resolved}");
+        Ok(())
     }
 
     fn alias(
@@ -190,6 +224,22 @@ impl Normalizer {
         output.push(line);
         Ok(())
     }
+}
+
+fn single_quoted_scalar(value: &str) -> bool {
+    let Some(body) = value
+        .strip_prefix('\'')
+        .and_then(|value| value.strip_suffix('\''))
+    else {
+        return false;
+    };
+    let mut characters = body.chars();
+    while let Some(character) = characters.next() {
+        if character == '\'' && characters.next() != Some('\'') {
+            return false;
+        }
+    }
+    true
 }
 
 pub(super) fn indent_content(line: &str) -> Result<(usize, &str), OrchestratorError> {

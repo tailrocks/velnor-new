@@ -50,7 +50,7 @@ fn every_ci_job_excludes_closed_pull_requests_and_preserves_other_events() -> Te
         )?)?,
     ];
     for text in workflows {
-        let tree = serde_saphyr::from_str::<serde_json::Value>(&text)?;
+        let tree = crate::yaml_tree::document(&text)?;
         assert!(
             tree.pointer("/on/pull_request/types")
                 .ok_or("no pull request trigger")?

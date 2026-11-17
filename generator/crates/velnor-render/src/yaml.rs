@@ -3,6 +3,8 @@
 
 const UNREAD_IGNORE: &str = "# jactionlint ignore=unused-job-output";
 
+use std::collections::BTreeMap;
+
 pub(crate) enum Yaml {
     Str(String),
     Expr(String),
@@ -14,15 +16,29 @@ pub(crate) enum Yaml {
     Map(Vec<(String, Yaml)>),
     Noted(String, Box<Yaml>),
     Trailed(String, Box<Yaml>),
+    Shared(Box<Yaml>),
+}
+
+#[derive(Default)]
+struct Anchors {
+    counting: bool,
+    uses: BTreeMap<String, usize>,
+    names: BTreeMap<String, String>,
 }
 
 pub(crate) fn emit(root: &[(String, Yaml)]) -> String {
+    let mut anchors = Anchors {
+        counting: true,
+        ..Anchors::default()
+    };
+    entries(&mut String::new(), root, 0, &mut anchors);
+    anchors.counting = false;
     let mut out = String::new();
-    entries(&mut out, root, 0);
+    entries(&mut out, root, 0, &mut anchors);
     out
 }
 
-fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize) {
+fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize, shared: &mut Anchors) {
     for (key, value) in items {
         let value = match value {
             Yaml::Noted(note, inner) => {
@@ -48,15 +64,15 @@ fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize) {
         out.push_str(&" ".repeat(indent));
         out.push_str(&key_text(key));
         out.push(':');
-        nested(out, value, indent + 2);
+        nested(out, value, indent + 2, shared);
     }
 }
 
-fn nested(out: &mut String, value: &Yaml, indent: usize) {
+fn nested(out: &mut String, value: &Yaml, indent: usize, shared: &mut Anchors) {
     match value {
         Yaml::Map(items) if !items.is_empty() => {
             out.push('\n');
-            entries(out, items, indent);
+            entries(out, items, indent, shared);
         }
         Yaml::Seq(items) if !items.is_empty() => {
             out.push('\n');
@@ -64,7 +80,7 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
                 out.push_str(&" ".repeat(indent));
                 out.push('-');
                 let mut block = String::new();
-                nested(&mut block, item, indent + 2);
+                nested(&mut block, item, indent + 2, shared);
                 match block.strip_prefix('\n') {
                     Some(rest) => {
                         out.push(' ');
@@ -73,6 +89,27 @@ fn nested(out: &mut String, value: &Yaml, indent: usize) {
                     None => out.push_str(&block),
                 }
             }
+        }
+        Yaml::Shared(inner) => {
+            let scalar = inline(inner);
+            out.push(' ');
+            if shared.counting {
+                *shared.uses.entry(scalar.clone()).or_default() += 1;
+                out.push_str(&scalar);
+            } else if shared.uses.get(&scalar).copied().unwrap_or(0) < 2 {
+                out.push_str(&scalar);
+            } else if let Some(anchor) = shared.names.get(&scalar) {
+                out.push('*');
+                out.push_str(anchor);
+            } else {
+                let anchor = format!("velnor_{}", shared.names.len());
+                out.push('&');
+                out.push_str(&anchor);
+                out.push(' ');
+                out.push_str(&scalar);
+                shared.names.insert(scalar, anchor);
+            }
+            out.push('\n');
         }
         Yaml::Block(text) => block(out, &text.replace("${{", "${{ '${{' }}"), indent),
         Yaml::Str(text) if text.contains('\n') => {
@@ -95,7 +132,7 @@ fn inline(value: &Yaml) -> String {
         Yaml::Bool(flag) => flag.to_string(),
         Yaml::Seq(_) => "[]".to_owned(),
         Yaml::Map(_) => "{}".to_owned(),
-        Yaml::Noted(_, inner) => inline(inner),
+        Yaml::Noted(_, inner) | Yaml::Shared(inner) => inline(inner),
         Yaml::Trailed(note, inner) => format!("{}  # {note}", inline(inner)),
     }
 }

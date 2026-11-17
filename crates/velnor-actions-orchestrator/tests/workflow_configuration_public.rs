@@ -8,6 +8,8 @@ mod tofu_generated_ledger;
 #[path = "workflow_configuration_public/tofu_generated_ledger_fixture.rs"]
 mod tofu_generated_ledger_fixture;
 
+#[path = "workflow_configuration_public/alint_line_cap_probe.rs"]
+mod alint_line_cap_probe;
 #[path = "workflow_configuration_public/both_rust_sharding.rs"]
 mod both_rust_sharding;
 #[path = "workflow_configuration_public/branches.rs"]

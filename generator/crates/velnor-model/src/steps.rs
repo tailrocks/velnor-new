@@ -52,10 +52,6 @@ pub enum StepKind {
     CratesMirror(crate::repo::CratesMirror),
     GeneratorCheck,
     InstallHelper(HelperRelease),
-    HelperFromArtifact,
-    PublishHelper {
-        binary: RepoPath,
-    },
     FailWhenANeedFailed,
     FailOnDraftRun,
     Verdict {

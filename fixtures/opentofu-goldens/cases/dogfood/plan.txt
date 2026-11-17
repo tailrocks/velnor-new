@@ -82,7 +82,7 @@ Workflow to generate
   Push branch: main
   Runner: ubuntu-26.04 (latest pinned default)
   Jobs:
-    - alint (2 steps)
+    - alint (3 steps)
     - cargo-deny (6 steps)
     - cargo-machete (7 steps)
     - check-generator-samples (7 steps)

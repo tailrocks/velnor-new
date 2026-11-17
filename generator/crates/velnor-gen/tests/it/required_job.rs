@@ -45,7 +45,7 @@ fn words(line: &str, flag: &str) -> Vec<String> {
 }
 
 #[test]
-fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> TestResult {
+fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestResult {
     let text = released("0.1.81", &["Cargo.toml", "lab/Cargo.toml"])?;
     let job = required(&text)?;
     assert!(job.contains(
@@ -53,12 +53,12 @@ fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> 
     ));
     assert!(!job.contains("Check out"));
     assert!(!job.contains("Fail when a Rust job failed or was cancelled"));
-    assert_eq!(job.matches("      - name: ").count(), 2);
+    assert!(!job.contains("Verify the released helper"));
     assert!(job.contains("      - name: Install velnor-ci 0.1.81\n"));
     assert!(job.contains(
         "        env:\n          NEEDS_JSON: '${{ toJSON(needs) }}'\n          GATE_SPEC: '"
     ));
-    assert!(job.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
+    assert!(job.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n"));
     assert_eq!(
         gate_line(&text)?,
         "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-lab=lab"
@@ -127,19 +127,8 @@ fn the_gate_names_every_job_the_verdict_job_needs() -> TestResult {
     Ok(())
 }
 
-fn built_from_source(version: &str) -> Result<String, Box<dyn std::error::Error>> {
-    let mut view = load(&samples().join("helper-source"))?;
-    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
-    let bytes = view.files.get(&lock).ok_or("no lock")?;
-    let text = String::from_utf8(bytes.clone())?.replacen("0.1.81", version, 1);
-    view.files.insert(lock, text.into_bytes());
-    if version == "0.1.80" {
-        let config = view
-            .files
-            .get_mut(&velnor_rust::CONFIG_PATH)
-            .ok_or("no config")?;
-        config.extend_from_slice(b"\nfull_run = \"off\"\n");
-    }
+fn built_from_source() -> Result<String, Box<dyn std::error::Error>> {
+    let view = load(&samples().join("helper-source"))?;
     let mut files = expected_files(&view)?;
     files
         .remove(&RepoPath::new(".github/workflows/rust-ci.yml")?)
@@ -148,7 +137,7 @@ fn built_from_source(version: &str) -> Result<String, Box<dyn std::error::Error>
 
 #[test]
 fn a_helper_built_from_source_never_runs_the_gate_from_the_pull_request_build() -> TestResult {
-    let text = built_from_source("0.1.81")?;
+    let text = built_from_source()?;
     let job = required(&text)?;
     assert!(job.contains("      - name: Install velnor-ci 0.1.81\n"));
     assert!(job.contains("      - name: velnor-ci gate\n"));
@@ -161,19 +150,41 @@ fn a_helper_built_from_source_never_runs_the_gate_from_the_pull_request_build() 
     Ok(())
 }
 
+fn long_named_roots(count: usize) -> Vec<String> {
+    (0..count)
+        .map(|index| {
+            if index == 0 {
+                "Cargo.toml".to_owned()
+            } else {
+                format!("crate-with-a-long-directory-name-{index}/Cargo.toml")
+            }
+        })
+        .collect()
+}
+
 #[test]
-fn a_helper_built_from_source_keeps_the_old_verdict_while_the_plan_helper_lacks_gate() -> TestResult
-{
-    let text = built_from_source("0.1.80")?;
-    let job = required(&text)?;
-    assert!(job.contains("Fail when a Rust job failed or was cancelled"));
-    assert!(!job.contains("velnor-ci gate"));
-    assert!(!text.contains("_tests"));
+fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests = long_named_roots(20);
+    let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let text = released("0.1.81", &roots)?;
+    let spec = gate_line(&text)?;
+    assert!(spec.len() > MAX_RUN_CHARACTERS);
+    assert_eq!(spec.matches("--tests ").count(), 20);
+    assert!(required(&text)?.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n"));
     Ok(())
 }
 
 #[test]
-fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+fn twenty_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
+    let manifests = long_named_roots(20);
+    let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let text = released("0.1.81", &roots)?;
+    assert!(text.len() <= 500_000, "{} bytes", text.len());
+    Ok(())
+}
+
+#[test]
+fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> TestResult {
     let manifests: Vec<String> = (0..60)
         .map(|index| {
             if index == 0 {
@@ -184,11 +195,18 @@ fn sixty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
         })
         .collect();
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let text = released("0.1.81", &roots)?;
-    let spec = gate_line(&text)?;
-    assert!(spec.len() > MAX_RUN_CHARACTERS);
-    assert_eq!(spec.matches("--tests ").count(), 60);
-    assert!(required(&text)?.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
+    let mut view = view(&roots, None)?;
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    view.files
+        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
+    let result = expected_files(&view);
+    let Err(velnor_gen::GenerateError::Rules(violations)) = result else {
+        return Err("oversized main workflow was not rejected by YAML rules".into());
+    };
+    let violation = violations.iter().find(|violation| matches!(violation.rule, velnor_render::Rule::WorkflowTooLarge(bytes) if bytes > 500_000)).ok_or("no workflow size violation")?;
+    let message = violation.to_string();
+    assert!(message.contains("500000 bytes"));
+    assert!(message.contains("reduce the workflow size"));
     Ok(())
 }
 
