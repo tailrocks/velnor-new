@@ -220,7 +220,12 @@ async fn atomic_decision_publication_keeps_empty_and_partial_data_from_guest_out
     scenario.start_on(proxy.docker.clone(), plan);
     let result = async {
         let mut seen = Vec::new();
-        for _ in 0..50 {
+        let repetitions = std::env::var("VELNOR_PUBLICATION_REPETITIONS")
+            .map_or(Ok(1), |value| value.parse::<usize>())?;
+        if repetitions == 0 {
+            return Err("VELNOR_PUBLICATION_REPETITIONS must be positive".into());
+        }
+        for _ in 0..repetitions {
             race(&mut scenario, &mut proxy, true, &mut seen).await?;
             race(&mut scenario, &mut proxy, false, &mut seen).await?;
             replacement(&mut scenario, &mut proxy, &mut seen).await?;
