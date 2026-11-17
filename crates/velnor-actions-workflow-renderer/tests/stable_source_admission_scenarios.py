@@ -28,7 +28,7 @@ with tempfile.TemporaryDirectory() as directory:
         "SOURCES_ID": "42", "SOURCES_DIGEST": digest, "SOURCES_TREE": "c" * 64,
         "SOURCES_ROOT_LOCK": hashlib.sha256(b"root-lock").hexdigest(),
         "SOURCES_RUNNER_LOCK": hashlib.sha256(b"runner-lock").hexdigest(),
-        "SOURCES_ATTEMPT": "2", "SOURCES_NAME": "generator-linux-assets", "GH_TOKEN": "fixture",
+        "SOURCES_ATTEMPT": "2", "SOURCES_NAME": "generator-linux-assets",
     }
     artifact = {"id": 42, "name": "generator-linux-assets-sources-2", "expired": False,
                 "digest": "sha256:" + digest, "size_in_bytes": 100,
@@ -38,8 +38,12 @@ with tempfile.TemporaryDirectory() as directory:
     try:
         def check(changes=None, metadata=None, expected=False):
             output.unlink(missing_ok=True)
+            def response(request, timeout):
+                assert not request.has_header("Authorization")
+                assert timeout == 30
+                return io.BytesIO(json.dumps(artifact if metadata is None else metadata).encode())
             with patch.dict(os.environ, env | (changes or {}), clear=True), \
-                 patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(artifact if metadata is None else metadata).encode())), \
+                 patch("urllib.request.urlopen", side_effect=response), \
                  contextlib.redirect_stdout(io.StringIO()):
                 try:
                     runpy.run_path(str(script), run_name="__main__")
