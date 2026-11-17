@@ -25,6 +25,22 @@ impl Fixture {
             repo.root().to_owned()
         };
         let prefix = if nested { "nested/" } else { "" };
+        if nested {
+            repo.write(
+                "Cargo.toml",
+                "[workspace]\nmembers=['outer']\nexclude=['nested']\nresolver='3'\n",
+            );
+            repo.write(
+                "outer/Cargo.toml",
+                "[package]\nname='outer'\nversion='0.1.0'\nedition='2024'\n",
+            );
+            repo.write("outer/src/lib.rs", "pub fn value() -> u32 { 1 }\n");
+        }
+        repo.write("mise.toml", "[tools]\n");
+        repo.write(
+            ".velnor/rust-ci.toml",
+            &format!("exclude=['{prefix}local','{prefix}stable']\n"),
+        );
         repo.write(".cargo/config.toml", "[build]\njobs=2\n");
         repo.write(&format!("{prefix}Cargo.toml"), "[workspace]\nmembers=['app','peer','spare']\nexclude=['local','stable']\nresolver='3'\n");
         for name in ["app", "peer", "spare", "local", "stable"] {
@@ -58,30 +74,34 @@ impl Fixture {
             directory,
             identity: String::new(),
         };
-        success(&fixture.cargo(&["generate-lockfile", "--offline"]));
-        velnor_gen::io::write_metadata(fixture.repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
-        fixture.repo.git(&["add", "--all"]);
-        let (output, values) = fixture.helper(&[
-            "delta",
-            "prepare",
-            "--target-dir",
-            "target",
-            "--staging-dir",
-            "delta",
-        ]);
+        fixture.build_baseline(nested);
+        fixture
+    }
+
+    fn build_baseline(&mut self, nested: bool) {
+        let lock = ["generate-lockfile", "--offline"];
+        success(&self.cargo(&lock));
+        if nested {
+            success(&Self::cargo_at(&lock, self.repo.root()));
+        }
+        velnor_gen::io::write_metadata(self.repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+        self.repo.git(&["add", "--all"]);
+        let checkout = velnor_gen::io::read_recorded_checkout(self.repo.root())
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let facts = velnor_rust::detect(&checkout.view).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(facts.rust_roots.len(), if nested { 2 } else { 1 });
+        let (output, values) = self.delta_result("prepare");
         success(&output);
         values
             .lines()
             .find_map(|line| line.strip_prefix("source_identity="))
             .unwrap_or_else(|| unreachable!("{values}"))
-            .clone_into(&mut fixture.identity);
-        fixture.delta("apply");
-        let output = fixture.build();
+            .clone_into(&mut self.identity);
+        self.delta("apply");
+        let output = self.build();
         success(&output);
-        fixture
-            .repo
+        self.repo
             .write_unstaged("velnor-run.log", &String::from_utf8_lossy(&output.stderr));
-        fixture
     }
 
     fn helper(&self, args: &[&str]) -> (Output, String) {
@@ -89,27 +109,42 @@ impl Fixture {
     }
 
     fn delta(&self, verb: &str) {
-        let (output, values) = self.helper(&[
-            "delta",
-            verb,
-            "--target-dir",
-            "target",
-            "--staging-dir",
-            "delta",
-            "--package",
-            "app",
-        ]);
+        let (output, values) = self.delta_result(verb);
         success(&output);
         if verb == "stage" {
             assert_eq!(values, "save=true\n");
         }
+        println!("{}", String::from_utf8_lossy(&output.stdout));
+    }
+
+    fn delta_result(&self, verb: &str) -> (Output, String) {
+        let nested = self.directory != self.repo.root();
+        helper_at(
+            &self.repo,
+            &[
+                "delta",
+                verb,
+                "--target-dir",
+                if nested { "nested/target" } else { "target" },
+                "--staging-dir",
+                if nested { "nested/delta" } else { "delta" },
+                "--package",
+                "app",
+            ],
+            Some(&self.identity),
+            self.repo.root(),
+        )
     }
 
     fn cargo(&self, args: &[&str]) -> Output {
+        Self::cargo_at(args, &self.directory)
+    }
+
+    fn cargo_at(args: &[&str], directory: &std::path::Path) -> Output {
         Command::new(env!("CARGO"))
             .args(args)
-            .current_dir(&self.directory)
-            .env("CARGO_TARGET_DIR", self.directory.join("target"))
+            .current_dir(directory)
+            .env("CARGO_TARGET_DIR", directory.join("target"))
             .env_remove("RUSTC_WRAPPER")
             .env_remove("RUSTC_WORKSPACE_WRAPPER")
             .output()
@@ -253,6 +288,31 @@ fn changed_local_dependency_rebuilds_itself_and_its_workspace_dependents() {
         &["local", "app", "peer"],
         &["spare", "stable"],
     );
+}
+
+#[test]
+fn repository_root_apply_rechecks_the_nested_target_workspace() {
+    let fixture = Fixture::new("delta-nested-target", true);
+    fixture.incomplete_watchsets(false);
+    fixture.change(
+        "app/src/lib.rs",
+        "compile_error!(\"nested current source rejected\");\n",
+    );
+    fixture.restore();
+    let output = fixture.build();
+    fs::remove_dir_all(fixture.directory.join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let cold = fixture.build();
+    assert!(!cold.status.success(), "{cold:?}");
+    assert!(String::from_utf8_lossy(&cold.stderr).contains("nested current source rejected"));
+    assert!(
+        !output.status.success(),
+        "nested source was reused: {output:?}"
+    );
+    let log = String::from_utf8_lossy(&output.stderr);
+    assert!(log.contains("nested current source rejected"), "{log}");
+    for name in ["local", "stable"] {
+        assert!(log.contains(&format!("Fresh {name} ")), "{log}");
+    }
 }
 
 #[test]
