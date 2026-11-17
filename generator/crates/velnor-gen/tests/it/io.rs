@@ -179,6 +179,10 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
         &sample.join("expected/.github/workflows/rust-ci.yml"),
         "kept\n",
     )?;
+    symlink(
+        ".github/workflows/rust-ci.yml",
+        sample.join("expected/link"),
+    )?;
     write(&sample.join("view/old/Cargo.toml"), "")?;
     write(&sample.join("cargo-metadata/old.json"), "{}")?;
     write_sample(
@@ -210,6 +214,10 @@ fn recording_a_sample_replaces_the_recorded_inputs_and_keeps_the_expected_files(
     assert_eq!(
         fs::read_to_string(sample.join("expected/.github/workflows/rust-ci.yml"))?,
         "kept\n"
+    );
+    assert_eq!(
+        fs::read_link(sample.join("expected/link"))?,
+        Path::new(".github/workflows/rust-ci.yml")
     );
     Ok(())
 }
@@ -301,6 +309,33 @@ fn a_rejected_recording_removes_nothing_from_the_sample() -> TestResult {
 }
 
 #[test]
+fn a_failed_recording_keeps_every_existing_sample_file_unchanged() -> TestResult {
+    let scratch = Scratch::new("record-failed-write")?;
+    let sample = scratch.repo().join("generator/samples/demo");
+    let kept = [
+        ("view/mise.toml", "kept\n"),
+        ("cargo-metadata/root.json", "metadata\n"),
+        ("manifests.txt", "old/Cargo.toml\n"),
+        ("expected/.github/workflows/rust-ci.yml", "expected\n"),
+    ];
+    for (path, text) in kept {
+        write(&sample.join(path), text)?;
+    }
+    let long_name = "a".repeat(300);
+    let long_path = format!("new/{long_name}");
+    let recording = Recording {
+        view: files(&[(&long_path, "unwritable")])?,
+        manifests: vec![RepoPath::new("Cargo.toml")?],
+        ..Recording::default()
+    };
+    assert!(write_sample(&scratch.repo(), "demo", &recording).is_err());
+    for (path, text) in kept {
+        assert_eq!(fs::read_to_string(sample.join(path))?, text, "{path}");
+    }
+    Ok(())
+}
+
+#[test]
 fn a_checkout_at_the_filesystem_root_cannot_be_recorded() {
     let result = relocate_metadata(Path::new("/"), b"{}");
     assert!(matches!(result, Err(IoError::Repository(_))), "{result:?}");
@@ -312,6 +347,26 @@ fn recorded_metadata_names_no_checkout_in_object_keys() -> TestResult {
     let recorded = relocate_metadata(Path::new("/home/someone/work/project"), json)?;
     assert!(!String::from_utf8(recorded)?.contains("someone"));
     Ok(())
+}
+
+#[test]
+fn recorded_metadata_relocates_only_checkout_path_prefixes() -> TestResult {
+    let json = br#"{"nearby":"/Users/me/workspace/crate","manifest":"/rep/crates/a/Cargo.toml"}"#;
+    let recorded = relocate_metadata(Path::new("/rep"), json)?;
+    let value: serde_json::Value = serde_json::from_slice(&recorded)?;
+    assert_eq!(value["nearby"], "/Users/me/workspace/crate");
+    assert_eq!(value["manifest"], "/repo/crates/a/Cargo.toml");
+    let recorded = relocate_metadata(Path::new("/Users/me/work"), json)?;
+    let value: serde_json::Value = serde_json::from_slice(&recorded)?;
+    assert_eq!(value["nearby"], "/Users/me/workspace/crate");
+    Ok(())
+}
+
+#[test]
+fn recorded_metadata_rejects_keys_that_collapse_during_relocation() {
+    let json = br#"{"/tmp/repo name/a":1,"/tmp/repo%20name/a":2}"#;
+    let result = relocate_metadata(Path::new("/tmp/repo name"), json);
+    assert!(matches!(result, Err(IoError::Repository(_))), "{result:?}");
 }
 
 #[test]
