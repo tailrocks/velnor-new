@@ -52,9 +52,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
-    if suffixed {
-        jobs.extend(audit_job(facts, helper_root.is_some()));
-    }
+    jobs.extend(audit_job(facts, &jobs, helper_root.is_some()));
     if facts.policy.any() {
         jobs.push(policy_job(
             facts,

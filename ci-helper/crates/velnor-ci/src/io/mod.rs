@@ -4,7 +4,9 @@
 mod audit;
 mod build_inputs;
 mod cache;
+mod cache_paths;
 mod cache_sources;
+mod cache_upload;
 mod cold;
 mod configurations;
 mod crates_mirror;
@@ -148,6 +150,8 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
+        Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
+        Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Restored(args) => {
             let root = current_dir()?;

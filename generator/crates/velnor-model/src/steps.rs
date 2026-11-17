@@ -16,10 +16,16 @@ pub enum StepKind {
     },
     CacheRestore(CacheKey),
     CacheSave(CacheKey),
+    RestoredTargets {
+        expiry: BaseExpiry,
+        targets: Vec<RepoPath>,
+    },
     CacheDecide {
+        manifests: Vec<RepoPath>,
         target: RepoPath,
         archive: Option<RepoPath>,
     },
+    CacheResult(Vec<JobId>),
     CacheTrim {
         lane: JobId,
         family: TrimFamily,
@@ -38,10 +44,6 @@ pub enum StepKind {
     Helper(HelperCommand),
     InputsSave(RepoPath),
     InputsRestore(Vec<(RepoPath, RepoPath)>),
-    RestoredTargets {
-        targets: Vec<RepoPath>,
-        expiry: BaseExpiry,
-    },
     CratesMirror(crate::repo::CratesMirror),
     GeneratorCheck,
     InstallHelper(HelperRelease),

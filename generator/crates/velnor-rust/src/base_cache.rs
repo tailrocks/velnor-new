@@ -32,9 +32,19 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
         when: When::BaseExpired,
         ..step(StepKind::Helper(HelperCommand::PlanFull))
     });
-    std::iter::once(step(StepKind::Helper(HelperCommand::Restored(expiry))))
-        .chain(replan)
-        .collect()
+    let restore = if has_saving_helper(facts) {
+        StepKind::RestoredTargets {
+            expiry,
+            targets: facts
+                .rust_roots
+                .iter()
+                .map(|root| root.target_dir.clone())
+                .collect(),
+        }
+    } else {
+        StepKind::Helper(HelperCommand::Restored(expiry))
+    };
+    std::iter::once(step(restore)).chain(replan).collect()
 }
 
 pub(crate) fn saving_run(run: Step) -> Step {
@@ -77,6 +87,11 @@ pub(crate) fn save_steps(
         Step {
             when: When::SaveBase,
             ..step(StepKind::CacheDecide {
+                manifests: facts
+                    .rust_roots
+                    .iter()
+                    .map(|root| root.manifest.clone())
+                    .collect(),
                 target: root.target_dir.clone(),
                 archive,
             })
@@ -88,7 +103,7 @@ pub(crate) fn save_steps(
     ];
     if sources {
         steps.push(Step {
-            when: When::SaveBaseDecided,
+            when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
                 root: cache_root,
@@ -117,8 +132,10 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         .collect();
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
+        .chain([step(StepKind::CacheResult(lanes.clone()))])
         .collect();
     Some(Job {
+        name: Some("Cache".to_owned()),
         needs: lanes,
         when: When::SaveBase,
         skip_on_draft: false,
@@ -150,4 +167,12 @@ fn lane_trims(lane: &Job) -> Vec<Step> {
         .into_iter()
         .chain(saves_sources.then(|| family(TrimFamily::Sources)))
         .collect()
+}
+
+pub(crate) fn lane_permissions(facts: &RepoFacts) -> Permissions {
+    let mut permissions = BTreeMap::from([(PermissionScope::Contents, Access::Read)]);
+    if writes_base(facts) {
+        permissions.insert(PermissionScope::Actions, Access::Read);
+    }
+    Permissions(permissions)
 }

@@ -18,11 +18,25 @@ const BASE_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
 const DEFAULT_BRANCH_REF: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
-pub(crate) fn cache_decide(target: &RepoPath, archive: Option<&RepoPath>) -> RenderedStep {
+pub(crate) fn cache_decide(
+    target: &RepoPath,
+    archive: Option<&RepoPath>,
+    manifests: &[RepoPath],
+) -> RenderedStep {
     let mut rendered = RenderedStep {
         condition: Some("${{ steps.inputs_save.outcome == 'success' }}".to_owned()),
         id: Some(BASE_STEP.to_owned()),
         name: "Decide whether to save the build directory".to_owned(),
+        env: vec![(
+            "VELNOR_CACHE_MANIFESTS".to_owned(),
+            Value::Text(
+                manifests
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
+        )],
         run: Some(format!(
             "velnor-ci cache decide --target-dir {}{}",
             shell_word(target.as_str()),
@@ -72,6 +86,20 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         }
         _ => None,
     });
+    let verified = steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::CacheSave(key) => crate::cache_upload::verification_id(key),
+            _ => None,
+        })
+        .map(|id| format!("steps.{id}.outcome != 'failure'"))
+        .collect::<Vec<_>>();
+    let verification = (!verified.is_empty()).then(|| {
+        (
+            "cache_ok".to_owned(),
+            format!("${{{{ {} }}}}", verified.join(" && ")),
+        )
+    });
     target
         .map(|prefix| {
             [
@@ -84,6 +112,7 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         })
         .into_iter()
         .flatten()
+        .chain(verification)
         .chain(sources.map(|prefix| (SOURCES_PREFIX_OUTPUT.to_owned(), prefix)))
         .chain(saved.map(|id| {
             (
@@ -120,7 +149,9 @@ pub(crate) fn with_saved_lane(condition: String, steps: &[Step]) -> String {
 fn admitted_lane(lane: &JobId, family: TrimFamily) -> String {
     match family {
         TrimFamily::Target => trimmed_lane(lane, family),
-        TrimFamily::Sources => format!("needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true'"),
+        TrimFamily::Sources => format!(
+            "(needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true' || needs.{lane}.outputs.cache_ok == 'false')"
+        ),
     }
 }
 
@@ -169,4 +200,31 @@ pub(crate) fn base_age(expiry: BaseExpiry) -> Vec<(String, Value)> {
             )),
         )],
     }
+}
+
+pub(crate) fn audited_lane(condition: String, job: &velnor_model::Job) -> String {
+    if !job
+        .steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
+    {
+        return condition;
+    }
+    if !job
+        .needs
+        .iter()
+        .any(|id| id.as_str() == "rust-inputs-audit")
+    {
+        return condition;
+    }
+    let inner = condition.trim_start_matches("${{ ").trim_end_matches(" }}");
+    format!(
+        "${{{{ {inner} && (needs.rust-inputs-audit.result == 'success' || needs.rust-inputs-audit.result == 'skipped') }}}}"
+    )
+}
+
+pub(crate) fn audited_save(job: &velnor_model::Job, step: &Step) -> Option<String> {
+    (job.needs.iter().any(|id| id.as_str() == "rust-inputs-audit")
+        && matches!(step.kind, StepKind::CacheDecide { .. } | StepKind::CacheSave(CacheKey::Target { .. })))
+    .then(|| "${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned())
 }

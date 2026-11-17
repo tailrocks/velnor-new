@@ -4,11 +4,11 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, CustomHarness, FilterRef, FullRun, HelperCommand, Job, JobId, OnMain,
-    PackageName, RepoFacts, RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind,
-    When,
+    CargoCommand, CustomHarness, FilterRef, HelperCommand, Job, JobId, PackageName, RepoFacts,
+    RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, When,
 };
 
+use crate::audit_job::{AuditLocation, audit_when};
 use crate::base_cache::{save_steps, saving_run};
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
@@ -28,6 +28,7 @@ struct RootJobs<'a> {
     root: &'a RustRoot,
     lane: &'a Lane,
     suffixed: bool,
+    audit: AuditLocation,
     nextest: bool,
     doctests: bool,
 }
@@ -44,6 +45,13 @@ pub(crate) fn root_jobs(
         root,
         lane,
         suffixed,
+        audit: if suffixed
+            || (decision.shape != Shape::OneJob && crate::base_cache::writes_base(facts))
+        {
+            AuditLocation::Separate
+        } else {
+            AuditLocation::Inline
+        },
         nextest: root
             .members
             .iter()
@@ -84,13 +92,26 @@ impl RootJobs<'_> {
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
         Job {
+            permissions: crate::base_cache::lane_permissions(self.facts),
             needs: self
                 .lane
                 .plan
                 .clone()
                 .into_iter()
                 .chain(self.lane.from_source.then_some(HELPER_JOB))
+                .chain(
+                    ((self.audit == AuditLocation::Separate)
+                        && crate::base_cache::writes_base(self.facts))
+                    .then_some(crate::audit_job::AUDIT_JOB),
+                )
                 .collect(),
+            when: if (self.audit == AuditLocation::Separate)
+                && crate::base_cache::writes_base(self.facts)
+            {
+                When::NotCancelled
+            } else {
+                When::Success
+            },
             gate: self.lane.job(),
             steps,
             ..job(self.facts, id)
@@ -98,7 +119,7 @@ impl RootJobs<'_> {
     }
 
     fn audit(&self) -> Option<Step> {
-        if self.facts.rust_roots.len() != 1 {
+        if self.audit == AuditLocation::Separate {
             return None;
         }
         let when = audit_when(self.facts)?;
@@ -205,9 +226,9 @@ impl RootJobs<'_> {
                     .map(skip_on_draft)
                     .map(saving_run),
             );
-            steps.extend(saves.iter().cloned());
             steps.extend(self.cargo(self.tests()).map(skip_on_draft));
             steps.extend(self.audit());
+            steps.extend(saves.iter().cloned());
         } else if saves.is_empty() {
             steps.extend(self.cargo(self.tests()).map(skip_on_draft));
             steps.extend(self.audit());
@@ -222,9 +243,9 @@ impl RootJobs<'_> {
                 }
             }
             steps.extend(self.cargo(workspace));
-            steps.extend(saves);
             steps.extend(self.cargo(after).map(skip_on_draft));
             steps.extend(self.audit());
+            steps.extend(saves);
         }
         Job {
             skip_on_draft: false,
@@ -325,14 +346,6 @@ impl RootJobs<'_> {
         let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
         group_job.needs.push(build_id.clone());
         [self.lane_job(build_id, build), group_job]
-    }
-}
-
-pub(crate) fn audit_when(facts: &RepoFacts) -> Option<When> {
-    match (facts.config.on_main, &facts.config.full_run) {
-        (OnMain::Everything, _) => Some(When::ScheduledOrPush),
-        (OnMain::Affected, FullRun::Off) => None,
-        (OnMain::Affected, _) => Some(When::Scheduled),
     }
 }
 

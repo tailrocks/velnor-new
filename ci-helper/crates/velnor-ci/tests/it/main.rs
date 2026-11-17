@@ -4,6 +4,12 @@
 mod audit;
 mod base_expiry;
 mod cache;
+mod cache_flow;
+mod cache_retention_flow;
+
+mod cache_safety;
+mod cache_upload;
+
 mod cache_trim;
 mod cache_trim_errors;
 mod check_configurations;
