@@ -74,7 +74,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
         .code(),
         Some(7)
     );
-    let cache = json!([{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root","requested_key":"descriptor-marker","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}, {"family":"target","root":"literal${{root}}","restore_step":"absent","save_step":"absent","requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}]);
+    let cache = json!([{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root"}, {"family":"target","root":"literal${{root}}","restore_step":"absent","save_step":"absent"}]);
     let report = |steps: &str| report(&repo, &cache, steps);
     let steps = r#"{"target_root":{"outputs":{"cache-primary-key":"primary-marker","cache-matched-key":"matched-marker"}}}"#;
     let metrics = report(steps)?;
@@ -163,6 +163,35 @@ fn failed_setup_still_writes_metrics_with_unknown_provenance() {
     let metrics = read(&repo);
     assert_ne!(metrics.diagnostics, [] as [String; 0]);
     assert_eq!(metrics.violations, [] as [String; 0]);
+}
+
+#[test]
+fn report_accepts_only_cache_plans_and_observes_steps_without_cargo() -> ResultTest {
+    let repo = Repo::new("report-cache-plan");
+    let mut plan =
+        json!([{"family":"target","root":".","restore_step":"restore","save_step":"save"}]);
+    let metrics = report(
+        &repo,
+        &plan,
+        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
+    )?;
+    assert_eq!(metrics.caches[0].hit, velnor_ci::report::Hit::Exact);
+    assert_eq!(metrics.caches[0].requested_key, "key");
+    assert!(!metrics.caches[0].usable);
+    for (field, value) in [("usable", json!(true)), ("hit", json!("exact"))] {
+        plan[0][field] = value;
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .arg("report")
+            .current_dir(repo.root())
+            .env("RUNNER_TEMP", repo.root())
+            .env("VELNOR_REPORT_CACHES", plan.to_string())
+            .env_remove("GITHUB_TOKEN")
+            .output()?;
+        assert!(!output.status.success(), "{field}: {output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains(field));
+        plan[0].as_object_mut().ok_or("plan object")?.remove(field);
+    }
+    Ok(())
 }
 
 fn interrupted_output(repo: &Repo) -> Result<String, Box<dyn std::error::Error>> {

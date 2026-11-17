@@ -41,6 +41,21 @@ for the compiler-artifact and build-script records used as input evidence.
 
 ## Producer and enforcement
 
+`VELNOR_REPORT_CACHES` supplies an array of cache plans. Each plan contains
+only `family`, `root` (a Cargo root or `null`), `restore_step`, and `save_step`.
+Observed report fields such as `requested_key`, `hit`, and `usable` are
+rejected as plan input. `VELNOR_REPORT_STEPS` supplies the actual step outputs
+and outcomes. The report resolves keys, restore hits, and save outcomes before
+collecting restored input provenance, even when no Cargo invocation ran.
+Target data is usable only when a restored snapshot exists and the restore
+step reports a hit. A stale snapshot with a cache miss remains cold. Snapshot
+parse or read errors make provenance unverifiable; a missing snapshot is cold.
+A tracked `Cargo.lock` symlink prevents same-lock verification. A usable target
+with that symlink makes compilation provenance unverifiable, including quiet
+non-fresh artifacts; fresh artifacts alone do not claim compilation.
+API enrichment runs after provenance collection. These inputs do not change
+the schema-1 output contract.
+
 Generated report and upload steps continue on error. The separate `Cache`
 job reports missing or invalid metrics. API lookups are read-only. Job timing
 comes from the current workflow run; cache sizes come from eligible cache

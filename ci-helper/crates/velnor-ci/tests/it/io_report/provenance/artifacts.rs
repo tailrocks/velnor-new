@@ -24,7 +24,7 @@ fn quiet_nonfresh_artifact(base: &Repo) -> Result<(), Box<dyn std::error::Error>
         false,
         false,
     )?;
-    let metrics = observation(&quiet, &[], &[lib], true)?;
+    let metrics = observation(&quiet, &[], &[lib])?;
     assert_eq!(metrics.invocations[0].compilations.len(), 1, "{metrics:?}");
     assert!(
         metrics
@@ -46,7 +46,7 @@ fn fresh_artifact_is_clean(base: &Repo) -> Result<(), Box<dyn std::error::Error>
         true,
         false,
     )?;
-    let metrics = observation(&fresh, &[], &[lib], true)?;
+    let metrics = observation(&fresh, &[], &[lib])?;
     assert!(metrics.invocations[0].compilations.is_empty());
     assert_eq!(metrics.violations, [] as [String; 0]);
     Ok(())
@@ -63,7 +63,7 @@ fn progress_and_artifact_count_once(base: &Repo) -> Result<(), Box<dyn std::erro
         false,
     )?;
     let event = event(&progress_and_artifact, "Compiling", "demo", "0.1.0", true);
-    let metrics = observation(&progress_and_artifact, &[event], &[lib], true)?;
+    let metrics = observation(&progress_and_artifact, &[event], &[lib])?;
     assert_eq!(metrics.invocations[0].compilations.len(), 1, "{metrics:?}");
     Ok(())
 }
@@ -72,7 +72,7 @@ fn package_identity_is_preserved(base: &Repo) -> Result<(), Box<dyn std::error::
     let both = base.fork("report-lib-test-artifacts");
     let artifacts = package_identity_artifacts(&both)?;
     fs::remove_file(both.root().join(SNAPSHOT))?;
-    let metrics = observation(&both, &[], &artifacts, true)?;
+    let metrics = observation(&both, &[], &artifacts)?;
     assert_eq!(metrics.invocations[0].compilations.len(), 3, "{metrics:?}");
     assert_eq!(
         metrics.invocations[0]
@@ -155,7 +155,8 @@ fn exact_source_downloads_require_a_changed_crate_archive() -> Result<(), Box<dy
 {
     let base = fixture("report-download-archive-base")?;
     let repo = base.fork("report-download-evidence");
-    let source_cache = json!([{"family":"sources","root":".","restore_step":"restore","save_step":"save","requested_key":"source-key","matched_key":"source-key","hit":"exact","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}]);
+    let source_cache =
+        json!([{"family":"sources","root":".","restore_step":"restore","save_step":"save"}]);
     let steps = r#"{"restore":{"outputs":{"cache-primary-key":"source-key","cache-matched-key":"source-key","cache-hit":"true"}}}"#;
 
     let home = cargo_home(&repo)?;

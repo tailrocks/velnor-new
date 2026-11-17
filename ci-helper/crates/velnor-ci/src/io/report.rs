@@ -5,11 +5,21 @@ use crate::cli::ReportArgs;
 use crate::error::CiError;
 use crate::github::{ApiJobs, GitHub, Repo, jobs_path};
 
-use crate::report::{Hit, LaneMetrics, SCHEMA, SaveOutcome, check, waste};
+use crate::report::{Cache, Hit, LaneMetrics, SCHEMA, SaveOutcome, check, waste};
 use crate::telemetry::{INVOCATIONS, Invocation};
+use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct CachePlan {
+    family: String,
+    root: Option<String>,
+    restore_step: String,
+    save_step: String,
+}
 
 fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
@@ -70,10 +80,14 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     }
     let log_bytes = read_log()?;
     let (invocations, invocation_errors) = invocations();
+    let plans: Vec<CachePlan> =
+        json(&std::env::var("VELNOR_REPORT_CACHES").unwrap_or_else(|_| "[]".to_owned()))?;
+    let steps: Value =
+        json(&std::env::var("VELNOR_REPORT_STEPS").unwrap_or_else(|_| "{}".to_owned()))?;
     let mut metrics = LaneMetrics {
         schema: SCHEMA,
         lane: env("GITHUB_JOB"),
-        caches: json(&std::env::var("VELNOR_REPORT_CACHES").unwrap_or_else(|_| "[]".to_owned()))?,
+        caches: observe_caches(plans, &steps),
         invocations,
         downloaded: 0,
         first_cargo_seconds: None,
@@ -97,9 +111,6 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
             .verification_errors
             .push(format!("Restored input provenance unavailable: {error}"));
     }
-    let steps: Value =
-        json(&std::env::var("VELNOR_REPORT_STEPS").unwrap_or_else(|_| "{}".to_owned()))?;
-    cache_step_metrics(&mut metrics, &steps);
     if let Err(error) = super::report_inputs::verify_downloads(&mut metrics, &log_bytes) {
         metrics
             .verification_errors
@@ -123,36 +134,50 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     Ok(summary)
 }
 
-fn cache_step_metrics(metrics: &mut LaneMetrics, steps: &Value) {
+fn observe_caches(plans: Vec<CachePlan>, steps: &Value) -> Vec<Cache> {
     let default = format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH"));
     let saving = env("GITHUB_REF") == default;
-    for cache in &mut metrics.caches {
-        cache.requested_key = steps[&cache.restore_step]["outputs"]["cache-primary-key"]
-            .as_str()
-            .unwrap_or_default()
-            .to_owned();
-        cache.matched_key = steps[&cache.restore_step]["outputs"]["cache-matched-key"]
-            .as_str()
-            .filter(|key| !key.is_empty())
-            .map(str::to_owned);
-        let exact = steps[&cache.restore_step]["outputs"]["cache-hit"] == "true";
-        cache.hit = match &cache.matched_key {
-            Some(key) if exact || key == &cache.requested_key => Hit::Exact,
-            Some(_) => Hit::Fallback,
-            None => Hit::Miss,
-        };
-        cache.usable &= cache.hit != Hit::Miss;
-        cache.usable_same_lock &= cache.usable;
-        cache.save = if saving {
-            match steps[&cache.save_step]["outcome"].as_str() {
-                Some("failure" | "cancelled") => SaveOutcome::Failed,
-                Some("success") => SaveOutcome::Unknown,
-                _ => SaveOutcome::NotAttempted,
+    plans
+        .into_iter()
+        .map(|plan| {
+            let requested_key = steps[&plan.restore_step]["outputs"]["cache-primary-key"]
+                .as_str()
+                .unwrap_or_default()
+                .to_owned();
+            let matched_key = steps[&plan.restore_step]["outputs"]["cache-matched-key"]
+                .as_str()
+                .filter(|key| !key.is_empty())
+                .map(str::to_owned);
+            let exact = steps[&plan.restore_step]["outputs"]["cache-hit"] == "true";
+            let hit = match &matched_key {
+                Some(key) if exact || key == &requested_key => Hit::Exact,
+                Some(_) => Hit::Fallback,
+                None => Hit::Miss,
+            };
+            let save = if saving {
+                match steps[&plan.save_step]["outcome"].as_str() {
+                    Some("failure" | "cancelled") => SaveOutcome::Failed,
+                    Some("success") => SaveOutcome::Unknown,
+                    _ => SaveOutcome::NotAttempted,
+                }
+            } else {
+                SaveOutcome::NotAttempted
+            };
+            Cache {
+                family: plan.family,
+                root: plan.root,
+                restore_step: plan.restore_step,
+                save_step: plan.save_step,
+                requested_key,
+                matched_key,
+                hit,
+                bytes: None,
+                usable: false,
+                usable_same_lock: false,
+                save,
             }
-        } else {
-            SaveOutcome::NotAttempted
-        };
-    }
+        })
+        .collect()
 }
 
 fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> {

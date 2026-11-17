@@ -11,23 +11,18 @@ use velnor_ci::telemetry::INVOCATIONS;
 
 mod artifacts;
 
-fn cache(warm: bool) -> Value {
-    json!([{"family":"target","root":".","restore_step":"restore","save_step":"save","requested_key":"key","matched_key":"key","hit":"exact","bytes":null,"usable":warm,"usable_same_lock":warm,"save":"not_attempted"}])
+fn cache() -> Value {
+    json!([{"family":"target","root":".","restore_step":"restore","save_step":"save"}])
 }
 
-fn progress(
-    repo: &Repo,
-    events: &[Value],
-    warm: bool,
-) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
-    observation(repo, events, &[], warm)
+fn progress(repo: &Repo, events: &[Value]) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
+    observation(repo, events, &[])
 }
 
 fn observation(
     repo: &Repo,
     events: &[Value],
     artifacts: &[Value],
-    warm: bool,
 ) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
     let root = fs::canonicalize(repo.root())?;
     let mut invocation = crate::report::lane()["invocations"][0].clone();
@@ -39,7 +34,7 @@ fn observation(
     fs::write(repo.root().join(INVOCATIONS), format!("{invocation}\n"))?;
     super::report(
         repo,
-        &cache(warm),
+        &cache(),
         r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
     )
 }
@@ -103,7 +98,7 @@ fn snapshot_missing_is_cold_but_parse_and_read_errors_fail_closed()
             "read-error" => fs::create_dir_all(&snapshot)?,
             _ => {}
         }
-        let metrics = progress(&repo, &[], true)?;
+        let metrics = progress(&repo, &[])?;
         assert_eq!(
             !metrics.verification_errors.is_empty(),
             case != "missing",
@@ -150,7 +145,7 @@ fn warm_cycle_exempts_a_workspace_rebuild_only_when_a_real_prerequisite_compiled
     restore(&repo);
     let a = event(&repo, "Compiling", "a", "0.1.0", true);
     let b = event(&repo, "Compiling", "b", "0.1.0", true);
-    let only_origin = progress(&repo, std::slice::from_ref(&a), true)?;
+    let only_origin = progress(&repo, std::slice::from_ref(&a))?;
     assert!(
         only_origin
             .violations
@@ -158,7 +153,7 @@ fn warm_cycle_exempts_a_workspace_rebuild_only_when_a_real_prerequisite_compiled
             .any(|line| line.contains("a v0.1.0")),
         "{only_origin:?}"
     );
-    let with_prerequisite = progress(&repo, &[a, b], true)?;
+    let with_prerequisite = progress(&repo, &[a, b])?;
     assert_eq!(
         with_prerequisite.violations,
         [] as [String; 0],
@@ -179,7 +174,7 @@ fn restore_witness_separates_prior_changes_from_changes_during_warm_cargo()
     before.write("src/lib.rs", "pub fn changed_before_restore() {}\n");
     assert!(super::cli(&before, &["inputs", "restore"]).status.success());
     let before_event = event(&before, "Compiling", "demo", "0.1.0", true);
-    let prior_change = progress(&before, std::slice::from_ref(&before_event), true)?;
+    let prior_change = progress(&before, std::slice::from_ref(&before_event))?;
     assert_eq!(prior_change.verification_errors, [] as [String; 0]);
     assert!(prior_change.violations.is_empty(), "{prior_change:?}");
 
@@ -188,8 +183,17 @@ fn restore_witness_separates_prior_changes_from_changes_during_warm_cargo()
     assert!(during.root().join(RESTORE_WITNESS).is_file());
     during.write("src/lib.rs", "pub fn changed() {}\n");
     let during_event = event(&during, "Compiling", "demo", "0.1.0", true);
-    let changed = progress(&during, &[during_event], true)?;
+    let changed = progress(&during, &[during_event])?;
     assert_ne!(changed.verification_errors, [] as [String; 0]);
+    for steps in [
+        "{}",
+        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-hit":"false"}}}"#,
+    ] {
+        let cold = report(&during, &cache(), steps)?;
+        assert!(!cold.caches[0].usable, "{cold:?}");
+        assert!(!cold.caches[0].usable_same_lock, "{cold:?}");
+        assert_eq!(cold.verification_errors, [] as [String; 0], "{cold:?}");
+    }
     Ok(())
 }
 
@@ -207,7 +211,7 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
         repo.git(&["add", "."]);
     }
     let dependency = event(&cold, "Compiling", "dependency", "1.0.0", false);
-    let cold_metrics = progress(&cold, &[dependency], false)?;
+    let cold_metrics = progress(&cold, &[dependency])?;
     assert_eq!(
         cold_metrics.verification_errors,
         [] as [String; 0],
@@ -217,7 +221,7 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
     assert!(super::cli(&warm, &["inputs", "save"]).status.success());
     assert!(super::cli(&warm, &["inputs", "restore"]).status.success());
     let dependency = event(&warm, "Compiling", "dependency", "1.0.0", false);
-    let metrics = progress(&warm, &[dependency], true)?;
+    let metrics = progress(&warm, &[dependency])?;
     assert!(
         metrics
             .verification_errors
@@ -226,7 +230,7 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
         "{metrics:?}"
     );
     let workspace = event(&warm, "Compiling", "demo", "0.1.0", true);
-    let metrics = progress(&warm, &[workspace], true)?;
+    let metrics = progress(&warm, &[workspace])?;
     assert_ne!(metrics.verification_errors, [] as [String; 0]);
 
     let quiet = artifact(
@@ -237,7 +241,7 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
         false,
         false,
     )?;
-    let metrics = observation(&warm, &[], &[quiet], true)?;
+    let metrics = observation(&warm, &[], &[quiet])?;
     assert_ne!(metrics.verification_errors, [] as [String; 0]);
 
     let fresh = artifact(
@@ -248,7 +252,7 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
         true,
         false,
     )?;
-    let metrics = observation(&warm, &[], &[fresh], true)?;
+    let metrics = observation(&warm, &[], &[fresh])?;
     assert_eq!(metrics.verification_errors, [] as [String; 0]);
     Ok(())
 }

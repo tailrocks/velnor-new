@@ -55,8 +55,8 @@ fn collect_root(
     let unchanged = unchanged(facts, root, current, saved);
     for cache in &mut metrics.caches {
         if cache.family == "target" && cache.root.as_deref() == Some(root_text) {
-            cache.usable = usable;
-            cache.usable_same_lock = usable && same_lock;
+            cache.usable = usable && cache.hit != Hit::Miss;
+            cache.usable_same_lock = cache.usable && same_lock;
         }
     }
     collect_invocations(
@@ -200,12 +200,16 @@ fn symlink_lock_unavailable(
             .filter(|text| !text.is_empty())
             .unwrap_or(".")
             .to_owned();
+        let saved = read_snapshot(&invocation_root.join(SNAPSHOT))?;
+        for cache in &mut metrics.caches {
+            if cache.family == "target" && cache.root.as_deref() == Some(&root) {
+                cache.usable = saved.is_some() && cache.hit != Hit::Miss;
+                cache.usable_same_lock = false;
+            }
+        }
         root.clone_into(&mut invocation.root);
         let warm = metrics.caches.iter().any(|cache| {
-            cache.family == "target"
-                && cache.root.as_deref() == Some(&root)
-                && cache.usable
-                && cache.hit != Hit::Miss
+            cache.family == "target" && cache.root.as_deref() == Some(&root) && cache.usable
         });
         if !warm {
             continue;
