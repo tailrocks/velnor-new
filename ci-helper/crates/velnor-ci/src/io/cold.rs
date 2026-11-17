@@ -65,8 +65,8 @@ pub(super) fn targets_with_receipts(root: &Path) -> Result<(Vec<PathBuf>, Pendin
     } else {
         let mut targets = vec![root.join("target")];
         for path in listed.paths {
-            if let Some(dir) = path.strip_suffix("Cargo.toml")
-                && (dir.is_empty() || dir.ends_with('/'))
+            if path.file_name().is_some_and(|name| name == "Cargo.toml")
+                && let Some(dir) = path.parent()
             {
                 let target = listed.top.join(dir).join("target");
                 if !targets.contains(&target) {

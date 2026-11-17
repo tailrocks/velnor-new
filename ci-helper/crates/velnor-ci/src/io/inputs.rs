@@ -127,10 +127,10 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Ok(format!(
+            return Err(CiError::new(format!(
                 "no {}; nothing restored (cold run)\n",
                 relative.display()
-            ));
+            )));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
@@ -139,10 +139,10 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
-        return Ok(format!(
+        return Err(CiError::new(format!(
             "restored nothing: {} tracked symlinks are new, changed or deleted since the save\n",
             plan.links_changed
-        ));
+        )));
     }
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
@@ -161,8 +161,7 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
 
 pub(super) struct TrackedPaths {
     pub top: PathBuf,
-    pub paths: Vec<String>,
-    pub non_utf8: usize,
+    pub paths: Vec<PathBuf>,
 }
 
 pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
@@ -174,21 +173,23 @@ pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
     );
     let listed = git(&top, &["ls-files", "-z", "--recurse-submodules"], None)?;
     let mut paths = Vec::new();
-    let mut non_utf8 = 0;
     for path in listed
         .split(|byte| *byte == 0)
         .filter(|path| !path.is_empty())
     {
-        match String::from_utf8(path.to_vec()) {
-            Ok(path) => paths.push(path),
-            Err(_) => non_utf8 += 1,
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStringExt;
+            paths.push(PathBuf::from(std::ffi::OsString::from_vec(path.to_vec())));
+        }
+        #[cfg(not(unix))]
+        {
+            paths.push(PathBuf::from(String::from_utf8(path.to_vec()).map_err(
+                |e| CiError::new(format!("git ls-files printed non-UTF-8: {e}")),
+            )?));
         }
     }
-    Ok(TrackedPaths {
-        top,
-        paths,
-        non_utf8,
-    })
+    Ok(TrackedPaths { top, paths })
 }
 
 fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {

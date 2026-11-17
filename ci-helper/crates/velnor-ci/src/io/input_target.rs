@@ -40,11 +40,6 @@ fn protect_checkout(root: &Path, targets: &[PathBuf]) -> Result<PathBuf, CiError
     let root = resolve(root)?;
     let tracked = tracked_paths(&root)?;
     let top = resolve(&tracked.top)?;
-    if tracked.non_utf8 > 0 {
-        return Err(CiError::new(
-            "cannot verify target directory: tracked paths are not valid UTF-8",
-        ));
-    }
     let metadata = [
         resolve(&top.join(".git"))?,
         git_path(&root, "--absolute-git-dir")?,

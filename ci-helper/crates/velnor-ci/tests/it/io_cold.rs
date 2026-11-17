@@ -76,7 +76,7 @@ fn rounding_detected_after_tie_breaking_makes_a_cold_build_in_every_root() {
 }
 
 #[test]
-fn a_non_utf8_tracked_path_refuses_unverifiable_cache_deletion() {
+fn a_non_utf8_tracked_path_outside_target_allows_verified_cold_deletion() {
     let repo = Repo::new("cold-non-utf8");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let blob = Command::new("git")
@@ -101,18 +101,10 @@ fn a_non_utf8_tracked_path_refuses_unverifiable_cache_deletion() {
     stale_target(&repo, "target");
     let output = helper(&repo, &["restored"]);
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!output.status.success(), "{output:?}");
-    assert!(stderr.contains("not valid UTF-8"), "{stderr}");
-    assert!(!stdout.contains("building cold"), "{stdout}");
-    assert_eq!(
-        std::fs::read(
-            repo.root()
-                .join("target/debug/.fingerprint/stale/lib-stale")
-        )
-        .unwrap_or_default(),
-        b"x"
-    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(stdout.contains("not valid UTF-8"), "{stdout}");
+    assert!(stdout.contains("building cold"), "{stdout}");
+    assert!(!repo.root().join("target").exists());
     assert_eq!(
         std::fs::read(repo.root().join("src/lib.rs")).unwrap_or_default(),
         b"pub fn one() {}\n"

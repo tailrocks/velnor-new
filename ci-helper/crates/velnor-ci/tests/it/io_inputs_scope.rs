@@ -68,6 +68,8 @@ fn invalid_symlinks_only_invalidate_their_own_root_snapshot() {
     repo.set_mtime("other/src/lib.rs", checkout);
     inputs(&repo, "other", "restore");
     assert_eq!(repo.mtime("other/src/lib.rs"), checkout);
+    inputs(&repo, "app", "save");
+    assert!(snapshot(&repo, "app").is_file());
     repo.link("lib.rs", "app/odd\tlink");
     assert!(inputs(&repo, "app", "save").contains("saved nothing: 1 tracked symlinks"));
     assert!(!snapshot(&repo, "app").exists());
