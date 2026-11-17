@@ -256,7 +256,7 @@ fn identity_preimage(
     fields.extend(specs.iter().cloned());
     if specs
         .iter()
-        .all(|spec| rust_spec_kind(spec) == RustSpecKind::NotRust)
+        .any(|spec| rust_spec_kind(spec) == RustSpecKind::NotRust)
     {
         fields.push(VERIFIED_INSTALL_ARCHIVES_FORM.to_owned());
     }

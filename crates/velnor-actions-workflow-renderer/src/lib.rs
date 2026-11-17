@@ -3,9 +3,6 @@
 
 #![allow(
     clippy::missing_errors_doc,
-    reason = "documentation comments are intentionally absent from this codebase"
-)]
-#![allow(
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]

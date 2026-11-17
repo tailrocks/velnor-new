@@ -118,7 +118,25 @@ fn retarget_check_identity(
                     *matrix_key = key;
                 }
             }
-            StepKind::NativeCheckExecution { .. } | StepKind::TofuTaskExecution { .. } => {}
+            StepKind::TofuTaskExecution { execution } => {
+                let variant = match lane {
+                    EmitLane::Single => None,
+                    EmitLane::Hosted => Some(super::LaneVariant::Hosted),
+                    EmitLane::Scale => Some(super::LaneVariant::ScaleSet),
+                };
+                if let Some(variant) = variant {
+                    let (id, key) = super::super::matrix_entry::project_task_matrix_identity(
+                        &execution.task_id,
+                        &execution.matrix_id,
+                        &execution.matrix_key,
+                        variant,
+                    )?;
+                    execution.matrix_id = id;
+                    execution.matrix_key = key;
+                    execution.refresh_execution_digest()?;
+                }
+            }
+            StepKind::NativeCheckExecution { .. } => {}
         }
     }
     Ok(())

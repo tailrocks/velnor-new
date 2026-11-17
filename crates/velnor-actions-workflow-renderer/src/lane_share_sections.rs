@@ -68,7 +68,8 @@ fn is_lane_specific(step: &Step) -> bool {
     }
     match &step.kind {
         StepKind::Shell { env, .. } | StepKind::Internal { env, .. } => {
-            env.contains_key(NAMED_CHECK_JOB_ID_ENV)
+            env.contains_key("VELNOR_MATRIX_ID")
+                || env.contains_key(NAMED_CHECK_JOB_ID_ENV)
                 || env.contains_key(NAMED_CHECK_LANE_VARIANT_ENV)
         }
         StepKind::NativeCheckExecution { .. }

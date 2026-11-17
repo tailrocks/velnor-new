@@ -155,3 +155,48 @@ fn generated_tofu_manifest_binds_recipe_to_selected_plan() -> TestResult {
     assert!(error.contains("manifest_task_digest_mismatch"), "{error}");
     Ok(())
 }
+
+#[test]
+fn tofu_renders_in_both_execution_lanes() -> TestResult {
+    let repo = super::tofu_providers_producers::tofu_repo(&["."])?;
+    let config = repo.path().join(".velnor/config.toml");
+    let mut contents = fs::read_to_string(&config)?.replace("schema = 1", "schema = 2");
+    contents.push_str(
+        r#"
+[execution]
+mode = "both"
+default_profile = "hosted"
+hosted_profile = "hosted"
+scale_set_profile = "local"
+[execution.profiles.hosted]
+kind = "github-hosted"
+label = "ubuntu-26.04"
+platform = "linux/amd64"
+[execution.profiles.local]
+kind = "github-scale-set"
+name = "ubuntu-26.04-scale-set"
+labels = ["velnor", "ubuntu-26.04-scale-set"]
+platform = "linux/amd64"
+"#,
+    );
+    fs::write(config, contents)?;
+    let prepared = velnor_actions_orchestrator::prepare(repo.path())?;
+    let tree = velnor_actions_orchestrator::render_staged_tree(&prepared)?;
+    let manifest = tree
+        .files
+        .iter()
+        .find(|file| file.path == velnor_actions_contract::TASK_EXECUTION_MANIFEST_PATH)
+        .ok_or("manifest missing")?;
+    let text = &manifest.bytes;
+    let manifest: TaskExecutionManifestV1 =
+        serde_json::from_str(text.split_once('\n').ok_or("marker missing")?.1)?;
+    let tofu: Vec<_> = manifest
+        .tasks
+        .values()
+        .filter(|record| record.task_id == "stack/tofu/dir-/fmt/default")
+        .collect();
+    assert_eq!(tofu.len(), 2);
+    assert_ne!(tofu[0].matrix_id, tofu[1].matrix_id);
+    assert_ne!(tofu[0].matrix_key, tofu[1].matrix_key);
+    Ok(())
+}

@@ -53,7 +53,7 @@ fn archive_material_rollout_rejects_previous_nonrust_exact_identity() -> Result<
             "daaa717006c54da9ddf53f5775553dd4e9808734e058466771c3834411c98eb5",
         ),
     ] {
-        assert_eq!(payload(Some(rust))?.identity_input(), baseline);
+        assert_ne!(payload(Some(rust))?.identity_input(), baseline);
     }
     Ok(())
 }

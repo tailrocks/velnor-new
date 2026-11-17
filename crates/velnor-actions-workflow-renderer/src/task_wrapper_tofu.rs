@@ -40,10 +40,16 @@ pub(super) fn lower<'a>(
                 context.controller,
             )?;
             let record = execution.as_ref().clone();
-            if records
-                .insert(record.task_id.clone(), record.clone())
-                .is_some()
-            {
+            let paired = context
+                .lane_plan
+                .and_then(|plan| plan.route_for_output(job_id))
+                .is_some_and(|route| route.variant.is_some());
+            let key = if paired {
+                &record.matrix_id
+            } else {
+                &record.task_id
+            };
+            if records.insert(key.clone(), record.clone()).is_some() {
                 return Err(RenderError::InvalidWorkflow(format!(
                     "native_tofu_task_not_unique:{}",
                     record.task_id
