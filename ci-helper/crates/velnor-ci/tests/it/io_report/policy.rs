@@ -116,9 +116,11 @@ fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> su
         ("truncated", vec!["main"], true, false),
         ("save-truncated", vec![], true, true),
         ("", vec![], false, true),
+        ("CASEKEY", vec!["main"], false, false),
     ] {
+        let matched = if key == "CASEKEY" { "casekey" } else { key };
         let mut entries: Vec<_> = refs.iter().enumerate().map(|(index, branch)| {
-            json!({"key":key,"ref":format!("refs/heads/{branch}"),"version":format!("v{index}"),"size_in_bytes":10 + index})
+            json!({"key":matched,"ref":format!("refs/heads/{branch}"),"version":format!("v{index}"),"size_in_bytes":10 + index})
         }).collect();
         entries.push(
             json!({"key":format!("{key}-prefix"),"ref":"refs/heads/main","size_in_bytes":99}),
@@ -127,14 +129,14 @@ fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> su
             entries.clear();
         }
         responses.insert(
-            format!("/repos/owner/repo/actions/caches?key={key}&per_page=100"),
+            format!("/repos/owner/repo/actions/caches?key={matched}&per_page=100"),
             json!({"total_count":entries.len() + usize::from(truncated),"actions_caches":entries})
                 .to_string(),
         );
         caches.push(json!({"family":"target","root":".","restore_step":key,"save_step":format!("save-{key}"),"requested_key":"","matched_key":null,"hit":"miss","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}));
         steps.insert(
             key.to_owned(),
-            json!({"outputs":{"cache-primary-key":key,"cache-matched-key":key}}),
+            json!({"outputs":{"cache-primary-key":key,"cache-matched-key":matched,"cache-hit":if key == "CASEKEY" { "true" } else { "false" }}}),
         );
         if saving {
             steps.insert(format!("save-{key}"), json!({"outcome":"success"}));
@@ -163,12 +165,15 @@ fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> su
 }
 
 fn assert_inventory(metrics: &velnor_ci::report::LaneMetrics) {
-    assert_eq!(metrics.caches.len(), 7);
+    assert_eq!(metrics.caches.len(), 8);
+    assert_eq!(metrics.caches[7].requested_key, "CASEKEY");
+    assert_eq!(metrics.caches[7].matched_key.as_deref(), Some("casekey"));
+    assert_eq!(metrics.caches[7].hit, velnor_ci::report::Hit::Exact);
     for (cache, expected_bytes) in
         metrics
             .caches
             .iter()
-            .zip([Some(11), Some(11), None, None, None, None, None])
+            .zip([Some(11), Some(11), None, None, None, None, None, Some(10)])
     {
         assert_eq!(cache.bytes, expected_bytes, "{}", cache.requested_key);
         assert_eq!(

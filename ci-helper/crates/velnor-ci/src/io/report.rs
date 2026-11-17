@@ -79,8 +79,9 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
             .as_str()
             .filter(|key| !key.is_empty())
             .map(str::to_owned);
+        let exact = steps[&cache.restore_step]["outputs"]["cache-hit"] == "true";
         cache.hit = match &cache.matched_key {
-            Some(key) if key == &cache.requested_key => Hit::Exact,
+            Some(key) if exact || key == &cache.requested_key => Hit::Exact,
             Some(_) => Hit::Fallback,
             None => Hit::Miss,
         };
@@ -97,11 +98,10 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
                 SaveOutcome::NotAttempted
             };
     }
-    match api_metrics(&mut metrics, &steps) {
-        Ok(()) => {}
-        Err(error) => metrics
+    if let Err(error) = api_metrics(&mut metrics, &steps) {
+        metrics
             .diagnostics
-            .push(format!("GitHub telemetry unavailable: {error}")),
+            .push(format!("GitHub telemetry unavailable: {error}"));
     }
     metrics.violations = waste(&metrics);
     let summary = metrics.summary();
