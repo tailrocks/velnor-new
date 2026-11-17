@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use toml::Value;
 use velnor_model::{ChangeSet, PathGlob, RepoFacts, RepoPath, RustRoot, Weakening};
 
+use crate::cargo_flags::flag_tokens;
 use crate::config::{CONFIG_PATH, parse};
 use crate::mise::MISE_CONFIGS;
 use crate::roots::is_cargo_config;
@@ -286,18 +287,6 @@ fn selects(build: Option<&toml::Table>, triple: &str) -> bool {
         Some(Value::String(one)) => one == triple,
         Some(Value::Array(many)) => many.iter().any(|item| item.as_str() == Some(triple)),
         _ => false,
-    }
-}
-
-fn flag_tokens(value: &Value) -> Vec<String> {
-    match value {
-        Value::Array(items) => items
-            .iter()
-            .filter_map(Value::as_str)
-            .map(str::to_owned)
-            .collect(),
-        Value::String(text) => text.split_whitespace().map(str::to_owned).collect(),
-        _ => Vec::new(),
     }
 }
 
