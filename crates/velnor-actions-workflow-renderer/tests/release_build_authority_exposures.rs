@@ -3,6 +3,34 @@
 
 use super::*;
 
+#[test]
+fn release_authority_rejects_credential_environment_objects() -> Result<(), Box<dyn Error>> {
+    let files = release_files()?;
+    let mut missed = Vec::new();
+    for expression in ["${{ secrets }}", "${{ fromJSON(secrets.ENVIRONMENT) }}"] {
+        for scope in ["workflow", "job", "step", "composite"] {
+            let mut workflow = json!({"jobs": {"build": {"steps": [{"run": "mbx build"}]}}});
+            match scope {
+                "workflow" => workflow["env"] = json!(expression),
+                "job" => workflow["jobs"]["build"]["env"] = json!(expression),
+                "step" => workflow["jobs"]["build"]["steps"][0]["env"] = json!(expression),
+                "composite" => {
+                    workflow["env"] = json!(expression);
+                    workflow["jobs"]["build"]["steps"][0] = json!({"uses": "./.github/actions/generator-release-build-linux"});
+                }
+                _ => unreachable!(),
+            }
+            if violations(&workflow, &files)? != ["build"] {
+                missed.push(format!("{scope} {expression}"));
+            }
+        }
+    }
+    assert!(missed.is_empty(), "missed {missed:?}");
+    let clean = json!({"env": "${{ fromJSON(vars.PUBLIC_ENVIRONMENT) }}", "jobs": {"build": {"env": "${{ fromJSON(vars.JOB_ENVIRONMENT) }}", "steps": [{"uses": "actions/setup-example@pin", "env": "${{ secrets }}"}, {"run": "mbx build", "env": "${{ fromJSON(vars.STEP_ENVIRONMENT) }}"}]}}});
+    assert_eq!(violations(&clean, &files)?, Vec::<String>::new());
+    Ok(())
+}
+
 fn rejects_scope(scope: &str) -> Result<(), Box<dyn Error>> {
     let files = release_files()?;
     let mut missed = Vec::new();
