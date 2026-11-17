@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
-use std::path::Path;
+use std::path::{Component, Path};
 
 use crate::cargo_artifacts::CargoArtifact;
 use crate::telemetry::Invocation;
@@ -87,24 +87,20 @@ pub fn diagnostics(invocation: &Invocation) -> Vec<String> {
     }
 }
 
-pub fn normalize(invocation: &mut Invocation, checkout: &Path) {
-    let target = invocation
-        .target_directory
-        .as_ref()
-        .map(std::path::PathBuf::from);
+pub fn normalize(invocation: &mut Invocation, checkout: &Path, target: &Path) {
     let relative = |text: &mut String| {
         let path = Path::new(text);
-        if let Some(target) = &target
-            && let Ok(relative) = path.strip_prefix(target)
-        {
-            *text = format!("target/{}", relative.display());
-        } else if let Ok(relative) = path.strip_prefix(checkout) {
+        if let Ok(relative) = path.strip_prefix(checkout) {
             *text = format!("checkout/{}", relative.display());
         }
     };
     for artifact in &mut invocation.artifacts {
         for filename in &mut artifact.filenames {
-            relative(filename);
+            if let Some(suffix) = target_relative(Path::new(filename), target) {
+                *filename = format!("target/{}", suffix.display());
+            } else {
+                relative(filename);
+            }
         }
         relative(&mut artifact.target.src_path);
         relative(&mut artifact.manifest_path);
@@ -124,6 +120,40 @@ pub fn normalize(invocation: &mut Invocation, checkout: &Path) {
         } else {
             root.to_string_lossy().into_owned()
         };
+    }
+}
+
+fn target_relative(path: &Path, target: &Path) -> Option<std::path::PathBuf> {
+    let normalized_path: std::path::PathBuf = path
+        .components()
+        .fold(Vec::new(), |mut components, component| {
+            push_component(&mut components, component);
+            components
+        })
+        .into_iter()
+        .collect();
+    let normalized_target: std::path::PathBuf = target
+        .components()
+        .fold(Vec::new(), |mut components, component| {
+            push_component(&mut components, component);
+            components
+        })
+        .into_iter()
+        .collect();
+    normalized_path
+        .strip_prefix(normalized_target)
+        .ok()
+        .map(Path::to_path_buf)
+}
+
+fn push_component<'a>(components: &mut Vec<Component<'a>>, component: Component<'a>) {
+    match component {
+        Component::CurDir => {}
+        Component::ParentDir if matches!(components.last(), Some(Component::Normal(_))) => {
+            components.pop();
+        }
+        Component::ParentDir if matches!(components.last(), Some(Component::RootDir)) => {}
+        _ => components.push(component),
     }
 }
 

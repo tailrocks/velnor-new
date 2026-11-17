@@ -209,8 +209,8 @@ fn configured_external_targets_have_portable_compilation_identity() -> super::Re
 }
 
 #[test]
-fn checkout_paths_do_not_assume_a_target_directory() -> super::ResultTest {
-    normalization("checkout", "checkout/target/", true)
+fn default_target_paths_have_portable_compilation_identity() -> super::ResultTest {
+    normalization("checkout", "target/", true)
 }
 
 #[test]

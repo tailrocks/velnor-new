@@ -37,7 +37,11 @@ fn dependency_source_identity_ignores_cargo_home_and_retains_package_source_and_
             package.clone_into(&mut artifact.package_id);
             artifact.manifest_path = format!("{home}/source/Cargo.toml");
             artifact.target.src_path = format!("{home}/source/src/lib.rs");
-            normalize(&mut invocation, std::path::Path::new("/checkout"));
+            normalize(
+                &mut invocation,
+                std::path::Path::new("/checkout"),
+                std::path::Path::new("/checkout/target"),
+            );
             assert_eq!(invocation.argv, argv);
             assert_eq!(invocation.artifacts[0].package_id, package);
             assert_eq!(
@@ -52,7 +56,11 @@ fn dependency_source_identity_ignores_cargo_home_and_retains_package_source_and_
     let mut different = invocation();
     packages[0].clone_into(&mut different.artifacts[0].package_id);
     different.artifacts[0].target.src_path = "/outside/src/lib.rs".to_owned();
-    normalize(&mut different, std::path::Path::new("/checkout"));
+    normalize(
+        &mut different,
+        std::path::Path::new("/checkout"),
+        std::path::Path::new("/checkout/target"),
+    );
     assert_eq!(
         different.artifacts[0].target.src_path,
         "/outside/src/lib.rs"
@@ -104,7 +112,11 @@ fn assert_checkout_normalization() {
         artifact.manifest_path = format!("{checkout}/Cargo.toml");
         artifact.target.src_path = format!("{checkout}/src/lib.rs");
         artifact.filenames = vec![format!("{checkout}/target/debug/deps/libapp-opaque.rlib")];
-        normalize(&mut invocation, std::path::Path::new(checkout));
+        normalize(
+            &mut invocation,
+            std::path::Path::new(checkout),
+            &std::path::Path::new(checkout).join("target"),
+        );
         assert_eq!(invocation.root, ".");
         assert_eq!(invocation.argv, argv);
         assert_eq!(
@@ -131,7 +143,11 @@ fn assert_checkout_normalization() {
         let mut invocation = invocation();
         "/agent one/工作-sibling".clone_into(&mut invocation.root);
         package.clone_into(&mut invocation.artifacts[0].package_id);
-        normalize(&mut invocation, std::path::Path::new("/agent one/工作"));
+        normalize(
+            &mut invocation,
+            std::path::Path::new("/agent one/工作"),
+            std::path::Path::new("/agent one/工作/target"),
+        );
         assert_eq!(invocation.root, "/agent one/工作-sibling");
         assert_eq!(invocation.artifacts[0].package_id, package);
     }

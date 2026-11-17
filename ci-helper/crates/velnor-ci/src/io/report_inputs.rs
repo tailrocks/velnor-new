@@ -150,7 +150,11 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
             .filter(|event| event.kind == ProgressKind::Downloaded)
             .map(|event| format!("{} v{}", event.package, event.version))
             .collect();
-        crate::observed_units::normalize(invocation, inputs.checkout);
+        let target = invocation
+            .target_directory
+            .as_ref()
+            .map_or(target, std::path::PathBuf::from);
+        crate::observed_units::normalize(invocation, inputs.checkout, &target);
         inputs.root_text.clone_into(&mut invocation.root);
         verify_witness(
             &mut metrics.verification_errors,
