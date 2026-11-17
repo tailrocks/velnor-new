@@ -438,6 +438,9 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
+      - name: Prepare test fixtures
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        run: bash scripts/ci-fixtures.sh
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
