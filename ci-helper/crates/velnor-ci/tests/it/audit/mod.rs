@@ -5,6 +5,7 @@ mod freshness;
 mod gated;
 mod guards;
 mod identity;
+mod optional;
 mod partial;
 mod reads;
 mod stand_ins;

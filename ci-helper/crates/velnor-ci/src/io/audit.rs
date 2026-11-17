@@ -33,6 +33,7 @@ pub(super) struct Audit<'a> {
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
+    stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,
 }
@@ -74,6 +75,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
             })
             .collect(),
         found: CompileInputs::new(),
+        stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
     };
@@ -103,6 +105,12 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     complete(&facts, &workspaces, &audit.built, &platforms)?;
+    if !audit.stale.is_empty() {
+        return Err(CiError::new(format!(
+            "found stale dep-info {}; rebuild every observed target or delete its stale unit files before auditing inputs",
+            audit.stale.join(", ")
+        )));
+    }
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if write {
@@ -283,6 +291,9 @@ impl Audit<'_> {
             return Ok(None);
         };
         if self.changed_since(workspace, &paths, built) {
+            if !self.owners.of(package, &source).is_empty() {
+                self.stale.push(file.display().to_string());
+            }
             return Ok(None);
         }
         for owner in self.owners.of(package, &source) {
