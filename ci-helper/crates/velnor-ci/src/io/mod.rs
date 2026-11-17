@@ -12,6 +12,7 @@ mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
 mod git;
+mod git_witness;
 mod http;
 mod inputs;
 mod manifests;

@@ -80,7 +80,7 @@ pub(super) fn downloads(
         .iter()
         .filter(|event| event.kind == ProgressKind::Downloaded)
         .collect();
-    match &invocation.verified_download_archives {
+    let (downloads, mut diagnostics, mut errors) = match &invocation.verified_download_archives {
         Some(archives) => verified_downloads(archives, root, &events),
         None if exact_sources => (
             Vec::new(),
@@ -97,7 +97,15 @@ pub(super) fn downloads(
             Vec::new(),
             Vec::new(),
         ),
+    };
+    match &invocation.verified_git_downloads {
+        Some(_) => {}
+        None if exact_sources => errors.push(format!(
+            "{root}: Git database evidence is unavailable for an exact sources cache hit"
+        )),
+        None => diagnostics.push(format!("{root}: Git source fetch count is unknown")),
     }
+    (downloads, diagnostics, errors)
 }
 
 fn verified_downloads(

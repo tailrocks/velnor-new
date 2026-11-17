@@ -39,6 +39,8 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         compilations: Vec::new(),
         downloads: Vec::new(),
         verified_download_archives: None,
+        verified_git_downloads: None,
+        restored_target_usable: None,
         artifacts: Vec::new(),
         progress: Some(Vec::new()),
         capture_complete: false,

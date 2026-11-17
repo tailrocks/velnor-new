@@ -39,7 +39,7 @@ fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTe
             .env("GITHUB_REF", if outcome == "pr-success" { "refs/pull/1/merge" } else { "refs/heads/main" }).env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
             .env("GITHUB_REPOSITORY", "owner/repo").env("GITHUB_RUN_ID", "1")
             .env("GITHUB_RUN_ATTEMPT", "1").env("VELNOR_REPORT_CACHES", cache.to_string())
-            .env("VELNOR_REPORT_STEPS", json!({"restore":{"outputs":{"cache-primary-key":"key"}},"save":{"outcome":if outcome == "pr-success" { "success" } else { outcome }}}).to_string());
+            .env("VELNOR_REPORT_STEPS", json!({"restore":{"outcome":"success","outputs":{"cache-primary-key":"key"}},"save":{"outcome":if outcome == "pr-success" { "success" } else { outcome }}}).to_string());
         if let Some(present) = inventory {
             let entries = if present {
                 json!([{"key":"key","ref":"refs/heads/main","size_in_bytes":12}])
@@ -61,7 +61,9 @@ fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTe
                 .env("GITHUB_TOKEN", "fixture")
                 .env("GITHUB_API_URL", api);
         } else {
-            command.env_remove("GITHUB_TOKEN");
+            command
+                .env_remove("GITHUB_TOKEN")
+                .env_remove("CARGO_TARGET_DIR");
         }
         let output = command.output()?;
         assert!(output.status.success(), "{output:?}");
@@ -116,7 +118,7 @@ fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> su
         ("save-ambiguous", vec!["main", "main"], false, true),
         ("truncated", vec!["main"], true, false),
         ("save-truncated", vec![], true, true),
-        ("", vec![], false, true),
+        ("missing-save", vec![], false, true),
         ("CASEKEY", vec!["main"], false, false),
     ] {
         let matched = if key == "CASEKEY" { "casekey" } else { key };
@@ -126,7 +128,7 @@ fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> su
         entries.push(
             json!({"key":format!("{key}-prefix"),"ref":"refs/heads/main","size_in_bytes":99}),
         );
-        if key.is_empty() {
+        if key == "missing-save" {
             entries.clear();
         }
         responses.insert(
@@ -134,10 +136,10 @@ fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> su
             json!({"total_count":entries.len() + usize::from(truncated),"actions_caches":entries})
                 .to_string(),
         );
-        caches.push(json!({"family":"target","root":".","restore_step":key,"save_step":format!("save-{key}")}));
+        caches.push(json!({"family":"target","root":".","restore_step":format!("restore-{key}"),"save_step":format!("save-{key}")}));
         steps.insert(
-            key.to_owned(),
-            json!({"outputs":{"cache-primary-key":key,"cache-matched-key":matched,"cache-hit":if key == "CASEKEY" { "true" } else { "false" }}}),
+            format!("restore-{key}"),
+            json!({"outcome":"success","outputs":{"cache-primary-key":key,"cache-matched-key":matched,"cache-hit":if key == "CASEKEY" { "true" } else { "false" }}}),
         );
         if saving {
             steps.insert(format!("save-{key}"), json!({"outcome":"success"}));
@@ -179,24 +181,21 @@ fn assert_inventory(metrics: &velnor_ci::report::LaneMetrics) {
         assert_eq!(cache.bytes, expected_bytes, "{}", cache.requested_key);
         assert_eq!(
             cache.save,
-            if cache.requested_key.starts_with("save-") || cache.requested_key.is_empty() {
+            if cache.requested_key.starts_with("save-") {
                 SaveOutcome::Unknown
+            } else if cache.requested_key == "missing-save" {
+                SaveOutcome::Failed
             } else {
                 SaveOutcome::NotAttempted
-            }
+            },
+            "{metrics:?}"
         );
-        if expected_bytes.is_none() {
+        if expected_bytes.is_none() && cache.requested_key != "missing-save" {
             assert!(
                 metrics
                     .diagnostics
                     .iter()
-                    .any(
-                        |diagnostic| diagnostic.contains(if cache.requested_key.is_empty() {
-                            "Cache inventory key unavailable"
-                        } else {
-                            &cache.requested_key
-                        })
-                    ),
+                    .any(|diagnostic| diagnostic.contains(&cache.requested_key)),
                 "{:?}",
                 metrics.diagnostics
             );
@@ -247,7 +246,11 @@ fn normalization(case: &str, prefix: &str, duplicate: bool) -> super::ResultTest
     let raw = format!("{invocation}\n");
     let path = repo.root().join("velnor-invocations.jsonl");
     std::fs::write(&path, &raw)?;
-    let metrics = super::report(&repo, &json!([]), "{}")?;
+    let metrics = super::report(
+        &repo,
+        &json!([]),
+        r#"{"restore":{"outcome":"skipped","outputs":{}}}"#,
+    )?;
     let observed = &metrics.invocations[0];
     let artifact = &observed.artifacts[0];
     assert_eq!(observed.root, ".");
@@ -347,7 +350,11 @@ fn corroboration(fresh: bool) -> super::ResultTest {
         repo.root().join("velnor-invocations.jsonl"),
         format!("{invocation}\n"),
     )?;
-    let metrics = super::report(&repo, &json!([]), "{}")?;
+    let metrics = super::report(
+        &repo,
+        &json!([]),
+        r#"{"restore":{"outcome":"skipped","outputs":{}}}"#,
+    )?;
     assert_eq!(
         metrics.invocations[0]
             .progress

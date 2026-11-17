@@ -27,6 +27,11 @@ deliberately when changing this contract.
   otherwise the registry-relative archive path is the label. Repeated progress
   and repeated archive paths count once. Equal filenames in different registry
   directories count separately.
+- `verified_git_downloads` records changed Git source repositories, separately
+  from registry crate downloads. Git object and reference observations are
+  bounded; unavailable observations remain `null`. One repository may contain
+  several crates, so the summary reports repository fetches and leaves their
+  crate count unknown.
 - `downloaded` and `slowest_tests` are aggregate display fields. The latter is
   capped at ten entries. `tests_run` is a display-only workflow value.
 - `first_cargo_seconds` measures job start to the first Cargo invocation, or
@@ -40,7 +45,8 @@ package identities must provide source, name, and version before their
 artifacts can classify compilation. Source identifiers remain opaque;
 structurally unsupported identities become verification errors.
 Progress text alone cannot prove a download when a source cache was an exact
-hit: archive observation is required, including for quiet invocations. An
+hit: registry archive and Git database observations are required, including
+for quiet invocations. An
 available empty observation proves zero downloads; an unavailable observation
 cannot establish that result. See Cargo's
 [JSON message format](https://doc.rust-lang.org/cargo/reference/external-tools.html#json-messages)
@@ -54,6 +60,10 @@ Observed report fields such as `requested_key`, `hit`, and `usable` are
 rejected as plan input. `VELNOR_REPORT_STEPS` supplies the actual step outputs
 and outcomes. The report resolves keys, restore hits, and save outcomes before
 collecting restored input provenance, even when no Cargo invocation ran.
+Malformed step contexts, missing planned restore steps, and unsuccessful or
+invalid restore evidence retain the metrics artifact with verification errors.
+An explicitly skipped restore and a successful restore with no matched key
+remain known cold observations.
 The inputs manifest, restored snapshot, and pre-Cargo witness live under
 `.velnor/` in each root's configured target directory. The report resolves that
 directory from the detected Cargo configuration. Inputs save and restore use
@@ -63,6 +73,10 @@ after Cargo preserves both the restored snapshot and the pre-Cargo witness.
 Target data is usable only when a restored snapshot exists and the restore
 step reports a hit. A stale snapshot with a cache miss remains cold. Snapshot
 parse or read errors make provenance unverifiable; a missing snapshot is cold.
+`restored_target_usable` applies that provenance to each invocation's effective
+target directory. A command overriding the configured cached target remains
+cold for target-cache rules and retains its compilation counts. Exact source
+cache checks still apply to that command.
 A tracked `Cargo.lock` symlink prevents same-lock verification for its Cargo
 root. A usable target with that symlink makes compilation provenance
 unverifiable, including quiet non-fresh artifacts. Cold runs still retain
@@ -81,6 +95,10 @@ package and available configuration context. Three such observations in one
 context make the check fail verification, because it cannot prove that Cargo
 respected the compilation limit. This is uncertainty rather than proof that
 one identical unit compiled three times.
+Named target selectors and command purpose distinguish fallback observations,
+so separate test or binary targets do not become repeated compilations of one
+unit. Unhashed documentation outputs cannot establish compiler identity and
+remain unknown, like ordinary unhashed binary outputs.
 API enrichment runs after provenance collection. These inputs do not change
 the schema-1 output contract.
 

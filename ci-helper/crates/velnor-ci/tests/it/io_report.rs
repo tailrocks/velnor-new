@@ -18,6 +18,7 @@ fn cli(repo: &Repo, args: &[&str]) -> Output {
         .env("GITHUB_JOB", "rust")
         .env("VELNOR_TESTS_RUN", "7")
         .env_remove("GITHUB_TOKEN")
+        .env_remove("CARGO_TARGET_DIR")
         .output()
         .unwrap_or_else(|error| unreachable!("{error}"))
 }
@@ -46,6 +47,7 @@ fn report(
         )
         .env("VELNOR_REPORT_STEPS", steps)
         .env_remove("GITHUB_TOKEN")
+        .env_remove("CARGO_TARGET_DIR")
         .output()?;
     assert!(output.status.success(), "{output:?}");
     Ok(read(repo))
@@ -80,7 +82,7 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     );
     let cache = json!([{"family":"target","root":".","restore_step":"target_root","save_step":"save_target_root"}, {"family":"target","root":"literal${{root}}","restore_step":"absent","save_step":"absent"}]);
     let report = |steps: &str| report(&repo, &cache, steps);
-    let steps = r#"{"target_root":{"outputs":{"cache-primary-key":"primary-marker","cache-matched-key":"matched-marker"}}}"#;
+    let steps = r#"{"target_root":{"outcome":"success","outputs":{"cache-primary-key":"primary-marker","cache-matched-key":"matched-marker"}}}"#;
     let metrics = report(steps)?;
     assert_eq!(metrics.caches[0].requested_key, "primary-marker");
     assert_eq!(metrics.caches[1].root.as_deref(), Some("literal${{root}}"));
@@ -125,7 +127,9 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     let decision = cli(&repo, &["cache", "decide", "--target-dir", "target"]);
     assert!(decision.status.success(), "{decision:?}");
     assert!(String::from_utf8_lossy(&decision.stdout).contains("2 crates compiled"));
-    let metrics = report(r#"{"target_root":{"outputs":{"cache-matched-key":"matched-marker"}}}"#)?;
+    let metrics = report(
+        r#"{"target_root":{"outcome":"success","outputs":{"cache-matched-key":"matched-marker"}}}"#,
+    )?;
     assert_eq!(metrics.caches[0].requested_key, "");
     Ok(())
 }
@@ -186,7 +190,7 @@ fn report_accepts_only_cache_plans_and_observes_steps_without_cargo() -> ResultT
     let metrics = report(
         &repo,
         &plan,
-        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
+        r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
     )?;
     assert_eq!(metrics.caches[0].hit, velnor_ci::report::Hit::Exact);
     assert_eq!(metrics.caches[0].requested_key, "key");
@@ -199,6 +203,7 @@ fn report_accepts_only_cache_plans_and_observes_steps_without_cargo() -> ResultT
             .env("RUNNER_TEMP", repo.root())
             .env("VELNOR_REPORT_CACHES", plan.to_string())
             .env_remove("GITHUB_TOKEN")
+            .env_remove("CARGO_TARGET_DIR")
             .output()?;
         assert!(!output.status.success(), "{field}: {output:?}");
         assert!(String::from_utf8_lossy(&output.stderr).contains(field));
@@ -249,6 +254,7 @@ fn metadata_inputs(repo: &Repo) -> ResultTest {
     Ok(())
 }
 
+mod evidence;
 mod policy;
 mod provenance;
 

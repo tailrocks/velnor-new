@@ -5,21 +5,12 @@ use crate::cli::ReportArgs;
 use crate::error::CiError;
 use crate::github::{ApiJobs, GitHub, Repo, jobs_path};
 
-use crate::report::{Cache, Hit, LaneMetrics, SCHEMA, SaveOutcome, check, waste};
+use crate::report::{LaneMetrics, SCHEMA, SaveOutcome, check, waste};
+use crate::report_caches::{CachePlan, observe_caches};
 use crate::telemetry::{INVOCATIONS, Invocation};
-use serde::Deserialize;
 use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct CachePlan {
-    family: String,
-    root: Option<String>,
-    restore_step: String,
-    save_step: String,
-}
 
 fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
@@ -79,15 +70,21 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
         return check_directory(directory);
     }
     let log_bytes = read_log()?;
-    let (invocations, invocation_errors) = invocations();
+    let (invocations, mut invocation_errors) = invocations();
     let plans: Vec<CachePlan> =
         json(&std::env::var("VELNOR_REPORT_CACHES").unwrap_or_else(|_| "[]".to_owned()))?;
     let steps: Value =
         json(&std::env::var("VELNOR_REPORT_STEPS").unwrap_or_else(|_| "{}".to_owned()))?;
+    let (caches, cache_errors) = observe_caches(
+        plans,
+        &steps,
+        env("GITHUB_REF") == format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH")),
+    );
+    invocation_errors.extend(cache_errors);
     let mut metrics = LaneMetrics {
         schema: SCHEMA,
         lane: env("GITHUB_JOB"),
-        caches: observe_caches(plans, &steps),
+        caches,
         invocations,
         downloaded: 0,
         first_cargo_seconds: None,
@@ -132,52 +129,6 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
     .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?;
     super::append_to("GITHUB_STEP_SUMMARY", &summary)?;
     Ok(summary)
-}
-
-fn observe_caches(plans: Vec<CachePlan>, steps: &Value) -> Vec<Cache> {
-    let default = format!("refs/heads/{}", env("VELNOR_REPORT_DEFAULT_BRANCH"));
-    let saving = env("GITHUB_REF") == default;
-    plans
-        .into_iter()
-        .map(|plan| {
-            let requested_key = steps[&plan.restore_step]["outputs"]["cache-primary-key"]
-                .as_str()
-                .unwrap_or_default()
-                .to_owned();
-            let matched_key = steps[&plan.restore_step]["outputs"]["cache-matched-key"]
-                .as_str()
-                .filter(|key| !key.is_empty())
-                .map(str::to_owned);
-            let exact = steps[&plan.restore_step]["outputs"]["cache-hit"] == "true";
-            let hit = match &matched_key {
-                Some(key) if exact || key == &requested_key => Hit::Exact,
-                Some(_) => Hit::Fallback,
-                None => Hit::Miss,
-            };
-            let save = if saving {
-                match steps[&plan.save_step]["outcome"].as_str() {
-                    Some("failure" | "cancelled") => SaveOutcome::Failed,
-                    Some("success") => SaveOutcome::Unknown,
-                    _ => SaveOutcome::NotAttempted,
-                }
-            } else {
-                SaveOutcome::NotAttempted
-            };
-            Cache {
-                family: plan.family,
-                root: plan.root,
-                restore_step: plan.restore_step,
-                save_step: plan.save_step,
-                requested_key,
-                matched_key,
-                hit,
-                bytes: None,
-                usable: false,
-                usable_same_lock: false,
-                save,
-            }
-        })
-        .collect()
 }
 
 fn api_metrics(metrics: &mut LaneMetrics, steps: &Value) -> Result<(), CiError> {

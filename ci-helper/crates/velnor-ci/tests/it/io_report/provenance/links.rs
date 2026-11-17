@@ -39,8 +39,8 @@ fn stable_tracked_source_chain_is_unknown_only_for_warm_compilation() -> super::
     save_restore(&repo);
     assert_unknown(&repo)?;
     for steps in [
-        "{}",
-        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-hit":"false"}}}"#,
+        r#"{"restore":{"outcome":"skipped","outputs":{}}}"#,
+        r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-hit":"false"}}}"#,
     ] {
         let metrics = report(&repo, &cache(), steps)?;
         assert_eq!(metrics.invocations[0].compilations.len(), 1);

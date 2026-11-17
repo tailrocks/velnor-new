@@ -40,7 +40,7 @@ fn observation(
     super::report(
         repo,
         &cache(),
-        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
+        r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
     )
 }
 
@@ -191,8 +191,8 @@ fn restore_witness_separates_prior_changes_from_changes_during_warm_cargo()
     let changed = progress(&during, &[during_event])?;
     assert_ne!(changed.verification_errors, [] as [String; 0]);
     for steps in [
-        "{}",
-        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-hit":"false"}}}"#,
+        r#"{"restore":{"outcome":"skipped","outputs":{}}}"#,
+        r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-hit":"false"}}}"#,
     ] {
         let cold = report(&during, &cache(), steps)?;
         assert!(!cold.caches[0].usable, "{cold:?}");
@@ -250,7 +250,11 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
     )?;
     let metrics = observation(&warm, &[], &[quiet])?;
     assert_ne!(metrics.verification_errors, [] as [String; 0]);
-    let cold = report(&warm, &cache(), "{}")?;
+    let cold = report(
+        &warm,
+        &cache(),
+        r#"{"restore":{"outcome":"skipped","outputs":{}}}"#,
+    )?;
     assert_eq!(cold.invocations[0].compilations.len(), 1);
     assert_eq!(
         cold.invocations[0].artifacts[0].manifest_path,

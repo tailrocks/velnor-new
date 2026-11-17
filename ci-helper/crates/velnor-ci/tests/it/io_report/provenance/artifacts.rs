@@ -157,7 +157,7 @@ fn exact_source_downloads_require_a_changed_crate_archive() -> Result<(), Box<dy
     let repo = base.fork("report-download-evidence");
     let source_cache =
         json!([{"family":"sources","root":".","restore_step":"restore","save_step":"save"}]);
-    let steps = r#"{"restore":{"outputs":{"cache-primary-key":"source-key","cache-matched-key":"source-key","cache-hit":"true"}}}"#;
+    let steps = r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"source-key","cache-matched-key":"source-key","cache-hit":"true"}}}"#;
 
     let home = cargo_home(&repo)?;
     run_downloaded_cargo(&repo, &home, true)?;
@@ -253,7 +253,7 @@ fn archive_downloads(archives: &[&str], expected: &[&str]) -> super::super::Resu
     let metrics = super::super::report(
         &repo,
         &caches,
-        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
+        r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
     )?;
     assert_eq!(metrics.invocations[0].downloads, expected);
     assert_eq!(metrics.downloaded, expected.len() as u64);

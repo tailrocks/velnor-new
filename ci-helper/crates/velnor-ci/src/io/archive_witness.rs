@@ -51,7 +51,7 @@ impl ArchiveWitness {
     }
 }
 
-fn cannot_download(argv: &[String]) -> bool {
+pub(super) fn cannot_download(argv: &[String]) -> bool {
     if argv
         .first()
         .and_then(|program| Path::new(program).file_name())

@@ -132,6 +132,13 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
         );
         metrics.verification_errors.extend(errors);
         invocation.compilations = compilations;
+        let target = inputs.checkout.join(inputs.root.target_dir.as_str());
+        let warm = warm
+            && invocation
+                .target_directory
+                .as_deref()
+                .is_none_or(|actual| same_directory(Path::new(actual), &target));
+        invocation.restored_target_usable = Some(warm);
         if warm && inputs.symlink_lock && !invocation.compilations.is_empty() {
             metrics.verification_errors.push(format!(
                 "{}: a tracked Cargo.lock symlink prevents compilation input verification",
@@ -156,6 +163,13 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
         );
     }
     Ok(())
+}
+
+fn same_directory(actual: &Path, expected: &Path) -> bool {
+    match (fs::canonicalize(actual), fs::canonicalize(expected)) {
+        (Ok(actual), Ok(expected)) => actual == expected,
+        _ => actual == expected,
+    }
 }
 
 pub(super) fn verify_downloads(metrics: &mut LaneMetrics, log: &[u8]) -> Result<(), CiError> {

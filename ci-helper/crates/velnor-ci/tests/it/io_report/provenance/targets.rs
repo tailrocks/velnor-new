@@ -4,6 +4,7 @@
 use super::{RESTORE_WITNESS, Repo, SNAPSHOT};
 use serde_json::json;
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 use velnor_ci::inputs::INPUTS_FILE;
@@ -11,7 +12,7 @@ use velnor_ci::report::LaneMetrics;
 use velnor_ci::telemetry::INVOCATIONS;
 
 type ResultTest = Result<(), Box<dyn std::error::Error>>;
-const HIT: &str = r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#;
+const HIT: &str = r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#;
 
 fn fixture(root: &str) -> Result<Repo, Box<dyn std::error::Error>> {
     let repo = Repo::new("report-configured-target");
@@ -58,11 +59,21 @@ fn inputs(repo: &Repo, root: &str, action: &str) -> ResultTest {
 }
 
 fn report(repo: &Repo, root: &str, steps: &str) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
+    report_target(repo, root, steps, None)
+}
+
+fn report_target(
+    repo: &Repo,
+    root: &str,
+    steps: &str,
+    target: Option<&Path>,
+) -> Result<LaneMetrics, Box<dyn std::error::Error>> {
     let directory = fs::canonicalize(repo.root().join(root))?;
     let mut invocation = crate::report::lane()["invocations"][0].clone();
     invocation["argv"] = json!(["cargo", "check"]);
     invocation["root"] = json!(directory);
     invocation["compilations"] = json!([]);
+    invocation["target_directory"] = json!(target);
     invocation["progress"] = json!([
         {"kind":"Compiling","package":"dependency","version":"1.0.0","location":null},
         {"kind":"Checking","package":"demo","version":"0.1.0","location":directory}
@@ -76,6 +87,31 @@ fn report(repo: &Repo, root: &str, steps: &str) -> Result<LaneMetrics, Box<dyn s
     let cache =
         json!([{"family":"target","root":root,"restore_step":"restore","save_step":"save"}]);
     super::super::report(repo, &cache, steps)
+}
+
+#[test]
+fn restored_target_warmth_is_scoped_to_each_invocations_effective_target() -> ResultTest {
+    let repo = fixture("")?;
+    inputs(&repo, "", "save")?;
+    inputs(&repo, "", "restore")?;
+    let target = fs::canonicalize(repo.root())?.join("cache-output");
+    let override_target = repo.root().join("other-target");
+    for (actual, warm) in [
+        (None, true),
+        (Some(target.as_path()), true),
+        (Some(override_target.as_path()), false),
+    ] {
+        let metrics = report_target(&repo, "", HIT, actual)?;
+        assert_eq!(metrics.invocations[0].compilations.len(), 2);
+        assert_eq!(metrics.invocations[0].restored_target_usable, Some(warm));
+        assert_eq!(
+            metrics.violations.len(),
+            if warm { 2 } else { 0 },
+            "{metrics:?}"
+        );
+        assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    }
+    Ok(())
 }
 
 #[test]
@@ -107,7 +143,11 @@ fn configured_target_restore_miss_rejects_stale_snapshot() -> ResultTest {
     inputs(&repo, "", "restore")?;
     let target = repo.root().join("cache-output");
     assert!(target.join(SNAPSHOT).is_file());
-    let metrics = report(&repo, "", "{}")?;
+    let metrics = report(
+        &repo,
+        "",
+        r#"{"restore":{"outcome":"skipped","outputs":{}}}"#,
+    )?;
     assert!(!metrics.caches[0].usable, "{metrics:?}");
     assert!(!metrics.caches[0].usable_same_lock, "{metrics:?}");
     assert!(metrics.violations.is_empty(), "{metrics:?}");
@@ -156,5 +196,49 @@ fn nested_configured_target_keeps_root_scope_and_pre_cargo_witness() -> ResultTe
     );
     assert!(!repo.root().join("nested/target").join(SNAPSHOT).exists());
     assert!(!Path::new(&metrics.invocations[0].root).is_absolute());
+    Ok(())
+}
+
+#[test]
+fn cli_target_override_keeps_compile_counts_on_a_cold_target() -> ResultTest {
+    recorded_override(true)
+}
+
+#[test]
+fn environment_target_override_keeps_compile_counts_on_a_cold_target() -> ResultTest {
+    recorded_override(false)
+}
+
+fn recorded_override(cli: bool) -> ResultTest {
+    let repo = fixture("")?;
+    let script = repo.root().join("cargo-fixture");
+    fs::write(
+        &script,
+        "#!/bin/sh\nprintf '   Compiling dependency v1.0.0\\n' >&2\n",
+    )?;
+    fs::set_permissions(&script, fs::Permissions::from_mode(0o755))?;
+    repo.git(&["add", "."]);
+    inputs(&repo, "", "save")?;
+    inputs(&repo, "", "restore")?;
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .args(["run", "--"])
+        .arg(script)
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env_remove("CARGO_TARGET_DIR");
+    if cli {
+        command.args(["--target-dir", "other-output"]);
+    } else {
+        command.env("CARGO_TARGET_DIR", "other-output");
+    }
+    assert!(command.output()?.status.success());
+    let cache = json!([{"family":"target","root":".","restore_step":"restore","save_step":"save"}]);
+    let metrics = super::super::report(&repo, &cache, HIT)?;
+    assert!(metrics.caches[0].usable_same_lock, "{metrics:?}");
+    assert_eq!(metrics.invocations[0].restored_target_usable, Some(false));
+    assert_eq!(metrics.invocations[0].compilations.len(), 1);
+    assert!(metrics.violations.is_empty(), "{metrics:?}");
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
     Ok(())
 }

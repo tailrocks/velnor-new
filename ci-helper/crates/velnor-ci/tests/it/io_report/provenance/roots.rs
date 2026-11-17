@@ -79,7 +79,7 @@ fn independent_roots(linked: &str) -> ResultTest {
     let metrics = super::super::report(
         &repo,
         &caches,
-        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
+        r#"{"restore":{"outcome":"success","outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
     )?;
     assert_eq!(metrics.invocations[0].root, "regular");
     assert_eq!(metrics.invocations[0].compilations.len(), 2);

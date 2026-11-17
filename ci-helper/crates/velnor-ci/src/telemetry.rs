@@ -21,6 +21,10 @@ pub struct Invocation {
     #[serde(default)]
     pub verified_download_archives: Option<Vec<String>>,
     #[serde(default)]
+    pub verified_git_downloads: Option<Vec<String>>,
+    #[serde(default)]
+    pub restored_target_usable: Option<bool>,
+    #[serde(default)]
     pub artifacts: Vec<crate::cargo_artifacts::CargoArtifact>,
     #[serde(default)]
     pub progress: Option<Vec<crate::cargo_artifacts::CargoProgress>>,
@@ -91,4 +95,46 @@ pub fn configuration(argv: &[String]) -> String {
         }
     }
     format!("{options:?} {features:?} {targets:?} {configs:?}")
+}
+
+#[must_use]
+pub fn target_selection(argv: &[String]) -> BTreeSet<String> {
+    let mut selection = BTreeSet::new();
+    let mut words = argv.iter().skip(1).take_while(|word| word.as_str() != "--");
+    let mut command = None;
+    let mut nextest_mode = false;
+    while let Some(word) = words.next() {
+        let (flag, inline) = word
+            .split_once('=')
+            .map_or((word.as_str(), None), |(flag, value)| (flag, Some(value)));
+        match flag {
+            "--bin" | "--test" | "--example" | "--bench" => {
+                if let Some(value) = inline.or_else(|| words.next().map(String::as_str)) {
+                    selection.insert(format!("{flag}={value}"));
+                }
+            }
+            "--lib" | "--bins" | "--tests" | "--examples" | "--benches" | "--all-targets"
+            | "--doc" => {
+                selection.insert(flag.to_owned());
+            }
+            "--config" | "--color" | "--manifest-path" | "--lockfile-path" | "--target-dir"
+            | "--target" | "--profile" | "--features" | "--package" | "--exclude" | "--jobs"
+            | "--message-format" | "-C" | "-Z" | "-F" | "-p" | "-j" => {
+                if inline.is_none() {
+                    words.next();
+                }
+            }
+            _ if word.starts_with('+') && command.is_none() => {}
+            _ if !word.starts_with('-') && command.is_none() => {
+                command = Some(word.as_str());
+                selection.insert(word.clone());
+            }
+            _ if command == Some("nextest") && !nextest_mode && !word.starts_with('-') => {
+                selection.insert(format!("nextest:{word}"));
+                nextest_mode = true;
+            }
+            _ => {}
+        }
+    }
+    selection
 }

@@ -63,16 +63,18 @@ pub struct LaneMetrics {
 pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
     let mut violations = Vec::new();
     for invocation in &metrics.invocations {
-        let warm = metrics.caches.iter().any(|cache| {
-            cache.family == "target"
-                && cache.root.as_deref() == Some(&invocation.root)
-                && cache.usable
-        });
-        let same_lock = metrics.caches.iter().any(|cache| {
-            cache.family == "target"
-                && cache.root.as_deref() == Some(&invocation.root)
-                && cache.usable_same_lock
-        });
+        let warm = invocation.restored_target_usable != Some(false)
+            && metrics.caches.iter().any(|cache| {
+                cache.family == "target"
+                    && cache.root.as_deref() == Some(&invocation.root)
+                    && cache.usable
+            });
+        let same_lock = invocation.restored_target_usable != Some(false)
+            && metrics.caches.iter().any(|cache| {
+                cache.family == "target"
+                    && cache.root.as_deref() == Some(&invocation.root)
+                    && cache.usable_same_lock
+            });
         let compiled: BTreeSet<&str> = metrics
             .invocations
             .iter()
@@ -112,6 +114,9 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                 invocation.downloads.join(", ")
             ));
         }
+        if let Some(violation) = git_waste(metrics, invocation) {
+            violations.push(violation);
+        }
     }
     violations.extend(
         metrics
@@ -126,6 +131,23 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
             }),
     );
     violations
+}
+
+fn git_waste(metrics: &LaneMetrics, invocation: &Invocation) -> Option<String> {
+    let repositories = invocation.verified_git_downloads.as_ref()?;
+    (!repositories.is_empty()
+        && metrics.caches.iter().any(|cache| {
+            cache.family == "sources"
+                && cache.root.as_deref() == Some(&invocation.root)
+                && cache.hit == Hit::Exact
+        }))
+    .then(|| {
+        format!(
+            "{}: Git sources fetched on an exact sources hit: {}",
+            invocation.root,
+            repositories.join(", ")
+        )
+    })
 }
 
 pub fn check(lanes: &[LaneMetrics]) -> Result<String, CiError> {
@@ -189,6 +211,8 @@ fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {
                     .entry((
                         &invocation.root,
                         &invocation.configuration,
+                        crate::telemetry::target_selection(&invocation.argv),
+                        &invocation.execution,
                         &event.package,
                         &event.version,
                     ))
@@ -203,7 +227,7 @@ fn compilation_repeats(lanes: &[LaneMetrics]) -> Result<Vec<String>, CiError> {
     }
     let mut violations = Vec::new();
     violations.extend(events.into_iter().filter(|(_, count)| *count > 2).map(
-        |((root, config, package, version), count)| {
+        |((root, config, _, _, package, version), count)| {
             format!("{root}: {package} v{version} compiled {count} times for {config}")
         },
     ));
@@ -261,6 +285,15 @@ impl LaneMetrics {
             .flat_map(|invocation| &invocation.compilations)
             .collect();
         let workspace = events.iter().filter(|event| event.workspace).count();
+        let git_fetches: Option<usize> = self
+            .invocations
+            .iter()
+            .map(|invocation| invocation.verified_git_downloads.as_ref().map(Vec::len))
+            .sum();
+        text.push(format!(
+            "\nGit source repositories fetched: {}. Git crate download count: unknown.\n",
+            git_fetches.map_or_else(|| "unknown".to_owned(), |count| count.to_string())
+        ));
         text.push(format!("\nCompiled: {workspace} workspace, {} dependency crates. Downloaded: {}. tests_run: {:?}. Job start to first cargo: {:?} seconds.\n\n| Cargo root | Invocation | Seconds |\n|---|---|---|\n", events.len() - workspace, self.downloaded, self.tests_run, self.first_cargo_seconds));
         for invocation in &self.invocations {
             text.push(format!(
