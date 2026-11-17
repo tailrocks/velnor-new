@@ -182,7 +182,7 @@ fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String,
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
             nextest_filter(filter)
         ),
         vec![],

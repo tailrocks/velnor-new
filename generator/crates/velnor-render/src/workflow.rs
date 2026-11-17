@@ -3,7 +3,7 @@
 
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
-use velnor_model::{TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     let mut items = Vec::new();
@@ -49,7 +49,10 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
                         let value = value.clone();
                         entry(
                             name,
-                            if name == TESTS_RUN_OUTPUT || name == TESTS_LISTED_OUTPUT {
+                            if name == TESTS_RUN_OUTPUT
+                                || name == TESTS_LISTED_OUTPUT
+                                || name == TESTS_BY_PACKAGE_OUTPUT
+                            {
                                 Yaml::Unread(value)
                             } else {
                                 Yaml::Expr(value)

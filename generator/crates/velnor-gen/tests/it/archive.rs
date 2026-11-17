@@ -157,16 +157,19 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
             .collect();
         assert_eq!(testing.len(), 2, "{config}: {testing:?}");
         for (id, block) in &jobs {
-            let reports = ["tests_run", "tests_listed"].iter().all(|name| {
-                block.contains(&format!(
-                    "      {name}: '${{{{ steps.test.outputs.{name} }}}}'\n"
-                ))
-            });
+            let reports = ["tests_run", "tests_listed", "tests_by_package"]
+                .iter()
+                .all(|name| {
+                    block.contains(&format!(
+                        "      {name}: '${{{{ steps.test.outputs.{name} }}}}'\n"
+                    ))
+                });
             assert_eq!(reports, block.contains("nextest run"), "{config}: {id}");
             for line in block
                 .lines()
                 .filter(|line| line.contains("nextest run") && !line.contains("--no-run"))
             {
+                assert!(line.contains("--status-level pass"), "{config}: {line}");
                 assert!(line.ends_with("--no-tests=pass'"), "{config}: {line}");
             }
         }

@@ -83,6 +83,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
       base_prefix: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
@@ -979,7 +981,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || needs.rust-plan.outputs.rust_root_test_filter }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: Doctests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
         env:
@@ -1071,6 +1073,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
       base_prefix: 'velnor-tgt-rust-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
@@ -1207,7 +1211,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.replan.outputs.rust_lab_test_filter || needs.rust-plan.outputs.rust_lab_test_filter }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: lab

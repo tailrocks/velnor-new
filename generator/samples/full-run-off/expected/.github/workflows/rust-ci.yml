@@ -34,6 +34,8 @@ jobs:
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
       tests_listed: '${{ steps.test.outputs.tests_listed }}'
+      # jactionlint ignore=unused-job-output
+      tests_by_package: '${{ steps.test.outputs.tests_by_package }}'
       base_prefix: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
@@ -168,7 +170,7 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || steps.plan.outputs.rust_root_test_filter }}'
-        run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
         if: '${{ (github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'' || steps.restored.outputs.expired == ''true'') && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
         run: '. "$VELNOR_EXEC" inputs audit'
