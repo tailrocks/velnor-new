@@ -103,6 +103,9 @@ pub(crate) fn condition(
             if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
+            if setup == Setup::Replanned {
+                parts.push(format!("steps.{REPLAN_STEP}.outcome != 'failure'"));
+            }
             parts.push(ON_DEFAULT_BRANCH.to_owned());
             parts.push(SAVING_EVENTS.to_owned());
             if when == When::SaveBaseDecided {

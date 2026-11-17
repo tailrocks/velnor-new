@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_save::{jobs, names, pinned, step};
+use crate::base_save::{jobs, names, pinned, step, steps};
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
 
@@ -93,5 +93,25 @@ fn a_repository_that_saves_no_base_plans_nothing_again() -> TestResult {
     let text = workflow(&pinned("0.1.79", "")?)?;
     assert!(!text.contains("plan --full"), "{text}");
     assert!(!text.contains("steps.replan"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_lane_whose_replan_failed_saves_no_base() -> TestResult {
+    for config in CONFIGS {
+        let lane = lane(config)?;
+        let mut saves = 0;
+        for block in steps(&lane) {
+            let base_save = block.contains("/save@") && !block.contains("tools cache");
+            if block.contains("velnor-ci cache decide") || base_save {
+                saves += 1;
+                assert!(
+                    block.contains("steps.replan.outcome != ''failure''"),
+                    "{config}: {block}"
+                );
+            }
+        }
+        assert!(saves > 0, "{config}: {lane}");
+    }
     Ok(())
 }
