@@ -18,7 +18,7 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
     }
     let job = RenderedJob {
         id: "rust-trim".to_owned(),
-        condition: Some("${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.head_repository.id == github.event.repository.id }}".to_owned()),
+        condition: Some("${{ github.event.workflow_run.event == 'pull_request' && github.event.workflow_run.path == '.github/workflows/rust-ci.yml' && github.event.workflow_run.head_repository.id == github.event.repository.id }}".to_owned()),
         runs_on: "ubuntu-latest".to_owned(),
         timeout_minutes: 5,
         permissions: vec![

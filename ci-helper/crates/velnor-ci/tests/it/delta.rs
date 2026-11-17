@@ -8,6 +8,15 @@ use std::process::{Command, Output, Stdio};
 use std::time::{Duration, SystemTime};
 
 pub(super) fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
+    let identity = (command == "stage").then(|| {
+        let (output, prepared) = run(repo, "prepare", base);
+        success(&output);
+        prepared
+            .lines()
+            .find_map(|line| line.strip_prefix("source_identity="))
+            .unwrap_or_default()
+            .to_owned()
+    });
     let output_file = repo.root().join("delta-output");
     fs::remove_file(&output_file).ok();
     let mut command_line = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -27,11 +36,54 @@ pub(super) fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
         .env("BASE_CACHE_KEY", base)
         .env("GITHUB_OUTPUT", &output_file)
         .env("RUNNER_TEMP", repo.root());
+    if let Some(identity) = identity {
+        command_line.env("EXPECTED_SOURCE_IDENTITY", identity);
+    }
     let output = command_line
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let written = fs::read_to_string(output_file).unwrap_or_default();
     (output, written)
+}
+
+pub(super) fn copy_tree(repo: &Repo, from: &str, to: &str) {
+    if repo.root().join(to).exists() {
+        fs::remove_dir_all(repo.root().join(to)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    success(
+        &Command::new("cp")
+            .args(["-pR"])
+            .arg(repo.root().join(from))
+            .arg(repo.root().join(to))
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}")),
+    );
+}
+
+pub(super) fn manifest(repo: &Repo) -> serde_json::Value {
+    serde_json::from_slice(
+        &fs::read(repo.root().join("delta/manifest.json")).unwrap_or_else(|e| unreachable!("{e}")),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+pub(super) fn write_manifest(repo: &Repo, value: &serde_json::Value) {
+    repo.write_unstaged(
+        "delta/manifest.json",
+        &serde_json::to_string(value).unwrap_or_else(|e| unreachable!("{e}")),
+    );
+}
+
+pub(super) fn valid_delta(repo: &Repo) {
+    repo.write_unstaged("target/debug/obsolete", "base artifact");
+    success(&run(repo, "apply", "base").0);
+    fs::remove_file(repo.root().join("target/debug/obsolete"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    repo.write_unstaged("target/debug/current", "current artifact");
+    compiled(repo);
+    let (output, saved) = run(repo, "stage", "base");
+    success(&output);
+    assert_eq!(saved, "save=true\n");
 }
 
 pub(super) fn success(output: &Output) {
@@ -65,7 +117,7 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
     let repo = Repo::new("delta-generations");
     let (output, key) = run(&repo, "prepare", "base");
     success(&output);
-    assert_eq!(key, "base8=cae66217\n");
+    assert!(key.starts_with("base8=cae66217\nsource_identity="));
     success(&run(&repo, "apply", "base").0);
     compiled(&repo);
     let built = time(&repo, "target/.velnor/delta-marker") + Duration::from_nanos(42_001);
@@ -82,10 +134,13 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
         fs::read_to_string(repo.root().join("delta/files/debug/first")).unwrap_or_default(),
         "first"
     );
+    copy_tree(&repo, "delta", "remote");
     for generation in [2, 3] {
         fs::remove_dir_all(repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
         repo.write_unstaged("target/.velnor/inputs.tsv", "base manifest");
+        copy_tree(&repo, "remote", "delta");
         success(&run(&repo, "apply", "base").0);
+        assert!(!repo.root().join("delta").exists());
         assert_eq!(time(&repo, "target/debug/first"), built);
         assert_eq!(
             fs::read_to_string(repo.root().join("target/debug/first")).unwrap_or_default(),
@@ -126,60 +181,57 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
                 expected
             );
         }
+        copy_tree(&repo, "delta", "remote");
     }
 }
 
 #[test]
 fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts() {
     let repo = Repo::new("delta-base");
-    for base in ["other base", ""] {
-        repo.write_unstaged("delta/removed.json", "[]");
-        repo.write_unstaged("delta/base-key", "base");
-        repo.write_unstaged("delta/files/debug/poison", "wrong base");
-        repo.write_unstaged("target/debug/base", "base artifact");
-        success(&run(&repo, "apply", base).0);
-        assert!(!repo.root().join("delta").exists());
-        assert!(!repo.root().join("target/debug/poison").exists());
-        assert!(repo.root().join("target/debug/base").exists());
-    }
-    for identity in ["oversized", "fifo"] {
-        let base = if identity == "oversized" {
-            "b".repeat(513)
-        } else {
-            "base".to_owned()
-        };
+    let base512 = "b".repeat(512);
+    valid_delta(&repo);
+    copy_tree(&repo, "delta", "remote");
+    for identity in ["other base", "", &base512, "fifo", "oversized"] {
+        copy_tree(&repo, "remote", "delta");
+        let mut metadata = manifest(&repo);
+        metadata["base"] = serde_json::Value::String(
+            if identity == "fifo" { "base" } else { identity }.to_owned(),
+        );
+        write_manifest(&repo, &metadata);
+        let path = repo.root().join("delta/manifest.json");
+        let mut writer = None;
         if identity == "oversized" {
-            repo.write_unstaged("delta/base-key", &base);
-        } else {
-            fs::create_dir_all(repo.root().join("delta")).unwrap_or_else(|e| unreachable!("{e}"));
+            File::create(&path)
+                .and_then(|file| file.set_len(16 * 1024 * 1024 + 1))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        } else if identity == "fifo" {
+            fs::remove_file(&path).unwrap_or_else(|e| unreachable!("{e}"));
             success(
                 &Command::new("mkfifo")
-                    .arg(repo.root().join("delta/base-key"))
+                    .arg(&path)
                     .output()
                     .unwrap_or_else(|e| unreachable!("{e}")),
             );
-        }
-        repo.write_unstaged("delta/removed.json", "[]");
-        repo.write_unstaged("delta/files/debug/poison", "invalid identity");
-        repo.write_unstaged("target/debug/base", "base artifact");
-        let mut writer = (identity == "fifo").then(|| {
-            let mut writer = Command::new("tee")
-                .arg(repo.root().join("delta/base-key"))
+            let mut child = Command::new("tee")
+                .arg(&path)
                 .stdin(Stdio::piped())
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
                 .unwrap_or_else(|e| unreachable!("{e}"));
-            writer
+            child
                 .stdin
                 .take()
-                .unwrap_or_else(|| unreachable!("missing FIFO writer input"))
-                .write_all(base.as_bytes())
+                .unwrap_or_else(|| unreachable!("missing FIFO input"))
+                .write_all(&serde_json::to_vec(&metadata).unwrap_or_else(|e| unreachable!("{e}")))
                 .unwrap_or_else(|e| unreachable!("{e}"));
-            writer
-        });
-        let (output, _) = run(&repo, "apply", &base);
-        if let Some(writer) = &mut writer {
+            writer = Some(child);
+        }
+        fs::remove_dir_all(repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
+        repo.write_unstaged("target/debug/base", "base artifact");
+        let expected = if identity.is_empty() { "" } else { "base" };
+        let (output, _) = run(&repo, "apply", expected);
+        if let Some(mut writer) = writer {
             if writer
                 .try_wait()
                 .unwrap_or_else(|e| unreachable!("{e}"))
@@ -191,9 +243,11 @@ fn a_different_or_absent_base_discards_the_delta_before_it_can_overlay_artifacts
         }
         success(&output);
         assert!(!repo.root().join("delta").exists());
-        assert!(!repo.root().join("target/debug/poison").exists());
-        assert!(repo.root().join("target/debug/base").exists());
+        assert!(!repo.root().join("target/debug/current").exists());
         assert!(repo.root().join("target/.velnor/delta-marker").is_file());
+        if matches!(identity, "other base" | "") || identity == base512 {
+            assert!(repo.root().join("target/debug/base").is_file());
+        }
     }
 }
 
@@ -221,7 +275,7 @@ fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
     let (output, save) = run(&repo, "stage", "base");
     success(&output);
     assert_eq!(save, "save=false\n");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("500000001"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("::notice::"));
     assert!(!repo.root().join("delta").exists());
     fs::remove_file(repo.root().join("target/huge")).unwrap_or_else(|e| unreachable!("{e}"));
     success(&run(&repo, "apply", "base").0);
@@ -244,19 +298,15 @@ fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
         fs::read_to_string(repo.root().join("delta/files/debug/current")).unwrap_or_default(),
         "current"
     );
-    assert_eq!(
-        fs::read_to_string(repo.root().join("delta/base-key")).unwrap_or_default(),
-        "base"
-    );
+    assert_eq!(manifest(&repo)["base"], "base");
 }
 
 #[test]
 fn delta_symlinks_never_read_or_overwrite_files_outside_the_cache() {
     let repo = Repo::new("delta-links");
     repo.write_unstaged("outside/untouched", "safe");
-    repo.write_unstaged("delta/removed.json", "[]");
-    repo.write_unstaged("delta/base-key", "base");
-    repo.write_unstaged("delta/files/debug/untouched", "poison");
+    valid_delta(&repo);
+    fs::remove_dir_all(repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::create_dir_all(repo.root().join("target")).unwrap_or_else(|e| unreachable!("{e}"));
     std::os::unix::fs::symlink(
         repo.root().join("outside"),
@@ -275,6 +325,9 @@ fn delta_symlinks_never_read_or_overwrite_files_outside_the_cache() {
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
     compiled(&repo);
-    assert!(!run(&repo, "stage", "base").0.status.success());
+    let (output, saved) = run(&repo, "stage", "base");
+    success(&output);
+    assert_eq!(saved, "save=false\n");
+    assert!(String::from_utf8_lossy(&output.stdout).contains("::notice::"));
     assert!(!repo.root().join("delta").exists());
 }

@@ -8,6 +8,8 @@ mod cold;
 mod configurations;
 mod delta;
 mod delta_snapshot;
+mod delta_source;
+mod delta_tree;
 mod delta_trim;
 mod git;
 mod http;

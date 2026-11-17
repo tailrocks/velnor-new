@@ -4,47 +4,92 @@
 use std::collections::BTreeMap;
 use std::fs;
 use std::io::{Read, Write};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use super::delta::{failure, files, safe_path};
+use super::delta::{failure, safe_path};
 use super::inputs::modified_ns;
 use crate::error::CiError;
 
 pub(super) const BASELINE: &str = ".velnor/delta-baseline.json";
-pub(super) const REMOVED: &str = "removed.json";
+pub(super) const MANIFEST: &str = "manifest.json";
 const METADATA_LIMIT: u64 = 16 * 1024 * 1024;
 
-#[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub(super) struct Identity {
-    pub size: u64,
-    pub modified: u64,
-    digest: [u8; 32],
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", deny_unknown_fields)]
+pub(super) enum Node {
+    File {
+        size: u64,
+        modified: u64,
+        mode: u32,
+        digest: [u8; 32],
+    },
+    Directory {
+        modified: u64,
+        mode: u32,
+    },
+}
+
+impl Node {
+    pub(super) fn directory(&self) -> bool {
+        matches!(self, Self::Directory { .. })
+    }
+    pub(super) fn size(&self) -> u64 {
+        match self {
+            Self::File { size, .. } => *size,
+            Self::Directory { .. } => 0,
+        }
+    }
+    pub(super) fn metadata(&self) -> (u64, u32) {
+        match self {
+            Self::File { modified, mode, .. } | Self::Directory { modified, mode } => {
+                (*modified, *mode)
+            }
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub(super) struct Snapshot {
     pub base: String,
-    pub files: BTreeMap<PathBuf, Identity>,
+    pub nodes: BTreeMap<PathBuf, Node>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct Manifest {
+    pub base: String,
+    pub nodes: BTreeMap<PathBuf, Node>,
+    pub removed: Vec<PathBuf>,
 }
 
 pub(super) fn capture(root: &Path, base: &str) -> Result<Snapshot, CiError> {
-    let files = files(root)?
+    let nodes = super::delta_tree::paths(root)?
         .into_iter()
-        .map(|path| identity(&root.join(&path)).map(|identity| (path, identity)))
+        .map(|path| identity(&root.join(&path)).map(|node| (path, node)))
         .collect::<Result<_, _>>()?;
     Ok(Snapshot {
         base: base.to_owned(),
-        files,
+        nodes,
     })
 }
 
-pub(super) fn identity(path: &Path) -> Result<Identity, CiError> {
-    safe_path(path)?;
+pub(super) fn identity(path: &Path) -> Result<Node, CiError> {
+    let node = stat(path)?;
+    let Node::File {
+        size,
+        modified,
+        mode,
+        ..
+    } = node
+    else {
+        return Ok(node);
+    };
     let mut file = fs::File::open(path).map_err(|e| failure(path, &e))?;
-    let size = file.metadata().map_err(|e| failure(path, &e))?.len();
     let mut digest = Sha256::new();
     let mut buffer = vec![0_u8; 64 * 1024].into_boxed_slice();
     loop {
@@ -54,10 +99,30 @@ pub(super) fn identity(path: &Path) -> Result<Identity, CiError> {
         }
         digest.update(&buffer[..count]);
     }
-    Ok(Identity {
+    Ok(Node::File {
         size,
-        modified: modified_ns(path)?,
+        modified,
+        mode,
         digest: digest.finalize().into(),
+    })
+}
+
+pub(super) fn stat(path: &Path) -> Result<Node, CiError> {
+    safe_path(path)?;
+    let metadata = fs::symlink_metadata(path).map_err(|e| failure(path, &e))?;
+    let modified = modified_ns(path)?;
+    let mode = metadata.permissions().mode() & 0o7777;
+    if metadata.is_dir() {
+        return Ok(Node::Directory { modified, mode });
+    }
+    if !metadata.is_file() {
+        return Err(CiError::new("unsupported delta node"));
+    }
+    Ok(Node::File {
+        size: metadata.len(),
+        modified,
+        mode,
+        digest: [0; 32],
     })
 }
 
@@ -87,11 +152,7 @@ pub(super) fn replace(path: &Path, bytes: Option<&[u8]>) -> Result<(), CiError> 
         safe_path(parent)?;
         fs::create_dir_all(parent).map_err(|e| failure(parent, &e))?;
     }
-    match fs::remove_file(path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(failure(path, &error)),
-    }
+    super::delta_tree::remove_node(path)?;
     if let Some(bytes) = bytes {
         fs::OpenOptions::new()
             .write(true)
@@ -116,26 +177,4 @@ pub(super) fn validate(path: &Path) -> Result<(), CiError> {
         )));
     }
     Ok(())
-}
-
-pub(super) fn apply(staging: &Path, target: &Path) -> Result<usize, CiError> {
-    let removed: Vec<PathBuf> = read(&staging.join(REMOVED))?;
-    let payload = staging.join("files");
-    let copied = files(&payload)?;
-    for path in removed.iter().chain(&copied) {
-        validate(path)?;
-        safe_path(&target.join(path))?;
-    }
-    for path in &removed {
-        let destination = target.join(path);
-        match fs::remove_file(&destination) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-            Err(e) => return Err(failure(&destination, &e)),
-        }
-    }
-    for path in &copied {
-        super::delta::copy(&payload.join(path), &target.join(path))?;
-    }
-    Ok(copied.len())
 }

@@ -39,6 +39,13 @@ pub(crate) fn delta_stage(
     packages: &[velnor_model::PackageName],
 ) -> RenderedStep {
     let mut step = delta_step(root, "stage");
+    step.env.push((
+        "EXPECTED_SOURCE_IDENTITY".to_owned(),
+        Value::Expr(format!(
+            "${{{{ steps.delta_base_{}.outputs.source_identity }}}}",
+            root.slug()
+        )),
+    ));
     if let Some(run) = &mut step.run {
         for package in packages {
             run.push_str(" --package ");

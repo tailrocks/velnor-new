@@ -106,6 +106,7 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                 step(&lane, "Save the target cache").is_some_and(|s| !s.contains("pull_request"))
             );
             assert!(step(&lane, "velnor-ci delta stage").is_some_and(|s| s.contains("--package")));
+            source_identity(&lane)?;
         }
     }
     private_sources_disable_deltas()?;
@@ -261,6 +262,15 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
         assert!(cleanup.contains("- completed"), "{cleanup}");
         assert!(cleanup.contains("  rust-trim:"), "{cleanup}");
         assert!(cleanup.contains("actions: write"), "{cleanup}");
+        let condition = cleanup
+            .lines()
+            .find(|line| line.starts_with("    if: "))
+            .ok_or("no cleanup condition")?;
+        assert!(
+            condition
+                .contains("github.event.workflow_run.path == ''.github/workflows/rust-ci.yml''"),
+            "{condition}"
+        );
         assert!(
             cleanup.contains(
                 "github.event.workflow_run.head_repository.id == github.event.repository.id"
@@ -283,5 +293,15 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             assert!(!cleanup.contains(forbidden), "{forbidden}: {cleanup}");
         }
     }
+    Ok(())
+}
+
+fn source_identity(lane: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let stage = step(lane, "velnor-ci delta stage").ok_or("no delta stage")?;
+    assert!(stage.contains("EXPECTED_SOURCE_IDENTITY:"), "{stage}");
+    assert!(
+        stage.contains("${{ steps.delta_base_root.outputs.source_identity }}"),
+        "{stage}"
+    );
     Ok(())
 }

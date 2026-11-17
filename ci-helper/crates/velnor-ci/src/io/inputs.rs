@@ -127,6 +127,17 @@ pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
     })
 }
 
+pub(super) fn source_files(root: &Path) -> Result<Tracked, CiError> {
+    let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
+    let top = String::from_utf8(top)
+        .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?;
+    top_level_files(
+        Path::new(top.trim_end_matches(['\n', '\r'])),
+        &Scope::default(),
+        true,
+    )
+}
+
 fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
     let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
     let top = PathBuf::from(
@@ -134,7 +145,7 @@ fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
             .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
             .trim_end_matches(['\n', '\r']),
     );
-    let tracked = top_level_files(&top, &scope_of(root, &top)?)?;
+    let tracked = top_level_files(&top, &scope_of(root, &top)?, false)?;
     Ok((top, tracked))
 }
 
@@ -154,7 +165,7 @@ fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
     Ok(Scope::new(prefix.trim_end_matches(['\n', '\r']), listed))
 }
 
-fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
+fn top_level_files(root: &Path, scope: &Scope, strict: bool) -> Result<Tracked, CiError> {
     let mut index = parse_ls_files(&git(
         root,
         &["ls-files", "-s", "-z", "--recurse-submodules"],
@@ -170,6 +181,8 @@ fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
                 mode: worktree_mode(&metadata, &file.mode),
                 ..file
             }),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => absent.push(file.path),
+            _ if strict => return Err(CiError::new("tracked source is not a regular file")),
             _ => absent.push(file.path),
         }
     }
@@ -192,8 +205,17 @@ fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
     let mut links = Vec::with_capacity(index.links.len());
     let mut unverifiable_links = index.unverifiable_links;
     for link in index.links {
-        let Ok(target) = fs::read_link(root.join(&link.path)) else {
-            continue;
+        let target = match fs::read_link(root.join(&link.path)) {
+            Ok(target) => target,
+            Err(error) if strict && error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(CiError::new("tracked source is not a symlink"));
+            }
+            Err(_) => {
+                if strict {
+                    absent.push(link.path);
+                }
+                continue;
+            }
         };
         match target.to_str() {
             Some(text) if is_representable(text) => links.push(TrackedFile {
