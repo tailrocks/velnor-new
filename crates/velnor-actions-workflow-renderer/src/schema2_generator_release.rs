@@ -2,9 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{ProductReleasePins, Schema2WorkflowRequest};
-use crate::RenderError;
-use crate::runs_on::runs_on_yaml;
-use crate::yaml::Yaml;
+use crate::{RenderError, runs_on::runs_on_yaml, yaml::Yaml};
 use velnor_actions_contract::ReleaseTarget;
 const MACOS_RUNS_ON: &str = "macos-15";
 const MACOS_INTEL_RUNS_ON: &str = "macos-15-intel";
@@ -26,6 +24,8 @@ mod preview_permissions;
 mod qualification;
 #[path = "schema2_generator_release_source.rs"]
 mod source;
+#[path = "schema2_generator_source_metadata.rs"]
+pub(super) mod source_metadata;
 #[path = "schema2_generator_source_preview.rs"]
 mod source_preview;
 #[path = "schema2_generator_source_preview_mac_proof.rs"]

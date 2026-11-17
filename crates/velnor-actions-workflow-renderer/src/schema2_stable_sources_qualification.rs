@@ -128,7 +128,7 @@ fn consumer(
     let mut steps = setup(platform.consumer_target, pins)?;
     let tree = format!("${{{{ needs.{producer}.outputs.tree }}}}");
     if warm {
-        steps.extend(warm_steps(platform, &producer));
+        steps.extend(warm_steps(platform, &producer, pins)?);
     }
     steps.push(shell(
         "Measure source preparation",
@@ -156,7 +156,11 @@ fn consumer(
     ))
 }
 
-fn warm_steps(platform: Platform, producer: &str) -> Vec<Yaml> {
+fn warm_steps(
+    platform: Platform,
+    producer: &str,
+    pins: &ProductReleasePins,
+) -> Result<Vec<Yaml>, RenderError> {
     let mut steps = Vec::new();
     let values = [
         "artifact_id",
@@ -167,10 +171,21 @@ fn warm_steps(platform: Platform, producer: &str) -> Vec<Yaml> {
         "attempt",
     ]
     .map(|name| format!("${{{{ needs.{producer}.outputs.{name} }}}}"));
+    steps.push(super::generator_release::command_step(
+        "Install pinned GitHub CLI",
+        &pins.install_gh_argv,
+    )?);
+    steps.push(super::generator_release::source_metadata::step(
+        pins, &values[0],
+    )?);
     let admission = shell(
         "Admit same-run source artifact",
         "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
         &[
+            (
+                "SOURCES_METADATA",
+                super::generator_release::source_metadata::PATH,
+            ),
             ("SOURCES_ID", &values[0]),
             ("SOURCES_DIGEST", &values[1]),
             ("SOURCES_TREE", &values[2]),
@@ -205,7 +220,7 @@ fn warm_steps(platform: Platform, producer: &str) -> Vec<Yaml> {
         ),
     ]));
 
-    steps
+    Ok(steps)
 }
 
 fn fields(name: &str, runner: &str) -> Vec<(String, Yaml)> {

@@ -732,9 +732,13 @@ These behaviors are GitHub service semantics, so the runner source does not defi
 
 ## Public source artifact admission
 
-The source-admission helper reads artifact metadata from the fixed public
-`tailrocks/velnor-new` repository without a credential. GitHub's
-[Get an artifact endpoint](https://docs.github.com/en/rest/actions/artifacts#get-an-artifact)
-supports unauthenticated reads of public resources. Admission still checks the
-same-run producer identity, artifact digest, source locks, size and expiry.
-An unavailable metadata response follows the existing source-fetch fallback.
+A generated inline step uses the pinned GitHub CLI and a step-scoped token to
+read metadata from the fixed `tailrocks/velnor-new` repository through GitHub's
+[Get an artifact endpoint](https://docs.github.com/en/rest/actions/artifacts#get-an-artifact).
+It validates a positive numeric artifact ID before the request, bounds the
+response to 1 MiB and removes stale or incomplete metadata on failure. The
+repository admission script reads only that metadata file without credentials
+or network access. Admission checks the same-run producer identity, artifact
+digest, source locks, size and expiry. An unavailable metadata response takes
+the generator release qualifier's existing source-fetch fallback. The mandatory
+warm qualification fails if it cannot fetch or admit the source artifact.

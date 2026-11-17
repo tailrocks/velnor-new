@@ -106,9 +106,8 @@ fn candidate_steps(
         )?,
         workflow_steps::verify_rust_step(pins)?,
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
-        workflow_steps::install_gh_step(&pins.install_gh_argv)?,
     ];
-    steps.extend(super::source_steps(product, pins));
+    steps.extend(super::source_steps(product, pins)?);
     steps.extend(assets::download_build_steps_for_id(
         product,
         "Download exact ARM candidate artifact",

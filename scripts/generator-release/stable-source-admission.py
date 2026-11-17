@@ -9,7 +9,6 @@ import os
 from pathlib import Path
 import re
 import sys
-import urllib.request
 
 
 def sha(path):
@@ -37,12 +36,8 @@ def admit():
         raise ValueError("artifact digest")
     if value["GITHUB_REPOSITORY"] != "tailrocks/velnor-new":
         raise ValueError("repository")
-    request = urllib.request.Request(
-        "https://api.github.com/repos/tailrocks/velnor-new/actions/artifacts/" + artifact_id,
-        headers={"Accept": "application/vnd.github+json", "User-Agent": "velnor-stable-source-admission"},
-    )
-    with urllib.request.urlopen(request, timeout=30) as response:
-        raw = response.read(1048577)
+    with open(value["SOURCES_METADATA"], "rb") as metadata:
+        raw = metadata.read(1048577)
     if len(raw) > 1048576:
         raise ValueError("artifact metadata limit")
     item = json.loads(raw)
