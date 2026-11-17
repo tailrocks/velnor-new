@@ -32,6 +32,10 @@ pub enum Command {
         about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and all required checks outside the explicit --pr-only-check list passed in push jobs on that branch at the exact commit; ready=false while a check is unfinished; exit 1 on a failed check, invalid exemption or off-branch commit. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
     )]
     ReleaseGate(ReleaseGateArgs),
+    #[command(
+        about = "The required check: read the needs context from NEEDS_JSON, and the spec in the variable --spec-env names, and the plan outputs of the plan job the spec names, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and the test jobs of every selected package with tests ran at least one test. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
+    )]
+    Gate(GateArgs),
     #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
     CheckTag(CheckTagArgs),
     #[command(
@@ -154,6 +158,16 @@ fn base_file(text: &str) -> Result<BaseFile, String> {
         path: RepoPath::new(path).map_err(|e| e.to_string())?,
         file: PathBuf::from(file),
     })
+}
+
+#[derive(Debug, Args)]
+pub struct GateArgs {
+    #[arg(
+        long,
+        value_name = "VARIABLE",
+        help = "The environment variable that holds the gate spec the generator wrote: --plan <job>, then --job <ID=WHEN> for every job of needs (WHEN is always, or conditions joined by +: lane:<root>, policy, schedule, schedule-or-push) and --tests <ID=ROOT> for each job whose tests_run output counts the tests of the root"
+    )]
+    pub spec_env: String,
 }
 
 #[derive(Debug, Args)]
