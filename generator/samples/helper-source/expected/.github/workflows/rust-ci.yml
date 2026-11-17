@@ -174,6 +174,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+      sources_saved: '${{ steps.sources_save_root.outcome == ''success'' }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -244,8 +245,12 @@ jobs:
       - id: restored
         name: velnor-ci restored
         env:
-          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && github.event_name != ''push'' && ''7'' || ''0'' }}'
+          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
         run: velnor-ci restored
+      - id: replan
+        name: velnor-ci plan --full
+        if: '${{ steps.restored.outputs.expired == ''true'' }}'
+        run: velnor-ci plan --full
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
@@ -257,77 +262,77 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || needs.rust-plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-actions-actionlint alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-actionlint '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-actionlint '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-actionlint --locked
       - name: Check velnor-actions-ansible alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-ansible '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-ansible '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-ansible --locked
       - name: Check velnor-actions-bun alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-bun '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-bun '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-bun --locked
       - name: Check velnor-actions-cli alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-cli '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-cli '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-cli --locked
       - name: Check velnor-actions-contract alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-contract '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-contract '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-contract --locked
       - name: Check velnor-actions-dbt alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-dbt '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-dbt '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-dbt --locked
       - name: Check velnor-actions-freshness alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-freshness '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-freshness '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-freshness --locked
       - name: Check velnor-actions-gradle alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-gradle '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-gradle '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-gradle --locked
       - name: Check velnor-actions-mise alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-mise '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-mise '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-mise --locked
       - name: Check velnor-actions-orchestrator alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-orchestrator '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-orchestrator '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-orchestrator --locked
       - name: Check velnor-actions-rust alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-rust '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-rust '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-rust --locked
       - name: Check velnor-actions-tofu alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-tofu '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-tofu '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-tofu --locked
       - name: Check velnor-actions-workflow-renderer alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-actions-workflow-renderer '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-workflow-renderer '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-actions-workflow-renderer --locked
       - name: Check velnor-archive-guard alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p velnor-archive-guard '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-archive-guard '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-archive-guard --locked
@@ -349,7 +354,8 @@ jobs:
         with:
           path: target
           key: 'velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: sources_save_root
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_root.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -363,7 +369,7 @@ jobs:
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
+          TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || needs.rust-plan.outputs.rust_root_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -388,6 +394,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
+      sources_saved: '${{ steps.sources_save_ci_helper.outcome == ''success'' }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -462,8 +469,12 @@ jobs:
       - id: restored
         name: velnor-ci restored
         env:
-          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && github.event_name != ''push'' && ''7'' || ''0'' }}'
+          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
         run: velnor-ci restored
+      - id: replan
+        name: velnor-ci plan --full
+        if: '${{ steps.restored.outputs.expired == ''true'' }}'
+        run: velnor-ci plan --full
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
@@ -477,13 +488,13 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'' && needs.rust-plan.outputs.rust_ci_helper_docs == ''run'' && needs.rust-plan.outputs.rust_ci_helper_package_args != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_ci_helper_mode || needs.rust-plan.outputs.rust_ci_helper_mode) != ''none'' && (steps.replan.outputs.rust_ci_helper_docs || needs.rust-plan.outputs.rust_ci_helper_docs) == ''run'' && (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args) != '''' }}'
         working-directory: ci-helper
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-ci alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_ci_helper_package_args), '' -p velnor-ci '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_ci_helper_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args)), '' -p velnor-ci '') || contains(format('' {0} '', (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args)), '' --workspace '')) }}'
         working-directory: ci-helper
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -508,7 +519,8 @@ jobs:
         with:
           path: ci-helper/target
           key: 'velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''ci-helper/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: sources_save_ci_helper
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_ci_helper.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -523,7 +535,7 @@ jobs:
         working-directory: ci-helper
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_ci_helper_test_filter }}'
+          TEST_FILTER: '${{ steps.replan.outputs.rust_ci_helper_test_filter || needs.rust-plan.outputs.rust_ci_helper_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -548,6 +560,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
+      sources_saved: '${{ steps.sources_save_crates_velnor_runner.outcome == ''success'' }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -622,8 +635,12 @@ jobs:
       - id: restored
         name: velnor-ci restored
         env:
-          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && github.event_name != ''push'' && ''7'' || ''0'' }}'
+          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
         run: velnor-ci restored
+      - id: replan
+        name: velnor-ci plan --full
+        if: '${{ steps.restored.outputs.expired == ''true'' }}'
+        run: velnor-ci plan --full
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
@@ -637,55 +654,55 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'' && needs.rust-plan.outputs.rust_crates_velnor_runner_docs == ''run'' && needs.rust-plan.outputs.rust_crates_velnor_runner_package_args != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_crates_velnor_runner_mode || needs.rust-plan.outputs.rust_crates_velnor_runner_mode) != ''none'' && (steps.replan.outputs.rust_crates_velnor_runner_docs || needs.rust-plan.outputs.rust_crates_velnor_runner_docs) == ''run'' && (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args) != '''' }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-resource-probe alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-resource-probe '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-resource-probe '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-resource-probe --locked
       - name: Check velnor-runner-attestation alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-runner-attestation '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-attestation '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-runner-attestation --locked
       - name: Check velnor-runner-cli alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-runner-cli '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-cli '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-runner-cli --locked
       - name: Check velnor-runner-core alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-runner-core '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-core '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-runner-core --locked
       - name: Check velnor-runner-github alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-runner-github '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-github '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-runner-github --locked
       - name: Check velnor-runner-host alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-runner-host '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-host '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-runner-host --locked
       - name: Check velnor-runner-image-manifest alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-runner-image-manifest '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-image-manifest '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-runner-image-manifest --locked
       - name: Check velnor-runner-qualification alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' -p velnor-runner-qualification '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_crates_velnor_runner_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-qualification '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -710,7 +727,8 @@ jobs:
         with:
           path: crates/velnor-runner/target
           key: 'velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: sources_save_crates_velnor_runner
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_crates_velnor_runner.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -725,7 +743,7 @@ jobs:
         working-directory: crates/velnor-runner
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_crates_velnor_runner_test_filter }}'
+          TEST_FILTER: '${{ steps.replan.outputs.rust_crates_velnor_runner_test_filter || needs.rust-plan.outputs.rust_crates_velnor_runner_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -750,6 +768,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
+      sources_saved: '${{ steps.sources_save_generator.outcome == ''success'' }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -824,8 +843,12 @@ jobs:
       - id: restored
         name: velnor-ci restored
         env:
-          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && github.event_name != ''push'' && ''7'' || ''0'' }}'
+          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
         run: velnor-ci restored
+      - id: replan
+        name: velnor-ci plan --full
+        if: '${{ steps.restored.outputs.expired == ''true'' }}'
+        run: velnor-ci plan --full
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
@@ -839,31 +862,31 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_generator_mode != ''none'' && needs.rust-plan.outputs.rust_generator_docs == ''run'' && needs.rust-plan.outputs.rust_generator_package_args != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_generator_mode || needs.rust-plan.outputs.rust_generator_mode) != ''none'' && (steps.replan.outputs.rust_generator_docs || needs.rust-plan.outputs.rust_generator_docs) == ''run'' && (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args) != '''' }}'
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-gen alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' -p velnor-gen '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-gen '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-gen --locked
       - name: Check velnor-model alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' -p velnor-model '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-model '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-model --locked
       - name: Check velnor-render alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' -p velnor-render '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-render '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-render --locked
       - name: Check velnor-rust alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' -p velnor-rust '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_generator_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-rust '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -888,7 +911,8 @@ jobs:
         with:
           path: generator/target
           key: 'velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''generator/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: sources_save_generator
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_generator.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -903,7 +927,7 @@ jobs:
         working-directory: generator
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_generator_test_filter }}'
+          TEST_FILTER: '${{ steps.replan.outputs.rust_generator_test_filter || needs.rust-plan.outputs.rust_generator_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -928,6 +952,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
+      sources_saved: '${{ steps.sources_save_local.outcome == ''success'' }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -1002,8 +1027,12 @@ jobs:
       - id: restored
         name: velnor-ci restored
         env:
-          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && github.event_name != ''push'' && ''7'' || ''0'' }}'
+          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
         run: velnor-ci restored
+      - id: replan
+        name: velnor-ci plan --full
+        if: '${{ steps.restored.outputs.expired == ''true'' }}'
+        run: velnor-ci plan --full
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
@@ -1017,19 +1046,19 @@ jobs:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - name: Documentation
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_local_mode != ''none'' && needs.rust-plan.outputs.rust_local_docs == ''run'' && needs.rust-plan.outputs.rust_local_package_args != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_local_mode || needs.rust-plan.outputs.rust_local_mode) != ''none'' && (steps.replan.outputs.rust_local_docs || needs.rust-plan.outputs.rust_local_docs) == ''run'' && (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args) != '''' }}'
         working-directory: local
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check velnor-cache-rules alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_local_package_args), '' -p velnor-cache-rules '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_local_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' -p velnor-cache-rules '') || contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' --workspace '')) }}'
         working-directory: local
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo check -p velnor-cache-rules --locked
       - name: Check velnor-local alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_local_package_args), '' -p velnor-local '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_local_package_args), '' --workspace '')) }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' -p velnor-local '') || contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' --workspace '')) }}'
         working-directory: local
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
@@ -1054,7 +1083,8 @@ jobs:
         with:
           path: local/target
           key: 'velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''local/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
-      - name: Save the sources cache
+      - id: sources_save_local
+        name: Save the sources cache
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.sources_local.outputs.cache-hit != ''true'' }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
@@ -1069,7 +1099,7 @@ jobs:
         working-directory: local
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          TEST_FILTER: '${{ needs.rust-plan.outputs.rust_local_test_filter }}'
+          TEST_FILTER: '${{ steps.replan.outputs.rust_local_test_filter || needs.rust-plan.outputs.rust_local_test_filter }}'
         run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -1253,8 +1283,12 @@ jobs:
       - id: restored
         name: velnor-ci restored
         env:
-          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && github.event_name != ''push'' && ''7'' || ''0'' }}'
+          VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
         run: velnor-ci restored
+      - id: replan
+        name: velnor-ci plan --full
+        if: '${{ steps.restored.outputs.expired == ''true'' }}'
+        run: velnor-ci plan --full
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:

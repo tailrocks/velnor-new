@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod audit;
+mod base_expiry;
 mod cache;
 mod check_configurations;
 mod check_metadata;
