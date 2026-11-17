@@ -40,6 +40,20 @@ fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() ->
     let jobs = job_ids(&text);
     assert_eq!(jobs[..2], ["rust-plan", "rust-helper"]);
     assert_eq!(jobs.iter().filter(|job| **job == "rust-helper").count(), 1);
+    let helper = text
+        .split("  rust-helper:\n")
+        .nth(1)
+        .ok_or("helper job missing")?
+        .split("\n  rust-")
+        .next()
+        .ok_or("helper job body missing")?;
+    assert!(helper.starts_with("    needs:\n      - rust-plan\n    if:"));
+    assert_eq!(
+        helper.lines().find(|line| line.starts_with("    if:")),
+        Some(
+            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
+        )
+    );
     let lanes: Vec<&&str> = jobs
         .iter()
         .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
@@ -170,6 +184,20 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
         ["rust-plan", "rust-helper", "rust", "required"]
     );
     assert_eq!(text.matches("Install velnor-ci").count(), 3);
+    let helper = text
+        .split("  rust-helper:\n")
+        .nth(1)
+        .ok_or("helper job missing")?
+        .split("\n  rust:")
+        .next()
+        .ok_or("helper job body missing")?;
+    assert!(helper.starts_with("    needs:\n      - rust-plan\n    if:"));
+    assert_eq!(
+        helper.lines().find(|line| line.starts_with("    if:")),
+        Some(
+            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
+        )
+    );
     assert!(!text.contains("Download velnor-ci"));
     assert!(text.contains("cargo-clippy clippy"));
     assert!(text.contains("cargo-nextest nextest run"));
