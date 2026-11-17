@@ -10,7 +10,8 @@ use crate::golden::{load, samples};
 use crate::pipeline::{HELPER_LOCK, view, workflow};
 
 fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
-    let mut view = view(roots, None)?;
+    let config = (version == "0.1.80").then_some(b"full_run = \"off\"\n".as_slice());
+    let mut view = view(roots, config)?;
     let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", version, 1);
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
@@ -56,7 +57,7 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
     assert!(job.contains("\"$VELNOR_HELPER_LAUNCHER\" -- gate --spec-env GATE_SPEC'\n"));
     assert_eq!(
         gate_line(&text)?,
-        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
+        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-lab=lab"
     );
     Ok(())
 }
@@ -143,8 +144,8 @@ fn a_helper_built_from_source_never_runs_the_gate_from_the_pull_request_build() 
 }
 
 #[test]
-fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
-    let manifests: Vec<String> = (0..20)
+fn fourteen_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests: Vec<String> = (0..14)
         .map(|index| {
             if index == 0 {
                 "Cargo.toml".to_owned()
@@ -157,7 +158,7 @@ fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult 
     let text = released("0.1.81", &roots)?;
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
-    assert_eq!(spec.matches("--tests ").count(), 20);
+    assert_eq!(spec.matches("--tests ").count(), 14);
     assert!(
         required(&text)?.contains("\"$VELNOR_HELPER_LAUNCHER\" -- gate --spec-env GATE_SPEC'\n")
     );

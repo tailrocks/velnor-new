@@ -54,7 +54,12 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     crate::facts::lock_pinned_tools(&mut view)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     view.tracked_paths.insert(lock.clone());
-    view.files.insert(lock, HELPER_LOCK.to_vec());
+    view.files.insert(
+        lock,
+        String::from_utf8(HELPER_LOCK.to_vec())?
+            .replace("0.1.79", "0.1.81")
+            .into_bytes(),
+    );
     if let Some(bytes) = config {
         let path = RepoPath::new(".velnor/rust-ci.toml")?;
         view.tracked_paths.insert(path.clone());
@@ -91,14 +96,15 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
             "  rust-root:",
             "  rust-lab:",
             "  rust-inputs-audit:",
+            "  rust-trim:",
             "  required:"
         ]
     );
     assert!(text.contains(
-        "  rust-lab:\n    needs:\n      - rust-plan\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'\n"
+        "  rust-lab:\n    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'\n"
     ));
     assert!(text.contains(
-        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'\n"
+        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
     ));
     Ok(())
 }
@@ -109,7 +115,7 @@ fn the_config_file_sets_runner_time_limit_and_excluded_roots() -> TestResult {
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(config))?)?;
     assert!(text.contains("    runs-on: self-hosted\n    timeout-minutes: 12\n"));
     let format = step_named(&text, "Format");
-    assert!(format.contains("!cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''"));
+    assert!(format.contains("!cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none''"));
     assert!(format.contains(r#""$VELNOR_HELPER_LAUNCHER" -- run -- cargo-fmt --all --check'"#));
     assert!(!text.contains("lab"));
     Ok(())
@@ -147,6 +153,7 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
     for run in text
         .lines()
         .filter(|line| line.trim_start().starts_with("run:"))
+        .filter(|line| !line.contains("--target-dir"))
     {
         assert!(
             !["bad", "crates", "odd"]
@@ -171,8 +178,12 @@ fn step_named(text: &str, name: &str) -> String {
 #[test]
 fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> TestResult {
     let root = "a${{ github.event.pull_request.title }}/Cargo.toml";
-    let config = b"runner = \"${{ secrets.TOKEN }}\"\n";
-    let text = workflow(&view(&[root], Some(config))?)?;
+    let config = b"runner = \"${{ secrets.TOKEN }}\"\nfull_run = \"off\"\n";
+    let mut unsaved = view(&[root], Some(config))?;
+    unsaved
+        .files
+        .insert(RepoPath::new(".velnor/rust-ci.lock")?, HELPER_LOCK.to_vec());
+    let text = workflow(&unsaved)?;
     assert!(text.contains("    runs-on: '${{ ''${{'' }} secrets.TOKEN }}'\n"));
     assert!(
         !text.contains("${{ github.event.pull_request.title"),

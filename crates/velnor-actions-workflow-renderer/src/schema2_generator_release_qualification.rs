@@ -44,7 +44,7 @@ pub(super) fn job(
         workflow_steps::verify_rust_step(pins)?,
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
     ];
-    action_steps.extend(source_steps(job.product, pins));
+    action_steps.extend(source_steps(job.product, pins)?);
     action_steps.extend(assets::download_build_steps(
         job.product,
         "Download built asset files",
@@ -115,12 +115,17 @@ pub(super) fn job(
     Ok(finish(job.id, fields, vec![job.source_step.clone(), call]))
 }
 
-pub(super) fn source_steps(product: ProductAsset, pins: &ProductReleasePins) -> Vec<Yaml> {
+pub(super) fn source_steps(
+    product: ProductAsset,
+    pins: &ProductReleasePins,
+) -> Result<Vec<Yaml>, RenderError> {
     let mut admission = workflow_steps::bash_step_with_env(
         "Admit exact same-run Cargo source artifact",
-        "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
+        &workflow_steps::credential_free_command(
+            "/usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py",
+        ),
         vec![
-            ("GH_TOKEN", "${{ github.token }}"),
+            ("SOURCES_METADATA", super::source_metadata::PATH),
             ("SOURCES_ID", "${{ inputs.sources_id }}"),
             ("SOURCES_DIGEST", "${{ inputs.sources_digest }}"),
             ("SOURCES_TREE", "${{ inputs.sources_tree }}"),
@@ -146,12 +151,20 @@ pub(super) fn source_steps(product: ProductAsset, pins: &ProductReleasePins) -> 
         ));
         fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
     }
-    vec![
+    let mut metadata = super::source_metadata::step(pins, "${{ inputs.sources_id }}")?;
+    if let Yaml::Map(fields) = &mut metadata {
+        fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
+    }
+    Ok(vec![
+        workflow_steps::install_gh_step(&pins.install_gh_argv)?,
+        metadata,
         admission,
         download,
         workflow_steps::bash_step_with_env(
             "Prepare complete locked Cargo sources",
-            "bash scripts/generator-release/stable-source-consumer.sh",
+            &workflow_steps::credential_free_command(
+                "bash scripts/generator-release/stable-source-consumer.sh",
+            ),
             vec![
                 ("SOURCES_TREE", "${{ inputs.sources_tree }}"),
                 (
@@ -161,5 +174,5 @@ pub(super) fn source_steps(product: ProductAsset, pins: &ProductReleasePins) -> 
                 ("VELNOR_RUST_VERSION", &pins.rust_version),
             ],
         ),
-    ]
+    ])
 }

@@ -38,7 +38,7 @@ pub(super) fn job(
         workflow_steps::bash_step(
             "Create canonical candidate manifest from verified build bytes",
             &format!(
-                "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nbash scripts/generator-release/create-release-manifest.sh '{}' '{}' '{}' '{}'",
+                "test \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/generator-release/create-release-manifest.sh '{}' '{}' '{}' '{}'",
                 assets::VERSION,
                 assets::REPOSITORY,
                 pins.rust_version,
@@ -81,7 +81,7 @@ pub(super) fn job(
             hosted,
             JobTimeout::DEFAULT,
         ),
-        workflow_steps::perm(&[("actions", "write"), ("contents", "read")]),
+        workflow_steps::perm(&[("actions", "read"), ("contents", "read")]),
     );
     fields.retain(|(key, _)| key != "name");
     fields = workflow_steps::with_needs(fields, &NEEDS);

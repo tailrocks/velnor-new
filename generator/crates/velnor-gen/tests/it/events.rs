@@ -38,27 +38,18 @@ const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(
 #[test]
 fn every_ci_job_excludes_closed_pull_requests_and_preserves_other_events() -> TestResult {
     let workflows = [
-        (with(&[], None)?, "!cancelled()"),
-        (with(&[], Some(b"shape = \"lint-test\"\n"))?, "!cancelled()"),
-        (
-            workflow(&view(&["Cargo.toml", "tools/Cargo.toml"], None)?)?,
-            "!cancelled()",
-        ),
-        (
-            with(
-                &[("deny.toml", ""), ("mise.toml", DENY_MISE)],
-                Some(b"shape = \"lint-test\"\nskip_draft_pull_requests = true\n"),
-            )?,
-            "!cancelled()",
-        ),
-        (
-            workflow(&crate::golden::load(
-                &crate::golden::samples().join("helper-source"),
-            )?)?,
-            "always()",
-        ),
+        with(&[], None)?,
+        with(&[], Some(b"shape = \"lint-test\"\n"))?,
+        workflow(&view(&["Cargo.toml", "tools/Cargo.toml"], None)?)?,
+        with(
+            &[("deny.toml", ""), ("mise.toml", DENY_MISE)],
+            Some(b"shape = \"lint-test\"\nskip_draft_pull_requests = true\n"),
+        )?,
+        workflow(&crate::golden::load(
+            &crate::golden::samples().join("helper-source"),
+        )?)?,
     ];
-    for (text, required_predicate) in workflows {
+    for text in workflows {
         let tree = crate::yaml_tree::document(&text)?;
         assert!(
             tree.pointer("/on/pull_request/types")
@@ -91,7 +82,7 @@ fn every_ci_job_excludes_closed_pull_requests_and_preserves_other_events() -> Te
             jobs.get("required")
                 .and_then(|job| job.get("if"))
                 .and_then(serde_json::Value::as_str),
-            Some(format!("${{{{ {ACTIVE_EVENT} && ({required_predicate}) }}}}").as_str())
+            Some(format!("${{{{ {ACTIVE_EVENT} && (always()) }}}}").as_str())
         );
         if let Some(condition) = jobs
             .get("rust-test")

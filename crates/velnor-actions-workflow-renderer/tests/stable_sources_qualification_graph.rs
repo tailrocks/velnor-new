@@ -124,3 +124,6 @@ fn stable_sources_mode_runs_only_the_read_only_branch_qualification_graph()
     );
     Ok(())
 }
+
+#[path = "stable_source_metadata.rs"]
+mod metadata;

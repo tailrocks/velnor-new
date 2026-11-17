@@ -1,0 +1,6 @@
+version = 4
+
+[[package]]
+name = "shared-lib"
+version = "1.0.0"
+source = "git+https://github.com/example/shared-lib?branch=main#0123456789abcdef"

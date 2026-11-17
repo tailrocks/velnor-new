@@ -258,6 +258,9 @@ fn patches(
                 continue;
             };
             let folder = folder.as_str().ok_or_else(|| invalid(key.clone()))?;
+            if rooted(folder) {
+                return Err(invalid(key));
+            }
             let package = match entry.get("package") {
                 Some(package) => package.as_str().ok_or_else(|| invalid(key.clone()))?,
                 None => name.as_str(),
@@ -271,6 +274,12 @@ fn patches(
     Ok(found)
 }
 
+fn rooted(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    path.starts_with(['/', '\\'])
+        || matches!(bytes, [drive, b':', ..] if drive.is_ascii_alphabetic())
+}
+
 pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
     let mut segments = resolve(base, relative)?;
     segments.push("Cargo.toml");
@@ -278,6 +287,9 @@ pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> 
 }
 
 pub(crate) fn resolve<'a>(base: Option<&'a RepoPath>, relative: &'a str) -> Option<Vec<&'a str>> {
+    if rooted(relative) {
+        return None;
+    }
     let mut segments: Vec<&str> =
         base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
     for segment in relative.split('/') {

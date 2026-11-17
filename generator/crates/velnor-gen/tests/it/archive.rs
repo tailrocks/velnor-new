@@ -9,7 +9,33 @@ use crate::job_shape::{job_ids, target};
 use crate::pipeline::{view, workflow};
 use crate::select::{facts, member};
 
+const LAUNCH: &str = "\"$VELNOR_HELPER_BASH\" --noprofile --norc -p -e -o pipefail -c \"$VELNOR_HELPER_LAUNCHER\" -- ";
+
+pub(crate) fn plain_invocations(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            let Some((indent, quoted)) = line.split_once("run: '") else {
+                return line.to_owned();
+            };
+            let Some(body) = quoted
+                .strip_prefix(LAUNCH)
+                .and_then(|rest| rest.strip_suffix('\''))
+            else {
+                return line.to_owned();
+            };
+            if body.contains(['"', '\'']) || body.contains(": ") {
+                format!("{indent}run: 'velnor-ci {body}'")
+            } else {
+                format!("{indent}run: velnor-ci {body}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
 pub(crate) fn jobs_of(text: &str) -> Vec<(String, String)> {
+    let text = plain_invocations(text);
     let mut jobs: Vec<(String, String)> = Vec::new();
     let mut in_jobs = false;
     for line in text.lines() {
@@ -51,6 +77,7 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "rust-test-lab",
             "rust-test-default-lab",
             "rust-inputs-audit",
+            "rust-trim",
             "required"
         ]
     );
@@ -131,7 +158,10 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
                 ))
             });
             assert_eq!(reports, block.contains("nextest run"), "{config}: {id}");
-            for line in block.lines().filter(|line| line.contains("nextest run")) {
+            for line in block
+                .lines()
+                .filter(|line| line.contains("nextest run") && !line.contains("--no-run"))
+            {
                 assert!(line.ends_with("--no-tests=pass'"), "{config}: {line}");
             }
         }

@@ -58,16 +58,21 @@ fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() ->
         .iter()
         .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
         .collect();
-    assert_eq!(lanes.len(), 6);
+    assert_eq!(lanes.len(), 7);
     assert_eq!(
         text.matches("cargo build -p velnor-ci --bin velnor-ci --locked")
             .count(),
         1
     );
     assert!(!text.contains("Upload velnor-ci"));
-    for lane in lanes {
-        let header = format!("  {lane}:\n    needs:\n      - rust-plan\n    if:");
-        assert!(text.contains(&header), "{lane}");
+    for lane in lanes.into_iter().filter(|lane| **lane != "rust-trim") {
+        let header = format!("  {lane}:\n    needs:\n      - rust-plan\n");
+        let start = text.find(&header).ok_or(lane.to_string())?;
+        let needs = text[start..]
+            .split("    if:")
+            .next()
+            .ok_or("no condition")?;
+        assert!(!needs.contains("rust-helper"), "{lane}: {needs}");
     }
     assert!(
         text.contains("    needs:\n      - rust-plan\n      - rust-helper\n      - rust-root\n")
@@ -175,8 +180,12 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
         )],
     )?;
     view.tracked_paths.insert(path(".velnor/rust-ci.lock")?);
-    view.files
-        .insert(path(".velnor/rust-ci.lock")?, HELPER_LOCK.to_vec());
+    view.files.insert(
+        path(".velnor/rust-ci.lock")?,
+        String::from_utf8(HELPER_LOCK.to_vec())?
+            .replace("0.1.79", "0.1.81")
+            .into_bytes(),
+    );
     view.tracked_paths.insert(CONFIG_PATH);
     view.files.insert(
         CONFIG_PATH,
@@ -185,9 +194,9 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     let text = text_of(&view)?;
     assert_eq!(
         job_ids(&text),
-        ["rust-plan", "rust-helper", "rust", "required"]
+        ["rust-plan", "rust-helper", "rust", "rust-trim", "required"]
     );
-    assert_eq!(text.matches("Install velnor-ci").count(), 4);
+    assert_eq!(text.matches("Install velnor-ci").count(), 5);
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
     assert!(verdict.contains("Install velnor-ci 0.1.81"));
     assert!(verdict.contains("\"$VELNOR_HELPER_LAUNCHER\" -- gate --spec-env GATE_SPEC"));
@@ -281,8 +290,10 @@ fn helper_source_requires_a_released_helper_with_restoration_and_tie_breaking() 
     }
     view.files.insert(lock, released.into_bytes());
     assert!(expected_files(&view).is_ok());
-    view.files
-        .insert(CONFIG_PATH, b"exclude = [\"fixtures/**\"]\n".to_vec());
+    view.files.insert(
+        CONFIG_PATH,
+        b"exclude = [\"fixtures/**\"]\nfull_run = \"off\"\n".to_vec(),
+    );
     let lock = path(".velnor/rust-ci.lock")?;
     let released = String::from_utf8(view.files.get(&lock).ok_or("no lock")?.clone())?;
     view.files

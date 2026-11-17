@@ -27,7 +27,7 @@ const COMMIT: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb";
 pub(crate) const COMMIT_FILE: &str = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb\n";
 
 fn with_lock(lock: &str) -> Result<RepoView, Box<dyn Error>> {
-    let mut view = view(&["Cargo.toml"], None)?;
+    let mut view = view(&["Cargo.toml"], Some(b"full_run = \"off\"\n"))?;
     view.tracked_paths.insert(LOCK_PATH);
     view.files.insert(LOCK_PATH, lock.as_bytes().to_vec());
     Ok(view)

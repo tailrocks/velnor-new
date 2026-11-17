@@ -7,8 +7,8 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    CommitSha, Concurrency, HelperCommand, HelperRelease, HelperVersion, Job, JobId, Permissions,
-    Platform, PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
+    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform,
+    PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
     WorkflowPlan,
 };
 use velnor_render::{
@@ -310,8 +310,8 @@ fn install_helper_renders_the_pinned_uses_step_with_the_release_tag_and_every_di
 #[test]
 fn one_command_steps_render_a_single_line_each() -> TestResult {
     let files = render(&plan(vec![
-        StepKind::Helper(HelperCommand::InputsSave),
-        StepKind::Helper(HelperCommand::InputsRestore),
+        StepKind::InputsSave(velnor_model::RepoPath::new("target")?),
+        StepKind::InputsRestore(velnor_model::RepoPath::new("target")?),
         StepKind::GeneratorCheck,
     ])?)
     .map_err(|found| format!("{found:?}"))?;

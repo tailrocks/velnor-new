@@ -13,7 +13,25 @@ const KEY: &str = "build.target-dir";
 type Found<'v> = (&'v RepoPath, Option<RepoPath>, toml::Value);
 
 pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPath, DetectError> {
-    target_dir_source(view, manifest).map(|(folder, _)| folder)
+    let (folder, _) = target_dir_source(view, manifest)?;
+    let overlaps = |path: &RepoPath| {
+        path == &folder
+            || path.as_str().starts_with(&format!("{folder}/"))
+            || folder.as_str().starts_with(&format!("{path}/"))
+    };
+    if folder
+        .as_str()
+        .split('/')
+        .any(|part| matches!(part, ".git" | ".cargo"))
+        || view.tracked_paths.iter().any(overlaps)
+        || view.rust_metadata.keys().any(overlaps)
+    {
+        return Err(DetectError::invalid(
+            manifest,
+            Reason::TargetDirOverlap(folder.to_string()),
+        ));
+    }
+    Ok(folder)
 }
 
 pub(crate) fn target_dir_source<'v>(
@@ -59,6 +77,19 @@ fn nearest<'v>(
     manifest: &RepoPath,
     key: &str,
 ) -> Result<Option<Found<'v>>, DetectError> {
+    for (file, bytes, base) in nearest_first(view, manifest) {
+        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+        if let Some(value) = parsed.get("build").and_then(|build| build.get(key)) {
+            return Ok(Some((file, base, value.clone())));
+        }
+    }
+    Ok(None)
+}
+
+pub(crate) fn nearest_first<'v>(
+    view: &'v RepoView,
+    manifest: &RepoPath,
+) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
     let mut configs: Vec<_> = patch_files(view, manifest)
         .into_iter()
         .filter(|(file, _, _)| *file != manifest)
@@ -70,11 +101,6 @@ fn nearest<'v>(
             file.as_str().strip_suffix(".toml").is_none(),
         )
     });
-    for (file, bytes, base) in configs.into_iter().rev() {
-        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
-        if let Some(value) = parsed.get("build").and_then(|build| build.get(key)) {
-            return Ok(Some((file, base, value.clone())));
-        }
-    }
-    Ok(None)
+    configs.reverse();
+    configs
 }
