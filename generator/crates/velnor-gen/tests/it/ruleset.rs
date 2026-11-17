@@ -27,7 +27,7 @@ fn golden() -> Result<String, Box<dyn Error>> {
 fn ruleset_on_the_golden_prints_the_recorded_json() -> TestResult {
     let view = load(&samples().join("release-two-roots"))?;
     let json = release_ruleset(&view)?;
-    if std::env::var_os("UPDATE_GOLDENS").is_some() {
+    if crate::golden::update_requested(std::env::var_os("UPDATE_GOLDENS").as_deref()) {
         fs::write(samples().join("release-two-roots/ruleset.json"), &json)?;
     }
     assert_eq!(json, golden()?);
