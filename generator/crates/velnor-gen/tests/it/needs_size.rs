@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet};
+
 use serde_json::{Map, Value, json};
 use velnor_model::{RepoPath, StepKind, WorkflowPlan};
-use velnor_render::{MAX_ENV_CHARACTERS, Rule};
+use velnor_render::{MAX_ENV_CHARACTERS, RenderedJob, RenderedWorkflow, Rule, rendered_workflow};
 
 use crate::facts::TestResult;
 use crate::pipeline::{HELPER_LOCK, view};
@@ -36,23 +38,6 @@ fn required_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
         .ok_or("no Required bound")
 }
 
-fn inspection_workflow(plan: &WorkflowPlan) -> Result<Value, Box<dyn std::error::Error>> {
-    let mut plan = plan.clone();
-    for step in plan.jobs.iter_mut().flat_map(|job| &mut job.steps) {
-        if let StepKind::Verdict {
-            needs_max_bytes, ..
-        }
-        | StepKind::CheckMetrics { needs_max_bytes } = &mut step.kind
-        {
-            *needs_max_bytes = 0;
-        }
-    }
-    let rendered = velnor_render::render(&plan).map_err(|errors| format!("{errors:?}"))?;
-    Ok(serde_saphyr::from_str(
-        rendered.values().next().ok_or("workflow")?,
-    )?)
-}
-
 fn cache_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
     plan.jobs
         .iter()
@@ -68,7 +53,8 @@ fn cache_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
 fn cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs() -> TestResult {
     for (roots, rejected) in [(2, false), (50, false), (62, true)] {
         let plan = saving_plan(roots, false)?;
-        let actual = realized_needs(&inspection_workflow(&plan)?, "cache")?;
+        let workflow = rendered_workflow(&plan);
+        let actual = realized_needs(&workflow, "cache")?;
         let bound = cache_bound(&plan)?;
         assert!(
             actual <= bound,
@@ -90,7 +76,9 @@ fn cache_context_is_bounded_from_its_producers_without_unrelated_plan_outputs() 
             .map(|job| job.id.clone())
             .collect();
         assert_eq!(cache.needs, producers);
-        let errors = velnor_render::render(&plan).err().unwrap_or_default();
+        let errors = velnor_render::check_rules(&workflow)
+            .err()
+            .unwrap_or_default();
         assert_eq!(
             errors
                 .iter()
@@ -110,8 +98,8 @@ fn blocking_cache_adds_its_outputless_context_to_required_without_changing_the_c
 -> TestResult {
     let advisory = saving_plan(2, false)?;
     let blocking = saving_plan(2, true)?;
-    let payload_growth = realized_needs(&inspection_workflow(&blocking)?, "required")?
-        - realized_needs(&inspection_workflow(&advisory)?, "required")?;
+    let payload_growth = realized_needs(&rendered_workflow(&blocking), "required")?
+        - realized_needs(&rendered_workflow(&advisory), "required")?;
     let budget_growth = required_bound(&blocking)? - required_bound(&advisory)?;
     assert!(payload_growth > 0);
     assert!(
@@ -145,17 +133,33 @@ fn blocking_cache_adds_its_outputless_context_to_required_without_changing_the_c
     Ok(())
 }
 
-fn realized_output(name: &str, text: &str) -> String {
-    if text.starts_with("velnor-") {
-        return text
+fn realized_output(name: &str, text: &str) -> Result<String, Box<dyn std::error::Error>> {
+    if matches!(name, "base_prefix" | "sources_prefix") && text.starts_with("velnor-") {
+        let value = text
             .replace("${{ runner.os }}", "Windows")
             .replace("${{ runner.arch }}", "ARM64")
             .replace("${{ steps.prepare.outputs.compat }}", &"f".repeat(16));
+        if value.contains("${{") {
+            return Err(format!("unsupported cache expression: {name}: {text}").into());
+        }
+        return Ok(value);
     }
+    let expression = text
+        .strip_prefix("${{ ")
+        .and_then(|inner| inner.strip_suffix(" }}"))
+        .ok_or_else(|| format!("unsupported output expression: {name}: {text}"))?;
     if matches!(name, "tests_run" | "tests_listed") {
-        return u64::MAX.to_string();
+        assert_eq!(expression, format!("steps.test.outputs.{name}"));
+        return Ok(u64::MAX.to_string());
     }
-    if name.ends_with("_package_args") {
+    if matches!(name, "base_save" | "sources_saved" | "cache_ok") {
+        check_cache_expression(name, expression)?;
+        return Ok("false".to_owned());
+    }
+    if !name.starts_with("rust_") || expression != format!("steps.plan.outputs.{name}") {
+        return Err(format!("unsupported output: {name}: {text}").into());
+    }
+    let value = if name.ends_with("_package_args") {
         "--workspace".to_owned()
     } else if name.ends_with("_tests") {
         "run".to_owned()
@@ -165,25 +169,72 @@ fn realized_output(name: &str, text: &str) -> String {
         String::new()
     } else if name.ends_with("_docs") || name.ends_with("_doctests") {
         "run".to_owned()
-    } else {
+    } else if name.ends_with("_doctests_known")
+        || matches!(name, "rust_deny" | "rust_machete" | "rust_policy")
+    {
         "false".to_owned()
-    }
+    } else {
+        return Err(format!("unsupported output: {name}: {text}").into());
+    };
+    Ok(value)
 }
 
-fn realized_needs(workflow: &Value, consumer: &str) -> Result<usize, Box<dyn std::error::Error>> {
+fn check_cache_expression(name: &str, expression: &str) -> TestResult {
+    let supported = match name {
+        "base_save" => expression == "steps.base.outputs.save",
+        "sources_saved" => expression
+            .strip_prefix("steps.sources_save_")
+            .and_then(|inner| inner.strip_suffix(".outcome == 'success'"))
+            .is_some_and(|slug| !slug.is_empty() && valid_step_id(slug)),
+        "cache_ok" => expression.split(" && ").all(|term| {
+            term.strip_prefix("steps.")
+                .and_then(|inner| inner.strip_suffix(".outcome != 'failure'"))
+                .is_some_and(|id| {
+                    id == "target_verified"
+                        || (id.starts_with("sources_")
+                            && id.ends_with("_verified")
+                            && valid_step_id(id))
+                })
+        }),
+        _ => false,
+    };
+    if !supported {
+        return Err(format!("unsupported cache expression: {name}: {expression}").into());
+    }
+    Ok(())
+}
+
+fn valid_step_id(id: &str) -> bool {
+    id.bytes()
+        .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+fn workflow_jobs(workflow: &RenderedWorkflow) -> BTreeMap<&str, &RenderedJob> {
+    let mut jobs = BTreeMap::new();
+    for job in &workflow.jobs {
+        assert!(jobs.insert(job.id.as_str(), job).is_none(), "{}", job.id);
+        let mut names = BTreeSet::new();
+        for (name, _) in &job.outputs {
+            assert!(names.insert(name), "{}: {name}", job.id);
+        }
+    }
+    jobs
+}
+
+fn realized_needs(
+    workflow: &RenderedWorkflow,
+    consumer: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let jobs = workflow_jobs(workflow);
     let mut needs = Map::new();
-    for id in workflow["jobs"][consumer]["needs"]
-        .as_array()
-        .ok_or("needs")?
-    {
-        let id = id.as_str().ok_or("job id")?;
+    let dependencies = &jobs.get(consumer).ok_or("consumer job")?.needs;
+    assert!(!dependencies.is_empty(), "{consumer}: missing needs");
+    for id in dependencies {
         let mut outputs = Map::new();
-        if let Some(declared) = workflow["jobs"][id]["outputs"].as_object() {
-            for (name, text) in declared {
-                let value = realized_output(name, text.as_str().ok_or("output")?);
-                assert!(!value.contains("${{"), "{name}: {value}");
-                outputs.insert(name.clone(), Value::String(value));
-            }
+        for (name, text) in &jobs.get(id.as_str()).ok_or("producer job")?.outputs {
+            let value = realized_output(name, text)?;
+            assert!(!value.contains("${{"), "{name}: {value}");
+            outputs.insert(name.clone(), Value::String(value));
         }
         needs.insert(
             id.to_owned(),
@@ -194,26 +245,81 @@ fn realized_needs(workflow: &Value, consumer: &str) -> Result<usize, Box<dyn std
 }
 
 #[test]
+fn production_job_lowering_preserves_planned_jobs_and_matches_yaml_dependencies_and_outputs()
+-> TestResult {
+    for blocks in [false, true] {
+        let plan = saving_plan(2, blocks)?;
+        let lowered = rendered_workflow(&plan);
+        let jobs = workflow_jobs(&lowered);
+        let mut plan_ids = BTreeSet::new();
+        for job in &plan.jobs {
+            assert!(plan_ids.insert(job.id.as_str()), "{}", job.id);
+        }
+        assert_eq!(plan_ids, jobs.keys().copied().collect());
+        let rendered = velnor_render::render(&plan).map_err(|errors| format!("{errors:?}"))?;
+        let yaml: Value = serde_saphyr::from_str(rendered.values().next().ok_or("workflow")?)?;
+        let wire_jobs = yaml["jobs"].as_object().ok_or("jobs")?;
+        assert_eq!(
+            plan_ids,
+            wire_jobs
+                .keys()
+                .map(String::as_str)
+                .collect::<BTreeSet<_>>()
+        );
+        for (id, job) in jobs {
+            let wire = wire_jobs.get(id).ok_or("wire job")?;
+            let wire_needs = match wire.get("needs") {
+                Some(value) => value
+                    .as_array()
+                    .ok_or("wire needs")?
+                    .iter()
+                    .map(|value| value.as_str().ok_or("wire dependency"))
+                    .collect::<Result<Vec<_>, _>>()?,
+                None => Vec::new(),
+            };
+            assert_eq!(
+                job.needs.iter().map(String::as_str).collect::<Vec<_>>(),
+                wire_needs,
+                "{id}"
+            );
+            let outputs: Map<String, Value> = job
+                .outputs
+                .iter()
+                .map(|(name, value)| (name.clone(), Value::String(value.clone())))
+                .collect();
+            let wire_outputs = match wire.get("outputs") {
+                Some(value) => value.as_object().ok_or("wire outputs")?.clone(),
+                None => Map::new(),
+            };
+            assert_eq!(outputs, wire_outputs, "{id}");
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_context() -> TestResult
 {
     for roots in [34, 35, 38] {
         let plan = saving_plan(roots, false)?;
-        let actual = realized_needs(&inspection_workflow(&plan)?, "required")?;
+        let workflow = rendered_workflow(&plan);
+        let actual = realized_needs(&workflow, "required")?;
         let bound = required_bound(&plan)?;
         assert!(
             actual <= bound,
             "roots={roots}, actual={actual}, bound={bound}"
         );
         if roots <= 34 {
-            assert!(velnor_render::render(&plan).is_ok());
+            assert!(velnor_render::check_rules(&workflow).is_ok());
         } else {
             if roots == 38 {
+                assert_eq!(actual, 100_430);
                 assert!(
                     actual > MAX_ENV_CHARACTERS,
                     "actual={actual}, bound={bound}"
                 );
             }
-            let errors = velnor_render::render(&plan)
+            let errors = velnor_render::check_rules(&workflow)
                 .err()
                 .ok_or("oversized context accepted")?;
             assert!(

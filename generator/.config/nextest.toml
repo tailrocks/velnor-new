@@ -24,10 +24,6 @@ final-status-level = "flaky"
 [profile.default]
 slow-timeout = { period = "2s", terminate-after = 1 }
 
-[[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and test(needs_size::)'
-threads-required = "num-test-threads"
-
 # Tests that build a temporary repository and run real cargo or git through
 # velnor-gen. Measured locally (CARGO_BUILD_JOBS=4, warm build): 0.36 s to
 # 1.04 s each, so 10 s is about 10x the slowest.
