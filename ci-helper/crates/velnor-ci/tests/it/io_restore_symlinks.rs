@@ -62,7 +62,9 @@ fn a_symlink_retargeted_inside_a_submodule_restores_nothing() {
         repo.set_mtime(path, checkout);
     }
     let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+        .err()
+        .unwrap_or_else(|| unreachable!("changed symlink was accepted"))
+        .to_string();
 
     assert_eq!(repo.mtime("data/a.txt"), checkout);
     assert_eq!(repo.mtime("data/b.txt"), checkout);
