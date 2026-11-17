@@ -27,6 +27,7 @@ jobs:
     permissions:
       contents: read
     outputs:
+      rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
       # jactionlint ignore=unused-job-output
@@ -39,10 +40,10 @@ jobs:
         with:
           fetch-depth: 2
           persist-credentials: false
-      - name: Install velnor-ci 0.1.79
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.79
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
         with:
-          version: '0.1.79'
+          version: '0.1.81'
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
@@ -101,6 +102,9 @@ jobs:
           restore-keys: |
             velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
+      - name: velnor-ci inputs restore
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        run: velnor-ci inputs restore
       - id: restored
         name: velnor-ci restored
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -114,14 +118,14 @@ jobs:
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
+        run: velnor-ci run -- velnor-ci inputs build -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.plan.outputs.rust_root_test_filter }}'
-        run: 'velnor-ci run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        run: 'velnor-ci run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
         if: '${{ github.event_name == ''schedule'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: velnor-ci inputs audit
@@ -129,12 +133,12 @@ jobs:
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' && steps.plan.outputs.rust_root_docs == ''run'' && steps.plan.outputs.rust_root_package_args != '''' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: 'velnor-ci run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        run: 'velnor-ci run -- velnor-ci inputs build -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check single-crate alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', steps.plan.outputs.rust_root_package_args), '' -p single-crate '') || contains(format('' {0} '', steps.plan.outputs.rust_root_package_args), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-        run: velnor-ci run -- cargo check -p single-crate --locked
+        run: velnor-ci run -- velnor-ci inputs build -- cargo check -p single-crate --locked
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -148,12 +152,21 @@ jobs:
     name: Required
     needs:
       - rust
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - name: Fail when a Rust job failed or was cancelled
-        if: '${{ contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'') }}'
-        run: exit 1
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        with:
+          version: '0.1.81'
+          sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
+          sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
+          sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
+      - name: velnor-ci gate
+        env:
+          NEEDS_JSON: '${{ toJSON(needs) }}'
+          GATE_SPEC: '--plan rust --job rust=always --tests rust=root'
+        run: velnor-ci gate --spec-env GATE_SPEC

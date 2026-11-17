@@ -54,7 +54,12 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     crate::facts::lock_pinned_tools(&mut view)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     view.tracked_paths.insert(lock.clone());
-    view.files.insert(lock, HELPER_LOCK.to_vec());
+    view.files.insert(
+        lock,
+        String::from_utf8(HELPER_LOCK.to_vec())?
+            .replace("0.1.79", "0.1.81")
+            .into_bytes(),
+    );
     if let Some(bytes) = config {
         let path = RepoPath::new(".velnor/rust-ci.toml")?;
         view.tracked_paths.insert(path.clone());
@@ -98,7 +103,7 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
         "  rust-lab:\n    needs:\n      - rust-plan\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'\n"
     ));
     assert!(text.contains(
-        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'\n"
+        "    needs:\n      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
     ));
     Ok(())
 }
