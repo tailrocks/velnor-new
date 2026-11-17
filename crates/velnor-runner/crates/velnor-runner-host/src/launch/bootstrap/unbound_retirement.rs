@@ -20,6 +20,10 @@ use crate::{
     launch::SelectedEngineContext,
 };
 
+#[cfg(test)]
+#[path = "unbound_retirement/historical_v48.rs"]
+pub(crate) mod historical_v48;
+
 #[path = "unbound_retirement/creation_target.rs"]
 mod creation_target;
 pub(crate) use creation_target::UnboundCreationObservation;

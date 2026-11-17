@@ -14,6 +14,10 @@ use crate::journal::schema::UNBOUND_SHAPE;
 
 use super::hold_context;
 
+#[cfg(test)]
+#[path = "unbound_retirement/historical_v48.rs"]
+mod historical_v48;
+
 #[path = "unbound_retirement/inventory.rs"]
 mod inventory;
 #[path = "unbound_retirement/ownership.rs"]

@@ -10,6 +10,8 @@ mod publication;
 mod storage;
 mod unbound_retirement;
 pub(crate) use unbound_retirement::UnboundCreationObservation;
+#[cfg(test)]
+pub(crate) use unbound_retirement::historical_v48;
 mod uncertain_recovery;
 
 pub(crate) use adapter::PreparedAcquiredBootstrap;

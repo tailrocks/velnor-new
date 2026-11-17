@@ -15,6 +15,9 @@ mod guards;
 mod inbox;
 #[path = "bootstrap/late.rs"]
 mod late;
+#[path = "bootstrap/migration.rs"]
+mod migration;
+
 #[path = "bootstrap/receipt_integrity.rs"]
 mod receipt_integrity;
 
@@ -90,6 +93,15 @@ async fn prepare(crash: Crash, _foreign: bool) -> TestResult<Prepared> {
 
 impl Prepared {
     async fn restart(self) -> TestResult<Self> {
+        let reopened = self.reopen().await?;
+        reopened
+            .journal
+            .recover_after_restart_without_authority()
+            .await?;
+        Ok(reopened)
+    }
+
+    async fn reopen(self) -> TestResult<Self> {
         let Self {
             directory,
             fixture,
@@ -104,7 +116,6 @@ impl Prepared {
         drop(journal);
         let journal = Journal::open(&path).await?;
         db::assert_current(&journal).await?;
-        journal.recover_after_restart_without_authority().await?;
         let config = crate::config::HostConfig::parse(super::HOST_CONFIG)?;
         let scope = journal
             .connection_scope(config.connections().first().ok_or("binding")?)
