@@ -170,7 +170,7 @@ fn rendered_steps(
     }
     if let Some(verify) = rendered
         .first()
-        .and_then(|saved| crate::cache_upload::verification(&step.kind, saved))
+        .and_then(|saved| crate::cache_upload::record(&step.kind, saved))
     {
         rendered.push(verify);
     }
@@ -230,6 +230,7 @@ fn step_body(
             crate::helper_steps::restored_step(*expiry, targets)
         }
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
+        StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
@@ -309,7 +310,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         id: Some(crate::report::cache_id(key, fallbacks)),
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
-        continue_on_error: !fallbacks && crate::cache_upload::verification_id(key).is_some(),
+        continue_on_error: !fallbacks && crate::cache_upload::key_id(key).is_some(),
         with,
         ..RenderedStep::default()
     }

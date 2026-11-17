@@ -7,6 +7,7 @@ use velnor_model::{
 };
 
 use crate::cache::render_key;
+use crate::cache_upload::{SOURCES_KEY_OUTPUT, key_id, key_output};
 use crate::gate::BASE_STEP;
 use crate::gate::sources_save_step;
 use crate::release_steps::shell_word;
@@ -48,7 +49,7 @@ pub(crate) fn cache_decide(
 }
 
 pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
-    cache_lane_outputs(steps)
+    let mut outputs = cache_lane_outputs(steps)
         .into_iter()
         .filter_map(|output| {
             let value = match &output {
@@ -61,18 +62,25 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
                     sources_save_step(root.slug())
                 ),
                 CacheLaneOutput::SourcesSaved(_) => return None,
-                CacheLaneOutput::CacheOk(keys) => {
-                    let verified = keys
-                        .iter()
-                        .filter_map(crate::cache_upload::verification_id)
-                        .map(|id| format!("steps.{id}.outcome != 'failure'"))
-                        .collect::<Vec<_>>();
-                    format!("${{{{ {} }}}}", verified.join(" && "))
-                }
             };
             Some((output.name().to_owned(), value))
         })
-        .collect()
+        .collect::<Vec<_>>();
+    outputs.extend([TrimFamily::Target, TrimFamily::Sources].into_iter().filter_map(
+        |family| {
+            steps.iter().find_map(|step| match &step.kind {
+                StepKind::CacheSave(key) if crate::cache_upload::family_of(key) == Some(family) => {
+                    let id = key_id(key)?;
+                    Some((
+                        key_output(family).to_owned(),
+                        format!("${{{{ steps.{id}.outputs.key }}}}"),
+                    ))
+                }
+                _ => None,
+            })
+        },
+    ));
+    outputs
 }
 
 pub(crate) fn with_saved_lane(condition: String, steps: &[Step]) -> String {
@@ -102,7 +110,7 @@ fn admitted_lane(lane: &JobId, family: TrimFamily) -> String {
     match family {
         TrimFamily::Target => trimmed_lane(lane, family),
         TrimFamily::Sources => format!(
-            "(needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true' || needs.{lane}.outputs.cache_ok == 'false')"
+            "(needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true' || needs.{lane}.outputs.{SOURCES_KEY_OUTPUT} != '')"
         ),
     }
 }

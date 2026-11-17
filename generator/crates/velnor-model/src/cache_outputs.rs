@@ -14,7 +14,6 @@ pub enum CacheLaneOutput {
     BaseSave,
     SourcesPrefix(CacheKey),
     SourcesSaved(CacheKey),
-    CacheOk(Vec<CacheKey>),
 }
 
 impl CacheLaneOutput {
@@ -25,14 +24,13 @@ impl CacheLaneOutput {
             Self::BaseSave => BASE_SAVE_OUTPUT,
             Self::SourcesPrefix(_) => SOURCES_PREFIX_OUTPUT,
             Self::SourcesSaved(_) => SOURCES_SAVED_OUTPUT,
-            Self::CacheOk(_) => "cache_ok",
         }
     }
 
     #[must_use]
     pub fn max_content_bytes(&self) -> usize {
         match self {
-            Self::BaseSave | Self::SourcesSaved(_) | Self::CacheOk(_) => 5,
+            Self::BaseSave | Self::SourcesSaved(_) => 5,
             Self::BasePrefix(key) | Self::SourcesPrefix(key) => {
                 let layout = key.layout();
                 let Some(&length) = layout.fallback_lengths.last() else {
@@ -63,19 +61,9 @@ pub fn cache_lane_outputs(steps: &[Step]) -> Vec<CacheLaneOutput> {
     };
     let target = saved(|key| matches!(key, CacheKey::Target { .. })).filter(|_| decides);
     let sources = saved(|key| matches!(key, CacheKey::Sources { .. })).filter(|_| decides);
-    let verified = steps
-        .iter()
-        .filter_map(|step| match &step.kind {
-            StepKind::CacheSave(key @ (CacheKey::Target { .. } | CacheKey::Sources { .. })) => {
-                Some(key.clone())
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>();
     target
         .into_iter()
         .flat_map(|key| [CacheLaneOutput::BasePrefix(key), CacheLaneOutput::BaseSave])
-        .chain((!verified.is_empty()).then_some(CacheLaneOutput::CacheOk(verified)))
         .chain(sources.into_iter().flat_map(|key| {
             [
                 CacheLaneOutput::SourcesPrefix(key.clone()),

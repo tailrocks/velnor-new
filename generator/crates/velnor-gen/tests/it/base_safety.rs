@@ -82,7 +82,16 @@ fn upload_failures_are_visible_to_the_cache_check() -> TestResult {
         } else {
             "sources"
         };
-        let verify = step(lane, &format!("Verify the {family} cache upload"))
+        let record =
+            step(lane, &format!("Record the {family} cache key")).ok_or("no recorded cache key")?;
+        assert!(!record.contains("GITHUB_TOKEN"), "{record}");
+        let all = jobs("0.1.81", "")?;
+        let trim = &all
+            .iter()
+            .find(|(id, _)| id == "rust-trim")
+            .ok_or("trim")?
+            .1;
+        let verify = step(trim, &format!("Verify the rust {family} cache upload"))
             .ok_or("no upload verification")?;
         assert!(verify.contains("velnor-ci cache verify"), "{verify}");
     }

@@ -26,7 +26,11 @@ pub enum StepKind {
         target: RepoPath,
         archive: Option<RepoPath>,
     },
-    CacheResult(Vec<JobId>),
+    CacheResult(Vec<(JobId, TrimFamily)>),
+    CacheVerify {
+        lane: JobId,
+        family: TrimFamily,
+    },
     CacheTrim {
         lane: JobId,
         family: TrimFamily,

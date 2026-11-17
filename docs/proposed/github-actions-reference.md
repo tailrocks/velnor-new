@@ -677,6 +677,13 @@ changes cannot select different attestation subjects.
 
 ### Artifact download extraction
 
+The pinned [upload-artifact implementation](https://github.com/actions/upload-artifact/blob/cf430e030ddbb5b0abf93d22962f4752f3646cd9/src/shared/upload-artifact.ts)
+uploads through `@actions/artifact`. The toolkit's
+[runtime credential reader](https://github.com/actions/toolkit/blob/main/packages/artifact/src/internal/shared/config.ts)
+uses `ACTIONS_RUNTIME_TOKEN`. Same-run uploads do not require `actions: write`
+on `GITHUB_TOKEN`. Release build jobs grant only `contents: read`; the candidate
+manifest job also grants `actions: read` for artifact downloads.
+
 The [pinned artifact reference](github-actions-artifact-reference.md#artifact-download-extraction-boundary)
 records the download action's extraction and digest boundary. Verify artifact
 producer and identity before download; the digest check runs after extraction.
@@ -744,3 +751,16 @@ Base-save, source-save and cache-verification values require at most the five ch
 These bounds include JSON escaping and do not depend on a cache-key length limit.
 
 The pinned [`actions/cache` save implementation](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/saveImpl.ts) catches save errors, emits warnings and exits successfully. Its [save action inputs](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/save/action.yml) expose neither a strict failure switch nor a saved-key output. Generated base-cache writers therefore verify the exact key and ref with the [read-only cache listing API](https://docs.github.com/en/rest/actions/cache#list-github-actions-caches-for-a-repository). The separate Cache check reports failed verification without changing Required. The Actions runner [status-function implementation](https://github.com/actions/runner/blob/main/src/Runner.Worker/Expressions/SuccessFunction.cs) evaluates `success()` against job status for steps; save steps combine this with their event and explicit decision guards, so an earlier producer or inline input-audit failure cannot authorize publication.
+
+## Public source artifact admission
+
+A generated inline step uses the pinned GitHub CLI and a step-scoped token to
+read metadata from the fixed `tailrocks/velnor-new` repository through GitHub's
+[Get an artifact endpoint](https://docs.github.com/en/rest/actions/artifacts#get-an-artifact).
+It validates a positive numeric artifact ID before the request, bounds the
+response to 1 MiB and removes stale or incomplete metadata on failure. The
+repository admission script reads only that metadata file without credentials
+or network access. Admission checks the same-run producer identity, artifact
+digest, source locks, size and expiry. An unavailable metadata response takes
+the generator release qualifier's existing source-fetch fallback. The mandatory
+warm qualification fails if it cannot fetch or admit the source artifact.

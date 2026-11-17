@@ -45,7 +45,12 @@ pub fn execute_homebrew_qualification_from_env() -> Result<(), OrchestratorError
     let deadline = absolute_deadline()?;
     let candidate = crate::homebrew::hosted_profile::verify_release_qualification_candidate()?;
     let (plan, spec, a, d) = load_catalog()?;
-    let (verified_a, verified_d) = verify_historical_pair(&plan, &a, &d, deadline)?;
+    let evidence = std::env::var_os("VELNOR_HOMEBREW_EVIDENCE_DIR")
+        .ok_or_else(|| internal("homebrew_qualification_evidence_missing"))?;
+    let (verified_a, verified_d) =
+        super::qualification_evidence::scope(Path::new(&evidence), || {
+            verify_historical_pair(&plan, &a, &d, deadline)
+        })?;
     let _hosted_profile_evidence =
         crate::homebrew::hosted_profile::prepare_for_release_qualification(&candidate, deadline)?;
     install_preview_transition(&spec, &plan, &verified_a, &verified_d, &a, &d, deadline)?;
