@@ -47,14 +47,3 @@ fn field_digest(digest: &mut Sha256, field: &[u8]) {
     digest.update((field.len() as u64).to_le_bytes());
     digest.update(field);
 }
-
-pub(super) fn unchanged(root: &Path) -> bool {
-    let Ok(expected) = std::env::var("EXPECTED_SOURCE_IDENTITY") else {
-        return false;
-    };
-    expected.len() == 64
-        && expected
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        && identity(root).is_ok_and(|actual| actual == expected)
-}

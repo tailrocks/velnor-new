@@ -135,7 +135,7 @@ fn absent_tracked_inputs_cannot_change_node_kind_before_delta_staging() {
             "regular-link" => std::os::unix::fs::symlink("src/main.rs", &missing)
                 .unwrap_or_else(|error| unreachable!("{error}")),
             "regular-directory" => {
-                fs::create_dir(&missing).unwrap_or_else(|error| unreachable!("{error}"))
+                fs::create_dir(&missing).unwrap_or_else(|error| unreachable!("{error}"));
             }
             _ => repo.write_unstaged("missing", "now a regular file"),
         }

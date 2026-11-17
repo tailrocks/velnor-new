@@ -111,7 +111,13 @@ pub(super) fn write_nodes(
     Ok(())
 }
 
-fn validate(manifest: &Manifest, staging: &Path, target: &Path) -> Result<(), CiError> {
+pub(super) fn validate(
+    manifest: &Manifest,
+    staging: &Path,
+    target: &Path,
+    cutoff: u64,
+) -> Result<(), CiError> {
+    snapshot::validate_times(&manifest.nodes, cutoff)?;
     let size = manifest
         .nodes
         .values()
@@ -163,8 +169,13 @@ fn validate(manifest: &Manifest, staging: &Path, target: &Path) -> Result<(), Ci
     Ok(())
 }
 
-pub(super) fn apply(manifest: &Manifest, staging: &Path, target: &Path) -> Result<usize, CiError> {
-    validate(manifest, staging, target)?;
+pub(super) fn apply(
+    manifest: &Manifest,
+    staging: &Path,
+    target: &Path,
+    cutoff: u64,
+) -> Result<usize, CiError> {
+    validate(manifest, staging, target, cutoff)?;
     let mut directories: Vec<_> = manifest
         .nodes
         .iter()

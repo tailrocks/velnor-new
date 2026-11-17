@@ -6,6 +6,7 @@ use std::fs;
 use std::io::{Read, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Component, Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -50,6 +51,28 @@ impl Node {
             }
         }
     }
+    pub(super) fn validate_time(&self, cutoff: u64) -> Result<(), CiError> {
+        if self.metadata().0 > cutoff {
+            return Err(CiError::new(
+                "cached build modification time is in the future",
+            ));
+        }
+        Ok(())
+    }
+}
+
+pub(super) fn now_ns() -> Result<u64, CiError> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .ok()
+        .and_then(|elapsed| u64::try_from(elapsed.as_nanos()).ok())
+        .ok_or_else(|| CiError::new("current modification time is out of range"))
+}
+
+pub(super) fn validate_times(nodes: &BTreeMap<PathBuf, Node>, cutoff: u64) -> Result<(), CiError> {
+    nodes
+        .values()
+        .try_for_each(|node| node.validate_time(cutoff))
 }
 
 #[derive(Serialize, Deserialize)]

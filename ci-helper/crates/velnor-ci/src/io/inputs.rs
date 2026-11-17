@@ -17,9 +17,11 @@ use crate::inputs::{
 use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
-    let top = tracked_paths(root)?.top;
-    let mut tracked = top_level_files(&top, &Scope::default(), false)?;
-    let identity = super::delta_source::identity_of(&tracked).unwrap_or_default();
+    let CapturedInputs {
+        top,
+        tracked,
+        source_identity: identity,
+    } = capture_inputs(root, false)?;
     let path = root.join(INPUTS_FILE);
     if std::env::var("EXPECTED_SOURCE_IDENTITY")
         .is_ok_and(|expected| identity.is_empty() || expected != identity)
@@ -27,10 +29,6 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
         super::delta_snapshot::replace(&path, None)?;
         return Ok("saved nothing: source identity changed or unavailable\n".to_owned());
     }
-    let scope = scope_of(root, &top)?;
-    tracked.files.retain(|file| scope.contains(&file.path));
-    tracked.links.retain(|file| scope.contains(&file.path));
-    tracked.absent.retain(|path| scope.contains(path));
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -72,6 +70,27 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
         tracked.unsupported,
         tracked.submodules
     ))
+}
+
+pub(super) struct CapturedInputs {
+    pub top: PathBuf,
+    pub tracked: Tracked,
+    pub source_identity: String,
+}
+
+pub(super) fn capture_inputs(root: &Path, strict: bool) -> Result<CapturedInputs, CiError> {
+    let top = tracked_paths(root)?.top;
+    let mut tracked = top_level_files(&top, &Scope::default(), strict)?;
+    let source_identity = super::delta_source::identity_of(&tracked).unwrap_or_default();
+    let scope = scope_of(root, &top)?;
+    tracked.files.retain(|file| scope.contains(&file.path));
+    tracked.links.retain(|file| scope.contains(&file.path));
+    tracked.absent.retain(|path| scope.contains(path));
+    Ok(CapturedInputs {
+        top,
+        tracked,
+        source_identity,
+    })
 }
 
 pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
