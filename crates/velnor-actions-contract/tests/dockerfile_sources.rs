@@ -239,6 +239,7 @@ fn add_sources_must_be_proven_local_before_claiming_context() -> Result<(), Stri
         "FROM scratch\nARG HTTP_PROXY=src\nADD $HTTP_PROXY /dest\n",
         "FROM scratch\nARG SRC=https://host/file\nADD $SRC /dest\n",
         "FROM scratch AS base\nADD --from=base https://host/file /dest\n",
+        "FROM scratch\nARG PATH\nADD https://host/$PATH\n",
     ] {
         assert!(
             matches!(
@@ -322,6 +323,11 @@ fn parent_components_refuse_before_normalization_or_unknown_context() -> Result<
             let facts = analyze_dockerfile(&text, &[]).map_err(|e| format!("{e:?}"))?;
             assert!(facts.context_sources.contains("dir/file"));
         }
+        let text = format!("FROM scratch\n{keyword} ../file\n");
+        assert!(matches!(
+            analyze_dockerfile(&text, &[]),
+            Err(DockerfileProblem::ContextEscape(_))
+        ));
     }
     Ok(())
 }

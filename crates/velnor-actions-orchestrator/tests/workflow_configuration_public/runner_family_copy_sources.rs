@@ -192,18 +192,25 @@ fn assert_image_context_selection(
 #[test]
 fn normalized_copy_paths_select_the_image_job() -> TestResult {
     for keyword in ["COPY", "ADD"] {
-        for source in ["$SRC/./main.txt", "$SRC//main.txt", "$SRC/sub/../main.txt"] {
+        for source in ["$SRC/./main.txt", "$SRC//main.txt"] {
             assert_image_context_selection(
                 &format!("FROM scratch\nARG SRC=src\n{keyword} {source} /dest\n"),
                 ("src/main.txt", "run"),
                 true,
             )?;
         }
-        assert_image_context_selection(
-            &format!("FROM scratch\nARG SRC=src\n{keyword} $SRC/../../main.txt /dest\n"),
-            ("actual/main.txt", "run"),
-            false,
-        )?;
+        for source in ["$SRC/sub/../main.txt", "$SRC/../../main.txt"] {
+            let repo = scoped_workspace(&format!("{DOCS_CONFIG}\n{IMAGE_CONFIG}"))?;
+            put(
+                repo.root(),
+                "image/Dockerfile",
+                &format!("FROM scratch\nARG SRC=src\n{keyword} {source} /dest\n"),
+            )?;
+            let error = velnor_actions_orchestrator::prepare(repo.root())
+                .err()
+                .ok_or("parent source accepted")?;
+            assert!(error.to_string().contains("image_context_escape"));
+        }
     }
     Ok(())
 }
@@ -222,13 +229,11 @@ fn client_proxy_arguments_select_the_whole_context() -> TestResult {
         "no_proxy",
         "all_proxy",
     ] {
-        for keyword in ["COPY", "ADD"] {
-            assert_image_context_selection(
-                &format!("FROM scratch\nARG {name}=src\n{keyword} ${name}/main.txt /dest\n"),
-                ("override/main.txt", "run"),
-                false,
-            )?;
-        }
+        assert_image_context_selection(
+            &format!("FROM scratch\nARG {name}=src\nCOPY ${name}/main.txt /dest\n"),
+            ("override/main.txt", "run"),
+            false,
+        )?;
     }
     Ok(())
 }
@@ -277,14 +282,12 @@ fn unused_complex_arguments_preserve_precise_selection() -> TestResult {
             ("src/main.txt", "run"),
             true,
         )?;
-        assert_image_context_selection(
-            &format!(
-                "FROM scratch\nARG CONFIG='{{\"mode\":\"fast\"}}'\n{keyword} $CONFIG/main.txt /dest\n"
-            ),
-            ("actual/main.txt", "run"),
-            false,
-        )?;
     }
+    assert_image_context_selection(
+        "FROM scratch\nARG CONFIG='{\"mode\":\"fast\"}'\nCOPY $CONFIG/main.txt /dest\n",
+        ("actual/main.txt", "run"),
+        false,
+    )?;
     Ok(())
 }
 

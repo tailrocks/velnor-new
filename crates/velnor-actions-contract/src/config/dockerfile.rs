@@ -196,13 +196,9 @@ impl State {
         if let Some(index) = local {
             for (keyword, args) in self.triggers[index].clone() {
                 match keyword.as_str() {
-                    "COPY" | "ADD" | "ARG" | "ENV" => match self.instruction(&keyword, &args) {
-                        Err(
-                            DockerfileProblem::ContextSourceUnresolved(_)
-                            | DockerfileProblem::ContextEscape(_),
-                        ) => self.facts.claims_whole_context = true,
-                        result => result?,
-                    },
+                    "COPY" | "ADD" | "RUN" | "ARG" | "ENV" => {
+                        self.instruction(&keyword, &args)?;
+                    }
                     _ => self.facts.claims_whole_context = true,
                 }
             }
@@ -236,14 +232,10 @@ impl State {
                 operands.push(token);
             }
         }
-        if from_other {
-            return Ok(());
+        let missing_destination = operands.len() < 2;
+        if !missing_destination {
+            operands.pop();
         }
-        if operands.len() < 2 {
-            self.facts.claims_whole_context = true;
-            return Ok(());
-        }
-        operands.pop();
         for source in operands {
             if source.starts_with("<<") {
                 continue;
@@ -251,26 +243,36 @@ impl State {
             if source.contains(['\\', '\'', '"']) {
                 return Err(DockerfileProblem::ContextSourceUnresolved(source));
             }
+            check_parent_components(&source)?;
+            if keyword == "ADD" && is_remote(&source) {
+                return Err(DockerfileProblem::RemoteAdd(source));
+            }
             if self.unknown_environment && source.contains('$') {
-                self.facts.claims_whole_context = true;
+                if keyword == "ADD" {
+                    return Err(DockerfileProblem::RemoteAdd(source));
+                }
+                self.facts.claims_whole_context |= !from_other;
                 continue;
             }
             let Some(source) = substitute(&source, &self.stage_args) else {
-                self.facts.claims_whole_context = true;
+                if keyword == "ADD" {
+                    return Err(DockerfileProblem::RemoteAdd(source));
+                }
+                self.facts.claims_whole_context |= !from_other;
                 continue;
             };
+            check_parent_components(&source)?;
             if !json_form && source.chars().any(char::is_whitespace) {
                 return Err(DockerfileProblem::ContextSourceUnresolved(source));
             }
             if keyword == "ADD" && is_remote(&source) {
                 return Err(DockerfileProblem::RemoteAdd(source));
             }
-            if let Some(relative) = normalize_source(&source) {
-                self.facts.context_sources.insert(relative);
-            } else {
-                self.facts.claims_whole_context = true;
+            if !from_other {
+                self.facts.context_sources.insert(normalize_source(&source));
             }
         }
+        self.facts.claims_whole_context |= missing_destination;
         Ok(())
     }
 
@@ -303,22 +305,23 @@ impl State {
     }
 }
 
-fn normalize_source(source: &str) -> Option<String> {
-    let mut parts = Vec::new();
-    for part in source.split('/') {
-        match part {
-            "" | "." => {}
-            ".." => {
-                parts.pop()?;
-            }
-            _ => parts.push(part),
-        }
+fn check_parent_components(source: &str) -> Result<(), DockerfileProblem> {
+    if source.split('/').any(|part| part == "..") {
+        return Err(DockerfileProblem::ContextEscape(source.to_owned()));
     }
-    Some(if parts.is_empty() {
+    Ok(())
+}
+
+fn normalize_source(source: &str) -> String {
+    let parts = source
+        .split('/')
+        .filter(|part| !matches!(*part, "" | "."))
+        .collect::<Vec<_>>();
+    if parts.is_empty() {
         ".".to_owned()
     } else {
         parts.join("/")
-    })
+    }
 }
 
 fn require_pinned(reference: &str) -> Result<(), DockerfileProblem> {
