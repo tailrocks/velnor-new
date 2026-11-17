@@ -17,7 +17,8 @@ const INPUTS: &str = ".velnor/inputs.tsv";
 pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
     let base = std::env::var("BASE_CACHE_KEY").unwrap_or_default();
     match command {
-        DeltaCommand::Prepare => {
+        DeltaCommand::Prepare(args) => {
+            super::delta_paths::staging(&args.staging_dir)?;
             let hash = velnor_rust::sha256_hex(base.as_bytes());
             let root = std::env::current_dir().map_err(|e| CiError::new(e.to_string()))?;
             let identity = super::delta_source::identity(&root);
@@ -41,8 +42,8 @@ pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
 }
 
 fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
+    super::delta_paths::staging(&args.staging_dir)?;
     safe_path(&args.target_dir)?;
-    safe_path(&args.staging_dir)?;
     let baseline = snapshot::capture(&args.target_dir, base);
     let manifest = snapshot::read::<Manifest>(&args.staging_dir.join(MANIFEST));
     let mut report = match manifest {
@@ -96,6 +97,7 @@ fn decline(reason: &str) -> Result<String, CiError> {
 }
 
 fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
+    super::delta_paths::staging(&args.staging_dir)?;
     if base.is_empty() || !compiled(args) {
         return decline("no base or no compilation");
     }
@@ -104,7 +106,15 @@ fn stage(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         return decline("source identity changed or unavailable");
     }
     safe_path(&args.target_dir)?;
-    safe_path(&args.staging_dir)?;
+    let inputs = fs::read_to_string(args.target_dir.join(INPUTS))
+        .ok()
+        .and_then(|text| super::input_snapshot::decode(&text).ok());
+    if !inputs.is_some_and(|saved| {
+        std::env::var("EXPECTED_SOURCE_IDENTITY")
+            .is_ok_and(|expected| saved.source_identity == expected)
+    }) {
+        return decline("saved inputs source identity changed or unavailable");
+    }
     let baseline = match snapshot::read::<Snapshot>(&args.target_dir.join(BASELINE)) {
         Ok(snapshot)
             if snapshot.base == base

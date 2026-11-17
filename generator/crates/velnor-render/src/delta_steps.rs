@@ -8,7 +8,7 @@ use velnor_model::CacheRoot;
 pub(crate) fn delta_step(root: &CacheRoot, verb: &str) -> RenderedStep {
     let slug = root.slug();
     let (id, args) = match verb {
-        "prepare" => (Some(format!("delta_base_{slug}")), String::new()),
+        "prepare" => (Some(format!("delta_base_{slug}")), paths(root)),
         "stage" => (Some("delta".to_owned()), paths(root)),
         _ => (None, paths(root)),
     };

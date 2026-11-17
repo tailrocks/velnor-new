@@ -7,10 +7,33 @@ use std::process::Command;
 use std::time::{Duration, SystemTime};
 
 use crate::delta::success;
-use crate::delta_source::{delta, fixture, helper, next_push, prepare, save_inputs};
+use crate::delta_source::{cargo, delta, fixture, helper, next_push, prepare, save_inputs};
 
 const SOURCE_A: &str = "fn main() {}\n";
 const SOURCE_B: &str = "compile_error!(\"uncompiled future source\");\nfn main() {}\n";
+
+#[test]
+fn an_absent_tracked_symlink_keeps_the_same_source_identity_when_inputs_are_saved() {
+    let (repo, _) = fixture("delta-absent-link-inputs");
+    let link = repo.root().join("link");
+    std::os::unix::fs::symlink("src/main.rs", &link)
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    repo.git(&["add", "link"]);
+    fs::remove_file(link).unwrap_or_else(|error| unreachable!("{error}"));
+    fs::remove_dir_all(repo.root().join("target")).unwrap_or_else(|error| unreachable!("{error}"));
+    let expected = prepare(&repo);
+    assert_eq!(expected.len(), 64);
+    delta(&repo, "apply", None);
+    let built = cargo(&repo);
+    success(&built);
+    repo.write_unstaged("velnor-run.log", &String::from_utf8_lossy(&built.stderr));
+    save_inputs(&repo);
+    assert_eq!(delta(&repo, "stage", Some(&expected)), "save=true\n");
+    let restored = next_push(&repo);
+    success(&restored);
+    let log = String::from_utf8_lossy(&restored.stderr);
+    assert!(log.contains("Fresh app"), "{log}");
+}
 
 #[test]
 fn a_saved_future_source_cannot_be_staged_after_the_built_source_returns() {
@@ -48,7 +71,7 @@ fn changed_snapshot_rows_cannot_restore_unbuilt_sources_to_old_times() {
         .filter(|line| line.starts_with("src/main.rs\t"))
         .collect::<Vec<_>>();
     assert_eq!(rows.len(), 1);
-    let mut forged = original
+    let mut inconsistent = original
         .lines()
         .map(|line| {
             if line.starts_with("src/main.rs\t") {
@@ -59,8 +82,8 @@ fn changed_snapshot_rows_cannot_restore_unbuilt_sources_to_old_times() {
         })
         .collect::<Vec<_>>()
         .join("\n");
-    forged.push('\n');
-    fs::write(&path, forged).unwrap_or_else(|e| unreachable!("{e}"));
+    inconsistent.push('\n');
+    fs::write(&path, inconsistent).unwrap_or_else(|e| unreachable!("{e}"));
     let changed_time = SystemTime::UNIX_EPOCH + Duration::from_secs(4);
     repo.set_mtime("src/main.rs", changed_time);
     success(&helper(&repo, &["inputs", "restore"], None).0);
@@ -95,7 +118,7 @@ fn missing_snapshot_binding_cannot_authorize_a_delta_save() {
 #[test]
 fn tracked_staging_inputs_survive_apply_stage_and_git_clean_with_path_aliases() {
     for alias in ["relative", "absolute", "parent"] {
-        for verb in ["apply", "stage"] {
+        for verb in ["prepare", "apply", "stage"] {
             let (repo, _) = fixture("tracked-delta-staging");
             let sentinel = "target.velnor-delta/sentinel";
             repo.write(sentinel, "tracked input must survive\n");

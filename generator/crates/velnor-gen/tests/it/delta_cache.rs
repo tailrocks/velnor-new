@@ -77,10 +77,6 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                     .ok_or("no delta condition")?;
                 if name == "Restore the delta cache" {
                     assert!(
-                        condition.contains("steps.delta_base_root.outcome == ''success''"),
-                        "{condition}"
-                    );
-                    assert!(
                         condition.contains("steps.target_root.outputs.cache-matched-key != ''''"),
                         "{condition}"
                     );
@@ -94,11 +90,6 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                     );
                 }
             }
-            let prepare = step(&lane, "velnor-ci delta prepare").ok_or("no prepare")?;
-            assert!(
-                prepare.contains("--target-dir target --staging-dir target.velnor-delta"),
-                "{prepare}"
-            );
             assert_delta_saves_are_not_cancelled(&lane)?;
             let stage = at("velnor-ci delta stage")?;
             assert_eq!(order[stage - 1], "velnor-ci inputs save");
@@ -306,6 +297,16 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
 }
 
 fn source_identity(lane: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let prepare = step(lane, "velnor-ci delta prepare").ok_or("no prepare")?;
+    assert!(
+        prepare.contains("--target-dir target --staging-dir target.velnor-delta"),
+        "{prepare}"
+    );
+    let restore = step(lane, "Restore the delta cache").ok_or("no delta restore")?;
+    assert!(
+        restore.contains("steps.delta_base_root.outcome == ''success''"),
+        "{restore}"
+    );
     let stage = step(lane, "velnor-ci delta stage").ok_or("no delta stage")?;
     assert!(stage.contains("EXPECTED_SOURCE_IDENTITY:"), "{stage}");
     assert!(

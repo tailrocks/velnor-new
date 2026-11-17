@@ -11,14 +11,26 @@ use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
 
 use crate::error::CiError;
 use crate::inputs::{
-    INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
-    parse_ls_files, plan_restore, with_worktree_blobs,
+    INPUTS_FILE, SavedInput, Tracked, TrackedFile, is_representable, parse_ls_files, plan_restore,
+    with_worktree_blobs,
 };
 use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path) -> Result<String, CiError> {
-    let (top, tracked) = worktree_files(root)?;
+    let top = tracked_paths(root)?.top;
+    let mut tracked = top_level_files(&top, &Scope::default(), false)?;
+    let identity = super::delta_source::identity_of(&tracked).unwrap_or_default();
     let path = root.join(INPUTS_FILE);
+    if std::env::var("EXPECTED_SOURCE_IDENTITY")
+        .is_ok_and(|expected| identity.is_empty() || expected != identity)
+    {
+        super::delta_snapshot::replace(&path, None)?;
+        return Ok("saved nothing: source identity changed or unavailable\n".to_owned());
+    }
+    let scope = scope_of(root, &top)?;
+    tracked.files.retain(|file| scope.contains(&file.path));
+    tracked.links.retain(|file| scope.contains(&file.path));
+    tracked.absent.retain(|path| scope.contains(path));
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -50,7 +62,7 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
         fs::create_dir_all(parent)
             .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
     }
-    fs::write(&path, format_inputs(&saved))
+    fs::write(&path, super::input_snapshot::encode(&identity, &saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
         "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
@@ -71,7 +83,7 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
-    let saved = parse_inputs(&text)?;
+    let saved = super::input_snapshot::decode(&text)?.inputs;
     let (top, tracked) = worktree_files(root)?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
@@ -211,9 +223,7 @@ fn top_level_files(root: &Path, scope: &Scope, strict: bool) -> Result<Tracked, 
                 return Err(CiError::new("tracked source is not a symlink"));
             }
             Err(_) => {
-                if strict {
-                    absent.push(link.path);
-                }
+                absent.push(link.path);
                 continue;
             }
         };

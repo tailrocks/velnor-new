@@ -7,7 +7,7 @@ use std::path::PathBuf;
 #[derive(Debug, Subcommand)]
 pub enum DeltaCommand {
     #[command(about = "Fingerprint BASE_CACHE_KEY, the target restore's cache-matched-key")]
-    Prepare,
+    Prepare(DeltaArgs),
     #[command(
         about = "Overlay the restored PR delta, preserving times, and record the build marker"
     )]

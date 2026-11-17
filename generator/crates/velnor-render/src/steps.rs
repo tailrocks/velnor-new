@@ -132,10 +132,13 @@ fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
 
 fn step_conditions(kind: &StepKind) -> Vec<String> {
     match kind {
-        StepKind::CacheRestore(CacheKey::Delta { root, .. }) => vec![format!(
-            "steps.target_{}.outputs.cache-matched-key != ''",
-            root.slug()
-        )],
+        StepKind::CacheRestore(CacheKey::Delta { root, .. }) => vec![
+            format!("steps.delta_base_{}.outcome == 'success'", root.slug()),
+            format!(
+                "steps.target_{}.outputs.cache-matched-key != ''",
+                root.slug()
+            ),
+        ],
         StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
             sources_step(root.slug())

@@ -44,7 +44,18 @@ fn helper_at(
 }
 
 pub(super) fn prepare(repo: &Repo) -> String {
-    prepared(helper(repo, &["delta", "prepare"], None))
+    prepared(helper(
+        repo,
+        &[
+            "delta",
+            "prepare",
+            "--target-dir",
+            "target",
+            "--staging-dir",
+            "delta",
+        ],
+        None,
+    ))
 }
 
 fn prepared((output, values): (Output, String)) -> String {
@@ -200,7 +211,14 @@ fn source_identity_covers_modes_links_absence_and_parent_configuration() {
         let nested = || {
             prepared(helper_at(
                 &repo,
-                &["delta", "prepare"],
+                &[
+                    "delta",
+                    "prepare",
+                    "--target-dir",
+                    "target",
+                    "--staging-dir",
+                    "delta",
+                ],
                 None,
                 &repo.root().join("workspace"),
             ))

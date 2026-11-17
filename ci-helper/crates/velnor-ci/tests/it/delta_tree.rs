@@ -198,8 +198,10 @@ fn corrupt(repo: &Repo, corruption: &str) {
             fs::write(repo.root().join("delta/files/debug/current"), b"short")
                 .unwrap_or_else(|e| unreachable!("{e}"));
         }
-        "extra-empty-metadata" => fs::create_dir_all(repo.root().join("delta/files/.velnor"))
-            .unwrap_or_else(|e| unreachable!("{e}")),
+        "extra-empty-metadata" => {
+            fs::create_dir_all(repo.root().join("delta/files/.velnor/unlisted"))
+                .unwrap_or_else(|e| unreachable!("{e}"));
+        }
         "extra" => repo.write_unstaged("delta/files/debug/extra", "unlisted"),
         _ => {
             let mut metadata = manifest(repo);

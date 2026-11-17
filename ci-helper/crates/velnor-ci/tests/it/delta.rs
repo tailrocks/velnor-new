@@ -21,16 +21,14 @@ pub(super) fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
     fs::remove_file(&output_file).ok();
     let mut command_line = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command_line.args(["delta", command]);
-    if command != "prepare" {
-        command_line.args([
-            "--target-dir",
-            "target",
-            "--staging-dir",
-            "delta",
-            "--package",
-            "app",
-        ]);
-    }
+    command_line.args([
+        "--target-dir",
+        "target",
+        "--staging-dir",
+        "delta",
+        "--package",
+        "app",
+    ]);
     command_line
         .current_dir(repo.root())
         .env("BASE_CACHE_KEY", base)
@@ -110,6 +108,7 @@ pub(super) fn set_time(repo: &Repo, path: &str, time: SystemTime) {
 
 pub(super) fn compiled(repo: &Repo) {
     repo.write_unstaged("velnor-run.log", "   Compiling app v0.1.0 (/work/app)\n");
+    velnor_ci::io::save_inputs(repo.root()).unwrap_or_else(|error| unreachable!("{error}"));
 }
 
 #[test]
@@ -119,11 +118,13 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
     success(&output);
     assert!(key.starts_with("base8=cae66217\nsource_identity="));
     success(&run(&repo, "apply", "base").0);
+    repo.write("source", "first source");
     compiled(&repo);
     let built = time(&repo, "target/.velnor/delta-marker") + Duration::from_nanos(42_001);
     repo.write_unstaged("target/debug/first", "first");
     repo.write_unstaged("target/debug/deleted", "gone later");
-    repo.write_unstaged("target/.velnor/inputs.tsv", "first manifest");
+    let mut expected_inputs = fs::read_to_string(repo.root().join("target/.velnor/inputs.tsv"))
+        .unwrap_or_else(|error| unreachable!("{error}"));
     set_time(&repo, "target/debug/first", built);
     set_time(&repo, "target/.velnor/inputs.tsv", built);
     let (output, save) = run(&repo, "stage", "base");
@@ -152,20 +153,18 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
                 "second"
             );
         }
-        let expected = if generation == 2 {
-            "first manifest"
-        } else {
-            "second manifest"
-        };
         assert_eq!(
             fs::read_to_string(repo.root().join("target/.velnor/inputs.tsv")).unwrap_or_default(),
-            expected
+            expected_inputs
         );
         if generation == 2 {
             fs::remove_file(repo.root().join("target/debug/deleted"))
                 .unwrap_or_else(|e| unreachable!("{e}"));
             repo.write_unstaged("target/debug/second", "second");
-            repo.write_unstaged("target/.velnor/inputs.tsv", "second manifest");
+            repo.write_unstaged("source", "second source");
+            velnor_ci::io::save_inputs(repo.root()).unwrap_or_else(|error| unreachable!("{error}"));
+            expected_inputs = fs::read_to_string(repo.root().join("target/.velnor/inputs.tsv"))
+                .unwrap_or_else(|error| unreachable!("{error}"));
         }
         let (output, save) = run(&repo, "stage", "base");
         success(&output);
