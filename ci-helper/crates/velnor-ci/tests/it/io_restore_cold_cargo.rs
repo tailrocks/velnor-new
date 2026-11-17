@@ -69,8 +69,8 @@ fn a_malformed_snapshot_discards_old_cargo_artifacts_before_a_backdated_edit_bui
 }
 
 #[test]
-fn a_missing_snapshot_keeps_the_target_and_builds_normally() {
-    let repo = Repo::new("missing-snapshot-empty");
+fn a_missing_snapshot_rebuilds_changed_cargo_sources_with_fresh_checkout_times() {
+    let repo = Repo::new("missing-snapshot-fresh-checkout");
     repo.write_all(&[
         (
             "Cargo.toml",
@@ -78,31 +78,33 @@ fn a_missing_snapshot_keeps_the_target_and_builds_normally() {
         ),
         ("src/main.rs", "fn main() { println!(\"A\"); }\n"),
     ]);
-    repo.write_unstaged("target/sentinel", "cached artifact\n");
-    let restored = run(
-        repo.root(),
-        Path::new(env!("CARGO_BIN_EXE_velnor-ci")),
-        &["inputs", "restore"],
-    );
-    assert_eq!(
-        std::fs::read(repo.root().join("target/sentinel")).unwrap_or_default(),
-        b"cached artifact\n"
-    );
+    let cargo = Path::new(env!("CARGO"));
+    let helper = Path::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    run(repo.root(), cargo, &["build", "--offline", "-v"]);
+    let binary = repo.root().join("target/debug/app");
+    assert_eq!(run(repo.root(), &binary, &[]).trim(), "A");
+    let cached = repo.mtime("target/debug/app");
+    let checkout = cached + Duration::from_secs(2);
+    repo.write_unstaged("src/main.rs", "fn main() { println!(\"B\"); }\n");
+    for path in ["Cargo.toml", "Cargo.lock", "src/main.rs"] {
+        repo.set_mtime(path, checkout);
+        assert!(repo.mtime(path) > cached);
+    }
+    let checkout = repo.mtime("src/main.rs");
+    assert!(!repo.root().join("target/.velnor/inputs.tsv").exists());
+    let restored = run(repo.root(), helper, &["inputs", "restore"]);
+    assert!(binary.exists(), "target discarded: {restored}");
     assert!(restored.contains("cold run"), "{restored}");
-    assert_eq!(
-        std::fs::read_to_string(repo.root().join("src/main.rs")).unwrap_or_default(),
-        "fn main() { println!(\"A\"); }\n"
+    assert_eq!(repo.mtime("src/main.rs"), checkout);
+    run(repo.root(), helper, &["restored"]);
+    let built = run(repo.root(), cargo, &["build", "--offline", "-v"]);
+    assert!(
+        built.contains("Compiling app ") || built.contains("Dirty app "),
+        "{built}"
     );
-    let built = run(
-        repo.root(),
-        Path::new(env!("CARGO")),
-        &["build", "--offline", "-v"],
-    );
-    assert!(built.contains("Compiling app "), "{built}");
-    assert_eq!(
-        run(repo.root(), &repo.root().join("target/debug/app"), &[]).trim(),
-        "A"
-    );
+    assert!(!built.contains("Fresh app "), "{built}");
+    assert_eq!(run(repo.root(), &binary, &[]).trim(), "B");
+    assert!(repo.mtime("src/main.rs") > cached);
 }
 
 #[test]

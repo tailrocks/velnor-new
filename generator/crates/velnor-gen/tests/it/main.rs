@@ -26,6 +26,7 @@ mod harness_kinds;
 mod harness_undecided;
 mod helper_source;
 mod inputs;
+mod inputs_order;
 mod io;
 mod io_files;
 mod io_manifests;
