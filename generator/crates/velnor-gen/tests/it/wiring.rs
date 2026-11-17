@@ -105,13 +105,42 @@ fn nextest_builds_the_workspace_and_reads_the_filter_the_plan_selected() -> Test
 
 #[test]
 fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestResult {
-    let mut files = view(&["Cargo.toml"], None)?;
+    let mut files = view(
+        &["lab/Cargo.toml"],
+        Some(b"skip_draft_pull_requests = true\n"),
+    )?;
     with_doctest_library(&mut files)?;
     let text = text(&files)?;
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
         "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked"
+    );
+    assert_eq!(text.matches("cargo test --doc").count(), 1);
+    let steps: Vec<&str> = text.split("\n      - ").collect();
+    let index = steps
+        .iter()
+        .position(|body| body.contains("name: Doctests\n"))
+        .ok_or("no doctests")?;
+    let build = steps.get(index - 1).ok_or("no preparatory build")?;
+    assert!(
+        build.contains("velnor-ci inputs build -- cargo build --workspace --all-targets --locked"),
+        "{build}"
+    );
+    for line in steps[index].lines().filter(|line| {
+        line.trim_start().starts_with("if:") || line.trim_start().starts_with("working-directory:")
+    }) {
+        assert!(build.lines().any(|candidate| candidate == line), "{line}");
+    }
+    files.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"off\"\n".to_vec(),
+    );
+    let off = self::text(&files)?;
+    assert_eq!(off.matches("cargo test --doc").count(), 1);
+    assert!(
+        !off.contains("cargo build --workspace --all-targets"),
+        "{off}"
     );
     Ok(())
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
@@ -100,7 +100,11 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
 }
 
 fn rendered_steps(step: &Step, restores: bool, audit: bool) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind, audit)];
+    let mut rendered = Vec::new();
+    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
+        rendered.push(cargo_step(&CargoCommand::BuildAll, true));
+    }
+    rendered.push(step_body(&step.kind, audit));
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -116,7 +120,7 @@ fn rendered_steps(step: &Step, restores: bool, audit: bool) -> Vec<RenderedStep>
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
-        (&step.reads, &step.kind, rendered.first_mut())
+        (&step.reads, &step.kind, rendered.last_mut())
     {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
