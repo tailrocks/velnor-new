@@ -44,11 +44,11 @@ fn the_helper_key_builds_the_helper_once_and_every_lane_downloads_it() -> TestRe
         .iter()
         .filter(|job| job.starts_with("rust-") && !matches!(**job, "rust-plan" | "rust-helper"))
         .collect();
-    assert_eq!(lanes.len(), 6);
-    assert_eq!(text.matches("Install velnor-ci").count(), 2);
-    assert_eq!(text.matches("Download velnor-ci").count(), lanes.len());
+    assert_eq!(lanes.len(), 7);
+    assert_eq!(text.matches("Install velnor-ci").count(), 4);
+    assert_eq!(text.matches("Download velnor-ci").count(), lanes.len() - 1);
     assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
-    for lane in lanes {
+    for lane in lanes.into_iter().filter(|lane| **lane != "rust-trim") {
         let header = format!("  {lane}:\n    needs:\n      - rust-plan\n      - rust-helper\n");
         assert!(text.contains(&header), "{lane}");
     }
@@ -66,11 +66,12 @@ fn the_plan_job_and_the_helper_job_use_the_released_helper() -> TestResult {
         let body = &text[start..];
         let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
         let body = &body[..end];
-        assert!(body.contains("Install velnor-ci 0.1.79"), "{job}");
+        assert!(body.contains("Install velnor-ci 0.1.81"), "{job}");
         assert!(!body.contains("Download velnor-ci"), "{job}");
     }
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
-    assert!(!verdict.contains("velnor-ci"));
+    assert!(verdict.contains("Install velnor-ci 0.1.81"));
+    assert!(!verdict.contains("Download velnor-ci"));
     Ok(())
 }
 
@@ -115,8 +116,12 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
         )],
     )?;
     view.tracked_paths.insert(path(".velnor/rust-ci.lock")?);
-    view.files
-        .insert(path(".velnor/rust-ci.lock")?, HELPER_LOCK.to_vec());
+    view.files.insert(
+        path(".velnor/rust-ci.lock")?,
+        String::from_utf8(HELPER_LOCK.to_vec())?
+            .replace("0.1.79", "0.1.81")
+            .into_bytes(),
+    );
     view.tracked_paths.insert(CONFIG_PATH);
     view.files.insert(
         CONFIG_PATH,
@@ -125,9 +130,9 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     let text = text_of(&view)?;
     assert_eq!(
         job_ids(&text),
-        ["rust-plan", "rust-helper", "rust", "required"]
+        ["rust-plan", "rust-helper", "rust", "rust-trim", "required"]
     );
-    assert_eq!(text.matches("Install velnor-ci").count(), 2);
+    assert_eq!(text.matches("Install velnor-ci").count(), 4);
     assert_eq!(text.matches("Download velnor-ci").count(), 1);
     Ok(())
 }

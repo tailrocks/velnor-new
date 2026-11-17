@@ -90,7 +90,7 @@ fn the_steps_after_the_restore_read_the_full_plan_when_there_is_one_and_the_firs
 
 #[test]
 fn a_repository_that_saves_no_base_plans_nothing_again() -> TestResult {
-    let text = workflow(&pinned("0.1.79", "")?)?;
+    let text = workflow(&pinned("0.1.79", "full_run = \"off\"\n")?)?;
     assert!(!text.contains("plan --full"), "{text}");
     assert!(!text.contains("steps.replan"), "{text}");
     Ok(())

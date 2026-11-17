@@ -195,14 +195,19 @@ pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
 }
 
 pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId) -> Vec<Step> {
-    setup_roots(facts, std::slice::from_ref(root), lane, job)
+    setup_roots(
+        facts,
+        std::slice::from_ref(root),
+        lane,
+        std::slice::from_ref(job),
+    )
 }
 
 pub(crate) fn setup_roots(
     facts: &RepoFacts,
     roots: &[RustRoot],
     lane: &Lane,
-    job: &JobId,
+    families: &[JobId],
 ) -> Vec<Step> {
     let root = &roots[0];
     let mut steps = head(
@@ -256,7 +261,7 @@ pub(crate) fn setup_roots(
     }
     toolchain.extend(tools_save(facts));
     toolchain.push(step(StepKind::Helper(HelperCommand::Prepare)));
-    for root in roots {
+    for (root, family) in roots.iter().zip(families) {
         let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
         toolchain.extend([
             Step {
@@ -268,7 +273,7 @@ pub(crate) fn setup_roots(
                 root: cache_root.clone(),
             })),
             step(StepKind::CacheRestore(CacheKey::Target {
-                job: job.clone(),
+                job: family.clone(),
                 root: cache_root,
                 host: Host,
             })),

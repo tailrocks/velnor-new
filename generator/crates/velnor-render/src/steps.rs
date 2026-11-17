@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
     TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
@@ -41,12 +41,7 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
-    let restores = job.steps.iter().any(|step| {
-        matches!(
-            step.kind,
-            StepKind::Helper(HelperCommand::Restored(..)) | StepKind::RestoredTargets { .. }
-        )
-    });
+    let (restores, audit) = crate::base_steps::job_setup(job);
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -89,15 +84,13 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             .steps
             .iter()
             .scan(false, |replanned, step| {
-                let setup = match (restores, *replanned) {
-                    (false, _) => Setup::Before,
-                    (true, false) => Setup::Restored,
-                    (true, true) => Setup::Replanned,
-                };
+                let setup = Setup::of(restores, *replanned);
                 *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-                let mut bodies = rendered_steps(step, setup);
-                for body in &mut bodies { body.condition = all_conditions(body.condition.take(), crate::base_steps::audited_save(job, step)); }
-                Some(bodies)
+                Some(crate::base_steps::audited_save(
+                    job,
+                    step,
+                    rendered_steps(step, setup, audit),
+                ))
             })
             .flatten()
             .collect(),
@@ -105,8 +98,12 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
     }
 }
 
-fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind, step.directory.as_ref())];
+fn rendered_steps(step: &Step, setup: Setup, audit: bool) -> Vec<RenderedStep> {
+    let mut rendered = Vec::new();
+    if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
+        rendered.push(cargo_step(&CargoCommand::BuildAll, true));
+    }
+    rendered.push(step_body(&step.kind, step.directory.as_ref(), audit));
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -128,7 +125,7 @@ fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
-        (&step.reads, &step.kind, rendered.first_mut())
+        (&step.reads, &step.kind, rendered.last_mut())
     {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
@@ -168,7 +165,7 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
+fn step_body(kind: &StepKind, directory: Option<&RepoPath>, audit: bool) -> RenderedStep {
     match kind {
         StepKind::Checkout { depth } => RenderedStep {
             name: "Check out".to_owned(),
@@ -213,7 +210,7 @@ fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
             run: Some(format!("rustup target add {}", targets.join(" "))),
             ..RenderedStep::default()
         },
-        StepKind::Cargo(command) => cargo_step(command),
+        StepKind::Cargo(command) => cargo_step(command, audit),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
         StepKind::InputsRestore(target) => crate::helper_steps::inputs_step("restore", target, directory),

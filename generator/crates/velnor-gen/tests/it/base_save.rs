@@ -89,6 +89,7 @@ fn compile_selection(step: &str) -> Option<String> {
         run.split("velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- ")
             .nth(1)
     })?;
+    let command = command.trim_start_matches("velnor-ci inputs build -- ");
     if command.starts_with("cargo-fmt") {
         return None;
     }
@@ -195,7 +196,7 @@ fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_br
 
 #[test]
 fn a_helper_older_than_0_1_81_gets_no_save_no_token_permission_and_no_age_limit() -> TestResult {
-    let text = workflow(&pinned("0.1.79", "")?)?;
+    let text = workflow(&pinned("0.1.79", "full_run = \"off\"\n")?)?;
     for absent in [
         "cache decide",
         "cache trim",
@@ -315,7 +316,7 @@ fn the_test_prebuild_ignores_a_nextest_default_filter() -> TestResult {
     let run = run_command(build).ok_or("no prebuild command")?;
     assert_eq!(
         run,
-        "velnor-ci run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run"
+        "velnor-ci run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run"
     );
     Ok(())
 }

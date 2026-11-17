@@ -47,6 +47,16 @@ Velnor probes and runs the named task with that `DEVELOPER_DIR` and never change
 
 ## Compatibility Rules and Verification Procedures
 
+### Interrupted JIT requests
+
+Recovery retains a late-registration tombstone for 24 hours from the claim
+timestamp, or until the runner is observed and deleted. The
+[JIT configuration endpoint](https://docs.github.com/en/rest/actions/self-hosted-runners#create-configuration-for-a-just-in-time-runner-for-an-organization)
+does not bound the time a request may take to create a runner. A runner created
+after 24 hours has a JIT configuration nobody holds, so it cannot come online
+or run a job. GitHub removes offline ephemeral runners itself; this residual is
+accepted.
+
 ### Performance review sources
 
 The [review gates](../reviews/ci-performance.md) use these primary sources:

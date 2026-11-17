@@ -27,10 +27,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -64,10 +64,10 @@ jobs:
         run: 'tar --extract --gzip --file "$RUNNER_TEMP/release-plz.tar.gz" --directory "$RUNNER_TEMP" release-plz'
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -164,10 +164,10 @@ jobs:
         run: 'tar --extract --gzip --file "$RUNNER_TEMP/release-plz.tar.gz" --directory "$RUNNER_TEMP" release-plz'
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -197,7 +197,7 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests --released-versions'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -421,10 +421,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -589,10 +589,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'

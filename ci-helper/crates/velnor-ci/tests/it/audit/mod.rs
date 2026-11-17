@@ -1,18 +1,33 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod boundary;
+mod build_clock;
+mod freshness;
 mod gated;
 mod guards;
 mod identity;
+mod inventory;
+mod links;
+mod migration;
 mod optional;
 mod partial;
 mod reads;
 mod stand_ins;
 
+use std::ffi::OsStr;
 use std::fs;
 use std::process::{Command, Output};
 
 use crate::io::Repo;
+
+pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
+    let mut command = Command::new(program);
+    command
+        .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
+        .env("MBX_SHARE_OUT_DIR", "0");
+    command
+}
 
 pub(super) fn audit(repo: &Repo, args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -336,4 +351,15 @@ pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
         &format!("{target}/build/leaf-0000000000000009/output"),
         "cargo:rerun-if-changed=build.rs\ncargo:rerun-if-changed=../../LICENSE\n",
     );
+    prepare_path_dependency_outputs(repo, target);
+}
+
+fn prepare_path_dependency_outputs(repo: &Repo, target: &str) {
+    let target_directory = repo.root().join("target");
+    for output in [
+        format!("{target}/build/mid-0000000000000004/output"),
+        format!("{target}/build/leaf-0000000000000009/output"),
+    ] {
+        inventory::build(repo, &output, Some(&target_directory));
+    }
 }
