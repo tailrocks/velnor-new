@@ -20,6 +20,7 @@ use super::{
 };
 use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
+use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
 use crate::plan::{Steps, explain, outputs, tests_outputs, warnings, weakened};
 use crate::summary::summary;
@@ -151,7 +152,10 @@ fn changes(
         match event_changes(checkout, facts, kind, event) {
             Ok(found) => found,
             Err(error) => {
-                eprintln!("velnor-ci: {error}; every package is selected");
+                eprintln!(
+                    "{}",
+                    stderr_line(&format!("{error}; every package is selected"))
+                );
                 return Ok(None);
             }
         }
