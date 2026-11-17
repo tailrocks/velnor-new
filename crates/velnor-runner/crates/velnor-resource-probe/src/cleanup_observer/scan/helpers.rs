@@ -63,6 +63,27 @@ pub(super) fn namespace_identity(path: &str) -> Result<([u32; 2], u64), ProbeErr
     Ok((device_pair(metadata.dev()), metadata.ino()))
 }
 
+pub(super) fn live_process_namespace(
+    identity: &super::ProcessIdentity,
+) -> Result<Option<([u32; 2], u64)>, ProbeError> {
+    let observe = || {
+        let stat_path = format!("/proc/{}/stat", identity.pid);
+        if process_start_ticks(&stat_path, identity.pid)? != identity.start_ticks {
+            return Ok(None);
+        }
+        let namespace = namespace_identity(&format!("/proc/{}/ns/mnt", identity.pid))?;
+        let unchanged = process_start_ticks(&stat_path, identity.pid)? == identity.start_ticks;
+        Ok(
+            (unchanged && namespace == (identity.namespace_device, identity.namespace_inode))
+                .then_some(namespace),
+        )
+    };
+    match observe() {
+        Err(error) if vanished(&error) => Ok(None),
+        observation => observation,
+    }
+}
+
 pub(super) fn observe_descriptor(
     path: &std::path::Path,
 ) -> Result<DescriptorObservation, ProbeError> {

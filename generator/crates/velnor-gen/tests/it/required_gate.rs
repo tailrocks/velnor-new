@@ -164,7 +164,13 @@ fn a_job_the_plan_did_not_schedule_may_be_skipped_and_a_success_is_a_warning() -
         true,
         "warning: rust-docs ran although the plan did not schedule it",
     )?;
-    for result in ["failure", "cancelled"] {
+    for result in [
+        "failure",
+        "cancelled",
+        "timed_out",
+        "neutral",
+        "action_required",
+    ] {
         let run = with(passing(), |run| set(&mut run.results, "rust-docs", result));
         expect(&run, false, "rust-docs was not scheduled by the plan")?;
     }
