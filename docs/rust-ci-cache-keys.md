@@ -56,6 +56,29 @@ debug = "none"
 debug = "none"
 ```
 
+## Cache telemetry and enforcement
+
+With helper `0.1.81` or a supported source-built helper, each reporting-enabled
+Cargo lane ends with `velnor-ci report` and uploads `ci-metrics.json`. These
+steps also run after an earlier failure unless the run was cancelled. Report
+and upload failures do not replace the lane's build result.
+
+The separate `Cache` job checks the same-run metrics from every reporting
+lane. It fails on cache waste, missing metrics, or unverifiable required
+evidence. It is advisory by default. To include it in Required's dependencies
+and verdict specification, set this in `.velnor/rust-ci.toml`:
+
+```toml
+cache_check_blocks = true
+```
+
+Reporting lanes use read-only Actions API access for timings and cache archive
+sizes. Fork pull-request report steps receive an empty explicit API token;
+unavailable API fields remain unknown. The `Cache` job needs no additional
+permission to download artifacts from its own run. The schema-1 JSON separates
+cache outcomes, captured Cargo invocations, display fields, verification
+errors, and optional diagnostics.
+
 ## Worked example
 
 A repository with the root `lab/Cargo.toml` and the job `rust-lint`, on `ubuntu-latest` (X64), at commit `c0ffee`, run `42`, compat `9f3a1c5e7b2d4a60`:
