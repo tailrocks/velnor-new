@@ -226,6 +226,7 @@ pub enum StepKind {
     InputsRestore {
         target_dir: RepoPath,
     },
+    CratesMirror(crate::repo::CratesMirror),
     GeneratorCheck,
     InstallHelper(HelperRelease),
     HelperFromArtifact,

@@ -12,3 +12,11 @@ slow-timeout = { period = "2s", terminate-after = 1 }
 [[profile.default.overrides]]
 filter = "test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::)"
 slow-timeout = { period = "30s", terminate-after = 1 }
+filter = 'test(crates_mirror)'
+success-output = "immediate"
+threads-required = "num-test-threads"
+
+[[profile.ci.overrides]]
+filter = 'test(crates_mirror)'
+success-output = "immediate"
+threads-required = "num-test-threads"

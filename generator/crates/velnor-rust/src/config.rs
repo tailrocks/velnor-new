@@ -12,8 +12,9 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 15] = [
+const KEYS: [&str; 16] = [
     "runner",
+    "crates_mirror",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -34,6 +35,7 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 #[derive(Deserialize)]
 struct RawConfig {
     runner: Option<String>,
+    crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -114,6 +116,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     Ok(RustCiConfig {
+        crates_mirror: raw
+            .crates_mirror
+            .map(crate::config_mirror::mirror)
+            .transpose()
+            .map_err(invalid)?,
         nextest_harnesses,
         default_branch,
         skip_draft_pull_requests: raw
