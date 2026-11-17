@@ -6,11 +6,15 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-const MISE: &str =
+pub(crate) const MISE: &str =
     "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n";
 
-fn scratch(name: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("velnor-ci-prepare-{}-{name}", std::process::id()));
+pub(crate) fn scratch_root(name: &str) -> PathBuf {
+    std::env::temp_dir().join(format!("velnor-ci-prepare-{}-{name}", std::process::id()))
+}
+
+pub(crate) fn scratch(name: &str) -> PathBuf {
+    let dir = scratch_root(name);
     if dir.exists() {
         fs::remove_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     }
@@ -24,7 +28,7 @@ fn scratch(name: &str) -> PathBuf {
     dir
 }
 
-fn reported(rust: &str, nextest: Option<&str>) -> String {
+pub(crate) fn reported(rust: &str, nextest: Option<&str>) -> String {
     let entry = |version: &str| {
         format!(
             "[{{\"version\":\"{version}\",\"requested_version\":\"{version}\",\"installed\":true,\"active\":true}}]"
@@ -50,28 +54,33 @@ pub(crate) struct Declared<'a> {
     pub rustup: Option<&'a str>,
 }
 
-struct Toolchain {
-    file: String,
-    components: String,
-    targets: String,
-    rustup: Option<String>,
+pub(crate) struct Toolchain {
+    pub file: String,
+    pub components: String,
+    pub targets: String,
+    pub rustup: Option<String>,
 }
 
-struct Setup {
-    json: String,
-    mise_toml: String,
-    mise_script: Option<String>,
-    toolchain: Option<Toolchain>,
-    rustc: bool,
-    rust_ci_toml: Option<&'static str>,
-    cargo_config: Option<&'static str>,
-    repo_cargo_config: Option<&'static str>,
-    release: &'static str,
-    env: Vec<(&'static str, &'static str)>,
+pub(crate) type Populate = Box<dyn Fn(&Path) + Send + Sync>;
+
+pub(crate) struct Setup {
+    pub json: String,
+    pub mise_toml: String,
+    pub mise_script: Option<String>,
+    pub toolchain: Option<Toolchain>,
+    pub rustc: bool,
+    pub rust_ci_toml: Option<&'static str>,
+    pub cargo_config: Option<&'static str>,
+    pub repo_cargo_config: Option<&'static str>,
+    pub ignored: bool,
+    pub plain: bool,
+    pub populate: Option<Populate>,
+    pub release: &'static str,
+    pub env: Vec<(&'static str, &'static str)>,
 }
 
 impl Setup {
-    fn new(json: String) -> Self {
+    pub(crate) fn new(json: String) -> Self {
         Self {
             json,
             mise_toml: MISE.to_owned(),
@@ -81,6 +90,9 @@ impl Setup {
             rust_ci_toml: None,
             cargo_config: None,
             repo_cargo_config: None,
+            ignored: false,
+            plain: false,
+            populate: None,
             release: "1.99.1",
             env: Vec::new(),
         }
@@ -90,10 +102,26 @@ impl Setup {
 pub(crate) struct Run {
     pub bin: PathBuf,
     pub output: Output,
-    env_file: String,
-    outputs: String,
-    cargo_config: String,
-    velnor_config: String,
+    pub env_file: String,
+    pub outputs: String,
+    pub cargo_config: String,
+    pub velnor_config: String,
+}
+
+fn replace_text(path: &Path, body: &str) {
+    static TICK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    if fs::read_to_string(path).is_ok_and(|have| have == body) {
+        return;
+    }
+    let temporary = path.with_file_name(format!(
+        ".{}.{}.{}",
+        path.file_name().unwrap_or_default().to_string_lossy(),
+        std::process::id(),
+        TICK.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    ));
+    fs::write(&temporary, body)
+        .and_then(|()| fs::rename(&temporary, path))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 fn script(path: &Path, body: &str) {
@@ -108,6 +136,13 @@ fn script(path: &Path, body: &str) {
         .unwrap_or_else(|e| unreachable!("{e}"));
 }
 
+fn record_default_root(checkout: &Path) {
+    replace_text(
+        &checkout.join(".velnor/rust-metadata.json"),
+        "{\"roots\":{\"Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
+    );
+}
+
 fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let checkout = dir.join("checkout");
     let bin = dir.join("bin");
@@ -119,7 +154,17 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         fs::write(checkout.join(".cargo/config.toml"), text)
             .unwrap_or_else(|e| unreachable!("{e}"));
     }
-    fs::write(checkout.join("mise.toml"), &setup.mise_toml).unwrap_or_else(|e| unreachable!("{e}"));
+    if setup.ignored {
+        fs::write(checkout.join(".gitignore"), ".cargo/\n").unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    if setup.plain {
+        fs::remove_dir_all(checkout.join(".git")).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    record_default_root(&checkout);
+    if let Some(populate) = &setup.populate {
+        populate(&checkout);
+    }
+    replace_text(&checkout.join("mise.toml"), &setup.mise_toml);
     let ci_toml = checkout.join(".velnor/rust-ci.toml");
     match setup.rust_ci_toml {
         Some(text) => fs::write(ci_toml, text).unwrap_or_else(|e| unreachable!("{e}")),
@@ -177,7 +222,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     }
 }
 
-fn prepare(name: &str, setup: &Setup) -> Run {
+pub(crate) fn prepare(name: &str, setup: &Setup) -> Run {
     prepare_in(&scratch(name), setup)
 }
 
@@ -192,25 +237,7 @@ pub(crate) fn prepare_declared(name: &str, json: &str, declared: Option<&Declare
     prepare(name, &setup)
 }
 
-fn prepare_with(
-    name: &str,
-    mise_toml: &str,
-    mise_script: &str,
-    declared: Option<&Declared<'_>>,
-) -> Run {
-    let mut setup = Setup::new(String::new());
-    mise_toml.clone_into(&mut setup.mise_toml);
-    setup.mise_script = Some(mise_script.to_owned());
-    setup.toolchain = declared.map(|declared| Toolchain {
-        file: declared.file.to_owned(),
-        components: declared.components.to_owned(),
-        targets: declared.targets.to_owned(),
-        rustup: declared.rustup.map(str::to_owned),
-    });
-    prepare(name, &setup)
-}
-
-fn digest(run: &Run) -> &str {
+pub(crate) fn digest(run: &Run) -> &str {
     run.outputs
         .strip_prefix("compat=")
         .and_then(|rest| rest.strip_suffix('\n'))
@@ -392,269 +419,4 @@ fn prepare_names_the_tool_that_is_not_at_its_pinned_version_and_writes_nothing()
             "{name}"
         );
     }
-}
-
-const LISTING: &str = "cargo-x86_64-unknown-linux-gnu (installed)\nclippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)\nrust-std-wasm32-unknown-unknown\nrustc-x86_64-unknown-linux-gnu (installed)\nrustfmt-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu\nrust-src\nrustc-dev-x86_64-unknown-linux-gnu\nrustc-dev-aarch64-apple-darwin";
-
-fn declared(file: &'static str) -> Declared<'static> {
-    Declared {
-        file,
-        components: LISTING,
-        targets: "x86_64-unknown-linux-gnu",
-        rustup: None,
-    }
-}
-
-#[test]
-fn prepare_names_every_component_a_complete_profile_implies_that_is_not_installed() {
-    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n";
-    let run = prepare_declared(
-        "complete",
-        &reported("1.99.1", Some("0.9.151")),
-        Some(&declared(file)),
-    );
-    let stderr = String::from_utf8_lossy(&run.output.stderr);
-    assert_eq!(run.output.status.code(), Some(1), "{stderr}");
-    assert!(
-        stderr.contains("component rust-docs, component rust-src, component rustc-dev"),
-        "{stderr}"
-    );
-    assert!(
-        !stderr.contains("aarch64") && !stderr.contains("clippy"),
-        "{stderr}"
-    );
-    assert_eq!((run.env_file.as_str(), run.outputs.as_str()), ("", ""));
-}
-
-#[test]
-fn prepare_passes_a_complete_profile_whose_components_are_all_installed() {
-    let all = LISTING
-        .lines()
-        .map(|line| {
-            if line.contains("(installed)") {
-                line.to_owned()
-            } else {
-                format!("{line} (installed)")
-            }
-        })
-        .collect::<Vec<_>>()
-        .join("\n");
-    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n";
-    let run = prepare_declared(
-        "complete-ok",
-        &reported("1.99.1", Some("0.9.151")),
-        Some(&Declared {
-            file,
-            components: &all,
-            targets: "x86_64-unknown-linux-gnu",
-            rustup: None,
-        }),
-    );
-    assert!(run.output.status.success(), "{:?}", run.output);
-}
-
-fn assert_lacks(name: &str, file: &'static str, missing: &str) {
-    let run = prepare_declared(
-        name,
-        &reported("1.99.1", Some("0.9.151")),
-        Some(&declared(file)),
-    );
-    let stderr = String::from_utf8_lossy(&run.output.stderr);
-    assert_eq!(run.output.status.code(), Some(1), "{stderr}");
-    assert!(stderr.ends_with(&format!("{missing}\n")), "{stderr}");
-}
-
-#[test]
-fn prepare_checks_the_components_the_default_profile_implies() {
-    assert_lacks(
-        "default",
-        "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"default\"\n",
-        "component rust-docs",
-    );
-}
-
-#[test]
-fn prepare_checks_the_listed_components() {
-    assert_lacks(
-        "listed",
-        "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"rust-src\"]\n",
-        "component rust-src",
-    );
-}
-
-#[test]
-fn prepare_checks_the_listed_targets() {
-    assert_lacks(
-        "target",
-        "[toolchain]\nchannel = \"1.99.1\"\ntargets = [\"wasm32-unknown-unknown\"]\n",
-        "target wasm32-unknown-unknown",
-    );
-}
-
-#[test]
-fn prepare_matches_a_legacy_preview_component_name_to_its_renamed_component() {
-    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"llvm-tools-preview\", \"clippy-preview\"]\n";
-    let listing = "cargo-x86_64-unknown-linux-gnu (installed)\nrustc-x86_64-unknown-linux-gnu (installed)\nclippy-x86_64-unknown-linux-gnu (installed)\nllvm-tools-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu (installed)";
-    let run = prepare_declared(
-        "preview",
-        &reported("1.99.1", Some("0.9.151")),
-        Some(&Declared {
-            file,
-            components: listing,
-            targets: "x86_64-unknown-linux-gnu",
-            rustup: None,
-        }),
-    );
-    assert!(run.output.status.success(), "{:?}", run.output);
-}
-
-#[test]
-fn prepare_passes_a_minimal_profile_with_nothing_more_declared() {
-    let file =
-        "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\ncomponents = [\"clippy\"]\n";
-    let run = prepare_declared(
-        "minimal",
-        &reported("1.99.1", Some("0.9.151")),
-        Some(&declared(file)),
-    );
-    assert!(run.output.status.success(), "{:?}", run.output);
-}
-
-#[test]
-fn prepare_does_not_run_rustup_for_a_path_toolchain() {
-    let file = "[toolchain]\npath = \"/opt/custom-rust\"\n";
-    let run = prepare_declared(
-        "path",
-        &reported("1.99.1", Some("0.9.151")),
-        Some(&Declared {
-            file,
-            components: "",
-            targets: "",
-            rustup: Some("echo rustup must not run >&2\nexit 1\n"),
-        }),
-    );
-    assert!(run.output.status.success(), "{:?}", run.output);
-}
-
-#[test]
-fn prepare_does_not_need_mise_when_no_tool_is_pinned() {
-    let run = prepare_with(
-        "empty",
-        "[tools]\n",
-        "echo mise must not run >&2\nexit 1\n",
-        None,
-    );
-    assert!(run.output.status.success(), "{:?}", run.output);
-    assert_eq!(digest(&run).len(), 16, "{}", run.outputs);
-}
-
-#[test]
-fn prepare_still_verifies_the_declared_toolchain_when_no_tool_is_pinned() {
-    let file = "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"complete\"\n";
-    let run = prepare_with(
-        "empty-declared",
-        "[tools]\n",
-        "echo mise must not run >&2\nexit 1\n",
-        Some(&declared(file)),
-    );
-    let stderr = String::from_utf8_lossy(&run.output.stderr);
-    assert_eq!(run.output.status.code(), Some(1), "{stderr}");
-    assert!(stderr.contains("component rust-docs"), "{stderr}");
-}
-
-#[test]
-fn prepare_names_a_base_component_missing_under_a_minimal_or_default_profile() {
-    let listing = "cargo-x86_64-unknown-linux-gnu\nclippy-x86_64-unknown-linux-gnu (installed)\nrust-std-x86_64-unknown-linux-gnu\nrustc-x86_64-unknown-linux-gnu (installed)\nrustfmt-x86_64-unknown-linux-gnu (installed)\nrust-docs-x86_64-unknown-linux-gnu (installed)";
-    for (name, file) in [
-        (
-            "base-minimal",
-            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"minimal\"\n",
-        ),
-        (
-            "base-default",
-            "[toolchain]\nchannel = \"1.99.1\"\nprofile = \"default\"\n",
-        ),
-    ] {
-        let run = prepare_declared(
-            name,
-            &reported("1.99.1", Some("0.9.151")),
-            Some(&Declared {
-                file,
-                components: listing,
-                targets: "x86_64-unknown-linux-gnu",
-                rustup: None,
-            }),
-        );
-        let stderr = String::from_utf8_lossy(&run.output.stderr);
-        assert_eq!(run.output.status.code(), Some(1), "{name}: {stderr}");
-        assert!(
-            stderr.ends_with("component cargo, component rust-std\n"),
-            "{name}: {stderr}"
-        );
-    }
-}
-
-fn compat_with(name: &str, change: impl FnOnce(&mut Setup)) -> String {
-    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
-    change(&mut setup);
-    let run = prepare(name, &setup);
-    assert!(run.output.status.success(), "{:?}", run.output);
-    digest(&run).to_owned()
-}
-
-#[test]
-fn compat_follows_a_repository_dependency_profile_override() {
-    let none = compat_with("compat-inputs", |_| {});
-    let debug = compat_with("compat-inputs", |setup| {
-        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
-    });
-    let off = compat_with("compat-inputs", |setup| {
-        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = false\n");
-    });
-    let unrelated = compat_with("compat-inputs", |setup| {
-        setup.repo_cargo_config = Some("[build]\njobs = 2\n");
-    });
-    assert_ne!(none, debug);
-    assert_ne!(debug, off);
-    assert_eq!(none, unrelated);
-}
-
-#[test]
-fn compat_follows_the_runner_image() {
-    let image = |value: Option<&'static str>| {
-        compat_with("compat-inputs", |setup| {
-            if let Some(value) = value {
-                setup.env.push(("ImageOS", value));
-            }
-        })
-    };
-    let (unset, new, old) = (
-        image(None),
-        image(Some("ubuntu24")),
-        image(Some("ubuntu22")),
-    );
-    assert_ne!(new, old);
-    assert_ne!(new, unset);
-    assert_eq!(new, image(Some("ubuntu24")));
-}
-
-#[test]
-fn rust_before_1_71_gets_numeric_debug_values() {
-    let mut setup = Setup::new(reported("1.70.0", Some("0.9.151")));
-    setup.release = "1.70.0";
-    setup.mise_toml = MISE.replace("1.99.1", "1.70.0");
-    let run = prepare("old-rust", &setup);
-    assert!(run.output.status.success(), "{:?}", run.output);
-    assert!(
-        run.env_file.contains("CARGO_PROFILE_DEV_DEBUG=1\n"),
-        "{}",
-        run.env_file
-    );
-    assert!(run.env_file.contains("CARGO_PROFILE_TEST_DEBUG=1\n"));
-    assert!(
-        run.velnor_config.contains("debug = 0\n"),
-        "{}",
-        run.velnor_config
-    );
-    assert!(!run.velnor_config.contains("\"none\""));
 }
