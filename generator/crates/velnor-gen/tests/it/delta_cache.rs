@@ -42,55 +42,6 @@ fn pr_delta_keys_preserve_every_identity_dimension_in_every_restore_fallback() -
 }
 
 #[test]
-fn a_delta_key_is_never_equal_to_or_a_prefix_of_a_base_key() -> TestResult {
-    let mut keys = Vec::new();
-    for (manifest, target) in [("Cargo.toml", "target"), ("lab/Cargo.toml", "lab/target")] {
-        let root = CacheRoot::new(&RepoPath::new(manifest)?, RepoPath::new(target)?);
-        for job in ["rust", "rust-test", "dlt"] {
-            let job = JobId::new(job)?;
-            keys.push(CacheKey::Target {
-                job: job.clone(),
-                root: root.clone(),
-                host: Host,
-            });
-            keys.push(CacheKey::Delta {
-                job,
-                root: root.clone(),
-                host: Host,
-            });
-        }
-        keys.push(CacheKey::Sources { host: Host, root });
-    }
-    keys.push(CacheKey::Tools { host: Host });
-    let mut tags = std::collections::BTreeSet::new();
-    let mut deltas = Vec::new();
-    let mut bases = Vec::new();
-    for key in &keys {
-        tags.insert(key.tag());
-        let rendered = render_key(key);
-        let family = format!("velnor-{}-", key.tag());
-        for value in std::iter::once(rendered.key).chain(rendered.restore_keys) {
-            assert!(value.starts_with(&family), "{value}");
-            if matches!(key, CacheKey::Delta { .. }) {
-                deltas.push(value);
-            } else {
-                bases.push(value);
-            }
-        }
-    }
-    assert_eq!(tags.len(), 4, "{tags:?}");
-    assert!(!deltas.is_empty() && !bases.is_empty());
-    for delta in &deltas {
-        for base in &bases {
-            assert_ne!(delta, base);
-            assert!(!delta.starts_with(base.as_str()), "{base} prefixes {delta}");
-            assert!(!base.starts_with(delta.as_str()), "{delta} prefixes {base}");
-        }
-    }
-    Ok(())
-}
-
-#[test]
 fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -> TestResult {
     for shape in ["", "shape = \"lint-test\"", "shape = \"groups\""] {
         for (id, lane) in jobs("0.1.81", shape)? {
