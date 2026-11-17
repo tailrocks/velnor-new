@@ -26,6 +26,7 @@ pub(super) const FOREIGN: Pair = Pair {
 pub(super) enum Schema {
     Current,
     Historical45,
+    Historical46,
 }
 
 pub(super) struct Case {
@@ -35,7 +36,7 @@ pub(super) struct Case {
     pub(super) journal: Journal,
     pub(super) scope: ConnectionJournal,
     pub(super) engine: SelectedEngineContext,
-    binding: RepositoryConnection,
+    pub(super) binding: RepositoryConnection,
     pub(super) images: VerifiedWorkerImages,
     pub(super) authority: Arc<ImageAuthority>,
 }
@@ -46,20 +47,40 @@ impl Case {
         outcome: JitOutcome,
         pending: bool,
     ) -> TestResult<Self> {
+        Self::with_control(schema, outcome, pending, false).await
+    }
+
+    pub(super) async fn with_control(
+        schema: Schema,
+        outcome: JitOutcome,
+        pending: bool,
+        control: bool,
+    ) -> TestResult<Self> {
         let directory = tempfile::tempdir()?;
         let socket = directory.path().join("docker.sock");
-        let fixture = FixtureDocker::start(&socket, &[CRASH, FOREIGN])?;
+        let mut pairs = vec![CRASH, FOREIGN];
+        if control {
+            pairs.push(super::policy_rotation::CONTROL);
+        }
+        let fixture = FixtureDocker::start(&socket, &pairs)?;
         let docker = crate::docker_client::connect_unix(&socket.to_string_lossy())?;
         let path = directory.path().join("launch.db");
         let journal = match schema {
             Schema::Current => Journal::open(&path).await?,
             Schema::Historical45 => Journal::open_historical_v45_for_test(&path).await?,
+            Schema::Historical46 => Journal::open_historical_v46_for_test(&path).await?,
         };
-        let (scope, engine) = seed::started_pairs(&journal, &docker, &[CRASH]).await?;
+        let started = if control {
+            vec![CRASH, super::policy_rotation::CONTROL]
+        } else {
+            vec![CRASH]
+        };
+        let (scope, engine) = seed::started_pairs(&journal, &docker, &started).await?;
         seed::bind_resources(&journal, CRASH, engine.docker_root_digest()).await?;
         binding::install(&journal, CRASH).await?;
         storage_seed::install(&journal, CRASH).await?;
         seed_jit(&journal, CRASH, outcome).await?;
+        Self::seed_control(&journal, &engine, control).await?;
         if pending {
             super::population::seed_pending(&journal).await?;
         }
@@ -84,6 +105,21 @@ impl Case {
             images,
             authority,
         })
+    }
+
+    async fn seed_control(
+        journal: &Journal,
+        engine: &SelectedEngineContext,
+        control: bool,
+    ) -> TestResult<()> {
+        if control {
+            let pair = super::policy_rotation::CONTROL;
+            seed::bind_resources(journal, pair, engine.docker_root_digest()).await?;
+            binding::install(journal, pair).await?;
+            storage_seed::install(journal, pair).await?;
+            super::seed_authorized_bound_request(journal, pair).await?;
+        }
+        Ok(())
     }
 
     pub(super) fn runtime(&self) -> TestResult<NativeCleanupRuntime> {
@@ -118,6 +154,7 @@ impl Case {
         let journal = match schema {
             Schema::Current => Journal::open(&path).await?,
             Schema::Historical45 => Journal::open_historical_v45_for_test(&path).await?,
+            Schema::Historical46 => Journal::open_historical_v46_for_test(&path).await?,
         };
         let scope = journal.connection_scope(&binding).await?;
         Ok(Self {

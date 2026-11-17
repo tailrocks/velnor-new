@@ -99,3 +99,13 @@ pub(in crate::journal) async fn bootstrap_historical_v45(
     }
     super::validate_persisted_schema_v45(conn).await
 }
+
+#[cfg(test)]
+pub(in crate::journal) async fn bootstrap_historical_v46(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    bootstrap_historical_v45(conn).await?;
+    super::jit_interrupted_claims::migrate_v45_to_v46(conn).await?;
+    super::validate_persisted_schema_v45(conn).await?;
+    super::jit_interrupted_claims::validate(conn).await
+}

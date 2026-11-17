@@ -78,7 +78,7 @@ async fn preserves(settled: bool) -> TestResult<()> {
     Ok(())
 }
 
-async fn proof_rows(journal: &Journal) -> TestResult<Vec<String>> {
+pub(super) async fn proof_rows(journal: &Journal) -> TestResult<Vec<String>> {
     let connection = journal.connection().await?;
     let mut result = Vec::new();
     for table in [
@@ -117,7 +117,7 @@ async fn historical_snapshot(journal: &Journal) -> TestResult<String> {
     Ok(binding::digest(&serde_json::to_vec(&identity)?))
 }
 
-async fn version(journal: &Journal) -> TestResult<i64> {
+pub(super) async fn version(journal: &Journal) -> TestResult<i64> {
     let connection = journal.connection().await?;
     let mut rows = connection.query("PRAGMA user_version", ()).await?;
     Ok(rows.next().await?.ok_or("version")?.get(0)?)

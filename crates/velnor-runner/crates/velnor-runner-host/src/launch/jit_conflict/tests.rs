@@ -9,6 +9,8 @@ mod case;
 mod end_to_end;
 mod github;
 mod historical;
+mod inbox;
+mod policy_rotation;
 mod population;
 mod probe_docker;
 mod storage_seed;
@@ -169,7 +171,10 @@ fn source_json() -> String {
     )
 }
 
-async fn seed_authorized_bound_request(journal: &Journal, pair: Pair) -> TestResult<String> {
+pub(super) async fn seed_authorized_bound_request(
+    journal: &Journal,
+    pair: Pair,
+) -> TestResult<String> {
     let binding = scalar(
         journal,
         "SELECT binding_digest FROM physical_attempts LIMIT 1",

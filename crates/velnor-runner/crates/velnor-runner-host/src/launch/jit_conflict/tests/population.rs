@@ -83,15 +83,29 @@ pub(super) async fn plan(
         "SELECT policy_digest FROM connection_active_job_authority LIMIT 1",
     )
     .await?;
+    let generation: u64 = scalar(
+        journal,
+        "SELECT CAST(generation AS TEXT) FROM connection_active_job_authority LIMIT 1",
+    )
+    .await?
+    .parse()?;
     let mut candidates = Vec::new();
     let mut successors = Vec::new();
     for request in &acquired {
-        if scope.acquired_successor_ready(request, 1, &policy).await? {
+        if scope
+            .acquired_successor_ready(request, generation, &policy)
+            .await?
+        {
             successors.push(request.clone());
         }
         for reservation in &reservations {
             if let Some(candidate) = scope
-                .acquired_recovery_candidate(request, reservation.reservation_id, 1, &policy)
+                .acquired_recovery_candidate(
+                    request,
+                    reservation.reservation_id,
+                    generation,
+                    &policy,
+                )
                 .await?
             {
                 candidates.push(candidate);

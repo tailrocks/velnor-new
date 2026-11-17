@@ -19,6 +19,8 @@ mod jit_conflict_settlement;
 pub(in crate::journal) mod jit_interrupted_claims;
 #[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v45;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v46;
 mod migration;
 mod physical_attempts;
 
