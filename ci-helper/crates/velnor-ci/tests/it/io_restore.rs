@@ -30,7 +30,8 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     for path in before {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.write("src/main.rs", "fn main() { println!(\"changed\"); }\n");
@@ -42,7 +43,8 @@ fn restore_brings_back_the_saved_time_of_unchanged_files_only() {
     for path in before.iter().chain(&["src/new.rs"]) {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("src/lib.rs"), built);
     assert_eq!(repo.mtime("data/greeting.txt"), built);
@@ -66,13 +68,15 @@ fn a_saved_file_that_sparse_checkout_left_out_is_counted_not_an_error() {
     for path in [".gitignore", "src/lib.rs", "assets/data.txt"] {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     repo.git(&["update-index", "-q", "--refresh"]);
     repo.git(&["sparse-checkout", "set", "--no-cone", "/src/"]);
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("src/lib.rs", checkout);
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert!(!repo.root().join("assets/data.txt").exists());
     assert_eq!(repo.mtime("src/lib.rs"), built);
@@ -92,7 +96,8 @@ fn a_file_checked_out_with_other_bytes_keeps_its_checkout_time() {
     for path in [".gitignore", "src/lib.rs", "assets/data.txt"] {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     repo.write(".gitattributes", "*.txt text eol=crlf\n");
     repo.commit();
@@ -111,7 +116,8 @@ fn a_file_checked_out_with_other_bytes_keeps_its_checkout_time() {
     ] {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("assets/data.txt"), checkout);
     assert_eq!(repo.mtime("src/lib.rs"), built);
@@ -132,7 +138,8 @@ fn a_mode_changed_only_in_the_worktree_keeps_its_checkout_time() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     for (path, mode) in [("tools/run.sh", 0o755), ("keys/key.txt", 0o600)] {
         fs::set_permissions(repo.root().join(path), Permissions::from_mode(mode))
@@ -142,7 +149,8 @@ fn a_mode_changed_only_in_the_worktree_keeps_its_checkout_time() {
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("tools/run.sh"), checkout);
     assert_eq!(repo.mtime("keys/key.txt"), checkout);
@@ -172,13 +180,15 @@ fn a_workspace_below_the_repository_root_is_saved_and_restored() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    let saved = save_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+    let saved = save_inputs(&workspace, std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(&workspace, std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert!(workspace.join("target/.velnor/inputs.tsv").is_file());
     assert_eq!(repo.mtime("rust/src/lib.rs"), built);
@@ -206,13 +216,14 @@ fn a_nested_root_reading_the_repository_root_keeps_the_times_of_files_outside_it
     for path in paths {
         repo.set_mtime(path, built);
     }
-    save_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(&workspace, std::path::Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    restore_inputs(&workspace).unwrap_or_else(|e| unreachable!("{e}"));
+    restore_inputs(&workspace, std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("rust/src/lib.rs"), built);
     assert_eq!(repo.mtime("other/src/lib.rs"), built);
@@ -231,18 +242,21 @@ fn two_roots_restored_from_different_snapshots_each_keep_their_own_times() {
     for path in paths {
         repo.set_mtime(path, first);
     }
-    save_inputs(&repo.root().join("one")).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(&repo.root().join("one"), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     for path in paths {
         repo.set_mtime(path, second);
     }
-    save_inputs(&repo.root().join("two")).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(&repo.root().join("two"), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in paths {
         repo.set_mtime(path, checkout);
     }
     for root in ["one", "two"] {
-        restore_inputs(&repo.root().join(root)).unwrap_or_else(|e| unreachable!("{e}"));
+        restore_inputs(&repo.root().join(root), std::path::Path::new("target"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
     }
     assert_eq!(repo.mtime("one/src/lib.rs"), first);
     assert_eq!(repo.mtime("two/src/lib.rs"), second);
@@ -259,7 +273,8 @@ fn a_retargeted_symlink_restores_nothing() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     fs::remove_file(repo.root().join("data/link.txt")).unwrap_or_else(|e| unreachable!("{e}"));
     repo.link("data/b.txt", "data/link.txt");
@@ -267,7 +282,8 @@ fn a_retargeted_symlink_restores_nothing() {
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("data/a.txt"), checkout);
     assert_eq!(repo.mtime("data/b.txt"), checkout);
@@ -288,13 +304,15 @@ fn an_unchanged_symlink_does_not_block_restore() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("data/a.txt"), built);
     assert_eq!(
@@ -310,12 +328,14 @@ fn a_symlink_the_file_cannot_hold_means_nothing_is_saved() {
     repo.link("data/a.txt", "data/odd\tlink");
     let built = UNIX_EPOCH + Duration::new(1_700_000_000, 0);
     repo.set_mtime("data/a.txt", built);
-    let saved = save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let saved = save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     repo.git(&["rm", "--quiet", "--force", "data/odd\tlink"]);
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("data/a.txt", checkout);
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("data/a.txt"), checkout);
     assert_eq!(
@@ -353,7 +373,8 @@ fn a_symlink_retargeted_inside_a_submodule_restores_nothing() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     let sub = repo.root().join("sub");
     fs::remove_file(sub.join("link.txt")).unwrap_or_else(|e| unreachable!("{e}"));
@@ -379,7 +400,8 @@ fn a_symlink_retargeted_inside_a_submodule_restores_nothing() {
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("data/a.txt"), checkout);
     assert_eq!(repo.mtime("data/b.txt"), checkout);
@@ -413,13 +435,15 @@ fn files_inside_a_submodule_are_restored_when_unchanged() {
     for path in paths {
         repo.set_mtime(path, built);
     }
-    let saved = save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let saved = save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in paths {
         repo.set_mtime(path, checkout);
     }
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("sub/src/lib.rs"), built);
     assert_eq!(
@@ -437,7 +461,8 @@ fn restore_without_saved_inputs_changes_nothing() {
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("src/lib.rs", checkout);
-    let report = restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(repo.mtime("src/lib.rs"), checkout);
     assert_eq!(
         report,
@@ -486,12 +511,14 @@ fn restore_then_tie_breaking_leaves_the_restored_times_of_distinct_files_alone()
     repo.set_mtime(".gitignore", built);
     repo.set_mtime("src/lib.rs", later);
     repo.set_mtime("build.rs", built - Duration::from_secs(1));
-    save_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     for path in [".gitignore", "src/lib.rs", "build.rs"] {
         repo.set_mtime(path, checkout);
     }
-    restore_inputs(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
+    restore_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
     break_time_ties(repo.root()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(repo.mtime("src/lib.rs"), later);
     assert_eq!(repo.mtime(".gitignore"), built);
@@ -517,4 +544,27 @@ fn the_restored_command_prints_its_report_and_writes_only_the_expired_output() {
         std::fs::read_to_string(repo.root().join("output")).unwrap_or_default(),
         "expired=false\n"
     );
+}
+
+#[test]
+fn configured_target_input_timestamps_round_trip_through_the_cli() {
+    let repo = Repo::new("configured-input-times");
+    repo.write("src/lib.rs", "pub fn one() {}\n");
+    let built = UNIX_EPOCH + Duration::new(1_700_000_000, 123_456_789);
+    let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
+    repo.set_mtime("src/lib.rs", built);
+    for verb in ["save", "restore"] {
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["inputs", verb, "--target-dir", "out"])
+            .current_dir(repo.root())
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(output.status.success(), "{output:?}");
+        if verb == "save" {
+            assert!(repo.root().join("out/.velnor/inputs.tsv").is_file());
+            assert!(!repo.root().join("target/.velnor/inputs.tsv").exists());
+            repo.set_mtime("src/lib.rs", checkout);
+        }
+    }
+    assert_eq!(repo.mtime("src/lib.rs"), built);
 }

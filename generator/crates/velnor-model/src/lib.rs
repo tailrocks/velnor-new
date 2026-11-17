@@ -10,6 +10,7 @@ mod ids;
 mod plan;
 mod repo;
 mod selection;
+mod steps;
 mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
@@ -28,10 +29,9 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, BaseExpiry, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, Job,
-    LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, PullRequestType, Shape,
-    ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
-    TrimFamily, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP, PermissionScope,
+    Permissions, PlanFrom, PlanRef, PullRequestType, Shape, ShapeDecision, Step, TEST_STEP,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun, InputRule,
@@ -44,3 +44,5 @@ pub use selection::{
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
+
+pub use steps::{BaseExpiry, HelperCommand, StepKind, TrimFamily};

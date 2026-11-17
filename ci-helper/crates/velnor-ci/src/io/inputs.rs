@@ -11,14 +11,14 @@ use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
 
 use crate::error::CiError;
 use crate::inputs::{
-    INPUTS_FILE, SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
+    SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
     parse_ls_files, plan_restore, with_worktree_blobs,
 };
 use crate::scope::Scope;
 
-pub fn save_inputs(root: &Path) -> Result<String, CiError> {
+pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
-    let path = root.join(INPUTS_FILE);
+    let path = root.join(target).join(".velnor/inputs.tsv");
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -53,9 +53,10 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, format_inputs(&saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
+        "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
         tracked.links.len(),
+        target.join(".velnor/inputs.tsv").display(),
         tracked.absent.len(),
         tracked.unsupported,
         tracked.submodules
@@ -98,7 +99,7 @@ pub(super) fn input_witness(tracked: &Tracked) -> String {
     format_inputs(&inputs)
 }
 
-pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
+pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     match fs::remove_file(root.join(crate::report::SNAPSHOT)) {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {}
@@ -109,11 +110,14 @@ pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(CiError::new(error.to_string())),
     }
-    let path = root.join(INPUTS_FILE);
+    let path = root.join(target).join(".velnor/inputs.tsv");
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Ok(format!("no {INPUTS_FILE}; nothing restored (cold run)\n"));
+            return Ok(format!(
+                "no {}; nothing restored (cold run)\n",
+                target.join(".velnor/inputs.tsv").display()
+            ));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };

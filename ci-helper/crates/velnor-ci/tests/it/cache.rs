@@ -436,3 +436,17 @@ fn trim_without_a_token_warns_and_exits_zero_like_every_other_trim_failure() {
     assert!(stdout.contains("::warning::cache trim"), "{stdout}{stderr}");
     assert!(stdout.contains("GITHUB_TOKEN"), "{stdout}");
 }
+
+#[test]
+fn a_non_utf8_child_log_still_saves_compiled_crates() {
+    let repo = Checkout::new("decide-non-utf8");
+    seed(&repo);
+    let temp = repo.root().join("runner-temp");
+    fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    let mut bytes = vec![0xff, b'\n'];
+    bytes.extend_from_slice(COMPILED.as_bytes());
+    fs::write(temp.join("velnor-run.log"), bytes).unwrap_or_else(|e| unreachable!("{e}"));
+    let (output, written) = decide(&repo, None);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(written, "save=true\n");
+}
