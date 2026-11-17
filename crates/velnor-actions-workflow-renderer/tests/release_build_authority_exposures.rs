@@ -4,6 +4,51 @@
 use super::*;
 
 #[test]
+fn release_authority_rejects_option_bearing_repository_commands() -> Result<(), Box<dyn Error>> {
+    let files = release_files()?;
+    let mut missed = Vec::new();
+    for run in [
+        "cargo -v build",
+        "cargo +stable build",
+        "mbx --verbose nextest run",
+        "/usr/bin/cargo --color always check",
+    ] {
+        let workflow = json!({"jobs": {"build": {"permissions": {"contents": "read"}, "steps": [{"run": run, "env": {"PRIVATE_VALUE": "${{ github.token }}"}}]}}});
+        if violations(&workflow, &files)? != ["build"] {
+            missed.push(run);
+        }
+    }
+    assert!(missed.is_empty(), "missed {missed:?}");
+    let clean = json!({"jobs": {"setup": {"steps": [{"run": "cargo --version", "env": {"GH_TOKEN": "${{ github.token }}"}}]}}});
+    assert_eq!(violations(&clean, &files)?, Vec::<String>::new());
+    Ok(())
+}
+
+#[test]
+fn release_authority_rejects_reusable_secret_forwarding() -> Result<(), Box<dyn Error>> {
+    let mut files = release_files()?;
+    files.push(RenderedFile {
+        path: ".github/workflows/secret-build.yml".to_owned(),
+        bytes: json!({"jobs": {"execute": {"steps": [{"run": "mbx build"}]}}}).to_string(),
+    });
+    let clean = json!({"jobs": {"build": {"uses": "./.github/workflows/secret-build.yml"}}});
+    assert_eq!(violations(&clean, &files)?, Vec::<String>::new());
+    let mut missed = Vec::new();
+    for secrets in [
+        json!("inherit"),
+        json!({"credential": "${{ secrets.PRIVATE_VALUE }}"}),
+    ] {
+        let mut workflow = clean.clone();
+        workflow["jobs"]["build"]["secrets"] = secrets.clone();
+        if violations(&workflow, &files)? != ["build/execute"] {
+            missed.push(secrets);
+        }
+    }
+    assert!(missed.is_empty(), "missed {missed:?}");
+    Ok(())
+}
+
+#[test]
 fn release_authority_rejects_credential_environment_objects() -> Result<(), Box<dyn Error>> {
     let files = release_files()?;
     let mut missed = Vec::new();
