@@ -27,8 +27,8 @@ pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, HELPER_FROM_ARTIFACT_RUN, MAX_CACHE_KEY_CHARACTERS,
-    MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
+    MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedStep,
+    RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;

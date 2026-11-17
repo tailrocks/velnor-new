@@ -77,8 +77,7 @@ fn public_cleanup_observer_tmpfs_reference_scans_observer_namespace_and_excludes
 104 90 0:54 / /sys/fs/cgroup ro,nosuid,nodev,noexec - cgroup2 cgroup2 rw\n\
 105 90 0:55 / /home/runner rw,nosuid,nodev - tmpfs tmpfs rw,size=2097152k\n";
 
-    let observer_devices =
-        observer_runtime_tmpfs_devices(99, Some(([0, 4], 4999)), &binding, observer_mountinfo);
+    let observer_devices = observer_runtime_tmpfs_devices(Some(([0, 4], 4999)), observer_mountinfo);
     let expected_observer: HashSet<u64> = [
         linux_device(0, 51),
         linux_device(0, 52),
@@ -90,12 +89,11 @@ fn public_cleanup_observer_tmpfs_reference_scans_observer_namespace_and_excludes
     assert_eq!(observer_devices, expected_observer);
 
     assert!(
-        observer_runtime_tmpfs_devices(20, Some(([0, 4], 4999)), &binding, observer_mountinfo)
-            .is_empty(),
-        "runner pid must not be treated as observer"
+        observer_runtime_tmpfs_devices(None, observer_mountinfo).is_empty(),
+        "unverified observer namespace must not exempt runtime mounts"
     );
     assert_eq!(
-        observer_runtime_tmpfs_devices(99, Some(([0, 4], 4002)), &binding, observer_mountinfo),
+        observer_runtime_tmpfs_devices(Some(([0, 4], 4002)), observer_mountinfo),
         expected_observer,
         "a recycled namespace number does not make the observer an owned process"
     );
@@ -147,8 +145,7 @@ fn public_cleanup_observer_does_not_count_its_own_recycled_runtime_mounts_but_st
 102 101 0:76 / /dev/mqueue rw,nosuid,nodev,noexec - mqueue mqueue rw\n\
 103 90 0:60 / /proc rw,nosuid,nodev,noexec - proc proc rw\n\
 104 90 0:61 / /home/runner rw,nosuid,nodev - tmpfs tmpfs rw\n";
-    let observer_devices =
-        observer_runtime_tmpfs_devices(99, Some(([0, 4], 4999)), &binding, observer_mountinfo);
+    let observer_devices = observer_runtime_tmpfs_devices(Some(([0, 4], 4999)), observer_mountinfo);
     let owned: HashSet<u64> = binding
         .owned_tmpfs_devices
         .iter()
@@ -175,15 +172,17 @@ fn public_cleanup_observer_does_not_count_its_own_recycled_runtime_mounts_but_st
 #[test]
 fn public_cleanup_observer_is_not_outside_a_namespace_that_belongs_to_the_pair() {
     let binding = sample_binding();
+    let protected = [&binding.daemon, &binding.runner, &binding.dind]
+        .map(|process| (process.namespace_device, process.namespace_inode));
     for pair_namespace in [4001, 4002, 4003] {
         assert_eq!(
-            observer_outside_pair_namespaces(Some(([0, 4], pair_namespace)), &binding),
+            observer_outside_pair_namespaces(Some(([0, 4], pair_namespace)), &protected),
             None
         );
     }
     assert_eq!(
-        observer_outside_pair_namespaces(Some(([0, 4], 4999)), &binding),
+        observer_outside_pair_namespaces(Some(([0, 4], 4999)), &protected),
         Some(([0, 4], 4999))
     );
-    assert_eq!(observer_outside_pair_namespaces(None, &binding), None);
+    assert_eq!(observer_outside_pair_namespaces(None, &protected), None);
 }

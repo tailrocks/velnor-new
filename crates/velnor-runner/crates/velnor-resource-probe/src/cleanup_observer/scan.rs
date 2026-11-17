@@ -15,11 +15,10 @@ mod inventory;
 mod mounts;
 mod output;
 
-use helpers::{add_issue, process_start_ticks, read_bounded};
+use helpers::{add_issue, live_process_namespace, read_bounded};
 use mounts::read_mountinfo;
 use output::{ScanEvidence, guest_root_matches, record};
 
-const PROC: &str = "/proc";
 const BOOT_ID: &str = "/proc/sys/kernel/random/boot_id";
 
 pub(super) fn observe(
@@ -135,17 +134,7 @@ fn check_root_stability(
 }
 
 fn check_process(identity: &ProcessIdentity, issues: &mut Vec<String>, failure: &'static str) {
-    let path = format!("{PROC}/{}/stat", identity.pid);
-    if !matches!(process_start_ticks(&path, identity.pid), Ok(value) if value == identity.start_ticks)
-    {
-        add_issue(issues, failure);
-        return;
-    }
-    let namespace_path = format!("{PROC}/{}/ns/mnt", identity.pid);
-    if !matches!(
-        helpers::namespace_identity(&namespace_path),
-        Ok(value) if value == (identity.namespace_device, identity.namespace_inode)
-    ) {
+    if !matches!(live_process_namespace(identity), Ok(Some(_))) {
         add_issue(issues, failure);
     }
 }

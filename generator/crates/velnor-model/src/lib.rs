@@ -7,6 +7,7 @@ mod ids;
 mod plan;
 mod repo;
 mod selection;
+mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
 pub use cron::CronExpr;
@@ -17,8 +18,8 @@ pub use ids::{
 pub use plan::{
     Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
     Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType,
-    Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_RUN_OUTPUT, Triggers, When,
-    WorkflowPlan,
+    Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,
@@ -30,3 +31,4 @@ pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
 };
+pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
