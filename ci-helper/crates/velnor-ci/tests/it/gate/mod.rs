@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use velnor_ci::gate::{Verdict, release_gate};
 use velnor_ci::github::{branch_path, compare_path, rules_path, run_jobs_path, runs_path};
 
-use crate::support::{FakeGitHub, repo};
+use crate::support::repo;
 
 mod current_run;
 mod external_checks;
@@ -120,19 +120,6 @@ impl Recorded {
 
     fn gate_with(&self, sha: &str, pr_only: &[String]) -> Result<Verdict, String> {
         self.gate_in_run(sha, pr_only, None)
-    }
-
-    fn gate_in_run(
-        &self,
-        sha: &str,
-        pr_only: &[String],
-        run: Option<u64>,
-    ) -> Result<Verdict, String> {
-        let mut fake = FakeGitHub::default();
-        for (path, body) in &self.0 {
-            fake.respond(path.clone(), &body.to_string());
-        }
-        release_gate(&fake, &repo(), sha, pr_only, run).map_err(|e| e.to_string())
     }
 }
 

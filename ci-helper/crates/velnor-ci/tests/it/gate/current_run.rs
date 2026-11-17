@@ -8,9 +8,24 @@ use super::pr_only::{
     CHECK_RULESET, aggregate_path, check_ruleset, checks_path, pr_rule, protected, suites_path,
 };
 use super::{GREEN, Recorded, assert_refused, check, required};
-use crate::support::repo;
+use crate::support::{FakeGitHub, repo};
 
-fn actions_bound(app: Value) -> Recorded {
+impl Recorded {
+    pub(super) fn gate_in_run(
+        &self,
+        sha: &str,
+        pr_only: &[String],
+        run: Option<u64>,
+    ) -> Result<velnor_ci::gate::Verdict, String> {
+        let mut fake = FakeGitHub::default();
+        for (path, body) in &self.0 {
+            fake.respond(path.clone(), &body.to_string());
+        }
+        velnor_ci::gate::release_gate(&fake, &repo(), sha, pr_only, run).map_err(|e| e.to_string())
+    }
+}
+
+fn actions_bound(app: &Value) -> Recorded {
     let binding = json!({"context": "DCO", "integration_id": app});
     let rule = required(&[check("Required"), binding]);
     let mut detail = check_ruleset();
@@ -25,7 +40,7 @@ fn actions_bound(app: Value) -> Recorded {
 #[test]
 fn only_the_current_runs_unfinished_suite_is_ignored() {
     for app in [json!(15368), json!(-1), Value::Null] {
-        let own = actions_bound(app);
+        let own = actions_bound(&app);
         let gate = |recorded: &Recorded| recorded.gate_in_run(GREEN, &["DCO".to_owned()], Some(77));
         assert!(gate(&own).is_ok_and(|verdict| verdict.ready));
         let other = own.set(
@@ -34,7 +49,7 @@ fn only_the_current_runs_unfinished_suite_is_ignored() {
                 {"id": 9, "status": "in_progress", "app": {"id": 15368}},
                 {"id": 10, "status": "in_progress", "app": {"id": 15368}}
             ]}),
-        );
+        ).set("/repos/tailrocks/velnor-new/check-suites/10/check-runs?filter=all&per_page=100&page=1".to_owned(), json!({"total_count": 0, "check_runs": []}));
         assert_refused(&gate(&other), "unfinished check suite 10");
     }
 }
@@ -42,13 +57,13 @@ fn only_the_current_runs_unfinished_suite_is_ignored() {
 #[test]
 fn current_run_identity_must_be_resolved_before_ignoring_a_suite() {
     for response in [json!({}), json!({"check_suite_id": null})] {
-        let own = actions_bound(json!(15368)).set(run_path(&repo(), 77), response);
+        let own = actions_bound(&json!(15368)).set(run_path(&repo(), 77), response);
         assert_refused(
             &own.gate_in_run(GREEN, &["DCO".to_owned()], Some(77)),
             "current workflow run",
         );
     }
-    let own = actions_bound(json!(15368));
+    let own = actions_bound(&json!(15368));
     assert_refused(
         &own.gate_in_run(GREEN, &["DCO".to_owned()], Some(78)),
         "no recorded response",
@@ -62,7 +77,7 @@ fn current_run_identity_must_be_resolved_before_ignoring_a_suite() {
 #[test]
 fn current_suite_check_names_still_disprove_pr_only_absence() {
     for path in [aggregate_path(1), checks_path(1)] {
-        let own = actions_bound(json!(15368)).set(path, json!({"total_count": 1, "check_runs": [{"name": "DCO", "app": {"id": 15368}, "check_suite": {"id": 9}}]}));
+        let own = actions_bound(&json!(15368)).set(path, json!({"total_count": 1, "check_runs": [{"name": "DCO", "app": {"id": 15368}, "check_suite": {"id": 9}}]}));
         assert_refused(
             &own.gate_in_run(GREEN, &["DCO".to_owned()], Some(77)),
             "PR-only check DCO has",
@@ -73,7 +88,7 @@ fn current_suite_check_names_still_disprove_pr_only_absence() {
 #[test]
 fn a_changed_listing_refuses_with_a_retry_diagnosis() {
     let recorded = protected()
-        .set(suites_path(1), json!({"total_count": 2, "check_suites": [{"id": 9, "status": "completed", "app": {"id": 343649}}]}))
+        .set(suites_path(1), json!({"total_count": 2, "check_suites": [{"id": 9, "status": "completed", "app": {"id": 343_649}}]}))
         .set(suites_path(2), json!({"total_count": 3, "check_suites": []}));
     assert_refused(
         &super::pr_only::allowed(&recorded),
