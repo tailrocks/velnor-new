@@ -117,12 +117,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         })
         .collect::<Result<Vec<_>, _>>()?;
     complete(&facts, &workspaces, &audit.built, &platforms)?;
-    if !audit.stale.is_empty() {
-        return Err(CiError::new(format!(
-            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
-            audit.stale.join(", ")
-        )));
-    }
+    audit.check_stale()?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
     if options.write {
@@ -219,6 +214,16 @@ fn compare(
 }
 
 impl Audit<'_> {
+    fn check_stale(&self) -> Result<(), CiError> {
+        if self.stale.is_empty() {
+            return Ok(());
+        }
+        Err(CiError::new(format!(
+            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
+            self.stale.join(", ")
+        )))
+    }
+
     fn record(
         &mut self,
         workspace: &Path,
