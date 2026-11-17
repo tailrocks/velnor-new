@@ -165,6 +165,15 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step
     steps
 }
 
+pub(crate) fn mirror_step(facts: &RepoFacts) -> Option<Step> {
+    facts
+        .config
+        .crates_mirror
+        .as_ref()
+        .filter(|mirror| mirror.runner == facts.config.runner)
+        .map(|mirror| step(StepKind::CratesMirror(mirror.clone())))
+}
+
 pub(crate) fn tools_cache_key() -> CacheKey {
     CacheKey::Tools { host: Host }
 }
@@ -207,10 +216,17 @@ pub(crate) fn setup_roots(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = [tools_restore(facts), tools_install(facts)]
-        .into_iter()
-        .flatten()
-        .collect();
+    let mut toolchain: Vec<Step> = [
+        mirror_step(facts),
+        tools_restore(facts),
+        tools_install(facts),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    if !facts.tools.tools.is_empty() {
+        toolchain.extend(mirror_step(facts));
+    }
     let declared = facts.toolchain.as_ref();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> = declared
