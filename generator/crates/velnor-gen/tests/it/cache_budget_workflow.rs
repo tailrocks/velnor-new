@@ -6,6 +6,7 @@ use crate::base_save::step;
 use crate::facts::TestResult;
 use crate::lock::{COMMIT_FILE, SUMS};
 use crate::pipeline::{view, workflow};
+use velnor_model::{RepoPath, TargetKind};
 use velnor_rust::{LOCK_PATH, pin_lock};
 
 fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -99,5 +100,82 @@ fn scheduled_budget_runs_after_writers_even_when_a_sibling_or_all_saves_are_skip
     let old = render("0.1.80", "")?;
     assert!(!old.contains("cache budget"));
     assert!(!old.contains("rust-trim:"));
+    Ok(())
+}
+
+#[test]
+fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestResult {
+    for bytes in [0_u64, 8_000_000_000] {
+        for version in ["0.1.80", "0.1.81"] {
+            let mut repo =
+                crate::base_save::pinned(version, &format!("cache_budget_bytes = {bytes}\n"))?;
+            repo.files
+                .insert(RepoPath::new("mise.toml")?, b"[tools]\n".to_vec());
+            repo.files.insert(
+                RepoPath::new("Cargo.lock")?,
+                b"version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"private\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/private#0123456789abcdef\"\n".to_vec(),
+            );
+            for target in repo
+                .rust_metadata
+                .values_mut()
+                .flat_map(|metadata| &mut metadata.members)
+                .flat_map(|member| &mut member.targets)
+            {
+                target.kinds = vec![TargetKind::Lib];
+                target.tests = false;
+                target.doctest = false;
+            }
+            let text = workflow(&repo)?;
+            assert!(!text.contains("name: Save the"), "{text}");
+            if version == "0.1.80" {
+                assert!(!text.contains("rust-trim:"), "{text}");
+                assert!(!text.contains("cache budget"), "{text}");
+                continue;
+            }
+            let all = jobs_of(&text);
+            let (_, trim) = all
+                .iter()
+                .find(|(id, _)| id == "rust-trim")
+                .ok_or("no cache budget job when no cache writers exist")?;
+            for absent in [
+                "    needs:",
+                "cache trim",
+                "checkout",
+                "cargo ",
+                "download-artifact",
+            ] {
+                assert!(!trim.contains(absent), "{absent}: {trim}");
+            }
+            assert!(trim.contains("Install velnor-ci 0.1.81"), "{trim}");
+            assert!(trim.contains("actions: write"), "{trim}");
+            assert!(trim.contains("pull-requests: read"), "{trim}");
+            let condition = trim
+                .lines()
+                .find(|line| line.starts_with("    if:"))
+                .ok_or("no budget job condition")?;
+            for required in [
+                "!cancelled()",
+                "github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch)",
+                "github.event_name == ''push''",
+                "github.event_name == ''schedule''",
+                "github.event_name == ''workflow_dispatch''",
+            ] {
+                assert!(condition.contains(required), "{required}: {condition}");
+            }
+            assert!(!condition.contains("needs."), "{condition}");
+            assert_eq!(text.matches("velnor-ci cache budget").count(), 1);
+            let budget = step(trim, "Enforce the repository cache budget").ok_or("budget")?;
+            assert!(
+                budget.contains(&format!("velnor-ci cache budget --budget-bytes {bytes}")),
+                "{budget}"
+            );
+            assert!(!budget.contains("    if:"), "{budget}");
+            let (_, required) = all
+                .iter()
+                .find(|(id, _)| id == "required")
+                .ok_or("required")?;
+            assert!(!required.contains("rust-trim"), "{required}");
+        }
+    }
     Ok(())
 }

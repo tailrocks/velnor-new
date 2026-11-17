@@ -113,9 +113,6 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         })
         .map(|job| job.id.clone())
         .collect();
-    if needs.is_empty() {
-        return None;
-    }
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
         .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
