@@ -39,11 +39,12 @@ pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
     }).collect();
     RenderedStep {
         name: "Report cache telemetry".to_owned(),
+        continue_on_error: true,
         run: Some("velnor-ci report".to_owned()),
         env: vec![
             (
                 "GITHUB_TOKEN".to_owned(),
-                Value::Expr("${{ github.token }}".to_owned()),
+                Value::Expr("${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '' }}".to_owned()),
             ),
             (
                 "VELNOR_REPORT_CACHES".to_owned(),
@@ -76,6 +77,7 @@ pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
 
 pub(crate) fn artifact(upload: bool) -> RenderedStep {
     RenderedStep {
+        continue_on_error: upload,
         name: if upload {
             "Upload cache metrics"
         } else {

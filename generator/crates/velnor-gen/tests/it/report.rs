@@ -113,6 +113,7 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
         let rendered = velnor_render::render(&plan).map_err(|errors| format!("{errors:?}"))?;
         let parsed: serde_json::Value =
             serde_saphyr::from_str(rendered.values().next().ok_or("workflow")?)?;
+        assert_metrics_policy(&parsed)?;
         let cache = plan.jobs.iter().find(|job| job.id.as_str() == "cache");
         if version == "0.1.80" {
             assert!(cache.is_none());
@@ -268,6 +269,29 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
                 .find(|step| step["name"] == "Upload cache metrics")
                 .ok_or("metrics upload")?;
             assert_eq!(upload["with"]["overwrite"], true, "{id} tests={tests}");
+        }
+    }
+    Ok(())
+}
+
+fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
+    for job in workflow["jobs"].as_object().ok_or("jobs")?.values() {
+        for step in job["steps"].as_array().ok_or("steps")? {
+            let producer = matches!(
+                step["name"].as_str(),
+                Some("Report cache telemetry" | "Upload cache metrics")
+            );
+            if step["name"] == "Report cache telemetry" {
+                assert_eq!(
+                    step["env"]["GITHUB_TOKEN"],
+                    "${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '' }}"
+                );
+            }
+            assert_eq!(
+                step["continue-on-error"].as_bool().unwrap_or(false),
+                producer,
+                "{step}"
+            );
         }
     }
     Ok(())

@@ -390,8 +390,9 @@ jobs:
           overwrite: true
       - name: Report cache telemetry
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ github.token }}'
+          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","matched_key":null,"requested_key":"","restore_step":"tools","root":null,"save":"not_attempted","save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_root","root":".","save":"not_attempted","save_step":"sources_save_root","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_root","root":".","save":"not_attempted","save_step":"save_target_root","usable":false,"usable_same_lock":false}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -399,6 +400,7 @@ jobs:
         run: velnor-ci report
       - name: Upload cache metrics
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: 'ci-metrics-${{ github.job }}'
@@ -580,8 +582,9 @@ jobs:
           overwrite: true
       - name: Report cache telemetry
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ github.token }}'
+          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","matched_key":null,"requested_key":"","restore_step":"tools","root":null,"save":"not_attempted","save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_ci_helper","root":"ci-helper","save":"not_attempted","save_step":"sources_save_ci_helper","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_ci_helper","root":"ci-helper","save":"not_attempted","save_step":"save_target_ci_helper","usable":false,"usable_same_lock":false}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -589,6 +592,7 @@ jobs:
         run: velnor-ci report
       - name: Upload cache metrics
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: 'ci-metrics-${{ github.job }}'
@@ -812,8 +816,9 @@ jobs:
           overwrite: true
       - name: Report cache telemetry
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ github.token }}'
+          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","matched_key":null,"requested_key":"","restore_step":"tools","root":null,"save":"not_attempted","save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save":"not_attempted","save_step":"sources_save_crates_velnor_runner","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save":"not_attempted","save_step":"save_target_crates_velnor_runner","usable":false,"usable_same_lock":false}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -821,6 +826,7 @@ jobs:
         run: velnor-ci report
       - name: Upload cache metrics
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: 'ci-metrics-${{ github.job }}'
@@ -1020,8 +1026,9 @@ jobs:
           overwrite: true
       - name: Report cache telemetry
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ github.token }}'
+          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","matched_key":null,"requested_key":"","restore_step":"tools","root":null,"save":"not_attempted","save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_generator","root":"generator","save":"not_attempted","save_step":"sources_save_generator","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_generator","root":"generator","save":"not_attempted","save_step":"save_target_generator","usable":false,"usable_same_lock":false}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -1029,6 +1036,7 @@ jobs:
         run: velnor-ci report
       - name: Upload cache metrics
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: 'ci-metrics-${{ github.job }}'
@@ -1216,8 +1224,9 @@ jobs:
           overwrite: true
       - name: Report cache telemetry
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ github.token }}'
+          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","matched_key":null,"requested_key":"","restore_step":"tools","root":null,"save":"not_attempted","save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_local","root":"local","save":"not_attempted","save_step":"sources_save_local","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_local","root":"local","save":"not_attempted","save_step":"save_target_local","usable":false,"usable_same_lock":false}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
@@ -1225,6 +1234,7 @@ jobs:
         run: velnor-ci report
       - name: Upload cache metrics
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: 'ci-metrics-${{ github.job }}'
@@ -1460,14 +1470,16 @@ jobs:
           overwrite: true
       - name: Report cache telemetry
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         env:
-          GITHUB_TOKEN: '${{ github.token }}'
+          GITHUB_TOKEN: '${{ (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '''' }}'
           VELNOR_REPORT_CACHES: '[{"bytes":null,"family":"tools","hit":"miss","matched_key":null,"requested_key":"","restore_step":"tools","root":null,"save":"not_attempted","save_step":"save_tools","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_root","root":".","save":"not_attempted","save_step":"sources_save_root","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_root","root":".","save":"not_attempted","save_step":"save_target_root","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_ci_helper","root":"ci-helper","save":"not_attempted","save_step":"sources_save_ci_helper","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_ci_helper","root":"ci-helper","save":"not_attempted","save_step":"save_target_ci_helper","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save":"not_attempted","save_step":"sources_save_crates_velnor_runner","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save":"not_attempted","save_step":"save_target_crates_velnor_runner","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_generator","root":"generator","save":"not_attempted","save_step":"sources_save_generator","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_generator","root":"generator","save":"not_attempted","save_step":"save_target_generator","usable":false,"usable_same_lock":false},{"bytes":null,"family":"sources","hit":"miss","matched_key":null,"requested_key":"","restore_step":"sources_local","root":"local","save":"not_attempted","save_step":"sources_save_local","usable":false,"usable_same_lock":false},{"bytes":null,"family":"target","hit":"miss","matched_key":null,"requested_key":"","restore_step":"target_local","root":"local","save":"not_attempted","save_step":"save_target_local","usable":false,"usable_same_lock":false}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
         run: velnor-ci report
       - name: Upload cache metrics
         if: '${{ !cancelled() }}'
+        continue-on-error: true
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: 'ci-metrics-${{ github.job }}'
