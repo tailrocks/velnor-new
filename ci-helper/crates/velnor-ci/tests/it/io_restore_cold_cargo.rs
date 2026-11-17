@@ -31,8 +31,8 @@ fn run(root: &Path, program: &Path, args: &[&str]) -> String {
 }
 
 #[test]
-fn a_missing_snapshot_discards_old_cargo_artifacts_before_a_backdated_edit_builds() {
-    let repo = Repo::new("missing-snapshot-cargo");
+fn a_malformed_snapshot_discards_old_cargo_artifacts_before_a_backdated_edit_builds() {
+    let repo = Repo::new("malformed-snapshot-cargo");
     repo.write_all(&[
         (
             "Cargo.toml",
@@ -46,8 +46,11 @@ fn a_missing_snapshot_discards_old_cargo_artifacts_before_a_backdated_edit_build
     let binary = repo.root().join("target/debug/app");
     assert_eq!(run(repo.root(), &binary, &[]).trim(), "A");
     run(repo.root(), helper, &["inputs", "save"]);
-    std::fs::remove_file(repo.root().join("target/.velnor/inputs.tsv"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(
+        repo.root().join("target/.velnor/inputs.tsv"),
+        "invalid snapshot\n",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
     repo.write_unstaged("src/main.rs", "fn main() { println!(\"B\"); }\n");
     repo.set_mtime(
         "src/main.rs",
@@ -66,17 +69,40 @@ fn a_missing_snapshot_discards_old_cargo_artifacts_before_a_backdated_edit_build
 }
 
 #[test]
-fn a_missing_snapshot_and_target_restore_successfully_as_a_cold_noop() {
+fn a_missing_snapshot_keeps_the_target_and_builds_normally() {
     let repo = Repo::new("missing-snapshot-empty");
-    repo.write("src/lib.rs", "pub fn one() {}\n");
+    repo.write_all(&[
+        (
+            "Cargo.toml",
+            "[package]\nname='app'\nversion='0.1.0'\nedition='2024'\n",
+        ),
+        ("src/main.rs", "fn main() { println!(\"A\"); }\n"),
+    ]);
+    repo.write_unstaged("target/sentinel", "cached artifact\n");
     let restored = run(
         repo.root(),
         Path::new(env!("CARGO_BIN_EXE_velnor-ci")),
         &["inputs", "restore"],
     );
-    assert!(restored.contains("building cold"), "{restored}");
-    assert!(!repo.root().join("target").exists());
-    assert!(repo.root().join("src/lib.rs").is_file());
+    assert_eq!(
+        std::fs::read(repo.root().join("target/sentinel")).unwrap_or_default(),
+        b"cached artifact\n"
+    );
+    assert!(restored.contains("cold run"), "{restored}");
+    assert_eq!(
+        std::fs::read_to_string(repo.root().join("src/main.rs")).unwrap_or_default(),
+        "fn main() { println!(\"A\"); }\n"
+    );
+    let built = run(
+        repo.root(),
+        Path::new(env!("CARGO")),
+        &["build", "--offline", "-v"],
+    );
+    assert!(built.contains("Compiling app "), "{built}");
+    assert_eq!(
+        run(repo.root(), &repo.root().join("target/debug/app"), &[]).trim(),
+        "A"
+    );
 }
 
 #[test]

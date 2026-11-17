@@ -216,28 +216,77 @@ fn save_rejects_internal_target_through_untracked_alias() {
 }
 
 #[test]
-fn a_local_missing_snapshot_removes_only_its_target() {
-    let local = Repo::new("cold-local-cache");
-    local.write("src/lib.rs", "pub fn one() {}\n");
-    local.write_unstaged("cache/target/stale", "cached artifact\n");
-    local.write_unstaged("cache/sibling-sentinel", "sibling artifact\n");
+fn a_missing_snapshot_keeps_the_target_and_every_other_file() {
+    for target in ["target", "cache/target"] {
+        let local = Repo::new("cold-local-cache");
+        local.write("src/lib.rs", "pub fn one() {}\n");
+        let source_time = UNIX_EPOCH + Duration::from_secs(1_700_000_000);
+        local.set_mtime("src/lib.rs", source_time);
+        local.write_unstaged(&format!("{target}/stale"), "cached artifact\n");
+        local.write_unstaged("cache/sibling-sentinel", "sibling artifact\n");
+        let output = helper(&local, &["inputs", "restore", "--target-dir", target]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            std::fs::read(local.root().join(target).join("stale")).unwrap_or_default(),
+            b"cached artifact\n"
+        );
+        assert!(stdout.contains("cold run"), "{stdout}");
+        assert!(!stdout.contains("removed"), "{stdout}");
+        assert_eq!(
+            std::fs::read(local.root().join("src/lib.rs")).unwrap_or_default(),
+            b"pub fn one() {}\n"
+        );
+        assert_eq!(local.mtime("src/lib.rs"), source_time);
+        assert_eq!(
+            std::fs::read(local.root().join("cache/sibling-sentinel")).unwrap_or_default(),
+            b"sibling artifact\n"
+        );
+        assert!(
+            !local
+                .root()
+                .join(target)
+                .join(".velnor/inputs.tsv")
+                .exists()
+        );
+    }
+}
+
+#[test]
+fn a_mismatched_snapshot_removes_only_its_target() {
+    let repo = Repo::new("cold-mismatched");
+    repo.write(".gitignore", "/target/\n/cache/\n");
+    repo.write_all(&[("data/a.txt", "a\n"), ("data/b.txt", "b\n")]);
+    repo.link("data/a.txt", "data/link.txt");
+    let saved = helper(&repo, &["inputs", "save", "--target-dir", "cache/target"]);
+    assert!(saved.status.success(), "{saved:?}");
+    repo.write_unstaged("cache/target/stale", "cached artifact\n");
+    repo.write_unstaged("cache/sibling-sentinel", "sibling artifact\n");
+    std::fs::remove_file(repo.root().join("data/link.txt")).unwrap_or_else(|e| unreachable!("{e}"));
+    repo.link("data/b.txt", "data/link.txt");
     let output = helper(
-        &local,
+        &repo,
         &["inputs", "restore", "--target-dir", "cache/target"],
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(output.status.success(), "{output:?}");
-    assert!(stdout.contains("building cold"), "{stdout}");
-    assert!(!local.root().join("cache/target").exists());
-    assert_eq!(
-        std::fs::read(local.root().join("cache/sibling-sentinel")).unwrap_or_default(),
-        b"sibling artifact\n"
-    );
+    assert!(!repo.root().join("cache/target").exists());
     assert!(
-        !local
-            .root()
-            .join("cache/target/.velnor/inputs.tsv")
-            .exists()
+        stdout.contains("tracked symlinks are new, changed or deleted"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("building cold"), "{stdout}");
+    assert_eq!(
+        std::fs::read_link(repo.root().join("data/link.txt")).ok(),
+        Some("b.txt".into())
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join("data/b.txt")).unwrap_or_default(),
+        b"b\n"
+    );
+    assert_eq!(
+        std::fs::read(repo.root().join("cache/sibling-sentinel")).unwrap_or_default(),
+        b"sibling artifact\n"
     );
 }
 
@@ -265,16 +314,11 @@ fn foreign_cache_link(operation: &str, tracked: bool) {
         &caller,
         &["inputs", operation, "--target-dir", "alias/target"],
     );
-    if tracked || operation == "save" {
-        assert_eq!(
-            std::fs::read(cache.join("target/stale")).unwrap_or_default(),
-            b"cached artifact\n",
-            "{tracked} {operation}: {output:?}"
-        );
-    } else {
-        assert!(!cache.join("target").exists(), "{output:?}");
-        assert!(String::from_utf8_lossy(&output.stdout).contains("building cold"));
-    }
+    assert_eq!(
+        std::fs::read(cache.join("target/stale")).unwrap_or_default(),
+        b"cached artifact\n",
+        "{tracked} {operation}: {output:?}"
+    );
     assert_eq!(output.status.success(), !tracked, "{output:?}");
     assert_eq!(
         cache.join("target/.velnor/inputs.tsv").is_file(),
@@ -312,7 +356,7 @@ fn save_refuses_target_through_foreign_tracked_cache_link() {
 }
 
 #[test]
-fn missing_snapshot_restore_removes_target_through_foreign_untracked_cache_link() {
+fn missing_snapshot_restore_preserves_target_through_foreign_untracked_cache_link() {
     foreign_cache_link("restore", false);
 }
 

@@ -91,6 +91,37 @@ fn a_helper_older_than_0_1_81_gets_no_inputs_restore_and_a_newer_one_gets_it() -
 }
 
 #[test]
+fn custom_target_cache_and_inputs_restore_use_the_configured_directory() -> TestResult {
+    let mut repo = locked("0.1.81")?;
+    let path = RepoPath::new(".cargo/config.toml")?;
+    repo.tracked_paths.insert(path.clone());
+    repo.files
+        .insert(path, b"[build]\ntarget-dir = \"custom-target\"\n".to_vec());
+    let text = workflow(&repo)?;
+    let caches = named(&text, "Restore the target cache");
+    let restores = named(&text, "velnor-ci inputs restore");
+    assert_ne!(caches.len(), 0);
+    assert_ne!(restores.len(), 0);
+    assert!(
+        caches
+            .iter()
+            .all(|step| step.contains("path: custom-target\n"))
+    );
+    for step in restores {
+        let command = step
+            .lines()
+            .find_map(|line| line.trim().strip_prefix("run: "))
+            .ok_or("no command")?;
+        let yaml = crate::yaml_tree::parse(&format!("run: {command}"))?;
+        assert_eq!(
+            yaml.get("run").and_then(crate::yaml_tree::Node::text),
+            Some("velnor-ci inputs restore --target-dir \"${GITHUB_WORKSPACE}\"/custom-target")
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn inputs_restore_uses_each_cached_target_directory_from_any_working_directory() -> TestResult {
     let mut repo = locked("0.1.81")?;
     let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;

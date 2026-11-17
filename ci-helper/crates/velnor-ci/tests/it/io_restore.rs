@@ -269,10 +269,8 @@ fn restore_without_saved_inputs_changes_nothing() {
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("src/lib.rs", checkout);
-    let report = restore_inputs(repo.root(), Path::new("target"))
-        .err()
-        .unwrap_or_else(|| unreachable!())
-        .to_string();
+    let report =
+        restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(repo.mtime("src/lib.rs"), checkout);
     assert_eq!(
         report,

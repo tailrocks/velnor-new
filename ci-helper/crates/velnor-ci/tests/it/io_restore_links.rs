@@ -81,10 +81,8 @@ fn a_symlink_the_file_cannot_hold_means_nothing_is_saved() {
     repo.git(&["rm", "--quiet", "--force", "data/odd\tlink"]);
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("data/a.txt", checkout);
-    let report = restore_inputs(repo.root(), Path::new("target"))
-        .err()
-        .unwrap_or_else(|| unreachable!())
-        .to_string();
+    let report =
+        restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
 
     assert_eq!(repo.mtime("data/a.txt"), checkout);
     assert_eq!(

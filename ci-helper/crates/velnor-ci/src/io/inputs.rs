@@ -127,10 +127,10 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Err(CiError::new(format!(
+            return Ok(format!(
                 "no {}; nothing restored (cold run)\n",
                 relative.display()
-            )));
+            ));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
