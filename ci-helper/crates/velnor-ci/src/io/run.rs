@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
@@ -20,7 +21,9 @@ use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::separate_group;
-use crate::tests_run::{TestCounts, output_lines, runs_nextest};
+use crate::tests_run::{
+    TestCounts, apply_runnable, list_argv, output_lines, runnable_matches, runs_nextest,
+};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -125,6 +128,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         && runs_nextest(&args.command)
         && let Some(counts) = counts
     {
+        let counts = apply_runnable(counts, list_matches(&args.command));
         append_outputs(&output_lines(counts))
             .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
     }
@@ -238,6 +242,24 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
             }
         }
     });
+}
+
+fn list_matches(argv: &[String]) -> Option<BTreeMap<String, u64>> {
+    let argv = list_argv(argv)?;
+    let mut command = Command::new(&argv[0]);
+    command
+        .args(&argv[1..])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for name in STEP_FILE_VARIABLES {
+        command.env_remove(name);
+    }
+    let output = command.output().ok()?;
+    if !output.status.success() {
+        drop(std::io::stderr().write_all(&output.stderr));
+        return None;
+    }
+    runnable_matches(&output.stdout)
 }
 
 fn collect(
