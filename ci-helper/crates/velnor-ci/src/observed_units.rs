@@ -7,7 +7,7 @@ use std::path::Path;
 use crate::cargo_artifacts::CargoArtifact;
 use crate::telemetry::Invocation;
 
-fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String> {
+pub(crate) fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String> {
     let mut filenames: Vec<_> = artifact
         .filenames
         .iter()
