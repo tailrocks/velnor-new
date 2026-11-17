@@ -92,8 +92,8 @@ fn invalid_and_oversized_lines_do_not_hide_the_next_artifact() {
             0,
         ),
         (format!("{missing}\n{wrong_type}\n"), 2),
-        (format!("{}\n", "x".repeat(1024 * 1024 + 1)), 0),
-        (format!("{}\n", " ".repeat(1024 * 1024 + 1)), 0),
+        (format!("{}\n", "x".repeat(1024 * 1024 + 1)), 1),
+        (format!("{}\n", " ".repeat(1024 * 1024 + 1)), 1),
     ];
     for (prefix, rejected) in cases {
         let mut tap = ArtifactTap::default();
@@ -125,5 +125,29 @@ fn invalid_and_oversized_lines_do_not_hide_the_next_artifact() {
         assert_eq!(batch.progress[0].version, "1.2.3");
         assert_eq!(batch.progress[0].location, None);
         assert_eq!(batch.tests, [("bin fail".to_owned(), 0.5)]);
+    }
+}
+
+#[test]
+fn oversized_cargo_artifacts_report_rejection_once_across_chunks_and_eof() {
+    let mut oversized = record(false);
+    oversized["filenames"] = json!(["x".repeat(1024 * 1024)]);
+    for newline in [false, true] {
+        let input = format!("{oversized}{}", if newline { "\n" } else { "" });
+        for size in [127, input.len()] {
+            let mut tap = ArtifactTap::default();
+            let mut rejected = 0;
+            for chunk in input.as_bytes().chunks(size) {
+                tap.feed(chunk);
+                rejected += tap.take_ready().rejected;
+            }
+            if newline {
+                tap.feed(record(true).to_string().as_bytes());
+            }
+            let batch = tap.finish();
+            assert_eq!(rejected + batch.rejected, 1);
+            assert_eq!(batch.artifacts.len(), usize::from(newline));
+            assert!(batch.artifacts.iter().all(|artifact| artifact.fresh));
+        }
     }
 }

@@ -138,26 +138,34 @@ fn assert_checkout_normalization() {
 }
 
 #[test]
-fn canonical_documentation_outputs_identify_repeats_and_keep_purposes_distinct() {
+fn canonical_documentation_outputs_leave_compiler_identity_unknown() {
     let mut invocation = invocation();
     invocation.artifacts[0].filenames = vec!["target/doc/app/index.html".to_owned()];
     let mut units = BTreeMap::new();
     for _ in 0..3 {
         collect(&invocation, &mut units);
     }
-    assert_eq!(diagnostics(&invocation), Vec::<String>::new());
-    assert_eq!(units.len(), 1);
-    assert_eq!(units.values().next().expect("doc unit").1, 3);
+    assert!(units.is_empty());
+    assert!(diagnostics(&invocation)[0].contains("identity unknown for 1 artifacts"));
+    assert_eq!(
+        invocation.artifacts[0].filenames,
+        ["target/doc/app/index.html"]
+    );
+    invocation.artifacts[0].filenames =
+        vec!["target/debug/deps/libapp-5a60227c82b41877.rmeta".to_owned()];
+    collect(&invocation, &mut units);
     let mut features = invocation.clone();
     features.artifacts[0].features.push("extra".to_owned());
     collect(&features, &mut units);
     let mut profile = invocation.clone();
     profile.artifacts[0].profile.opt_level = "3".to_owned();
     collect(&profile, &mut units);
-    invocation.artifacts[0].filenames = vec!["target/debug/deps/libapp-opaque.rmeta".to_owned()];
+    invocation.artifacts[0].filenames =
+        vec!["target/debug/deps/libapp-552bd7752ecb13da.rmeta".to_owned()];
     collect(&invocation, &mut units);
+    assert_eq!(diagnostics(&invocation), Vec::<String>::new());
     assert_eq!(units.len(), 4);
-    assert_eq!(units.values().filter(|(_, count)| *count == 1).count(), 3);
+    assert!(units.values().all(|(_, count)| *count == 1));
 }
 
 #[test]
