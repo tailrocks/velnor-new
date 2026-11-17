@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cli;
+mod delta_cache;
 mod drifts;
 mod error;
 pub mod io;
@@ -70,25 +71,7 @@ pub fn expected_with_notes(
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
     let plan = plan(&facts);
-    for root in plan
-        .jobs
-        .iter()
-        .flat_map(|job| &job.steps)
-        .filter_map(|step| {
-            if let StepKind::CacheSave(CacheKey::Delta { root, .. }) = &step.kind {
-                Some(root)
-            } else {
-                None
-            }
-        })
-    {
-        let staging = root.delta_dir();
-        if let Some(path) = view.tracked_paths.iter().find(|path| {
-            path.as_str() == staging || path.as_str().starts_with(&format!("{staging}/"))
-        }) {
-            return Err(GenerateError::DeltaStagingCollision(path.clone()));
-        }
-    }
+    delta_cache::validate_staging(view, &plan)?;
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
     if plan
