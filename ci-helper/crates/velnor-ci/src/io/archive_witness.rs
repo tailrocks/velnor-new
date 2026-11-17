@@ -19,7 +19,13 @@ pub(super) struct ArchiveWitness {
 }
 
 impl ArchiveWitness {
-    pub(super) fn start() -> Self {
+    pub(super) fn start(argv: &[String]) -> Self {
+        if cannot_download(argv) {
+            return Self {
+                cache: None,
+                before: Some(BTreeMap::new()),
+            };
+        }
         let cache = std::env::var_os("CARGO_HOME")
             .map(PathBuf::from)
             .or_else(|| std::env::var_os("HOME").map(|home| Path::new(&home).join(".cargo")))
@@ -31,14 +37,80 @@ impl ArchiveWitness {
 
     pub(super) fn finish(self) -> Option<Vec<String>> {
         let before = self.before?;
-        let after = scan(self.cache.as_deref()?).ok()?;
+        let Some(cache) = self.cache else {
+            return Some(Vec::new());
+        };
+        let after = scan(&cache).ok()?;
         let changed = after
             .into_iter()
             .filter(|(path, stamp)| before.get(path) != Some(stamp));
         changed
-            .map(|(path, _)| path.file_name()?.to_str().map(str::to_owned))
+            .map(|(path, _)| path.strip_prefix(&cache).ok()?.to_str().map(str::to_owned))
             .collect::<Option<BTreeSet<_>>>()
             .map(|names| names.into_iter().collect())
+    }
+}
+
+fn cannot_download(argv: &[String]) -> bool {
+    if argv
+        .first()
+        .and_then(|program| Path::new(program).file_name())
+        != Some("cargo".as_ref())
+    {
+        return false;
+    }
+    let mut words = argv.iter().skip(1).peekable();
+    if words.peek().is_some_and(|word| word.starts_with('+')) {
+        words.next();
+    }
+    let mut command = None;
+    let mut offline = false;
+    while let Some(word) = words.next() {
+        if word == "--" {
+            break;
+        }
+        let flag = word.split_once('=').map_or(word.as_str(), |(flag, _)| flag);
+        match flag {
+            "--offline" | "--frozen" if flag == word => offline = true,
+            "--config" | "--color" | "--manifest-path" | "--lockfile-path" | "--target-dir"
+            | "--target" | "--profile" | "--features" | "--package" | "--exclude" | "--bin"
+            | "--example" | "--test" | "--bench" | "--jobs" | "--message-format" | "--timings"
+            | "-C" | "-Z" | "-F" | "-p" | "-j" => {
+                if !word.contains('=') && words.next().is_none() {
+                    return false;
+                }
+            }
+            "--locked"
+            | "--release"
+            | "--workspace"
+            | "--all"
+            | "--all-targets"
+            | "--lib"
+            | "--bins"
+            | "--examples"
+            | "--tests"
+            | "--benches"
+            | "--all-features"
+            | "--no-default-features"
+            | "--no-deps"
+            | "--no-run"
+            | "--quiet"
+            | "--verbose"
+            | "-q"
+            | "-v"
+            | "-vv"
+            | "-r"
+                if flag == word => {}
+            "fmt" if command.is_none() => return true,
+            "run" | "list" if command == Some("nextest") => {}
+            _ if !word.starts_with('-') && command.is_none() => command = Some(word.as_str()),
+            _ => return false,
+        }
+    }
+    match command {
+        Some("fmt") => true,
+        Some("fetch" | "metadata") => offline,
+        _ => false,
     }
 }
 

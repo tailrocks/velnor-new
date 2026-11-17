@@ -112,6 +112,12 @@ pub fn normalize(invocation: &mut Invocation, checkout: &Path) {
         }
         relative(&mut artifact.target.src_path);
         relative(&mut artifact.manifest_path);
+        if (artifact.package_id.starts_with("registry+") || artifact.package_id.starts_with("git+"))
+            && let Some(package) = Path::new(&artifact.manifest_path).parent()
+            && let Ok(source) = Path::new(&artifact.target.src_path).strip_prefix(package)
+        {
+            artifact.target.src_path = format!("package/{}", source.display());
+        }
         if let Some(package) = checkout_package(&artifact.package_id, checkout) {
             artifact.package_id = package;
         }

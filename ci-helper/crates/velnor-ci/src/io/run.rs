@@ -98,7 +98,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
     let signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|e| (2, format!("cannot watch for SIGINT and SIGTERM: {e}")))?;
-    let archives = super::archive_witness::ArchiveWitness::start();
+    let archives = super::archive_witness::ArchiveWitness::start(&args.command);
     let (mut child, own_group) = spawn_child(&args.command)?;
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
@@ -116,7 +116,8 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
             "velnor-ci: output capture incomplete; a stream did not reach EOF before the deadline"
         );
     }
-    if runs_nextest(&args.command)
+    if invocation.capture_complete
+        && runs_nextest(&args.command)
         && let Some(counts) = counts
     {
         append_outputs(&output_lines(counts))

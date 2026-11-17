@@ -29,6 +29,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
             ])
             .current_dir(&temp)
             .env("RUNNER_TEMP", &temp)
+            .env("CARGO_HOME", temp.join("cargo-home"))
             .env("GITHUB_OUTPUT", temp.join("outputs"))
             .env("VELNOR_CI_RUN_PUMP_GRACE_MS", "20")
             .stdout(Stdio::null())
@@ -64,7 +65,7 @@ fn completed_observations_survive_a_descendant_holding_the_stream_open() {
         assert_eq!(invocation["capture_complete"], !held);
         assert_eq!(
             fs::read_to_string(temp.join("outputs")).unwrap_or_default(),
-            if active { TEST_OUTPUT } else { "" }
+            if active && !held { TEST_OUTPUT } else { "" }
         );
         let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["cache", "decide", "--target-dir", "target"])
