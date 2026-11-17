@@ -58,7 +58,7 @@ async fn a_publication_operation_is_not_retired() -> TestResult<()> {
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn a_container_that_was_not_created_is_not_retired() -> TestResult<()> {
+async fn an_untracked_container_create_without_a_claim_clock_is_not_retired() -> TestResult<()> {
     refused(
         "UPDATE capacity_reservation_bootstrap_containers SET create_state = 'uncertain', container_id = NULL, start_state = 'not_requested' WHERE reservation_id = {r} AND role = 'dind'",
     )
