@@ -243,6 +243,10 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
     )?;
     let metrics = observation(&warm, &[], &[quiet])?;
     assert_ne!(metrics.verification_errors, [] as [String; 0]);
+    let cold = report(&warm, &cache(), "{}")?;
+    assert!(!cold.caches[0].usable, "{cold:?}");
+    assert!(!cold.caches[0].usable_same_lock, "{cold:?}");
+    assert_eq!(cold.verification_errors, [] as [String; 0], "{cold:?}");
 
     let fresh = artifact(
         &warm,
