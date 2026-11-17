@@ -114,3 +114,72 @@ fn the_policy_lane_runs_machete_once_from_the_repository_root() -> TestResult {
     assert!(!policy.contains("working-directory"), "{policy}");
     Ok(())
 }
+
+#[test]
+fn cargo_deny_configs_enable_the_policy_lane_and_require_a_pin() -> TestResult {
+    for (manifest, config) in [
+        ("Cargo.toml", "deny.toml"),
+        ("Cargo.toml", ".deny.toml"),
+        ("Cargo.toml", ".cargo/deny.toml"),
+        ("Cargo.toml", ".config/deny.toml"),
+        ("lab/Cargo.toml", "lab/.cargo/deny.toml"),
+        ("lab/Cargo.toml", ".config/deny.toml"),
+    ] {
+        let mut repo = view(&[manifest], None)?;
+        repo.tracked_paths.insert(RepoPath::new(config)?);
+        let error = workflow(&repo).err().ok_or("missing pin accepted")?;
+        assert!(
+            error.to_string().contains("cargo-deny"),
+            "{config}: {error}"
+        );
+        repo.files
+            .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+        let text = workflow(&repo)?;
+        assert!(text.contains("cargo-deny"), "{config}: {text}");
+        if manifest.starts_with("lab/") {
+            assert!(
+                text.contains("cargo-deny --manifest-path ''lab/Cargo.toml'' check"),
+                "{text}"
+            );
+        }
+    }
+    for config in [
+        "docs/deny.toml",
+        "lab/other/deny.toml",
+        ".cargo/deny.toml.extra",
+    ] {
+        let mut repo = view(&["lab/Cargo.toml"], None)?;
+        repo.tracked_paths.insert(RepoPath::new(config)?);
+        repo.files
+            .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
+        assert!(!workflow(&repo)?.contains("cargo-deny"), "{config}");
+    }
+    Ok(())
+}
+
+#[test]
+fn changes_to_cargo_deny_configs_select_policy() -> TestResult {
+    let tools = PolicyTools {
+        deny: false,
+        machete: false,
+    };
+    for name in [
+        "deny.toml",
+        ".deny.toml",
+        ".cargo/deny.toml",
+        ".config/deny.toml",
+        "lab/.cargo/deny.toml",
+    ] {
+        let changed = BTreeSet::from([RepoPath::new(name)?]);
+        assert!(policy_runs(tools, &changed, false, true).deny, "{name}");
+    }
+    for name in [
+        "deny.toml.extra",
+        ".deny.toml.bak",
+        ".cargo/deny.toml.extra",
+    ] {
+        let changed = BTreeSet::from([RepoPath::new(name)?]);
+        assert!(!policy_runs(tools, &changed, false, true).deny, "{name}");
+    }
+    Ok(())
+}

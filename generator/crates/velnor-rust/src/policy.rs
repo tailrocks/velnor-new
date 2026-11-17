@@ -9,9 +9,21 @@ use velnor_model::{PolicyTools, RepoPath};
 use crate::mise::MISE_CONFIGS;
 use crate::roots::is_cargo_config;
 
-pub(crate) const DENY_CONFIG: RepoPath = RepoPath::from_static("deny.toml");
+const DEPENDENCY_FILES: [&str; 2] = ["Cargo.toml", "Cargo.lock"];
 
-const DEPENDENCY_FILES: [&str; 3] = ["Cargo.toml", "Cargo.lock", "deny.toml"];
+pub(crate) const DENY_CONFIG_NAMES: [&str; 4] = [
+    "deny.toml",
+    ".deny.toml",
+    ".cargo/deny.toml",
+    ".config/deny.toml",
+];
+
+pub(crate) fn is_deny_config(path: &RepoPath) -> bool {
+    matches!(
+        path.as_str().rsplit('/').next(),
+        Some("deny.toml" | ".deny.toml")
+    )
+}
 const DENY_EXCEPTION_FILES: [&str; 2] = ["deny.exceptions.toml", ".deny.exceptions.toml"];
 const IGNORE_FILES: [&str; 2] = [".gitignore", ".ignore"];
 
@@ -31,7 +43,7 @@ pub fn policy_runs(
     let dependency = everything
         || changed.iter().any(|path| {
             let name = path.as_str().rsplit('/').next().unwrap_or_default();
-            DEPENDENCY_FILES.contains(&name) || is_cargo_config(path)
+            DEPENDENCY_FILES.contains(&name) || is_deny_config(path) || is_cargo_config(path)
         });
     let deny_only = changed.iter().any(|path| {
         let name = path.as_str().rsplit('/').next().unwrap_or_default();
@@ -44,7 +56,7 @@ pub fn policy_runs(
             || IGNORE_FILES.contains(&name)
     });
     PolicyRuns {
-        deny: (tools.deny || changed.contains(&DENY_CONFIG)) && (dependency || deny_only),
+        deny: (tools.deny || changed.iter().any(is_deny_config)) && (dependency || deny_only),
         machete: tools.machete && (dependency || unused_possible),
     }
 }
