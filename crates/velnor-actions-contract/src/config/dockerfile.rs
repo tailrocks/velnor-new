@@ -62,7 +62,7 @@ mod variable;
 
 pub use runner::analyze_runner_dockerfile;
 use syntax::{check_directives, instructions};
-use variable::{ArgValue, arg_value, is_injected_arg, substitute, valid_name};
+use variable::{ArgValue, arg_value, arg_words, is_injected_arg, substitute, valid_name};
 
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
@@ -101,7 +101,6 @@ struct State {
     unknown_environment: bool,
     inherited_stage: bool,
     global_args: BTreeMap<String, ArgValue>,
-    unknown_global_args: bool,
     stage_args: BTreeMap<String, ArgValue>,
     stages: BTreeMap<String, usize>,
     triggers: Vec<Vec<(String, String)>>,
@@ -131,50 +130,40 @@ impl State {
     }
 
     fn record_arg(&mut self, args: &str) -> Result<(), DockerfileProblem> {
-        let token = args.trim();
         let unresolved = || DockerfileProblem::ContextSourceUnresolved(format!("ARG {args}"));
-        let (name, value) = match token.split_once('=') {
-            Some((name, value)) => {
-                let ambiguous_names = value.chars().any(char::is_whitespace)
-                    && !(['\'', '"']
-                        .into_iter()
-                        .any(|quote| value.starts_with(quote) && value.ends_with(quote)));
-                let value = arg_value(value).map_or(ArgValue::Unknown, ArgValue::Known);
-                if ambiguous_names {
-                    if self.triggers.is_empty() {
-                        self.unknown_global_args = true;
-                    } else {
-                        self.unknown_environment = true;
-                    }
-                }
-                (name, value)
-            }
-            None if self.inherited_stage => (token, ArgValue::Unknown),
-            None => (
-                token,
-                self.stage_args
-                    .get(token)
-                    .or_else(|| self.global_args.get(token))
-                    .cloned()
-                    .unwrap_or(if self.unknown_global_args {
-                        ArgValue::Unknown
-                    } else {
-                        ArgValue::Unset
-                    }),
-            ),
-        };
-        if !valid_name(name) {
+        let words = arg_words(args).ok_or_else(unresolved)?;
+        if words.is_empty() {
             return Err(unresolved());
         }
-        let value = if is_injected_arg(name) {
-            ArgValue::Unknown
-        } else {
-            value
-        };
-        if self.triggers.is_empty() {
-            self.global_args.insert(name.to_owned(), value);
-        } else {
-            self.stage_args.insert(name.to_owned(), value);
+        for token in words {
+            let (name, value) = match token.split_once('=') {
+                Some((name, value)) => (
+                    name,
+                    arg_value(value).map_or(ArgValue::Unknown, ArgValue::Known),
+                ),
+                None if self.inherited_stage => (token, ArgValue::Unknown),
+                None => (
+                    token,
+                    self.stage_args
+                        .get(token)
+                        .or_else(|| self.global_args.get(token))
+                        .cloned()
+                        .unwrap_or(ArgValue::Unset),
+                ),
+            };
+            if !valid_name(name) {
+                return Err(unresolved());
+            }
+            let value = if is_injected_arg(name) {
+                ArgValue::Unknown
+            } else {
+                value
+            };
+            if self.triggers.is_empty() {
+                self.global_args.insert(name.to_owned(), value);
+            } else {
+                self.stage_args.insert(name.to_owned(), value);
+            }
         }
         Ok(())
     }
@@ -184,9 +173,6 @@ impl State {
         let Some(raw) = tokens.next() else {
             return Ok(());
         };
-        if self.unknown_global_args && raw.contains('$') {
-            return Err(DockerfileProblem::ImageBaseUnresolved(raw.to_owned()));
-        }
         let reference = substitute(raw, &self.global_args)
             .ok_or_else(|| DockerfileProblem::ImageBaseUnresolved(raw.to_owned()))?;
         self.stage_args.clear();

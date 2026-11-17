@@ -34,6 +34,38 @@ pub(super) enum ArgValue {
     Unknown,
 }
 
+pub(super) fn arg_words(args: &str) -> Option<Vec<&str>> {
+    let mut words = Vec::new();
+    let mut start = 0;
+    let mut quote = None;
+    let mut escaped = false;
+    for (index, character) in args.char_indices() {
+        if escaped {
+            escaped = false;
+            continue;
+        }
+        match character {
+            '\\' if quote != Some('\'') => escaped = true,
+            character if quote == Some(character) => quote = None,
+            '\'' | '"' if quote.is_none() => quote = Some(character),
+            character if quote.is_none() && character.is_whitespace() => {
+                if start < index {
+                    words.push(&args[start..index]);
+                }
+                start = index + character.len_utf8();
+            }
+            _ => {}
+        }
+    }
+    if quote.is_some() || escaped {
+        return None;
+    }
+    if start < args.len() {
+        words.push(&args[start..]);
+    }
+    Some(words)
+}
+
 pub(super) fn arg_value(value: &str) -> Option<String> {
     if value.contains('\\') {
         return None;
