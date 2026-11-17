@@ -80,3 +80,36 @@ fn an_arbitrary_commands_manifest_argument_is_passed_through_unchanged() {
     assert!(echoed.status.success(), "{echoed:?}");
     assert_eq!(echoed.stdout, b"--manifest-path=/nonexistent/Cargo.toml\n");
 }
+
+#[cfg(unix)]
+#[test]
+fn audit_wrapped_nextest_cannot_forge_step_outputs() {
+    use std::os::unix::fs::PermissionsExt;
+
+    let repo = workspace_below_the_root();
+    let driver = repo.root().join("driver");
+    fs::create_dir_all(&driver).unwrap_or_else(|e| unreachable!("{e}"));
+    let nextest = driver.join("cargo-nextest");
+    fs::write(&nextest, "#!/bin/sh\nenv > \"$RUNNER_TEMP/child-env\"\nif [ -n \"$GITHUB_OUTPUT\" ]; then echo tests_run=999 >> \"$GITHUB_OUTPUT\"; fi\necho '     Summary [   0.001s] 7 tests run: 7 passed, 2 skipped' >&2\n").unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&nextest, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let output_file = driver.join("output");
+    fs::write(&output_file, "existing=1\n").unwrap_or_else(|e| unreachable!("{e}"));
+    let path = format!("{}:{}", driver.display(), std::env::var("PATH").unwrap_or_default());
+    let mut run = command(env!("CARGO_BIN_EXE_velnor-ci"));
+    run.current_dir(repo.root().join("rust"))
+        .args(["run", "--", env!("CARGO_BIN_EXE_velnor-ci"), "inputs", "build", "--", "cargo-nextest", "nextest", "run", "--no-tests=pass"])
+        .env("PATH", path)
+        .env("RUNNER_TEMP", &driver);
+    for name in ["GITHUB_OUTPUT", "GITHUB_ENV", "GITHUB_PATH", "GITHUB_STEP_SUMMARY", "GITHUB_STATE"] {
+        run.env(name, &output_file);
+    }
+    let output = run.output().unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(output.status.success(), "{output:?}");
+    let written = fs::read_to_string(&output_file).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(written, "existing=1\ntests_run=7\ntests_listed=9\n");
+    let environment = fs::read_to_string(driver.join("child-env")).unwrap_or_else(|e| unreachable!("{e}"));
+    for name in ["GITHUB_OUTPUT", "GITHUB_ENV", "GITHUB_PATH", "GITHUB_STEP_SUMMARY", "GITHUB_STATE"] {
+        assert!(!environment.lines().any(|line| line.starts_with(&format!("{name}="))), "{name} leaked");
+    }
+}
