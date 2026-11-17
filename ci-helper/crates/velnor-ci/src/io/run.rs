@@ -64,9 +64,13 @@ fn open_log(path: &Path) -> std::io::Result<std::fs::File> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::OpenOptionsExt;
-        options.custom_flags(libc::O_NOFOLLOW);
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
     }
-    options.open(path)
+    let file = options.open(path)?;
+    if !file.metadata()?.is_file() {
+        return Err(std::io::Error::other("not a regular file"));
+    }
+    Ok(file)
 }
 
 pub(super) fn run(args: &RunArgs) -> ExitCode {
@@ -111,7 +115,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, counts) = collect(&receiver, &slots, &mut invocation);
+    let (mut lost, console, counts) = collect(&receiver, &slots, &mut invocation);
     if !invocation.capture_complete {
         eprintln!(
             "velnor-ci: output capture incomplete; a stream did not reach EOF before the deadline"
@@ -127,11 +131,12 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let ran = doctests
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .finish();
+        .ran();
     if code == 0 && args.require_doctests && ran == 0 {
         eprintln!("velnor-ci: the command ran 0 doctests, so this step checked nothing");
         code = 1;
     }
+    code = console_exit(code, console);
     let mut log = log
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
@@ -157,6 +162,20 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         }
         None => Ok(ExitCode::from(u8::try_from(code).unwrap_or(1))),
     }
+}
+
+fn console_exit(code: i32, console: Option<std::io::Error>) -> i32 {
+    if let Some(error) = console {
+        writeln!(
+            std::io::stderr(),
+            "velnor-ci: cannot write the command output: {error}"
+        )
+        .ok();
+        if code == 0 {
+            return 2;
+        }
+    }
+    code
 }
 
 fn has_terminal() -> bool {
@@ -225,37 +244,32 @@ fn collect(
     receiver: &mpsc::Receiver<(usize, bool)>,
     slots: &[Arc<Mutex<Capture>>],
     invocation: &mut crate::telemetry::Invocation,
-) -> (Option<std::io::Error>, Option<TestCounts>) {
+) -> (
+    Option<std::io::Error>,
+    Option<std::io::Error>,
+    Option<TestCounts>,
+) {
     let deadline = Instant::now() + pump_grace();
-    let mut open = vec![true; slots.len()];
     let mut completed = 0;
     let mut counts = None;
     for _ in 0..slots.len() {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok((index, complete)) => {
-                completed += usize::from(complete);
-                open[index] = false;
-                counts = slots[index]
-                    .lock()
-                    .unwrap_or_else(std::sync::PoisonError::into_inner)
-                    .counts
-                    .or(counts);
-            }
+            Ok((_, complete)) => completed += usize::from(complete),
             Err(_) => break,
         }
     }
     invocation.capture_complete = completed == slots.len();
     let mut failure = None;
-    for (index, slot) in slots.iter().enumerate() {
+    let mut console = None;
+    for slot in slots {
         let captured = std::mem::take(
             &mut *slot
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner),
         );
-        if open[index] {
-            counts = captured.counts.or(counts);
-        }
+        counts = captured.counts.or(counts);
         failure = failure.or(captured.failure);
+        console = console.or(captured.console);
         invocation.artifacts.extend(captured.observations.artifacts);
         invocation
             .progress
@@ -264,7 +278,7 @@ fn collect(
         invocation.tests.extend(captured.observations.tests);
         invocation.rejected += captured.observations.rejected;
     }
-    (failure, counts)
+    (failure, console, counts)
 }
 
 #[cfg(unix)]

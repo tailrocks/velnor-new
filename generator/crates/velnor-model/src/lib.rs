@@ -29,9 +29,9 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP, PermissionScope,
-    Permissions, PlanFrom, PlanRef, PullRequestType, Shape, ShapeDecision, Step, TEST_STEP,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
+    Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP,
+    PermissionScope, Permissions, PlanFrom, PlanRef, PullRequestType, Shape, ShapeDecision, Step,
+    TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun, InputRule,

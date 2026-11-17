@@ -13,6 +13,7 @@ const CHUNK: usize = 8192;
 #[derive(Debug, Default)]
 pub(super) struct Capture {
     pub failure: Option<Error>,
+    pub console: Option<Error>,
     pub counts: Option<TestCounts>,
     pub observations: ArtifactBatch,
 }
@@ -46,9 +47,15 @@ pub(super) fn pump_counted<L: Write>(
     let mut tap = SummaryTap::default();
     let mut artifacts = ArtifactTap::default();
     let mut buffer = [0_u8; CHUNK];
+    let mut console_failed = false;
     let complete = loop {
         let read = match from.read(&mut buffer) {
-            Ok(0) => break true,
+            Ok(0) => {
+                if let Some(Ok(mut seen)) = count.map(Mutex::lock) {
+                    seen.end_stream();
+                }
+                break true;
+            }
             Ok(read) => read,
             Err(error) if error.kind() == ErrorKind::Interrupted => continue,
             Err(error) => {
@@ -67,7 +74,14 @@ pub(super) fn pump_counted<L: Write>(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .publish(artifacts.take_ready(), tap.counts());
-        to.write_all(chunk).and_then(|()| to.flush()).ok();
+        if !console_failed && let Err(error) = to.write_all(chunk).and_then(|()| to.flush()) {
+            capture
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .console
+                .get_or_insert(error);
+            console_failed = true;
+        }
         let failure = log
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)

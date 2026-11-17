@@ -194,7 +194,11 @@ pub fn nextest_summary(line: &str) -> Option<NextestSummary> {
         .split_once(" tests run")
         .or_else(|| rest.split_once(" test run"))?;
     Some(NextestSummary {
-        tests_run: count.parse().ok()?,
+        tests_run: count
+            .split_once('/')
+            .map_or(count, |(finished, _)| finished)
+            .parse()
+            .ok()?,
         seconds,
     })
 }
