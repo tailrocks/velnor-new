@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::{Value, json};
 use velnor_ci::collect::collect;
-use velnor_ci::github::{Repo, job_log_path, jobs_path};
+use velnor_ci::github::{Repo, job_log_path, jobs_path, run_path};
 
 use crate::support::{
     CLI_ID, CLI_LOG, CORE_ID, CORE_LOG, FakeGitHub, JOBS, RUN, RUN_ID, error_text,
@@ -216,6 +217,60 @@ fn job_with(steps: &[(&str, &str, &str)]) -> velnor_ci::github::ApiJob {
         steps.join(",")
     ))
     .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn collected_with_times(
+    run_started: &str,
+    run_updated: &str,
+    job_created: &str,
+    job_started: &str,
+    job_completed: &str,
+) -> velnor_ci::metrics::RunMetrics {
+    let mut run: Value = serde_json::from_str(RUN).unwrap_or_else(|e| unreachable!("{e}"));
+    run["run_started_at"] = json!(run_started);
+    run["updated_at"] = json!(run_updated);
+    let mut jobs: Value = serde_json::from_str(JOBS).unwrap_or_else(|e| unreachable!("{e}"));
+    for job in jobs["jobs"].as_array_mut().into_iter().flatten() {
+        if job["conclusion"] == "success" {
+            job["created_at"] = json!(job_created);
+            job["started_at"] = json!(job_started);
+            job["completed_at"] = json!(job_completed);
+        }
+    }
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(run_path(&repo(), RUN_ID), &run.to_string());
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &jobs.to_string());
+    collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn unmeasured_run_and_job_timestamps_stay_distinct_from_measured_zero() {
+    let unmeasured = collected_with_times(
+        "2026-11-12T08:36:32Z",
+        "not-a-time",
+        "2026-11-12T08:36:32Z",
+        "not-a-time",
+        "not-a-time",
+    );
+    let summary = unmeasured.summary();
+    assert!(
+        summary.contains("wall unmeasured, runner unmeasured"),
+        "{summary}"
+    );
+    assert!(summary.contains("[success] unmeasured"), "{summary}");
+
+    let measured_zero = collected_with_times(
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+    );
+    assert!(
+        measured_zero
+            .summary()
+            .contains("wall 0s, runner 0s (0.0 runner-minutes)")
+    );
 }
 
 #[test]
