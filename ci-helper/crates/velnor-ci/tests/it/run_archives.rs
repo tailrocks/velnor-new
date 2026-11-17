@@ -124,6 +124,19 @@ fn offline_project_commands_still_capture_archives_created_by_executed_code() {
     }
 }
 
+#[test]
+fn an_undiscoverable_cargo_home_cannot_establish_an_empty_archive_witness() {
+    for (name, args, expected) in [
+        ("absent-home", vec!["fetch"], Value::Null),
+        ("absent-home-fmt", vec!["fmt"], json!([])),
+    ] {
+        let (status, invocation) =
+            recording(name, "absent", "missing", ":", 0, &args).expect("recording");
+        assert!(status.success());
+        assert_eq!(invocation["verified_download_archives"], expected);
+    }
+}
+
 fn recording(
     name: &str,
     home: &str,
@@ -177,6 +190,9 @@ fn recording(
         .env("HOME", temp.join("home"))
         .env_remove("CARGO_HOME");
     match home {
+        "absent" => {
+            command.env_remove("HOME");
+        }
         "explicit" => {
             command.env("CARGO_HOME", &cargo_home);
         }

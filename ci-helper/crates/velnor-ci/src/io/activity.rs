@@ -48,10 +48,10 @@ pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
     if !crate::cache::should_save(&counts)
         && invocations
             .iter()
-            .any(|invocation| !invocation.capture_complete)
+            .any(|invocation| !invocation.capture_complete || invocation.rejected > 0)
     {
         return Err(CiError::new(
-            "output capture incomplete; cannot establish that no crates were compiled",
+            "output capture incomplete or rejected records; cannot establish that no crates were compiled",
         ));
     }
     Ok(Some(counts))

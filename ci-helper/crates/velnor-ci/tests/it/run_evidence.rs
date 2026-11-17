@@ -202,3 +202,88 @@ fn cargo_build_compiler_selectors_are_recorded_and_distinguish_compilation_ident
     assert_eq!(units.values().filter(|(_, count)| *count == 2).count(), 1);
     fs::remove_dir_all(temp).expect("cleanup");
 }
+
+#[test]
+fn non_unicode_compiler_selectors_are_rejected_before_execution_but_unrelated_values_work() {
+    use std::os::unix::ffi::OsStringExt;
+    let temp = std::env::temp_dir().join(format!("velnor-selector-bytes-{}", std::process::id()));
+    for key in ["CARGO_BUILD_RUSTC", "UNRELATED"] {
+        for byte in [0xfe, 0xff] {
+            let program = crate::run_capture::fixture(&temp, false, false).expect("fixture");
+            fs::write(&program, "#!/bin/sh\ntouch executed\n").expect("program");
+            let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+                .args(["run", "--"])
+                .arg(program)
+                .current_dir(&temp)
+                .env("RUNNER_TEMP", &temp)
+                .env(key, std::ffi::OsString::from_vec(vec![byte]))
+                .output()
+                .expect("capture");
+            let recognized = key == "CARGO_BUILD_RUSTC";
+            assert_eq!(output.status.success(), !recognized, "{key}: {output:?}");
+            assert_eq!(temp.join("executed").exists(), !recognized);
+            if recognized {
+                let error = String::from_utf8_lossy(&output.stderr);
+                assert!(error.contains(key) && error.contains("Unicode"), "{error}");
+            }
+        }
+    }
+    fs::remove_dir_all(temp).expect("cleanup");
+}
+
+#[test]
+fn rejected_oversized_output_cannot_establish_zero_cache_activity() {
+    for active in [false, true] {
+        let temp =
+            std::env::temp_dir().join(format!("velnor-oversized-{}-{active}", std::process::id()));
+        let program = crate::run_capture::fixture(&temp, false, false).expect("fixture");
+        fs::write(&program, "#!/bin/sh\ncat events\n").expect("program");
+        let mut artifact = crate::cargo_artifacts::record(false);
+        artifact["filenames"] = serde_json::json!(["x".repeat(1024 * 1024)]);
+        fs::write(
+            temp.join("events"),
+            format!(
+                "{artifact}\n{}",
+                if active {
+                    format!("{}\n", crate::cargo_artifacts::record(false))
+                } else {
+                    String::new()
+                }
+            ),
+        )
+        .expect("events");
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["run", "--"])
+            .arg(program)
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .output()
+            .expect("capture");
+        assert!(output.status.success());
+        let invocation: Invocation = serde_json::from_str(
+            fs::read_to_string(temp.join("velnor-invocations.jsonl"))
+                .expect("record")
+                .trim(),
+        )
+        .expect("invocation");
+        assert_eq!(invocation.rejected, 1);
+        let decision = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["cache", "decide", "--target-dir", "target"])
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .env("GITHUB_OUTPUT", temp.join("outputs"))
+            .output()
+            .expect("decision");
+        assert_eq!(decision.status.success(), active, "{decision:?}");
+        if active {
+            assert_eq!(
+                fs::read_to_string(temp.join("outputs")).expect("outputs"),
+                "save=true\n"
+            );
+        } else {
+            assert!(String::from_utf8_lossy(&decision.stderr).contains("rejected"));
+            assert!(!temp.join("outputs").exists());
+        }
+        fs::remove_dir_all(temp).expect("cleanup");
+    }
+}

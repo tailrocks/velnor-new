@@ -13,7 +13,7 @@ fn temp(file: &str) -> std::path::PathBuf {
 }
 
 pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
-    let execution = execution(argv);
+    let execution = execution(argv)?;
     Ok(Invocation {
         argv: argv.to_vec(),
         root: super::current_dir()?.to_string_lossy().into_owned(),
@@ -80,7 +80,7 @@ fn target_directory(argv: &[String]) -> Result<Option<String>, CiError> {
         .transpose()
 }
 
-fn execution(argv: &[String]) -> BTreeMap<String, String> {
+fn execution(argv: &[String]) -> Result<BTreeMap<String, String>, CiError> {
     let mut settings: BTreeMap<String, String> = std::env::vars_os()
         .filter_map(|(key, value)| {
             let key = key.to_str()?;
@@ -103,9 +103,16 @@ fn execution(argv: &[String]) -> BTreeMap<String, String> {
             if !recognized {
                 return None;
             }
-            Some((key.to_owned(), value.into_string().ok()?))
+            Some(
+                value
+                    .into_string()
+                    .map(|value| (key.to_owned(), value))
+                    .map_err(|_| {
+                        CiError::new(format!("compiler setting {key} is not valid Unicode"))
+                    }),
+            )
         })
-        .collect();
+        .collect::<Result<_, _>>()?;
     settings.insert(
         "host-platform".to_owned(),
         format!("{}-{}", std::env::consts::ARCH, std::env::consts::OS),
@@ -123,5 +130,5 @@ fn execution(argv: &[String]) -> BTreeMap<String, String> {
         }
     }
     settings.insert("cargo-config-arguments".to_owned(), format!("{configs:?}"));
-    settings
+    Ok(settings)
 }

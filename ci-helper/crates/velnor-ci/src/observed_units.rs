@@ -14,11 +14,7 @@ fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String>
         .filter(|filename| {
             let path = Path::new(filename);
             !path.is_absolute()
-                && (path.ends_with(
-                    Path::new("doc")
-                        .join(artifact.target.name.replace('-', "_"))
-                        .join("index.html"),
-                ) || (path.parent().is_some_and(|parent| parent.ends_with("deps"))
+                && (path.parent().is_some_and(|parent| parent.ends_with("deps"))
                     && (matches!(
                         path.extension().and_then(|value| value.to_str()),
                         Some("rmeta" | "rlib")
@@ -36,7 +32,7 @@ fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String>
                                 .unwrap_or(name)
                                 .strip_prefix(&artifact.target.name.replace('-', "_"))
                                 .is_some_and(|suffix| suffix.starts_with('-') && suffix.len() > 1)
-                        })))
+                        }))
         })
         .collect();
     if filenames.is_empty() {
@@ -85,7 +81,7 @@ pub fn diagnostics(invocation: &Invocation) -> Vec<String> {
         Vec::new()
     } else {
         vec![format!(
-            "{}: compilation identity unknown for {unknown} artifacts; {} malformed artifact records rejected",
+            "{}: compilation identity unknown for {unknown} artifacts; {} artifact records rejected",
             invocation.root, invocation.rejected
         )]
     }

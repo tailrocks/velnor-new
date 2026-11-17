@@ -80,6 +80,7 @@ impl ArtifactTap {
             };
             if !self.discarding {
                 if content.len() > MAX_LINE_BYTES - self.line.len() {
+                    self.batch.rejected += 1;
                     self.line.clear();
                     self.discarding = true;
                 } else {
