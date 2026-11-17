@@ -350,24 +350,24 @@ impl Parts {
 }
 
 fn execution() -> (Vec<String>, ToolchainInputs) {
-        let toolchain_inputs = ToolchainInputs {
-            tools: vec!["rust@1.89.0".to_owned()],
-            components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
-            compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_test".to_owned(),
-        };
-        let argv = vec![
-            "mise".to_owned(),
-            "--no-config".to_owned(),
-            "--no-env".to_owned(),
-            "--no-hooks".to_owned(),
-            "exec".to_owned(),
-            "rust@1.89.0".to_owned(),
-            "--".to_owned(),
-            "cargo".to_owned(),
-            "test".to_owned(),
-            "--locked".to_owned(),
-        ];
+    let toolchain_inputs = ToolchainInputs {
+        tools: vec!["rust@1.89.0".to_owned()],
+        components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+        compile_driver: "cargo".to_owned(),
+        test_runner: "cargo_test".to_owned(),
+    };
+    let argv = vec![
+        "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
+        "exec".to_owned(),
+        "rust@1.89.0".to_owned(),
+        "--".to_owned(),
+        "cargo".to_owned(),
+        "test".to_owned(),
+        "--locked".to_owned(),
+    ];
     (argv, toolchain_inputs)
 }
 
