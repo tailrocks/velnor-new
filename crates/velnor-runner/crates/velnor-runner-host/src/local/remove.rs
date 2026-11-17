@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::path::Path;
 
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
@@ -9,6 +10,7 @@ use bollard::query_parameters::{
     ListContainersOptions, ListVolumesOptions, RemoveContainerOptions, RemoveVolumeOptions,
 };
 
+use super::cleanup_audit::Audit;
 use crate::docker_client::docker_deadline;
 use crate::error::HostError;
 
@@ -22,7 +24,32 @@ pub(super) async fn remove_labelled(
     docker: &Docker,
     labels: &[String],
 ) -> Result<Removed, HostError> {
-    let filters = HashMap::from([("label".to_owned(), labels.to_vec())]);
+    let filters = label_filters(labels)?;
+    remove_matching(docker, filters, None).await
+}
+
+pub(super) async fn remove_audited(
+    docker: &Docker,
+    labels: &[String],
+    path: &Path,
+) -> Result<Removed, HostError> {
+    let filters = label_filters(labels)?;
+    let mut audit = Audit::open(path, filters.clone()).await?;
+    remove_matching(docker, filters, Some(&mut audit)).await
+}
+
+fn label_filters(labels: &[String]) -> Result<HashMap<String, Vec<String>>, HostError> {
+    if labels.is_empty() || labels.iter().any(String::is_empty) {
+        return Err(HostError::Ownership);
+    }
+    Ok(HashMap::from([("label".to_owned(), labels.to_vec())]))
+}
+
+async fn remove_matching(
+    docker: &Docker,
+    filters: HashMap<String, Vec<String>>,
+    mut audit: Option<&mut Audit>,
+) -> Result<Removed, HostError> {
     let containers = docker_deadline(docker.list_containers(Some(ListContainersOptions {
         all: true,
         filters: Some(filters.clone()),
@@ -35,8 +62,19 @@ pub(super) async fn remove_labelled(
         volumes: 0,
     };
     for id in containers.into_iter().filter_map(|container| container.id) {
-        remove_container(docker, &id).await?;
-        removed.containers += 1;
+        if let Some(audit) = audit.as_mut() {
+            audit.record("intent", Some(("container", &id))).await?;
+        }
+        let present = remove_container_present(docker, &id).await?;
+        if let Some(audit) = audit.as_mut() {
+            audit
+                .record(
+                    if present { "removed" } else { "absent" },
+                    Some(("container", &id)),
+                )
+                .await?;
+        }
+        removed.containers += usize::from(present);
     }
     let volumes = docker_deadline(docker.list_volumes(Some(ListVolumesOptions {
         filters: Some(filters),
@@ -44,29 +82,48 @@ pub(super) async fn remove_labelled(
     .await?
     .map_err(|_| HostError::Docker)?;
     for volume in volumes.volumes.unwrap_or_default() {
-        match docker_deadline(docker.remove_volume(&volume.name, None::<RemoveVolumeOptions>))
-            .await?
-        {
-            Ok(()) => removed.volumes += 1,
-            Err(DockerError::DockerResponseServerError {
-                status_code: 404, ..
-            }) => {}
-            Err(_) => return Err(HostError::Docker),
+        if let Some(audit) = audit.as_mut() {
+            audit
+                .record("intent", Some(("volume", &volume.name)))
+                .await?;
         }
+        let present =
+            match docker_deadline(docker.remove_volume(&volume.name, None::<RemoveVolumeOptions>))
+                .await?
+            {
+                Ok(()) => true,
+                Err(DockerError::DockerResponseServerError {
+                    status_code: 404, ..
+                }) => false,
+                Err(_) => return Err(HostError::Docker),
+            };
+        if let Some(audit) = audit.as_mut() {
+            audit
+                .record(
+                    if present { "removed" } else { "absent" },
+                    Some(("volume", &volume.name)),
+                )
+                .await?;
+        }
+        removed.volumes += usize::from(present);
     }
     Ok(removed)
 }
 
 pub(super) async fn remove_container(docker: &Docker, id: &str) -> Result<(), HostError> {
+    remove_container_present(docker, id).await.map(|_| ())
+}
+
+async fn remove_container_present(docker: &Docker, id: &str) -> Result<bool, HostError> {
     let options = RemoveContainerOptions {
         force: true,
         ..Default::default()
     };
     match docker_deadline(docker.remove_container(id, Some(options))).await? {
-        Ok(())
-        | Err(DockerError::DockerResponseServerError {
+        Ok(()) => Ok(true),
+        Err(DockerError::DockerResponseServerError {
             status_code: 404, ..
-        }) => Ok(()),
+        }) => Ok(false),
         Err(_) => Err(HostError::Docker),
     }
 }
@@ -97,3 +154,7 @@ pub(super) async fn labelled_agents(
     agents.dedup();
     Ok(agents)
 }
+
+#[cfg(test)]
+#[path = "remove_tests.rs"]
+mod tests;

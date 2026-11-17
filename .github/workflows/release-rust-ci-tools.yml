@@ -32,11 +32,15 @@ jobs:
               throw new Error('Provision TAG_RULESET_ADMIN_READ_TOKEN with Administration: read (#949)');
             }
             const { owner, repo } = context.repo;
+            const expectedBypassActors = new Map([
+              ['protect-tags', []],
+              ['release-tags', [{ actor_id: 5762496, actor_type: 'Integration', bypass_mode: 'always' }]]
+            ]);
             const listed = await github.paginate('GET /repos/{owner}/{repo}/rulesets', {
               owner, repo, per_page: 100
             });
             const rulesets = [];
-            for (const listedRuleset of listed.filter(rule => rule.target === 'tag')) {
+            for (const listedRuleset of listed.filter(rule => rule.target === 'tag' || expectedBypassActors.has(rule.name))) {
               const { data } = await github.request('GET /repos/{owner}/{repo}/rulesets/{ruleset_id}', {
                 owner, repo, ruleset_id: listedRuleset.id
               });
@@ -50,12 +54,20 @@ jobs:
                 || !['update', 'deletion'].every(type => protection.rules?.some(rule => rule.type === type))) {
               throw new Error('protect-tags must actively prevent all tag updates and deletion without exclusions');
             }
+            const releases = rulesets.filter(rule => rule.name === 'release-tags');
+            if (releases.length !== 1 || releases[0].target !== 'tag' || releases[0].enforcement !== 'active') {
+              throw new Error('release-tags must be exactly one active tag ruleset');
+            }
             for (const ruleset of rulesets) {
-              if (ruleset.rules?.some(rule => ['update', 'deletion'].includes(rule.type))) {
+              if (expectedBypassActors.has(ruleset.name) || ruleset.rules?.some(rule => ['update', 'deletion'].includes(rule.type))) {
                 if (!Array.isArray(ruleset.bypass_actors)) {
                   throw new Error(`${ruleset.name}: bypass_actors unreadable; require Administration: read`);
                 }
-                if (ruleset.bypass_actors.length !== 0) {
+                const expected = expectedBypassActors.get(ruleset.name) ?? [];
+                if (ruleset.bypass_actors.length !== expected.length
+                    || !ruleset.bypass_actors.every(actor => expected.some(value =>
+                      actor.actor_id === value.actor_id && actor.actor_type === value.actor_type
+                      && actor.bypass_mode === value.bypass_mode))) {
                   throw new Error(`${ruleset.name}: tag immutability bypass actors detected`);
                 }
               }

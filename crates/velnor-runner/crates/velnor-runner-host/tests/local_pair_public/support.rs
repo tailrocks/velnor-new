@@ -13,6 +13,10 @@ use bollard::query_parameters::{
 use futures_util::StreamExt;
 use velnor_runner_host::local::{ENVIRONMENT_LABEL, LocalPairRequest};
 
+#[path = "endpoint.rs"]
+mod endpoint;
+pub(crate) use endpoint::Endpoint;
+
 #[path = "guard.rs"]
 mod guard;
 #[path = "program.rs"]
@@ -22,10 +26,10 @@ pub(crate) use program::Program;
 
 pub(crate) type TestResult<T> = Result<T, Box<dyn Error>>;
 
-pub(crate) fn docker() -> TestResult<Docker> {
-    let socket =
-        std::env::var("DOCKER_HOST").unwrap_or_else(|_| "unix:///var/run/docker.sock".to_owned());
-    Ok(velnor_runner_host::connect_unix(&socket)?)
+pub(crate) fn docker() -> TestResult<Option<Docker>> {
+    Endpoint::selected()?
+        .map(|endpoint| endpoint.docker())
+        .transpose()
 }
 
 pub(crate) fn suffix() -> TestResult<String> {
@@ -97,6 +101,13 @@ pub(crate) async fn build_program(
         .ok_or_else(|| "built image has no id".into())
 }
 
+pub(crate) fn untag_only() -> RemoveImageOptions {
+    RemoveImageOptions {
+        noprune: true,
+        ..Default::default()
+    }
+}
+
 pub(crate) fn request(environment: &str, network: &str, image: &str) -> LocalPairRequest {
     LocalPairRequest {
         environment: environment.to_owned(),
@@ -136,20 +147,23 @@ pub(crate) async fn labelled(docker: &Docker, environment: &str) -> TestResult<(
 
 pub(crate) struct Fixture {
     pub(crate) docker: Docker,
+    pub(crate) endpoint: Endpoint,
     pub(crate) environment: String,
     pub(crate) network: String,
     pub(crate) image: String,
-    tag: String,
     pub(crate) guard: Guard,
 }
 
 impl Fixture {
-    pub(crate) async fn new() -> TestResult<Self> {
+    pub(crate) async fn new() -> TestResult<Option<Self>> {
         Self::running(Program::Sleep).await
     }
 
-    pub(crate) async fn running(program: Program) -> TestResult<Self> {
-        let docker = docker()?;
+    pub(crate) async fn running(program: Program) -> TestResult<Option<Self>> {
+        let Some(endpoint) = Endpoint::selected()? else {
+            return Ok(None);
+        };
+        let docker = endpoint.docker()?;
         let suffix = suffix()?;
         let tag = format!("velnor-local-test-sleeper:{suffix}");
         let network = format!("velnor-local-test-{suffix}");
@@ -160,25 +174,25 @@ impl Fixture {
                 ..Default::default()
             })
             .await?;
-        Ok(Self {
-            docker,
+        Ok(Some(Self {
+            endpoint,
+            docker: docker.clone(),
             environment: format!("test-{suffix}"),
-            guard: Guard::new(&format!("test-{suffix}"), &tag, &network),
+            guard: Guard::new(docker, &format!("test-{suffix}"), &tag, &network),
             network,
             image,
-            tag,
-        })
+        }))
     }
 
     pub(crate) fn request(&self) -> LocalPairRequest {
         request(&self.environment, &self.network, &self.image)
     }
 
-    pub(crate) async fn finish(self) -> TestResult<()> {
-        self.docker.remove_network(&self.network).await?;
-        self.docker
-            .remove_image(&self.tag, None::<RemoveImageOptions>, None)
-            .await?;
-        Ok(())
+    pub(crate) fn image_tag(&self) -> &str {
+        self.guard.image_tag()
+    }
+
+    pub(crate) async fn finish(mut self) -> TestResult<()> {
+        self.guard.finish().await
     }
 }
