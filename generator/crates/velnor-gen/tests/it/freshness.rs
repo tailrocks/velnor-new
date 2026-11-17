@@ -40,6 +40,10 @@ fn names_of(lane: &str) -> Vec<&str> {
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
     let mut repo = locked("0.1.81")?;
+    repo.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"nightly\"\n".to_vec(),
+    );
     let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     repo.rust_metadata = more.rust_metadata;
     repo.tracked_paths.extend(more.tracked_paths);
@@ -290,7 +294,7 @@ fn generate_rejects_a_build_script_that_is_a_filesystem_symlink() -> TestResult 
         root.join("Cargo.lock"),
         "version = 4\n\n[[package]]\nname = \"fixture\"\nversion = \"0.1.0\"\n",
     )?;
-    fs::write(root.join(".velnor/rust-ci.toml"), "")?;
+    fs::write(root.join(".velnor/rust-ci.toml"), "full_run = \"off\"\n")?;
     fs::write(
         root.join(".velnor/rust-ci.lock"),
         crate::release_fixture::LOCK,

@@ -5,6 +5,7 @@ mod audit_job;
 mod base_cache;
 mod build_profile;
 mod build_script;
+mod build_target;
 mod cargo_flags;
 mod cargo_lock;
 mod classify;

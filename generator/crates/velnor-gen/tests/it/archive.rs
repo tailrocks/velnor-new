@@ -51,6 +51,7 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "rust-test-lab",
             "rust-test-default-lab",
             "rust-inputs-audit",
+            "rust-trim",
             "required"
         ]
     );
@@ -131,7 +132,10 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
                 ))
             });
             assert_eq!(reports, block.contains("nextest run"), "{config}: {id}");
-            for line in block.lines().filter(|line| line.contains("nextest run")) {
+            for line in block
+                .lines()
+                .filter(|line| line.contains("nextest run") && !line.contains("--no-run"))
+            {
                 assert!(line.ends_with("--no-tests=pass'"), "{config}: {line}");
             }
         }

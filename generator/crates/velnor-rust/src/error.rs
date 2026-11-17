@@ -21,6 +21,7 @@ pub enum DetectError {
     NestedToolchain { file: RepoPath },
     NoRustRoot,
     JobIdTaken(String),
+    UnhostedOrigin,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -61,6 +62,7 @@ pub enum Reason {
     CapLints,
     CargoEnv(String),
     UndeclaredTarget(String),
+    HostTupleVersion(String),
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
@@ -85,6 +87,20 @@ impl DetectError {
 }
 
 impl Reason {
+    fn fmt_build_target(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UndeclaredTarget(target) => write!(
+                f,
+                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
+            ),
+            Self::HostTupleVersion(version) => write!(
+                f,
+                "build.target uses host-tuple, which Cargo does not support in Rust {version}; use Rust 1.91.0 or newer"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnpinnedTool(tool) => write!(
@@ -190,10 +206,7 @@ impl fmt::Display for Reason {
                 f,
                 "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
             ),
-            Self::UndeclaredTarget(target) => write!(
-                f,
-                "build.target names {target}, which rust-toolchain.toml does not list in targets; the generated jobs install only the declared targets"
-            ),
+            Self::UndeclaredTarget(_) | Self::HostTupleVersion(_) => self.fmt_build_target(f),
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
@@ -257,6 +270,9 @@ impl fmt::Display for DetectError {
                 "{file} sets up tools for one Cargo root; the generated jobs set up one toolchain and one mise configuration for the repository, so move it to the repository root"
             ),
             Self::NoRustRoot => f.write_str("no Cargo workspace found outside the excluded paths"),
+            Self::UnhostedOrigin => f.write_str(
+                "origin must identify a hosted repository to place a hashed full_run schedule; point origin at a hosted URL, or set full_run to \"off\" or a cron expression",
+            ),
             Self::JobIdTaken(id) => write!(
                 f,
                 "two generated jobs get the id {id}; rename the folder of a Cargo root or add it to exclude in {CONFIG_PATH}"

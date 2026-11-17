@@ -8,7 +8,8 @@ use velnor_model::{InvalidId, RepoPath};
 
 pub use crate::cli_cache::CacheCommand;
 pub use crate::cli_inputs::{
-    AuditArgs, InputsArgs, InputsBatchArgs, InputsCommand, InputsSaveArgs, RestoredArgs,
+    AuditArgs, InputsArgs, InputsBatchArgs, InputsBuildArgs, InputsCommand, InputsSaveArgs,
+    RestoredArgs,
 };
 use crate::error::CiError;
 use crate::release::PlainName;

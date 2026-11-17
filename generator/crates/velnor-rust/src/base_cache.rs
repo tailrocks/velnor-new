@@ -130,9 +130,17 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         .filter(|lane| lane.steps.iter().any(is_decide))
         .map(|lane| lane.id.clone())
         .collect();
+    let uploads: Vec<(JobId, TrimFamily)> = jobs.iter().flat_map(lane_uploads).collect();
+    let verifies = uploads.iter().map(|(lane, family)| {
+        step(StepKind::CacheVerify {
+            lane: lane.clone(),
+            family: *family,
+        })
+    });
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
-        .chain([step(StepKind::CacheResult(lanes.clone()))])
+        .chain(verifies)
+        .chain([step(StepKind::CacheResult(uploads.clone()))])
         .collect();
     Some(Job {
         name: Some("Cache".to_owned()),
@@ -150,12 +158,13 @@ fn is_decide(step: &Step) -> bool {
 }
 
 fn lane_trims(lane: &Job) -> Vec<Step> {
-    let family = |family| {
-        step(StepKind::CacheTrim {
-            lane: lane.id.clone(),
-            family,
-        })
-    };
+    lane_uploads(lane)
+        .into_iter()
+        .map(|(lane, family)| step(StepKind::CacheTrim { lane, family }))
+        .collect()
+}
+
+fn lane_uploads(lane: &Job) -> Vec<(JobId, TrimFamily)> {
     let saves_sources = lane
         .steps
         .iter()
@@ -163,9 +172,9 @@ fn lane_trims(lane: &Job) -> Vec<Step> {
     lane.steps
         .iter()
         .any(is_decide)
-        .then(|| family(TrimFamily::Target))
+        .then(|| (lane.id.clone(), TrimFamily::Target))
         .into_iter()
-        .chain(saves_sources.then(|| family(TrimFamily::Sources)))
+        .chain(saves_sources.then(|| (lane.id.clone(), TrimFamily::Sources)))
         .collect()
 }
 

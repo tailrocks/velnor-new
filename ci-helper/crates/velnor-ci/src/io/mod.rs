@@ -35,7 +35,7 @@ use std::io::{Read, Write};
 use std::path::Path;
 use std::process::ExitCode;
 
-pub use self::audit::audit_inputs;
+pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
 pub use self::cold::{cold_on_failure, every_root_target};
 pub use self::input_target::{CaseSensitivity, check_input_target_with};
@@ -54,7 +54,7 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
-use crate::metrics::RunMetrics;
+use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
@@ -134,9 +134,14 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Inputs(InputsCommand::RestoreAll(args)) => {
             inputs_batch::restore_args(&current_dir()?, &args)
         }
-        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
-            audit_inputs(&current_dir()?, write)
-        }
+        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => audit_inputs(
+            &current_dir()?,
+            &AuditOptions {
+                write,
+                ..AuditOptions::default()
+            },
+        ),
+        Command::Inputs(InputsCommand::Build(args)) => audit::build(&current_dir()?, &args),
         Command::ReleaseGate(args) => run_release_gate(&args),
         Command::CheckTag(CheckTagArgs { tag }) => check_tag(env!("CARGO_PKG_VERSION"), &tag),
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
@@ -266,6 +271,14 @@ fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
 pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {
     let text = fs::read_to_string(path)
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
-    serde_json::from_str(&text)
-        .map_err(|e| CiError::new(format!("{} is not a metrics file: {e}", path.display())))
+    let metrics: RunMetrics = serde_json::from_str(&text)
+        .map_err(|e| CiError::new(format!("{} is not a metrics file: {e}", path.display())))?;
+    if metrics.schema_version != METRICS_SCHEMA_VERSION {
+        return Err(CiError::new(format!(
+            "{} uses unsupported metrics schema version {}; expected {METRICS_SCHEMA_VERSION}",
+            path.display(),
+            metrics.schema_version
+        )));
+    }
+    Ok(metrics)
 }

@@ -13,6 +13,7 @@ use crate::steps::StepKind;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
+pub const BUILD_TESTS_STEP: &str = "Build the tests";
 
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
