@@ -59,17 +59,19 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         .steps
         .iter()
         .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
-    let restores = job
-        .steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))));
+    let restores = job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::Helper(HelperCommand::Restored(..)) | StepKind::RestoredTargets { .. }
+        )
+    });
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(with_saved_lane(
-            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            crate::base_steps::audited_lane(admission(job.when, job.gate.as_ref(), job.skip_on_draft), job),
             &job.steps,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
@@ -111,7 +113,9 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                     (true, true) => Setup::Replanned,
                 };
                 *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
-                Some(rendered_steps(step, setup, tests, artifacts))
+                let mut bodies = rendered_steps(step, setup, tests, artifacts);
+                for body in &mut bodies { body.condition = all_conditions(body.condition.take(), crate::base_steps::audited_save(job, step)); }
+                Some(bodies)
             })
             .flatten()
             .collect(),
@@ -164,6 +168,12 @@ fn rendered_steps(
             )
         }));
     }
+    if let Some(verify) = rendered
+        .first()
+        .and_then(|saved| crate::cache_upload::verification(&step.kind, saved))
+    {
+        rendered.push(verify);
+    }
     rendered
 }
 
@@ -206,26 +216,20 @@ fn step_body(
             ],
             ..RenderedStep::default()
         },
-        StepKind::InstallTools { only } => {
-            let mut with = vec![
-                ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
-                ("cache".to_owned(), Value::Bool(false)),
-            ];
-            if let Some(tool) = only {
-                with.push(("install_args".to_owned(), Value::Text(tool.clone())));
-            }
-            RenderedStep {
-                name: "Install tools".to_owned(),
-                uses: Some(MISE.to_owned()),
-                with,
-                ..RenderedStep::default()
-            }
-        }
+        StepKind::InstallTools { only } => install_tools(only.as_deref()),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
         StepKind::CacheSave(key) => cache_step(CACHE_SAVE, "Save", key, false),
-        StepKind::CacheDecide { target, archive } => cache_decide(target, archive.as_ref()),
+        StepKind::CacheDecide {
+            target,
+            archive,
+            manifests,
+        } => cache_decide(target, archive.as_ref(), manifests),
+        StepKind::RestoredTargets { expiry, targets } => {
+            crate::helper_steps::restored_step(*expiry, targets)
+        }
+        StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
@@ -272,6 +276,22 @@ fn step_body(
     }
 }
 
+fn install_tools(only: Option<&str>) -> RenderedStep {
+    let mut with = vec![
+        ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+        ("cache".to_owned(), Value::Bool(false)),
+    ];
+    if let Some(tool) = only {
+        with.push(("install_args".to_owned(), Value::Text(tool.to_owned())));
+    }
+    RenderedStep {
+        name: "Install tools".to_owned(),
+        uses: Some(MISE.to_owned()),
+        with,
+        ..RenderedStep::default()
+    }
+}
+
 fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
     let rendered = render_key(key);
     let paths: Vec<String> = key.paths().iter().map(path_text).collect();
@@ -289,6 +309,7 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
         id: Some(crate::report::cache_id(key, fallbacks)),
         name: format!("{verb} the {} cache", key.family()),
         uses: Some(action.to_owned()),
+        continue_on_error: !fallbacks && crate::cache_upload::verification_id(key).is_some(),
         with,
         ..RenderedStep::default()
     }

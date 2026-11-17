@@ -703,7 +703,17 @@ on `sha256sum`.
 ## Tag ruleset drift
 
 The maintenance drift job uses the [pinned github-script API client](https://github.com/actions/github-script/blob/3a2844b7e9c422d3c10d287c895573f7108da1b3/README.md#this-action) and its pagination plugin without checkout.
-The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential requests Administration read permission.
+The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential needs Administration write permission.
+
+## Rulesets API: bypass_actors visibility
+
+GitHub's [repository ruleset endpoint](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) says `bypass_actors` is returned only when the requester has write access to the ruleset. The [branch rules endpoint](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch) returns effective rules and does not document bypass actors. The release gate requests Administration write because it requires an explicit array.
+
+## PR-only check exemption contracts
+
+The [Checks API](https://docs.github.com/en/rest/checks/runs) limits the commit-reference check-runs endpoint to the 1,000 most recent check suites for a SHA. To inspect the full history, enumerate check suites for the reference and list check runs for each suite; both suite and run listings are paginated, with at most 100 items per page. A check run includes its suite identity and the suite includes its App identity. An unfinished suite from the App that owns an exempted required check cannot establish that the check is absent. The endpoint requires `checks: read` for fine-grained GitHub App tokens.
+
+The [Rules API](https://docs.github.com/en/rest/repos/rules) returns the effective rules for a branch with their ruleset IDs and source identities. Fetch each candidate ruleset with `includes_parents=true` (the default) and verify that its ID, source, source type, target and rules match the effective rule. A repository ruleset response can omit `bypass_actors` unless the credential has write access to that ruleset, even when the request succeeds; absence is unknown, not proof that bypass is disabled. Organization and enterprise ruleset details may be unavailable without the necessary permissions or a supporting GitHub plan; inaccessible details cannot authorize an exemption. An active branch ruleset must explicitly return an empty `bypass_actors` list to prove non-bypassable pull-request and required-status-check enforcement. GitHub defines `pull_request` and `required_status_checks` as distinct rules; verify both rules in the effective enforcement used for the exemption. The ruleset read endpoint documents `Metadata: read` for fine-grained tokens, but visibility of bypass actors has the stricter write-access condition.
 
 ## Generated Rust CI workflow events and concurrency
 
@@ -730,5 +740,7 @@ The runner [sets the OS and architecture contexts from VarUtil](https://github.c
 make `Windows` and `ARM64` the longest values, at seven and five ASCII bytes.
 The generator bounds JSON cache outputs from the same key segments that render
 cache fallbacks. The compatibility width is shared with the helper's producer;
-base-save and source-save values require at most the five characters of `false`.
+Base-save, source-save and cache-verification values require at most the five characters of `false`.
 These bounds include JSON escaping and do not depend on a cache-key length limit.
+
+The pinned [`actions/cache` save implementation](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/saveImpl.ts) catches save errors, emits warnings and exits successfully. Its [save action inputs](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/save/action.yml) expose neither a strict failure switch nor a saved-key output. Generated base-cache writers therefore verify the exact key and ref with the [read-only cache listing API](https://docs.github.com/en/rest/actions/cache#list-github-actions-caches-for-a-repository). The separate Cache check reports failed verification without changing Required. The Actions runner [status-function implementation](https://github.com/actions/runner/blob/main/src/Runner.Worker/Expressions/SuccessFunction.cs) evaluates `success()` against job status for steps; save steps combine this with their event and explicit decision guards, so an earlier producer or inline input-audit failure cannot authorize publication.

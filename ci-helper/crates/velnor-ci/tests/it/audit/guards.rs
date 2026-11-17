@@ -149,7 +149,7 @@ fn two_roots_sharing_a_target_directory_make_the_audit_refuse() {
     let shared = audit(&repo, &["--write"]);
     assert_eq!(shared.status.code(), Some(1), "{shared:?}");
     assert!(
-        String::from_utf8_lossy(&shared.stderr).contains("so their units cannot be told apart"),
+        String::from_utf8_lossy(&shared.stderr).contains("overlaps tracked checkout content"),
         "{shared:?}"
     );
     assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());

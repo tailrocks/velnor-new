@@ -197,6 +197,9 @@ pub enum When {
     SaveToolsOnDefaultBranch,
     SaveBase,
     SaveBaseDecided,
+    SaveSources,
+    FullAudit,
+    FullAuditOrPush,
     BaseExpired,
     SavingRun,
 }

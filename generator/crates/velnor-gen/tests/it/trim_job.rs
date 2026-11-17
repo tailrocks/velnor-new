@@ -58,7 +58,7 @@ fn one_trim_job_alone_holds_actions_write_and_runs_only_after_a_default_branch_s
         "{trim}"
     );
     let condition = format!(
-        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'' || needs.rust-test.outputs.sources_saved == ''true'') }}}}'\n"
+        "    if: '${{{{ {ADMISSION} && (!cancelled() && {GUARD} && ({EVENTS})) && (needs.rust-lint.outputs.base_save == ''true'' || needs.rust-test.outputs.base_save == ''true'' || (needs.rust-test.outputs.sources_saved == ''true'' || needs.rust-test.outputs.cache_ok == ''false'')) }}}}'\n"
     );
     assert!(trim.contains(&condition), "{trim}");
     assert!(
@@ -205,13 +205,21 @@ fn position(order: &[String], name: &str) -> Result<usize, Box<dyn std::error::E
 }
 
 #[test]
-fn the_target_is_saved_after_the_test_build_and_before_any_test_runs() -> TestResult {
+fn target_publication_follows_its_test_build_and_input_audit() -> TestResult {
     for (config, id) in [("", "rust"), ("shape = \"lint-test\"\n", "rust-test")] {
         let order = names(&lane(config, id)?);
         let build = position(&order, "Build the tests")?;
         let save = position(&order, "Save the target cache")?;
         let run = position(&order, "Test")?;
-        assert!(build < save && save < run, "{id}: {order:?}");
+        assert!(build < save, "{id}: {order:?}");
+        if id == "rust" {
+            assert!(
+                run < save && position(&order, "velnor-ci inputs audit")? < save,
+                "{order:?}"
+            );
+        } else {
+            assert!(save < run, "{order:?}");
+        }
     }
     let order = names(&lane("", "rust")?);
     for name in ["Lint", "Documentation"] {
@@ -373,7 +381,7 @@ fn a_run_that_saved_only_sources_still_admits_the_trim_job_and_trims_them() -> T
         .replace("needs.rust-test.outputs.base_save == ''true''", "false");
     assert!(
         sources_only
-            .contains("false || false || needs.rust-test.outputs.sources_saved == ''true''"),
+            .contains("false || false || (needs.rust-test.outputs.sources_saved == ''true''"),
         "{condition}"
     );
     let prune =

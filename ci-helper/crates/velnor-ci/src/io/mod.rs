@@ -4,7 +4,9 @@
 mod audit;
 mod build_inputs;
 mod cache;
+mod cache_paths;
 mod cache_sources;
+mod cache_upload;
 mod cold;
 mod configurations;
 mod crates_mirror;
@@ -115,9 +117,11 @@ fn run(cli: Cli) -> Result<String, CiError> {
         }
         Command::Inputs(InputsCommand::Restore(args)) => {
             let root = current_dir()?;
-            cold_on_failure(&[root.join(&args.target_dir)], "inputs restore", || {
-                restore_inputs(&root, &args.target_dir)
-            })
+            cold_on_failure(
+                &[cache_paths::validated(&root, &args.target_dir)?],
+                "inputs restore",
+                || restore_inputs(&root, &args.target_dir),
+            )
         }
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
             audit_inputs(&current_dir()?, write)
@@ -143,25 +147,40 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let log_path = Path::new(&temp).join("velnor-run.log");
             let log = fs::read(&log_path)
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
-            let decision = match cache_sources::refusal(&current_dir()?)? {
+            let target = cache_paths::validated(&current_dir()?, &args.target_dir)?;
+            let manifests =
+                cache_paths::list("VELNOR_CACHE_MANIFESTS")?.unwrap_or(args.manifest_path);
+            let refusal = cache_sources::refusal(&current_dir()?, &manifests)?;
+            let sources = refusal.is_none();
+            let decision = match refusal {
                 Some(reason) => Decision {
                     save: false,
                     report: reason,
                 },
                 None => decide(
                     Some(&String::from_utf8_lossy(&log)),
-                    &args.target_dir,
+                    &target,
                     args.archive.as_deref(),
                     now_seconds(),
                 )?,
             };
-            append_outputs(&format!("save={}\n", decision.save))?;
+            append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
             Ok(decision.report)
         }
+        Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
+        Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
-        Command::Restored => {
+        Command::Restored(args) => {
             let root = current_dir()?;
-            let targets = every_root_target(&root);
+            let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
+            let targets = if configured.is_empty() {
+                every_root_target(&root)
+            } else {
+                configured
+                    .iter()
+                    .map(|target| cache_paths::validated(&root, target))
+                    .collect::<Result<Vec<_>, _>>()?
+            };
             let expiry = expire_old_bases(&targets, now_seconds())?;
             append_outputs(&format!("expired={}\n", expiry.expired))?;
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
@@ -212,6 +231,11 @@ fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
         &repo,
         &args.sha,
         &args.pr_only_check,
+        std::env::var("GITHUB_RUN_ID")
+            .ok()
+            .map(|id| id.parse::<u64>())
+            .transpose()
+            .map_err(|e| CiError::new(format!("invalid GITHUB_RUN_ID: {e}")))?,
     )?;
     append_outputs(&format!("ready={}\n", verdict.ready))?;
     Ok(verdict.report)

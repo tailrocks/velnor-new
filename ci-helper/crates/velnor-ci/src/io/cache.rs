@@ -56,7 +56,7 @@ pub fn decide(
             "{} crates compiled, checked or documented; saving {}: {} bytes, removed {removed} incremental directories\n",
             counts.crates_compiled(),
             target.display(),
-            directory_size(target)
+            directory_size(target)?
         ),
     })
 }
@@ -72,22 +72,30 @@ fn remove_file(path: &Path) -> Result<(), CiError> {
     }
 }
 
+fn entries(dir: &Path) -> Result<Vec<fs::DirEntry>, CiError> {
+    fs::read_dir(dir)
+        .and_then(Iterator::collect)
+        .map_err(|e| CiError::new(format!("cannot traverse {}: {e}", dir.display())))
+}
+
 fn remove_incremental(target: &Path) -> Result<u64, CiError> {
-    let Ok(entries) = fs::read_dir(target) else {
-        return Ok(0);
-    };
     let mut removed = 0;
-    for entry in entries.flatten() {
-        if !entry.file_type().is_ok_and(|kind| kind.is_dir()) {
+    for entry in entries(target)? {
+        let kind = entry.file_type().map_err(|e| CiError::new(e.to_string()))?;
+        if kind.is_symlink() {
+            return Err(CiError::new("cache target contains a symlink"));
+        }
+        if !kind.is_dir() {
             continue;
         }
         let path = entry.path();
         removed += remove_incremental_child(&path)?;
-        let Ok(nested) = fs::read_dir(&path) else {
-            continue;
-        };
-        for child in nested.flatten() {
-            if child.file_type().is_ok_and(|kind| kind.is_dir()) {
+        for child in entries(&path)? {
+            let kind = child.file_type().map_err(|e| CiError::new(e.to_string()))?;
+            if kind.is_symlink() {
+                return Err(CiError::new("cache target contains a symlink"));
+            }
+            if kind.is_dir() {
                 removed += remove_incremental_child(&child.path())?;
             }
         }
@@ -97,26 +105,39 @@ fn remove_incremental(target: &Path) -> Result<u64, CiError> {
 
 fn remove_incremental_child(dir: &Path) -> Result<u64, CiError> {
     let path = dir.join(INCREMENTAL);
-    if !fs::symlink_metadata(&path).is_ok_and(|meta| meta.is_dir()) {
-        return Ok(0);
+    match fs::symlink_metadata(&path) {
+        Err(e) if e.kind() == ErrorKind::NotFound => return Ok(0),
+        Ok(meta) if meta.is_dir() => {}
+        Ok(_) => {
+            return Err(CiError::new(format!(
+                "{} is not a regular directory",
+                path.display()
+            )));
+        }
+        Err(e) => return Err(CiError::new(e.to_string())),
     }
     fs::remove_dir_all(&path)
         .map_err(|e| CiError::new(format!("cannot remove {}: {e}", path.display())))?;
     Ok(1)
 }
 
-fn directory_size(dir: &Path) -> u64 {
-    let Ok(entries) = fs::read_dir(dir) else {
-        return 0;
-    };
-    entries
-        .flatten()
-        .map(|entry| match entry.file_type() {
-            Ok(kind) if kind.is_dir() => directory_size(&entry.path()),
-            Ok(kind) if kind.is_file() => entry.metadata().map_or(0, |meta| meta.len()),
-            _ => 0,
-        })
-        .sum()
+fn directory_size(dir: &Path) -> Result<u64, CiError> {
+    let mut size = 0;
+    for entry in entries(dir)? {
+        let kind = entry.file_type().map_err(|e| CiError::new(e.to_string()))?;
+        if kind.is_symlink() {
+            return Err(CiError::new("cache target contains a symlink"));
+        }
+        size += if kind.is_dir() {
+            directory_size(&entry.path())?
+        } else {
+            entry
+                .metadata()
+                .map_err(|e| CiError::new(e.to_string()))?
+                .len()
+        };
+    }
+    Ok(size)
 }
 
 #[derive(Debug)]

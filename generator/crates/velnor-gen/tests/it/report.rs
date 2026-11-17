@@ -285,7 +285,8 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
 
 fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
     for job in workflow["jobs"].as_object().ok_or("jobs")?.values() {
-        for step in job["steps"].as_array().ok_or("steps")? {
+        let steps = job["steps"].as_array().ok_or("steps")?;
+        for step in steps {
             let producer = matches!(
                 step["name"].as_str(),
                 Some("Report cache telemetry" | "Upload cache metrics")
@@ -296,9 +297,32 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
                     "${{ (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && github.token || '' }}"
                 );
             }
+            let verified_save = step["uses"]
+                == "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
+                && matches!(
+                    step["name"].as_str(),
+                    Some("Save the target cache" | "Save the sources cache")
+                );
+            if verified_save {
+                let verify = steps
+                    .iter()
+                    .find(|verify| {
+                        verify["run"] == "velnor-ci cache verify --key \"$CACHE_KEY\""
+                            && verify["env"]["CACHE_KEY"] == step["with"]["key"]
+                    })
+                    .ok_or("paired upload verification")?;
+                let id = verify["id"].as_str().ok_or("verification id")?;
+                assert!(
+                    job["outputs"]["cache_ok"]
+                        .as_str()
+                        .ok_or("cache_ok output")?
+                        .contains(&format!("steps.{id}.outcome != 'failure'"))
+                );
+            }
+            let verification = step["run"] == "velnor-ci cache verify --key \"$CACHE_KEY\"";
             assert_eq!(
                 step["continue-on-error"].as_bool().unwrap_or(false),
-                producer,
+                producer || verified_save || verification,
                 "{step}"
             );
         }

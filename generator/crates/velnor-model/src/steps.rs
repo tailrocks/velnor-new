@@ -17,10 +17,16 @@ pub enum StepKind {
     },
     CacheRestore(CacheKey),
     CacheSave(CacheKey),
+    RestoredTargets {
+        expiry: BaseExpiry,
+        targets: Vec<RepoPath>,
+    },
     CacheDecide {
+        manifests: Vec<RepoPath>,
         target: RepoPath,
         archive: Option<RepoPath>,
     },
+    CacheResult(Vec<JobId>),
     CacheTrim {
         lane: JobId,
         family: TrimFamily,

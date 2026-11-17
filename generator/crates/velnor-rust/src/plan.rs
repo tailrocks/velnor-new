@@ -53,9 +53,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
-    if suffixed {
-        jobs.extend(audit_job(facts, helper_root.is_some()));
-    }
+    jobs.extend(audit_job(facts, &jobs, helper_root.is_some()));
     if facts.policy.any() {
         jobs.push(policy_job(
             facts,
@@ -291,7 +289,13 @@ fn upload_cargo_logs(jobs: &mut [Job]) {
             let gate = job
                 .steps
                 .iter()
-                .find(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))))
+                .find(|step| {
+                    matches!(
+                        step.kind,
+                        StepKind::Helper(HelperCommand::Restored(..))
+                            | StepKind::RestoredTargets { .. }
+                    )
+                })
                 .and_then(|step| step.gate.clone());
             job.steps.push(Step {
                 when: When::CacheDebug,

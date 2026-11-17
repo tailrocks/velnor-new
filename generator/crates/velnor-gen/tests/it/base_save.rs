@@ -118,8 +118,7 @@ fn saved_and_restored(block: &str) -> Result<(String, String), Box<dyn std::erro
         .ok_or("no target restore")?;
     let saved = steps[..save]
         .iter()
-        .rev()
-        .find_map(|step| compile_selection(step))
+        .find_map(|step| compile_selection(step).filter(|selection| selection == "--workspace"))
         .ok_or("no build before the save")?;
     let restored = steps[restore + 1..]
         .iter()
@@ -129,8 +128,8 @@ fn saved_and_restored(block: &str) -> Result<(String, String), Box<dyn std::erro
 }
 
 #[test]
-fn the_one_job_lane_saves_between_the_test_build_and_the_test_run_and_only_on_the_default_branch()
--> TestResult {
+fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_branch() -> TestResult
+{
     let all = jobs("0.1.81", "")?;
     let (_, lane) = all
         .iter()
@@ -141,7 +140,16 @@ fn the_one_job_lane_saves_between_the_test_build_and_the_test_run_and_only_on_th
         .iter()
         .position(|name| name == "Build the tests")
         .ok_or("no test build")?;
-    let saved: Vec<&str> = order[build + 1..build + 5]
+    let audit = order
+        .iter()
+        .position(|name| name == "velnor-ci inputs audit")
+        .ok_or("no audit")?;
+    let tested = order
+        .iter()
+        .position(|name| name == "Test")
+        .ok_or("no test")?;
+    assert!(build < tested && tested < audit);
+    let saved: Vec<&str> = order[audit + 1..audit + 7]
         .iter()
         .map(String::as_str)
         .collect();
@@ -151,10 +159,11 @@ fn the_one_job_lane_saves_between_the_test_build_and_the_test_run_and_only_on_th
             "velnor-ci inputs save",
             "Decide whether to save the build directory",
             "Save the target cache",
+            "Verify the target cache upload",
             "Save the sources cache",
+            "Verify the sources cache upload",
         ]
     );
-    assert_eq!(order[build + 5], "Test");
     for name in &saved {
         let text = step(lane, name).ok_or("missing step")?;
         assert!(text.contains(EVENTS), "{name}: {text}");
@@ -172,7 +181,7 @@ fn the_one_job_lane_saves_between_the_test_build_and_the_test_run_and_only_on_th
         "{sources}"
     );
     assert!(
-        sources.contains("steps.base.outputs.save == ''true''"),
+        sources.contains("steps.base.outputs.sources == ''true''"),
         "{sources}"
     );
     assert!(!lane.contains("actions: write"), "{lane}");
