@@ -134,7 +134,10 @@ async fn finish(
     assert_eq!(case.fixture.objects(FOREIGN), foreign);
     let case = case.reopen(Schema::Current).await?;
     assert_eq!(frozen(&case).await?, before);
-    assert_eq!(super::historical::version(&case.journal).await?, 49);
+    assert_eq!(
+        super::historical::version(&case.journal).await?,
+        crate::journal::Journal::current_schema_version_for_test()
+    );
     assert!(
         case.scope
             .recoverable_jit_conflict_candidates()

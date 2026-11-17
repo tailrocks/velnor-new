@@ -11,17 +11,18 @@ impl ReadyEffects<'_> {
     pub(super) async fn remove_containers(&self) -> Result<Vec<Observation>, HostError> {
         let mut observations = Vec::new();
         for container in &self.inventory.containers {
-            let id = container.id.as_deref().ok_or(HostError::Ownership)?;
+            let Some(id) = container.id.as_deref() else {
+                observations.push(
+                    self.absent_container(&container.role, &container.name)
+                        .await?,
+                );
+                continue;
+            };
             let present = self.authorized(inspect_container(self.docker, id)).await?;
             let by_name = self
                 .authorized(inspect_container(self.docker, &container.name))
                 .await?;
-            if by_name
-                .as_ref()
-                .is_some_and(|named| named.id.as_deref() != Some(id))
-            {
-                return Err(HostError::Ownership);
-            }
+            validate_named_container(by_name.as_ref(), id)?;
             let Some(inspected) = present else {
                 if by_name.is_some() {
                     return Err(HostError::Ownership);
@@ -84,6 +85,17 @@ impl ReadyEffects<'_> {
         Ok(observations)
     }
 
+    async fn absent_container(&self, role: &str, name: &str) -> Result<Observation, HostError> {
+        if self
+            .authorized(inspect_container(self.docker, name))
+            .await?
+            .is_some()
+        {
+            return Err(HostError::Ownership);
+        }
+        Ok(observation(role, name, None, "absent_after_deadline"))
+    }
+
     pub(super) async fn remove_volumes(&self) -> Result<Vec<Observation>, HostError> {
         let mut observations = Vec::new();
         for volume in &self.inventory.volumes {
@@ -124,4 +136,14 @@ impl ReadyEffects<'_> {
         }
         Ok(observations)
     }
+}
+
+fn validate_named_container(
+    named: Option<&bollard::models::ContainerInspectResponse>,
+    id: &str,
+) -> Result<(), HostError> {
+    if named.is_some_and(|named| named.id.as_deref() != Some(id)) {
+        return Err(HostError::Ownership);
+    }
+    Ok(())
 }

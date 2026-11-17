@@ -10,7 +10,7 @@ use super::super::controller::Controller;
 use super::{CRASHED, Crash, NEIGHBOR, Prepared, TestResult, bootstrap_seed, db, prepare};
 
 #[derive(Clone, Copy)]
-enum Family {
+pub(super) enum Family {
     Container,
     Network,
 }
@@ -52,7 +52,7 @@ impl Family {
             Self::Network => case.fixture.remove_network(CRASHED),
         }
     }
-    async fn submit(self, case: &Prepared) -> TestResult<()> {
+    pub(super) async fn submit(self, case: &Prepared) -> TestResult<()> {
         match self {
             Self::Container => {
                 let labels = HashMap::from([

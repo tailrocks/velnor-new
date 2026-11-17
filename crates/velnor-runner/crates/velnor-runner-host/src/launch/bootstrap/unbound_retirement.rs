@@ -64,6 +64,27 @@ pub(crate) async fn retire_unbound_pair(
     engine: &SelectedEngineContext,
     reservation_id: i64,
 ) -> Result<bool, HostError> {
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| HostError::Journal)?
+        .as_secs();
+    retire_unbound_pair_at(
+        docker,
+        scope,
+        engine,
+        reservation_id,
+        i64::try_from(now).map_err(|_| HostError::Journal)?,
+    )
+    .await
+}
+
+pub(crate) async fn retire_unbound_pair_at(
+    docker: &Docker,
+    scope: &ConnectionJournal,
+    engine: &SelectedEngineContext,
+    reservation_id: i64,
+    now: i64,
+) -> Result<bool, HostError> {
     let Some(claim) = scope.claim_unbound_retirement(reservation_id).await? else {
         return Ok(false);
     };
@@ -72,6 +93,7 @@ pub(crate) async fn retire_unbound_pair(
         scope,
         engine,
         claim: &claim,
+        now,
     };
     if claim.engine_id() != engine.engine_id()
         || claim.docker_root_digest() != engine.docker_root_digest()
@@ -140,6 +162,7 @@ struct Effects<'a> {
     scope: &'a ConnectionJournal,
     engine: &'a SelectedEngineContext,
     claim: &'a UnboundRetirementClaim,
+    now: i64,
 }
 
 impl Effects<'_> {

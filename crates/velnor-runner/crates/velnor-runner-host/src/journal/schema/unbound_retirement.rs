@@ -4,6 +4,7 @@
 use crate::error::HostError;
 
 mod creation_targets;
+mod dispatch_deadlines;
 mod shape;
 pub(in crate::journal) use shape::UNBOUND_SHAPE;
 
@@ -20,7 +21,20 @@ pub(super) async fn migrate_v48_to_v49(conn: &turso::Connection) -> Result<(), H
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
     validate_objects(conn, objects(UNBOUND_SHAPE)).await?;
-    creation_targets::validate(conn).await
+    creation_targets::validate(conn).await?;
+    if super::journal_version(conn).await? >= 51 {
+        dispatch_deadlines::validate(conn).await?;
+    }
+    Ok(())
+}
+
+pub(super) async fn migrate_v49_to_v51(conn: &turso::Connection) -> Result<(), HostError> {
+    validate(conn).await?;
+    dispatch_deadlines::install(conn).await?;
+    conn.execute("PRAGMA user_version = 51", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    validate(conn).await
 }
 
 const VERSION: i64 = 43;

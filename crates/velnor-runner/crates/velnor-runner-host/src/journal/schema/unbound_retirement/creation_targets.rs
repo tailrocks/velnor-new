@@ -73,6 +73,39 @@ fn objects() -> Vec<(&'static str, String, String)> {
     objects
 }
 
+fn current_objects() -> Vec<(&'static str, String, String)> {
+    objects()
+        .into_iter()
+        .map(|(kind, name, mut sql)| {
+            if name.contains("publication_") {
+                for predicate in [CONTAINERS, VOLUMES, NETWORKS] {
+                    sql = sql.replace(
+                        &predicate.replace("{r}", "NEW.reservation_id"),
+                        &super::dispatch_deadlines::with_absence(predicate)
+                            .replace("{r}", "NEW.reservation_id"),
+                    );
+                }
+            }
+            (kind, name, sql)
+        })
+        .collect()
+}
+
+pub(super) async fn install_absence_guards(conn: &turso::Connection) -> Result<(), HostError> {
+    for (_, name, sql) in current_objects()
+        .into_iter()
+        .filter(|(_, name, _)| name.contains("publication_"))
+    {
+        conn.execute(&format!("DROP TRIGGER {name}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+        conn.execute(&sql, ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    Ok(())
+}
+
 fn add_owner_guards(objects: &mut Vec<(&'static str, String, String)>) {
     let owner = "SELECT 1 FROM capacity_reservation_unbound_owners owner JOIN capacity_reservation_unbound_candidates candidate ON candidate.reservation_id=owner.reservation_id JOIN capacity_reservations reservation ON reservation.id=owner.reservation_id JOIN connection_intents intent ON intent.id=reservation.intent_id WHERE owner.reservation_id=NEW.reservation_id AND reservation.state='uncertain' AND intent.state='uncertain'";
     for (name, table) in [
@@ -107,7 +140,16 @@ pub(super) async fn install(conn: &turso::Connection) -> Result<(), HostError> {
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_objects(conn, objects()).await?;
+    let current = super::super::journal_version(conn).await? >= 51;
+    super::validate_objects(
+        conn,
+        if current {
+            current_objects()
+        } else {
+            objects()
+        },
+    )
+    .await?;
     let invalid = format!(
         "SELECT EXISTS (SELECT 1 FROM capacity_reservation_unbound_creation_targets target JOIN capacity_reservation_unbound_retirement_claims claim ON claim.reservation_id=target.reservation_id WHERE target.connection_id!=claim.connection_id OR target.operation_id!=claim.operation_id OR target.engine_id!=claim.engine_id OR target.docker_root_digest!=claim.docker_root_digest OR target.observation_claim_generation>claim.claim_generation OR NOT ({})) OR EXISTS (SELECT 1 FROM capacity_reservation_unbound_retirement_progress phase WHERE (phase.phase='containers_absent' AND {}) OR (phase.phase='volumes_absent' AND {})) OR EXISTS (SELECT 1 FROM capacity_reservation_networks network WHERE network.remove_state='removed' AND EXISTS (SELECT 1 FROM capacity_reservation_unbound_retirement_claims claim WHERE claim.reservation_id=network.reservation_id) AND {}) OR EXISTS (SELECT 1 FROM physical_attempt_unbound_retirements retired WHERE {} OR {} OR {})",
         RESOURCE_MATCH.replace("{t}", "target"),
@@ -118,6 +160,27 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
         VOLUMES.replace("{r}", "retired.reservation_id"),
         history::unpublished_networks("retired.reservation_id")
     );
+    let mut invalid = invalid;
+    if current {
+        for reservation in ["network.reservation_id", "retired.reservation_id"] {
+            let original = history::unpublished_networks(reservation);
+            let end = original.len() - 1;
+            let guarded = format!(
+                "{} AND NOT {})",
+                &original[..end],
+                super::dispatch_deadlines::absent("network", "'private'", "network_name")
+            );
+            invalid = invalid.replace(&original, &guarded);
+        }
+        for predicate in [CONTAINERS, VOLUMES, NETWORKS] {
+            for reservation in ["phase.reservation_id", "retired.reservation_id"] {
+                invalid = invalid.replace(
+                    &predicate.replace("{r}", reservation),
+                    &super::dispatch_deadlines::with_absence(predicate).replace("{r}", reservation),
+                );
+            }
+        }
+    }
     require_false(conn, &invalid).await?;
     history::validate(conn).await?;
     observations::validate(conn).await

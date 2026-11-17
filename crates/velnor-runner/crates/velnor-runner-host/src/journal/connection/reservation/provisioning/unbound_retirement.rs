@@ -18,6 +18,7 @@ use super::hold_context;
 #[path = "unbound_retirement/historical_v48.rs"]
 mod historical_v48;
 
+mod absence;
 #[path = "unbound_retirement/inventory.rs"]
 mod inventory;
 #[path = "unbound_retirement/ownership.rs"]

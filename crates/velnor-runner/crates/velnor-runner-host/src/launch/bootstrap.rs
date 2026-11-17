@@ -12,6 +12,8 @@ mod unbound_retirement;
 pub(crate) use unbound_retirement::UnboundCreationObservation;
 #[cfg(test)]
 pub(crate) use unbound_retirement::historical_v48;
+#[cfg(test)]
+pub(crate) use unbound_retirement::retire_unbound_pair_at;
 mod uncertain_recovery;
 
 pub(crate) use adapter::PreparedAcquiredBootstrap;
