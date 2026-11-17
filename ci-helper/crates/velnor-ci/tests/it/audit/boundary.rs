@@ -22,7 +22,10 @@ fn main() {
     std::fs::create_dir_all("target/generated").unwrap();
     let value = std::path::Path::new("target/generated/value.txt");
     if !value.exists() { std::fs::write(value, "input").unwrap(); }
-    std::fs::write("target/debug/build/lib-f000000000000008/output", "cargo:rerun-if-changed=../target/generated\n").unwrap();
+    let counter = std::path::Path::new("target/compiler-passes.txt");
+    let pass = std::fs::read_to_string(counter).unwrap_or_default().parse::<u32>().unwrap_or(0) + 1;
+    std::fs::write(counter, pass.to_string()).unwrap();
+    std::fs::write("target/debug/build/lib-f000000000000008/output", format!("cargo:rerun-if-changed=../target/generated\ncargo:rustc-env=FIXTURE_COMPILER_PASS={pass}\n")).unwrap();
 }
 "#);
     let driver = repo.root().join("driver/cargo");
@@ -41,6 +44,11 @@ fn main() {
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join("rust/target/compiler-passes.txt"))
+            .unwrap_or_else(|error| unreachable!("{error}")),
+        "3"
+    );
     assert_eq!(
         fs::read_to_string(repo.root().join("rust/target/custom-tests-ran.txt"))
             .unwrap_or_else(|e| unreachable!("{e}")),

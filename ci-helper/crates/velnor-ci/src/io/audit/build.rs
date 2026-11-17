@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod clock;
 mod declarations;
 mod generated;
 mod invocation;
@@ -31,6 +32,8 @@ struct Builder<'a> {
     declared: BTreeSet<PathBuf>,
     location: PathBuf,
 }
+
+type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
@@ -86,6 +89,7 @@ impl Builder<'_> {
         self.targets.extend(generated::proven(&self.workspaces)?);
         for _ in 0..if replayable { 2 } else { 1 } {
             let declared = self.declared()?;
+            let before = self.identities()?;
             self.targets.extend(
                 declared
                     .iter()
@@ -111,7 +115,7 @@ impl Builder<'_> {
                 declarations::invalidate(&declared)?;
             }
             let (entries, complete) = self.capture();
-            self.run(command, &entries, complete)?;
+            self.run(command, &entries, complete, &before)?;
             if !replayable || self.declared()?.iter().all(|unit| unit.trusted) {
                 return Ok(());
             }
@@ -148,7 +152,7 @@ impl Builder<'_> {
         (evidence, true)
     }
 
-    fn run(&self, command: &[String], entries: &Evidence, complete: bool) -> Result<(), CiError> {
+    fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
         for workspace in &self.workspaces {
             for (unit, path) in unit_files(&workspace.target_directory)? {
@@ -157,7 +161,24 @@ impl Builder<'_> {
                 }
             }
         }
-        let started = SystemTime::now();
+        Ok(before)
+    }
+
+    fn run(
+        &self,
+        command: &[String],
+        entries: &Evidence,
+        complete: bool,
+        before: &Identities,
+    ) -> Result<(), CiError> {
+        let started = self
+            .workspaces
+            .iter()
+            .map(|workspace| clock::Clock::new(&workspace.target_directory))
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| {
+                CiError::new(format!("cannot establish build filesystem clock: {error}"))
+            })?;
         let status = Command::new(&command[0])
             .args(&command[1..])
             .current_dir(self.directory)
@@ -166,8 +187,8 @@ impl Builder<'_> {
         self.record(
             entries,
             complete,
-            &before,
-            started,
+            before,
+            &started,
             status,
             Invocation::new(command).compiler,
         )?;
@@ -181,8 +202,8 @@ impl Builder<'_> {
         &self,
         entries: &Evidence,
         complete: bool,
-        before: &BTreeMap<PathBuf, (String, SystemTime)>,
-        started: SystemTime,
+        before: &Identities,
+        started: &[clock::Clock],
         status: ExitStatus,
         compiler: bool,
     ) -> Result<(), CiError> {
@@ -194,7 +215,7 @@ impl Builder<'_> {
         }
         let bytes = serde_json::to_vec(&evidence).map_err(|e| CiError::new(e.to_string()))?;
         let digest = sha256_hex(&bytes);
-        for workspace in &self.workspaces {
+        for (workspace, started) in self.workspaces.iter().zip(started) {
             let store = workspace.target_directory.join(inventory::STORE);
             let saved = store.join(format!("{digest}.json"));
             if complete && status.success() {
@@ -207,11 +228,14 @@ impl Builder<'_> {
                     continue;
                 }
                 let current = identity(&file)?;
-                if before.get(&file) == Some(&current) {
+                let previous = before.get(&file);
+                if previous == Some(&current) {
                     continue;
                 }
                 let receipt = inventory::receipt_path(&file);
-                if complete && status.success() && current.1 >= started {
+                let newer = current.1 > started.modified
+                    || previous.is_some() && current.1 == started.modified;
+                if complete && status.success() && newer {
                     let record = inventory::receipt(&file, saved.clone(), digest.clone())
                         .map_err(|e| CiError::new(e.to_string()))?;
                     let text =
