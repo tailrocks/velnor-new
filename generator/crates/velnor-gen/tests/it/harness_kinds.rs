@@ -348,7 +348,7 @@ fn the_per_package_steps_and_the_archive_build_follow_the_packages_the_plan_sele
             .collect::<Vec<_>>()
             .join("\n");
         let selected = format!(
-            "contains(format(' {{0}} ', needs.rust-plan.outputs.rust_root_package_args), ' -p {package} ')"
+            "contains(format(' {{0}} ', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), ' -p {package} ')"
         );
         assert!(block.contains(&selected), "{name}: {block}");
         assert!(block.contains("' --workspace '"), "{name}: {block}");

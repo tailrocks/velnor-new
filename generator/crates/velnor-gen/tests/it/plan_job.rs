@@ -25,7 +25,7 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 12] = [
+const LANE_SETUP: [&str; 13] = [
     "Check out",
     "Install velnor-ci 0.1.81",
     "Restore the tools cache",
@@ -38,6 +38,7 @@ const LANE_SETUP: [&str; 12] = [
     "Restore the target cache",
     "velnor-ci inputs restore",
     "velnor-ci restored",
+    "velnor-ci plan --full",
 ];
 
 #[test]
@@ -50,9 +51,10 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
         steps[..3],
         ["Check out", "Install velnor-ci 0.1.81", "velnor-ci plan"]
     );
-    let condition =
+    let condition = "steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none''";
+    let plain =
         "steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''";
-    let gated = text.matches(condition).count();
+    let gated = text.matches(plain).count() + text.matches(condition).count();
     let later = steps.len() - 3;
     assert_eq!(
         gated, later,
@@ -60,14 +62,13 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     );
     assert!(
         text.contains(&format!(
-            "        if: '${{{{ {condition} }}}}'\n        uses: jdx/mise-action@"
+            "        if: '${{{{ {plain} }}}}'\n        uses: jdx/mise-action@"
         )),
         "{text}"
     );
     assert!(text.contains(
         "      - id: plan\n        name: velnor-ci plan\n        run: velnor-ci plan --explain\n"
     ));
-    assert!(!text.contains("GITHUB_TOKEN"), "{text}");
     Ok(())
 }
 
@@ -100,7 +101,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
             );
         }
         assert!(text.contains(&format!(
-            "    needs:\n      - rust-plan\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_{slug}_mode != ''none'') }}}}'\n"
+            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
         )));
     }
     assert!(!text.contains("_doctests"), "{text}");
@@ -129,11 +130,12 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
         }
     }
     let text = workflow(&files)?;
-    let doctests = "steps.plan.outputs.rust_root_doctests == ''run''";
-    let docs = "steps.plan.outputs.rust_root_docs == ''run''";
+    let doctests = "(steps.replan.outputs.rust_root_doctests || steps.plan.outputs.rust_root_doctests) == ''run''";
+    let docs =
+        "(steps.replan.outputs.rust_root_docs || steps.plan.outputs.rust_root_docs) == ''run''";
     assert!(text.contains(doctests), "{text}");
     assert!(text.contains(docs), "{text}");
-    let known = "DOCTESTS_KNOWN: '${{ steps.plan.outputs.rust_root_doctests_known }}'";
+    let known = "DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || steps.plan.outputs.rust_root_doctests_known }}'";
     assert!(text.contains(known), "{text}");
     let steps: Vec<&str> = text
         .lines()
@@ -314,10 +316,17 @@ fn no_job_asks_for_pull_requests_access_and_every_job_reads_contents_only() -> T
     for text in [&multi, &single] {
         assert!(!text.contains("pull-requests"), "{text}");
     }
-    for job in ["rust-plan", "rust-root", "rust-lab", "required"] {
+    for job in ["rust-plan", "required"] {
         assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
     }
-    assert_eq!(job_permissions(&single, "rust"), ["contents: read"]);
+    for job in ["rust-root", "rust-lab"] {
+        let saves = ["actions: read", "contents: read"];
+        assert_eq!(job_permissions(&multi, job), saves, "{job}");
+    }
+    assert_eq!(
+        job_permissions(&single, "rust"),
+        ["actions: read", "contents: read"]
+    );
     Ok(())
 }
 

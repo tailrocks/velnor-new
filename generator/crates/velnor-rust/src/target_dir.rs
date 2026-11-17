@@ -13,7 +13,25 @@ const KEY: &str = "build.target-dir";
 type Found<'v> = (&'v RepoPath, Option<RepoPath>, toml::Value);
 
 pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPath, DetectError> {
-    target_dir_source(view, manifest).map(|(folder, _)| folder)
+    let (folder, _) = target_dir_source(view, manifest)?;
+    let overlaps = |path: &RepoPath| {
+        path == &folder
+            || path.as_str().starts_with(&format!("{folder}/"))
+            || folder.as_str().starts_with(&format!("{path}/"))
+    };
+    if folder
+        .as_str()
+        .split('/')
+        .any(|part| matches!(part, ".git" | ".cargo"))
+        || view.tracked_paths.iter().any(overlaps)
+        || view.rust_metadata.keys().any(overlaps)
+    {
+        return Err(DetectError::invalid(
+            manifest,
+            Reason::TargetDirOverlap(folder.to_string()),
+        ));
+    }
+    Ok(folder)
 }
 
 pub(crate) fn target_dir_source<'v>(

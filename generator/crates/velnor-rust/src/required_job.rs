@@ -40,13 +40,20 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         _ => None,
     });
     let when = match job.when {
+        When::FullAudit => Some(JobCondition::ScheduleOrDispatch),
+        When::FullAuditOrPush => Some(JobCondition::ScheduleOrPushOrDispatch),
         When::Scheduled => Some(JobCondition::Schedule),
         When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
         When::Success
         | When::NotCancelled
         | When::Always
         | When::CacheDebug
-        | When::SaveToolsOnDefaultBranch => None,
+        | When::SaveToolsOnDefaultBranch
+        | When::SaveBase
+        | When::SaveBaseDecided
+        | When::SaveSources
+        | When::BaseExpired
+        | When::SavingRun => None,
     };
     gate.into_iter().chain(when).collect()
 }

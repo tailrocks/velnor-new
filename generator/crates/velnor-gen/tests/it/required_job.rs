@@ -57,7 +57,7 @@ fn a_helper_that_has_gate_renders_the_gate_in_two_steps_without_a_checkout() -> 
     assert!(job.contains("        run: velnor-ci gate --spec-env GATE_SPEC\n"));
     assert_eq!(
         gate_line(&text)?,
-        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule --tests rust-root=root --tests rust-lab=lab"
+        "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-lab=lab"
     );
     Ok(())
 }
