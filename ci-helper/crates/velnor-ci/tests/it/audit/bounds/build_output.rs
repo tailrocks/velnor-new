@@ -15,6 +15,7 @@ fn large_build_output_keeps_the_trailing_rerun_directive() {
     output.push_str(&"x".repeat(1 << 20));
     output.push_str("\ncargo:rerun-if-changed=../../shared/greeting.txt\n");
     unit(&repo, output_path, &output);
+    super::super::inventory::build(&repo, output_path, None);
 
     let result = audit(&repo, &["--write"]);
 
