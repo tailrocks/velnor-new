@@ -8,11 +8,21 @@ use std::os::unix::fs::PermissionsExt;
 
 const SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
 
-fn poisoned_invocation(poison: &str) -> TestResult {
-    let (scratch, _) = fixture()?;
-    let root = scratch.outside();
+fn native_helper(root: &std::path::Path) -> Result<String, Box<dyn std::error::Error>> {
     let source = root.join("velnor-ci-bin/velnor-ci");
     fs::copy("/bin/echo", &source)?;
+    if cfg!(target_os = "macos") {
+        let signed = std::process::Command::new("/usr/bin/codesign")
+            .args(["--force", "--sign", "-"])
+            .arg(&source)
+            .output()?;
+        assert!(
+            signed.status.success(),
+            "{}",
+            String::from_utf8_lossy(&signed.stderr)
+        );
+    }
+
     let hash = std::process::Command::new("/usr/bin/shasum")
         .args(["-a", "256"])
         .arg(&source)
@@ -23,6 +33,13 @@ fn poisoned_invocation(poison: &str) -> TestResult {
         .next()
         .ok_or("no digest")?
         .to_owned();
+    Ok(digest)
+}
+
+fn poisoned_invocation(poison: &str) -> TestResult {
+    let (scratch, _) = fixture()?;
+    let root = scratch.outside();
+    let digest = native_helper(&root)?;
     let shadows = root.join("shadows");
     for name in ["bash", "sh"] {
         let shadow = shadows.join(name);
@@ -59,7 +76,12 @@ fn poisoned_invocation(poison: &str) -> TestResult {
         ]
     };
     let good = execute_environment(&steps[index], &root, &shadows, &digest, &environment)?;
-    assert!(good.status.success());
+    assert!(
+        good.status.success(),
+        "{poison}: {:?}: {}",
+        good.status,
+        String::from_utf8_lossy(&good.stderr)
+    );
     assert_eq!(good.stdout, b"plan --explain\n", "{poison}");
     let invalid = execute_environment(
         &steps[index],

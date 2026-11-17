@@ -116,6 +116,13 @@ than from the certificate's caller source digest.
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) resolves a step's shell with `WhichUtil.Which(command, …, prependPath)`, where `prependPath` holds every `core.addPath`/`GITHUB_PATH` entry ahead of the job `PATH`. In a composite action (`IsActionStep`) even `shell: bash` takes this route. [`WhichUtil.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Sdk/Util/WhichUtil.cs) returns a fully qualified command as given when the file exists and never searches `PATH` for it; a custom shell string is split at its first space and must contain `{0}`. `jdx/mise-action` adds the Mise `bin/` and, by default, `shims/` with `core.addPath`, so after a tools-cache restore a bare shell or helper name can resolve to restored bytes. Velnor's restore checks therefore use `/bin/bash --noprofile --norc -p -e -o pipefail {0}` and reset `PATH` to `/usr/bin:/bin:/usr/sbin:/sbin` first ([hermetic checks](tools-cache-v2.md#the-checks-run-hermetically)).
 
+Trusted generator helper invocations use the same absolute Bash shell. Bash's
+[`-p` mode](https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html)
+ignores startup files, imported functions, and shell options inherited through
+the environment. This prevents persisted `BASH_ENV`, exported functions, or
+`SHELLOPTS` from bypassing the helper's copy, digest check, and execution before
+the generated command runs.
+
 ### Workflow command parsing
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) gives a step's standard output and its standard error each an `OutputManager` that feeds the same `ActionCommandManager`, so a workflow command on either stream runs. [`ActionCommand.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Common/ActionCommand.cs) calls `TrimStart()` on a line before it checks for the `::` prefix, so a command can follow leading Unicode whitespace. Command data escapes `%`, `\r` and `\n` as `%25`, `%0D` and `%0A`; command properties also escape `:` and `,` as `%3A` and `%2C`. `::stop-commands::<token>` pauses command processing until a command named by the token resumes it. `velnor-ci` therefore escapes every control and non-space whitespace character and `%` in anything it prints, and escapes `:` in names taken from repository content, so no printed line can start a command on either stream.

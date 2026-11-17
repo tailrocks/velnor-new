@@ -9,6 +9,8 @@ const DIRECTORY: &str = "${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-
 const CHECKSUM: &str = "${{ runner.os == 'Linux' && '/usr/bin/sha256sum' || runner.os == 'macOS' && '/usr/bin/shasum' || '' }}";
 const CHECKSUM_ARGUMENTS: &str = "${{ runner.os == 'Linux' && '--check --status' || runner.os == 'macOS' && '-a 256 --check --status' || '' }}";
 
+pub(crate) const INVOCATION_SHELL: &str = "/bin/bash --noprofile --norc -p -e -o pipefail {0}";
+
 pub(crate) const INVOCATION_PREFIX: &str = "VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d \"$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX\") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp \"$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX\") && /bin/cp \"$VELNOR_HELPER\" \"$VELNOR_HELPER_COPY\" && /bin/chmod 500 \"$VELNOR_HELPER_COPY\" && \"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY\" && exec \"$VELNOR_HELPER_COPY\" ";
 
 pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedStep> {
@@ -36,6 +38,7 @@ pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedS
             .and_then(|run| run.strip_prefix("velnor-ci "))
         {
             step.run = Some(format!("{INVOCATION_PREFIX}{arguments}"));
+            step.shell = Some(INVOCATION_SHELL.to_owned());
             step.env.extend(verification_environment(release));
         }
         secured.push(step);

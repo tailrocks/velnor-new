@@ -75,6 +75,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" plan --explain'
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:
@@ -152,6 +153,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" prepare'
       - name: velnor-ci check-metadata
         env:
@@ -160,6 +162,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" check-metadata'
       - name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -186,6 +189,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" restored'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -196,6 +200,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -206,6 +211,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings'
       - id: test
         name: Test
@@ -218,6 +224,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_docs == ''run'' && needs.rust-plan.outputs.rust_root_package_args != '''' }}'
@@ -228,6 +235,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' -p app '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_root_package_args), '' --workspace '')) }}'
@@ -238,6 +246,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo check -p app --locked'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -325,6 +334,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" prepare'
       - name: velnor-ci check-metadata
         working-directory: tools
@@ -334,6 +344,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" check-metadata'
       - name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -360,6 +371,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" restored'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -371,6 +383,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -382,6 +395,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings'
       - id: test
         name: Test
@@ -395,6 +409,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && needs.rust-plan.outputs.rust_tools_mode != ''none'' && needs.rust-plan.outputs.rust_tools_docs == ''run'' && needs.rust-plan.outputs.rust_tools_package_args != '''' }}'
@@ -406,6 +421,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check tools alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', needs.rust-plan.outputs.rust_tools_package_args), '' -p tools '') || contains(format('' {0} '', needs.rust-plan.outputs.rust_tools_package_args), '' --workspace '')) }}'
@@ -417,6 +433,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo check -p tools --locked'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
@@ -497,6 +514,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" prepare'
       - name: velnor-ci check-metadata
         env:
@@ -505,6 +523,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" check-metadata'
       - name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -531,6 +550,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" check-metadata'
       - name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -557,6 +577,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" restored'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -567,6 +588,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo build --workspace --all-targets --locked'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -578,6 +600,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" run -- cargo build --workspace --all-targets --locked'
       - name: velnor-ci inputs audit
         env:
@@ -586,6 +609,7 @@ jobs:
           VELNOR_HELPER_SHA256: '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'' || '''' }}'
           VELNOR_HELPER_CHECKSUM: '${{ runner.os == ''Linux'' && ''/usr/bin/sha256sum'' || runner.os == ''macOS'' && ''/usr/bin/shasum'' || '''' }}'
           VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ runner.os == ''Linux'' && ''--check --status'' || runner.os == ''macOS'' && ''-a 256 --check --status'' || '''' }}'
+        shell: '/bin/bash --noprofile --norc -p -e -o pipefail {0}'
         run: 'VELNOR_HELPER_DIRECTORY=$(/usr/bin/mktemp -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$(/usr/bin/mktemp "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && /bin/cp "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && /bin/chmod 500 "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" && exec "$VELNOR_HELPER_COPY" inputs audit'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
