@@ -72,6 +72,7 @@ mod release_inputs;
 mod release_nested_toolchain;
 mod release_pr_only;
 mod release_push_names;
+mod release_ruleset_lock_version;
 mod release_sample_names;
 mod release_symlink;
 mod release_tag_binding;

@@ -26,8 +26,8 @@ pub use hazards::{
 };
 pub use members::{check_release_manifests, root_publishes_to_crates_io};
 pub use plan::{
-    BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, check_release_plz_configs,
-    publish_budget_minutes,
+    BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, check_publish_budget,
+    check_release_plz_configs, publish_budget_minutes,
 };
 pub use release_plz::{release_pr_branch_prefix, release_tag_patterns};
 pub use ruleset::{
