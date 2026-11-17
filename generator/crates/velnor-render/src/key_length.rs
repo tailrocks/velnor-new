@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::rules::{RenderedStep, Value};
+use velnor_model::{CACHE_COMPAT_LENGTH, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH};
 
 const CACHE_ACTIONS: [&str; 2] = ["actions/cache/restore", "actions/cache/save"];
 
@@ -36,12 +37,12 @@ fn expanded_length(line: &str) -> usize {
 
 fn expansion(expression: &str) -> usize {
     match expression {
-        "runner.os" => 7,
-        "runner.arch" => 5,
+        "runner.os" => RUNNER_OS_MAX_LENGTH,
+        "runner.arch" => RUNNER_ARCH_MAX_LENGTH,
         "github.sha" => 40,
         "github.run_id" => 20,
         _ if expression.starts_with("hashFiles(") => 64,
-        _ if expression.ends_with(".outputs.compat") => 16,
+        _ if expression.ends_with(".outputs.compat") => CACHE_COMPAT_LENGTH,
         _ if expression.ends_with(".outputs.base8") => 8,
         _ => expression.encode_utf16().count(),
     }
