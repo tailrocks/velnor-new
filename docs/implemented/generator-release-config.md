@@ -22,13 +22,15 @@ GitHub [returns `bypass_actors` only with ruleset write access](https://docs.git
 so configured exemptions make the generated gate use the existing release App
 from the `release` environment's `RELEASE_APP_ID` and
 `RELEASE_APP_PRIVATE_KEY` secrets. The App installation needs repository
-`administration: write` and `actions`, `contents`, `statuses`, and `checks`
+`administration: read` and `actions`, `contents`, `statuses`, and `checks`
 read permissions. The gate requests these permissions on a token scoped to
 the current repository. It checks out nothing and runs only the pinned helper.
 The job's own `GITHUB_TOKEN` retains read permissions. Without exemptions,
 the gate uses `github.token` and needs neither the App nor the environment.
 An App token cannot authorize exemptions when inherited ruleset metadata
-remains hidden or unverifiable.
+remains hidden or unverifiable. Access to organization or enterprise rulesets
+may require additional permissions or a GitHub plan that supports those rulesets;
+the gate refuses exemptions when it cannot read them.
 At least one required push check must remain after exemptions. Stale names or
 removal of the enforced PR rule refuse release. Exempted checks may belong to
 external GitHub Apps. A listed name with a push job, commit status or Checks API
@@ -39,7 +41,8 @@ for a SHA. Its documentation does not specify whether `total_count` includes
 suites outside that returned window. The gate therefore treats the aggregate
 response as incomplete evidence and enumerates the check-suite pages for the
 SHA, then lists runs for suites absent from the aggregate response. An
-unfinished suite from an App that could produce an exempt check refuses release.
+unfinished suite from an App that could produce an exempt check refuses release,
+except for the current workflow run's own check suite.
 Missing suite status or App metadata also refuses release.
 This conservative match also refuses a same-commit pull request check run.
 An unreadable or incomplete response refuses release. Every other required

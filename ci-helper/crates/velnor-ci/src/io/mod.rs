@@ -165,6 +165,11 @@ fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
         &repo,
         &args.sha,
         &args.pr_only_check,
+        std::env::var("GITHUB_RUN_ID")
+            .ok()
+            .map(|id| id.parse::<u64>())
+            .transpose()
+            .map_err(|e| CiError::new(format!("invalid GITHUB_RUN_ID: {e}")))?,
     )?;
     append_outputs(&format!("ready={}\n", verdict.ready))?;
     Ok(verdict.report)

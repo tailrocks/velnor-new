@@ -154,6 +154,49 @@ fn an_inherited_non_bypassable_ruleset_on_a_later_page_enforces_pull_requests() 
 }
 
 #[test]
+fn inaccessible_inherited_rulesets_name_the_permission_or_plan_needed() {
+    struct Forbidden(super::Recorded);
+    impl velnor_ci::github::GitHub for Forbidden {
+        fn get(&self, path: &str) -> Result<String, velnor_ci::error::CiError> {
+            if path == RULESET {
+                return Err(velnor_ci::error::CiError::new(
+                    "GET ruleset: HTTP 403 Forbidden",
+                ));
+            }
+            self.0
+                .0
+                .get(path)
+                .map(Value::to_string)
+                .ok_or_else(|| velnor_ci::error::CiError::new("missing response"))
+        }
+    }
+    for source_type in ["Organization", "Enterprise"] {
+        let mut rule = pr_rule();
+        rule["ruleset_source_type"] = json!(source_type);
+        rule["ruleset_source"] = json!("tailrocks");
+        let recorded = protected().rules(vec![rule, required(&[check("Required"), dco()])]);
+        let said = velnor_ci::gate::release_gate(
+            &Forbidden(recorded),
+            &repo(),
+            super::GREEN,
+            &["DCO".to_owned()],
+            None,
+        )
+        .map_err(|e| e.to_string());
+        assert_refused(
+            &said,
+            &format!("cannot verify {source_type} ruleset 7 from tailrocks"),
+        );
+        assert_refused(
+            &said,
+            "permission and a GitHub plan that supports reading inherited rulesets",
+        );
+        assert_refused(&said, "HTTP 403 Forbidden");
+    }
+    assert!(allowed(&protected()).is_ok_and(|verdict| verdict.ready));
+}
+
+#[test]
 fn one_non_bypassable_ruleset_suffices_but_unknown_sources_do_not() {
     let mut other = pr_rule();
     other["ruleset_id"] = json!(8);

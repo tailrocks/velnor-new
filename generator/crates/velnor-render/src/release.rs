@@ -123,7 +123,7 @@ fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     if !plan.pr_only_checks.is_empty() {
         scopes.push(("checks", "read"));
         let mut app_scopes = scopes.clone();
-        app_scopes.push(("administration", "write"));
+        app_scopes.push(("administration", "read"));
         steps.push(app_token(&app_scopes));
         token = APP_TOKEN_OUTPUT;
     }

@@ -23,6 +23,11 @@ struct CheckSuiteId {
 }
 
 #[derive(Deserialize)]
+struct CurrentRun {
+    check_suite_id: u64,
+}
+
+#[derive(Deserialize)]
 struct CheckSuite {
     id: u64,
     status: String,
@@ -50,10 +55,20 @@ pub(super) fn check_names(
     repo: &Repo,
     sha: &str,
     exempt_sources: &[ApiRequiredCheck],
+    current_run_id: Option<u64>,
 ) -> Result<BTreeSet<String>, CiError> {
     if exempt_sources.is_empty() {
         return Ok(BTreeSet::new());
     }
+    let current_suite = current_run_id
+        .map(|id| {
+            parse::<CurrentRun>(
+                &github.get(&crate::github::run_path(repo, id))?,
+                "current workflow run",
+            )
+            .map(|run| run.check_suite_id)
+        })
+        .transpose()?;
     let aggregate: Vec<CheckRun> = all_pages(github, "aggregate check runs", |page| {
         format!("/repos/{repo}/commits/{sha}/check-runs?filter=all&per_page=100&page={page}")
     })?;
@@ -74,6 +89,7 @@ pub(super) fn check_names(
     })?;
     for suite in suites {
         if suite.status != "completed"
+            && current_suite != Some(suite.id)
             && exempt_sources.iter().any(|check| {
                 check
                     .integration_id
@@ -148,7 +164,11 @@ pub(super) fn require_enforcement(
         }
         if let std::collections::btree_map::Entry::Vacant(entry) = details.entry(id) {
             entry.insert(parse::<Ruleset>(
-                &github.get(&format!("/repos/{repo}/rulesets/{id}"))?,
+                &github.get(&format!("/repos/{repo}/rulesets/{id}")).map_err(|error| {
+                    error.context(&format!(
+                        "cannot verify {source_type} ruleset {id} from {source}; PR-only exemptions require ruleset read permission and a GitHub plan that supports reading inherited rulesets"
+                    ))
+                })?,
                 "enforcement ruleset",
             )?);
         }

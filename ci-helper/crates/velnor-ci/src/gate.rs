@@ -46,6 +46,7 @@ pub fn release_gate(
     repo: &Repo,
     sha: &str,
     pr_only_checks: &[String],
+    current_run_id: Option<u64>,
 ) -> Result<Verdict, CiError> {
     if sha.len() != 40
         || !sha
@@ -66,7 +67,8 @@ pub fn release_gate(
     let statuses: Vec<ApiCommitStatus> = all_pages(github, "commit statuses", |page| {
         statuses_path(repo, sha, page)
     })?;
-    let check_names = exemptions::check_names(github, repo, sha, &required.exempt_sources)?;
+    let check_names =
+        exemptions::check_names(github, repo, sha, &required.exempt_sources, current_run_id)?;
     let mut report = Vec::new();
     let mut failures = Vec::new();
     if matches!(compare.status.as_str(), "identical" | "behind") {
@@ -296,7 +298,7 @@ fn all_pages<T: DeserializeOwned>(
         let ApiPage { total_count, items } = parse(&github.get(&path(page))?, what)?;
         if expected.is_some_and(|count| count != total_count) {
             return Err(CiError::new(format!(
-                "GitHub changed the number of {what} during pagination"
+                "GitHub {what} listing changed during pagination; retry the release gate"
             )));
         }
         expected = Some(total_count);

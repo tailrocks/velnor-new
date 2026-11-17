@@ -9,6 +9,7 @@ use velnor_ci::github::{branch_path, compare_path, rules_path, run_jobs_path, ru
 
 use crate::support::{FakeGitHub, repo};
 
+mod current_run;
 mod external_checks;
 mod inputs;
 mod pr_only;
@@ -56,6 +57,7 @@ impl Recorded {
             &repo(),
             GREEN,
             &["DCO".to_owned()],
+            None,
         )
         .map_err(|e| e.to_string())
     }
@@ -117,11 +119,20 @@ impl Recorded {
     }
 
     fn gate_with(&self, sha: &str, pr_only: &[String]) -> Result<Verdict, String> {
+        self.gate_in_run(sha, pr_only, None)
+    }
+
+    fn gate_in_run(
+        &self,
+        sha: &str,
+        pr_only: &[String],
+        run: Option<u64>,
+    ) -> Result<Verdict, String> {
         let mut fake = FakeGitHub::default();
         for (path, body) in &self.0 {
             fake.respond(path.clone(), &body.to_string());
         }
-        release_gate(&fake, &repo(), sha, pr_only).map_err(|e| e.to_string())
+        release_gate(&fake, &repo(), sha, pr_only, run).map_err(|e| e.to_string())
     }
 }
 
