@@ -57,7 +57,7 @@ runtime `latest` lookup and no recompilation of the coordinator on every
 release.
 
 Generated release steps do not use `release-plz/action`. They invoke the CLI as
-`mise --no-config --no-env --no-hooks exec rust[profile=minimal]@<catalog Rust pin> release-plz@0.4.3 -- release-plz`,
+`mise --no-config --no-env --no-hooks exec rust@<catalog Rust pin> release-plz@0.4.3 -- release-plz`,
 then the subcommand.
 
 ## 3. Selection contract
