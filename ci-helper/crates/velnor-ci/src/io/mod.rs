@@ -6,6 +6,7 @@ mod archive_witness;
 mod audit;
 mod build_inputs;
 mod cache;
+mod cache_sources;
 mod cold;
 mod configurations;
 mod crates_mirror;
@@ -138,20 +139,29 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => {
-            let log = std::env::var_os("RUNNER_TEMP")
+            let temp = std::env::var_os("RUNNER_TEMP")
                 .filter(|dir| !dir.is_empty())
-                .and_then(|dir| fs::read(Path::new(&dir).join("velnor-run.log")).ok());
-            let counts = activity::activity()?.unwrap_or_else(|| {
-                log.as_ref()
-                    .map(|bytes| crate::logscan::scan(&String::from_utf8_lossy(bytes)))
-                    .unwrap_or_default()
-            });
-            let decision = cache::decide_counts(
-                &counts,
-                &args.target_dir,
-                args.archive.as_deref(),
-                now_seconds(),
-            )?;
+                .ok_or_else(|| {
+                    CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
+                })?;
+            let log_path = Path::new(&temp).join("velnor-run.log");
+            let log = fs::read(&log_path)
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
+            let decision = if let Some(reason) = cache_sources::refusal(&current_dir()?)? {
+                Decision {
+                    save: false,
+                    report: reason,
+                }
+            } else {
+                let counts = activity::activity()?
+                    .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
+                cache::decide_counts(
+                    &counts,
+                    &args.target_dir,
+                    args.archive.as_deref(),
+                    now_seconds(),
+                )?
+            };
             append_outputs(&format!("save={}\n", decision.save))?;
             Ok(decision.report)
         }

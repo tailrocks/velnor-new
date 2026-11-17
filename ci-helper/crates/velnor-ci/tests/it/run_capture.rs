@@ -100,6 +100,14 @@ pub(crate) fn fixture(
         fs::remove_dir_all(temp)?;
     }
     fs::create_dir_all(temp)?;
+    let git = Command::new("git")
+        .args(["init", "-q"])
+        .current_dir(temp)
+        .output()?;
+    if !git.status.success() {
+        return Err(format!("cannot initialize capture fixture: {git:?}").into());
+    }
+    fs::write(temp.join("Cargo.lock"), "version = 4\n")?;
     let artifact = serde_json::json!({
         "reason": "compiler-artifact", "package_id": "demo 0.1.0",
         "manifest_path": "/demo/Cargo.toml", "target": {

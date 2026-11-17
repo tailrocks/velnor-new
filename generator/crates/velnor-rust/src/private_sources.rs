@@ -66,3 +66,13 @@ fn configured_source(path: &RepoPath, bytes: &[u8]) -> Option<String> {
         })
         .map(|section| format!("{path} declares [{section}]"))
 }
+
+pub fn cacheable_lock(text: &str) -> Result<bool, crate::lock::LockError> {
+    let lock = crate::cargo_lock::CargoLock::parse(text)?;
+    Ok(lock.packages.iter().all(|package| {
+        package
+            .source
+            .as_deref()
+            .is_none_or(|source| PUBLIC_SOURCES.contains(&source))
+    }))
+}

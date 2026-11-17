@@ -29,7 +29,7 @@ pub fn decide(
     archive: Option<&Path>,
     now_seconds: i64,
 ) -> Result<Decision, CiError> {
-    let counts = log.map(scan).unwrap_or_default();
+    let counts = scan(log.ok_or_else(|| CiError::new("velnor-run.log is missing"))?);
     decide_counts(&counts, target, archive, now_seconds)
 }
 
@@ -174,24 +174,14 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
         .map_err(|_| CiError::new(format!("set {REPOSITORY_VARIABLE} to owner/name")))?;
     let reference = std::env::var(REF_VARIABLE)
         .map_err(|_| CiError::new(format!("set {REF_VARIABLE} to the ref that saved")))?;
-    let token = match super::token() {
-        Ok(token) => token,
-        Err(error) => return Ok(trim_warning(&error)),
-    };
+    let token = super::token()?;
     let github =
         super::http::HttpGitHub::new(super::api_url(), token, super::http::DEFAULT_TIMEOUT);
-    match trim(
+    trim(
         &github,
         &Repo::parse(&repository)?,
         &reference,
         prefix,
         keep.unwrap_or(KEEP_NEWEST),
-    ) {
-        Ok(report) => Ok(report),
-        Err(error) => Ok(trim_warning(&error)),
-    }
-}
-
-fn trim_warning(error: &CiError) -> String {
-    format!("::warning::cache trim failed, older entries stay until the next save: {error}\n")
+    )
 }
