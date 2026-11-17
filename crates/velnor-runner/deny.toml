@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 [advisories]
-ignore = []
+ignore = [{ id = "RUSTSEC-2026-0543", reason = "chrono is unmaintained but arrives only via turso 0.8.3 (velnor-runner-host); drop when turso does. Tracked in #1218." }]
 
 [bans]
 multiple-versions = "warn"
