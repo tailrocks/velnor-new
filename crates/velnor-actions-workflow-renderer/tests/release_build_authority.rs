@@ -27,25 +27,49 @@ fn repository_step(step: &Value) -> bool {
         .as_str()
         .is_some_and(|uses| uses.starts_with("./"))
         || step["run"].as_str().is_some_and(|run| {
-            [
-                "mbx build",
-                "mbx nextest",
-                "cargo build",
-                "cargo nextest",
-                "cargo test",
-                "scripts/",
-                "images/",
-                "./linux-assets/",
-                "./macos-assets/",
-                "./macos-intel-assets/",
-                "./homebrew-assets/",
-            ]
-            .iter()
-            .any(|command| run.contains(command))
+            repository_build(run)
+                || [
+                    "scripts/",
+                    "images/",
+                    "./linux-assets/",
+                    "./macos-assets/",
+                    "./macos-intel-assets/",
+                    "./homebrew-assets/",
+                ]
+                .iter()
+                .any(|command| run.contains(command))
                 || run
                     .split_whitespace()
                     .any(|word| word.trim_start_matches(['\'', '"']).starts_with("./"))
         })
+}
+
+fn repository_build(run: &str) -> bool {
+    run.split(['\n', ';', '|', '&']).any(|command| {
+        let words: Vec<_> = command
+            .split_whitespace()
+            .map(|word| word.trim_matches(['\'', '"']))
+            .collect();
+        words.iter().enumerate().any(|(index, word)| {
+            matches!(word.rsplit('/').next(), Some("cargo" | "mbx"))
+                && words[index + 1..].iter().any(|word| {
+                    matches!(
+                        *word,
+                        "build"
+                            | "nextest"
+                            | "test"
+                            | "check"
+                            | "clippy"
+                            | "doc"
+                            | "run"
+                            | "bench"
+                            | "rustc"
+                            | "rustdoc"
+                            | "fix"
+                    )
+                })
+        })
+    })
 }
 
 fn checkout_steps(steps: &Value) -> bool {
@@ -234,7 +258,10 @@ fn inspect_jobs(
                     &callee,
                     files,
                     permissions,
-                    input_credentials || credential_value(&job["with"]),
+                    input_credentials
+                        || credential_value(&job["with"])
+                        || job["secrets"] == "inherit"
+                        || credential_value(&job["secrets"]),
                     visiting,
                 )?
                 .into_iter()
