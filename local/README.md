@@ -59,7 +59,7 @@ velnor-local down --dir "$STATE"
 | Jobs come from | GitHub | GitHub's scale set service | `runner.server`, fed by the `velnor-local` driver |
 | Job containers | GitHub's | `velnor-host` pairs of dind and runner | `--runner pair` (the default): `velnor-host local` pairs; `--runner plain`: the official runner image |
 | The job-start check asks | nobody | `https://api.github.com` | the `velnor-local` authority on `127.0.0.1`; only in builds with the `local-mode` feature |
-| Cleanup | GitHub | the journal, then GitHub's admin API | containers, volumes, networks and agents removed by label and by name; no journal |
+| Cleanup | GitHub | the journal, then GitHub's admin API | containers, volumes, networks and agents removed by label and by name; removals recorded in `cleanup.jsonl` |
 
 `pair` runs your jobs the way the self-hosted runner does, behind the same job-start check; `plain` runs the official runner image with no check and is for a machine that cannot build the pair images (`doctor` says when `pair` cannot run and which command fixes it). The verdict names the mode and says what ran for real, what was stood in and what was not exercised.
 
@@ -67,7 +67,7 @@ velnor-local down --dir "$STATE"
 
 - The authority listens on `127.0.0.1` only, and every call needs its token, which each `up` replaces. The cache and API stub control ports answer only with their own token.
 - `velnor-host` with local mode exists only in builds made by `velnor-local build`. A release build refuses the `local-mode` feature, so production never carries the local check.
-- Local mode keeps no journal and no reservation. `down` removes everything labelled `velnor-local=<name>`; after it, `docker ps -aq`, `docker volume ls -q` and `docker network ls -q` with that label print nothing.
+- Local mode keeps no reservation. Its cleanup audit is separate from the minted-agent recovery state in `runner/minted-agents.log`. `down` removes everything labelled `velnor-local=<name>`; after it, `docker ps -aq`, `docker volume ls -q` and `docker network ls -q` with that label print nothing.
 - `down` appends its exact label filter and each removal's intent and result to `$STATE/cleanup.jsonl`. The host sweep writes the same records to `$STATE/runner/cleanup.jsonl`. Successful removals remain recorded when a later removal fails. Cleanup repairs an incomplete final record before appending, preserves complete records, and refuses deletion if a complete record is corrupt. Volumes are removed only through the label filter, without implicit anonymous-volume deletion.
 - Untrusted runs (fork pull requests) use a second network and runner.server, a cache that only restores, and no secrets or token. That network is an ordinary Docker bridge; replay fork pull requests only where that is acceptable.
 - `STATE` is outside the checkout. `run` copies the checkout and never modifies it.
