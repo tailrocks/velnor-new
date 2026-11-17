@@ -8,7 +8,7 @@ use serde_json::{Value, json};
 use velnor_local::io::lock_index;
 use velnor_local::rest::rfc3339;
 
-use crate::support::{Harness, MAIN, Stub, temp_dir};
+use crate::support::{Harness, MAIN, PULL_2, Stub, temp_dir};
 
 const LIMIT: u64 = 10_000_000_000;
 const CACHES: &str = "/repos/tailrocks/velnor-lab/actions/caches";
@@ -28,6 +28,44 @@ fn keys(list: &Value) -> Vec<String> {
         .flatten()
         .filter_map(|entry| entry["key"].as_str().map(str::to_owned))
         .collect()
+}
+
+async fn job_cache_request_preserves_archives(name: &str, method: &str) {
+    let harness = Harness::new(name, LIMIT).await;
+    harness.register(2).await;
+    let saved = harness.save(MAIN, "tools", b"1234").await;
+    harness.save(PULL_2, "pr-tools", b"5678").await;
+    let stub = stub_over(&harness, name);
+    let before = archives(&harness);
+    let id = saved["entry_id"].as_str().unwrap_or_default();
+    let path = if method == "GET" {
+        format!("{CACHES}?per_page=100")
+    } else {
+        format!("{CACHES}/{id}")
+    };
+    let refused = stub.call(method, &path).await;
+
+    assert_eq!(refused.status, 403);
+    assert_eq!(archives(&harness), before);
+    for (git_ref, key, bytes) in [
+        (MAIN, "tools", b"1234"),
+        (PULL_2, "pr-tools", b"5678"),
+    ] {
+        let restored = harness.restore(git_ref, key).await;
+        let url = restored["signed_download_url"].as_str().unwrap_or_default();
+        assert_eq!(restored["ok"], true);
+        assert_eq!(harness.get(url).await.body.as_ref(), bytes);
+    }
+}
+
+#[tokio::test]
+async fn job_requests_cannot_list_cache_entries() {
+    job_cache_request_preserves_archives("api-job-list", "GET").await;
+}
+
+#[tokio::test]
+async fn job_requests_cannot_delete_cache_entries() {
+    job_cache_request_preserves_archives("api-job-delete", "DELETE").await;
 }
 
 #[tokio::test]
