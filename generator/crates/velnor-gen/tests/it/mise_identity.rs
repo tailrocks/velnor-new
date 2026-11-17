@@ -131,6 +131,53 @@ fn templated_versions_use_mise_string_values_for_primitive_vars() -> TestResult 
 }
 
 #[test]
+fn version_templates_reject_unavailable_context_even_in_guarded_branches() -> TestResult {
+    for (template, vars) in [
+        ("{% if env is defined %}25{% else %}24{% endif %}", ""),
+        ("{{ env | default(value='24') }}", ""),
+        (
+            "{% if __tera_context is defined %}24{% else %}25{% endif %}",
+            "",
+        ),
+        (
+            "{% if env.VERSION is defined %}{{ env.VERSION }}{% else %}24{% endif %}",
+            "",
+        ),
+        ("{{ env.VERSION | default(value='24') }}", ""),
+        (
+            "{{ vars.a }}",
+            "[vars]\na = \"{{ env.VERSION | default(value='24') }}\"\n",
+        ),
+        (
+            "{% if false %}{% set env = {} %}{% endif %}{{ env.VERSION | default(value='24') }}",
+            "",
+        ),
+        (
+            "{% if false %}{{ exec(command='anything') }}{% endif %}24",
+            "",
+        ),
+    ] {
+        let files = std::collections::BTreeMap::from([(
+            RepoPath::from_static("mise.toml"),
+            format!("[tools]\nnode = \"{template}\"\n{vars}").into_bytes(),
+        )]);
+        let error = velnor_rust::tool_pins(&files)
+            .err()
+            .ok_or("unavailable context was accepted")?;
+        assert!(error.to_string().contains("unsupported"), "{error}");
+    }
+    for template in [
+        "{{ vars.missing | default(value='24') }}",
+        "{% if vars.missing is defined %}25{% else %}24{% endif %}",
+        "{{ 'env.VERSION' | replace(from='env.VERSION', to='24') }}",
+        "{% if '{% set env = 1 %}' == '{% set env = 1 %}' %}24{% endif %}",
+    ] {
+        npm_config(&format!("version = \"{template}\""), "", "")?;
+    }
+    Ok(())
+}
+
+#[test]
 fn linux_aarch64_uses_arm_policy_tools_and_prebuilts() -> TestResult {
     let platform = velnor_model::MisePlatform::runner("linux-aarch64").ok_or("no platform")?;
     assert_eq!(platform.lock_key(), "linux-arm64");
