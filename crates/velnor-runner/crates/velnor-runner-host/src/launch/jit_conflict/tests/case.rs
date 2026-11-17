@@ -31,6 +31,7 @@ pub(super) enum Schema {
 }
 
 pub(super) struct Case {
+    pub(super) jit_claim: Option<crate::journal::RunnerJitClaim>,
     directory: tempfile::TempDir,
     pub(super) fixture: FixtureDocker,
     pub(super) docker: Docker,
@@ -81,7 +82,7 @@ impl Case {
         seed::bind_resources(&journal, CRASH, engine.docker_root_digest()).await?;
         binding::install(&journal, CRASH).await?;
         storage_seed::install(&journal, CRASH).await?;
-        seed_jit(&journal, CRASH, outcome).await?;
+        let jit_claim = seed_jit(&journal, CRASH, outcome).await?;
         Self::seed_control(&journal, &engine, control).await?;
         if pending {
             super::population::seed_pending(&journal).await?;
@@ -97,6 +98,7 @@ impl Case {
             serde_json::json!({"runner":IMAGE,"dind":IMAGE,"resource_probe":IMAGE}),
         )?));
         Ok(Self {
+            jit_claim,
             directory,
             fixture,
             docker,
@@ -140,6 +142,7 @@ impl Case {
 
     pub(super) async fn reopen(self, schema: Schema) -> TestResult<Self> {
         let Self {
+            jit_claim,
             directory,
             fixture,
             docker,
@@ -161,6 +164,7 @@ impl Case {
         };
         let scope = journal.connection_scope(&binding).await?;
         Ok(Self {
+            jit_claim,
             directory,
             fixture,
             docker,

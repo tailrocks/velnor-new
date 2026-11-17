@@ -111,6 +111,9 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
 pub(in crate::journal) async fn recover_at_startup(
     conn: &turso::Connection,
 ) -> Result<(), HostError> {
+    if super::journal_version(conn).await? >= 49 {
+        super::jit_claim_deadline::recover_times(conn).await?;
+    }
     conn.execute(
         &format!(
             "INSERT INTO physical_attempt_jit_interrupted_claims ({}) {}",

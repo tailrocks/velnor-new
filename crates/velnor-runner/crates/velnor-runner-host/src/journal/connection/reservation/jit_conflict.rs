@@ -2,16 +2,31 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod claim;
+mod deadline;
 pub(in crate::journal) mod identity;
 mod progress;
 mod settlement;
 
 pub(crate) use claim::{JitConflictRecoveryCandidate, JitConflictRecoveryClaim};
 
+pub(in crate::journal) async fn stamp_dispatch_claim(
+    scope: &ConnectionJournal,
+    intent_id: i64,
+) -> Result<(), HostError> {
+    deadline::stamp(scope, intent_id).await
+}
+
 use crate::error::HostError;
 use crate::journal::connection::ConnectionJournal;
 
 impl ConnectionJournal {
+    pub(crate) async fn record_jit_absent_after_deadline(
+        &self,
+        claim: &JitConflictRecoveryClaim,
+        now: i64,
+    ) -> Result<bool, HostError> {
+        deadline::record(self, claim, now).await
+    }
     pub(crate) async fn recoverable_jit_conflict_candidates(
         &self,
     ) -> Result<Vec<JitConflictRecoveryCandidate>, HostError> {
