@@ -2,8 +2,7 @@
 
 profile: default
 generated-files: report
-config-variables:
-  - VELNOR_CACHE_DEBUG
+config-variables: []
 self-hosted-runner:
   labels:
     - velnor

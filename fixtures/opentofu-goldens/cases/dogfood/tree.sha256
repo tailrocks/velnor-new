@@ -18,7 +18,7 @@
 - 567800a1d83268beb9f288fbdd49ad7a65eba0a67c8eb1d5adcde02427d8677e  ./.github/actions/velnor-verify-restored-rust/action.yml
 - 58ec8d2b6796a17e12302fd3036654f937af357d7c0031ced49fc98bbf69fb63  ./.github/actions/velnor-verify-rust-manifest/action.yml
 - 85fe78f59acce8269111acd36dd3a5442a23e0fbe264819ed51c75f40f9e2971  ./.github/dco.yml
-- a7f9cf6911f390f95709cbfc421efe8fb32f2c09d7f9e0931cd75e2291d88f49  ./.github/jactionlint.yaml
+- 6afa8c8379923032675e19205a0de81d46052af720bd92efc2b47f86e9218f7d  ./.github/jactionlint.yaml
 - 96536aaddf245c41c4c1956d9b468d6415e9f558ede684003418187368136678  ./.github/scripts/velnor-tools-cache-identity.sh
 - 7fad48cdf09d58769f8ff0764b34562299ed97b8f98b642f08ab69266e81be07  ./.github/velnor/producer-executions-v1.json
 - e130bc3ecc6c05bd7cadbd66fd2a92e40e540f3c13ac920ccfbbe14de0c2f576  ./.github/velnor/task-execution-manifest-v1.json
@@ -33,7 +33,7 @@
 - 5d951ed57b45de7ae1c6f9a20fc9ff771d86d3dc654fec0d803f3e5b0396171a  ./.github/workflows/product-release.yml
 - 013298311a734453c251c03371c51440aff7315afc892e73358b14eb440f2f8b  ./.github/workflows/qualification.yml
 - fdbbed799a5f54e7c361d332ea43806bfa37453f70b99fd47eadd633517530d7  ./.github/workflows/release-rust-ci-tools.yml
-- b4f91f1ae1a5e13c2beb8346a992b7ecf4f75a3f4d59ad48bb00d38171dabf5c  ./.github/workflows/rust-ci.yml
+- c33fd8e7980690b4b090f5ae1d3c3ca01cbe321728ac2bdc81564f30d3bbd161  ./.github/workflows/rust-ci.yml
 - a4bd0eed062eda89a30d33dd7619800786b98392de6b8c59764dcf699e4fc26e  ./.github/workflows/source-preview-mac-proof.yml
 - 20adfde90e8c27cba5bcd66ac3f905f9084bea08db17728fcc19d024e0dc1e0b  ./.github/workflows/source-preview-publication.yml
 - 342302f17a56dd151ebf615f44218afef84edacfb572b7eb8e778ecbf9b40e77  ./.github/workflows/source-preview-runtime.yml
