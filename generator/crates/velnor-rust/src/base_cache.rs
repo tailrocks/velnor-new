@@ -132,10 +132,9 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         .collect();
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
-        .chain([step(StepKind::CacheResult(lanes.clone()))])
         .collect();
     Some(Job {
-        name: Some("Cache".to_owned()),
+        name: Some("Cache maintenance".to_owned()),
         needs: lanes,
         when: When::SaveBase,
         skip_on_draft: false,

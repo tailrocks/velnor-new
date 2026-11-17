@@ -3,7 +3,8 @@
 
 use crate::plan::{head, job, step};
 use velnor_model::{
-    Access, HelperVersion, Job, JobId, PermissionScope, RepoFacts, Step, StepKind, When,
+    Access, CacheLaneOutput, HelperVersion, Job, JobId, PermissionScope, RepoFacts, Step, StepKind,
+    When, cache_lane_outputs,
 };
 
 pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
@@ -25,44 +26,26 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
                 })
         });
     let mut producers = Vec::new();
+    let mut verified = Vec::new();
     for job in jobs {
+        let saves = cache_lane_outputs(&job.steps)
+            .iter()
+            .any(|output| matches!(output, CacheLaneOutput::CacheOk(_)));
         if !job
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::Cargo(_)))
+            && !saves
         {
             continue;
         }
         if job.id.as_str() == "rust-helper" && !released {
             continue;
         }
-        job.permissions
-            .0
-            .entry(PermissionScope::Actions)
-            .or_insert(Access::Read);
-
-        let caches = job
-            .steps
-            .iter()
-            .filter_map(|step| match &step.kind {
-                StepKind::CacheRestore(key) => Some(key.clone()),
-                _ => None,
-            })
-            .collect();
-        job.steps.extend(
-            [
-                StepKind::ReportCaches {
-                    caches,
-                    nextest_artifacts,
-                },
-                StepKind::UploadMetrics,
-            ]
-            .into_iter()
-            .map(|kind| Step {
-                when: When::Finalizer,
-                ..step(kind)
-            }),
-        );
+        if saves {
+            verified.push(job.id.clone());
+        }
+        attach_metrics(job, nextest_artifacts);
         producers.push(&*job);
     }
     let needs = producers.iter().map(|job| job.id.clone()).collect();
@@ -72,6 +55,12 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
         step(StepKind::DownloadMetrics),
         step(StepKind::CheckMetrics { needs_max_bytes }),
     ]);
+    if !verified.is_empty() {
+        steps.push(Step {
+            when: When::Finalizer,
+            ..step(StepKind::CacheResult(verified))
+        });
+    }
     Some(Job {
         name: Some("Cache".to_owned()),
         needs,
@@ -80,6 +69,36 @@ pub(crate) fn attach(facts: &RepoFacts, jobs: &mut [Job]) -> Option<Job> {
         steps,
         ..job(facts, JobId::from_static("cache"))
     })
+}
+
+fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
+    job.permissions
+        .0
+        .entry(PermissionScope::Actions)
+        .or_insert(Access::Read);
+
+    let caches = job
+        .steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::CacheRestore(key) => Some(key.clone()),
+            _ => None,
+        })
+        .collect();
+    job.steps.extend(
+        [
+            StepKind::ReportCaches {
+                caches,
+                nextest_artifacts,
+            },
+            StepKind::UploadMetrics,
+        ]
+        .into_iter()
+        .map(|kind| Step {
+            when: When::Finalizer,
+            ..step(kind)
+        }),
+    );
 }
 
 pub(crate) fn finish(

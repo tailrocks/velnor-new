@@ -5,6 +5,8 @@ use crate::rules::{RenderedStep, Value};
 use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
 use velnor_model::CacheKey;
 
+const REPORT_STEP: &str = "report_cache_metrics";
+
 pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
     if let CacheKey::Sources { root, .. } = key
         && !restore
@@ -38,6 +40,7 @@ pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
         serde_json::json!({"family":key.family(),"root":root,"restore_step":cache_id(key,true),"save_step":cache_id(key,false)})
     }).collect();
     RenderedStep {
+        id: Some(REPORT_STEP.to_owned()),
         name: "Report cache telemetry".to_owned(),
         continue_on_error: true,
         run: Some("velnor-ci report".to_owned()),
@@ -77,6 +80,7 @@ pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
 
 pub(crate) fn artifact(upload: bool) -> RenderedStep {
     RenderedStep {
+        condition: upload.then(|| format!("steps.{REPORT_STEP}.outcome == 'success'")),
         continue_on_error: upload,
         name: if upload {
             "Upload cache metrics"

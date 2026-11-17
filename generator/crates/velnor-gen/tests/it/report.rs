@@ -99,7 +99,12 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
 
 #[test]
 fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() -> TestResult {
-    for (version, blocks) in [("0.1.80", false), ("0.1.81", false), ("0.1.81", true)] {
+    for (version, blocks) in [
+        ("0.1.80", false),
+        ("0.1.80", true),
+        ("0.1.81", false),
+        ("0.1.81", true),
+    ] {
         let config = format!("cache_check_blocks = {blocks}\n");
         let view = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
         let mut facts = detect(&view)?;
@@ -127,6 +132,7 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
             continue;
         }
         let cache = cache.ok_or("Cache missing")?;
+        assert_unified_cache_verdict(&parsed)?;
         assert_eq!(cache.name.as_deref(), Some("Cache"));
         assert_eq!(cache.when, When::Finalizer);
         assert!(parsed["jobs"]["cache"]["permissions"]["actions"].is_null());
@@ -169,6 +175,60 @@ fn reporting_is_gated_by_helper_version_and_cache_blocks_only_when_configured() 
             );
         }
     }
+    Ok(())
+}
+
+fn assert_unified_cache_verdict(workflow: &serde_json::Value) -> TestResult {
+    let jobs = workflow["jobs"].as_object().ok_or("jobs")?;
+    assert_eq!(
+        jobs.values().filter(|job| job["name"] == "Cache").count(),
+        1
+    );
+    let cache = &jobs["cache"];
+    let steps = cache["steps"].as_array().ok_or("cache steps")?;
+    let verdict = steps
+        .iter()
+        .position(|step| step["run"] == "velnor-ci cache check --success \"$CACHE_OK\"")
+        .ok_or("Cache must report failed uploads")?;
+    let waste = steps
+        .iter()
+        .position(|step| step["name"] == "Check cache waste")
+        .ok_or("waste check")?;
+    assert!(waste < verdict);
+    assert_eq!(steps[verdict]["if"], "${{ !cancelled() }}");
+    assert_ne!(steps[verdict]["continue-on-error"], true);
+    let uploads = steps[verdict]["env"]["CACHE_OK"]
+        .as_str()
+        .ok_or("upload verdict")?;
+    let needs = cache["needs"].as_array().ok_or("cache needs")?;
+    for (id, job) in jobs
+        .iter()
+        .filter(|(_, job)| job["outputs"]["cache_ok"].is_string())
+    {
+        assert!(needs.iter().any(|need| need == id));
+        assert!(uploads.contains(&format!("needs.{id}.outputs.cache_ok != 'false'")));
+        assert!(
+            job["steps"]
+                .as_array()
+                .ok_or("producer steps")?
+                .iter()
+                .any(|step| step["run"] == "velnor-ci report")
+        );
+    }
+    let maintenance = &jobs["rust-trim"];
+    assert_eq!(maintenance["name"], "Cache maintenance");
+    assert_eq!(maintenance["permissions"]["actions"], "write");
+    let steps = maintenance["steps"].as_array().ok_or("maintenance steps")?;
+    assert!(steps.iter().any(|step| {
+        step["run"]
+            .as_str()
+            .is_some_and(|run| run.starts_with("velnor-ci cache trim "))
+    }));
+    assert!(
+        steps
+            .iter()
+            .all(|step| step["run"] != "velnor-ci cache check --success \"$CACHE_OK\"")
+    );
     Ok(())
 }
 
@@ -243,7 +303,7 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
         .ok_or("report")?;
     let condition = report["if"].as_str().ok_or("condition")?;
     assert!(condition.contains("!cancelled()"));
-    assert!(!condition.contains("restored.outcome"));
+    assert!(!condition.contains("restored.outcome") && !condition.contains("success()"));
     assert_eq!(report["env"]["VELNOR_REPORT_STEPS"], "${{ toJSON(steps) }}");
     assert!(
         steps
@@ -268,6 +328,8 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
                 continue;
             };
             let reports_tests = steps.iter().any(|step| step["id"] == "test");
+            assert_eq!(report["id"], "report_cache_metrics");
+            assert_eq!(report["continue-on-error"], true);
             assert_eq!(
                 report["env"]["VELNOR_TESTS_RUN"].as_str(),
                 reports_tests.then_some("${{ steps.test.outputs.tests_run }}"),
@@ -278,6 +340,11 @@ fn rendered_reports_keep_selection_but_run_after_failed_restores() -> TestResult
                 .find(|step| step["name"] == "Upload cache metrics")
                 .ok_or("metrics upload")?;
             assert_eq!(upload["with"]["overwrite"], true, "{id} tests={tests}");
+            assert_eq!(
+                upload["if"],
+                "${{ (steps.report_cache_metrics.outcome == 'success') && (!cancelled()) }}"
+            );
+            assert_eq!(upload["continue-on-error"], true);
         }
     }
     Ok(())
