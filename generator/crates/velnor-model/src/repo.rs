@@ -238,6 +238,7 @@ pub struct ToolLock {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
+    pub crates_mirror: Option<CratesMirror>,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -286,6 +287,7 @@ impl Default for RustCiConfig {
     fn default() -> Self {
         Self {
             runner: RunnerLabel::from_static("ubuntu-latest"),
+            crates_mirror: None,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),
@@ -302,4 +304,11 @@ impl Default for RustCiConfig {
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CratesMirror {
+    pub runner: RunnerLabel,
+    pub registry: String,
+    pub cainfo: String,
 }
