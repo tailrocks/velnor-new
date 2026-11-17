@@ -8,7 +8,7 @@ use super::scoped_workspace::{
 };
 use std::fs;
 
-fn family_workspace(
+pub(super) fn family_workspace(
     config: &str,
 ) -> Result<super::scoped_workspace::ScopedRepo, Box<dyn std::error::Error>> {
     let repo = scoped_workspace(config)?;
@@ -58,7 +58,7 @@ fn family_qualification_plan_without_base(
     }))
 }
 
-const HELPER_INPUTS: &str = r#"
+pub(super) const HELPER_INPUTS: &str = r#"
 [[stacks.rust.inputs]]
 globs = ["apps/a1/**", "family-guard/**", "family-guarded/**", "images/dind/fixture-unrelated.txt", "images/resource-probe/fixture-unrelated.txt", "scripts/generator-release/source-qualification.sh", "scripts/generator-release/cargo-git-handoff.py", "scripts/generator-release/cargo-source-handoff.sh"]
 packages = ["a1"]
@@ -290,7 +290,7 @@ fn archive_guard_tree_changes_select_runner_family_without_sibling_fallback() ->
     Ok(())
 }
 
-fn populate_family_fixture(root: &std::path::Path) -> TestResult {
+pub(super) fn populate_family_fixture(root: &std::path::Path) -> TestResult {
     let cargo = fs::read_to_string(root.join("Cargo.toml"))?;
     let cargo = cargo.replace(
         "]\nresolver",

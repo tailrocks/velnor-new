@@ -24,6 +24,8 @@ pub enum DockerfileProblem {
 
     ContextEscape(String),
 
+    ContextSourceUnresolved(String),
+
     EscapeDirective,
 
     SyntaxUnpinned(String),
@@ -40,6 +42,9 @@ impl DockerfileProblem {
             Self::SecretMount => "image_secret_mount".to_owned(),
             Self::RemoteAdd(source) => format!("image_add_remote_source:{source}"),
             Self::ContextEscape(source) => format!("image_context_escape:{source}"),
+            Self::ContextSourceUnresolved(source) => {
+                format!("image_context_source_unresolved:{source}")
+            }
             Self::EscapeDirective => "image_escape_directive".to_owned(),
             Self::SyntaxUnpinned(image) => format!("image_syntax_unpinned:{image}"),
             Self::UnsupportedRunnerSyntax(value) => {
@@ -51,9 +56,11 @@ impl DockerfileProblem {
 
 mod runner;
 mod syntax;
+mod variable;
 
 pub use runner::analyze_runner_dockerfile;
 use syntax::{check_directives, instructions};
+use variable::{arg_value, is_injected_arg, substitute};
 
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
@@ -82,8 +89,9 @@ pub fn analyze_dockerfile(
     check_directives(text)?;
     for (keyword, args) in instructions(text) {
         match keyword.as_str() {
-            "ARG" if !state.in_stage => state.record_global_arg(&args),
+            "ARG" => state.record_arg(&args),
             "FROM" => state.from(&args)?,
+            "ENV" => state.unknown_environment = true,
             "COPY" | "ADD" => state.copy(&keyword, &args)?,
             "RUN" => state.run(&args)?,
             _ => {}
@@ -96,35 +104,53 @@ pub fn analyze_dockerfile(
 struct State {
     facts: DockerfileFacts,
     in_stage: bool,
-    args: BTreeMap<String, Option<String>>,
+    unknown_environment: bool,
+    inherited_stage: bool,
+    global_args: BTreeMap<String, Option<String>>,
+    stage_args: BTreeMap<String, Option<String>>,
     stages: BTreeSet<String>,
     stage_count: usize,
     known_contexts: BTreeSet<String>,
 }
 
 impl State {
-    fn record_global_arg(&mut self, args: &str) {
-        for token in args.split_whitespace() {
-            match token.split_once('=') {
-                Some((name, value)) => {
-                    self.args
-                        .insert(name.to_owned(), Some(unquote(value).to_owned()));
-                }
-                None => {
-                    self.args.insert(token.to_owned(), None);
-                }
-            }
+    fn record_arg(&mut self, args: &str) {
+        let token = args.trim();
+        let (name, value) = match token.split_once('=') {
+            Some((name, value)) => (name, arg_value(value)),
+            None if self.inherited_stage => (token, None),
+            None => (
+                token,
+                self.stage_args
+                    .get(token)
+                    .or_else(|| self.global_args.get(token))
+                    .cloned()
+                    .flatten(),
+            ),
+        };
+        let value = if is_injected_arg(name) { None } else { value };
+        if self.in_stage {
+            self.stage_args.insert(name.to_owned(), value);
+        } else {
+            self.global_args.insert(name.to_owned(), value);
         }
     }
 
     fn from(&mut self, args: &str) -> Result<(), DockerfileProblem> {
-        self.in_stage = true;
         let mut tokens = args.split_whitespace().filter(|t| !t.starts_with("--"));
         let Some(raw) = tokens.next() else {
             return Ok(());
         };
-        let reference = self.substitute(raw)?;
+        let reference = substitute(raw, &self.global_args)
+            .ok_or_else(|| DockerfileProblem::ImageBaseUnresolved(raw.to_owned()))?;
+        self.in_stage = true;
+        self.stage_args.clear();
         let is_stage = self.stages.contains(&reference.to_ascii_lowercase());
+        self.inherited_stage = is_stage
+            || reference
+                .parse::<usize>()
+                .is_ok_and(|index| index < self.stage_count);
+        self.unknown_environment = reference != "scratch";
         if reference != "scratch" && !is_stage {
             require_pinned(&reference)?;
             self.facts.external_images.insert(reference);
@@ -138,30 +164,17 @@ impl State {
         Ok(())
     }
 
-    fn substitute(&self, raw: &str) -> Result<String, DockerfileProblem> {
-        let mut out = String::new();
-        let mut rest = raw;
-        while let Some(at) = rest.find('$') {
-            out.push_str(&rest[..at]);
-            let tail = &rest[at + 1..];
-            let (name, default, consumed) = parse_variable(tail);
-            let value = match self.args.get(name) {
-                Some(Some(value)) => value.clone(),
-                _ => default
-                    .map(str::to_owned)
-                    .ok_or_else(|| DockerfileProblem::ImageBaseUnresolved(raw.to_owned()))?,
-            };
-            out.push_str(&value);
-            rest = &tail[consumed..];
-        }
-        out.push_str(rest);
-        Ok(out)
-    }
-
     fn copy(&mut self, keyword: &str, args: &str) -> Result<(), DockerfileProblem> {
+        if args.contains('\\')
+            || (!args.trim_start().starts_with('[') && args.contains(['"', '\'']))
+        {
+            return Err(DockerfileProblem::ContextSourceUnresolved(args.to_owned()));
+        }
         let mut from_other = false;
         let mut operands = Vec::new();
-        for token in split_operands(args) {
+        for token in split_operands(args)
+            .ok_or_else(|| DockerfileProblem::ContextSourceUnresolved(args.to_owned()))?
+        {
             if let Some(source) = token.strip_prefix("--from=") {
                 from_other = true;
                 self.check_from_source(source)?;
@@ -176,6 +189,16 @@ impl State {
         for source in operands {
             if source.starts_with("<<") {
                 continue;
+            }
+            if source.contains(['\\', '\'', '"'])
+                || (self.unknown_environment && source.contains('$'))
+            {
+                return Err(DockerfileProblem::ContextSourceUnresolved(source));
+            }
+            let source = substitute(&source, &self.stage_args)
+                .ok_or_else(|| DockerfileProblem::ContextSourceUnresolved(source.clone()))?;
+            if !args.trim_start().starts_with('[') && source.chars().any(char::is_whitespace) {
+                return Err(DockerfileProblem::ContextSourceUnresolved(source));
             }
             if keyword == "ADD" && is_remote(&source) {
                 return Err(DockerfileProblem::RemoteAdd(source));
@@ -234,36 +257,15 @@ fn unquote(value: &str) -> &str {
     value.trim_matches(|c| c == '"' || c == '\'')
 }
 
-fn parse_variable(tail: &str) -> (&str, Option<&str>, usize) {
-    if let Some(body) = tail.strip_prefix('{')
-        && let Some(end) = body.find('}')
-    {
-        let inner = &body[..end];
-        let (name, default) = match inner.split_once(":-") {
-            Some((name, default)) => (name, Some(default)),
-            None => (inner, None),
-        };
-        return (name, default, end + 2);
-    }
-    let end = tail
-        .bytes()
-        .position(|b| !(b.is_ascii_alphanumeric() || b == b'_'))
-        .unwrap_or(tail.len());
-    (&tail[..end], None, end)
-}
-
-fn split_operands(args: &str) -> Vec<String> {
+fn split_operands(args: &str) -> Option<Vec<String>> {
     let trimmed = args.trim();
-    if trimmed.starts_with('[')
-        && let Some(inner) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
-    {
-        return inner
-            .split(',')
-            .map(|item| unquote(item.trim()).to_owned())
-            .collect();
+    if trimmed.starts_with('[') {
+        return serde_json::from_str(trimmed).ok();
     }
-    trimmed
-        .split_whitespace()
-        .map(|item| unquote(item).to_owned())
-        .collect()
+    Some(
+        trimmed
+            .split_whitespace()
+            .map(|item| unquote(item).to_owned())
+            .collect(),
+    )
 }
