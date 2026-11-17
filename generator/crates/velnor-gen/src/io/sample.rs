@@ -36,7 +36,9 @@ pub fn recording_of(
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();
     }
+    let symlinks = view.symlinks.iter().cloned().collect();
     Ok(Recording {
+        symlinks,
         view: recorded_files(view.files, &view.tracked_paths),
         manifests: cargo_files(&view.tracked_paths),
         metadata: metadata
@@ -63,6 +65,7 @@ pub fn recorded_files(
 pub struct Recording {
     pub view: BTreeMap<RepoPath, Vec<u8>>,
     pub manifests: Vec<RepoPath>,
+    pub symlinks: Vec<RepoPath>,
     pub metadata: BTreeMap<RepoPath, Vec<u8>>,
 }
 
@@ -156,6 +159,12 @@ pub fn write_sample(root: &Path, name: &str, recording: &Recording) -> Result<()
         listing.push('\n');
     }
     files.push((RepoPath::from_static("manifests.txt"), listing.into_bytes()));
+    let mut links = String::new();
+    for link in &recording.symlinks {
+        links.push_str(link.as_str());
+        links.push('\n');
+    }
+    files.push((RepoPath::from_static("symlinks.txt"), links.into_bytes()));
     let directories = [
         sample_path(format!("{base}/view"))?,
         sample_path(format!("{base}/cargo-metadata"))?,
@@ -177,7 +186,7 @@ pub fn write_sample(root: &Path, name: &str, recording: &Recording) -> Result<()
             let entry = entry.map_err(|e| Error::File(existing.clone(), e))?;
             if !matches!(
                 entry.file_name().to_str(),
-                Some("view" | "cargo-metadata" | "manifests.txt")
+                Some("view" | "cargo-metadata" | "manifests.txt" | "symlinks.txt")
             ) {
                 copy_entry(&entry.path(), &prepared.join(entry.file_name()))?;
             }

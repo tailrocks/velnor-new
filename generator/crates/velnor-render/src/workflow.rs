@@ -132,7 +132,7 @@ fn values(items: &[(String, Value)]) -> Yaml {
             .map(|(key, value)| {
                 let yaml = match value {
                     Value::Text(text) => Yaml::Str(text.clone()),
-                    Value::Expr(text) => Yaml::Expr(text.clone()),
+                    Value::Expr(text) | Value::BoundedExpr { text, .. } => Yaml::Expr(text.clone()),
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };

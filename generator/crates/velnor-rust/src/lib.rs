@@ -4,10 +4,13 @@
 mod audit_job;
 mod build_profile;
 mod build_script;
+mod build_target;
+mod cargo_flags;
 mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_mirror;
 mod credentials;
 mod detect;
 mod doc_steps;
@@ -28,6 +31,7 @@ mod policy;
 mod reads;
 mod repo_profile;
 mod required_job;
+mod required_size;
 mod root_jobs;
 mod roots;
 mod schedule;
@@ -60,6 +64,7 @@ pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
     METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
+    recorded_roots,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
@@ -69,7 +74,7 @@ pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,
     rerun_if_changed, unlisted,
 };
-pub use repo_profile::repo_profile;
+pub use repo_profile::{cargo_config_paths, check_runtime_configs, repo_profile};
 pub use required_job::tests_expected;
 pub use select::{select, unknown_paths, unread_packages};
 pub use select_event::{select_event, selects_by_diff};

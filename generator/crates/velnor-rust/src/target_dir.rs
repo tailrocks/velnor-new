@@ -13,8 +13,21 @@ const KEY: &str = "build.target-dir";
 type Found<'v> = (&'v RepoPath, Option<RepoPath>, toml::Value);
 
 pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPath, DetectError> {
+    target_dir_source(view, manifest).map(|(folder, _)| folder)
+}
+
+pub(crate) fn target_dir_source<'v>(
+    view: &'v RepoView,
+    manifest: &RepoPath,
+) -> Result<(RepoPath, Option<&'v RepoPath>), DetectError> {
+    if let Some((file, ..)) = nearest(view, manifest, "build-dir")? {
+        return Err(DetectError::invalid(
+            file,
+            Reason::BuildDirKey("build.build-dir"),
+        ));
+    }
     let Some((file, base, value)) = nearest(view, manifest, "target-dir")? else {
-        return Ok(manifest.sibling(&DEFAULT));
+        return Ok((manifest.sibling(&DEFAULT), None));
     };
     let text = value.as_str().map(str::to_owned).ok_or_else(|| {
         DetectError::invalid(
@@ -26,7 +39,7 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
         )
     })?;
     let outside = || DetectError::invalid(file, Reason::TargetDirOutside(text.clone()));
-    if text.starts_with('/') {
+    if text.starts_with(['/', '~']) || text.contains(['{', '}']) {
         return Err(outside());
     }
     let segments = resolve(base.as_ref(), &text).ok_or_else(outside)?;
@@ -37,25 +50,8 @@ pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPat
     if holds_root {
         Err(outside())
     } else {
-        Ok(folder)
+        Ok((folder, Some(file)))
     }
-}
-
-pub(crate) fn sets_build_target(view: &RepoView, manifest: &RepoPath) -> Result<bool, DetectError> {
-    for (file, bytes, _) in patch_files(view, manifest) {
-        if file == manifest {
-            continue;
-        }
-        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
-        if parsed
-            .get("build")
-            .and_then(|build| build.get("target"))
-            .is_some()
-        {
-            return Ok(true);
-        }
-    }
-    Ok(false)
 }
 
 fn nearest<'v>(
@@ -63,6 +59,19 @@ fn nearest<'v>(
     manifest: &RepoPath,
     key: &str,
 ) -> Result<Option<Found<'v>>, DetectError> {
+    for (file, bytes, base) in nearest_first(view, manifest) {
+        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+        if let Some(value) = parsed.get("build").and_then(|build| build.get(key)) {
+            return Ok(Some((file, base, value.clone())));
+        }
+    }
+    Ok(None)
+}
+
+pub(crate) fn nearest_first<'v>(
+    view: &'v RepoView,
+    manifest: &RepoPath,
+) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
     let mut configs: Vec<_> = patch_files(view, manifest)
         .into_iter()
         .filter(|(file, _, _)| *file != manifest)
@@ -74,11 +83,6 @@ fn nearest<'v>(
             file.as_str().strip_suffix(".toml").is_none(),
         )
     });
-    for (file, bytes, base) in configs.into_iter().rev() {
-        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
-        if let Some(value) = parsed.get("build").and_then(|build| build.get(key)) {
-            return Ok(Some((file, base, value.clone())));
-        }
-    }
-    Ok(None)
+    configs.reverse();
+    configs
 }
