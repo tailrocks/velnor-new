@@ -48,8 +48,8 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
     }
     let mut requested = Versions::new();
     for (config, bytes) in &present {
-        requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
-        let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
+        let parsed =
+            literal_config(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
         let settings = parsed.get("settings").and_then(Value::as_table);
         let postinstall = parsed
             .get("tools")
@@ -66,6 +66,7 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
             "alias",
             "monorepo_root",
             "monorepo",
+            "plugins",
         ]
         .into_iter()
         .find(|key| {
@@ -78,6 +79,7 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
                 Reason::MiseOverridesFlags(name.to_owned()),
             ));
         }
+        requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
     }
     let (mut locked, mut prebuilt) = match files.get(&MISE_LOCK) {
         Some(lock) => (
@@ -213,6 +215,23 @@ fn runs_a_command(value: &Value) -> bool {
     match value {
         Value::Table(entry) => entry.contains_key("postinstall"),
         Value::Array(items) => items.iter().any(runs_a_command),
+        _ => false,
+    }
+}
+
+fn literal_config(bytes: &[u8]) -> Result<toml::Table, Reason> {
+    let parsed = table(bytes)?;
+    if parsed.values().any(is_template) {
+        return Err(Reason::MiseTemplate);
+    }
+    Ok(parsed)
+}
+
+fn is_template(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text.contains("{{") || text.contains("{%"),
+        Value::Array(items) => items.iter().any(is_template),
+        Value::Table(entries) => entries.values().any(is_template),
         _ => false,
     }
 }

@@ -57,6 +57,7 @@ pub enum Reason {
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
+    MiseTemplate,
     OtherMiseConfig,
     CapLints,
     CargoEnv(String),
@@ -173,7 +174,10 @@ impl fmt::Display for Reason {
             ),
             Self::MiseOverridesFlags(name) => write!(
                 f,
-                "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+                "{name} is not supported: mise-action installs tools and exports this configuration's environment to every step, where plugins or variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::MiseTemplate => f.write_str(
+                "templates are not supported: mise evaluates them while installing tools and can execute commands that replace or weaken a check; use literal configuration values"
             ),
             Self::UndeclaredTarget(target) => write!(
                 f,
