@@ -23,9 +23,9 @@ fn hundreds_of_helper_calls_share_one_job_installed_launcher() -> TestResult {
     let invocations: Vec<_> = steps
         .iter()
         .filter(|step| {
-            step["run"].as_str().is_some_and(|run| {
-                run.starts_with("\"$VELNOR_HELPER_BASH\" -p \"$VELNOR_HELPER_EXEC\" ")
-            })
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.starts_with(". \"$VELNOR_EXEC\" "))
         })
         .collect();
     assert_eq!(invocations.len(), 324);

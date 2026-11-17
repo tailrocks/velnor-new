@@ -241,12 +241,7 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if step.run.is_some() == step.uses.is_some() {
         rules.push(Rule::NotExactlyOneOfRunAndUses);
     }
-    let trusted_shell = step.shell.as_deref() == Some(crate::helper_integrity::INVOCATION_SHELL)
-        && step
-            .run
-            .as_deref()
-            .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX));
-    if step.shell.is_some() && !trusted_shell {
+    if step.shell.is_some() {
         rules.push(Rule::ShellKey);
     }
     if let Some(uses) = &step.uses {

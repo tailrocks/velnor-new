@@ -3,17 +3,30 @@
 
 use velnor_model::{HelperRelease, Job, StepKind};
 
-use crate::rules::{RenderedStep, SETUP_VELNOR_ACTION, Value};
+use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
+use crate::yaml::{Yaml, entry, text};
 
-pub(crate) const INVOCATION_SHELL: &str = "bash -p {0}";
+pub(crate) const DEFAULT_SHELL: &str = "bash -p {0}";
 
-pub(crate) const INVOCATION_PREFIX: &str = "\"$VELNOR_HELPER_BASH\" -p \"$VELNOR_HELPER_EXEC\" ";
+pub(crate) const INVOCATION_PREFIX: &str = ". \"$VELNOR_EXEC\" ";
+
+pub(crate) fn defaults(jobs: &[RenderedJob]) -> Option<Yaml> {
+    jobs.iter()
+        .flat_map(|job| &job.steps)
+        .any(|step| {
+            step.run
+                .as_deref()
+                .is_some_and(|run| run.starts_with(INVOCATION_PREFIX))
+        })
+        .then(|| entry("run", Yaml::Map(vec![entry("shell", text(DEFAULT_SHELL))])))
+        .map(|run| Yaml::Map(vec![run]))
+}
 
 const LAUNCHER: &str = "directory=$(\"$VELNOR_HELPER_MKTEMP\" -d \"$RUNNER_TEMP/velnor-helper.XXXXXXXXXX\") && copy=$(\"$VELNOR_HELPER_MKTEMP\" \"$directory/velnor-ci.XXXXXXXXXX\") && \"$VELNOR_HELPER_CP\" \"$VELNOR_HELPER\" \"$copy\" && \"$VELNOR_HELPER_CHMOD\" 500 \"$copy\" && { \"$VELNOR_HELPER_ENV\" -i PATH=/usr/bin:/bin \"$VELNOR_HELPER_CHECKSUM\" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< \"$VELNOR_HELPER_SHA256  $copy\" || { printf '%s\\n' 'velnor-ci integrity check failed' >&2; exit 1; }; } && exec \"$copy\" \"$@\"";
 
-const INSTALL_TOOLS: &str = "fail() { printf '%s\\n' \"::error title=setup-velnor::$1\"; exit 1; }; resolve_tool() { local path; path=\"$(command -v \"$2\")\" && [[ \"$path\" = /* && -f \"$path\" && -x \"$path\" ]] || fail \"required tool '$2' was not found on PATH\"; printf '%s=%s\\n' \"$1\" \"$path\" >> \"$GITHUB_ENV\"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool \"VELNOR_HELPER_${binding%:*}\" \"${binding#*:}\"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM \"$checksum\"; printf '%s=%s\\n' VELNOR_HELPER_CHECKSUM_ARGUMENTS \"$arguments\" >> \"$GITHUB_ENV\"";
+const INSTALL_TOOLS: &str = "fail() { printf '%s\\n' \"::error title=setup-velnor::$1\"; exit 1; }; resolve_tool() { local path; path=\"$(command -v \"$2\")\" && [[ \"$path\" = /* && -f \"$path\" && -x \"$path\" ]] || fail \"required tool '$2' was not found on PATH\"; printf '%s=%s\\n' \"$1\" \"$path\" >> \"$GITHUB_ENV\"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool \"VELNOR_HELPER_${binding%:*}\" \"${binding#*:}\"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM \"$checksum\"; printf '%s=%s\\n' VELNOR_HELPER_CHECKSUM_ARGUMENTS \"$arguments\" >> \"$GITHUB_ENV\"";
 
-const INSTALL_LAUNCHER: &str = "directory=\"$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB\" && \"$VELNOR_HELPER_MKDIR\" -m 700 \"$directory\" && \"$VELNOR_HELPER_CP\" \"$RUNNER_TEMP/velnor-ci-bin/velnor-ci\" \"$directory/velnor-ci\" && \"$VELNOR_HELPER_CHMOD\" 500 \"$directory/velnor-ci\" && printf '%s\\n' \"$VELNOR_HELPER_LAUNCHER\" > \"$directory/velnor-ci-exec\" && \"$VELNOR_HELPER_CHMOD\" 500 \"$directory/velnor-ci-exec\" && printf '%s=%s\\n' VELNOR_HELPER \"$directory/velnor-ci\" VELNOR_HELPER_EXEC \"$directory/velnor-ci-exec\" VELNOR_HELPER_SHA256 \"$VELNOR_HELPER_SHA256\" >> \"$GITHUB_ENV\"";
+const INSTALL_LAUNCHER: &str = "directory=\"$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB\" && \"$VELNOR_HELPER_MKDIR\" -m 700 \"$directory\" && \"$VELNOR_HELPER_CP\" \"$RUNNER_TEMP/velnor-ci-bin/velnor-ci\" \"$directory/velnor-ci\" && \"$VELNOR_HELPER_CHMOD\" 500 \"$directory/velnor-ci\" && printf '%s\\n' \"$VELNOR_HELPER_LAUNCHER\" > \"$directory/velnor-ci-exec\" && \"$VELNOR_HELPER_CHMOD\" 500 \"$directory/velnor-ci-exec\" && printf '%s=%s\\n' VELNOR_HELPER \"$directory/velnor-ci\" VELNOR_EXEC \"$directory/velnor-ci-exec\" VELNOR_HELPER_SHA256 \"$VELNOR_HELPER_SHA256\" >> \"$GITHUB_ENV\"";
 
 pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedStep> {
     let Some(release) = job.steps.iter().find_map(|step| match &step.kind {
@@ -41,7 +54,6 @@ pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedS
             .and_then(|run| run.strip_prefix("velnor-ci "))
         {
             step.run = Some(format!("{INVOCATION_PREFIX}{arguments}"));
-            step.shell = Some(INVOCATION_SHELL.to_owned());
         }
         secured.push(step);
     }

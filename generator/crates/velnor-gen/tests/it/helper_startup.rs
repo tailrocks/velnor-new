@@ -2,11 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::TestResult;
-use crate::helper_integrity::{execute_environment, fixture, steps, workflow};
+use crate::helper_integrity::{DEFAULT_SHELL, execute_environment, fixture, steps, workflow};
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-
-const SHELL: &str = "bash -p {0}";
 
 pub(crate) fn native_helper(root: &std::path::Path) -> Result<String, Box<dyn std::error::Error>> {
     let source = root.join("velnor-ci-bin/velnor-ci");
@@ -123,46 +121,29 @@ fn trusted_invocations_ignore_imported_shell_options() -> TestResult {
 }
 
 #[test]
-
-fn hardened_shell_is_allowed_only_with_the_exact_trusted_wrapper() -> TestResult {
+fn steps_never_set_a_shell_and_the_workflow_default_is_the_hardened_one() -> TestResult {
     use velnor_render::{RenderedJob, RenderedStep, RenderedWorkflow, Rule, check_rules};
     let yaml = workflow(&"a".repeat(64))?;
-    let invocation = steps(&yaml)?
-        .iter()
-        .find(|step| step["name"] == "velnor-ci plan")
-        .and_then(|step| step["run"].as_str())
-        .ok_or("no invocation")?;
-    let mutated = invocation.replace("$VELNOR_HELPER_EXEC", "$VELNOR_HELPER_COPY");
-    for (run, shell, trusted) in [
-        (invocation, SHELL, true),
-        ("echo ordinary", SHELL, false),
-        (mutated.as_str(), SHELL, false),
-        (
-            invocation,
-            "/bin/bash --noprofile --norc -e -o pipefail {0}",
-            false,
-        ),
-    ] {
-        let result = check_rules(&RenderedWorkflow {
-            jobs: vec![RenderedJob {
-                id: "trusted".to_owned(),
-                runs_on: "ubuntu-latest".to_owned(),
-                timeout_minutes: 10,
-                steps: vec![RenderedStep {
-                    name: "trusted".to_owned(),
-                    run: Some(run.to_owned()),
-                    shell: Some(shell.to_owned()),
-                    ..RenderedStep::default()
-                }],
-                ..RenderedJob::default()
+    assert_eq!(yaml["defaults"]["run"]["shell"], DEFAULT_SHELL);
+    assert!(steps(&yaml)?.iter().all(|step| step["shell"].is_null()));
+    let result = check_rules(&RenderedWorkflow {
+        jobs: vec![RenderedJob {
+            id: "trusted".to_owned(),
+            runs_on: "ubuntu-latest".to_owned(),
+            timeout_minutes: 10,
+            steps: vec![RenderedStep {
+                name: "trusted".to_owned(),
+                run: Some(". \"$VELNOR_EXEC\" plan".to_owned()),
+                shell: Some(DEFAULT_SHELL.to_owned()),
+                ..RenderedStep::default()
             }],
-        });
-        let refused = result.is_err_and(|violations| {
-            violations
-                .iter()
-                .any(|violation| violation.rule == Rule::ShellKey)
-        });
-        assert_eq!(refused, !trusted, "{run} {shell}");
-    }
+            ..RenderedJob::default()
+        }],
+    });
+    assert!(result.is_err_and(|violations| {
+        violations
+            .iter()
+            .any(|violation| violation.rule == Rule::ShellKey)
+    }));
     Ok(())
 }

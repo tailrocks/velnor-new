@@ -67,7 +67,11 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     let plain =
         "steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''";
     let gated = text.matches(plain).count() + text.matches(condition).count();
-    let later = steps.len() - plan_index - 1;
+    let reporting = steps
+        .iter()
+        .filter(|name| matches!(**name, "Report cache telemetry" | "Upload cache metrics"))
+        .count();
+    let later = steps.len() - plan_index - 1 - reporting;
     assert_eq!(
         gated, later,
         "every step after the plan carries the gate: {text}"
@@ -78,7 +82,7 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
         )),
         "{text}"
     );
-    assert!(text.contains(r#""$VELNOR_HELPER_EXEC" plan --explain'"#));
+    assert!(text.contains(r#""$VELNOR_EXEC" plan --explain'"#));
     assert!(!text.contains("steps.velnor-helper-check-"));
     Ok(())
 }
@@ -162,7 +166,7 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
     for line in steps {
         assert!(
             line.contains(
-                "\"$VELNOR_HELPER_EXEC\" run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc"
+                "\"$VELNOR_EXEC\" run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc"
             ),
             "{line}"
         );
@@ -229,10 +233,7 @@ fn every_cargo_command_runs_through_the_helper() -> TestResult {
     assert_ne!(runs.len(), 0);
     for run in runs {
         let cargo = run.contains("cargo-") || run.starts_with("cargo ");
-        assert!(
-            !cargo || run.contains("\"$VELNOR_HELPER_EXEC\" run "),
-            "{run}"
-        );
+        assert!(!cargo || run.contains("\"$VELNOR_EXEC\" run "), "{run}");
     }
     Ok(())
 }
@@ -320,7 +321,7 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
         let text = workflow(&view(roots, None)?)?;
         let cargo: Vec<&str> = text
             .split("      - name: ")
-            .filter(|step| step.contains(r#""$VELNOR_HELPER_EXEC" run -- cargo"#))
+            .filter(|step| step.contains(r#""$VELNOR_EXEC" run -- cargo"#))
             .collect();
         assert!(!cargo.is_empty(), "{text}");
         for step in cargo {

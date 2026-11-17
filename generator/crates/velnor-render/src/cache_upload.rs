@@ -16,16 +16,6 @@ pub(crate) fn key_output(family: TrimFamily) -> &'static str {
     }
 }
 
-pub(crate) fn family_of(key: &CacheKey) -> Option<TrimFamily> {
-    match key {
-        CacheKey::Target { .. } => Some(TrimFamily::Target),
-        CacheKey::Sources { .. } => Some(TrimFamily::Sources),
-        _ => None,
-    }
-}
-
-/// Records the saved key in the lane without a token. The verification that
-/// needs one runs in the cache job, which never executes repository code.
 pub(crate) fn record(kind: &StepKind, saved: &RenderedStep) -> Option<RenderedStep> {
     let StepKind::CacheSave(key) = kind else {
         return None;

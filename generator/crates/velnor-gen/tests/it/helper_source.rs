@@ -130,9 +130,10 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
             .ok_or("source check missing")?;
         assert!(step.contains("working-directory: ci-helper"), "{step}");
     }
-    let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
+    let verdict = &text[text.find("  required:").ok_or("no verdict")?
+        ..text.find("\n  cache:\n").ok_or("no Cache")?];
     assert!(verdict.contains("Install velnor-ci 0.1.81"));
-    assert!(verdict.contains("\"$VELNOR_HELPER_EXEC\" gate --spec-env GATE_SPEC"));
+    assert!(verdict.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC"));
     assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
     assert!(!verdict.contains("Check out"));
     assert!(!verdict.contains("download-artifact"));
@@ -194,12 +195,20 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     let text = text_of(&view)?;
     assert_eq!(
         job_ids(&text),
-        ["rust-plan", "rust-helper", "rust", "rust-trim", "required"]
+        [
+            "rust-plan",
+            "rust-helper",
+            "rust",
+            "rust-trim",
+            "required",
+            "cache"
+        ]
     );
-    assert_eq!(text.matches("Install velnor-ci").count(), 5);
+    assert_eq!(text.matches("Install velnor-ci").count(), 6);
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
+    let verdict = verdict.split("\n  cache:").next().unwrap_or(verdict);
     assert!(verdict.contains("Install velnor-ci 0.1.81"));
-    assert!(verdict.contains("\"$VELNOR_HELPER_EXEC\" gate --spec-env GATE_SPEC"));
+    assert!(verdict.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC"));
     assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
     assert!(!verdict.contains("Check out"));
     assert!(!verdict.contains("download-artifact"));

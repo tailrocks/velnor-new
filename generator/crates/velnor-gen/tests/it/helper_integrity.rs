@@ -18,6 +18,7 @@ use velnor_render::render;
 use crate::facts::TestResult;
 use crate::io::Scratch;
 
+pub(crate) const DEFAULT_SHELL: &str = "bash -p {0}";
 const GOOD: &str = "#!/bin/sh\nprintf 'released-helper\\n'\n";
 const BAD: &str = "#!/bin/sh\nprintf 'replaced-helper\\n'\n";
 
@@ -82,18 +83,18 @@ pub(crate) fn steps(workflow: &Value) -> Result<&Vec<Value>, Box<dyn Error>> {
 #[test]
 fn every_trusted_helper_use_runs_the_one_installed_launcher() -> TestResult {
     let workflow = workflow(&"a".repeat(64))?;
+    assert_eq!(workflow["defaults"]["run"]["shell"], DEFAULT_SHELL);
     let steps = steps(&workflow)?;
     let mut seen = Vec::new();
     for step in steps {
         let Some(run) = step["run"].as_str() else {
             continue;
         };
-        let Some(rest) = run.strip_prefix("\"$VELNOR_HELPER_BASH\" -p \"$VELNOR_HELPER_EXEC\" ")
-        else {
-            assert!(!run.contains("$VELNOR_HELPER_EXEC"), "{run}");
+        let Some(rest) = run.strip_prefix(". \"$VELNOR_EXEC\" ") else {
+            assert!(!run.contains("$VELNOR_EXEC"), "{run}");
             continue;
         };
-        assert_eq!(step["shell"], "bash -p {0}");
+        assert!(step["shell"].is_null());
         assert_eq!(run.lines().count(), 1, "{run}");
         assert!(
             step["env"]
@@ -181,7 +182,7 @@ pub(crate) fn execute_environment(
         .collect();
     if step["run"]
         .as_str()
-        .is_some_and(|run| run.contains("$VELNOR_HELPER_EXEC"))
+        .is_some_and(|run| run.contains("$VELNOR_EXEC"))
     {
         bindings.insert("VELNOR_HELPER_SHA256".to_owned(), digest.to_owned());
     }
@@ -190,9 +191,7 @@ pub(crate) fn execute_environment(
             .iter()
             .map(|(key, value)| ((*key).to_owned(), (*value).to_owned())),
     );
-    let shell = step["shell"]
-        .as_str()
-        .unwrap_or("/bin/bash --noprofile --norc -e -o pipefail {0}");
+    let shell = step["shell"].as_str().unwrap_or(DEFAULT_SHELL);
     let mut words = shell.split_whitespace();
     let program = words.next().ok_or("no shell executable")?;
     let mut command = Command::new(if program == "bash" {

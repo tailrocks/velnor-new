@@ -20,7 +20,11 @@ fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error:
 
 fn required(text: &str) -> Result<&str, &'static str> {
     text.find("  required:\n")
-        .map(|at| &text[at..])
+        .map(|at| {
+            let job = &text[at..];
+            let end = job.find("\n  cache:\n").map_or(job.len(), |at| at + 1);
+            &job[..end]
+        })
         .ok_or("no required job")
 }
 
@@ -54,7 +58,7 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
     assert!(job.contains(
         "        env:\n          NEEDS_JSON: '${{ toJSON(needs) }}'\n          GATE_SPEC: '"
     ));
-    assert!(job.contains("\"$VELNOR_HELPER_EXEC\" gate --spec-env GATE_SPEC'\n"));
+    assert!(job.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n"));
     assert_eq!(
         gate_line(&text)?,
         "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-lab=lab"
@@ -163,7 +167,7 @@ fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult 
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
     assert_eq!(spec.matches("--tests ").count(), 20);
-    assert!(required(&text)?.contains("\"$VELNOR_HELPER_EXEC\" gate --spec-env GATE_SPEC'\n"));
+    assert!(required(&text)?.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n"));
     Ok(())
 }
 

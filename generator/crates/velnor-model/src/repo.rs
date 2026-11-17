@@ -5,8 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::cron::CronExpr;
+use crate::helper::HelperRelease;
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
-use crate::plan::{HelperRelease, Shape};
+use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
@@ -257,6 +258,7 @@ pub struct RustCiConfig {
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
     pub ci_debuginfo: CiDebugInfo,
+    pub cache_check_blocks: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -306,6 +308,7 @@ impl Default for RustCiConfig {
             full_run: FullRun::Nightly,
             helper: None,
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
+            cache_check_blocks: false,
         }
     }
 }

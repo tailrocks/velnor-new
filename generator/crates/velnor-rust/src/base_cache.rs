@@ -143,7 +143,7 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         .chain([step(StepKind::CacheResult(uploads.clone()))])
         .collect();
     Some(Job {
-        name: Some("Cache".to_owned()),
+        name: Some("Cache maintenance".to_owned()),
         needs: lanes,
         when: When::SaveBase,
         skip_on_draft: false,

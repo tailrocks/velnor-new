@@ -4,17 +4,13 @@
 use std::collections::BTreeMap;
 
 use crate::cron::CronExpr;
-use crate::ids::{
-    CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RootSlug, RunnerLabel,
-    Sha256, TargetName,
-};
+use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::TargetKind;
 use crate::steps::StepKind;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
 pub const BUILD_TESTS_STEP: &str = "Build the tests";
-
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
 
@@ -194,6 +190,7 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    Finalizer,
     Always,
     Scheduled,
     ScheduledOrPush,
@@ -206,77 +203,6 @@ pub enum When {
     FullAuditOrPush,
     BaseExpired,
     SavingRun,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HelperRelease {
-    version: HelperVersion,
-    action: CommitSha,
-    digests: BTreeMap<Platform, Sha256>,
-}
-
-impl HelperRelease {
-    pub fn new(
-        version: HelperVersion,
-        action: CommitSha,
-        digests: BTreeMap<Platform, Sha256>,
-    ) -> Result<Self, InvalidId> {
-        if digests.is_empty() {
-            return Err(InvalidId {
-                kind: "HelperRelease",
-                value: version.to_string(),
-            });
-        }
-        Ok(Self {
-            version,
-            action,
-            digests,
-        })
-    }
-
-    #[must_use]
-    pub fn version(&self) -> &HelperVersion {
-        &self.version
-    }
-
-    #[must_use]
-    pub fn action(&self) -> &CommitSha {
-        &self.action
-    }
-
-    #[must_use]
-    pub fn digests(&self) -> &BTreeMap<Platform, Sha256> {
-        &self.digests
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Platform {
-    LinuxX64,
-    LinuxArm64,
-    MacosArm64,
-}
-
-impl Platform {
-    pub const ALL: [Self; 3] = [Self::LinuxX64, Self::LinuxArm64, Self::MacosArm64];
-
-    #[must_use]
-    pub const fn file_suffix(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "linux-x64",
-            Self::LinuxArm64 => "linux-arm64",
-            Self::MacosArm64 => "macos-arm64",
-        }
-    }
-
-    #[must_use]
-    pub const fn runner_key(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "Linux-X64",
-            Self::LinuxArm64 => "Linux-ARM64",
-            Self::MacosArm64 => "macOS-ARM64",
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

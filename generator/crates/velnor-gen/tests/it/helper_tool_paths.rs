@@ -18,7 +18,7 @@ fn tools(root: &Path, missing: &str) -> TestResult {
     ] {
         if tool != missing {
             let path = root.join("tools").join(tool);
-            if ["bash", "mktemp", "cp", "chmod", "env", "shasum"].contains(&tool) {
+            if ["mktemp", "cp", "chmod", "env", "shasum"].contains(&tool) {
                 fs::write(
                     &path,
                     format!(
@@ -64,7 +64,7 @@ fn setup_records_non_default_tools_and_rendered_calls_use_them() -> TestResult {
             .success()
     );
     let recorded = fs::read_to_string(temp.join("helper-tools.env"))?;
-    for tool in ["bash", "mktemp", "cp", "chmod", "mkdir", "env", "shasum"] {
+    for tool in ["mktemp", "cp", "chmod", "mkdir", "env", "shasum"] {
         assert!(recorded.contains(&fixture.work.join("tools").join(tool).display().to_string()));
     }
     let binary = fixture.work.join("temp/velnor-ci-bin/velnor-ci");
@@ -97,7 +97,7 @@ fn setup_records_non_default_tools_and_rendered_calls_use_them() -> TestResult {
         }
     }
     let used = fs::read_to_string(fixture.work.join("tools-used"))?;
-    for tool in ["bash", "mktemp", "cp", "chmod", "env", "shasum"] {
+    for tool in ["mktemp", "cp", "chmod", "env", "shasum"] {
         assert!(
             used.lines().any(|line| line == tool),
             "{tool} was not used: {used}"
@@ -109,7 +109,7 @@ fn setup_records_non_default_tools_and_rendered_calls_use_them() -> TestResult {
 
 #[test]
 fn setup_names_a_missing_required_tool_before_publishing_the_helper() -> TestResult {
-    for missing in ["mktemp", "bash"] {
+    for missing in ["mktemp", "cp"] {
         let fixture = Install::new(&format!("missing-helper-{missing}"))?;
         tools(&fixture.work, missing)?;
         let yaml = workflow(&"a".repeat(64))?;

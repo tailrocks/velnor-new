@@ -334,6 +334,13 @@ fn multi_line_runs(text: &str) -> Vec<String> {
             continue;
         };
         let value = value.trim();
+        if value.is_empty()
+            && lines
+                .get(index + 1)
+                .is_some_and(|next| next.trim_start().starts_with("shell:"))
+        {
+            continue;
+        }
         let indent = line.len() - line.trim_start().len();
         let quoted_open = ["'", "\""]
             .iter()
