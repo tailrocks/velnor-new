@@ -332,3 +332,26 @@ async fn a_helper_identity_that_differs_from_the_journal_settles_nothing() -> Te
     }
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_removed_initializer_remains_valid_after_journal_reopen() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("launch.db");
+    let (journal, scope, engine) = seeded(dir.path(), &[BOUND]).await?;
+    prime_bound_release(&journal, BOUND).await?;
+    settle(&scope, &engine, BOUND, &helper(BOUND))
+        .await
+        .map_err(|error| format!("initializer settlement: {error}"))?;
+    drop(scope);
+    drop(journal);
+
+    let (journal, _scope) = reopen(&path)
+        .await
+        .map_err(|error| format!("journal reload: {error}"))?;
+    assert!(ready(&journal).await?);
+    assert_eq!(
+        seed::text(&journal, STATES, BOUND.reservation).await?,
+        "removed/not_requested"
+    );
+    Ok(())
+}
