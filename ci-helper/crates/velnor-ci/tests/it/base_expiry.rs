@@ -21,7 +21,7 @@ fn today(days_ago: i64) -> String {
 
 fn restored(repo: &Repo, days: Option<&str>) -> (Output, String) {
     let outputs = repo.root().join("github-output");
-    let _ = fs::remove_file(&outputs);
+    fs::remove_file(&outputs).unwrap_or_default();
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .arg("restored")
