@@ -91,7 +91,6 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
             }
         }
         Ok(_) => return Err(format!("{} is not a regular file", symlinks_file.display()).into()),
-        Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
     tracked_paths.extend(symlinks.iter().cloned());
@@ -263,16 +262,18 @@ fn a_sample_without_metadata_for_one_of_its_roots_is_rejected() -> TestResult {
         fs::remove_dir_all(&sample)?;
     }
     fs::create_dir_all(&sample)?;
+    fs::write(sample.join("symlinks.txt"), "")?;
     fs::write(
         sample.join("manifests.txt"),
         "Cargo.toml\nxtask/Cargo.toml\n",
     )?;
-    let workspace = br#"{"workspace_root":"/repo","packages":[{"name":"a","manifest_path":"/repo/Cargo.toml","dependencies":[],"targets":[]}]}"#;
+    let workspace = br#"{"workspace_root":"/repo","packages":[{"name":"a","version":"0.1.0","manifest_path":"/repo/Cargo.toml","dependencies":[],"targets":[]}]}"#;
     fs::create_dir_all(sample.join("cargo-metadata"))?;
     fs::write(sample.join("cargo-metadata/Cargo.toml.json"), workspace)?;
     let result = load(&sample);
     fs::remove_dir_all(&sample)?;
-    assert!(result.is_err());
+    let error = result.err().ok_or("missing root metadata was accepted")?;
+    assert!(error.to_string().contains("xtask/Cargo.toml"), "{error}");
     Ok(())
 }
 
