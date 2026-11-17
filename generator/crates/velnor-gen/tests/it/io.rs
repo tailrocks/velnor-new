@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
-use std::os::unix::fs::{PermissionsExt, symlink};
+use std::os::unix::fs::symlink;
 use std::path::{Path, PathBuf};
 
 use velnor_gen::Drift;
@@ -18,8 +18,6 @@ pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 const CONFIG: &str = ".velnor/rust-ci.toml";
-
-mod samples;
 
 pub(crate) struct Scratch(PathBuf);
 
