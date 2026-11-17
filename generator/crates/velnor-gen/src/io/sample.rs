@@ -110,7 +110,10 @@ pub fn relocate_metadata(checkout: &Path, json: &[u8]) -> Result<Vec<u8>, Error>
         prefixes.push(url_path.clone());
         prefixes.push(percent_encode(&url_path));
     }
-    if let Some(authority) = normalized.strip_prefix("//").filter(|rest| !rest.is_empty()) {
+    if let Some(authority) = normalized
+        .strip_prefix("//")
+        .filter(|rest| !rest.is_empty())
+    {
         prefixes.push(authority.to_owned());
         prefixes.push(percent_encode(authority));
     }
