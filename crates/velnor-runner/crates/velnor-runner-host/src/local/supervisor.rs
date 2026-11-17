@@ -17,7 +17,7 @@ use super::minted::MintedAgents;
 use super::pair::{ENVIRONMENT_LABEL, PAIR_LABEL};
 use super::plan::{Plan, Side};
 use super::policy::Policy;
-use super::remove::{labelled_agents, remove_labelled};
+use super::remove::{labelled_agents, remove_audited};
 use super::request::{LocalPairRequest, validate};
 
 pub(super) const DECISIONS_FILE: &str = "decisions.jsonl";
@@ -88,7 +88,12 @@ impl Supervisor {
         agents.sort();
         agents.dedup();
         let pairs = [label.clone(), PAIR_LABEL.to_owned()];
-        let removed = remove_labelled(&self.docker, &pairs).await?;
+        let removed = remove_audited(
+            &self.docker,
+            &pairs,
+            &self.decisions.with_file_name("cleanup.jsonl"),
+        )
+        .await?;
         let mut cleanup = Ok(());
         let mut unconfirmed = false;
         for (side_name, name) in agents {

@@ -1,50 +1,67 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 use std::process::Command;
 
 use velnor_gen::io::read_files;
 use velnor_model::RepoPath;
-use velnor_rust::{repo_profile, rustc_release};
+use velnor_rust::{
+    METADATA_PATH, cargo_config_paths, check_runtime_configs, recorded_roots, repo_profile,
+    rustc_release,
+};
 
 use crate::error::CiError;
 
-const CONFIG_PATHSPECS: [&str; 2] = [":(glob)**/.cargo/config", ":(glob)**/.cargo/config.toml"];
 const OS_RELEASE: &str = "/etc/os-release";
 
 pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
+    let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
+    let roots = recorded_roots(recorded.get(&METADATA_PATH).map(Vec::as_slice))
+        .map_err(|e| CiError::new(e.to_string()))?;
+    let mut files = BTreeMap::new();
+    for path in cargo_config_paths(&roots) {
+        if let Some(bytes) = read_config(root, &path)? {
+            files.insert(path, bytes);
+        }
+    }
+    let tracked = tracked_among(root, &files);
+    check_runtime_configs(&roots, &files, &tracked).map_err(|e| CiError::new(e.to_string()))?;
+    repo_profile(&files).map_err(|e| CiError::new(e.to_string()))
+}
+
+fn tracked_among(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> BTreeSet<RepoPath> {
+    let Some(listed) = listed_configs(root, files) else {
+        return BTreeSet::new();
+    };
+    let wanted: BTreeSet<&str> = files.keys().map(RepoPath::as_str).collect();
+    listed
+        .split(|byte| *byte == 0)
+        .filter_map(|name| std::str::from_utf8(name).ok())
+        .filter(|name| wanted.contains(name))
+        .filter_map(|name| RepoPath::new(name).ok())
+        .collect()
+}
+
+fn listed_configs(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> Option<Vec<u8>> {
+    if files.is_empty() {
+        return Some(Vec::new());
+    }
     let output = Command::new("git")
-        .args([
-            "ls-files",
-            "-z",
-            "--cached",
-            "--others",
-            "--exclude-standard",
-            "--",
-        ])
-        .args(CONFIG_PATHSPECS)
+        .arg("--literal-pathspecs")
+        .args(["ls-files", "-z", "--"])
+        .args(files.keys().map(RepoPath::as_str))
         .current_dir(root)
         .output()
-        .map_err(|e| CiError::new(format!("cannot run git: {e}")))?;
-    if !output.status.success() {
-        return Err(CiError::new(format!(
-            "git ls-files failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )));
-    }
-    let paths = output
-        .stdout
-        .split(|byte| *byte == 0)
-        .filter(|name| !name.is_empty())
-        .map(|name| {
-            std::str::from_utf8(name)
-                .map_err(|_| CiError::new("a cargo config path is not UTF-8".to_owned()))
-                .and_then(|name| RepoPath::new(name).map_err(|e| CiError::new(e.to_string())))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-    let files = read_files(root, &paths).map_err(|e| CiError::new(e.to_string()))?;
-    repo_profile(&files).map_err(|e| CiError::new(e.to_string()))
+        .ok()?;
+    output.status.success().then_some(output.stdout)
+}
+
+fn read_config(root: &Path, path: &RepoPath) -> Result<Option<Vec<u8>>, CiError> {
+    let mut read = read_files(root, std::slice::from_ref(path))
+        .map_err(|error| CiError::new(error.to_string()))?;
+    Ok(read.remove(path))
 }
 
 pub(super) fn release_of(verbose: &str) -> Result<(u32, u32), CiError> {
