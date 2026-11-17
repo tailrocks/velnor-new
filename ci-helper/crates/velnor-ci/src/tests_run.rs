@@ -8,6 +8,8 @@ use velnor_rust::{PackageCounts, encode_package_counts};
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
+#[cfg(test)]
+mod list_argv;
 #[path = "tests_run/listed.rs"]
 mod listed;
 #[path = "tests_run/status.rs"]
@@ -44,8 +46,7 @@ const RUN_OPTIONS: &[&str] = &[
     "--test-threads",
 ];
 
-#[must_use]
-pub fn runs_nextest(command: &[String]) -> bool {
+fn nextest_run(command: &[String]) -> Option<&[String]> {
     let command = if command
         .first()
         .and_then(|program| program.rsplit('/').next())
@@ -62,9 +63,15 @@ pub fn runs_nextest(command: &[String]) -> bool {
         .first()
         .and_then(|program| program.rsplit('/').next())
         .unwrap_or_default();
-    matches!(program, "cargo" | "cargo-nextest")
+    (matches!(program, "cargo" | "cargo-nextest")
         && command.get(1).map(String::as_str) == Some("nextest")
-        && command.get(2).map(String::as_str) == Some("run")
+        && command.get(2).map(String::as_str) == Some("run"))
+    .then_some(command)
+}
+
+#[must_use]
+pub fn runs_nextest(command: &[String]) -> bool {
+    nextest_run(command).is_some()
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -98,9 +105,7 @@ fn skipped(line: &str) -> Option<u64> {
 
 #[must_use]
 pub(crate) fn list_argv(run: &[String]) -> Option<Vec<String>> {
-    if !runs_nextest(run) {
-        return None;
-    }
+    let run = nextest_run(run)?;
     let mut out = Vec::with_capacity(run.len() + 2);
     out.extend(run.iter().take(2).cloned());
     out.push("list".to_owned());

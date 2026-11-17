@@ -38,8 +38,8 @@ pub(super) fn status_line(line: &str) -> Status {
     }
     let counted = matches!(
         word,
-        "PASS" | "FAIL" | "TIMEOUT" | "TMPASS" | "LEAK" | "LEAK-FAIL" | "SIGSEGV" | "ABORT"
-    );
+        "PASS" | "FAIL" | "TIMEOUT" | "TIMEOUT-PASS" | "LEAK" | "LEAK-FAIL" | "ABORT"
+    ) || signal(word);
     if !counted {
         return if word
             .bytes()
@@ -56,6 +56,15 @@ pub(super) fn status_line(line: &str) -> Status {
     parse_status(rest).map_or(Status::Poison, |(package, counter)| Status::Count {
         package,
         counter,
+    })
+}
+
+fn signal(word: &str) -> bool {
+    word.strip_prefix("SIG").is_some_and(|name| {
+        !name.is_empty()
+            && name
+                .bytes()
+                .all(|byte| byte.is_ascii_uppercase() || byte.is_ascii_digit())
     })
 }
 
