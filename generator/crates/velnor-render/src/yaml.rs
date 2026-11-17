@@ -38,12 +38,7 @@ pub(crate) fn emit(root: &[(String, Yaml)]) -> String {
     out
 }
 
-fn entries(
-    out: &mut String,
-    items: &[(String, Yaml)],
-    indent: usize,
-    shared: &mut Anchors,
-) {
+fn entries(out: &mut String, items: &[(String, Yaml)], indent: usize, shared: &mut Anchors) {
     for (key, value) in items {
         let value = match value {
             Yaml::Noted(note, inner) => {
