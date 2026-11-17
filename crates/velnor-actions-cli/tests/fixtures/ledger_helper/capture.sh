@@ -9,7 +9,7 @@ trap 'rm -rf "$work"' EXIT
 stage="$work/stage"
 matrix=m-df42bdfcb20b0e49
 run_dir="$stage/runner_temp/velnor/r4242-a1"
-report="$run_dir/$matrix/tasks/task-r4242-a1-m-df42bdfcb20b0e49-4fcc45b68b3849cf.json"
+report="$run_dir/$matrix/tasks/task-r4242-a1-m-df42bdfcb20b0e49-f45e95b559d5cf79.json"
 
 mask() {
   sed -E 's/"(started_at|finished_at)":"[^"]*"/"\1":"<clock>"/g'
