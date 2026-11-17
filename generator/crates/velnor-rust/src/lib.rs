@@ -86,3 +86,5 @@ pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use verdict::{JobResult, Need, PlanOutput, TestCounts, Verdict, decide, verdict};
 pub use weaken::introduced;
+
+pub use private_sources::cacheable_lock;

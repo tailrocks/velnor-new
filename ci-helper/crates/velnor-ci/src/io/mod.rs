@@ -4,6 +4,7 @@
 mod audit;
 mod build_inputs;
 mod cache;
+mod cache_sources;
 mod cold;
 mod configurations;
 mod crates_mirror;
@@ -134,17 +135,26 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => {
-            let log = std::env::var_os("RUNNER_TEMP")
+            let temp = std::env::var_os("RUNNER_TEMP")
                 .filter(|dir| !dir.is_empty())
-                .and_then(|dir| fs::read(Path::new(&dir).join("velnor-run.log")).ok());
-            let decision = decide(
-                log.as_ref()
-                    .map(|bytes| String::from_utf8_lossy(bytes))
-                    .as_deref(),
-                &args.target_dir,
-                args.archive.as_deref(),
-                now_seconds(),
-            )?;
+                .ok_or_else(|| {
+                    CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
+                })?;
+            let log_path = Path::new(&temp).join("velnor-run.log");
+            let log = fs::read(&log_path)
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
+            let decision = match cache_sources::refusal(&current_dir()?)? {
+                Some(reason) => Decision {
+                    save: false,
+                    report: reason,
+                },
+                None => decide(
+                    Some(&String::from_utf8_lossy(&log)),
+                    &args.target_dir,
+                    args.archive.as_deref(),
+                    now_seconds(),
+                )?,
+            };
             append_outputs(&format!("save={}\n", decision.save))?;
             Ok(decision.report)
         }
