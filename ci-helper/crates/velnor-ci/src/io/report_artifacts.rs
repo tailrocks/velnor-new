@@ -80,9 +80,6 @@ pub(super) fn downloads(
         .iter()
         .filter(|event| event.kind == ProgressKind::Downloaded)
         .collect();
-    if events.is_empty() {
-        return (Vec::new(), Vec::new(), Vec::new());
-    }
     match &invocation.verified_download_archives {
         Some(archives) => verified_downloads(archives, root, &events),
         None if exact_sources => (
@@ -111,13 +108,16 @@ fn verified_downloads(
     let archives: BTreeSet<_> = archives.iter().collect();
     let mut downloads = Vec::new();
     for archive in &archives {
-        if let Some(event) = events.iter().find(|event| {
+        let label = if let Some(event) = events.iter().find(|event| {
             Path::new(archive).file_name().is_some_and(|name| {
                 name == format!("{}-{}.crate", event.package, event.version).as_str()
             })
         }) {
-            downloads.push(format!("{} v{} ({archive})", event.package, event.version));
-        }
+            format!("{} v{} ({archive})", event.package, event.version)
+        } else {
+            (*archive).clone()
+        };
+        downloads.push(label);
     }
     let diagnostics = events
         .iter()

@@ -220,14 +220,18 @@ fn same_package_archives_in_two_registries_count_as_two_downloads() -> super::su
 #[test]
 fn repeated_download_text_counts_one_changed_archive_once() -> super::super::ResultTest {
     archive_downloads(
-        &["registry/demo-0.1.0.crate"],
+        &["registry/demo-0.1.0.crate", "registry/demo-0.1.0.crate"],
         &["demo v0.1.0 (registry/demo-0.1.0.crate)"],
     )
 }
 
 #[test]
-fn unrelated_archive_does_not_corroborate_download_text() -> super::super::ResultTest {
-    archive_downloads(&["registry/unrelated-0.1.0.crate"], &[])
+fn unmatched_changed_archive_counts_without_corroborating_download_text() -> super::super::ResultTest
+{
+    archive_downloads(
+        &["registry/unrelated-0.1.0.crate"],
+        &["registry/unrelated-0.1.0.crate"],
+    )
 }
 
 fn archive_downloads(archives: &[&str], expected: &[&str]) -> super::super::ResultTest {
@@ -254,6 +258,10 @@ fn archive_downloads(archives: &[&str], expected: &[&str]) -> super::super::Resu
     assert_eq!(metrics.invocations[0].downloads, expected);
     assert_eq!(metrics.downloaded, expected.len() as u64);
     assert_eq!(metrics.violations.is_empty(), expected.is_empty());
+    assert_eq!(
+        velnor_ci::report::check(std::slice::from_ref(&metrics)).is_err(),
+        !expected.is_empty()
+    );
     assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
     assert!(
         metrics

@@ -10,6 +10,8 @@ use velnor_ci::report::{LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
 use velnor_ci::telemetry::INVOCATIONS;
 
 mod artifacts;
+mod downloads;
+mod links;
 mod roots;
 
 fn cache() -> Value {

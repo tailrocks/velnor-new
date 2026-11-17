@@ -22,8 +22,11 @@ deliberately when changing this contract.
   compiler artifacts, progress, test timings, capture status, and execution
   context. `verified_download_archives` is `null` when archive observation was
   unavailable, or the sorted changed/created `.crate` paths relative to Cargo's
-  registry cache. Each corroborated archive contributes one download entry,
-  labelled with that path. Repeated progress for one archive counts once.
+  registry cache. Each distinct changed archive contributes one download entry,
+  even when Cargo prints no progress. Matching progress enriches its label;
+  otherwise the registry-relative archive path is the label. Repeated progress
+  and repeated archive paths count once. Equal filenames in different registry
+  directories count separately.
 - `downloaded` and `slowest_tests` are aggregate display fields. The latter is
   capped at ten entries. `tests_run` is a display-only workflow value.
 - `first_cargo_seconds` measures job start to the first Cargo invocation, or
@@ -37,7 +40,9 @@ package identities must provide source, name, and version before their
 artifacts can classify compilation. Source identifiers remain opaque;
 structurally unsupported identities become verification errors.
 Progress text alone cannot prove a download when a source cache was an exact
-hit: a matching archive observation is required. See Cargo's
+hit: archive observation is required, including for quiet invocations. An
+available empty observation proves zero downloads; an unavailable observation
+cannot establish that result. See Cargo's
 [JSON message format](https://doc.rust-lang.org/cargo/reference/external-tools.html#json-messages)
 for the compiler-artifact and build-script records used as input evidence.
 
@@ -56,6 +61,18 @@ A tracked `Cargo.lock` symlink prevents same-lock verification for its Cargo
 root. A usable target with that symlink makes compilation provenance
 unverifiable, including quiet non-fresh artifacts. Cold runs still retain
 compilation evidence. Fresh artifacts alone do not claim compilation.
+Other tracked symlink inputs prove unchanged contents only when their relative
+target chains resolve to regular files covered by both tracked snapshots.
+Changes in a covered referent select the original symlink path. Absolute,
+escaping, untracked, dangling, cyclic, or directory-link targets make warm
+compilation provenance unverifiable. The report does not follow or hash
+arbitrary referents. This uncertainty disables an unchanged-workspace claim
+within the affected root and leaves independent roots verifiable.
+Repeated compilations without a recognized unit identity retain their observed
+package and available configuration context. Three such observations in one
+context make the check fail verification, because it cannot prove that Cargo
+respected the compilation limit. This is uncertainty rather than proof that
+one identical unit compiled three times.
 API enrichment runs after provenance collection. These inputs do not change
 the schema-1 output contract.
 

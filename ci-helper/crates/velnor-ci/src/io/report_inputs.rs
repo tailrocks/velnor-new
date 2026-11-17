@@ -12,6 +12,8 @@ use velnor_model::{AllTrigger, ChangeSet, RepoPath, RustSelection};
 
 #[path = "report_artifacts.rs"]
 mod artifact_evidence;
+#[path = "report_links.rs"]
+mod link_evidence;
 
 fn ci(error: impl std::fmt::Display) -> CiError {
     CiError::new(error.to_string())
@@ -44,11 +46,12 @@ fn collect_root(
     let saved = read_snapshot(&root_path.join(SNAPSHOT))?;
     let saved_witness = read_witness(&root_path.join(RESTORE_WITNESS))?;
     let usable = saved.is_some();
+    let links = link_evidence::LinkEvidence::collect(&current, saved.as_deref());
     let same_lock = !symlink_lock && same_lock(&root.manifest, &current, saved.as_deref())?;
-    let unchanged = if symlink_lock {
+    let unchanged = if symlink_lock || links.unverifiable {
         BTreeSet::new()
     } else {
-        unchanged(facts, root, &current, saved)
+        unchanged(facts, root, &current, saved, &links.changed)
     };
     for cache in &mut metrics.caches {
         if cache.family == "target" && cache.root.as_deref() == Some(root_text) {
@@ -63,6 +66,7 @@ fn collect_root(
             checkout,
             current: &current,
             symlink_lock,
+            unverifiable_links: links.unverifiable,
             log,
             root_text,
             root_path: &root_path,
@@ -82,6 +86,7 @@ struct RootInputs<'a> {
     unchanged: &'a BTreeSet<String>,
     saved_witness: Option<&'a str>,
     symlink_lock: bool,
+    unverifiable_links: bool,
 }
 
 fn read_snapshot(path: &Path) -> Result<Option<Vec<crate::inputs::SavedInput>>, CiError> {
@@ -142,6 +147,7 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
             invocation,
             inputs.root_text,
             inputs.current,
+            inputs.unverifiable_links,
             inputs.saved_witness,
             warm,
         );
@@ -171,6 +177,7 @@ fn verify_witness(
     invocation: &crate::telemetry::Invocation,
     root: &str,
     current: &crate::inputs::Tracked,
+    unverifiable_links: bool,
     saved: Option<&str>,
     warm: bool,
 ) {
@@ -181,11 +188,9 @@ fn verify_witness(
         errors.push(format!(
             "{root}: restored input witness is missing or changed during Cargo"
         ));
-    } else if current.unverifiable_links > 0
-        && invocation.compilations.iter().any(|event| !event.workspace)
-    {
+    } else if unverifiable_links {
         errors.push(format!(
-            "{root}: tracked symlink targets cannot verify dependency inputs"
+            "{root}: tracked symlink referents cannot verify compilation inputs"
         ));
     }
 }
@@ -209,6 +214,7 @@ fn unchanged(
     root: &velnor_model::RustRoot,
     current: &crate::inputs::Tracked,
     saved: Option<Vec<crate::inputs::SavedInput>>,
+    links_changed: &BTreeSet<String>,
 ) -> BTreeSet<String> {
     let mut unchanged = BTreeSet::new();
     if current.unsupported > 0 || current.unverifiable_links > 0 || !current.absent.is_empty() {
@@ -253,6 +259,8 @@ fn unchanged(
                 .keys()
                 .chain(current.keys())
                 .filter(|path| saved.get(*path) != current.get(*path))
+                .copied()
+                .chain(links_changed.iter())
                 .filter_map(|path| RepoPath::new(path.as_str()).ok())
                 .collect(),
             ..ChangeSet::default()

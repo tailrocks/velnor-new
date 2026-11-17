@@ -12,15 +12,20 @@ type ResultTest = Result<(), Box<dyn std::error::Error>>;
 
 #[test]
 fn independent_symlink_root_preserves_regular_warm_dependency_waste() -> ResultTest {
-    independent_roots(true)
+    independent_roots("lock")
 }
 
 #[test]
 fn regular_nested_root_uses_its_own_restoration_witness() -> ResultTest {
-    independent_roots(false)
+    independent_roots("regular")
 }
 
-fn independent_roots(linked: bool) -> ResultTest {
+#[test]
+fn unverified_source_link_in_other_root_preserves_regular_workspace_classification() -> ResultTest {
+    independent_roots("source")
+}
+
+fn independent_roots(linked: &str) -> ResultTest {
     let repo = Repo::new("report-independent-roots");
     for name in ["regular", "other"] {
         repo.write(
@@ -35,11 +40,18 @@ fn independent_roots(linked: bool) -> ResultTest {
     }
     super::super::metadata_inputs(&repo)?;
     velnor_gen::io::write_metadata(repo.root())?;
-    if linked {
+    if linked == "lock" {
         fs::remove_file(repo.root().join("other/Cargo.lock"))?;
         symlink(
             "/missing/external/Cargo.lock",
             repo.root().join("other/Cargo.lock"),
+        )?;
+    }
+    if linked == "source" {
+        fs::remove_file(repo.root().join("other/src/lib.rs"))?;
+        symlink(
+            "/missing/external/source",
+            repo.root().join("other/src/lib.rs"),
         )?;
     }
     repo.git(&["add", "."]);
