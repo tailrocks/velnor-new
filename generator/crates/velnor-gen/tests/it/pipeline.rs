@@ -124,9 +124,20 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
     ];
     let text = workflow(&view(&roots, Some(b"runner = \"on\"\n"))?)?;
     assert!(text.contains("    runs-on: 'on'\n"));
+    let formats: Vec<&str> = text
+        .split("\n      - ")
+        .filter(|step| step.lines().any(|line| line.trim() == "name: Format"))
+        .collect();
+    assert_eq!(formats.len(), 3, "{formats:?}");
+    let format_command = r#"run: '"$VELNOR_HELPER" run -- cargo-fmt --all --check'"#;
     for directory in ["'-bad'", "'it''s crates'", "\"odd\\uffff\""] {
         let rendered = format!("working-directory: {directory}");
-        assert!(text.contains(&rendered), "{directory}");
+        assert!(
+            formats
+                .iter()
+                .any(|step| step.contains(&rendered) && step.contains(format_command)),
+            "{directory} must be in its Format step: {formats:?}"
+        );
     }
     assert_eq!(
         text.matches(r#"run: '"$VELNOR_HELPER" run -- cargo-fmt --all --check'"#)

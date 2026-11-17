@@ -51,29 +51,17 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
         let end = rest
             .find("\n  rust-")
             .or_else(|| rest.find("\n  required:"));
-        let order = names_of(end.map_or(rest, |end| &rest[..end]));
+        let order: Vec<&str> = names_of(end.map_or(rest, |end| &rest[..end]))
+            .into_iter()
+            .filter(|name| *name != "Verify the released helper")
+            .collect();
         let restored = order
             .iter()
             .position(|name| *name == "velnor-ci restored")
             .ok_or("no restored step")?;
-        let target = order
-            .iter()
-            .position(|name| *name == "Restore the target cache")
-            .ok_or("no target cache")?;
-        let input_restore = order
-            .iter()
-            .position(|name| *name == "velnor-ci inputs restore")
-            .ok_or("no input restore")?;
-        assert!(
-            target < input_restore && input_restore < restored,
-            "{lane}: {order:?}"
-        );
-        assert!(
-            order[restored + 1..]
-                .iter()
-                .any(|name| name.starts_with("Format")),
-            "{lane}: {order:?}"
-        );
+        assert_eq!(order[restored - 2], "Restore the target cache", "{lane}");
+        assert_eq!(order[restored - 1], "velnor-ci inputs restore", "{lane}");
+        assert_eq!(order[restored + 1], "Format", "{lane}");
     }
     let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
     let audited = named(audit, "velnor-ci inputs restore");
