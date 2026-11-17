@@ -110,14 +110,21 @@ fn a_release_whose_commit_is_not_a_full_lowercase_sha_is_not_pinned() {
 }
 
 #[test]
-fn a_locked_helper_is_installed_by_the_pinned_action_right_after_the_checkout_and_nowhere_else()
+fn a_locked_helper_is_installed_by_the_pinned_action_after_tool_resolution_and_nowhere_else()
 -> TestResult {
     let text = workflow(&locked("0.1.79")?)?;
     let steps: Vec<&str> = text
         .lines()
         .filter_map(|line| line.strip_prefix("      - name: "))
         .collect();
-    assert_eq!(steps[..2], ["Check out", "Install velnor-ci 0.1.79"]);
+    assert_eq!(
+        steps[..3],
+        [
+            "Check out",
+            "Resolve released helper tools",
+            "Install velnor-ci 0.1.79"
+        ]
+    );
     assert_eq!(
         steps
             .iter()

@@ -13,6 +13,9 @@ impl ConnectionJournal {
         let connection_id = self.connection_id().as_str().to_owned();
         read_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
+            if super::unbound_retirement::reserves_cleanup(connection, &connection_id, reservation_id).await? {
+                return Ok(None);
+            }
             let Some(context) = hold_context(connection, &connection_id, reservation_id).await? else {
                 return Ok(None);
             };
@@ -95,6 +98,9 @@ impl ConnectionJournal {
         let connection_id = self.connection_id().as_str().to_owned();
         in_transaction_before(self.journal_ref(), deadline, async |connection| {
             self.validate_scope(connection).await?;
+            if super::unbound_retirement::reserves_cleanup(connection, &connection_id, candidate.reservation_id).await? {
+                return Ok(None);
+            }
             let Some(context) = hold_context(connection, &connection_id, candidate.reservation_id).await? else {
                 return Ok(None);
             };

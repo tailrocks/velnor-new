@@ -17,6 +17,11 @@ use crate::launch::SelectedEngineContext;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[cfg(test)]
+mod historical_v48;
+#[cfg(test)]
+pub(crate) use historical_v48::remove_unbound_v48_for_test;
+
 mod create;
 mod remove;
 
