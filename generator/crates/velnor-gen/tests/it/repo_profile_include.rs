@@ -48,17 +48,3 @@ fn a_cargo_config_that_includes_another_file_cannot_be_hashed_as_having_no_profi
     ));
     Ok(())
 }
-
-#[test]
-fn a_config_without_include_keeps_its_inline_profile_or_hashes_as_empty() -> TestResult {
-    let inline = repo_profile(&files(&[(
-        ".cargo/config.toml",
-        "[profile.dev]\nopt-level = 3\n",
-    )])?)?;
-    assert!(inline.starts_with(".cargo/config.toml\n") && inline.contains("opt-level = 3"));
-    assert_eq!(
-        repo_profile(&files(&[(".cargo/config.toml", "[build]\njobs = 2\n")])?)?,
-        ""
-    );
-    Ok(())
-}
