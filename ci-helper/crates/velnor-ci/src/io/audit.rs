@@ -113,7 +113,7 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     complete(&facts, &workspaces, &audit.built, &platforms)?;
     if !audit.stale.is_empty() {
         return Err(CiError::new(format!(
-            "found stale dep-info {}; rebuild every observed target or delete its stale unit files before auditing inputs",
+            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
             audit.stale.join(", ")
         )));
     }
@@ -174,7 +174,7 @@ fn complete(
         return Ok(());
     }
     Err(CiError::new(format!(
-        "found no current dep-info {}; run this after cargo build --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
+        "found no current dep-info {}; run this after velnor-ci inputs build -- cargo build --workspace --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
         gaps.join("; ")
     )))
 }
@@ -207,7 +207,7 @@ fn compare(
     .map(|(heading, entries)| format!("{heading}:\n{}", format_inputs_lock(&entries)))
     .collect();
     Err(CiError::new(format!(
-        "{INPUTS_LOCK} is stale; run velnor-ci inputs audit --write after a build of all targets and commit it\n{}",
+        "{INPUTS_LOCK} is stale; run velnor-ci inputs build -- cargo build --workspace --all-targets, then velnor-ci inputs audit --write and commit it\n{}",
         sections.concat().trim_end()
     )))
 }

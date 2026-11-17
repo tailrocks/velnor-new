@@ -36,11 +36,25 @@ impl Freshness {
         }
         let root = fs::canonicalize(path)?;
         if !self.directories.contains_key(&root) {
-            let entries = inventory::scan(&root, &self.targets, &mut self.remaining)?;
+            let scanned = inventory::scan(&root, &self.targets, &mut self.remaining)?;
+            let entries = inventory::view(&scanned, &root, &self.targets)?;
             let mut newest = SystemTime::UNIX_EPOCH;
-            for (path, kind) in &entries {
-                if *kind != Kind::Directory {
-                    newest = newest.max(fs::metadata(path)?.modified()?);
+            for (directory, children) in &entries {
+                for (name, kind) in children {
+                    let path = directory.join(name);
+                    let metadata = match fs::metadata(&path) {
+                        Ok(metadata) => metadata,
+                        Err(error)
+                            if inventory::unresolved_link(&error)
+                                && matches!(kind, Kind::Link { resolved: None, .. }) =>
+                        {
+                            fs::symlink_metadata(&path)?
+                        }
+                        Err(error) => return Err(error),
+                    };
+                    if !metadata.is_dir() {
+                        newest = newest.max(metadata.modified()?);
+                    }
                 }
             }
             self.directories.insert(root.clone(), (newest, entries));
@@ -48,7 +62,8 @@ impl Freshness {
         let Some((newest, entries)) = self.directories.get(&root) else {
             return Err(io::Error::other("directory inventory missing after scan"));
         };
-        Ok(*newest > built || !inventory::matches(output, &root, entries).unwrap_or(false))
+        Ok(*newest > built
+            || !inventory::matches(output, path, entries, &self.targets).unwrap_or(false))
     }
 }
 
@@ -95,7 +110,11 @@ impl Audit<'_> {
         let root = fs::canonicalize(directory).map_err(|error| failed(directory, &error))?;
         Ok(self.tracked.iter().any(|tracked| {
             let path = self.repository.join(tracked.as_str());
-            path.starts_with(&root) && inventory::excluded(&path, &root, &self.freshness.targets)
+            path.starts_with(&root)
+                && (inventory::excluded(&path, &root, &self.freshness.targets)
+                    || fs::canonicalize(&path).is_ok_and(|canonical| {
+                        inventory::excluded(&canonical, &root, &self.freshness.targets)
+                    }))
         }))
     }
 }

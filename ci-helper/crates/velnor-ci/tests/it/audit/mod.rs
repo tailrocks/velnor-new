@@ -6,6 +6,7 @@ mod gated;
 mod guards;
 mod identity;
 mod inventory;
+mod links;
 mod optional;
 mod partial;
 mod reads;
