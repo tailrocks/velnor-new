@@ -14,6 +14,7 @@ use velnor_rust::{
 };
 
 use super::units::{UnitFile, Workspace, apart, platforms, profile, unit_files, workspace};
+use super::{SOURCE_LIMIT, read_limited};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 use crate::platform::Platforms;
@@ -372,7 +373,11 @@ fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
 }
 
 fn read(file: &Path) -> Result<String, CiError> {
-    fs::read_to_string(file)
+    let handle = fs::File::open(file)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
+    let bytes = read_limited(handle, SOURCE_LIMIT)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
+    String::from_utf8(bytes)
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))
 }
 

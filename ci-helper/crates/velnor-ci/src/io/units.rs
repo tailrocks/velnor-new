@@ -16,6 +16,8 @@ use crate::coverage::{Built, Fingerprint, HOST, UnitKind};
 use crate::error::CiError;
 use crate::platform::{Platform, Platforms};
 
+const MAX_TARGET_DEPTH: usize = 64;
+
 #[derive(Deserialize)]
 pub(super) struct Workspace {
     pub(super) workspace_root: PathBuf,
@@ -52,44 +54,44 @@ pub(super) enum UnitFile {
 
 pub(super) fn unit_files(target: &Path) -> Result<Vec<(UnitFile, PathBuf)>, CiError> {
     let mut found = Vec::new();
-    walk(target, target, &mut found)?;
-    Ok(found)
-}
-
-fn walk(
-    target: &Path,
-    directory: &Path,
-    found: &mut Vec<(UnitFile, PathBuf)>,
-) -> Result<(), CiError> {
-    let entries = match fs::read_dir(directory) {
-        Ok(entries) => entries,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => {
-            return Err(CiError::new(format!(
-                "cannot read {}: {e}",
-                directory.display()
-            )));
-        }
-    };
-    for entry in entries {
-        let entry =
-            entry.map_err(|e| CiError::new(format!("cannot read {}: {e}", directory.display())))?;
-        let path = entry.path();
-        let kind = entry
-            .file_type()
-            .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
-        if kind.is_dir() && entry.file_name() != "incremental" {
-            walk(target, &path, found)?;
-        } else if let Some(unit) = path
-            .strip_prefix(target)
-            .ok()
-            .and_then(unit_file)
-            .filter(|_| kind.is_file())
-        {
-            found.push((unit, path));
+    let mut pending = vec![(target.to_path_buf(), 0)];
+    while let Some((directory, depth)) = pending.pop() {
+        let entries = match fs::read_dir(&directory) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(CiError::new(format!(
+                    "cannot read {}: {e}",
+                    directory.display()
+                )));
+            }
+        };
+        for entry in entries {
+            let entry = entry
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", directory.display())))?;
+            let path = entry.path();
+            let kind = entry
+                .file_type()
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
+            if kind.is_dir() && entry.file_name() != "incremental" {
+                if depth == MAX_TARGET_DEPTH {
+                    return Err(CiError::new(format!(
+                        "cannot read {}: target directory depth exceeds {MAX_TARGET_DEPTH}",
+                        path.display()
+                    )));
+                }
+                pending.push((path, depth + 1));
+            } else if let Some(unit) = path
+                .strip_prefix(target)
+                .ok()
+                .and_then(unit_file)
+                .filter(|_| kind.is_file())
+            {
+                found.push((unit, path));
+            }
         }
     }
-    Ok(())
+    Ok(found)
 }
 
 fn unit_file(relative: &Path) -> Option<UnitFile> {
