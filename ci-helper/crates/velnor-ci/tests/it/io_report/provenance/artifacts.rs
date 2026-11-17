@@ -164,9 +164,12 @@ fn exact_source_downloads_require_a_changed_crate_archive() -> Result<(), Box<dy
     let metrics = super::report(&repo, &source_cache, steps)?;
     assert_eq!(
         metrics.invocations[0].verified_download_archives,
-        Some(vec!["demo-0.1.0.crate".to_owned()])
+        Some(vec!["index/demo-0.1.0.crate".to_owned()])
     );
-    assert_eq!(metrics.invocations[0].downloads, ["demo v0.1.0"]);
+    assert_eq!(
+        metrics.invocations[0].downloads,
+        ["demo v0.1.0 (index/demo-0.1.0.crate)"]
+    );
     assert!(
         metrics
             .diagnostics
@@ -199,6 +202,64 @@ fn exact_source_downloads_require_a_changed_crate_archive() -> Result<(), Box<dy
             .violations
             .iter()
             .any(|line| line.contains("downloaded"))
+    );
+    Ok(())
+}
+
+#[test]
+fn same_package_archives_in_two_registries_count_as_two_downloads() -> super::super::ResultTest {
+    archive_downloads(
+        &["other/demo-0.1.0.crate", "registry/demo-0.1.0.crate"],
+        &[
+            "demo v0.1.0 (other/demo-0.1.0.crate)",
+            "demo v0.1.0 (registry/demo-0.1.0.crate)",
+        ],
+    )
+}
+
+#[test]
+fn repeated_download_text_counts_one_changed_archive_once() -> super::super::ResultTest {
+    archive_downloads(
+        &["registry/demo-0.1.0.crate"],
+        &["demo v0.1.0 (registry/demo-0.1.0.crate)"],
+    )
+}
+
+#[test]
+fn unrelated_archive_does_not_corroborate_download_text() -> super::super::ResultTest {
+    archive_downloads(&["registry/unrelated-0.1.0.crate"], &[])
+}
+
+fn archive_downloads(archives: &[&str], expected: &[&str]) -> super::super::ResultTest {
+    let repo = fixture("report-qualified-archive-downloads")?;
+    let root = fs::canonicalize(repo.root())?;
+    let mut invocation = crate::report::lane()["invocations"][0].clone();
+    invocation["root"] = json!(root);
+    invocation["compilations"] = json!([]);
+    invocation["artifacts"] = json!([]);
+    invocation["progress"] = json!([
+        {"kind":"Downloaded","package":"demo","version":"0.1.0","location":null},
+        {"kind":"Downloaded","package":"demo","version":"0.1.0","location":null},
+        {"kind":"Downloaded","package":"lookalike","version":"9.9.9","location":null}
+    ]);
+    invocation["verified_download_archives"] = json!(archives);
+    fs::write(repo.root().join(INVOCATIONS), format!("{invocation}\n"))?;
+    let caches =
+        json!([{"family":"sources","root":".","restore_step":"restore","save_step":"save"}]);
+    let metrics = super::super::report(
+        &repo,
+        &caches,
+        r#"{"restore":{"outputs":{"cache-primary-key":"key","cache-matched-key":"key","cache-hit":"true"}}}"#,
+    )?;
+    assert_eq!(metrics.invocations[0].downloads, expected);
+    assert_eq!(metrics.downloaded, expected.len() as u64);
+    assert_eq!(metrics.violations.is_empty(), expected.is_empty());
+    assert!(metrics.verification_errors.is_empty(), "{metrics:?}");
+    assert!(
+        metrics
+            .diagnostics
+            .iter()
+            .any(|line| line.contains("unverified download event for lookalike v9.9.9"))
     );
     Ok(())
 }

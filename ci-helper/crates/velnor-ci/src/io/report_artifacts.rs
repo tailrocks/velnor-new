@@ -84,23 +84,7 @@ pub(super) fn downloads(
         return (Vec::new(), Vec::new(), Vec::new());
     }
     match &invocation.verified_download_archives {
-        Some(archives) => {
-            let archives: BTreeSet<_> = archives.iter().map(String::as_str).collect();
-            let mut downloads = Vec::new();
-            let mut diagnostics = Vec::new();
-            for event in events {
-                let archive = format!("{}-{}.crate", event.package, event.version);
-                if archives.contains(archive.as_str()) {
-                    downloads.push(format!("{} v{}", event.package, event.version));
-                } else {
-                    diagnostics.push(format!(
-                        "{root}: ignored unverified download event for {} v{}",
-                        event.package, event.version
-                    ));
-                }
-            }
-            (downloads, diagnostics, Vec::new())
-        }
+        Some(archives) => verified_downloads(archives, root, &events),
         None if exact_sources => (
             Vec::new(),
             Vec::new(),
@@ -117,6 +101,42 @@ pub(super) fn downloads(
             Vec::new(),
         ),
     }
+}
+
+fn verified_downloads(
+    archives: &[String],
+    root: &str,
+    events: &[&CargoProgress],
+) -> (Vec<String>, Vec<String>, Vec<String>) {
+    let archives: BTreeSet<_> = archives.iter().collect();
+    let mut downloads = Vec::new();
+    for archive in &archives {
+        if let Some(event) = events.iter().find(|event| {
+            Path::new(archive).file_name().is_some_and(|name| {
+                name == format!("{}-{}.crate", event.package, event.version).as_str()
+            })
+        }) {
+            downloads.push(format!("{} v{} ({archive})", event.package, event.version));
+        }
+    }
+    let diagnostics = events
+        .iter()
+        .filter(|event| {
+            let basename = format!("{}-{}.crate", event.package, event.version);
+            !archives.iter().any(|archive| {
+                Path::new(archive)
+                    .file_name()
+                    .is_some_and(|name| name == basename.as_str())
+            })
+        })
+        .map(|event| {
+            format!(
+                "{root}: ignored unverified download event for {} v{}",
+                event.package, event.version
+            )
+        })
+        .collect();
+    (downloads, diagnostics, Vec::new())
 }
 
 fn package(package_id: &str) -> Option<Package> {

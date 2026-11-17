@@ -21,8 +21,9 @@ deliberately when changing this contract.
   time, elapsed seconds, output offsets, compilation evidence, downloads,
   compiler artifacts, progress, test timings, capture status, and execution
   context. `verified_download_archives` is `null` when archive observation was
-  unavailable, or the sorted changed/created `.crate` basenames observed for
-  that invocation.
+  unavailable, or the sorted changed/created `.crate` paths relative to Cargo's
+  registry cache. Each corroborated archive contributes one download entry,
+  labelled with that path. Repeated progress for one archive counts once.
 - `downloaded` and `slowest_tests` are aggregate display fields. The latter is
   capped at ten entries. `tests_run` is a display-only workflow value.
 - `first_cargo_seconds` measures job start to the first Cargo invocation, or
@@ -51,9 +52,10 @@ collecting restored input provenance, even when no Cargo invocation ran.
 Target data is usable only when a restored snapshot exists and the restore
 step reports a hit. A stale snapshot with a cache miss remains cold. Snapshot
 parse or read errors make provenance unverifiable; a missing snapshot is cold.
-A tracked `Cargo.lock` symlink prevents same-lock verification. A usable target
-with that symlink makes compilation provenance unverifiable, including quiet
-non-fresh artifacts; fresh artifacts alone do not claim compilation.
+A tracked `Cargo.lock` symlink prevents same-lock verification for its Cargo
+root. A usable target with that symlink makes compilation provenance
+unverifiable, including quiet non-fresh artifacts. Cold runs still retain
+compilation evidence. Fresh artifacts alone do not claim compilation.
 API enrichment runs after provenance collection. These inputs do not change
 the schema-1 output contract.
 
