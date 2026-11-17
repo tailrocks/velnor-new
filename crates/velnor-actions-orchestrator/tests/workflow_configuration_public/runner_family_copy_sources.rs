@@ -151,3 +151,67 @@ fn runner_family_with_unrecognized_copy_runs_conservatively() -> TestResult {
     );
     Ok(())
 }
+
+fn assert_image_context_selection(dockerfile: &str, input: &str, precise: bool) -> TestResult {
+    let mut repo = scoped_workspace(&format!("{DOCS_CONFIG}\n{IMAGE_CONFIG}"))?;
+    put(repo.root(), "image/Dockerfile", dockerfile)?;
+    let input = format!("image/{input}");
+    put(repo.root(), &input, "initial\n")?;
+    repo.base = commit(repo.root(), "Dockerfile context baseline")?;
+    let prepared = velnor_actions_orchestrator::prepare(repo.root())?;
+    assert!(velnor_actions_orchestrator::finalized_jobs(&prepared)?.contains_key("image-app-amd64"));
+    for (path, expected) in [
+        (input.as_str(), "run"),
+        ("image/fixture-unrelated.txt", if precise { "not_affected" } else { "run" }),
+    ] {
+        super::workflow_configuration_fixture::git(&["checkout", "--detach", &repo.base], repo.root())?;
+        put(repo.root(), path, "changed\n")?;
+        let head = commit(repo.root(), "change context input")?;
+        let run = plan(repo.root(), "pull_request", Some(&repo.base), &head)?;
+        assert_eq!(run.jobs()?.get("image-app-amd64").map(String::as_str), Some(expected), "{dockerfile}: {path}");
+    }
+    Ok(())
+}
+
+#[test]
+fn normalized_copy_paths_select_the_image_job() -> TestResult {
+    for keyword in ["COPY", "ADD"] {
+        for source in ["$SRC/./main.txt", "$SRC//main.txt", "$SRC/sub/../main.txt"] {
+            assert_image_context_selection(&format!("FROM scratch\nARG SRC=src\n{keyword} {source} /dest\n"), "src/main.txt", true)?;
+        }
+        assert_image_context_selection(&format!("FROM scratch\nARG SRC=src\n{keyword} $SRC/../../main.txt /dest\n"), "actual/main.txt", false)?;
+    }
+    Ok(())
+}
+
+#[test]
+fn client_proxy_arguments_select_the_whole_context() -> TestResult {
+    for name in ["HTTP_PROXY", "HTTPS_PROXY", "FTP_PROXY", "NO_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "ftp_proxy", "no_proxy", "all_proxy"] {
+        for keyword in ["COPY", "ADD"] {
+            assert_image_context_selection(&format!("FROM scratch\nARG {name}=src\n{keyword} ${name}/main.txt /dest\n"), "override/main.txt", false)?;
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn inherited_onbuild_inputs_select_the_image_job() -> TestResult {
+    assert_image_context_selection(&format!("FROM example@sha256:{}\nCOPY src/main.txt /dest\n", "a".repeat(64)), "inherited/main.txt", false)?;
+    for reference in ["base", "0"] {
+        for keyword in ["COPY", "ADD"] {
+            assert_image_context_selection(&format!("FROM scratch AS base\nONBUILD {keyword} inherited/main.txt /dest\nFROM {reference} AS child\nFROM child\nCOPY src/main.txt /dest\n"), "inherited/main.txt", true)?;
+        }
+    }
+    assert_image_context_selection("FROM scratch AS base\nONBUILD COPY inherited/main.txt /dest\nCOPY src/main.txt /dest\n", "src/main.txt", true)?;
+    assert_image_context_selection("FROM scratch AS base\nARG SRC=src\nONBUILD COPY $SRC/main.txt /dest\nFROM base\n", "override/main.txt", false)?;
+    Ok(())
+}
+
+#[test]
+fn unused_complex_arguments_preserve_precise_selection() -> TestResult {
+    for keyword in ["COPY", "ADD"] {
+        assert_image_context_selection(&format!("FROM scratch\nARG CONFIG='{{\"mode\":\"fast\"}}'\n{keyword} src/main.txt /dest\n"), "src/main.txt", true)?;
+        assert_image_context_selection(&format!("FROM scratch\nARG CONFIG='{{\"mode\":\"fast\"}}'\n{keyword} $CONFIG/main.txt /dest\n"), "actual/main.txt", false)?;
+    }
+    Ok(())
+}
