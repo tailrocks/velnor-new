@@ -27,7 +27,7 @@ use std::path::Path;
 use std::process::ExitCode;
 
 pub use self::audit::audit_inputs;
-pub use self::cache::{Decision, decide, expire_old_bases};
+pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
 pub use self::cold::{cold_on_failure, every_root_target, root_target};
 pub use self::inputs::{restore_inputs, save_inputs};
 pub use self::restored::{break_time_ties, break_time_ties_with};
@@ -143,9 +143,10 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Restored => {
             let root = current_dir()?;
             let targets = every_root_target(&root);
-            let expired = expire_old_bases(&targets, now_seconds())?;
+            let expiry = expire_old_bases(&targets, now_seconds())?;
+            append_outputs(&format!("expired={}\n", expiry.expired))?;
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
-            Ok(expired + &ties)
+            Ok(expiry.report + &ties)
         }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }

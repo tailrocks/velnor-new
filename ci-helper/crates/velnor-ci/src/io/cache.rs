@@ -119,13 +119,22 @@ fn directory_size(dir: &Path) -> u64 {
         .sum()
 }
 
-pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<String, CiError> {
+#[derive(Debug)]
+pub struct Expiry {
+    pub expired: bool,
+    pub report: String,
+}
+
+pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<Expiry, CiError> {
     let Some(days) = std::env::var(MAX_AGE_VARIABLE)
         .ok()
         .and_then(|text| text.trim().parse::<u64>().ok())
         .filter(|days| *days > 0)
     else {
-        return Ok(String::new());
+        return Ok(Expiry {
+            expired: false,
+            report: String::new(),
+        });
     };
     let mut removed = Vec::new();
     for target in targets {
@@ -138,13 +147,16 @@ pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<String,
             .map_err(|e| CiError::new(format!("cannot remove {}: {e}", target.display())))?;
         removed.push(format!("{} (born {born})", target.display()));
     }
-    Ok(if removed.is_empty() {
-        String::new()
-    } else {
-        format!(
-            "removed build directories older than {days} days, so this run builds cold and saves a clean base: {}\n",
-            removed.join(", ")
-        )
+    Ok(Expiry {
+        expired: !removed.is_empty(),
+        report: if removed.is_empty() {
+            String::new()
+        } else {
+            format!(
+                "removed build directories older than {days} days, so this run builds cold and saves a clean base: {}\n",
+                removed.join(", ")
+            )
+        },
     })
 }
 

@@ -6,19 +6,19 @@ use velnor_model::{
     TESTS_RUN_OUTPUT,
 };
 
-use crate::base_steps::{
-    base_age, cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane,
-};
-use crate::cache::{path_text, render_key};
+use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane};
+use crate::cache_steps::cache_step;
 use crate::cargo::{cargo_step, reports_tests};
-use crate::gate::{PLAN_STEP, TOOLS_STEP, admission, condition, output, plan_source, sources_step};
+use crate::gate::{
+    PLAN_STEP, Setup, admission, condition, output, plan_read, plan_source, sources_step,
+};
+use crate::helper_steps::helper_step;
 use crate::permission_pairs;
 use crate::rules::{
     HELPER_FROM_ARTIFACT_RUN, RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value,
 };
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
-const RESTORED_STEP: &str = "restored";
 pub(crate) const RUN: &str = "velnor-ci run --";
 pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
@@ -78,13 +78,22 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         steps: job
             .steps
             .iter()
-            .flat_map(|step| rendered_steps(step, restores))
+            .scan(false, |replanned, step| {
+                let setup = match (restores, *replanned) {
+                    (false, _) => Setup::Before,
+                    (true, false) => Setup::Restored,
+                    (true, true) => Setup::Replanned,
+                };
+                *replanned |= step.kind == StepKind::Helper(HelperCommand::PlanFull);
+                Some(rendered_steps(step, setup))
+            })
+            .flatten()
             .collect(),
         ..RenderedJob::default()
     }
 }
 
-fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
+fn rendered_steps(step: &Step, setup: Setup) -> Vec<RenderedStep> {
     let mut rendered = vec![step_body(&step.kind)];
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
@@ -97,7 +106,7 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         if let Some(condition) = condition(
             step.when,
             step.gate.as_ref(),
-            restores,
+            setup,
             step.skip_on_draft,
             &step_conditions(&step.kind),
         ) {
@@ -111,9 +120,10 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
         let source = plan_source(&plan.from);
         main.env.extend(command.plan_values().iter().map(|need| {
             let key = output(&plan.slug, *need);
+            let read = plan_read(&source, &key, setup);
             (
                 variable(*need).to_owned(),
-                Value::Expr(format!("${{{{ {source}.{key} }}}}")),
+                Value::Expr(format!("${{{{ {read} }}}}")),
             )
         }));
     }
@@ -278,45 +288,6 @@ fn publish_helper(binary: &RepoPath) -> RenderedStep {
     }
 }
 
-fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> RenderedStep {
-    let rendered = render_key(key);
-    let paths: Vec<String> = key.paths().iter().map(path_text).collect();
-    let mut with = vec![
-        ("path".to_owned(), Value::Text(paths.join("\n"))),
-        ("key".to_owned(), Value::Expr(rendered.key)),
-    ];
-    if fallbacks && !rendered.restore_keys.is_empty() {
-        with.push((
-            "restore-keys".to_owned(),
-            Value::Expr(rendered.restore_keys.join("\n")),
-        ));
-    }
-    RenderedStep {
-        id: match key {
-            CacheKey::Tools { .. } if fallbacks => Some(TOOLS_STEP.to_owned()),
-            CacheKey::Sources { root, .. } if fallbacks => Some(sources_step(root.slug())),
-            CacheKey::Target { root, .. } if fallbacks => Some(format!("target_{}", root.slug())),
-            _ => None,
-        },
-        name: format!("{verb} the {} cache", key.family()),
-        uses: Some(action.to_owned()),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-fn helper_arguments(command: HelperCommand) -> &'static str {
-    match command {
-        HelperCommand::Plan => "plan",
-        HelperCommand::Prepare => "prepare",
-        HelperCommand::CheckMetadata => "check-metadata",
-        HelperCommand::Restored(..) => "restored",
-        HelperCommand::InputsSave => "inputs save",
-        HelperCommand::InputsRestore => "inputs restore",
-        HelperCommand::InputsAudit => "inputs audit",
-    }
-}
-
 pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     let version = release.version();
     let mut with = vec![("version".to_owned(), Value::Text(version.to_string()))];
@@ -366,26 +337,6 @@ fn download_step(name: &str, into: Option<&RepoPath>) -> RenderedStep {
         name: "Download the tests".to_owned(),
         uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
         with,
-        ..RenderedStep::default()
-    }
-}
-
-fn helper_step(command: HelperCommand) -> RenderedStep {
-    let arguments = helper_arguments(command);
-    let (id, env) = match command {
-        HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
-        HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
-        HelperCommand::Restored(expiry) => (Some(RESTORED_STEP), base_age(expiry)),
-        _ => (None, Vec::new()),
-    };
-    RenderedStep {
-        name: format!("velnor-ci {arguments}"),
-        id: id.map(str::to_owned),
-        env,
-        run: Some(match command {
-            HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
-            _ => format!("velnor-ci {arguments}"),
-        }),
         ..RenderedStep::default()
     }
 }
