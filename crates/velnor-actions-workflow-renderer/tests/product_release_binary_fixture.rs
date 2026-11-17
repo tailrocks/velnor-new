@@ -22,7 +22,6 @@ use super::product_release_binary_hash_fixture::{install_shasum_double, sha256};
 
 pub(crate) const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
 pub(crate) const HELPER_SUFFIX: &[u8] = b"helper payload\n";
-
 const BINARY_WORKFLOW: &str = ".github/workflows/product-release-binary.yml";
 const BUILD_STEP: &str = "Build velnor-host with MBX";
 const VERIFY_STEP: &str = "Verify Mach-O architecture";
@@ -334,6 +333,7 @@ fn pins() -> ProductReleasePins {
         ],
         mr_boxington_version: "1.29.2".to_owned(),
         gh_version: "2.83.1".to_owned(),
+        bun_version: "1.4.4".to_owned(),
     }
 }
 

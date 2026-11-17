@@ -226,6 +226,7 @@ fn pins(fake_gh: &Path) -> ProductReleasePins {
         ],
         mr_boxington_version: "${VELNOR_TOOL_MR_BOXINGTON}".to_owned(),
         gh_version: GH_VERSION.to_owned(),
+        bun_version: "1.4.4".to_owned(),
     }
 }
 

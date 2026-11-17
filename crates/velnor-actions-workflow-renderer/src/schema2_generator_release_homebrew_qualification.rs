@@ -182,18 +182,13 @@ fn start_budget_step() -> Yaml {
 }
 
 fn acquisition_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
-    let bun = pins
-        .install_qualify_tools_argv
-        .iter()
-        .find(|argument| argument.starts_with("bun@"))
-        .ok_or_else(|| RenderError::BadCommand("homebrew_acquisition_bun_pin".to_owned()))?;
     let command = crate::commands::join_argv_for_run(&[
         "mise".to_owned(),
         "--no-config".to_owned(),
         "--no-env".to_owned(),
         "--no-hooks".to_owned(),
         "exec".to_owned(),
-        bun.clone(),
+        format!("bun@{}", pins.bun_version),
         "--".to_owned(),
         "bun".to_owned(),
         "--no-env-file".to_owned(),

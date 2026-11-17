@@ -139,6 +139,7 @@ pub(crate) fn pins() -> ProductReleasePins {
         verify_rust_argv: verify_rust_argv(),
         mr_boxington_version: "1.0.0".to_owned(),
         gh_version: "2.103.2".to_owned(),
+        bun_version: "1.4.4".to_owned(),
     }
 }
 
