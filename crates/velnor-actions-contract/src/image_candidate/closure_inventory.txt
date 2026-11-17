@@ -365,6 +365,7 @@ crates/velnor-actions-contract/src/workflow/step/task_execution/argv.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/environment.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/identity.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/native_job_image.rs
+crates/velnor-actions-contract/src/workflow/step/task_execution/tofu.rs
 crates/velnor-actions-contract/src/workflow/step/task_execution/toolchain.rs
 crates/velnor-actions-contract/src/workflow/step_id.rs
 crates/velnor-actions-contract/src/workflow/step_identity.rs
@@ -1324,7 +1325,9 @@ crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_rustc.rs
 crates/velnor-actions-workflow-renderer/src/cache_steps_mbx_scripts.rs
 crates/velnor-actions-workflow-renderer/src/cache_steps_tools.rs
 crates/velnor-actions-workflow-renderer/src/cache_steps_tools_installs_verify.sh
+crates/velnor-actions-workflow-renderer/src/cache_steps_tools_outputs.rs
 crates/velnor-actions-workflow-renderer/src/cache_steps_tools_restore.rs
+crates/velnor-actions-workflow-renderer/src/cache_steps_tools_verify.rs
 crates/velnor-actions-workflow-renderer/src/closure.rs
 crates/velnor-actions-workflow-renderer/src/closure_freshness.rs
 crates/velnor-actions-workflow-renderer/src/closure_paths.rs
@@ -1406,6 +1409,8 @@ crates/velnor-actions-workflow-renderer/src/native_authority/support_commands/ve
 crates/velnor-actions-workflow-renderer/src/native_authority/support_commands/verify.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/task_policies.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/task_sources.rs
+crates/velnor-actions-workflow-renderer/src/native_authority/tool_archive_pins.rs
+crates/velnor-actions-workflow-renderer/src/native_authority/tool_archive_pins.tsv
 crates/velnor-actions-workflow-renderer/src/native_authority/tools.rs
 crates/velnor-actions-workflow-renderer/src/native_check_execution.rs
 crates/velnor-actions-workflow-renderer/src/native_helper.rs
@@ -1478,6 +1483,7 @@ crates/velnor-actions-workflow-renderer/src/render_execution_boundaries.rs
 crates/velnor-actions-workflow-renderer/src/render_fallback.rs
 crates/velnor-actions-workflow-renderer/src/render_required_verdict_step.rs
 crates/velnor-actions-workflow-renderer/src/render_state_seal.rs
+crates/velnor-actions-workflow-renderer/src/repository_nonrust_fixture.rs
 crates/velnor-actions-workflow-renderer/src/required_gate.rs
 crates/velnor-actions-workflow-renderer/src/review_completion.rs
 crates/velnor-actions-workflow-renderer/src/review_completion_steps.rs
@@ -1602,6 +1608,7 @@ crates/velnor-actions-workflow-renderer/src/task_script.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper_declared.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper_script.rs
+crates/velnor-actions-workflow-renderer/src/task_wrapper_tofu.rs
 crates/velnor-actions-workflow-renderer/src/task_wrapper_validation.rs
 crates/velnor-actions-workflow-renderer/src/tofu_apply.rs
 crates/velnor-actions-workflow-renderer/src/tofu_apply_command.rs
