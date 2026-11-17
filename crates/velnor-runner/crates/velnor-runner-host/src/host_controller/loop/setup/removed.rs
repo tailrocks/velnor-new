@@ -11,11 +11,13 @@ use tokio::time::{Instant as TokioInstant, timeout_at};
 
 use crate::{
     config::HostConfig,
+    error::HostError,
     journal::Journal,
     launch::{
         ImageAuthority, SelectedEngineContext, VerifiedWorkerImages,
         bootstrap::{
-            UncertainRecovery, recover_uncertain_reservations, retire_uncertain_unbound_pairs,
+            INITIALIZER_RECOVERY_BUDGET, UncertainRecovery, UncertainRecoveryWork,
+            retire_uncertain_unbound_pairs, uncertain_recovery_work,
         },
     },
 };
@@ -44,10 +46,7 @@ pub(crate) async fn reconcile_removed_at_startup(startup: &RemovedStartup<'_>) {
         let scope = match startup.journal.existing_connection_scope(binding).await {
             Ok(scope) => scope,
             Err(error) => {
-                eprintln!(
-                    "host controller removed connection held connection={} reason={error}",
-                    binding.connection_id
-                );
+                held(binding, error);
                 continue;
             }
         };
@@ -60,36 +59,74 @@ pub(crate) async fn reconcile_removed_at_startup(startup: &RemovedStartup<'_>) {
             image_authority: startup.image_authority,
             pass: 0,
         };
-        let Ok(recovered) = timeout_at(
+        let discovered = timeout_at(
             TokioInstant::from_std(startup.deadline),
-            Box::pin(recover_uncertain_reservations(&recovery)),
-        )
-        .await
-        else {
-            defer(binding);
-            break;
-        };
-        let recovered = match recovered {
-            Ok(pending) => {
-                pending.recover_before(&recovery, startup.deadline).await;
-                Ok(())
-            }
-            Err(error) => Err(error),
-        };
-        let retired = retire_uncertain_unbound_pairs(
-            startup.deadline,
-            startup.docker,
-            &scope,
-            startup.engine,
+            uncertain_recovery_work(&recovery),
         )
         .await;
-        if let Err(error) = recovered.and(retired) {
-            eprintln!(
-                "host controller removed connection held connection={} reason={error}",
-                binding.connection_id
-            );
+        match discovered {
+            Ok(Ok(work)) => recover_work(work, &recovery, startup.deadline).await,
+            Ok(Err(error)) => {
+                let retired = retire_uncertain_unbound_pairs(
+                    startup.deadline,
+                    startup.docker,
+                    &scope,
+                    startup.engine,
+                )
+                .await;
+                held(binding, retired.err().unwrap_or(error));
+            }
+            Err(_) => {
+                defer(binding);
+                break;
+            }
         }
     }
+}
+
+async fn recover_work(
+    work: Vec<UncertainRecoveryWork>,
+    recovery: &UncertainRecovery<'_>,
+    deadline: Instant,
+) {
+    let mut initializer_deadline = None;
+    for item in work {
+        if Instant::now() >= deadline {
+            break;
+        }
+        match item {
+            UncertainRecoveryWork::Initializer(initializer) => {
+                let until = *initializer_deadline.get_or_insert_with(|| {
+                    TokioInstant::from_std(deadline)
+                        .min(TokioInstant::now() + INITIALIZER_RECOVERY_BUDGET)
+                });
+                if TokioInstant::now() < until {
+                    initializer.recover_before(recovery, until, deadline).await;
+                }
+            }
+            UncertainRecoveryWork::AssignedPair(pair) => {
+                if timeout_at(
+                    TokioInstant::from_std(deadline),
+                    Box::pin(pair.recover(recovery)),
+                )
+                .await
+                .is_err()
+                {
+                    break;
+                }
+            }
+            UncertainRecoveryWork::UnboundPair(pair) => {
+                pair.recover_before(recovery, deadline).await;
+            }
+        }
+    }
+}
+
+fn held(binding: &crate::config::RepositoryConnection, error: HostError) {
+    eprintln!(
+        "host controller removed connection held connection={} reason={error}",
+        binding.connection_id
+    );
 }
 
 fn defer(binding: &crate::config::RepositoryConnection) {

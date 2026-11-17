@@ -20,7 +20,6 @@ use super::{
 };
 use crate::host_controller::loop_driver::state::SessionCredentials;
 use crate::https::HttpsTransport;
-use crate::journal::{AssignmentKey, IntentState, PhysicalRunnerJitState};
 use crate::listen::{Secret, link_from_admin};
 
 const CHILD: &str = "VELNOR_RETIREMENT_CURL_LOG";
@@ -150,52 +149,9 @@ async fn active_connection(restarted: &Restarted) -> TestResult<Controller> {
     Ok(active)
 }
 
-async fn assign_failed_reservation(restarted: &Restarted, removed: &Controller) -> TestResult<()> {
-    let identity = removed
-        .prepared
-        .scope
-        .assignment_identity(AssignmentKey::Remote {
-            kind: "runner".to_owned(),
-            subject: FAILED.nonce(),
-        })
-        .await?;
-    let assignment_key = identity.storage_key();
-    seed::unguarded(
-        &restarted.journal,
-        &[
-            format!(
-                "UPDATE connection_intents SET assignment_key = '{assignment_key}' WHERE id = (SELECT intent_id FROM capacity_reservations WHERE id = {})",
-                FAILED.reservation
-            ),
-            format!(
-                "UPDATE capacity_reservations SET assignment_key = '{assignment_key}' WHERE id = {}",
-                FAILED.reservation
-            ),
-            format!(
-                "INSERT INTO connection_request_authorizations (connection_id, scale_set_id, request_id, message_id, policy_mode, authority_model, binding_digest, source_digest, source_json, acquire_state) SELECT attempt.connection_id, attempt.scale_set_id, attempt.witness_request_id, 0, 'branch_restricted', 'created_empty_exclusive_admin_session_v1', attempt.binding_digest, attempt.source_digest, '{{}}', 'authorized' FROM physical_attempts AS attempt JOIN physical_attempt_current AS current ON current.lineage_id = attempt.lineage_id AND current.generation = attempt.generation AND current.reservation_id = attempt.reservation_id AND current.intent_id = attempt.intent_id WHERE attempt.reservation_id = {}",
-                FAILED.reservation
-            ),
-        ],
-    )
-    .await?;
-    let reservation = removed
-        .prepared
-        .scope
-        .physical_runner_reservations()
-        .await?
-        .into_iter()
-        .find(|reservation| reservation.reservation_id == FAILED.reservation)
-        .ok_or("failed reservation missing")?;
-    assert_eq!(reservation.ownership.assignment(), Some(&identity));
-    assert_eq!(reservation.jit_state, PhysicalRunnerJitState::Absent);
-    assert_eq!(reservation.intent_state, Some(IntentState::Uncertain));
-    assert!(reservation.acquired_request.is_none());
-    Ok(())
-}
-
 async fn exercise(stall: bool) -> TestResult<()> {
     let (restarted, removed) = restarted_with_a_removed_connection().await?;
-    assign_failed_reservation(&restarted, &removed).await?;
+    seed::assigned_pair(&restarted.journal, &removed.prepared.scope, FAILED).await?;
     crate::host_controller::loop_driver::setup::configure_shared_capacity(
         &restarted.journal,
         &removed.config,

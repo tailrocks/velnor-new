@@ -6,7 +6,8 @@ use tokio::time::{Instant, timeout_at};
 use crate::{
     error::HostError,
     launch::bootstrap::{
-        UncertainRecovery, recover_uncertain_reservations, retire_uncertain_unbound_pairs,
+        INITIALIZER_RECOVERY_BUDGET, UncertainRecovery, UncertainRecoveryWork,
+        uncertain_recovery_work,
     },
 };
 
@@ -29,20 +30,54 @@ pub(super) async fn reconcile(
         image_authority: context.image_authority,
         pass,
     };
-    let result = timeout_at(
+    let work = if let Ok(work) = timeout_at(
         Instant::from_std(deadline),
-        Box::pin(recover_uncertain_reservations(&recovery)),
+        uncertain_recovery_work(&recovery),
     )
-    .await;
-    if let Ok(result) = result {
-        result?.recover_before(&recovery, deadline).await;
-        retire_uncertain_unbound_pairs(deadline, context.docker, scope, context.selected_engine)
-            .await
+    .await
+    {
+        work?
     } else {
-        eprintln!(
-            "host controller defers pre-JIT recovery to the next sweep connection={}",
-            scope.connection_id().as_str()
-        );
-        Ok(())
+        defer(scope);
+        return Ok(());
+    };
+    let mut initializer_deadline = None;
+    for item in work {
+        if std::time::Instant::now() >= deadline {
+            break;
+        }
+        match item {
+            UncertainRecoveryWork::Initializer(initializer) => {
+                let until = *initializer_deadline.get_or_insert_with(|| {
+                    Instant::from_std(deadline).min(Instant::now() + INITIALIZER_RECOVERY_BUDGET)
+                });
+                if Instant::now() < until {
+                    initializer.recover_before(&recovery, until, deadline).await;
+                }
+            }
+            UncertainRecoveryWork::AssignedPair(pair) => {
+                if timeout_at(
+                    Instant::from_std(deadline),
+                    Box::pin(pair.recover(&recovery)),
+                )
+                .await
+                .is_err()
+                {
+                    defer(scope);
+                    break;
+                }
+            }
+            UncertainRecoveryWork::UnboundPair(pair) => {
+                pair.recover_before(&recovery, deadline).await;
+            }
+        }
     }
+    Ok(())
+}
+
+fn defer(scope: &ConnectionJournal) {
+    eprintln!(
+        "host controller defers pre-JIT recovery to the next sweep connection={}",
+        scope.connection_id().as_str()
+    );
 }
