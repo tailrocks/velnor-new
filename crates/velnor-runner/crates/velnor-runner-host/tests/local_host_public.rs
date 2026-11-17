@@ -26,8 +26,12 @@ mod cleanup;
 mod endpoint;
 #[path = "local_host_public/journal.rs"]
 mod journal;
+#[path = "local_host_public/previous_decision.rs"]
+mod previous_decision;
 #[path = "local_host_public/proxy.rs"]
 mod proxy;
+#[path = "local_host_public/publication_proxy.rs"]
+mod publication_proxy;
 #[path = "local_host_public/refusals.rs"]
 mod refusals;
 #[path = "local_host_public/removal_audit.rs"]

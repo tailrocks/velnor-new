@@ -50,6 +50,16 @@ pub(crate) fn platform() -> &'static str {
     }
 }
 
+pub(crate) fn job_hook_binary() -> TestResult<std::path::PathBuf> {
+    if let Some(path) = std::env::var_os("VELNOR_TEST_JOB_HOOK_BINARY") {
+        return Ok(path.into());
+    }
+    if cfg!(target_os = "linux") {
+        return Ok(env!("CARGO_BIN_EXE_velnor-local-test-job-hook").into());
+    }
+    Err("set VELNOR_TEST_JOB_HOOK_BINARY to a Linux velnor-job-start-hook binary".into())
+}
+
 fn append(
     context: &mut tar::Builder<Vec<u8>>,
     path: &str,
@@ -71,16 +81,30 @@ pub(crate) async fn build_program(
     program: Program,
 ) -> TestResult<String> {
     let mut context = tar::Builder::new(Vec::new());
-    append(
-        &mut context,
-        "Dockerfile",
-        0o644,
-        b"FROM scratch\nCOPY program /program\nCMD [\"/program\"]\n",
-    )?;
+    let base = if cfg!(target_arch = "aarch64") {
+        "FROM ubuntu:26.04@sha256:7e7957462d7b6db141de67623f46135d82a6bc131bc2ff369aedfccfa91c0a1b"
+    } else {
+        include_str!("../../../../../../images/dind/Dockerfile")
+            .lines()
+            .find(|line| line.starts_with("FROM ubuntu:"))
+            .ok_or("dind image has no Ubuntu base")?
+    };
+    let mut dockerfile = format!("{base}\nCOPY program /program\nCMD [\"/program\"]\n");
+    if cfg!(target_os = "linux") || std::env::var_os("VELNOR_TEST_JOB_HOOK_BINARY").is_some() {
+        append(
+            &mut context,
+            "job-hook",
+            0o755,
+            &std::fs::read(job_hook_binary()?)?,
+        )?;
+        dockerfile.push_str("COPY job-hook /velnor-job-start-hook\n");
+    }
+    append(&mut context, "Dockerfile", 0o644, dockerfile.as_bytes())?;
     append(&mut context, "program", 0o755, &program::elf(program))?;
     let options = BuildImageOptions {
         dockerfile: "Dockerfile".to_owned(),
         t: Some(tag.to_owned()),
+        platform: platform().to_owned(),
         rm: true,
         ..Default::default()
     };

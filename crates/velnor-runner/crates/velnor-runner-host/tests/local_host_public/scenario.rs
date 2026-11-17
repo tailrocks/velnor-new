@@ -89,8 +89,11 @@ impl Scenario {
     }
 
     pub(crate) fn start(&mut self, plan: Plan) {
+        self.start_on(self.fixture.docker.clone(), plan);
+    }
+
+    pub(crate) fn start_on(&mut self, docker: Docker, plan: Plan) {
         let (stop, wait) = tokio::sync::oneshot::channel::<()>();
-        let docker = self.fixture.docker.clone();
         let state = self.state.path().to_path_buf();
         self.stop = Some(stop);
         self.task = Some(tokio::spawn(async move {
@@ -183,7 +186,7 @@ pub(crate) async fn wait_for_runner(
     }
 }
 
-async fn download(docker: &Docker, container: &str, path: &str) -> TestResult<Vec<u8>> {
+pub(crate) async fn download(docker: &Docker, container: &str, path: &str) -> TestResult<Vec<u8>> {
     let chunks: Vec<_> = docker
         .download_from_container(
             container,
@@ -230,11 +233,7 @@ where
     let deadline = Instant::now() + timeout;
     loop {
         if let Ok(Ok(bytes)) = tokio::time::timeout_at(deadline.into(), download()).await {
-            match serde_json::from_slice(&bytes) {
-                Ok(decision) => return Ok(decision),
-                Err(error) if error.is_eof() => {}
-                Err(error) => return Err(error.into()),
-            }
+            return Ok(serde_json::from_slice(&bytes)?);
         }
         if Instant::now() >= deadline {
             return Err(std::io::Error::new(
