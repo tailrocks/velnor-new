@@ -160,8 +160,6 @@ pub(super) fn restore_declared_paths(
     Ok(())
 }
 
-/// A real cache restore lands at the producer's `$HOME`, so Mise's absolute
-/// `.mise-bins` links stay inside the install; the sandboxes' homes differ.
 fn relocate_links(dir: &Path, from: &Path, to: &Path) -> Result<(), Box<dyn Error>> {
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
@@ -187,7 +185,10 @@ fn restored_absolute_links_follow_the_reader_home() -> Result<(), Box<dyn Error>
     fs::create_dir_all(&bins)?;
     std::os::unix::fs::symlink(from.path().join("install/uv"), bins.join("uv"))?;
     relocate_links(to.path(), from.path(), to.path())?;
-    assert_eq!(fs::read_link(bins.join("uv"))?, to.path().join("install/uv"));
+    assert_eq!(
+        fs::read_link(bins.join("uv"))?,
+        to.path().join("install/uv")
+    );
     Ok(())
 }
 
