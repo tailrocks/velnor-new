@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod cache;
+mod cache_layout;
+mod cache_outputs;
 mod cron;
 mod helper;
 mod ids;
@@ -11,6 +13,14 @@ mod selection;
 mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
+pub use cache_layout::{
+    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, RUNNER_ARCH_MAX_LENGTH,
+    RUNNER_OS_MAX_LENGTH, json_char_bytes, json_string_bytes,
+};
+pub use cache_outputs::{
+    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
+    SOURCES_SAVED_OUTPUT, cache_lane_outputs,
+};
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use ids::{

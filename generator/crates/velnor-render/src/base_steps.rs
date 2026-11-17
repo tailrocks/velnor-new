@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{BaseExpiry, CacheKey, JobId, RepoPath, Step, StepKind, TrimFamily};
+use velnor_model::{
+    BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, BaseExpiry, CacheKey, CacheLaneOutput, JobId, RepoPath,
+    SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind, TrimFamily, cache_lane_outputs,
+};
 
 use crate::cache::render_key;
 use crate::gate::BASE_STEP;
@@ -9,10 +12,6 @@ use crate::gate::sources_save_step;
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 
-const BASE_SAVE_OUTPUT: &str = "base_save";
-const BASE_PREFIX_OUTPUT: &str = "base_prefix";
-const SOURCES_PREFIX_OUTPUT: &str = "sources_prefix";
-const SOURCES_SAVED_OUTPUT: &str = "sources_saved";
 const MAX_BASE_AGE_DAYS: u64 = 7;
 const BASE_AGE_VARIABLE: &str = "VELNOR_BASE_MAX_AGE_DAYS";
 const DEFAULT_BRANCH_REF: &str =
@@ -35,42 +34,22 @@ pub(crate) fn cache_decide(target: &RepoPath, archive: Option<&RepoPath>) -> Ren
 }
 
 pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
-    let prefix = |wanted: fn(&CacheKey) -> bool| {
-        steps.iter().find_map(|step| match &step.kind {
-            StepKind::CacheSave(key) if wanted(key) => render_key(key).restore_keys.pop(),
-            _ => None,
-        })
-    };
-    let decides = steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }));
-    let target = prefix(|key| matches!(key, CacheKey::Target { .. })).filter(|_| decides);
-    let sources = prefix(|key| matches!(key, CacheKey::Sources { .. })).filter(|_| decides);
-    let saved = steps.iter().find_map(|step| match &step.kind {
-        StepKind::CacheSave(CacheKey::Sources { root, .. }) if decides => {
-            Some(sources_save_step(root.slug()))
-        }
-        _ => None,
-    });
-    target
-        .map(|prefix| {
-            [
-                (BASE_PREFIX_OUTPUT.to_owned(), prefix),
-                (
-                    BASE_SAVE_OUTPUT.to_owned(),
-                    format!("${{{{ steps.{BASE_STEP}.outputs.save }}}}"),
-                ),
-            ]
-        })
+    cache_lane_outputs(steps)
         .into_iter()
-        .flatten()
-        .chain(sources.map(|prefix| (SOURCES_PREFIX_OUTPUT.to_owned(), prefix)))
-        .chain(saved.map(|id| {
-            (
-                SOURCES_SAVED_OUTPUT.to_owned(),
-                format!("${{{{ steps.{id}.outcome == 'success' }}}}"),
-            )
-        }))
+        .filter_map(|output| {
+            let value = match &output {
+                CacheLaneOutput::BasePrefix(key) | CacheLaneOutput::SourcesPrefix(key) => {
+                    render_key(key).restore_keys.pop()?
+                }
+                CacheLaneOutput::BaseSave => format!("${{{{ steps.{BASE_STEP}.outputs.save }}}}"),
+                CacheLaneOutput::SourcesSaved(CacheKey::Sources { root, .. }) => format!(
+                    "${{{{ steps.{}.outcome == 'success' }}}}",
+                    sources_save_step(root.slug())
+                ),
+                CacheLaneOutput::SourcesSaved(_) => return None,
+            };
+            Some((output.name().to_owned(), value))
+        })
         .collect()
 }
 
