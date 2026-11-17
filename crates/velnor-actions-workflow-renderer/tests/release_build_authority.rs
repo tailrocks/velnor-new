@@ -154,18 +154,28 @@ fn credential_value(value: &Value) -> bool {
     }
 }
 
-fn effective_env(parent: &Value, scope: &Value) -> Value {
-    let mut env = parent.as_object().cloned().unwrap_or_default();
+#[derive(Default)]
+struct Environment {
+    bindings: Value,
+    dynamic_credentials: bool,
+}
+
+fn effective_env(parent: &Environment, scope: &Value) -> Environment {
+    let mut env = parent.bindings.as_object().cloned().unwrap_or_default();
     if let Some(local) = scope["env"].as_object() {
         env.extend(local.clone());
     }
-    Value::Object(env)
+    Environment {
+        bindings: Value::Object(env),
+        dynamic_credentials: parent.dynamic_credentials
+            || (!scope["env"].is_object() && credential_value(&scope["env"])),
+    }
 }
 
 fn exposed_steps(
     steps: &Value,
     files: &[RenderedFile],
-    inherited_env: &Value,
+    inherited_env: &Environment,
     visiting: &mut BTreeSet<String>,
 ) -> Result<bool, Box<dyn Error>> {
     let Some(steps) = steps.as_array() else {
@@ -175,7 +185,8 @@ fn exposed_steps(
     for step in steps {
         let env = effective_env(inherited_env, step);
         if repository_step(step) {
-            found |= credential_value(&env)
+            found |= env.dynamic_credentials
+                || credential_value(&env.bindings)
                 || credential_value(&step["with"])
                 || credential_value(&step["run"]);
         }
@@ -231,7 +242,7 @@ fn inspect_jobs(
             );
             visiting.remove(path);
         } else {
-            let env = effective_env(&workflow["env"], job);
+            let env = effective_env(&effective_env(&Environment::default(), workflow), job);
             if (repository_steps(&job["steps"])
                 && (write_permission(permissions) || input_credentials))
                 || (checkout_steps(&job["steps"])
@@ -268,7 +279,7 @@ fn release_repository_code_has_read_only_job_permissions() -> Result<(), Box<dyn
             !exposed_steps(
                 &action["runs"]["steps"],
                 &files,
-                &Value::Null,
+                &Environment::default(),
                 &mut BTreeSet::new()
             )?,
             "{path}"
