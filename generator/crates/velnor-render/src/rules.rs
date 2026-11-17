@@ -241,15 +241,7 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if step.run.is_some() == step.uses.is_some() {
         rules.push(Rule::NotExactlyOneOfRunAndUses);
     }
-    let mut launchers = step
-        .env
-        .iter()
-        .filter(|(key, _)| key == "VELNOR_HELPER_LAUNCHER");
-    let trusted_launcher = launchers.next().is_some_and(|(_, value)| {
-        value == &Value::Text(crate::helper_integrity::LAUNCHER.to_owned())
-    }) && launchers.next().is_none();
     let trusted_shell = step.shell.as_deref() == Some(crate::helper_integrity::INVOCATION_SHELL)
-        && trusted_launcher
         && step
             .run
             .as_deref()

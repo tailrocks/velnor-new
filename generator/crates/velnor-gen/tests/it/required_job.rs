@@ -54,7 +54,7 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
     assert!(job.contains(
         "        env:\n          NEEDS_JSON: '${{ toJSON(needs) }}'\n          GATE_SPEC: '"
     ));
-    assert!(job.contains("\"$VELNOR_HELPER_LAUNCHER\" -- gate --spec-env GATE_SPEC'\n"));
+    assert!(job.contains("\"$VELNOR_HELPER_EXEC\" gate --spec-env GATE_SPEC'\n"));
     assert_eq!(
         gate_line(&text)?,
         "--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-lab=lab"
@@ -143,9 +143,8 @@ fn a_helper_built_from_source_never_runs_the_gate_from_the_pull_request_build() 
     Ok(())
 }
 
-#[test]
-fn fourteen_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
-    let manifests: Vec<String> = (0..14)
+fn long_named_roots(count: usize) -> Vec<String> {
+    (0..count)
         .map(|index| {
             if index == 0 {
                 "Cargo.toml".to_owned()
@@ -153,15 +152,27 @@ fn fourteen_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResul
                 format!("crate-with-a-long-directory-name-{index}/Cargo.toml")
             }
         })
-        .collect();
+        .collect()
+}
+
+#[test]
+fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests = long_named_roots(20);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = released("0.1.81", &roots)?;
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
-    assert_eq!(spec.matches("--tests ").count(), 14);
-    assert!(
-        required(&text)?.contains("\"$VELNOR_HELPER_LAUNCHER\" -- gate --spec-env GATE_SPEC'\n")
-    );
+    assert_eq!(spec.matches("--tests ").count(), 20);
+    assert!(required(&text)?.contains("\"$VELNOR_HELPER_EXEC\" gate --spec-env GATE_SPEC'\n"));
+    Ok(())
+}
+
+#[test]
+fn twenty_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
+    let manifests = long_named_roots(20);
+    let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
+    let text = released("0.1.81", &roots)?;
+    assert!(text.len() <= 500_000, "{} bytes", text.len());
     Ok(())
 }
 

@@ -7,7 +7,7 @@ use velnor_model::{CargoCommand, PackageName, StepKind, WORKFLOW_PATH};
 use velnor_render::{RenderedJob, RenderedWorkflow, Rule, render, render_workflow};
 
 #[test]
-fn hundreds_of_helper_calls_share_one_workflow_owned_launcher() -> TestResult {
+fn hundreds_of_helper_calls_share_one_job_installed_launcher() -> TestResult {
     let extra = (0..320)
         .map(|index| {
             Ok(StepKind::Cargo(CargoCommand::CheckAlone {
@@ -17,17 +17,24 @@ fn hundreds_of_helper_calls_share_one_workflow_owned_launcher() -> TestResult {
         .collect::<Result<_, Box<dyn std::error::Error>>>()?;
     let text = workflow_text(&"a".repeat(64), extra)?;
     assert!(text.len() <= 500_000, "{} bytes", text.len());
-    assert_eq!(text.matches("VELNOR_HELPER_COPY=$(").count(), 1);
+    assert_eq!(text.matches("copy=$(").count(), 1);
     let yaml = crate::yaml_tree::document(&text)?;
     let steps = steps(&yaml)?;
     let invocations: Vec<_> = steps
         .iter()
-        .filter(|step| step["env"]["VELNOR_HELPER_LAUNCHER"].is_string())
+        .filter(|step| {
+            step["run"].as_str().is_some_and(|run| {
+                run.starts_with("\"$VELNOR_HELPER_BASH\" -p \"$VELNOR_HELPER_EXEC\" ")
+            })
+        })
         .collect();
     assert_eq!(invocations.len(), 324);
-    let launcher = &invocations[0]["env"]["VELNOR_HELPER_LAUNCHER"];
     for invocation in &invocations {
-        assert_eq!(&invocation["env"]["VELNOR_HELPER_LAUNCHER"], launcher);
+        assert!(
+            invocation["env"]
+                .as_object()
+                .is_none_or(|env| env.keys().all(|key| !key.starts_with("VELNOR_HELPER")))
+        );
     }
     let gate = invocations
         .iter()

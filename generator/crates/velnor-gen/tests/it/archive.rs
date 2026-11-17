@@ -9,7 +9,7 @@ use crate::job_shape::{job_ids, target};
 use crate::pipeline::{view, workflow};
 use crate::select::{facts, member};
 
-const LAUNCH: &str = "\"$VELNOR_HELPER_BASH\" --noprofile --norc -p -e -o pipefail -c \"$VELNOR_HELPER_LAUNCHER\" -- ";
+const LAUNCH: &str = "\"$VELNOR_HELPER_BASH\" -p \"$VELNOR_HELPER_EXEC\" ";
 
 pub(crate) fn plain_invocations(text: &str) -> String {
     text.lines()

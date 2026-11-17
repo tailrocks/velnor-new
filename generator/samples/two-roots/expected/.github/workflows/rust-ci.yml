@@ -48,11 +48,7 @@ jobs:
           persist-credentials: false
       - name: Resolve released helper tools
         env:
-          VELNOR_HELPER_INSTALL_TOOLS: |
-            fail() { printf '%s
-            ' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool '$2' was not found on PATH"; printf '%s=%s
-            ' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf '%s=%s
-            ' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"
+          VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
@@ -61,35 +57,16 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
-      - name: Create the released helper directory
+      - name: Install the released helper launcher
         env:
-          VELNOR_HELPER: &velnor_0 '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}/velnor-ci'
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_MKDIR" -m 700 "$VELNOR_HELPER_DIRECTORY"'
-      - name: Copy the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CP" "$VELNOR_HELPER_SOURCE" "$VELNOR_HELPER"'
-      - name: Protect the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CHMOD" 500 "$VELNOR_HELPER"'
+          VELNOR_HELPER_INSTALL_LAUNCHER: &velnor_1 'directory="$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB" && "$VELNOR_HELPER_MKDIR" -m 700 "$directory" && "$VELNOR_HELPER_CP" "$RUNNER_TEMP/velnor-ci-bin/velnor-ci" "$directory/velnor-ci" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci" && printf ''%s\n'' "$VELNOR_HELPER_LAUNCHER" > "$directory/velnor-ci-exec" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci-exec" && printf ''%s=%s\n'' VELNOR_HELPER "$directory/velnor-ci" VELNOR_HELPER_EXEC "$directory/velnor-ci-exec" VELNOR_HELPER_SHA256 "$VELNOR_HELPER_SHA256" >> "$GITHUB_ENV"'
+          VELNOR_HELPER_LAUNCHER: &velnor_2 'directory=$("$VELNOR_HELPER_MKTEMP" -d "$RUNNER_TEMP/velnor-helper.XXXXXXXXXX") && copy=$("$VELNOR_HELPER_MKTEMP" "$directory/velnor-ci.XXXXXXXXXX") && "$VELNOR_HELPER_CP" "$VELNOR_HELPER" "$copy" && "$VELNOR_HELPER_CHMOD" 500 "$copy" && { "$VELNOR_HELPER_ENV" -i PATH=/usr/bin:/bin "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $copy" || { printf ''%s\n'' ''velnor-ci integrity check failed'' >&2; exit 1; }; } && exec "$copy" "$@"'
+          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'' || '''' }}'
+        run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - id: plan
         name: velnor-ci plan
-        env:
-          VELNOR_HELPER_LAUNCHER: &velnor_1 'VELNOR_HELPER_DIRECTORY=$("$VELNOR_HELPER_MKTEMP" -d "$VELNOR_HELPER_TEMP/velnor-helper.XXXXXXXXXX") && VELNOR_HELPER_COPY=$("$VELNOR_HELPER_MKTEMP" "$VELNOR_HELPER_DIRECTORY/velnor-ci.XXXXXXXXXX") && "$VELNOR_HELPER_CP" "$VELNOR_HELPER" "$VELNOR_HELPER_COPY" && "$VELNOR_HELPER_CHMOD" 500 "$VELNOR_HELPER_COPY" && { "$VELNOR_HELPER_ENV" -i PATH=/usr/bin:/bin "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $VELNOR_HELPER_COPY" || { printf ''%s\n'' ''velnor-ci integrity check failed'' >&2; exit 1; }; } && exec "$VELNOR_HELPER_COPY" "$@"'
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: &velnor_2 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'' || '''' }}'
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- plan --explain'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" plan --explain'
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
   rust-root:
     needs:
@@ -120,11 +97,7 @@ jobs:
           persist-credentials: false
       - name: Resolve released helper tools
         env:
-          VELNOR_HELPER_INSTALL_TOOLS: |
-            fail() { printf '%s
-            ' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool '$2' was not found on PATH"; printf '%s=%s
-            ' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf '%s=%s
-            ' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"
+          VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
@@ -133,24 +106,12 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
-      - name: Create the released helper directory
+      - name: Install the released helper launcher
         env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_MKDIR" -m 700 "$VELNOR_HELPER_DIRECTORY"'
-      - name: Copy the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CP" "$VELNOR_HELPER_SOURCE" "$VELNOR_HELPER"'
-      - name: Protect the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CHMOD" 500 "$VELNOR_HELPER"'
+          VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
+          VELNOR_HELPER_LAUNCHER: *velnor_2
+          VELNOR_HELPER_SHA256: *velnor_3
+        run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -176,25 +137,11 @@ jobs:
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- prepare'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" prepare'
       - name: velnor-ci check-metadata
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- check-metadata'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" check-metadata'
       - id: sources_root
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -214,15 +161,8 @@ jobs:
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- inputs restore --target-dir target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" inputs restore --target-dir target'
       - id: restored
         name: velnor-ci restored
         env:
@@ -230,136 +170,68 @@ jobs:
           VELNOR_CACHE_TARGETS: |
             target
             xtask/target
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- restored'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" restored'
       - id: replan
         name: velnor-ci plan --full
         if: '${{ steps.restored.outputs.expired == ''true'' }}'
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- plan --full'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" plan --full'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-fmt --all --check'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || needs.rust-plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p app '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo check -p app --locked'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo check -p app --locked'
       - name: Check core alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p core '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo check -p core --locked'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo check -p core --locked'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || needs.rust-plan.outputs.rust_root_test_filter }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: Doctests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- inputs save --target-dir target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" inputs save --target-dir target'
       - id: base
         name: Decide whether to save the build directory
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
@@ -367,14 +239,8 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             xtask/Cargo.toml
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache decide --target-dir target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache decide --target-dir target'
       - name: Save the target cache
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'') && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         continue-on-error: true
@@ -444,11 +310,7 @@ jobs:
           persist-credentials: false
       - name: Resolve released helper tools
         env:
-          VELNOR_HELPER_INSTALL_TOOLS: |
-            fail() { printf '%s
-            ' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool '$2' was not found on PATH"; printf '%s=%s
-            ' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf '%s=%s
-            ' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"
+          VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
@@ -457,24 +319,12 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
-      - name: Create the released helper directory
+      - name: Install the released helper launcher
         env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_MKDIR" -m 700 "$VELNOR_HELPER_DIRECTORY"'
-      - name: Copy the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CP" "$VELNOR_HELPER_SOURCE" "$VELNOR_HELPER"'
-      - name: Protect the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CHMOD" 500 "$VELNOR_HELPER"'
+          VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
+          VELNOR_HELPER_LAUNCHER: *velnor_2
+          VELNOR_HELPER_SHA256: *velnor_3
+        run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -501,26 +351,12 @@ jobs:
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- prepare'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" prepare'
       - name: velnor-ci check-metadata
         working-directory: xtask
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- check-metadata'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" check-metadata'
       - id: sources_xtask
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -541,15 +377,8 @@ jobs:
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         working-directory: xtask
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- inputs restore --target-dir ../xtask/target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" inputs restore --target-dir ../xtask/target'
       - id: restored
         name: velnor-ci restored
         env:
@@ -557,91 +386,48 @@ jobs:
           VELNOR_CACHE_TARGETS: |
             target
             xtask/target
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- restored'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" restored'
       - id: replan
         name: velnor-ci plan --full
         if: '${{ steps.restored.outputs.expired == ''true'' }}'
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- plan --full'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" plan --full'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-fmt --all --check'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_xtask_mode || needs.rust-plan.outputs.rust_xtask_mode) != ''none'' && (steps.replan.outputs.rust_xtask_docs || needs.rust-plan.outputs.rust_xtask_docs) == ''run'' && (steps.replan.outputs.rust_xtask_package_args || needs.rust-plan.outputs.rust_xtask_package_args) != '''' }}'
         working-directory: xtask
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'''
       - name: Check xtask alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_xtask_package_args || needs.rust-plan.outputs.rust_xtask_package_args)), '' -p xtask '') || contains(format('' {0} '', (steps.replan.outputs.rust_xtask_package_args || needs.rust-plan.outputs.rust_xtask_package_args)), '' --workspace '')) }}'
         working-directory: xtask
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo check -p xtask --locked'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo check -p xtask --locked'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: xtask
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
@@ -649,26 +435,13 @@ jobs:
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
           TEST_FILTER: '${{ steps.replan.outputs.rust_xtask_test_filter || needs.rust-plan.outputs.rust_xtask_test_filter }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- cargo-nextest nextest run --workspace --locked --no-fail-fast --ignore-default-filter -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: xtask
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- inputs save --target-dir ../xtask/target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" inputs save --target-dir ../xtask/target'
       - id: base
         name: Decide whether to save the build directory
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
@@ -676,14 +449,8 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             xtask/Cargo.toml
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache decide --target-dir xtask/target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache decide --target-dir xtask/target'
       - name: Save the target cache
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'') && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         continue-on-error: true
@@ -739,11 +506,7 @@ jobs:
           persist-credentials: false
       - name: Resolve released helper tools
         env:
-          VELNOR_HELPER_INSTALL_TOOLS: |
-            fail() { printf '%s
-            ' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool '$2' was not found on PATH"; printf '%s=%s
-            ' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf '%s=%s
-            ' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"
+          VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
@@ -752,24 +515,12 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
-      - name: Create the released helper directory
+      - name: Install the released helper launcher
         env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_MKDIR" -m 700 "$VELNOR_HELPER_DIRECTORY"'
-      - name: Copy the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CP" "$VELNOR_HELPER_SOURCE" "$VELNOR_HELPER"'
-      - name: Protect the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CHMOD" 500 "$VELNOR_HELPER"'
+          VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
+          VELNOR_HELPER_LAUNCHER: *velnor_2
+          VELNOR_HELPER_SHA256: *velnor_3
+        run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - id: tools
         name: Restore the tools cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -795,25 +546,11 @@ jobs:
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- prepare'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" prepare'
       - name: velnor-ci check-metadata
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- check-metadata'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" check-metadata'
       - id: sources_root
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -834,15 +571,8 @@ jobs:
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci check-metadata
         working-directory: xtask
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- check-metadata'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" check-metadata'
       - id: sources_xtask
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -862,26 +592,12 @@ jobs:
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- inputs restore --target-dir target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" inputs restore --target-dir target'
       - name: velnor-ci inputs restore
         working-directory: xtask
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- inputs restore --target-dir ../xtask/target'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" inputs restore --target-dir ../xtask/target'
       - id: restored
         name: velnor-ci restored
         env:
@@ -889,61 +605,29 @@ jobs:
           VELNOR_CACHE_TARGETS: |
             target
             xtask/target
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- restored'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" restored'
       - id: replan
         name: velnor-ci plan --full
         if: '${{ steps.restored.outputs.expired == ''true'' }}'
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- plan --full'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" plan --full'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked'
       - name: velnor-ci inputs audit
-        env:
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- inputs audit'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" inputs audit'
       - name: Upload the cargo fingerprint log
         if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -966,11 +650,7 @@ jobs:
     steps:
       - name: Resolve released helper tools
         env:
-          VELNOR_HELPER_INSTALL_TOOLS: |
-            fail() { printf '%s
-            ' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool '$2' was not found on PATH"; printf '%s=%s
-            ' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf '%s=%s
-            ' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"
+          VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
@@ -979,76 +659,40 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
-      - name: Create the released helper directory
+      - name: Install the released helper launcher
         env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_MKDIR" -m 700 "$VELNOR_HELPER_DIRECTORY"'
-      - name: Copy the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CP" "$VELNOR_HELPER_SOURCE" "$VELNOR_HELPER"'
-      - name: Protect the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CHMOD" 500 "$VELNOR_HELPER"'
+          VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
+          VELNOR_HELPER_LAUNCHER: *velnor_2
+          VELNOR_HELPER_SHA256: *velnor_3
+        run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - name: Delete the older rust-root entries
         if: '${{ needs.rust-root.outputs.base_save == ''true'' }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-root.outputs.base_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache trim --prefix "$CACHE_PREFIX"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-root sources entries
         if: '${{ needs.rust-root.outputs.sources_prefix != '''' }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-root.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache trim --prefix "$CACHE_PREFIX"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-xtask entries
         if: '${{ needs.rust-xtask.outputs.base_save == ''true'' }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-xtask.outputs.base_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache trim --prefix "$CACHE_PREFIX"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-xtask sources entries
         if: '${{ needs.rust-xtask.outputs.sources_prefix != '''' }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-xtask.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache trim --prefix "$CACHE_PREFIX"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - id: verify-rust-root-target_key
         name: Verify the rust-root target cache upload
         if: '${{ needs.rust-root.outputs.target_key != '''' }}'
@@ -1056,14 +700,8 @@ jobs:
         env:
           CACHE_KEY: '${{ needs.rust-root.outputs.target_key }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache verify --key "$CACHE_KEY"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache verify --key "$CACHE_KEY"'
       - id: verify-rust-root-sources_key
         name: Verify the rust-root sources cache upload
         if: '${{ needs.rust-root.outputs.sources_key != '''' }}'
@@ -1071,14 +709,8 @@ jobs:
         env:
           CACHE_KEY: '${{ needs.rust-root.outputs.sources_key }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache verify --key "$CACHE_KEY"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache verify --key "$CACHE_KEY"'
       - id: verify-rust-xtask-target_key
         name: Verify the rust-xtask target cache upload
         if: '${{ needs.rust-xtask.outputs.target_key != '''' }}'
@@ -1086,14 +718,8 @@ jobs:
         env:
           CACHE_KEY: '${{ needs.rust-xtask.outputs.target_key }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache verify --key "$CACHE_KEY"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache verify --key "$CACHE_KEY"'
       - id: verify-rust-xtask-sources_key
         name: Verify the rust-xtask sources cache upload
         if: '${{ needs.rust-xtask.outputs.sources_key != '''' }}'
@@ -1101,25 +727,13 @@ jobs:
         env:
           CACHE_KEY: '${{ needs.rust-xtask.outputs.sources_key }}'
           GITHUB_TOKEN: '${{ github.token }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache verify --key "$CACHE_KEY"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache verify --key "$CACHE_KEY"'
       - name: Require verified cache uploads
         env:
           CACHE_OK: '${{ steps.verify-rust-root-target_key.outcome != ''failure'' && steps.verify-rust-root-sources_key.outcome != ''failure'' && steps.verify-rust-xtask-target_key.outcome != ''failure'' && steps.verify-rust-xtask-sources_key.outcome != ''failure'' }}'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- cache check --success "$CACHE_OK"'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" cache check --success "$CACHE_OK"'
   required:
     name: Required
     needs:
@@ -1135,11 +749,7 @@ jobs:
     steps:
       - name: Resolve released helper tools
         env:
-          VELNOR_HELPER_INSTALL_TOOLS: |
-            fail() { printf '%s
-            ' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool '$2' was not found on PATH"; printf '%s=%s
-            ' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in BASH:bash MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments='--check --status'; else checksum=shasum; arguments='-a 256 --check --status'; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf '%s=%s
-            ' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"
+          VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
@@ -1148,33 +758,15 @@ jobs:
           sha256-linux-x64: '10e3511ab3d2f211366c6fd3633474f4a74ee6750b16b52c90758c0e8321dd3e'
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
-      - name: Create the released helper directory
+      - name: Install the released helper launcher
         env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_MKDIR" -m 700 "$VELNOR_HELPER_DIRECTORY"'
-      - name: Copy the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CP" "$VELNOR_HELPER_SOURCE" "$VELNOR_HELPER"'
-      - name: Protect the released helper
-        env:
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_DIRECTORY: '${{ runner.temp }}/velnor-trusted-${{ github.run_id }}-${{ github.run_attempt }}-${{ github.job }}'
-          VELNOR_HELPER_SOURCE: '${{ runner.temp }}/velnor-ci-bin/velnor-ci'
-        run: '"$VELNOR_HELPER_CHMOD" 500 "$VELNOR_HELPER"'
+          VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
+          VELNOR_HELPER_LAUNCHER: *velnor_2
+          VELNOR_HELPER_SHA256: *velnor_3
+        run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - name: velnor-ci gate
         env:
           NEEDS_JSON: '${{ toJSON(needs) }}'
           GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-root=lane:root --job rust-xtask=lane:xtask --job rust-inputs-audit=schedule-or-dispatch --tests rust-root=root --tests rust-xtask=xtask'
-          VELNOR_HELPER_LAUNCHER: *velnor_1
-          VELNOR_HELPER: *velnor_0
-          VELNOR_HELPER_TEMP: '${{ runner.temp }}'
-          VELNOR_HELPER_SHA256: *velnor_2
-          VELNOR_HELPER_CHECKSUM: '${{ env.VELNOR_HELPER_CHECKSUM }}'
-          VELNOR_HELPER_CHECKSUM_ARGUMENTS: '${{ env.VELNOR_HELPER_CHECKSUM_ARGUMENTS }}'
-        shell: 'bash --noprofile --norc -p -e -o pipefail {0}'
-        run: '"$VELNOR_HELPER_BASH" --noprofile --norc -p -e -o pipefail -c "$VELNOR_HELPER_LAUNCHER" -- gate --spec-env GATE_SPEC'
+        shell: 'bash -p {0}'
+        run: '"$VELNOR_HELPER_BASH" -p "$VELNOR_HELPER_EXEC" gate --spec-env GATE_SPEC'

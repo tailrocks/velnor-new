@@ -80,7 +80,7 @@ pub(crate) fn steps(workflow: &Value) -> Result<&Vec<Value>, Box<dyn Error>> {
 }
 
 #[test]
-fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> TestResult {
+fn every_trusted_helper_use_runs_the_one_installed_launcher() -> TestResult {
     let workflow = workflow(&"a".repeat(64))?;
     let steps = steps(&workflow)?;
     let mut seen = Vec::new();
@@ -88,49 +88,25 @@ fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> Tes
         let Some(run) = step["run"].as_str() else {
             continue;
         };
-        if !run.starts_with("velnor-ci ") && step["env"]["VELNOR_HELPER"].is_null()
-            || step["env"]["VELNOR_HELPER_SOURCE"].is_string()
-        {
+        let Some(rest) = run.strip_prefix("\"$VELNOR_HELPER_BASH\" -p \"$VELNOR_HELPER_EXEC\" ")
+        else {
+            assert!(!run.contains("$VELNOR_HELPER_EXEC"), "{run}");
             continue;
-        }
-        assert_eq!(
-            step["shell"],
-            "bash --noprofile --norc -p -e -o pipefail {0}"
-        );
+        };
+        assert_eq!(step["shell"], "bash -p {0}");
         assert_eq!(run.lines().count(), 1, "{run}");
-        let rest = run
-            .strip_prefix(
-                "\"$VELNOR_HELPER_BASH\" --noprofile --norc -p -e -o pipefail -c \"$VELNOR_HELPER_LAUNCHER\" -- ",
-            )
-            .ok_or("missing trusted invocation")?;
-        let launcher = step["env"]["VELNOR_HELPER_LAUNCHER"]
-            .as_str()
-            .ok_or("no launcher")?;
-        assert!(launcher.contains("\"$VELNOR_HELPER_ENV\" -i PATH=/usr/bin:/bin"));
-        assert!(launcher.ends_with("exec \"$VELNOR_HELPER_COPY\" \"$@\""));
-        assert_eq!(step["env"]["VELNOR_HELPER_TEMP"], "${{ runner.temp }}");
+        assert!(
+            step["env"]
+                .as_object()
+                .is_none_or(|env| env.keys().all(|key| !key.starts_with("VELNOR_HELPER"))),
+            "{step:?}"
+        );
         assert!(
             !step["if"]
                 .as_str()
                 .unwrap_or_default()
                 .contains("velnor-helper-check")
         );
-        let digest = step["env"]["VELNOR_HELPER_SHA256"]
-            .as_str()
-            .ok_or("no digest")?;
-        for (os, arch, pin) in [
-            ("Linux", "X64", "a".repeat(64)),
-            ("Linux", "ARM64", "1".repeat(64)),
-            ("macOS", "ARM64", "2".repeat(64)),
-        ] {
-            assert!(
-                digest.contains(&format!(
-                    "runner.os == '{os}' && runner.arch == '{arch}' && '{pin}'"
-                )),
-                "{digest}"
-            );
-        }
-        assert!(digest.ends_with(" || '' }}"), "{digest}");
         seen.push(rest);
     }
     for command in ["plan ", "run --", "crates-mirror ", "gate "] {
@@ -139,6 +115,32 @@ fn every_trusted_helper_use_copies_verifies_and_executes_one_fresh_path() -> Tes
             "missing {command}: {seen:?}"
         );
     }
+    let installs: Vec<_> = steps
+        .iter()
+        .filter(|step| step["name"] == "Install the released helper launcher")
+        .collect();
+    assert_eq!(installs.len(), 1);
+    let launcher = installs[0]["env"]["VELNOR_HELPER_LAUNCHER"]
+        .as_str()
+        .ok_or("no launcher")?;
+    assert!(launcher.contains("\"$VELNOR_HELPER_ENV\" -i PATH=/usr/bin:/bin"));
+    assert!(launcher.ends_with("exec \"$copy\" \"$@\""));
+    let digest = installs[0]["env"]["VELNOR_HELPER_SHA256"]
+        .as_str()
+        .ok_or("no digest")?;
+    for (os, arch, pin) in [
+        ("Linux", "X64", "a".repeat(64)),
+        ("Linux", "ARM64", "1".repeat(64)),
+        ("macOS", "ARM64", "2".repeat(64)),
+    ] {
+        assert!(
+            digest.contains(&format!(
+                "runner.os == '{os}' && runner.arch == '{arch}' && '{pin}'"
+            )),
+            "{digest}"
+        );
+    }
+    assert!(digest.ends_with(" || '' }}"), "{digest}");
     let gate = steps
         .iter()
         .find(|step| step["name"] == "velnor-ci gate")
@@ -177,6 +179,12 @@ pub(crate) fn execute_environment(
         .filter_map(|line| line.split_once('='))
         .map(|(key, value)| (key.to_owned(), value.to_owned()))
         .collect();
+    if step["run"]
+        .as_str()
+        .is_some_and(|run| run.contains("$VELNOR_HELPER_EXEC"))
+    {
+        bindings.insert("VELNOR_HELPER_SHA256".to_owned(), digest.to_owned());
+    }
     bindings.extend(
         environment
             .iter()
@@ -208,6 +216,10 @@ pub(crate) fn execute_environment(
         .env_clear()
         .env("PATH", path)
         .env("GITHUB_ENV", env_file)
+        .env("RUNNER_TEMP", root)
+        .env("GITHUB_RUN_ID", "42")
+        .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("GITHUB_JOB", "format")
         .envs(&bindings);
     if let Some(env) = step["env"].as_object() {
         for (key, value) in env {
@@ -289,14 +301,7 @@ fn rendered_commands_ignore_path_shadows_and_refuse_a_replaced_helper() -> TestR
     let genuine = execute(&steps[use_index], &root, &shadows, &digest)?;
     assert!(genuine.status.success());
     assert_eq!(genuine.stdout, b"released-helper\n");
-    let path = steps[use_index]["env"]["VELNOR_HELPER"]
-        .as_str()
-        .ok_or("no installed path")?
-        .replace("${{ runner.temp }}", root.to_str().ok_or("root encoding")?)
-        .replace("${{ github.run_id }}", "42")
-        .replace("${{ github.run_attempt }}", "1")
-        .replace("${{ github.job }}", "format");
-    let installed = Path::new(&path);
+    let installed = &root.join("velnor-trusted-42-1-format/velnor-ci");
     assert!(!installed.starts_with(scratch.repo()));
     assert_eq!(fs::metadata(installed)?.permissions().mode() & 0o777, 0o500);
     assert_eq!(

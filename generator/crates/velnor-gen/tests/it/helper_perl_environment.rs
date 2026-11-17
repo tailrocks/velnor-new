@@ -36,10 +36,13 @@ fn trusted_shasum_ignores_perl_startup_and_inherited_launcher_poison() -> TestRe
         ("PERL5OPT", "-MHelperPoison"),
         ("PERL5LIB", root.to_str().ok_or("non UTF8 root")?),
         ("VELNOR_HELPER_LAUNCHER", "printf 'forged-helper\\n'"),
+        ("VELNOR_HELPER_CHECKSUM", "/usr/bin/shasum"),
+        (
+            "VELNOR_HELPER_CHECKSUM_ARGUMENTS",
+            "-a 256 --check --status",
+        ),
     ];
-    let mut step = steps[index].clone();
-    step["env"]["VELNOR_HELPER_CHECKSUM"] = "/usr/bin/shasum".into();
-    step["env"]["VELNOR_HELPER_CHECKSUM_ARGUMENTS"] = "-a 256 --check --status".into();
+    let step = steps[index].clone();
     let good = execute_environment(&step, &root, &shadows, &digest, &poison)?;
     assert!(
         good.status.success(),
