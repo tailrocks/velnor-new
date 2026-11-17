@@ -7,10 +7,13 @@ use serde_json::{Value, json};
 use velnor_ci::gate::{Verdict, release_gate};
 use velnor_ci::github::{branch_path, compare_path, rules_path, run_jobs_path, runs_path};
 
-use crate::support::{FakeGitHub, repo};
+use crate::support::repo;
 
+mod current_run;
+mod external_checks;
 mod inputs;
 mod pr_only;
+mod pr_rules;
 mod status;
 
 pub(crate) const GATE: &str = include_str!("../data/gate.json");
@@ -26,6 +29,38 @@ const BOTH_PASSED: &str = "check Required passed\ncheck Required verdict passed\
 struct Recorded(BTreeMap<String, Value>);
 
 impl Recorded {
+    fn gate_with_budget(&self, limit: usize) -> Result<Verdict, String> {
+        struct Budget<'a> {
+            responses: &'a BTreeMap<String, Value>,
+            left: std::cell::Cell<usize>,
+        }
+        impl velnor_ci::github::GitHub for Budget<'_> {
+            fn get(&self, path: &str) -> Result<String, velnor_ci::error::CiError> {
+                let left =
+                    self.left.get().checked_sub(1).ok_or_else(|| {
+                        velnor_ci::error::CiError::new("request budget exhausted")
+                    })?;
+                self.left.set(left);
+                self.responses
+                    .get(path)
+                    .map(Value::to_string)
+                    .ok_or_else(|| {
+                        velnor_ci::error::CiError::new(format!("no recorded response for {path}"))
+                    })
+            }
+        }
+        release_gate(
+            &Budget {
+                responses: &self.0,
+                left: std::cell::Cell::new(limit),
+            },
+            &repo(),
+            GREEN,
+            &["DCO".to_owned()],
+            None,
+        )
+        .map_err(|e| e.to_string())
+    }
     fn new() -> Self {
         Self(serde_json::from_str(GATE).unwrap_or_else(|e| unreachable!("{e}")))
     }
@@ -84,11 +119,7 @@ impl Recorded {
     }
 
     fn gate_with(&self, sha: &str, pr_only: &[String]) -> Result<Verdict, String> {
-        let mut fake = FakeGitHub::default();
-        for (path, body) in &self.0 {
-            fake.respond(path.clone(), &body.to_string());
-        }
-        release_gate(&fake, &repo(), sha, pr_only).map_err(|e| e.to_string())
+        self.gate_in_run(sha, pr_only, None)
     }
 }
 
