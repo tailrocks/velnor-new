@@ -46,7 +46,7 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
-use crate::metrics::RunMetrics;
+use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
@@ -285,6 +285,14 @@ fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
 pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {
     let text = fs::read_to_string(path)
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
-    serde_json::from_str(&text)
-        .map_err(|e| CiError::new(format!("{} is not a metrics file: {e}", path.display())))
+    let metrics: RunMetrics = serde_json::from_str(&text)
+        .map_err(|e| CiError::new(format!("{} is not a metrics file: {e}", path.display())))?;
+    if metrics.schema_version != METRICS_SCHEMA_VERSION {
+        return Err(CiError::new(format!(
+            "{} uses unsupported metrics schema version {}; expected {METRICS_SCHEMA_VERSION}",
+            path.display(),
+            metrics.schema_version
+        )));
+    }
+    Ok(metrics)
 }

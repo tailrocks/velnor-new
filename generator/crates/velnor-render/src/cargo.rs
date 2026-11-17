@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind, TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind,
+    TargetName,
 };
 
 use crate::gate::CACHE_DEBUG_ON;
@@ -36,7 +37,7 @@ pub(crate) fn cargo_step(command: &CargoCommand) -> RenderedStep {
             filter,
         ),
         CargoCommand::NextestArchive { file } => (
-            "Build the tests".into(),
+            BUILD_TESTS_STEP.into(),
             format!(
                 "cargo-nextest nextest archive --workspace --locked --archive-file '{}'",
                 file.as_str().replace('\'', "'\\''")

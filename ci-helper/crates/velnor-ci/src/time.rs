@@ -44,11 +44,10 @@ fn split_offset(text: &str) -> Option<(&str, i64)> {
 }
 
 #[must_use]
-pub fn seconds_between(start: Option<&str>, end: Option<&str>) -> u64 {
-    match (start.and_then(parse_utc), end.and_then(parse_utc)) {
-        (Some(start), Some(end)) => u64::try_from(end - start).unwrap_or(0),
-        _ => 0,
-    }
+pub fn seconds_between(start: Option<&str>, end: Option<&str>) -> Option<u64> {
+    let start = start.and_then(parse_utc)?;
+    let end = end.and_then(parse_utc)?;
+    u64::try_from(end - start).ok()
 }
 
 fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
