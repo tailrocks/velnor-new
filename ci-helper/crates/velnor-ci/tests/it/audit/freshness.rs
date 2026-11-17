@@ -8,6 +8,79 @@ use std::time::{Duration, UNIX_EPOCH};
 use super::{audit, own_units, unit, workspace_below_the_root};
 
 #[test]
+fn a_later_workspaces_target_creation_does_not_stale_a_repository_read() {
+    let repo = workspace_below_the_root();
+    repo.write(
+        "second/Cargo.toml",
+        "[package]\nname = \"second\"\nedition = \"2024\"\n[workspace]\n",
+    );
+    repo.write("second/src/lib.rs", "");
+    repo.write("second/Cargo.lock", "version = 4\n");
+    own_units(&repo, "rust/target/debug", &[]);
+    let output = "rust/target/debug/build/lib-f000000000000008/output";
+    unit(&repo, output, "cargo:rerun-if-changed=../..\n");
+    let built = UNIX_EPOCH + Duration::from_secs(3_000_000_001);
+    repo.set_mtime(output, built);
+    File::open(repo.root().join("second"))
+        .and_then(|file| file.set_times(FileTimes::new().set_modified(built)))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    for (hash, fingerprint) in [("001", "lib-second"), ("002", "test-lib-second")] {
+        unit(
+            &repo,
+            &format!("second/target/debug/deps/second-f000000000000{hash}.d"),
+            "out.d: src/lib.rs\n",
+        );
+        unit(
+            &repo,
+            &format!("second/target/debug/.fingerprint/second-f000000000000{hash}/{fingerprint}"),
+            "",
+        );
+    }
+    File::open(repo.root().join("second"))
+        .and_then(|file| {
+            file.set_times(
+                FileTimes::new().set_modified(UNIX_EPOCH + Duration::from_secs(4_000_000_000)),
+            )
+        })
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(repo.mtime("second") > built);
+
+    let written = audit(&repo, &["--write"]);
+    assert!(written.status.success(), "{written:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
+            .unwrap_or_else(|e| unreachable!("{e}")),
+        ".\tlib\n"
+    );
+}
+
+#[test]
+fn a_newer_descendant_of_an_explicit_target_directory_prevents_writing_the_inputs_lock() {
+    let repo = workspace_below_the_root();
+    own_units(&repo, "rust/target/debug", &[]);
+    let output = "rust/target/debug/build/lib-f000000000000008/output";
+    unit(&repo, output, "cargo:rerun-if-changed=../target/generated\n");
+    let built = UNIX_EPOCH + Duration::from_secs(3_000_000_001);
+    repo.set_mtime(output, built);
+    unit(&repo, "rust/target/generated/nested/value.txt", "newer");
+    repo.set_mtime(
+        "rust/target/generated/nested/value.txt",
+        UNIX_EPOCH + Duration::from_secs(4_000_000_000),
+    );
+    let old = UNIX_EPOCH + Duration::from_secs(2_000_000_000);
+    for directory in ["rust/target/generated", "rust/target/generated/nested"] {
+        File::open(repo.root().join(directory))
+            .and_then(|file| file.set_times(FileTimes::new().set_modified(old)))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(repo.mtime(directory), old);
+    }
+
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
+}
+
+#[test]
 fn a_target_directory_containing_tracked_inputs_cannot_hide_changed_sources() {
     let repo = workspace_below_the_root();
     let target = "debug";
