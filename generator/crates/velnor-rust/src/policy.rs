@@ -1,22 +1,50 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
-use velnor_model::{PolicyTools, RepoPath};
+use velnor_model::{PolicyTools, RepoPath, RepoView, RustRoot};
 
 use crate::mise::MISE_CONFIGS;
 use crate::roots::is_cargo_config;
 
 const DEPENDENCY_FILES: [&str; 2] = ["Cargo.toml", "Cargo.lock"];
 
-pub(crate) const DENY_CONFIG_NAMES: [&str; 4] = [
+const DENY_CONFIG_NAMES: [&str; 4] = [
     "deny.toml",
     ".deny.toml",
     ".cargo/deny.toml",
     ".config/deny.toml",
 ];
+
+pub(crate) fn deny_configs(view: &RepoView, roots: &[RustRoot]) -> BTreeMap<RepoPath, RepoPath> {
+    roots
+        .iter()
+        .filter_map(|root| {
+            let mut folder = root.manifest.parent();
+            loop {
+                for name in DENY_CONFIG_NAMES {
+                    let path = folder
+                        .as_ref()
+                        .map_or_else(
+                            || RepoPath::new(name),
+                            |folder| RepoPath::new(format!("{folder}/{name}")),
+                        )
+                        .ok()?;
+                    if view.tracked_paths.contains(&path) {
+                        return Some((root.manifest.clone(), path));
+                    }
+                }
+                folder = match folder {
+                    Some(current) => current.parent(),
+                    None => break,
+                };
+            }
+            None
+        })
+        .collect()
+}
 
 pub(crate) fn is_deny_config(path: &RepoPath) -> bool {
     matches!(

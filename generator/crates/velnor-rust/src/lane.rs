@@ -160,6 +160,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
             lane.cargo(
                 CargoCommand::Deny {
                     manifest: root.manifest.clone(),
+                    config: facts.deny_configs.get(&root.manifest).cloned(),
                 },
                 None,
             )

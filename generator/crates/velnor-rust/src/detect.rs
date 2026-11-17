@@ -14,7 +14,7 @@ use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::os_pins::pinned_for_runner;
-use crate::policy::DENY_CONFIG_NAMES;
+use crate::policy::deny_configs;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
 use crate::timings::{TIMINGS_PATH, usable_timings};
@@ -143,10 +143,12 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         })
         .transpose()?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
-    let policy = policy_tools(view, &rust_roots, config.runner.as_str())?;
+    let deny_configs = deny_configs(view, &rust_roots);
+    let policy = policy_tools(view, &deny_configs, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
     Ok(RepoFacts {
         policy,
+        deny_configs,
         repository: view.repository.clone(),
         timings,
         timings_notes,
@@ -165,40 +167,17 @@ const DENY_TOOL: &str = "cargo-deny";
 
 fn policy_tools(
     view: &RepoView,
-    roots: &[RustRoot],
+    deny_configs: &BTreeMap<RepoPath, RepoPath>,
     runner: &str,
 ) -> Result<PolicyTools, DetectError> {
     let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
-    let deny_config = roots.iter().find_map(|root| {
-        let mut folder = root.manifest.parent();
-        loop {
-            for name in DENY_CONFIG_NAMES {
-                let path = folder
-                    .as_ref()
-                    .map_or_else(
-                        || RepoPath::new(name),
-                        |folder| RepoPath::new(format!("{folder}/{name}")),
-                    )
-                    .ok()?;
-                if view.tracked_paths.contains(&path) {
-                    return Some(path);
-                }
-            }
-            folder = match folder {
-                Some(current) => current.parent(),
-                None => break,
-            };
-        }
-        None
-    });
-    if let Some(path) = &deny_config
+    if let Some(path) = deny_configs.values().next()
         && !pinned(DENY_TOOL)
     {
         return Err(DetectError::invalid(path, Reason::UnpinnedTool(DENY_TOOL)));
     }
-    let deny = deny_config.is_some();
     Ok(PolicyTools {
-        deny,
+        deny: !deny_configs.is_empty(),
         machete: pinned("cargo-machete"),
     })
 }

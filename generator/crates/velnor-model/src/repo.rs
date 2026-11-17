@@ -82,6 +82,7 @@ pub struct RepoFacts {
     pub timings_notes: Vec<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
+    pub deny_configs: BTreeMap<RepoPath, RepoPath>,
     pub weakenings: Vec<Weakening>,
 }
 
