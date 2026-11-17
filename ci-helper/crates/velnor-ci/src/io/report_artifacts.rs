@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cargo_artifacts::{CargoArtifact, CargoProgress, ProgressKind};
+use crate::cargo_package::PackageIdentity;
 use crate::telemetry::{Compilation, Invocation};
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -119,28 +120,12 @@ pub(super) fn downloads(
 }
 
 fn package(package_id: &str) -> Option<Package> {
-    let (source, spec) = if let Some((source, spec)) = package_id.rsplit_once('#') {
-        let (name, version) = spec.rsplit_once('@')?;
-        (source, (name, version))
-    } else {
-        let (name_version, source) = package_id.rsplit_once(" (")?;
-        let source = source.strip_suffix(')')?;
-        let mut fields = name_version.split_whitespace();
-        let name = fields.next()?;
-        let version = fields.next()?;
-        if fields.next().is_some() {
-            return None;
-        }
-        (source, (name, version))
-    };
-    let (name, version) = spec;
-    if source.is_empty() || name.is_empty() || version.is_empty() {
-        return None;
-    }
+    let identity = PackageIdentity::parse(package_id)?;
+    let source = identity.source?;
     Some(Package {
-        key: format!("{source}#{name}@{version}"),
-        name: name.to_owned(),
-        version: version.to_owned(),
+        key: format!("{source}#{}@{}", identity.name, identity.version),
+        name: identity.name.to_owned(),
+        version: identity.version.to_owned(),
     })
 }
 
