@@ -154,6 +154,17 @@ pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> St
     }
 }
 
+pub(crate) fn all_conditions(first: Option<String>, second: Option<String>) -> Option<String> {
+    match (first, second) {
+        (Some(first), Some(second)) => Some(format!(
+            "${{{{ ({}) && ({}) }}}}",
+            first.trim_start_matches("${{ ").trim_end_matches(" }}"),
+            second.trim_start_matches("${{ ").trim_end_matches(" }}")
+        )),
+        (first, second) => first.or(second),
+    }
+}
+
 fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {

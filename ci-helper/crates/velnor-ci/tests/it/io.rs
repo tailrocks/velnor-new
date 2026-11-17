@@ -159,7 +159,7 @@ fn a_name_taken_by_a_folder_is_skipped_and_the_folder_is_left_untouched() {
 pub(crate) struct Repo(PathBuf);
 
 impl Repo {
-    fn empty(name: &str) -> Self {
+    pub(crate) fn empty(name: &str) -> Self {
         Self(fresh_dir("velnor-ci-inputs", name))
     }
 
