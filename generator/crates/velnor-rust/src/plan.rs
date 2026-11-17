@@ -82,6 +82,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     upload_cargo_logs(&mut jobs);
     let required = verdict_job(facts, &jobs, single, draft_guard);
+    jobs.extend(crate::base_cache::trim_job(facts, &jobs));
     jobs.push(required);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -272,14 +273,36 @@ pub(crate) fn setup_roots(
             })),
         ]);
     }
-    if lane.from_source || breaks_ties(facts) {
-        toolchain.extend(restore_file_times(roots));
-    }
-    toolchain.push(step(StepKind::Helper(HelperCommand::Restored)));
+    toolchain.extend(restore_steps(facts, roots, lane));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
     }));
+    steps
+}
+
+fn restore_steps(facts: &RepoFacts, roots: &[RustRoot], lane: &Lane) -> Vec<Step> {
+    let mut steps = Vec::new();
+    if lane.from_source || breaks_ties(facts) {
+        steps.push(step(StepKind::InputsRestore(
+            roots
+                .iter()
+                .map(|root| (root.manifest.clone(), root.target_dir.clone()))
+                .collect(),
+        )));
+    }
+    let mut restored = crate::base_cache::restored(facts);
+    if lane.from_source || breaks_ties(facts) {
+        for step in &mut restored {
+            if let StepKind::Helper(HelperCommand::Restored(expiry)) = step.kind {
+                step.kind = StepKind::RestoredTargets {
+                    targets: roots.iter().map(|root| root.target_dir.clone()).collect(),
+                    expiry,
+                };
+            }
+        }
+    }
+    steps.extend(restored);
     steps
 }
 
@@ -293,7 +316,13 @@ fn upload_cargo_logs(jobs: &mut [Job]) {
             let gate = job
                 .steps
                 .iter()
-                .find(|step| step.kind == StepKind::Helper(HelperCommand::Restored))
+                .find(|step| {
+                    matches!(
+                        step.kind,
+                        StepKind::RestoredTargets { .. }
+                            | StepKind::Helper(HelperCommand::Restored(..))
+                    )
+                })
                 .and_then(|step| step.gate.clone());
             job.steps.push(Step {
                 when: When::CacheDebug,
@@ -309,13 +338,6 @@ fn breaks_ties(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(TIE_BREAKING_HELPER))
-}
-
-fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
-    roots.iter().map(|root| Step {
-        directory: root.manifest.parent(),
-        ..step(StepKind::InputsRestore(root.target_dir.clone()))
-    })
 }
 
 pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {

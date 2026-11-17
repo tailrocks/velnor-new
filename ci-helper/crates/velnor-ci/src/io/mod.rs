@@ -12,13 +12,18 @@ mod crates_mirror_dispatch;
 mod crates_mirror_mise;
 mod git;
 mod http;
+mod input_scopes;
+mod input_target;
 mod inputs;
+mod inputs_batch;
 mod manifests;
 mod plan;
 mod release;
 mod required;
 mod restored;
+mod restored_targets;
 mod run;
+mod scope_cache;
 mod setup;
 mod timings;
 mod units;
@@ -30,9 +35,12 @@ use std::process::ExitCode;
 
 pub use self::audit::audit_inputs;
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
-pub use self::cold::{cold_on_failure, every_root_target, root_target};
+pub use self::cold::{cold_on_failure, every_root_target};
+pub use self::input_target::{CaseSensitivity, check_input_target_with};
 pub use self::inputs::{restore_inputs, save_inputs};
+pub use self::inputs_batch::restore_inputs_batch_with;
 pub use self::restored::{break_time_ties, break_time_ties_with};
+pub use self::scope_cache::ScopeCacheIo;
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
@@ -111,9 +119,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Inputs(InputsCommand::Save(args)) => {
-            let root = current_dir()?;
-            input_target::check_target(&root, &args.target_dir)?;
-            save_inputs(&root, &args.target_dir)
+            inputs_batch::save_args(&current_dir()?, &args)
         }
         Command::Inputs(InputsCommand::Restore(args)) => {
             let root = current_dir()?;
@@ -122,6 +128,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
             cold_on_failure(&[root.join(&args.target_dir)], "inputs restore", || {
                 restore_inputs(&root, &args.target_dir)
             })
+        }
+        Command::Inputs(InputsCommand::RestoreAll(args)) => {
+            inputs_batch::restore_args(&current_dir()?, &args)
         }
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
             audit_inputs(&current_dir()?, write)
@@ -138,34 +147,16 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
-        Command::Cache(CacheCommand::Decide(args)) => {
-            let temp = std::env::var_os("RUNNER_TEMP")
-                .filter(|dir| !dir.is_empty())
-                .ok_or_else(|| {
-                    CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
-                })?;
-            let log_path = Path::new(&temp).join("velnor-run.log");
-            let log = fs::read(&log_path)
-                .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
-            let decision = match cache_sources::refusal(&current_dir()?)? {
-                Some(reason) => Decision {
-                    save: false,
-                    report: reason,
-                },
-                None => decide(
-                    Some(&String::from_utf8_lossy(&log)),
-                    &args.target_dir,
-                    args.archive.as_deref(),
-                    now_seconds(),
-                )?,
-            };
-            append_outputs(&format!("save={}\n", decision.save))?;
-            Ok(decision.report)
-        }
+        Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
-        Command::Restored => {
+        Command::Restored(args) => {
             let root = current_dir()?;
-            let (targets, pending) = cold::targets_with_receipts(&root)?;
+            let configured = inputs_batch::restored_targets(&args)?;
+            let (targets, pending) = if configured.is_empty() {
+                cold::targets_with_receipts(&root)?
+            } else {
+                cold::explicit_targets_with_receipts(&root, &configured)?
+            };
             let expiry = expire_old_bases(&targets, now_seconds())?;
             append_outputs(&format!("expired={}\n", expiry.expired))?;
             let report = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
@@ -217,6 +208,11 @@ fn run_release_gate(args: &ReleaseGateArgs) -> Result<String, CiError> {
         &repo,
         &args.sha,
         &args.pr_only_check,
+        std::env::var("GITHUB_RUN_ID")
+            .ok()
+            .map(|id| id.parse::<u64>())
+            .transpose()
+            .map_err(|e| CiError::new(format!("invalid GITHUB_RUN_ID: {e}")))?,
     )?;
     append_outputs(&format!("ready={}\n", verdict.ready))?;
     Ok(verdict.report)

@@ -264,17 +264,19 @@ fn two_roots_restored_from_different_snapshots_each_keep_their_own_times() {
 }
 
 #[test]
-fn restore_without_saved_inputs_changes_nothing() {
+fn restore_without_saved_inputs_refuses_cached_artifacts_and_changes_no_sources() {
     let repo = Repo::new("cold");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("src/lib.rs", checkout);
-    let report =
-        restore_inputs(repo.root(), Path::new("target")).unwrap_or_else(|e| unreachable!("{e}"));
+    let report = restore_inputs(repo.root(), Path::new("target"))
+        .err()
+        .unwrap_or_else(|| unreachable!("missing snapshot was accepted"))
+        .to_string();
     assert_eq!(repo.mtime("src/lib.rs"), checkout);
     assert_eq!(
         report,
-        "no target/.velnor/inputs.tsv; nothing restored (cold run)\n"
+        "no target/.velnor/inputs.tsv; cannot restore cached inputs"
     );
 }
 
@@ -332,7 +334,7 @@ fn restore_then_tie_breaking_leaves_the_restored_times_of_distinct_files_alone()
 }
 
 #[test]
-fn the_restored_command_prints_its_report_and_writes_no_output_file() {
+fn the_restored_command_prints_its_report_and_only_writes_the_expiry_output() {
     let repo = Repo::new("restored-command");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let output = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
@@ -340,10 +342,15 @@ fn the_restored_command_prints_its_report_and_writes_no_output_file() {
         .current_dir(repo.root())
         .env("GITHUB_ENV", repo.root().join("env"))
         .env("GITHUB_OUTPUT", repo.root().join("output"))
+        .env_remove("VELNOR_BASE_MAX_AGE_DAYS")
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).starts_with("gave "));
     assert_eq!(output.stderr.len(), 0);
-    assert!(!repo.root().join("env").exists() && !repo.root().join("output").exists());
+    assert!(!repo.root().join("env").exists());
+    assert_eq!(
+        std::fs::read_to_string(repo.root().join("output")).unwrap_or_default(),
+        "expired=false\n"
+    );
 }

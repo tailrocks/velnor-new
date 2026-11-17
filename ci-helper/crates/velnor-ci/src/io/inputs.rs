@@ -8,9 +8,7 @@ use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use velnor_model::CompileInputs;
-use velnor_rust::{INPUTS_LOCK, METADATA_PATH, detect, parse_inputs_lock};
-
+use super::input_scopes::{git_prefix, scoped_files};
 use crate::error::CiError;
 use crate::inputs::{
     SavedInput, Tracked, TrackedFile, format_inputs, inputs_file, is_representable, parse_inputs,
@@ -21,7 +19,15 @@ use crate::scope::Scope;
 static NEXT_SNAPSHOT: AtomicU64 = AtomicU64::new(0);
 
 pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    let (top, tracked) = worktree_files(root)?;
+    save_inputs_scoped(root, target, None)
+}
+
+pub(super) fn save_inputs_scoped(
+    root: &Path,
+    target: &Path,
+    scope: Option<&Scope>,
+) -> Result<String, CiError> {
+    let (top, tracked) = scoped_files(root, scope)?;
     let relative = target.join(inputs_file(&git_prefix(root)?));
     let path = root.join(&relative);
     check_snapshot_parent(&path)?;
@@ -64,6 +70,19 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     ))
 }
 
+pub(super) fn invalidate_snapshot(root: &Path, target: &Path) -> Result<(), CiError> {
+    let path = root.join(target).join(inputs_file(&git_prefix(root)?));
+    check_snapshot_parent(&path)?;
+    match fs::remove_file(&path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(CiError::new(format!(
+            "cannot invalidate {}: {error}",
+            path.display()
+        ))),
+    }
+}
+
 fn check_snapshot_parent(path: &Path) -> Result<(), CiError> {
     let parent = path
         .parent()
@@ -82,7 +101,7 @@ fn check_snapshot_parent(path: &Path) -> Result<(), CiError> {
     }
 }
 
-fn publish_snapshot(path: &Path, text: &str) -> Result<(), CiError> {
+pub(super) fn publish_snapshot(path: &Path, text: &str) -> Result<(), CiError> {
     let parent = path
         .parent()
         .ok_or_else(|| CiError::new(format!("{} has no parent", path.display())))?;
@@ -122,21 +141,29 @@ fn publish_snapshot(path: &Path, text: &str) -> Result<(), CiError> {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
+    restore_inputs_scoped(root, target, None)
+}
+
+pub(super) fn restore_inputs_scoped(
+    root: &Path,
+    target: &Path,
+    scope: Option<&Scope>,
+) -> Result<String, CiError> {
     let relative = target.join(inputs_file(&git_prefix(root)?));
     let path = root.join(&relative);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Ok(format!(
-                "no {}; nothing restored (cold run)\n",
+            return Err(CiError::new(format!(
+                "no {}; cannot restore cached inputs",
                 relative.display()
-            ));
+            )));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
     let saved =
         parse_inputs(&text).map_err(|e| CiError::new(format!("{}: {e}", path.display())))?;
-    let (top, tracked) = worktree_files(root)?;
+    let (top, tracked) = scoped_files(root, scope)?;
     let plan = plan_restore(&saved, &tracked);
     if plan.links_changed > 0 {
         return Err(CiError::new(format!(
@@ -192,42 +219,7 @@ pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
     Ok(TrackedPaths { top, paths })
 }
 
-fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
-    let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
-    let top = PathBuf::from(
-        String::from_utf8(top)
-            .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
-            .trim_end_matches(['\n', '\r']),
-    );
-    let tracked = top_level_files(&top, &scope_of(root, &top)?)?;
-    Ok((top, tracked))
-}
-
-fn git_prefix(root: &Path) -> Result<String, CiError> {
-    let prefix = git(root, &["rev-parse", "--show-prefix"], None)?;
-    let prefix = String::from_utf8(prefix)
-        .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?;
-    Ok(prefix.trim_end_matches(['\n', '\r']).to_owned())
-}
-
-fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
-    let prefix = git_prefix(root)?;
-    let listed = match fs::read(top.join(INPUTS_LOCK.as_str())) {
-        Ok(bytes) => parse_inputs_lock(&bytes).map_err(|e| CiError::new(e.to_string()))?,
-        Err(e) if e.kind() == ErrorKind::NotFound => CompileInputs::new(),
-        Err(e) => return Err(CiError::new(format!("cannot read {INPUTS_LOCK}: {e}"))),
-    };
-    let facts = if top.join(METADATA_PATH.as_str()).exists() {
-        let checkout =
-            velnor_gen::io::read_recorded_checkout(top).map_err(|e| CiError::new(e.to_string()))?;
-        Some(detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?)
-    } else {
-        None
-    };
-    Ok(Scope::new(&prefix, &listed, facts.as_ref()))
-}
-
-fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
+pub(super) fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
     let index = parse_ls_files(
         &git(
             root,
@@ -298,7 +290,7 @@ fn worktree_mode(_metadata: &fs::Metadata, index_mode: &str) -> String {
     index_mode.to_owned()
 }
 
-fn git(root: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>, CiError> {
+pub(super) fn git(root: &Path, args: &[&str], stdin: Option<&[u8]>) -> Result<Vec<u8>, CiError> {
     let mut child = Command::new("git")
         .arg("-C")
         .arg(root)

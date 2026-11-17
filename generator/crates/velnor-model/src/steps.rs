@@ -37,7 +37,11 @@ pub enum StepKind {
     Cargo(CargoCommand),
     Helper(HelperCommand),
     InputsSave(RepoPath),
-    InputsRestore(RepoPath),
+    InputsRestore(Vec<(RepoPath, RepoPath)>),
+    RestoredTargets {
+        targets: Vec<RepoPath>,
+        expiry: BaseExpiry,
+    },
     CratesMirror(crate::repo::CratesMirror),
     GeneratorCheck,
     InstallHelper(HelperRelease),

@@ -41,10 +41,12 @@ const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
 pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
-    let restores = job
-        .steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::Helper(HelperCommand::Restored(..))));
+    let restores = job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::Helper(HelperCommand::Restored(..)) | StepKind::RestoredTargets { .. }
+        )
+    });
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -203,7 +205,8 @@ fn step_body(kind: &StepKind, directory: Option<&RepoPath>) -> RenderedStep {
         StepKind::Cargo(command) => cargo_step(command),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
-        StepKind::InputsRestore(target) => crate::helper_steps::inputs_step("restore", target, directory),
+        StepKind::InputsRestore(roots) => crate::helper_steps::restore_inputs_step(roots),
+        StepKind::RestoredTargets { targets, expiry } => crate::helper_steps::restored_targets_step(targets, *expiry),
 StepKind::CratesMirror(mirror) => RenderedStep {
     name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
     condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
@@ -306,7 +309,10 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
     let rendered = render_key(key);
     let paths: Vec<String> = key.paths().iter().map(path_text).collect();
     let mut with = vec![
-        ("path".to_owned(), Value::Text(paths.join("\n"))),
+        (
+            "path".to_owned(),
+            crate::cache::action_path(&paths.join("\n")),
+        ),
         ("key".to_owned(), Value::Expr(rendered.key)),
     ];
     if fallbacks && !rendered.restore_keys.is_empty() {

@@ -117,17 +117,19 @@ fn files_inside_a_submodule_are_restored_when_unchanged() {
 }
 
 #[test]
-fn restore_without_saved_inputs_changes_nothing() {
+fn restore_without_saved_inputs_refuses_cached_artifacts_and_changes_no_sources() {
     let repo = Repo::new("cold");
     repo.write("src/lib.rs", "pub fn one() {}\n");
     let checkout = UNIX_EPOCH + Duration::new(1_800_000_000, 0);
     repo.set_mtime("src/lib.rs", checkout);
     let report = restore_inputs(repo.root(), std::path::Path::new("target"))
-        .unwrap_or_else(|e| unreachable!("{e}"));
+        .err()
+        .unwrap_or_else(|| unreachable!("missing snapshot was accepted"))
+        .to_string();
     assert_eq!(repo.mtime("src/lib.rs"), checkout);
     assert_eq!(
         report,
-        "no target/.velnor/inputs.tsv; nothing restored (cold run)\n"
+        "no target/.velnor/inputs.tsv; cannot restore cached inputs"
     );
 }
 

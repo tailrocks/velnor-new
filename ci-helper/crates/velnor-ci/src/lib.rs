@@ -4,6 +4,7 @@
 pub mod cache;
 pub mod cli;
 mod cli_cache;
+mod cli_inputs;
 pub mod collect;
 pub mod compare;
 mod configurations;

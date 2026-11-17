@@ -239,10 +239,10 @@ jobs:
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore --target-dir target
+        run: 'velnor-ci inputs restore-all --root-target "${GITHUB_WORKSPACE}"/. "${GITHUB_WORKSPACE}"/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
       - id: restored
         name: velnor-ci restored
-        run: velnor-ci restored
+        run: 'velnor-ci restored --target-dir "${GITHUB_WORKSPACE}"/target'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
@@ -426,11 +426,10 @@ jobs:
             velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('ci-helper/Cargo.lock') }}-
             velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        working-directory: ci-helper
-        run: velnor-ci inputs restore --target-dir ../ci-helper/target
+        run: 'velnor-ci inputs restore-all --root-target "${GITHUB_WORKSPACE}"/ci-helper "${GITHUB_WORKSPACE}"/ci-helper/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
       - id: restored
         name: velnor-ci restored
-        run: velnor-ci restored
+        run: 'velnor-ci restored --target-dir "${GITHUB_WORKSPACE}"/ci-helper/target'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
@@ -554,11 +553,10 @@ jobs:
             velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('crates/velnor-runner/Cargo.lock') }}-
             velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        working-directory: crates/velnor-runner
-        run: velnor-ci inputs restore --target-dir ../../crates/velnor-runner/target
+        run: 'velnor-ci inputs restore-all --root-target "${GITHUB_WORKSPACE}"/crates/velnor-runner "${GITHUB_WORKSPACE}"/crates/velnor-runner/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
       - id: restored
         name: velnor-ci restored
-        run: velnor-ci restored
+        run: 'velnor-ci restored --target-dir "${GITHUB_WORKSPACE}"/crates/velnor-runner/target'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
@@ -724,11 +722,10 @@ jobs:
             velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('generator/Cargo.lock') }}-
             velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        working-directory: generator
-        run: velnor-ci inputs restore --target-dir ../generator/target
+        run: 'velnor-ci inputs restore-all --root-target "${GITHUB_WORKSPACE}"/generator "${GITHUB_WORKSPACE}"/generator/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
       - id: restored
         name: velnor-ci restored
-        run: velnor-ci restored
+        run: 'velnor-ci restored --target-dir "${GITHUB_WORKSPACE}"/generator/target'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
@@ -870,11 +867,10 @@ jobs:
             velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('local/Cargo.lock') }}-
             velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        working-directory: local
-        run: velnor-ci inputs restore --target-dir ../local/target
+        run: 'velnor-ci inputs restore-all --root-target "${GITHUB_WORKSPACE}"/local "${GITHUB_WORKSPACE}"/local/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
       - id: restored
         name: velnor-ci restored
-        run: velnor-ci restored
+        run: 'velnor-ci restored --target-dir "${GITHUB_WORKSPACE}"/local/target'
       - name: Format
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
@@ -1079,22 +1075,10 @@ jobs:
             velnor-tgt-rust-inputs-audit.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('local/Cargo.lock') }}-
             velnor-tgt-rust-inputs-audit.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore --target-dir target
-      - name: velnor-ci inputs restore
-        working-directory: ci-helper
-        run: velnor-ci inputs restore --target-dir ../ci-helper/target
-      - name: velnor-ci inputs restore
-        working-directory: crates/velnor-runner
-        run: velnor-ci inputs restore --target-dir ../../crates/velnor-runner/target
-      - name: velnor-ci inputs restore
-        working-directory: generator
-        run: velnor-ci inputs restore --target-dir ../generator/target
-      - name: velnor-ci inputs restore
-        working-directory: local
-        run: velnor-ci inputs restore --target-dir ../local/target
+        run: 'velnor-ci inputs restore-all --root-target "${GITHUB_WORKSPACE}"/. "${GITHUB_WORKSPACE}"/target --root-target "${GITHUB_WORKSPACE}"/ci-helper "${GITHUB_WORKSPACE}"/ci-helper/target --root-target "${GITHUB_WORKSPACE}"/crates/velnor-runner "${GITHUB_WORKSPACE}"/crates/velnor-runner/target --root-target "${GITHUB_WORKSPACE}"/generator "${GITHUB_WORKSPACE}"/generator/target --root-target "${GITHUB_WORKSPACE}"/local "${GITHUB_WORKSPACE}"/local/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
       - id: restored
         name: velnor-ci restored
-        run: velnor-ci restored
+        run: 'velnor-ci restored --target-dir "${GITHUB_WORKSPACE}"/target --target-dir "${GITHUB_WORKSPACE}"/ci-helper/target --target-dir "${GITHUB_WORKSPACE}"/crates/velnor-runner/target --target-dir "${GITHUB_WORKSPACE}"/generator/target --target-dir "${GITHUB_WORKSPACE}"/local/target'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:

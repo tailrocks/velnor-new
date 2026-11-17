@@ -7,8 +7,8 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    CommitSha, Concurrency, HelperCommand, HelperRelease, HelperVersion, Job, JobId, Permissions,
-    Platform, PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
+    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform,
+    PullRequestType, RepoPath, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
     WorkflowPlan,
 };
 use velnor_render::{
@@ -310,16 +310,18 @@ fn install_helper_renders_one_pinned_uses_step_with_the_release_tag_and_every_di
 
 #[test]
 fn one_command_steps_render_a_single_line_each() -> TestResult {
+    let manifest = RepoPath::new("Cargo.toml")?;
+    let target = RepoPath::new("target")?;
     let files = render(&plan(vec![
-        StepKind::InputsSave(velnor_model::RepoPath::new("target")?),
-        StepKind::InputsRestore(velnor_model::RepoPath::new("target")?),
+        StepKind::InputsSave(target.clone()),
+        StepKind::InputsRestore(vec![(manifest, target)]),
         StepKind::GeneratorCheck,
     ])?)
     .map_err(|found| format!("{found:?}"))?;
     let text = files.get(&WORKFLOW_PATH).ok_or("no workflow")?;
     for line in [
-        "run: velnor-ci inputs save",
-        "run: 'velnor-ci inputs restore --target-dir \"${GITHUB_WORKSPACE}\"/target'",
+        "run: 'velnor-ci inputs save --target-dir target --scope-cache \"${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json\"'",
+        "run: 'velnor-ci inputs restore-all --root-target \"${GITHUB_WORKSPACE}\"/. \"${GITHUB_WORKSPACE}\"/target --scope-cache \"${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json\"'",
         "run: velnor-gen check",
     ] {
         assert!(text.contains(line), "{line} missing in {text}");

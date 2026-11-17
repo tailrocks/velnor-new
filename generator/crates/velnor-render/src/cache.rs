@@ -3,6 +3,7 @@
 
 use velnor_model::{CacheKey, CachePath, RepoPath};
 
+use crate::rules::Value;
 use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
@@ -146,6 +147,21 @@ pub(crate) fn path_text(path: &CachePath) -> String {
         CachePath::CargoRegistryIndex => "~/.cargo/registry/index".to_owned(),
         CachePath::CargoRegistryCache => "~/.cargo/registry/cache".to_owned(),
         CachePath::CargoGitDb => "~/.cargo/git/db".to_owned(),
-        CachePath::Target(directory) => directory.to_string(),
+        CachePath::Target(directory) => glob_literal(directory.as_str()),
     }
+}
+
+pub(crate) fn action_path(text: &str) -> Value {
+    if !text.contains("${{") {
+        return Value::Text(text.to_owned());
+    }
+    let escaped = text
+        .replace('\\', "\\\\")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t")
+        .replace('\'', "''")
+        .replace("${{", "\\u0024{{");
+    Value::Expr(format!("${{{{ fromJSON('\"{escaped}\"') }}}}"))
 }

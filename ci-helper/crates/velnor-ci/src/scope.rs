@@ -4,7 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{CompileInputs, PackageName, RepoFacts, RepoPath};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Scope {
     prefix: String,
     listed: Vec<String>,

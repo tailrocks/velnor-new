@@ -216,7 +216,7 @@ fn save_rejects_internal_target_through_untracked_alias() {
 }
 
 #[test]
-fn a_missing_snapshot_keeps_the_target_and_every_other_file() {
+fn a_missing_snapshot_removes_the_target_and_preserves_every_other_file() {
     for target in ["target", "cache/target"] {
         let local = Repo::new("cold-local-cache");
         local.write("src/lib.rs", "pub fn one() {}\n");
@@ -227,12 +227,8 @@ fn a_missing_snapshot_keeps_the_target_and_every_other_file() {
         let output = helper(&local, &["inputs", "restore", "--target-dir", target]);
         let stdout = String::from_utf8_lossy(&output.stdout);
         assert!(output.status.success(), "{output:?}");
-        assert_eq!(
-            std::fs::read(local.root().join(target).join("stale")).unwrap_or_default(),
-            b"cached artifact\n"
-        );
-        assert!(stdout.contains("cold run"), "{stdout}");
-        assert!(!stdout.contains("removed"), "{stdout}");
+        assert!(!local.root().join(target).exists(), "{stdout}");
+        assert!(stdout.contains("building cold"), "{stdout}");
         assert_eq!(
             std::fs::read(local.root().join("src/lib.rs")).unwrap_or_default(),
             b"pub fn one() {}\n"
@@ -314,11 +310,15 @@ fn foreign_cache_link(operation: &str, tracked: bool) {
         &caller,
         &["inputs", operation, "--target-dir", "alias/target"],
     );
-    assert_eq!(
-        std::fs::read(cache.join("target/stale")).unwrap_or_default(),
-        b"cached artifact\n",
-        "{tracked} {operation}: {output:?}"
-    );
+    if !tracked && operation == "restore" {
+        assert!(!cache.join("target").exists(), "{output:?}");
+    } else {
+        assert_eq!(
+            std::fs::read(cache.join("target/stale")).unwrap_or_default(),
+            b"cached artifact\n",
+            "{tracked} {operation}: {output:?}"
+        );
+    }
     assert_eq!(output.status.success(), !tracked, "{output:?}");
     assert_eq!(
         cache.join("target/.velnor/inputs.tsv").is_file(),
@@ -356,7 +356,7 @@ fn save_refuses_target_through_foreign_tracked_cache_link() {
 }
 
 #[test]
-fn missing_snapshot_restore_preserves_target_through_foreign_untracked_cache_link() {
+fn missing_snapshot_restore_discards_target_through_foreign_untracked_cache_link() {
     foreign_cache_link("restore", false);
 }
 

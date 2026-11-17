@@ -5,6 +5,7 @@ use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
+use super::input_target::check_removal_target;
 use crate::cache::{KEEP_NEWEST, born_expired, should_save, trim};
 use crate::error::CiError;
 use crate::github::Repo;
@@ -136,13 +137,20 @@ pub fn expire_old_bases(targets: &[PathBuf], now_seconds: i64) -> Result<Expiry,
             report: String::new(),
         });
     };
-    let mut removed = Vec::new();
+    let mut expired = Vec::new();
     for target in targets {
         let born = match fs::read_to_string(target.join(BORN_FILE)) {
             Ok(born) if born_expired(&born, now_seconds, days) => born.trim().to_owned(),
             Err(_) if target.is_dir() => "unknown".to_owned(),
             Ok(_) | Err(_) => continue,
         };
+        expired.push((target, born));
+    }
+    for (target, _) in &expired {
+        check_removal_target(target)?;
+    }
+    let mut removed = Vec::new();
+    for (target, born) in expired {
         fs::remove_dir_all(target)
             .map_err(|e| CiError::new(format!("cannot remove {}: {e}", target.display())))?;
         removed.push(format!("{} (born {born})", target.display()));
@@ -175,4 +183,30 @@ pub(super) fn run_trim(prefix: &str, keep: Option<usize>) -> Result<String, CiEr
         prefix,
         keep.unwrap_or(KEEP_NEWEST),
     )
+}
+
+pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, CiError> {
+    let (target, archive) = super::inputs_batch::cache_paths(args)?;
+    let temp = std::env::var_os("RUNNER_TEMP")
+        .filter(|dir| !dir.is_empty())
+        .ok_or_else(|| {
+            CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
+        })?;
+    let log_path = Path::new(&temp).join("velnor-run.log");
+    let log = fs::read(&log_path)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
+    let decision = match super::cache_sources::refusal(&super::current_dir()?)? {
+        Some(reason) => Decision {
+            save: false,
+            report: reason,
+        },
+        None => decide(
+            Some(&String::from_utf8_lossy(&log)),
+            &target,
+            archive.as_deref(),
+            super::now_seconds(),
+        )?,
+    };
+    super::append_outputs(&format!("save={}\n", decision.save))?;
+    Ok(decision.report)
 }

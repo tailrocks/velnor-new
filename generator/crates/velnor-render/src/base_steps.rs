@@ -7,7 +7,7 @@ use crate::cache::render_key;
 use crate::gate::BASE_STEP;
 use crate::gate::sources_save_step;
 use crate::release_steps::shell_word;
-use crate::rules::{RenderedStep, Value};
+use crate::rules::{MAX_RUN_CHARACTERS, RenderedStep, Value};
 
 const BASE_SAVE_OUTPUT: &str = "base_save";
 const BASE_PREFIX_OUTPUT: &str = "base_prefix";
@@ -19,7 +19,8 @@ const DEFAULT_BRANCH_REF: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
 pub(crate) fn cache_decide(target: &RepoPath, archive: Option<&RepoPath>) -> RenderedStep {
-    RenderedStep {
+    let mut rendered = RenderedStep {
+        condition: Some("${{ steps.inputs_save.outcome == 'success' }}".to_owned()),
         id: Some(BASE_STEP.to_owned()),
         name: "Decide whether to save the build directory".to_owned(),
         run: Some(format!(
@@ -31,7 +32,26 @@ pub(crate) fn cache_decide(target: &RepoPath, archive: Option<&RepoPath>) -> Ren
             ))
         )),
         ..RenderedStep::default()
+    };
+    if target.as_str().contains("${{")
+        || archive.is_some_and(|path| path.as_str().contains("${{"))
+        || rendered
+            .run
+            .as_ref()
+            .is_some_and(|run| run.chars().count() > MAX_RUN_CHARACTERS)
+    {
+        let target = crate::helper_steps::hex_path(target.as_str());
+        let archive = archive.map_or_else(
+            || "null".to_owned(),
+            |path| format!("\"{}\"", crate::helper_steps::hex_path(path.as_str())),
+        );
+        rendered.env.push((
+            "VELNOR_CACHE_PATHS".to_owned(),
+            Value::Text(format!("[\"{target}\",{archive}]")),
+        ));
+        rendered.run = Some("velnor-ci cache decide --paths-env VELNOR_CACHE_PATHS".to_owned());
     }
+    rendered
 }
 
 pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {

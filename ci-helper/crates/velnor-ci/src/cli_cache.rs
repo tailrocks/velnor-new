@@ -18,10 +18,24 @@ pub enum CacheCommand {
 
 #[derive(Debug, Args)]
 pub struct DecideArgs {
-    #[arg(long, help = "The build directory the cache saves")]
-    pub target_dir: PathBuf,
-    #[arg(long, help = "A nextest archive file to remove before the save")]
+    #[arg(
+        long,
+        required_unless_present = "paths_env",
+        conflicts_with = "paths_env",
+        help = "The build directory the cache saves"
+    )]
+    pub target_dir: Option<PathBuf>,
+    #[arg(
+        long,
+        conflicts_with = "paths_env",
+        help = "A nextest archive file to remove before the save"
+    )]
     pub archive: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "Environment variable containing JSON [hex target, optional hex archive] paths"
+    )]
+    pub paths_env: Option<String>,
 }
 
 #[derive(Debug, Args)]

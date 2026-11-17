@@ -63,12 +63,8 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
     }
     let audit = &text[text.find("  rust-inputs-audit:").ok_or("no audit job")?..];
     let audited = named(audit, "velnor-ci inputs restore");
-    assert_eq!(audited.len(), 2, "{audit}");
-    assert!(
-        audited
-            .iter()
-            .any(|s| s.contains("working-directory: lab\n"))
-    );
+    assert_eq!(audited.len(), 1, "{audit}");
+    assert!(audited.iter().any(|s| s.contains("/lab")));
     assert!(audited.iter().any(|s| !s.contains("working-directory")));
     Ok(())
 }
@@ -116,7 +112,9 @@ fn custom_target_cache_and_inputs_restore_use_the_configured_directory() -> Test
         let yaml = crate::yaml_tree::parse(&format!("run: {command}"))?;
         assert_eq!(
             yaml.get("run").and_then(crate::yaml_tree::Node::text),
-            Some("velnor-ci inputs restore --target-dir \"${GITHUB_WORKSPACE}\"/custom-target")
+            Some(
+                "velnor-ci inputs restore-all --root-target \"${GITHUB_WORKSPACE}\"/. \"${GITHUB_WORKSPACE}\"/custom-target --scope-cache \"${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json\""
+            )
         );
     }
     Ok(())
@@ -144,12 +142,12 @@ fn inputs_restore_uses_each_cached_target_directory_from_any_working_directory()
     }
     let text = workflow(&repo)?;
     let restores = named(&text, "velnor-ci inputs restore");
-    assert_eq!(restores.len(), 4, "{text}");
+    assert_eq!(restores.len(), 3, "{text}");
     for target in ["'cache dir'", "'lab'\\''s target'"] {
         let matching: Vec<_> = restores
             .iter()
             .filter(|step| {
-                step.contains("--target-dir")
+                step.contains("--root-target")
                     && step.contains(if target == "'cache dir'" {
                         "cache dir"
                     } else {
@@ -170,7 +168,10 @@ fn inputs_restore_uses_each_cached_target_directory_from_any_working_directory()
             .ok_or("invalid scalar")?;
         assert_eq!(
             command,
-            format!("velnor-ci inputs restore --target-dir \"${{GITHUB_WORKSPACE}}\"/{target}")
+            format!(
+                "velnor-ci inputs restore-all --root-target \"${{GITHUB_WORKSPACE}}\"/{} \"${{GITHUB_WORKSPACE}}\"/{target} --scope-cache \"${{RUNNER_TEMP}}/velnor-input-scopes-${{GITHUB_JOB}}.json\"",
+                if target == "'cache dir'" { "." } else { "lab" }
+            )
         );
     }
     Ok(())

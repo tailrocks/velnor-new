@@ -24,8 +24,6 @@ fn trusted_before_restore(step: &serde_json::Value) -> bool {
                 | "velnor-ci prepare"
                 | "velnor-ci check-metadata"
                 | "rustup component add clippy rustfmt"
-                | "velnor-ci inputs restore --target-dir \"${GITHUB_WORKSPACE}\"/target"
-                | "velnor-ci inputs restore --target-dir \"${GITHUB_WORKSPACE}\"/tools/target"
         ) || run == MIRROR
     })
 }
@@ -57,7 +55,7 @@ fn released_helper_restores_inputs_after_checkout_and_cache_before_repository_co
                 let steps = body["steps"].as_array().ok_or("missing steps")?;
                 for (restore, _) in steps.iter().enumerate().filter(|(_, step)| {
                     step["run"].as_str().is_some_and(|run| {
-                        run.starts_with("velnor-ci inputs restore --target-dir ")
+                        run.starts_with("velnor-ci inputs restore-all --root-target ")
                     })
                 }) {
                     restores += 1;

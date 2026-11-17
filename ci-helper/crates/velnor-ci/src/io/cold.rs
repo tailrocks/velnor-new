@@ -89,3 +89,18 @@ pub(super) fn targets_with_receipts(root: &Path) -> Result<(Vec<PathBuf>, Pendin
     }
     Ok((targets, pending))
 }
+
+pub(super) fn explicit_targets_with_receipts(
+    root: &Path,
+    targets: &[PathBuf],
+) -> Result<(Vec<PathBuf>, Pending), CiError> {
+    let pending = restored_targets::read(root)?;
+    let mut targets: Vec<_> = targets.iter().map(|target| root.join(target)).collect();
+    targets.extend(pending.targets.iter().cloned());
+    targets.sort();
+    targets.dedup();
+    for target in &targets {
+        check_target(root, target)?;
+    }
+    Ok((targets, pending))
+}
