@@ -11,8 +11,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Opt
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least((0, 1, 81)));
-    let from_source = facts.config.helper.is_some();
-    if !released && !from_source {
+    if !released {
         return None;
     }
     let nextest_artifacts = crate::mise::nextest_tool(&facts.tools)
@@ -38,29 +37,22 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Opt
         {
             continue;
         }
-        if job.id.as_str() == "rust-helper" && !released {
-            continue;
-        }
         attach_metrics(job, nextest_artifacts);
         producers.push(&*job);
     }
     producers.extend(maintenance);
     let needs = producers.iter().map(|job| job.id.clone()).collect();
     let needs_max_bytes = crate::required_size::needs_max_bytes(facts, producers);
-    let mut steps: Vec<_> = if released {
-        facts
-            .helper
-            .iter()
-            .map(|release| step(StepKind::InstallHelper(release.clone())))
-            .collect()
-    } else {
-        vec![step(StepKind::HelperFromArtifact)]
-    };
+    let mut steps: Vec<_> = facts
+        .helper
+        .iter()
+        .map(|release| step(StepKind::InstallHelper(release.clone())))
+        .collect();
     steps.extend([
         step(StepKind::DownloadMetrics),
         step(StepKind::CheckMetrics {
             needs_max_bytes,
-            trusted_api: released,
+            trusted_api: true,
         }),
     ]);
     let mut cache = Job {
@@ -71,12 +63,10 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Opt
         steps,
         ..job(facts, JobId::from_static("cache"))
     };
-    if released {
-        cache
-            .permissions
-            .0
-            .insert(PermissionScope::Actions, Access::Read);
-    }
+    cache
+        .permissions
+        .0
+        .insert(PermissionScope::Actions, Access::Read);
     Some(cache)
 }
 

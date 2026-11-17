@@ -215,8 +215,9 @@ pub enum CargoCommand {
     CheckAlone {
         package: PackageName,
     },
-    Build {
+    BuildBinary {
         package: PackageName,
+        binary: TargetName,
     },
     BuildAll,
     NextestBuild,

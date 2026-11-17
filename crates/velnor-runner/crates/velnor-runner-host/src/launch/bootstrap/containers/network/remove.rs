@@ -8,14 +8,15 @@ use bollard::Docker;
 use crate::error::HostError;
 use crate::journal::{
     ConnectionJournal, JitConflictRecoveryClaim, PostJitRetirementClaim,
-    StorageNetworkRemovalClaim, UnboundRetirementClaim,
+    StorageNetworkRemovalClaim, UnboundResourceKind, UnboundRetirementClaim,
 };
 use crate::launch::SelectedEngineContext;
 
-use super::{
-    REQUEST_TIMEOUT, VerifiedStorageNetworkRemoved, inspect_network, request, validate_network,
-    verify_engine,
-};
+use super::{REQUEST_TIMEOUT, VerifiedStorageNetworkRemoved, verify_engine};
+
+mod target;
+
+use target::{remove_and_verify_target, resolve_target_id};
 
 const NETWORK_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -222,7 +223,16 @@ async fn remove_claimed(
         return Err(HostError::Identity);
     }
     verify_removal_context(docker, journal, engine, claim, &authority, deadline).await?;
-    let target_id = resolve_target_id(docker, claim, deadline).await?;
+    let observed_id = match &authority {
+        RemovalAuthority::Unbound(retirement) => {
+            journal
+                .unbound_creation_target(retirement, UnboundResourceKind::Network, "private")
+                .await?
+        }
+        _ => None,
+    };
+    let effective_id = claim.network_id().or(observed_id.as_deref());
+    let target_id = resolve_target_id(docker, claim, effective_id, deadline).await?;
     remove_and_verify_target(
         docker,
         journal,
@@ -264,97 +274,6 @@ async fn verify_removal_context(
     )
     .await?;
     validate_authority(journal, authority).await?;
-    Ok(())
-}
-
-async fn resolve_target_id(
-    docker: &Docker,
-    claim: &StorageNetworkRemovalClaim,
-    deadline: Instant,
-) -> Result<Option<String>, HostError> {
-    let by_name = inspect_network(docker, claim.network_name(), deadline).await?;
-    if let Some(network) = by_name.as_ref() {
-        let actual_id = network
-            .id
-            .as_deref()
-            .filter(|id| super::valid_network_id(id))
-            .ok_or(HostError::Ownership)?;
-        if claim
-            .network_id()
-            .is_some_and(|saved_id| saved_id != actual_id)
-        {
-            return Err(HostError::Ownership);
-        }
-        validate_network(network, claim.network_name(), actual_id, claim.labels())?;
-    }
-
-    let target_id = match claim.network_id() {
-        Some(saved_id) => {
-            if !super::valid_network_id(saved_id) {
-                return Err(HostError::Ownership);
-            }
-            match inspect_network(docker, saved_id, deadline).await? {
-                Some(network) => {
-                    validate_network(&network, claim.network_name(), saved_id, claim.labels())?;
-                    Some(saved_id.to_owned())
-                }
-                None if by_name.is_none() => None,
-                None => return Err(HostError::Ownership),
-            }
-        }
-        None => by_name
-            .as_ref()
-            .and_then(|network| network.id.as_deref())
-            .map(str::to_owned),
-    };
-    Ok(target_id)
-}
-
-async fn remove_and_verify_target(
-    docker: &Docker,
-    journal: &ConnectionJournal,
-    engine: &SelectedEngineContext,
-    claim: &StorageNetworkRemovalClaim,
-    authority: &RemovalAuthority<'_>,
-    target_id: Option<&str>,
-    deadline: Instant,
-) -> Result<(), HostError> {
-    if let Some(target_id) = target_id {
-        validate_authority(journal, authority).await?;
-        verify_engine(
-            docker,
-            engine,
-            claim.engine_id(),
-            claim.docker_root_digest(),
-            deadline,
-        )
-        .await?;
-        validate_authority(journal, authority).await?;
-        request(deadline, docker.remove_network(target_id))
-            .await?
-            .map_err(|_| HostError::Docker)?;
-    }
-    validate_authority(journal, authority).await?;
-    verify_engine(
-        docker,
-        engine,
-        claim.engine_id(),
-        claim.docker_root_digest(),
-        deadline,
-    )
-    .await?;
-    validate_authority(journal, authority).await?;
-    if let Some(known_id) = claim.network_id().or(target_id)
-        && inspect_network(docker, known_id, deadline).await?.is_some()
-    {
-        return Err(HostError::Ownership);
-    }
-    if inspect_network(docker, claim.network_name(), deadline)
-        .await?
-        .is_some()
-    {
-        return Err(HostError::Ownership);
-    }
     Ok(())
 }
 

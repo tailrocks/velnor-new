@@ -5,7 +5,6 @@ use crate::rules::{RenderedStep, Value};
 use crate::steps::{DOWNLOAD_ARTIFACT, UPLOAD_ARTIFACT};
 use velnor_model::RepoPath;
 
-const HELPER_ARTIFACT: &str = "velnor-ci";
 const CARGO_LOG_ARTIFACT: &str = "velnor-cargo-log";
 const RUN_LOG_FILE: &str = "velnor-run.log";
 const CARGO_LOG_RETENTION_DAYS: u64 = 3;
@@ -32,43 +31,6 @@ pub(crate) fn upload_cargo_log() -> RenderedStep {
                 "retention-days".to_owned(),
                 Value::Int(CARGO_LOG_RETENTION_DAYS),
             ),
-            ("overwrite".to_owned(), Value::Bool(true)),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn download_helper() -> RenderedStep {
-    RenderedStep {
-        name: "Download velnor-ci".to_owned(),
-        uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
-        with: vec![
-            ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
-            (
-                "path".to_owned(),
-                Value::Expr("${{ runner.temp }}/vbin".to_owned()),
-            ),
-        ],
-        ..RenderedStep::default()
-    }
-}
-
-pub(crate) fn publish_helper(binary: &RepoPath) -> RenderedStep {
-    RenderedStep {
-        name: "Upload velnor-ci".to_owned(),
-        uses: Some(UPLOAD_ARTIFACT.to_owned()),
-        with: vec![
-            ("name".to_owned(), Value::Text(HELPER_ARTIFACT.to_owned())),
-            (
-                "path".to_owned(),
-                Value::Text(crate::cache::glob_literal(binary.as_str())),
-            ),
-            ("include-hidden-files".to_owned(), Value::Bool(true)),
-            (
-                "if-no-files-found".to_owned(),
-                Value::Text("error".to_owned()),
-            ),
-            ("retention-days".to_owned(), Value::Int(1)),
             ("overwrite".to_owned(), Value::Bool(true)),
         ],
         ..RenderedStep::default()

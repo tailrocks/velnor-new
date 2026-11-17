@@ -7,6 +7,8 @@ use crate::launch::SessionRefreshStartupAuthority;
 use super::Journal;
 use super::connection::storage::in_transaction;
 
+#[cfg(test)]
+mod historical_startup;
 mod interrupted_initialization;
 mod orphan_recovery;
 
@@ -54,6 +56,8 @@ async fn recover_after_restart(connection: &turso::Connection) -> Result<(), Hos
 impl Journal {
     pub(crate) async fn recover_after_restart_without_authority(&self) -> Result<(), HostError> {
         in_transaction(self, async |connection| {
+            historical_startup::require_version(connection, &[super::schema::JOURNAL_VERSION])
+                .await?;
             recover_after_restart(connection).await
         })
         .await
