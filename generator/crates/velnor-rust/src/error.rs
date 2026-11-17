@@ -67,6 +67,11 @@ pub enum Reason {
     HelperSourceRelease,
     CargoCredentialProvider(String),
     TargetDirOutside(String),
+    BuildDirKey(&'static str),
+    RuntimeTargetDir {
+        used: RepoPath,
+        rendered: RepoPath,
+    },
 }
 
 impl DetectError {
@@ -110,7 +115,15 @@ impl Reason {
             ),
             Self::TargetDirOutside(value) => write!(
                 f,
-                "build.target-dir is {value:?}, which is not a folder inside the repository below its root; the target cache can only save a folder of the checkout, so name one"
+                "build.target-dir is {value:?}, which is not a plain folder inside the repository below its root (a leading ~ or a {{placeholder}} is not modelled); the target cache can only save a folder of the checkout, so name one"
+            ),
+            Self::RuntimeTargetDir { used, rendered } => write!(
+                f,
+                "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
+            ),
+            Self::BuildDirKey(key) => write!(
+                f,
+                "{key} is not supported: the target cache cannot model a separate build directory, so remove it"
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
@@ -190,6 +203,8 @@ impl fmt::Display for Reason {
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
             | Self::TargetDirOutside(_)
+            | Self::BuildDirKey(_)
+            | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
             Self::InvalidPatch(key) => {
                 write!(

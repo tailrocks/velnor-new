@@ -16,7 +16,7 @@ use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::os_pins::pinned_for_runner;
 use crate::policy::DENY_CONFIG;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
-use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
+use crate::roots::{CARGO_LOCK, effective_configs, is_cargo_config, rust_roots};
 use crate::timings::{TIMINGS_PATH, usable_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
@@ -214,7 +214,7 @@ fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
 
 fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {
     let declared: Vec<&String> = toolchain.into_iter().flat_map(|t| &t.targets).collect();
-    for (file, bytes) in view.files.iter().filter(|(path, _)| is_cargo_config(path)) {
+    for (file, bytes) in effective_configs(&view.files) {
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
         let target = parsed.get("build").and_then(|build| build.get("target"));
         let named: Vec<String> = match target {
