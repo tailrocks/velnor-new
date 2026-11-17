@@ -256,7 +256,13 @@ fn quiet_artifacts_count_once_and_only_nonfresh_units_are_waste()
 -> Result<(), Box<dyn std::error::Error>> {
     let base = fixture("report-quiet-artifacts-base")?;
     restore(&base);
+    quiet_nonfresh_artifact(&base)?;
+    fresh_artifact_is_clean(&base)?;
+    progress_and_artifact_count_once(&base)?;
+    package_identity_is_preserved(&base)
+}
 
+fn quiet_nonfresh_artifact(base: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     let quiet = base.fork("report-quiet-artifact");
     let lib = artifact(
         &quiet,
@@ -275,7 +281,10 @@ fn quiet_artifacts_count_once_and_only_nonfresh_units_are_waste()
             .any(|line| line.contains("demo v0.1.0")),
         "{metrics:?}"
     );
+    Ok(())
+}
 
+fn fresh_artifact_is_clean(base: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     let fresh = base.fork("report-fresh-artifact");
     let lib = artifact(
         &fresh,
@@ -288,7 +297,10 @@ fn quiet_artifacts_count_once_and_only_nonfresh_units_are_waste()
     let metrics = observation(&fresh, &[], &[lib], true)?;
     assert!(metrics.invocations[0].compilations.is_empty());
     assert_eq!(metrics.violations, [] as [String; 0]);
+    Ok(())
+}
 
+fn progress_and_artifact_count_once(base: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     let progress_and_artifact = base.fork("report-progress-artifact");
     let lib = artifact(
         &progress_and_artifact,
@@ -301,10 +313,44 @@ fn quiet_artifacts_count_once_and_only_nonfresh_units_are_waste()
     let event = event(&progress_and_artifact, "Compiling", "demo", "0.1.0", true);
     let metrics = observation(&progress_and_artifact, &[event], &[lib], true)?;
     assert_eq!(metrics.invocations[0].compilations.len(), 1, "{metrics:?}");
+    Ok(())
+}
 
+fn package_identity_is_preserved(base: &Repo) -> Result<(), Box<dyn std::error::Error>> {
     let both = base.fork("report-lib-test-artifacts");
+    let artifacts = package_identity_artifacts(&both)?;
+    fs::remove_file(both.root().join(SNAPSHOT))?;
+    let metrics = observation(&both, &[], &artifacts, true)?;
+    assert_eq!(metrics.invocations[0].compilations.len(), 3, "{metrics:?}");
+    assert_eq!(
+        metrics.invocations[0]
+            .compilations
+            .iter()
+            .filter(|event| event.version == "0.1.0")
+            .count(),
+        2
+    );
+    assert_eq!(
+        metrics.invocations[0]
+            .compilations
+            .iter()
+            .filter(|event| event.version == "0.2.0")
+            .count(),
+        1
+    );
+    assert!(
+        metrics
+            .verification_errors
+            .iter()
+            .any(|error| { error.contains("non-fresh artifact package identity is unsupported") })
+    );
+    assert!(velnor_ci::report::check(&[metrics]).is_err());
+    Ok(())
+}
+
+fn package_identity_artifacts(repo: &Repo) -> Result<Vec<Value>, Box<dyn std::error::Error>> {
     let lib = artifact(
-        &both,
+        repo,
         "demo",
         "lib",
         "target/debug/deps/libdemo-hash.rmeta",
@@ -312,33 +358,57 @@ fn quiet_artifacts_count_once_and_only_nonfresh_units_are_waste()
         false,
     )?;
     let test = artifact(
-        &both,
+        repo,
         "demo",
         "test",
         "target/debug/deps/demo-test-hash",
         false,
         true,
     )?;
-    let snapshot = both.root().join(SNAPSHOT);
-    fs::remove_file(snapshot)?;
-    let metrics = observation(&both, &[], &[lib, test], true)?;
-    assert_eq!(metrics.invocations[0].compilations.len(), 1, "{metrics:?}");
-    assert!(velnor_ci::report::check(&[metrics]).is_ok());
-    Ok(())
+    let mut other_source = artifact(
+        repo,
+        "demo",
+        "lib",
+        "target/debug/deps/libdemo-other-source.rmeta",
+        false,
+        false,
+    )?;
+    other_source["package_id"] = json!("git+https://example.invalid/demo?rev=deadbeef#demo@0.1.0");
+    let mut other_version = artifact(
+        repo,
+        "demo",
+        "lib",
+        "target/debug/deps/libdemo-other-version.rmeta",
+        false,
+        false,
+    )?;
+    other_version["package_id"] = json!(format!(
+        "path+file://{}#demo@0.2.0",
+        fs::canonicalize(repo.root())?.display()
+    ));
+    let mut unsupported = artifact(
+        repo,
+        "demo",
+        "lib",
+        "target/debug/deps/libdemo-unsupported.rmeta",
+        false,
+        false,
+    )?;
+    unsupported["package_id"] = json!("not-a-package-id");
+    Ok(vec![lib, test, other_source, other_version, unsupported])
 }
 
 #[test]
 fn exact_source_downloads_require_a_changed_crate_archive() -> Result<(), Box<dyn std::error::Error>>
 {
     let base = fixture("report-download-archive-base")?;
-    let real = base.fork("report-download-real");
-    let lookalike = base.fork("report-download-lookalike");
+    let repo = base.fork("report-download-evidence");
     let source_cache = json!([{"family":"sources","root":".","restore_step":"restore","save_step":"save","requested_key":"source-key","matched_key":"source-key","hit":"exact","bytes":null,"usable":false,"usable_same_lock":false,"save":"not_attempted"}]);
     let steps = r#"{"restore":{"outputs":{"cache-primary-key":"source-key","cache-matched-key":"source-key","cache-hit":"true"}}}"#;
 
-    let real_home = cargo_home(&real)?;
-    run_downloaded_cargo(&real, &real_home, true)?;
-    let metrics = super::report(&real, &source_cache, steps)?;
+    let home = cargo_home(&repo)?;
+    run_downloaded_cargo(&repo, &home, true)?;
+    let metrics = super::report(&repo, &source_cache, steps)?;
     assert_eq!(
         metrics.invocations[0].verified_download_archives,
         Some(vec!["demo-0.1.0.crate".to_owned()])
@@ -346,25 +416,36 @@ fn exact_source_downloads_require_a_changed_crate_archive() -> Result<(), Box<dy
     assert_eq!(metrics.invocations[0].downloads, ["demo v0.1.0"]);
     assert!(
         metrics
+            .diagnostics
+            .iter()
+            .any(|line| { line.contains("unverified download event for lookalike v9.9.9") })
+    );
+    assert!(
+        metrics
             .violations
             .iter()
             .any(|line| line.contains("exact sources hit"))
     );
 
-    let lookalike_home = cargo_home(&lookalike)?;
-    run_downloaded_cargo(&lookalike, &lookalike_home, false)?;
-    let metrics = super::report(&lookalike, &source_cache, steps)?;
-    assert_eq!(
-        metrics.invocations[0].verified_download_archives,
-        Some(Vec::new())
-    );
+    let invocations = repo.root().join(INVOCATIONS);
+    let record: Value = serde_json::from_slice(&fs::read(&invocations)?)?;
+    let mut record = record;
+    record["verified_download_archives"] = Value::Null;
+    fs::write(&invocations, format!("{record}\n"))?;
+    let metrics = super::report(&repo, &source_cache, steps)?;
+    assert_eq!(metrics.invocations[0].verified_download_archives, None);
     assert_eq!(metrics.invocations[0].downloads, [] as [String; 0]);
-    assert_eq!(metrics.violations, [] as [String; 0]);
     assert!(
         metrics
-            .diagnostics
+            .verification_errors
             .iter()
-            .any(|line| line.contains("unverified download event"))
+            .any(|line| line.contains("crate archive evidence is unavailable"))
+    );
+    assert!(
+        !metrics
+            .violations
+            .iter()
+            .any(|line| line.contains("downloaded"))
     );
     Ok(())
 }
@@ -395,7 +476,9 @@ fn run_downloaded_cargo(
     };
     fs::write(
         &script,
-        format!("#!/bin/sh\nprintf '    Downloaded demo v0.1.0\\n' >&2\n{create}"),
+        format!(
+            "#!/bin/sh\nprintf '    Downloaded demo v0.1.0\\n    Downloaded lookalike v9.9.9\\n' >&2\n{create}"
+        ),
     )?;
     fs::set_permissions(&script, fs::Permissions::from_mode(0o755))?;
     repo.git(&["add", "."]);
