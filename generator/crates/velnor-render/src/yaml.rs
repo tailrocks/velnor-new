@@ -19,9 +19,22 @@ pub(crate) enum Yaml {
     Shared(Box<Yaml>),
 }
 
+#[derive(Default)]
+struct Anchors {
+    counting: bool,
+    uses: BTreeMap<String, usize>,
+    names: BTreeMap<String, String>,
+}
+
 pub(crate) fn emit(root: &[(String, Yaml)]) -> String {
+    let mut anchors = Anchors {
+        counting: true,
+        ..Anchors::default()
+    };
+    entries(&mut String::new(), root, 0, &mut anchors);
+    anchors.counting = false;
     let mut out = String::new();
-    entries(&mut out, root, 0, &mut BTreeMap::new());
+    entries(&mut out, root, 0, &mut anchors);
     out
 }
 
@@ -29,7 +42,7 @@ fn entries(
     out: &mut String,
     items: &[(String, Yaml)],
     indent: usize,
-    shared: &mut BTreeMap<String, String>,
+    shared: &mut Anchors,
 ) {
     for (key, value) in items {
         let value = match value {
@@ -60,7 +73,7 @@ fn entries(
     }
 }
 
-fn nested(out: &mut String, value: &Yaml, indent: usize, shared: &mut BTreeMap<String, String>) {
+fn nested(out: &mut String, value: &Yaml, indent: usize, shared: &mut Anchors) {
     match value {
         Yaml::Map(items) if !items.is_empty() => {
             out.push('\n');
@@ -85,16 +98,21 @@ fn nested(out: &mut String, value: &Yaml, indent: usize, shared: &mut BTreeMap<S
         Yaml::Shared(inner) => {
             let scalar = inline(inner);
             out.push(' ');
-            if let Some(anchor) = shared.get(&scalar) {
+            if shared.counting {
+                *shared.uses.entry(scalar.clone()).or_default() += 1;
+                out.push_str(&scalar);
+            } else if shared.uses.get(&scalar).copied().unwrap_or(0) < 2 {
+                out.push_str(&scalar);
+            } else if let Some(anchor) = shared.names.get(&scalar) {
                 out.push('*');
                 out.push_str(anchor);
             } else {
-                let anchor = format!("velnor_{}", shared.len());
+                let anchor = format!("velnor_{}", shared.names.len());
                 out.push('&');
                 out.push_str(&anchor);
                 out.push(' ');
                 out.push_str(&scalar);
-                shared.insert(scalar, anchor);
+                shared.names.insert(scalar, anchor);
             }
             out.push('\n');
         }

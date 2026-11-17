@@ -110,6 +110,7 @@ mod toolchain_components;
 mod tools_cache;
 mod trim_job;
 mod unowned;
+mod unused_anchors;
 mod version;
 mod weaken;
 mod weaken_more;
