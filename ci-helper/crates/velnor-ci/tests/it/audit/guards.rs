@@ -133,11 +133,11 @@ fn two_roots_sharing_a_target_directory_make_the_audit_refuse() {
     repo.write_all(&[
         (
             "rust/.cargo/config.toml",
-            "[build]\ntarget-dir = \"../shared\"\n",
+            "[build]\ntarget-dir = \"../shared-target\"\n",
         ),
         (
             "tools/.cargo/config.toml",
-            "[build]\ntarget-dir = \"../shared\"\n",
+            "[build]\ntarget-dir = \"../shared-target\"\n",
         ),
         (
             "tools/Cargo.toml",

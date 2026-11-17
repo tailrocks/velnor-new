@@ -53,7 +53,7 @@ pub fn check_runtime_configs(
     roots: &[RepoPath],
     files: &BTreeMap<RepoPath, Vec<u8>>,
     tracked: &BTreeSet<RepoPath>,
-) -> Result<(), DetectError> {
+) -> Result<BTreeSet<RepoPath>, DetectError> {
     for (file, bytes) in effective_configs(files) {
         if let Ok(parsed) = table(bytes)
             && parsed.contains_key("include")
@@ -73,6 +73,7 @@ pub fn check_runtime_configs(
             .collect(),
         ..RepoView::default()
     };
+    let mut targets = BTreeSet::new();
     for root in roots {
         let (used, source) = target_dir_source(&read, root)?;
         let (rendered, rendered_from) = target_dir_source(&generated, root)?;
@@ -82,8 +83,9 @@ pub fn check_runtime_configs(
                 Reason::RuntimeTargetDir { used, rendered },
             ));
         }
+        targets.insert(used);
     }
-    Ok(())
+    Ok(targets)
 }
 
 fn blamed(

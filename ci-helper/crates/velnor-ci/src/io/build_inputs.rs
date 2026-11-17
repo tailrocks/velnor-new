@@ -27,7 +27,11 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
         }
     }
     let tracked = tracked_among(root, &files);
-    check_runtime_configs(&roots, &files, &tracked).map_err(|e| CiError::new(e.to_string()))?;
+    let targets =
+        check_runtime_configs(&roots, &files, &tracked).map_err(|e| CiError::new(e.to_string()))?;
+    for target in targets {
+        super::delta_paths::untracked(&root.join(target.as_str()), "target")?;
+    }
     repo_profile(&files).map_err(|e| CiError::new(e.to_string()))
 }
 

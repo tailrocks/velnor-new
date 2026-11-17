@@ -13,7 +13,21 @@ const KEY: &str = "build.target-dir";
 type Found<'v> = (&'v RepoPath, Option<RepoPath>, toml::Value);
 
 pub(crate) fn target_dir(view: &RepoView, manifest: &RepoPath) -> Result<RepoPath, DetectError> {
-    target_dir_source(view, manifest).map(|(folder, _)| folder)
+    let (folder, source) = target_dir_source(view, manifest)?;
+    let target = std::path::Path::new(folder.as_str());
+    if let Some(tracked) = view.tracked_paths.iter().find(|tracked| {
+        let tracked = std::path::Path::new(tracked.as_str());
+        tracked.starts_with(target) || target.starts_with(tracked)
+    }) {
+        return Err(DetectError::invalid(
+            source.unwrap_or(manifest),
+            Reason::TargetDirTracked {
+                target: folder,
+                tracked: tracked.clone(),
+            },
+        ));
+    }
+    Ok(folder)
 }
 
 pub(crate) fn target_dir_source<'v>(

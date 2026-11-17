@@ -15,6 +15,10 @@ const MARKER: &str = ".velnor/delta-marker";
 const INPUTS: &str = ".velnor/inputs.tsv";
 
 pub(super) fn run(command: DeltaCommand) -> Result<String, CiError> {
+    let args = match &command {
+        DeltaCommand::Prepare(args) | DeltaCommand::Apply(args) | DeltaCommand::Stage(args) => args,
+    };
+    super::delta_paths::untracked(&args.target_dir, "target")?;
     let base = std::env::var("BASE_CACHE_KEY").unwrap_or_default();
     match command {
         DeltaCommand::Prepare(args) => {

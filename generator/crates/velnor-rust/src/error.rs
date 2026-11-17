@@ -67,6 +67,10 @@ pub enum Reason {
     HelperTarget(RepoPath),
     CargoCredentialProvider(String),
     TargetDirOutside(String),
+    TargetDirTracked {
+        target: RepoPath,
+        tracked: RepoPath,
+    },
     BuildDirKey(&'static str),
     RuntimeTargetDir {
         used: RepoPath,
@@ -121,6 +125,10 @@ impl Reason {
             Self::RuntimeTargetDir { used, rendered } => write!(
                 f,
                 "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
+            ),
+            Self::TargetDirTracked { target, tracked } => write!(
+                f,
+                "target directory {target} overlaps tracked input {tracked}; choose an untracked target directory"
             ),
             Self::BuildDirKey(key) => write!(
                 f,
@@ -204,6 +212,7 @@ impl fmt::Display for Reason {
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
             | Self::TargetDirOutside(_)
+            | Self::TargetDirTracked { .. }
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),

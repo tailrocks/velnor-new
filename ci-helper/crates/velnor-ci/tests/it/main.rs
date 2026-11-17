@@ -18,6 +18,7 @@ mod delta_freshness;
 mod delta_integrity;
 mod delta_metadata;
 mod delta_source;
+mod delta_target_paths;
 mod delta_tree;
 mod delta_trim;
 mod event;

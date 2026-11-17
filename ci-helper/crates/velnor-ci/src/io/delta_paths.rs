@@ -9,12 +9,18 @@ use crate::error::CiError;
 
 pub(super) fn staging(path: &Path) -> Result<(), CiError> {
     safe_path(path)?;
+    untracked(path, "staging")
+}
+
+pub(super) fn untracked(path: &Path, role: &str) -> Result<(), CiError> {
     let root = std::env::current_dir().map_err(|error| CiError::new(error.to_string()))?;
     let tracked = super::inputs::tracked_paths(&root)?;
     if tracked.non_utf8 > 0 {
-        return Err(CiError::new("cannot verify staging against tracked paths"));
+        return Err(CiError::new(format!(
+            "cannot verify {role} against tracked paths"
+        )));
     }
-    let staging = resolve(path)?;
+    let destination = resolve(path)?;
     for path in tracked.paths {
         let full = tracked.top.join(path);
         let parent = full
@@ -24,9 +30,9 @@ pub(super) fn staging(path: &Path) -> Result<(), CiError> {
             full.file_name()
                 .ok_or_else(|| CiError::new("tracked path has no filename"))?,
         );
-        if tracked.starts_with(&staging) || staging.starts_with(&tracked) {
+        if tracked.starts_with(&destination) || destination.starts_with(&tracked) {
             return Err(CiError::new(format!(
-                "delta staging overlaps tracked input {}",
+                "delta {role} overlaps tracked input {}",
                 tracked.display()
             )));
         }

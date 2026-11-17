@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 
 use crate::io::Repo;
 
@@ -123,7 +124,7 @@ fn reads_below_an_unowned_manifest_that_does_not_parse_go_to_every_member_using_
 }
 
 #[test]
-fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
+fn tracked_inputs_inside_a_target_directory_make_the_audit_refuse() {
     let repo = workspace_below_the_root();
     repo.write(
         "rust/.cargo/config.toml",
@@ -152,13 +153,35 @@ fn tracked_reads_inside_a_tracked_target_directory_are_kept() {
         &format!("{target}/build/lib-0000000000000004/output"),
         "cargo:rerun-if-changed=../../docs/debug/gen.txt\n",
     );
-    let written = audit(&repo, &["--write"]);
-    assert!(written.status.success(), "{written:?}");
-    assert_eq!(
-        fs::read_to_string(repo.root().join(".velnor/rust-inputs.lock"))
-            .unwrap_or_else(|e| unreachable!("{e}")),
-        "docs/schema.json\tapp\n"
+    let tracked_input = repo.root().join("docs/schema.json");
+    let bytes = fs::read(&tracked_input).unwrap_or_else(|e| unreachable!("{e}"));
+    let modified = repo.mtime("docs/schema.json");
+    let mode = fs::metadata(&tracked_input)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .permissions()
+        .mode()
+        & 0o777;
+    let refused = audit(&repo, &["--write"]);
+    assert_eq!(refused.status.code(), Some(1), "{refused:?}");
+    assert!(
+        String::from_utf8_lossy(&refused.stderr)
+            .contains("target directory docs overlaps tracked input docs/schema.json"),
+        "{refused:?}"
     );
+    assert_eq!(
+        fs::read(&tracked_input).unwrap_or_else(|e| unreachable!("{e}")),
+        bytes
+    );
+    assert_eq!(repo.mtime("docs/schema.json"), modified);
+    assert_eq!(
+        fs::metadata(&tracked_input)
+            .unwrap_or_else(|e| unreachable!("{e}"))
+            .permissions()
+            .mode()
+            & 0o777,
+        mode
+    );
+    assert!(!repo.root().join(".velnor/rust-inputs.lock").exists());
 }
 
 #[test]

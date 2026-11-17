@@ -69,3 +69,42 @@ fn a_leading_tilde_in_a_hashed_path_is_read_literally() -> TestResult {
     assert!(key.contains("'./~x/Cargo.lock'"), "{key}");
     Ok(())
 }
+
+#[test]
+fn target_cache_directories_cannot_overlap_tracked_inputs() -> TestResult {
+    let mut failures = Vec::new();
+    for (target, tracked) in [
+        (None, "target/.velnor/inputs.json"),
+        (Some("out"), "out/source.rs"),
+        (Some("source/cache"), "source"),
+        (None, "target"),
+    ] {
+        let mut repo = view(&["Cargo.toml"], None)?;
+        if let Some(target) = target {
+            with_config(
+                &mut repo,
+                ".cargo/config.toml",
+                &format!("[build]\ntarget-dir = {target:?}\n"),
+            )?;
+        }
+        repo.tracked_paths.insert(RepoPath::new(tracked)?);
+        let error = workflow(&repo)
+            .err()
+            .map(|error| error.to_string())
+            .unwrap_or_default();
+        if !error.contains("target") || !error.contains(tracked) {
+            failures.push(format!("{target:?} {tracked}: {error}"));
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+    Ok(())
+}
+
+#[test]
+fn target_cache_directories_allow_component_siblings() -> TestResult {
+    let mut repo = view(&["Cargo.toml"], None)?;
+    repo.tracked_paths
+        .insert(RepoPath::new("target-backup/source.rs")?);
+    assert!(workflow(&repo)?.contains("path: target\n"));
+    Ok(())
+}

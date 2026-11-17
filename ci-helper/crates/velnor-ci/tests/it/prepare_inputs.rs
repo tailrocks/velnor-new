@@ -44,15 +44,17 @@ fn compat_follows_a_gitignored_repository_profile_override() {
 }
 
 #[test]
-fn compat_reads_the_repository_profile_without_asking_git() {
-    let with_git = compat_with("compat-plain", |setup| {
-        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
-    });
-    let without_git = compat_with("compat-plain", |setup| {
-        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
-        setup.plain = true;
-    });
-    assert_eq!(with_git, without_git);
+fn prepare_requires_git_to_verify_target_ownership() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
+    setup.plain = true;
+    let run = prepare("compat-plain", &setup);
+    assert!(!run.output.status.success(), "{:?}", run.output);
+    assert!(String::from_utf8_lossy(&run.output.stderr).contains("git"));
+    assert_eq!(
+        (run.env_file, run.outputs, run.velnor_config),
+        (String::new(), String::new(), String::new())
+    );
 }
 
 #[test]
@@ -167,15 +169,16 @@ fn prepare_refuses_a_target_dir_when_tracking_cannot_be_read() {
     refuses("no-git-target", true);
     refuses("git-down-target", false);
 
-    let seen = compat_with("git-down-profile", |setup| {
-        setup.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
-    });
     let mut broken = Setup::new(reported("1.99.1", Some("0.9.151")));
     broken.repo_cargo_config = Some("[profile.dev.package.\"*\"]\ndebug = true\n");
     broken.populate = Some(Box::new(|checkout| install_git(checkout, "exit 1")));
     let run = prepare("git-down-profile", &broken);
-    assert!(run.output.status.success(), "{:?}", run.output);
-    assert_eq!(digest(&run), seen);
+    assert!(!run.output.status.success(), "{:?}", run.output);
+    assert!(String::from_utf8_lossy(&run.output.stderr).contains("git"));
+    assert_eq!(
+        (run.env_file, run.outputs, run.velnor_config),
+        (String::new(), String::new(), String::new())
+    );
 }
 
 #[test]
@@ -237,8 +240,106 @@ fn prepare_asks_git_which_of_the_read_configs_are_tracked() {
     assert!(run.output.status.success(), "{:?}", run.output);
     let args = fs::read_to_string(scratch_root("ask-git").join("git-args"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(
-        args,
-        "--literal-pathspecs ls-files -z -- .cargo/config.toml nested/.cargo/config.toml\n"
+    assert!(
+        args.lines().any(|line| line
+            == "--literal-pathspecs ls-files -z -- .cargo/config.toml nested/.cargo/config.toml"),
+        "{args}"
     );
+    assert!(
+        args.lines()
+            .any(|line| line.ends_with(" ls-files -z --recurse-submodules")),
+        "{args}"
+    );
+}
+
+#[test]
+fn prepare_rejects_tracked_target_inputs_before_writing_anything() {
+    let mut accepted = Vec::new();
+    for (name, target, alias) in [
+        ("target-input", "target", false),
+        ("configured-input", "out", false),
+        ("nested-target-alias", "source", true),
+    ] {
+        let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+        if target == "out" {
+            setup.repo_cargo_config = Some("[build]\ntarget-dir = \"out\"\n");
+        }
+        setup.populate = Some(Box::new(move |checkout| {
+            let directory = checkout.join(target).join(".velnor");
+            fs::create_dir_all(&directory).unwrap_or_else(|e| unreachable!("{e}"));
+            fs::write(directory.join("inputs.json"), "tracked input\n")
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            git_add(checkout, &[&format!("{target}/.velnor/inputs.json")]);
+            if target == "out" {
+                git_add(checkout, &[".cargo/config.toml"]);
+            }
+            if alias {
+                fs::create_dir_all(checkout.join("nested")).unwrap_or_else(|e| unreachable!("{e}"));
+                std::os::unix::fs::symlink("../source", checkout.join("nested/target"))
+                    .unwrap_or_else(|e| unreachable!("{e}"));
+                fs::write(
+                    checkout.join(".velnor/rust-metadata.json"),
+                    "{\"roots\":{\"Cargo.toml\":{\"members\":[]},\"nested/Cargo.toml\":{\"members\":[]}},\"manifests\":{},\"layout\":\"\"}",
+                )
+                .unwrap_or_else(|e| unreachable!("{e}"));
+            }
+            let metadata =
+                fs::metadata(directory.join("inputs.json")).unwrap_or_else(|e| unreachable!("{e}"));
+            fs::write(
+                checkout.join("sentinel-metadata"),
+                format!(
+                    "{:?} {}",
+                    metadata.modified(),
+                    metadata.permissions().mode()
+                ),
+            )
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        }));
+        let run = prepare(name, &setup);
+        if run.output.status.success() {
+            accepted.push(name);
+            continue;
+        }
+        let stderr = String::from_utf8_lossy(&run.output.stderr);
+        assert!(
+            stderr.contains("target") && stderr.contains("inputs.json"),
+            "{stderr}"
+        );
+        assert_eq!(
+            (run.env_file, run.outputs, run.velnor_config),
+            (String::new(), String::new(), String::new())
+        );
+        let checkout = scratch_root(name).join("checkout");
+        let sentinel = checkout.join(target).join(".velnor/inputs.json");
+        assert_eq!(
+            fs::read_to_string(&sentinel).unwrap_or_default(),
+            "tracked input\n"
+        );
+        let metadata = fs::metadata(&sentinel).unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(
+            fs::read_to_string(checkout.join("sentinel-metadata")).unwrap_or_default(),
+            format!(
+                "{:?} {}",
+                metadata.modified(),
+                metadata.permissions().mode()
+            )
+        );
+    }
+    assert!(
+        accepted.is_empty(),
+        "accepted tracked target inputs: {accepted:?}"
+    );
+}
+
+#[test]
+fn prepare_accepts_a_linked_target_with_only_untracked_files() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.populate = Some(Box::new(|checkout| {
+        fs::create_dir_all(checkout.join("untracked-output"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        std::os::unix::fs::symlink("untracked-output", checkout.join("target"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }));
+    let run = prepare("linked-untracked-target", &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
 }
