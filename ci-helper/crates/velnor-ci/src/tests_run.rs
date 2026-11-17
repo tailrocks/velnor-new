@@ -4,12 +4,14 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
-use velnor_rust::{PackageCounts, encode_package_counts, package_token};
+use velnor_rust::{PackageCounts, encode_package_counts};
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
 #[path = "tests_run/listed.rs"]
 mod listed;
+#[path = "tests_run/status.rs"]
+mod status;
 #[cfg(test)]
 mod statuses;
 
@@ -189,13 +191,19 @@ fn reconciled(packages: &BTreeMap<String, PackageCounts>, run: u64, listed: u64)
 
 #[derive(Debug)]
 enum Seen {
-    Open(BTreeMap<String, u64>),
+    Open {
+        with_counter: BTreeMap<String, u64>,
+        without_counter: BTreeMap<String, u64>,
+    },
     Poison,
 }
 
 impl Default for Seen {
     fn default() -> Self {
-        Self::Open(BTreeMap::new())
+        Self::Open {
+            with_counter: BTreeMap::new(),
+            without_counter: BTreeMap::new(),
+        }
     }
 }
 
@@ -264,27 +272,43 @@ impl SummaryTap {
     }
 
     fn reconcile_runs(&self, run: u64) -> Option<BTreeMap<String, u64>> {
-        let Seen::Open(packages) = &self.seen else {
+        let Seen::Open {
+            with_counter,
+            without_counter,
+        } = &self.seen
+        else {
             return None;
         };
-        let summed = packages
-            .values()
-            .try_fold(0u64, |total, count| total.checked_add(*count))?;
-        (summed == run).then(|| packages.clone())
+        if summed(with_counter) == Some(run) {
+            return Some(with_counter.clone());
+        }
+        if summed(without_counter) == Some(run) {
+            return Some(without_counter.clone());
+        }
+        None
     }
 
     fn note(&mut self, line: &str) {
-        match status_line(line) {
-            Status::Ignore => {}
-            Status::Poison => self.seen = Seen::Poison,
-            Status::Count { package } => self.count(package),
+        match status::status_line(line) {
+            status::Status::Ignore => {}
+            status::Status::Poison => self.seen = Seen::Poison,
+            status::Status::Count { package, counter } => self.count(package, counter),
         }
     }
 
-    fn count(&mut self, package: String) {
+    fn count(&mut self, package: String, counter: bool) {
         let overflow = {
-            let Seen::Open(packages) = &mut self.seen else {
+            let Seen::Open {
+                with_counter,
+                without_counter,
+            } = &mut self.seen
+            else {
                 return;
+            };
+            let packages = if counter {
+                with_counter
+            } else {
+                without_counter
             };
             let entry = packages.entry(package).or_default();
             match entry.checked_add(1) {
@@ -301,85 +325,8 @@ impl SummaryTap {
     }
 }
 
-enum Status {
-    Ignore,
-    Poison,
-    Count { package: String },
-}
-
-fn status_line(line: &str) -> Status {
-    let mut words = line.split_whitespace();
-    let Some(first) = words.next() else {
-        return Status::Ignore;
-    };
-    let (word, retried) = if first == "TRY" {
-        let numbered = words
-            .next()
-            .is_some_and(|attempt| attempt.bytes().all(|byte| byte.is_ascii_digit()));
-        match words.next() {
-            Some(word) if numbered => (word, true),
-            _ => return Status::Ignore,
-        }
-    } else {
-        (first, false)
-    };
-    let Some((_, rest)) = line.split_once(word) else {
-        return Status::Ignore;
-    };
-    let rest = rest.trim_start();
-    if !rest.starts_with('[') {
-        return Status::Ignore;
-    }
-    if matches!(word, "SKIP" | "SLOW") {
-        return Status::Ignore;
-    }
-    let counted = matches!(
-        word,
-        "PASS" | "FAIL" | "TIMEOUT" | "TMPASS" | "LEAK" | "LEAK-FAIL" | "SIGSEGV" | "ABORT"
-    );
-    if !counted {
-        return if word
-            .bytes()
-            .all(|byte| byte.is_ascii_uppercase() || byte == b'-')
-        {
-            Status::Poison
-        } else {
-            Status::Ignore
-        };
-    }
-    if retried && word != "PASS" {
-        return Status::Ignore;
-    }
-    parse_status(rest).map_or(Status::Poison, |package| Status::Count { package })
-}
-
-fn parse_status(rest: &str) -> Option<String> {
-    let rest = rest.strip_prefix('[')?;
-    let (inside, rest) = rest.split_once(']')?;
-    if !duration_ok(inside) {
-        return None;
-    }
-    let rest = rest.trim_start();
-    let rest = match rest.strip_prefix('(') {
-        Some(counter) => counter.split_once(')')?.1,
-        None => rest,
-    };
-    let binary = rest.split_whitespace().next()?;
-    let package = binary.split("::").next()?;
-    package_token(package).then(|| package.to_owned())
-}
-
-fn duration_ok(inside: &str) -> bool {
-    let Some(number) = inside.trim().strip_suffix('s') else {
-        return false;
-    };
-    let mut parts = number.trim().split('.');
-    let whole = parts.next().unwrap_or("");
-    let fraction = parts.next();
-    parts.next().is_none()
-        && !whole.is_empty()
-        && whole.bytes().all(|byte| byte.is_ascii_digit())
-        && fraction.is_none_or(|fraction| {
-            !fraction.is_empty() && fraction.bytes().all(|byte| byte.is_ascii_digit())
-        })
+fn summed(packages: &BTreeMap<String, u64>) -> Option<u64> {
+    packages
+        .values()
+        .try_fold(0u64, |total, count| total.checked_add(*count))
 }

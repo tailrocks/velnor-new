@@ -6,6 +6,8 @@ use std::collections::BTreeMap;
 use serde::Deserialize;
 use velnor_rust::package_token;
 
+const NOT_RUNNABLE: [&str; 2] = ["ignored", "not-benchmark"];
+
 #[derive(Deserialize)]
 pub(super) struct Listed {
     #[serde(rename = "rust-suites")]
@@ -28,31 +30,46 @@ pub(super) struct Case {
 #[derive(Deserialize)]
 pub(super) struct FilterMatch {
     pub(super) status: String,
+    #[serde(default)]
+    pub(super) reason: Option<String>,
 }
 
 #[must_use]
 pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
     let listed: Listed = serde_json::from_slice(bytes).ok()?;
     let mut packages = BTreeMap::new();
-    let mut excluded = BTreeMap::new();
+    let mut skipped = BTreeMap::new();
     for suite in listed.rust_suites.into_values() {
         if !package_token(&suite.package_name) {
             return None;
         }
-        let mut matched = 0u64;
-        let mut mismatched = 0u64;
+        let mut runnable = 0u64;
+        let mut excluded = 0u64;
+        let mut not_runnable = 0u64;
         for case in suite.testcases.into_values() {
-            match case.filter_match.status.as_str() {
-                "matches" => matched = matched.checked_add(1)?,
-                "mismatch" => mismatched = mismatched.checked_add(1)?,
+            let filter = case.filter_match;
+            match filter.status.as_str() {
+                "matches" => runnable = runnable.checked_add(1)?,
+                "mismatch" => {
+                    if filter
+                        .reason
+                        .as_deref()
+                        .is_some_and(|reason| NOT_RUNNABLE.contains(&reason))
+                    {
+                        not_runnable = not_runnable.checked_add(1)?;
+                    } else {
+                        excluded = excluded.checked_add(1)?;
+                    }
+                }
                 _ => return None,
             }
         }
-        add(&mut packages, &suite.package_name, matched)?;
-        add(&mut excluded, &suite.package_name, mismatched)?;
+        add(&mut packages, &suite.package_name, runnable)?;
+        add(&mut packages, &suite.package_name, excluded)?;
+        add(&mut skipped, &suite.package_name, not_runnable)?;
     }
     Some(if packages.is_empty() {
-        excluded
+        skipped
     } else {
         packages
     })

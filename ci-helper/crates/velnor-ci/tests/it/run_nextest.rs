@@ -291,3 +291,24 @@ fn run_writes_no_count_for_other_commands_or_a_run_that_printed_no_summary() {
         assert_eq!(written, "existing=1\n", "{name}");
     }
 }
+
+#[test]
+fn run_ignores_captured_output_that_looks_like_a_status_line() {
+    let script = "cat >&2 <<'END'\n\
+    PASS [   0.012s] (1/1) kept alpha\n\
+  stdout \u{2500}\u{2500}\u{2500}\n\
+\n\
+running 1 test\n\
+PASS [   0.012s] kept tests::fake\n\
+test alpha ... ok\n\
+\n\
+ Summary [   0.012s] 1 test run: 1 passed, 0 skipped\n\
+END";
+    let one = listed(&[("kept", &["alpha"])]);
+    let (output, written, _) = run_with_output("tests-run-captured", script, &one, &NEXTEST_RUN);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=kept=1/1\n"
+    );
+}

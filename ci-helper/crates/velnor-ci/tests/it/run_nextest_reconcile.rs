@@ -24,7 +24,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_by_package=both=1/1 kept=1/1\n"
+        "existing=1\ntests_run=2\ntests_listed=3\ntests_by_package=both=1/1 kept=1/2\n"
     );
 }
 
@@ -103,5 +103,81 @@ END";
     assert_eq!(
         written,
         "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=ran=1/1\n"
+    );
+}
+
+#[test]
+fn run_keeps_a_package_whose_tests_the_filter_excluded_next_to_one_that_ran() {
+    let script = r"cat >&2 <<'END'
+    PASS [   0.012s] (1/1) kept alpha
+ Summary [   0.012s] 1 test run: 1 passed, 0 skipped
+END";
+    let list = concat!(
+        r##"{"test-count":3,"rust-suites":{"##,
+        r##""kept":{"package-name":"kept","status":"listed","testcases":{"alpha":{"ignored":false,"filter-match":{"status":"matches"}}}},"##,
+        r##""gone":{"package-name":"gone","status":"listed","testcases":{"one":{"ignored":false,"filter-match":{"status":"mismatch","reason":"expression"}},"two":{"ignored":false,"filter-match":{"status":"mismatch","reason":"expression"}}}}}}"##
+    );
+    let (output, written, _) =
+        run_with_output("tests-run-mixed-filter", script, list, &NEXTEST_RUN);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=1\ntests_listed=3\ntests_by_package=gone=0/2 kept=1/1\n"
+    );
+}
+
+#[test]
+fn the_required_gate_fails_when_the_filter_excluded_a_selected_package() {
+    let script = r"cat >&2 <<'END'
+    PASS [   0.012s] (1/1) kept alpha
+ Summary [   0.012s] 1 test run: 1 passed, 0 skipped
+END";
+    let list = concat!(
+        r##"{"test-count":3,"rust-suites":{"##,
+        r##""kept":{"package-name":"kept","status":"listed","testcases":{"alpha":{"ignored":false,"filter-match":{"status":"matches"}}}},"##,
+        r##""gone":{"package-name":"gone","status":"listed","testcases":{"one":{"ignored":false,"filter-match":{"status":"mismatch","reason":"expression"}},"two":{"ignored":false,"filter-match":{"status":"mismatch","reason":"expression"}}}}}}"##
+    );
+    let (_, written, _) = run_with_output("tests-run-mixed-gate", script, list, &NEXTEST_RUN);
+    let outputs = written
+        .lines()
+        .filter_map(|line| line.split_once('='))
+        .map(|(key, value)| (key.to_owned(), value.to_owned()))
+        .collect::<BTreeMap<_, _>>();
+    let spec = VerdictSpec::parse(
+        "rust-plan",
+        &[
+            "rust-plan=always".to_owned(),
+            "rust-test=lane:root".to_owned(),
+        ],
+        &["rust-test=root".to_owned()],
+    )
+    .expect("verdict spec");
+    let needs = BTreeMap::from([
+        (
+            JobId::new("rust-plan").expect("job id"),
+            Need {
+                result: Some("success".to_owned()),
+                outputs: BTreeMap::from([
+                    ("rust_root_mode".to_owned(), "some".to_owned()),
+                    ("rust_root_tests".to_owned(), "run".to_owned()),
+                ]),
+            },
+        ),
+        (
+            JobId::new("rust-test").expect("job id"),
+            Need {
+                result: Some("success".to_owned()),
+                outputs,
+            },
+        ),
+    ]);
+    let verdict = decide(&spec, &needs, Some("pull_request"));
+    assert!(!verdict.passed, "{}", verdict.table());
+    assert!(
+        verdict
+            .table()
+            .contains("package gone of root listed 2 tests and ran none"),
+        "{}",
+        verdict.table()
     );
 }
