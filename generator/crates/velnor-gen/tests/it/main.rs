@@ -24,7 +24,9 @@ mod golden;
 mod harness;
 mod harness_kinds;
 mod harness_undecided;
+mod helper_integrity;
 mod helper_source;
+
 mod inputs;
 mod io;
 mod io_files;
