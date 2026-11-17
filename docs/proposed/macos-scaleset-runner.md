@@ -179,16 +179,16 @@ state. This may conservatively retain an old definite rejection. Unknown journal
 versions and malformed migrations fail closed without partial schema changes.
 An engine identity change stops automatic mutation.
 
-Pre-JIT bootstrap recovery retains the reservation while any dispatched Docker
-create has an unknown outcome. An absent deterministic name does not prove that
-the original request cannot publish later. Recovery waits for an exact owned
-object, records its immutable target identity durably, and then removes that
-target. Recorded create responses also supply target identity. The target
-receipt survives lease changes and restarts, including a crash after Docker
-deletes the object but before the journal records success. Container, volume,
-network, and initializer cleanup all wait until every attempted create has a
-known target. Recovery never retries the original create or start request.
-Ownership mismatches retain capacity and leave the conflicting object intact.
+Pre-JIT bootstrap recovery records an immutable target identity for each owned
+object it finds and removes that exact target. Recorded create responses also
+supply target identity. A target receipt survives lease changes and restarts,
+including a crash after Docker deletes an object but before the journal records
+success. When a claimed create remains absent after its grace period, recovery
+records that absence, retires earlier owned objects, and releases the reservation.
+An absent deterministic name does not prove that the original request cannot
+publish later: retirement fences keep a late object from being bound or started.
+Recovery never retries the original create or start request. Ownership mismatches
+retain capacity and leave the conflicting object intact.
 
 Disabled runner self-update is a registration invariant. Do not patch the
 official runner. Do not spoof `/proc` to bypass `AssertCompatibleOS`.
