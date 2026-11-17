@@ -6,8 +6,9 @@
 `ci-metrics.json` is the per-lane, schema-1 report. The checker reads these
 files from artifact directories and recomputes policy from their evidence;
 `violations` is useful for display, but is not trusted as the only verdict.
-The JSON structs reject unknown fields. Change the schema deliberately when
-changing this contract.
+The top-level report and policy structs reject unknown fields. Nested Cargo
+artifact records tolerate additional upstream fields. Change the schema
+deliberately when changing this contract.
 
 ## Lane fields
 
@@ -65,8 +66,6 @@ diagnostics; they are not reported as zero-byte archives or successful saves.
 
 Generated reporting requires helper `0.1.81` or a supported source-built
 helper. The `Cache` job fails on waste or unverifiable required evidence.
-`cache_check_blocks` defaults to `false`; setting it to `true` includes
-`Cache` in both Required's dependencies and its verdict specification.
 
 `velnor-ci report --check <artifacts>` requires metrics for every non-skipped
 lane named by `VELNOR_REPORT_NEEDS`, validates schema and evidence, and

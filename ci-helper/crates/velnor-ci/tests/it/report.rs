@@ -58,6 +58,27 @@ fn cache_waste_rules_respect_restored_provenance_and_root() {
 }
 
 #[test]
+fn only_workspace_dependency_compilation_exempts_unchanged_workspace_crates() {
+    for workspace in [false, true] {
+        let mut value = lane();
+        value["caches"][0]["usable_same_lock"] = json!(false);
+        value["invocations"][0]["compilations"] = json!([
+            {"package":"app","version":"1.0.0","workspace":true,"unchanged":true,"dependencies":["helper"]},
+            {"package":"helper","version":if workspace { "1.0.0" } else { "2.0.0" },"workspace":workspace,"unchanged":false,"dependencies":[]}
+        ]);
+        let violations = waste(&metrics(value));
+        if workspace {
+            assert!(violations.is_empty(), "{violations:?}");
+        } else {
+            assert_eq!(
+                violations,
+                [".: app v1.0.0 compiled despite usable restored inputs"]
+            );
+        }
+    }
+}
+
+#[test]
 fn third_compile_is_aggregated_across_lanes_by_root_configuration_and_package_version() {
     for (dimension, fails) in [
         ("same", true),

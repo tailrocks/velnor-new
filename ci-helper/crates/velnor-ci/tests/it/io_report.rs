@@ -138,6 +138,15 @@ fn checker_rejects_missing_malformed_and_duplicate_artifacts_and_accepts_skipped
             .output()
             .unwrap_or_else(|error| unreachable!("{error}"))
     };
+    assert!(check("{}").status.success());
+    for needs in ["[]", "null", r#""rust""#, "1", "false"] {
+        let output = check(needs);
+        assert!(!output.status.success(), "{needs}: {output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("invalid type"),
+            "{needs}: {output:?}"
+        );
+    }
     assert!(check(r#"{"rust":{"result":"skipped"}}"#).status.success());
     assert!(!check(r#"{"rust":{"result":"failure"}}"#).status.success());
     fs::create_dir_all(repo.root().join("artifacts/rust"))?;

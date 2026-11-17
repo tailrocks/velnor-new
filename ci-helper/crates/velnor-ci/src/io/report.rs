@@ -318,13 +318,11 @@ fn check_directory(directory: &Path) -> Result<String, CiError> {
                 .and_then(|text| json::<LaneMetrics>(&text))
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let needs: Value =
+    let needs: serde_json::Map<String, Value> =
         json(&std::env::var("VELNOR_REPORT_NEEDS").unwrap_or_else(|_| "{}".to_owned()))?;
-    if let Some(needs) = needs.as_object() {
-        for (lane, need) in needs {
-            if need["result"] != "skipped" && !lanes.iter().any(|metrics| &metrics.lane == lane) {
-                return Err(CiError::new(format!("missing metrics for lane {lane}")));
-            }
+    for (lane, need) in needs {
+        if need["result"] != "skipped" && !lanes.iter().any(|metrics| metrics.lane == lane) {
+            return Err(CiError::new(format!("missing metrics for lane {lane}")));
         }
     }
     check(&lanes)

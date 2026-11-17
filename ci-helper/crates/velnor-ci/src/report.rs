@@ -82,6 +82,7 @@ pub fn waste(metrics: &LaneMetrics) -> Vec<String> {
                 other.root == invocation.root && other.configuration == invocation.configuration
             })
             .flat_map(|other| &other.compilations)
+            .filter(|event| event.workspace)
             .map(|event| event.package.as_str())
             .collect();
         for event in &invocation.compilations {
