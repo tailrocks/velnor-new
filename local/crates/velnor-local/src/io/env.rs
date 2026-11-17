@@ -348,21 +348,25 @@ impl<E: Engine> Environment<E> {
     }
 
     pub async fn down(&self) -> io::Result<[usize; 3]> {
+        let label = format!("velnor-local={}", self.name);
+        let filter = format!("label={label}");
+        let mut audit = super::cleanup::Audit::open(&self.dir, label).await?;
         super::supervisor::stop(&self.dir).await?;
-        let filter = format!("label=velnor-local={}", self.name);
         let mut removed = [0; 3];
         let kinds = [
-            ("ps -aq --filter", "rm -f -v"),
-            ("volume ls -q --filter", "volume rm -f"),
-            ("network ls -q --filter", "network rm"),
+            ("ps -aq --no-trunc --filter", "rm -f", "container"),
+            ("volume ls -q --filter", "volume rm -f", "volume"),
+            ("network ls -q --no-trunc --filter", "network rm", "network"),
         ];
-        for ((list, remove), count) in kinds.into_iter().zip(&mut removed) {
+        for ((list, remove, kind), count) in kinds.into_iter().zip(&mut removed) {
             let listed = self.docker(list, &[&filter]).await?;
             let ids: Vec<&str> = listed.split_whitespace().collect();
-            if !ids.is_empty() {
-                self.docker(remove, &ids).await?;
+            for id in ids {
+                audit.record("intent", Some((kind, id))).await?;
+                self.docker(remove, &[id]).await?;
+                audit.record("removed", Some((kind, id))).await?;
+                *count += 1;
             }
-            *count = ids.len();
         }
         Ok(removed)
     }

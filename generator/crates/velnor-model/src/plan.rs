@@ -232,7 +232,10 @@ pub enum StepKind {
     },
     FailWhenANeedFailed,
     FailOnDraftRun,
-    Verdict(VerdictSpec),
+    Verdict {
+        spec: VerdictSpec,
+        needs_max_bytes: usize,
+    },
     UploadCargoLog,
 }
 
