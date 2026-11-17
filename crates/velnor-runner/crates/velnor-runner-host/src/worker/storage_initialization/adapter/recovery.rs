@@ -28,42 +28,40 @@ pub(crate) async fn recover_absent(
     docker: &Docker,
     journal: &ConnectionJournal,
     reservation_id: i64,
-    timeout: Duration,
+    deadline: Instant,
 ) -> Result<(), HostError> {
-    if timeout.is_zero() || timeout > Duration::from_secs(30) {
-        return Err(HostError::DockerTimeout);
-    }
-    let deadline = Instant::now()
-        .checked_add(timeout)
-        .ok_or(HostError::DockerTimeout)?;
-    let mut active_claim = None;
-    let result = bounded_by_deadline(
+    let candidate = journal
+        .storage_initializer_abort_candidate(reservation_id)
+        .await?
+        .ok_or(HostError::Journal)?;
+    bounded_by_deadline(
         deadline,
         Box::pin(async {
-            let candidate = journal
-                .storage_initializer_abort_candidate(reservation_id)
-                .await?
-                .ok_or(HostError::Journal)?;
             verify_engine(docker, journal, &candidate).await?;
-            verify_volumes(docker, &candidate).await?;
-            let claim = journal
-                .claim_storage_initializer_abort(&candidate)
-                .await?
-                .ok_or(HostError::Journal)?;
-            active_claim = Some(claim);
-            let claim = active_claim.as_ref().ok_or(HostError::Journal)?;
-            Box::pin(reconcile_abort(docker, journal, claim)).await
+            verify_volumes(docker, &candidate).await
         }),
     )
-    .await;
+    .await??;
+    if Instant::now() >= deadline {
+        return Err(HostError::DockerTimeout);
+    }
+    let claim = journal
+        .claim_storage_initializer_abort(&candidate)
+        .await?
+        .ok_or(HostError::Journal)?;
+    let result = if Instant::now() >= deadline {
+        Err(HostError::DockerTimeout)
+    } else {
+        bounded_by_deadline(deadline, Box::pin(reconcile_abort(docker, journal, &claim))).await
+    };
     match result {
         Ok(Ok(())) => Ok(()),
         Ok(Err(error)) => {
-            mark_abort_uncertain(journal, active_claim.as_ref()).await?;
+            mark_abort_uncertain(journal, &claim).await?;
             Err(error)
         }
         Err(_) => {
-            mark_abort_uncertain(journal, active_claim.as_ref()).await?;
+            mark_abort_uncertain(journal, &claim).await?;
             Err(HostError::DockerTimeout)
         }
     }
@@ -71,14 +69,11 @@ pub(crate) async fn recover_absent(
 
 async fn mark_abort_uncertain(
     journal: &ConnectionJournal,
-    claim: Option<&StorageInitializationClaim>,
+    claim: &StorageInitializationClaim,
 ) -> Result<(), HostError> {
-    if let Some(claim) = claim {
-        journal
-            .mark_storage_initializer_abort_uncertain(claim)
-            .await?;
-    }
-    Ok(())
+    journal
+        .mark_storage_initializer_abort_uncertain(claim)
+        .await
 }
 
 async fn reconcile_abort(

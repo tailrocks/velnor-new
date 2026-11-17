@@ -20,23 +20,24 @@ pub(super) async fn reconcile(
     context: &PositivePollContext<'_>,
 ) -> Result<(), HostError> {
     let deadline = std::time::Instant::now() + context.retirement_budget;
-    let result = timeout_at(Instant::from_std(deadline), async {
-        Box::pin(recover_uncertain_reservations(&UncertainRecovery {
-            docker: context.docker,
-            journal: context.journal,
-            scope,
-            engine: context.selected_engine,
-            images: context.worker_images,
-            image_authority: context.image_authority,
-            pass,
-        }))
-        .await?;
-        retire_uncertain_unbound_pairs(deadline, context.docker, scope, context.selected_engine)
-            .await
-    })
+    let recovery = UncertainRecovery {
+        docker: context.docker,
+        journal: context.journal,
+        scope,
+        engine: context.selected_engine,
+        images: context.worker_images,
+        image_authority: context.image_authority,
+        pass,
+    };
+    let result = timeout_at(
+        Instant::from_std(deadline),
+        Box::pin(recover_uncertain_reservations(&recovery)),
+    )
     .await;
     if let Ok(result) = result {
-        result
+        result?.recover_before(&recovery, deadline).await;
+        retire_uncertain_unbound_pairs(deadline, context.docker, scope, context.selected_engine)
+            .await
     } else {
         eprintln!(
             "host controller defers pre-JIT recovery to the next sweep connection={}",

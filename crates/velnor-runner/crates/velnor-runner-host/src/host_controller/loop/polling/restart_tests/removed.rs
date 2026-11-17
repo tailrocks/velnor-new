@@ -30,6 +30,9 @@ const UNCERTAIN: &str = "uncertain/00/uncertain/0/1/none/";
 #[path = "removed/deadline.rs"]
 mod deadline;
 
+#[path = "removed/initializer_deadline.rs"]
+mod initializer_deadline;
+
 impl Controller {
     fn remove_connection(&mut self) -> TestResult<()> {
         let kept = HOST_CONFIG.replace("conn-test-1", "conn-other-1");

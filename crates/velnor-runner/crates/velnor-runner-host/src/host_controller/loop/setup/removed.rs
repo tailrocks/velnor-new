@@ -51,22 +51,30 @@ pub(crate) async fn reconcile_removed_at_startup(startup: &RemovedStartup<'_>) {
                 continue;
             }
         };
+        let recovery = UncertainRecovery {
+            docker: startup.docker,
+            journal: startup.journal,
+            scope: &scope,
+            engine: startup.engine,
+            images: startup.images,
+            image_authority: startup.image_authority,
+            pass: 0,
+        };
         let Ok(recovered) = timeout_at(
             TokioInstant::from_std(startup.deadline),
-            Box::pin(recover_uncertain_reservations(&UncertainRecovery {
-                docker: startup.docker,
-                journal: startup.journal,
-                scope: &scope,
-                engine: startup.engine,
-                images: startup.images,
-                image_authority: startup.image_authority,
-                pass: 0,
-            })),
+            Box::pin(recover_uncertain_reservations(&recovery)),
         )
         .await
         else {
             defer(binding);
             break;
+        };
+        let recovered = match recovered {
+            Ok(pending) => {
+                pending.recover_before(&recovery, startup.deadline).await;
+                Ok(())
+            }
+            Err(error) => Err(error),
         };
         let retired = retire_uncertain_unbound_pairs(
             startup.deadline,

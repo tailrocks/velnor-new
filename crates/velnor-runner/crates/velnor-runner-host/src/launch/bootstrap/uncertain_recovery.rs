@@ -31,7 +31,7 @@ pub(crate) struct UncertainRecovery<'a> {
 
 pub(crate) async fn recover_uncertain_reservations(
     recovery: &UncertainRecovery<'_>,
-) -> Result<(), HostError> {
+) -> Result<PendingInitializers, HostError> {
     let mut initializers = Vec::new();
     for reservation in recovery.scope.physical_runner_reservations().await? {
         if reservation.reservation.state != ReservationState::Uncertain
@@ -51,28 +51,38 @@ pub(crate) async fn recover_uncertain_reservations(
         }
         recover_pre_jit(recovery, &reservation).await;
     }
-    recover_initializers(recovery, &initializers).await;
-    Ok(())
+    Ok(PendingInitializers(initializers))
 }
 
-async fn recover_initializers(recovery: &UncertainRecovery<'_>, initializers: &[i64]) {
-    recover_in_rotation(
-        initializers,
-        recovery.pass,
-        INITIALIZER_RECOVERY_BUDGET,
-        |id, remaining| async move {
-            if let Err(error) = recover_absent(recovery.docker, recovery.scope, id, remaining).await
-            {
-                report(
-                    recovery.scope,
-                    id,
-                    "an interrupted storage initializer",
-                    error,
-                );
-            }
-        },
-    )
-    .await;
+pub(crate) struct PendingInitializers(Vec<i64>);
+
+impl PendingInitializers {
+    pub(crate) async fn recover_before(
+        self,
+        recovery: &UncertainRecovery<'_>,
+        deadline: std::time::Instant,
+    ) {
+        let now = Instant::now();
+        let deadline = Instant::from_std(deadline).min(now + INITIALIZER_RECOVERY_BUDGET);
+        recover_in_rotation(
+            &self.0,
+            recovery.pass,
+            deadline.saturating_duration_since(now),
+            |id, _| async move {
+                if let Err(error) =
+                    recover_absent(recovery.docker, recovery.scope, id, deadline).await
+                {
+                    report(
+                        recovery.scope,
+                        id,
+                        "an interrupted storage initializer",
+                        error,
+                    );
+                }
+            },
+        )
+        .await;
+    }
 }
 
 async fn recover_in_rotation<Recover, Pending>(
