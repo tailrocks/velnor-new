@@ -14,10 +14,10 @@ use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
 use crate::mise::nextest_tool;
 use crate::plan::{
-    CHECKOUT_DEPTH, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup, step, tools_restore,
+    CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup,
+    step, tools_restore,
 };
 
-const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
 const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
 

@@ -136,7 +136,10 @@ fn the_file_holds_the_medians_of_the_step_times_bench_collect_reports() {
             got.lint_build_seconds,
             median(
                 runs.iter()
-                    .map(|r| f64::from(u32::try_from(step(r, "Lint").seconds).unwrap_or_default()))
+                    .map(|r| f64::from(
+                        u32::try_from(step(r, "Lint").seconds.unwrap_or_default())
+                            .unwrap_or_default()
+                    ))
                     .collect()
             )
         );

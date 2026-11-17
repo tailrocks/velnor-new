@@ -26,7 +26,7 @@ fn recorded_run_becomes_metrics() {
     assert_eq!(cli.duration_seconds, 854);
     assert_eq!(cli.steps.len(), 6);
     assert_eq!(cli.steps[1].name, "Checkout");
-    assert_eq!(cli.steps[1].seconds, 5);
+    assert_eq!(cli.steps[1].seconds, Some(5));
     assert_eq!(cli.log.compiling, 24);
     assert_eq!(metrics.crates_compiled(), 28);
 }

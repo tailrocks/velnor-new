@@ -59,7 +59,8 @@ pub fn collect(
         wall_seconds: seconds_between(
             Some(run.run_started_at.as_deref().unwrap_or(&run.created_at)),
             Some(&run.updated_at),
-        ),
+        )
+        .unwrap_or_default(),
         runner_seconds,
         jobs,
     })
@@ -76,6 +77,7 @@ pub fn setup_seconds(job: &ApiJob) -> Option<u64> {
     let done = step.completed_at.as_deref()?;
     (step.conclusion.as_deref() == Some("success"))
         .then(|| seconds_between(Some(started), Some(done)))
+        .flatten()
 }
 
 fn fetch_jobs(
@@ -130,8 +132,9 @@ fn job_metrics(
     };
     let (queue_seconds, duration_seconds) = if ran {
         (
-            seconds_between(Some(&job.created_at), job.started_at.as_deref()),
-            seconds_between(job.started_at.as_deref(), job.completed_at.as_deref()),
+            seconds_between(Some(&job.created_at), job.started_at.as_deref()).unwrap_or_default(),
+            seconds_between(job.started_at.as_deref(), job.completed_at.as_deref())
+                .unwrap_or_default(),
         )
     } else {
         (0, 0)
@@ -144,7 +147,7 @@ fn job_metrics(
             log: step_logs.get(&index).cloned().unwrap_or_default(),
             name: step.name.clone(),
             seconds: if step.conclusion.as_deref() == Some("skipped") {
-                0
+                None
             } else {
                 seconds_between(step.started_at.as_deref(), step.completed_at.as_deref())
             },

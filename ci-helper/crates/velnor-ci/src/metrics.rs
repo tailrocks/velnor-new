@@ -36,7 +36,7 @@ pub struct JobMetrics {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct StepMetrics {
     pub name: String,
-    pub seconds: u64,
+    pub seconds: Option<u64>,
     #[serde(default)]
     pub log: LogScan,
 }
