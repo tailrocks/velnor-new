@@ -89,6 +89,8 @@ fn credential_expression(text: &str) -> bool {
                 let access = remaining.trim_start();
                 let dot = access.strip_prefix('.').map(str::trim_start);
                 let bracket = access.strip_prefix('[').map(str::trim_start);
+                let dynamic = dot.is_some_and(|member| member.starts_with('*'))
+                    || bracket.is_some_and(|member| !member.starts_with(['\'', '"']));
                 let token = dot.is_some_and(|member| {
                     member.strip_prefix("token").is_some_and(|tail| {
                         !tail.starts_with(|c: char| c.is_ascii_alphanumeric() || c == '_')
@@ -103,7 +105,7 @@ fn credential_expression(text: &str) -> bool {
                 if !property
                     && (identifier == "secrets"
                         || (identifier == "github"
-                            && (token || (dot.is_none() && bracket.is_none()))))
+                            && (token || dynamic || (dot.is_none() && bracket.is_none()))))
                 {
                     return true;
                 }
