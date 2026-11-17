@@ -19,20 +19,10 @@ fn ci(error: impl std::fmt::Display) -> CiError {
 
 pub(super) fn collect_inputs(metrics: &mut LaneMetrics, log: &[u8]) -> Result<(), CiError> {
     let directory = super::current_dir()?;
-    let tracked = super::inputs::tracked_paths(&directory)?;
-    if tracked.paths.iter().any(|path| {
-        path.ends_with("Cargo.lock")
-            && fs::symlink_metadata(tracked.top.join(path))
-                .is_ok_and(|metadata| metadata.file_type().is_symlink())
-    }) {
-        symlink_lock_unavailable(metrics, log, &tracked.top)?;
-        return Ok(());
-    }
-    let checkout = velnor_gen::io::read_recorded_checkout(&directory).map_err(ci)?;
-    let facts = velnor_rust::detect(&checkout.view).map_err(ci)?;
-    let (_, current) = super::inputs::worktree_files(&checkout.root)?;
+    let report = super::report_checkout::read(&directory)?;
+    let facts = velnor_rust::detect(&report.checkout.view).map_err(ci)?;
     for root in &facts.rust_roots {
-        collect_root(metrics, &facts, root, &checkout.root, &current, log)?;
+        collect_root(metrics, &facts, root, &report, log)?;
     }
     Ok(())
 }
@@ -41,18 +31,25 @@ fn collect_root(
     metrics: &mut LaneMetrics,
     facts: &velnor_model::RepoFacts,
     root: &velnor_model::RustRoot,
-    checkout: &Path,
-    current: &crate::inputs::Tracked,
+    report: &super::report_checkout::ReportCheckout,
     log: &[u8],
 ) -> Result<(), CiError> {
+    let checkout = &report.checkout.root;
     let directory = root.manifest.parent();
     let root_text = directory.as_ref().map_or(".", RepoPath::as_str);
     let root_path = checkout.join(directory.as_ref().map_or("", RepoPath::as_str));
+    let (_, current) = super::inputs::worktree_files(&root_path)?;
+    let lock = root.manifest.sibling(&RepoPath::from_static("Cargo.lock"));
+    let symlink_lock = report.symlink_locks.contains(&lock);
     let saved = read_snapshot(&root_path.join(SNAPSHOT))?;
     let saved_witness = read_witness(&root_path.join(RESTORE_WITNESS))?;
     let usable = saved.is_some();
-    let same_lock = same_lock(&root.manifest, current, saved.as_deref())?;
-    let unchanged = unchanged(facts, root, current, saved);
+    let same_lock = !symlink_lock && same_lock(&root.manifest, &current, saved.as_deref())?;
+    let unchanged = if symlink_lock {
+        BTreeSet::new()
+    } else {
+        unchanged(facts, root, &current, saved)
+    };
     for cache in &mut metrics.caches {
         if cache.family == "target" && cache.root.as_deref() == Some(root_text) {
             cache.usable = usable && cache.hit != Hit::Miss;
@@ -64,7 +61,8 @@ fn collect_root(
         &RootInputs {
             root,
             checkout,
-            current,
+            current: &current,
+            symlink_lock,
             log,
             root_text,
             root_path: &root_path,
@@ -83,6 +81,7 @@ struct RootInputs<'a> {
     root_path: &'a Path,
     unchanged: &'a BTreeSet<String>,
     saved_witness: Option<&'a str>,
+    symlink_lock: bool,
 }
 
 fn read_snapshot(path: &Path) -> Result<Option<Vec<crate::inputs::SavedInput>>, CiError> {
@@ -125,6 +124,12 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
         );
         metrics.verification_errors.extend(errors);
         invocation.compilations = compilations;
+        if warm && inputs.symlink_lock && !invocation.compilations.is_empty() {
+            metrics.verification_errors.push(format!(
+                "{}: a tracked Cargo.lock symlink prevents compilation input verification",
+                inputs.root_text
+            ));
+        }
         invocation.downloads = progress
             .iter()
             .filter(|event| event.kind == ProgressKind::Downloaded)
@@ -183,55 +188,6 @@ fn verify_witness(
             "{root}: tracked symlink targets cannot verify dependency inputs"
         ));
     }
-}
-
-fn symlink_lock_unavailable(
-    metrics: &mut LaneMetrics,
-    log: &[u8],
-    checkout: &Path,
-) -> Result<(), CiError> {
-    for invocation in &mut metrics.invocations {
-        let invocation_root = Path::new(&invocation.root);
-        let Ok(relative) = invocation_root.strip_prefix(checkout) else {
-            continue;
-        };
-        let root = relative
-            .to_str()
-            .filter(|text| !text.is_empty())
-            .unwrap_or(".")
-            .to_owned();
-        let saved = read_snapshot(&invocation_root.join(SNAPSHOT))?;
-        for cache in &mut metrics.caches {
-            if cache.family == "target" && cache.root.as_deref() == Some(&root) {
-                cache.usable = saved.is_some() && cache.hit != Hit::Miss;
-                cache.usable_same_lock = false;
-            }
-        }
-        root.clone_into(&mut invocation.root);
-        let warm = metrics.caches.iter().any(|cache| {
-            cache.family == "target" && cache.root.as_deref() == Some(&root) && cache.usable
-        });
-        if !warm {
-            continue;
-        }
-        let progress = progress(invocation, log)?;
-        if has_compilation(invocation, &progress) {
-            metrics.verification_errors.push(format!(
-                "{root}: a tracked Cargo.lock symlink prevents compilation input verification"
-            ));
-        }
-    }
-    Ok(())
-}
-
-fn has_compilation(
-    invocation: &crate::telemetry::Invocation,
-    progress: &[crate::cargo_artifacts::CargoProgress],
-) -> bool {
-    invocation.artifacts.iter().any(|artifact| !artifact.fresh)
-        || progress
-            .iter()
-            .any(|event| artifact_evidence::is_compilation(event.kind))
 }
 
 fn same_lock(

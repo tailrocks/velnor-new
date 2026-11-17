@@ -17,6 +17,7 @@ pub mod pump;
 mod recording;
 mod release;
 mod report;
+mod report_checkout;
 mod report_inputs;
 mod required;
 mod restored;

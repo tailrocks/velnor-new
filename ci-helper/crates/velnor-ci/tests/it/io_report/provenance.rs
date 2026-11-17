@@ -10,6 +10,7 @@ use velnor_ci::report::{LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
 use velnor_ci::telemetry::INVOCATIONS;
 
 mod artifacts;
+mod roots;
 
 fn cache() -> Value {
     json!([{"family":"target","root":".","restore_step":"restore","save_step":"save"}])
@@ -212,6 +213,8 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
     }
     let dependency = event(&cold, "Compiling", "dependency", "1.0.0", false);
     let cold_metrics = progress(&cold, &[dependency])?;
+    assert_eq!(cold_metrics.invocations[0].root, ".");
+    assert_eq!(cold_metrics.invocations[0].compilations.len(), 1);
     assert_eq!(
         cold_metrics.verification_errors,
         [] as [String; 0],
@@ -244,6 +247,11 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
     let metrics = observation(&warm, &[], &[quiet])?;
     assert_ne!(metrics.verification_errors, [] as [String; 0]);
     let cold = report(&warm, &cache(), "{}")?;
+    assert_eq!(cold.invocations[0].compilations.len(), 1);
+    assert_eq!(
+        cold.invocations[0].artifacts[0].manifest_path,
+        "checkout/Cargo.toml"
+    );
     assert!(!cold.caches[0].usable, "{cold:?}");
     assert!(!cold.caches[0].usable_same_lock, "{cold:?}");
     assert_eq!(cold.verification_errors, [] as [String; 0], "{cold:?}");
@@ -256,8 +264,10 @@ fn warm_dependency_compile_with_symlinked_lock_is_unverifiable()
         true,
         false,
     )?;
-    let metrics = observation(&warm, &[], &[fresh])?;
+    let workspace = event(&warm, "Compiling", "demo", "0.1.0", true);
+    let metrics = observation(&warm, &[workspace], &[fresh])?;
     assert_eq!(metrics.verification_errors, [] as [String; 0]);
+    assert!(metrics.invocations[0].compilations.is_empty());
     Ok(())
 }
 
