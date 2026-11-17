@@ -11,11 +11,30 @@ use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
-    pub repository: String,
+    pub repository: RepositoryIdentity,
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub symlinks: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepositoryIdentity {
+    Named(String),
+    Unhosted,
+}
+
+impl Default for RepositoryIdentity {
+    fn default() -> Self {
+        Self::Named(String::new())
+    }
+}
+
+impl FullRun {
+    #[must_use]
+    pub fn is_hashed(&self) -> bool {
+        matches!(self, Self::Hourly | Self::Nightly | Self::Weekly)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
-    RootSlug, RustCiConfig, RustRoot, Toolchain,
+    RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain,
 };
 
 use crate::build_target::{build_targets, check_host_tuple_version};
@@ -151,9 +151,16 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     let policy = policy_tools(view, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = private_sources(view, &rust_roots);
+    let repository = match &view.repository {
+        RepositoryIdentity::Named(name) if config.full_run.is_hashed() => name.clone(),
+        RepositoryIdentity::Unhosted if config.full_run.is_hashed() => {
+            return Err(DetectError::UnhostedOrigin);
+        }
+        _ => String::new(),
+    };
     Ok(RepoFacts {
         policy,
-        repository: view.repository.clone(),
+        repository,
         timings,
         timings_notes,
         private_sources,

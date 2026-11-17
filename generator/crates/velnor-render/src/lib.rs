@@ -14,6 +14,7 @@ mod key_length;
 mod release;
 mod release_binaries;
 mod release_finalize;
+mod release_outputs;
 mod release_steps;
 mod rules;
 mod steps;

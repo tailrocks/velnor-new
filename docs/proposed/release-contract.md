@@ -166,8 +166,32 @@ Rules:
 - Record both the workflow-authority SHA and the package-source SHA; they may
   differ legitimately but MUST never differ accidentally through checkout
   fallback or a mutable-branch input. Preflight resolves the exact source
-  release-plz will publish, not merely the event SHA; release-plz may select
-  the release-PR head rather than the merge result — qualify that behavior.
+  release-plz will publish, not merely the event SHA. release-plz may select
+  an earlier commit from the release pull request rather than the checked-out
+  commit — qualify that behavior.
+  Qualified against release-plz 0.4.3 (release_plz_core 0.43.0,
+  `should_release` and `pr_commits`): when a pull request whose head branch
+  starts with the `pr_branch_prefix` is associated with the checked-out commit,
+  release-plz reads `GET /repos/{owner}/{repo}/pulls/{number}/commits` once,
+  with no `per_page` (the first page only; GitHub returns 30 commits, oldest
+  first), and takes the last sha on that page. When that sha is an ancestor of
+  the checked-out commit other than the commit itself, release-plz checks out
+  that sha and puts the tag there. When the page is empty, or that sha is not
+  an ancestor, release-plz tags the checked-out commit. A released tag must
+  name the verified default-branch commit (docs/goals.md), so release pull
+  requests must be squash-merged (or merged through a merge queue with
+  squash). The tag job refuses a release that release-plz would tag on another
+  commit before release-plz holds any publishing authority: `velnor-ci release
+  preflight`, read-only, before the App token is minted, lists the pull
+  requests of the verified commit, and for each one whose head branch starts
+  with a `pr_branch_prefix` reads that same unpaginated commits page. It fails
+  when the last sha on the page is an ancestor of the verified commit other
+  than that commit, or when the pull requests, the commits page, or the
+  comparison cannot be read (it fails closed). `velnor-ci release record` then
+  resolves the commit of each recorded
+  tag, requires it to equal the verified commit, and exports it as
+  `<package>_commit`; the build jobs compare their checkout with that output
+  (helper 0.1.81+).
 - Publish only from repository-local generated jobs on fresh GitHub-hosted
   runners, an explicitly preconfigured protected environment, and trusted
   eligible branch/dispatch events. Never publish from PRs,
