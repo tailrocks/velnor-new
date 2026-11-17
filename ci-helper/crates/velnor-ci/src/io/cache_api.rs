@@ -7,7 +7,7 @@ use std::time::Duration;
 use serde::Deserialize;
 use velnor_rust::{CacheEntry, budget_plan, cache_family, delta_pull_request};
 
-use crate::cache::{MAX_PAGES, stale_entries};
+use crate::cache::{MAX_PAGES, encode, stale_entries};
 use crate::cli_cache::BudgetArgs;
 use crate::error::CiError;
 use crate::github::{GitHubWrite, Repo};
@@ -237,17 +237,6 @@ pub(super) fn run_budget(args: &BudgetArgs) -> Result<String, CiError> {
         args.budget_bytes,
         args.dry_run,
     )
-}
-
-fn encode(text: &str) -> String {
-    text.bytes()
-        .map(|byte| match byte {
-            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                char::from(byte).to_string()
-            }
-            _ => format!("%{byte:02X}"),
-        })
-        .collect()
 }
 
 fn unique_ids(ids: impl Iterator<Item = u64>) -> Result<(), CiError> {

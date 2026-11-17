@@ -149,6 +149,36 @@ fn a_git_or_private_registry_dependency_saves_no_base_cache() -> TestResult {
     Ok(())
 }
 
+fn incomplete_expressions(text: &str) -> Vec<String> {
+    let mut found = Vec::new();
+    let mut rest = text;
+    while let Some(start) = rest.find("${{") {
+        let after = &rest[start + 3..];
+        let Some(end) = after.find("}}") else {
+            found.push(after.lines().next().unwrap_or_default().to_owned());
+            break;
+        };
+        let inner = after[..end].trim();
+        let dangling = ["&&", "||", "!", "==", "!=", "(", ","]
+            .iter()
+            .any(|operator| inner.ends_with(operator));
+        if inner.is_empty() || dangling {
+            found.push(format!("${{{{{}}}}}", &after[..end]));
+        }
+        rest = &after[end + 2..];
+    }
+    found
+}
+
+#[test]
+fn every_rendered_expression_is_complete_when_no_lane_uploads_a_cache() -> TestResult {
+    let text = text_of(&with_lock_file(GIT)?)?;
+    assert!(text.contains("velnor-ci cache budget"), "{text}");
+    assert_eq!(incomplete_expressions(&text), Vec::<String>::new());
+    assert!(!text.contains("Require verified cache uploads"), "{text}");
+    Ok(())
+}
+
 #[test]
 fn a_cargo_config_registry_or_source_saves_no_base_cache() -> TestResult {
     for (config, section) in [

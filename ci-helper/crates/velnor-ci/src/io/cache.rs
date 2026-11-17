@@ -30,7 +30,16 @@ pub fn decide(
     now_seconds: i64,
 ) -> Result<Decision, CiError> {
     let counts = scan(log.ok_or_else(|| CiError::new("velnor-run.log is missing"))?);
-    if !should_save(&counts) {
+    decide_counts(&counts, target, archive, now_seconds)
+}
+
+pub(super) fn decide_counts(
+    counts: &crate::logscan::LogScan,
+    target: &Path,
+    archive: Option<&Path>,
+    now_seconds: i64,
+) -> Result<Decision, CiError> {
+    if !should_save(counts) {
         return Ok(Decision {
             save: false,
             report: "no crate was compiled, checked or documented in this run; saving nothing\n"

@@ -138,14 +138,15 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
             family: *family,
         })
     });
+    let result = (!uploads.is_empty()).then(|| step(StepKind::CacheResult(uploads.clone())));
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
         .chain(verifies)
-        .chain([step(StepKind::CacheResult(uploads.clone()))])
+        .chain(result)
         .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
         .collect();
     Some(Job {
-        name: Some("Cache".to_owned()),
+        name: Some("Cache maintenance".to_owned()),
         needs,
         when: When::SaveBase,
         skip_on_draft: false,

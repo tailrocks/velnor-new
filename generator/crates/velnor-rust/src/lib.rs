@@ -33,6 +33,7 @@ mod policy;
 mod private_sources;
 mod reads;
 mod repo_profile;
+mod report;
 mod required_job;
 mod required_size;
 mod root_jobs;

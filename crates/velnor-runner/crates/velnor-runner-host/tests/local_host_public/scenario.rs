@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::HashMap;
+use std::future::Future;
 use std::time::{Duration, Instant};
 
 use bollard::Docker;
@@ -41,8 +42,22 @@ impl Scenario {
         Self::with(Fixture::new().await?).await
     }
 
+    pub(crate) async fn new_with_guest_hook() -> TestResult<Option<Self>> {
+        if skip_without_guest_hook() {
+            return Ok(None);
+        }
+        Self::new().await
+    }
+
     pub(crate) async fn running(program: Program) -> TestResult<Option<Self>> {
         Self::with(Fixture::running(program).await?).await
+    }
+
+    pub(crate) async fn running_with_guest_hook(program: Program) -> TestResult<Option<Self>> {
+        if skip_without_guest_hook() {
+            return Ok(None);
+        }
+        Self::running(program).await
     }
 
     async fn with(fixture: Option<Fixture>) -> TestResult<Option<Self>> {
@@ -88,8 +103,11 @@ impl Scenario {
     }
 
     pub(crate) fn start(&mut self, plan: Plan) {
+        self.start_on(self.fixture.docker.clone(), plan);
+    }
+
+    pub(crate) fn start_on(&mut self, docker: Docker, plan: Plan) {
         let (stop, wait) = tokio::sync::oneshot::channel::<()>();
-        let docker = self.fixture.docker.clone();
         let state = self.state.path().to_path_buf();
         self.stop = Some(stop);
         self.task = Some(tokio::spawn(async move {
@@ -124,6 +142,17 @@ impl Scenario {
         self.fixture.finish().await?;
         stopped??;
         Ok(())
+    }
+}
+
+fn skip_without_guest_hook() -> bool {
+    if cfg!(target_os = "macos") && std::env::var_os("VELNOR_TEST_JOB_HOOK_BINARY").is_none() {
+        eprintln!(
+            "SKIP Docker integration test: set VELNOR_TEST_JOB_HOOK_BINARY to a Linux velnor-job-start-hook binary and VELNOR_TEST_JOB_HOOK_ROOTFS to its Linux runtime root"
+        );
+        true
+    } else {
+        false
     }
 }
 
@@ -182,7 +211,7 @@ pub(crate) async fn wait_for_runner(
     }
 }
 
-async fn download(docker: &Docker, container: &str, path: &str) -> TestResult<Vec<u8>> {
+pub(crate) async fn download(docker: &Docker, container: &str, path: &str) -> TestResult<Vec<u8>> {
     let chunks: Vec<_> = docker
         .download_from_container(
             container,
@@ -206,15 +235,44 @@ pub(crate) async fn read_challenge(docker: &Docker, runner: &str) -> TestResult<
 }
 
 pub(crate) async fn wait_for_decision(docker: &Docker, runner: &str) -> TestResult<Decision> {
-    let started = Instant::now();
+    let path = format!("{CONTROL}/decision.json");
+    let docker = docker.clone();
+    let runner = runner.to_owned();
+    wait_for_decision_bytes(
+        move || {
+            let docker = docker.clone();
+            let runner = runner.clone();
+            let path = path.clone();
+            async move { download(&docker, &runner, &path).await }
+        },
+        Duration::from_secs(120),
+    )
+    .await
+}
+
+async fn wait_for_decision_bytes<F, Fut>(mut download: F, timeout: Duration) -> TestResult<Decision>
+where
+    F: FnMut() -> Fut,
+    Fut: Future<Output = TestResult<Vec<u8>>>,
+{
+    let deadline = Instant::now() + timeout;
     loop {
-        if let Ok(bytes) = download(docker, runner, &format!("{CONTROL}/decision.json")).await {
+        if let Ok(Ok(bytes)) = tokio::time::timeout_at(deadline.into(), download()).await {
             return Ok(serde_json::from_slice(&bytes)?);
         }
-        if started.elapsed() > Duration::from_secs(120) {
-            return Err("no decision within the hook's 120 s".into());
+        if Instant::now() >= deadline {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                "no decision within the hook's 120 s",
+            )
+            .into());
         }
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        tokio::time::sleep_until(
+            (Instant::now() + Duration::from_millis(100))
+                .min(deadline)
+                .into(),
+        )
+        .await;
     }
 }
 
@@ -275,3 +333,7 @@ pub(crate) async fn finish_job(docker: &Docker, runner: &str) -> TestResult<()> 
         .await?;
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "scenario_tests.rs"]
+mod tests;

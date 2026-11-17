@@ -116,7 +116,7 @@ fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestRes
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked"
+        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics"
     );
     assert_eq!(text.matches("cargo test --doc").count(), 1);
     let steps: Vec<&str> = text.split("\n      - ").collect();
@@ -329,7 +329,7 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
     );
     assert_eq!(
         audit
-            .matches("run: velnor-ci run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked")
+            .matches("run: 'velnor-ci run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'")
             .count(),
         2,
         "{audit}"

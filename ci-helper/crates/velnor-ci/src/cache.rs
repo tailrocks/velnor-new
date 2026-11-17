@@ -55,3 +55,14 @@ pub fn stale_entries(entries: &[CacheEntry], prefix: &str, keep: usize) -> Vec<u
 
 pub const KEEP_NEWEST: usize = 2;
 pub const MAX_PAGES: usize = 20;
+
+pub(crate) fn encode(text: &str) -> String {
+    text.bytes()
+        .map(|byte| match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                char::from(byte).to_string()
+            }
+            _ => format!("%{byte:02X}"),
+        })
+        .collect()
+}

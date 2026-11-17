@@ -8,7 +8,7 @@ use velnor_model::RepositoryIdentity;
 
 use super::program;
 
-pub(super) fn repository_name(root: &Path) -> RepositoryIdentity {
+pub fn repository_name(root: &Path) -> RepositoryIdentity {
     let remote = program(
         root,
         "git",
