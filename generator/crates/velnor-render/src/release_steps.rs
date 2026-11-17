@@ -9,6 +9,8 @@ use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 
 pub(crate) const TAG_PATTERN_HELPER: (u64, u64, u64) = (0, 1, 80);
 pub(crate) const RELEASED_VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
+pub(crate) const TAGGED_COMMIT_HELPER: (u64, u64, u64) = (0, 1, 81);
+pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
 const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
 const APP_TOKEN_VERSION: &str = "v3.3.0";
 pub(crate) const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
@@ -144,7 +146,7 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
 pub(crate) fn refuse_commands(
     roots: &[RootPlan],
     helper: &HelperVersion,
-    tags_released_version: bool,
+    tag_job: bool,
 ) -> RenderedStep {
     let files: Vec<String> = roots
         .iter()
@@ -169,6 +171,17 @@ pub(crate) fn refuse_commands(
                 })
         })
         .collect();
+    let prefixes: Vec<String> = roots
+        .iter()
+        .filter(|_| binds_tags && tag_job && helper.at_least(TAGGED_COMMIT_HELPER))
+        .map(|root| {
+            format!(
+                "--branch-prefix {} {}",
+                shell_word(&join(&root.root, RELEASE_PLZ_FILE)),
+                shell_word(&root.pr_branch_prefix)
+            )
+        })
+        .collect();
     let (name, env) = if binds_tags {
         let mut env = variables(&[
             ("GITHUB_TOKEN", "${{ github.token }}"),
@@ -183,10 +196,12 @@ pub(crate) fn refuse_commands(
                 .iter()
                 .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
         );
-        (
-            "Refuse a release-plz config that runs commands, changes the tag patterns or names another registry",
-            env,
-        )
+        let name = if prefixes.is_empty() {
+            "Refuse a release-plz config that runs commands, changes the tag patterns or names another registry"
+        } else {
+            "Refuse a release-plz config that runs commands, changes the tag patterns or the branch prefixes or names another registry"
+        };
+        (name, env)
     } else {
         ("Refuse a release-plz config that runs commands", Vec::new())
     };
@@ -199,9 +214,10 @@ pub(crate) fn refuse_commands(
                 files.join(" ")
             ))
             .chain(tags)
-            .chain(binds_tags.then(|| "--repo \"$REPOSITORY\" --manifests".to_owned()))
+            .chain(prefixes)
+            .chain(binds_tags.then(|| "--repo=\"$REPOSITORY\" --manifests".to_owned()))
             .chain(
-                (binds_tags && tags_released_version && helper.at_least(RELEASED_VERSIONS_HELPER))
+                (binds_tags && tag_job && helper.at_least(RELEASED_VERSIONS_HELPER))
                     .then(|| "--released-versions".to_owned()),
             )
             .collect::<Vec<_>>()
