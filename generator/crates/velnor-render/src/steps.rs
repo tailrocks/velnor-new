@@ -16,7 +16,7 @@ use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, cargo_step, reports_tests};
 use crate::gate::{
     PLAN_STEP, REPLAN_STEP, Setup, admission, condition, output, plan_read, plan_source,
-    sources_step,
+    sources_step, verdict_step,
 };
 use crate::permission_pairs;
 use crate::rules::{
@@ -37,8 +37,6 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
 
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
-const NEEDS_JSON: &str = "NEEDS_JSON";
-const GATE_SPEC: &str = "GATE_SPEC";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -248,7 +246,10 @@ fn step_body(kind: &StepKind, tests: bool, artifacts: ArtifactFormat) -> Rendere
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::HelperFromArtifact => download_helper(),
         StepKind::PublishHelper { binary } => publish_helper(binary),
-        StepKind::Verdict(spec) => verdict_step(spec),
+        StepKind::Verdict {
+            spec,
+            needs_max_bytes,
+        } => verdict_step(spec, *needs_max_bytes),
         StepKind::FailWhenANeedFailed => RenderedStep {
             name: "Fail when a Rust job failed or was cancelled".to_owned(),
             condition: Some(A_NEED_FAILED.to_owned()),
@@ -328,21 +329,6 @@ fn helper_step(command: HelperCommand) -> RenderedStep {
             HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
             _ => format!("velnor-ci {arguments}"),
         }),
-        ..RenderedStep::default()
-    }
-}
-
-fn verdict_step(spec: &velnor_model::VerdictSpec) -> RenderedStep {
-    RenderedStep {
-        name: "velnor-ci gate".to_owned(),
-        env: vec![
-            (
-                NEEDS_JSON.to_owned(),
-                Value::Expr("${{ toJSON(needs) }}".to_owned()),
-            ),
-            (GATE_SPEC.to_owned(), Value::Text(spec.text())),
-        ],
-        run: Some(format!("velnor-ci gate --spec-env {GATE_SPEC}")),
         ..RenderedStep::default()
     }
 }

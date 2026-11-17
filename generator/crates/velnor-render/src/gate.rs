@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, VerdictSpec, When};
+
+use crate::rules::{RenderedStep, Value};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -14,6 +16,8 @@ const PUSH: &str = "push";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const BASE_STEP: &str = "base";
 const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
+const NEEDS_JSON: &str = "NEEDS_JSON";
+const GATE_SPEC: &str = "GATE_SPEC";
 const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 const ACTIVE_EVENT: &str = "(github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed'))";
@@ -23,6 +27,24 @@ pub(crate) fn sources_step(slug: &RootSlug) -> String {
 
 pub(crate) fn sources_save_step(slug: &RootSlug) -> String {
     format!("sources_save_{slug}")
+}
+
+pub(crate) fn verdict_step(spec: &VerdictSpec, needs_max_bytes: usize) -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci gate".to_owned(),
+        env: vec![
+            (
+                NEEDS_JSON.to_owned(),
+                Value::BoundedExpr {
+                    text: "${{ toJSON(needs) }}".to_owned(),
+                    max_bytes: needs_max_bytes,
+                },
+            ),
+            (GATE_SPEC.to_owned(), Value::Text(spec.text())),
+        ],
+        run: Some(format!("velnor-ci gate --spec-env {GATE_SPEC}")),
+        ..RenderedStep::default()
+    }
 }
 
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
