@@ -6,13 +6,15 @@ use serde_json::{Value, json};
 use std::fs;
 use std::os::unix::fs::{PermissionsExt, symlink};
 use std::process::Command;
-use velnor_ci::report::{LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
+use velnor_ci::inputs::{RESTORE_WITNESS, SNAPSHOT};
+use velnor_ci::report::LaneMetrics;
 use velnor_ci::telemetry::INVOCATIONS;
 
 mod artifacts;
 mod downloads;
 mod links;
 mod roots;
+mod targets;
 
 fn cache() -> Value {
     json!([{"family":"target","root":".","restore_step":"restore","save_step":"save"}])
@@ -92,7 +94,7 @@ fn snapshot_missing_is_cold_but_parse_and_read_errors_fail_closed()
 -> Result<(), Box<dyn std::error::Error>> {
     for case in ["missing", "malformed", "read-error"] {
         let repo = fixture(&format!("report-snapshot-{case}"))?;
-        let snapshot = repo.root().join(SNAPSHOT);
+        let snapshot = repo.root().join("target").join(SNAPSHOT);
         match case {
             "malformed" => {
                 fs::create_dir_all(snapshot.parent().ok_or("snapshot parent")?)?;
@@ -183,7 +185,7 @@ fn restore_witness_separates_prior_changes_from_changes_during_warm_cargo()
 
     let during = base.fork("report-witness-during");
     restore(&during);
-    assert!(during.root().join(RESTORE_WITNESS).is_file());
+    assert!(during.root().join("target").join(RESTORE_WITNESS).is_file());
     during.write("src/lib.rs", "pub fn changed() {}\n");
     let during_event = event(&during, "Compiling", "demo", "0.1.0", true);
     let changed = progress(&during, &[during_event])?;

@@ -6,7 +6,8 @@ use serde_json::json;
 use std::fs;
 use std::os::unix::fs::symlink;
 use std::process::{Command, Output};
-use velnor_ci::report::{LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
+use velnor_ci::inputs::{RESTORE_WITNESS, SNAPSHOT};
+use velnor_ci::report::LaneMetrics;
 
 type ResultTest = Result<(), Box<dyn std::error::Error>>;
 fn cli(repo: &Repo, args: &[&str]) -> Output {
@@ -56,12 +57,15 @@ fn report_preserves_restored_inputs_after_save_and_measures_failed_cargo_output(
     repo.git(&["add", "."]);
     assert!(cli(&repo, &["inputs", "save"]).status.success());
     assert!(cli(&repo, &["inputs", "restore"]).status.success());
-    let before = fs::read(repo.root().join(SNAPSHOT))?;
-    let witness = fs::read(repo.root().join(RESTORE_WITNESS))?;
+    let before = fs::read(repo.root().join("target").join(SNAPSHOT))?;
+    let witness = fs::read(repo.root().join("target").join(RESTORE_WITNESS))?;
     repo.write("src/lib.rs", "pub fn changed() {}\n");
     assert!(cli(&repo, &["inputs", "save"]).status.success());
-    assert_eq!(fs::read(repo.root().join(SNAPSHOT))?, before);
-    assert_eq!(fs::read(repo.root().join(RESTORE_WITNESS))?, witness);
+    assert_eq!(fs::read(repo.root().join("target").join(SNAPSHOT))?, before);
+    assert_eq!(
+        fs::read(repo.root().join("target").join(RESTORE_WITNESS))?,
+        witness
+    );
     let fixture = repo.root().join("cargo-fixture");
     symlink("/bin/sh", &fixture)?;
     let script = interrupted_output(&repo)?;

@@ -54,6 +54,12 @@ Observed report fields such as `requested_key`, `hit`, and `usable` are
 rejected as plan input. `VELNOR_REPORT_STEPS` supplies the actual step outputs
 and outcomes. The report resolves keys, restore hits, and save outcomes before
 collecting restored input provenance, even when no Cargo invocation ran.
+The inputs manifest, restored snapshot, and pre-Cargo witness live under
+`.velnor/` in each root's configured target directory. The report resolves that
+directory from the detected Cargo configuration. Inputs save and restore use
+`--target-dir` relative to their Cargo working directory; tracked input scope
+remains the Cargo root even when the target is outside that folder. Saving
+after Cargo preserves both the restored snapshot and the pre-Cargo witness.
 Target data is usable only when a restored snapshot exists and the restore
 step reports a hit. A stale snapshot with a cache miss remains cold. Snapshot
 parse or read errors make provenance unverifiable; a missing snapshot is cold.

@@ -3,8 +3,8 @@
 
 use crate::cargo_artifacts::{ArtifactTap, ProgressKind};
 use crate::error::CiError;
-use crate::inputs::{SYMLINK_MODE, parse_inputs};
-use crate::report::{Hit, LaneMetrics, RESTORE_WITNESS, SNAPSHOT};
+use crate::inputs::{RESTORE_WITNESS, SNAPSHOT, SYMLINK_MODE, parse_inputs};
+use crate::report::{Hit, LaneMetrics};
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -41,8 +41,9 @@ fn collect_root(
     let (_, current) = super::inputs::worktree_files(&root_path)?;
     let lock = root.manifest.sibling(&RepoPath::from_static("Cargo.lock"));
     let symlink_lock = report.symlink_locks.contains(&lock);
-    let saved = read_snapshot(&root_path.join(SNAPSHOT))?;
-    let saved_witness = read_witness(&root_path.join(RESTORE_WITNESS))?;
+    let target = checkout.join(root.target_dir.as_str());
+    let saved = read_snapshot(&target.join(SNAPSHOT))?;
+    let saved_witness = read_witness(&target.join(RESTORE_WITNESS))?;
     let usable = saved.is_some();
     let unverifiable_links = !current.links.is_empty()
         || current.unverifiable_links > 0

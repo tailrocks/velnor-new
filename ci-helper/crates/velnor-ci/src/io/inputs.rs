@@ -11,14 +11,14 @@ use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
 
 use crate::error::CiError;
 use crate::inputs::{
-    SavedInput, Tracked, TrackedFile, format_inputs, is_representable, parse_inputs,
-    parse_ls_files, plan_restore, with_worktree_blobs,
+    INPUTS_FILE, RESTORE_WITNESS, SNAPSHOT, SavedInput, Tracked, TrackedFile, format_inputs,
+    is_representable, parse_inputs, parse_ls_files, plan_restore, with_worktree_blobs,
 };
 use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let (top, tracked) = worktree_files(root)?;
-    let path = root.join(target).join(".velnor/inputs.tsv");
+    let path = root.join(target).join(INPUTS_FILE);
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -56,7 +56,7 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
         tracked.links.len(),
-        target.join(".velnor/inputs.tsv").display(),
+        target.join(INPUTS_FILE).display(),
         tracked.absent.len(),
         tracked.unsupported,
         tracked.submodules
@@ -100,23 +100,23 @@ pub(super) fn input_witness(tracked: &Tracked) -> String {
 }
 
 pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    match fs::remove_file(root.join(crate::report::SNAPSHOT)) {
+    match fs::remove_file(root.join(target).join(SNAPSHOT)) {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(CiError::new(error.to_string())),
     }
-    match fs::remove_file(root.join(crate::report::RESTORE_WITNESS)) {
+    match fs::remove_file(root.join(target).join(RESTORE_WITNESS)) {
         Ok(()) => {}
         Err(error) if error.kind() == ErrorKind::NotFound => {}
         Err(error) => return Err(CiError::new(error.to_string())),
     }
-    let path = root.join(target).join(".velnor/inputs.tsv");
+    let path = root.join(target).join(INPUTS_FILE);
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
             return Ok(format!(
                 "no {}; nothing restored (cold run)\n",
-                target.join(".velnor/inputs.tsv").display()
+                target.join(INPUTS_FILE).display()
             ));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
@@ -124,7 +124,7 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let saved = parse_inputs(&text)?;
     let (top, tracked) = worktree_files(root)?;
     fs::write(
-        root.join(crate::report::RESTORE_WITNESS),
+        root.join(target).join(RESTORE_WITNESS),
         input_witness(&tracked),
     )
     .map_err(|e| CiError::new(format!("cannot preserve input witness: {e}")))?;
@@ -135,7 +135,7 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
             plan.links_changed
         ));
     }
-    fs::write(root.join(crate::report::SNAPSHOT), &text)
+    fs::write(root.join(target).join(SNAPSHOT), &text)
         .map_err(|e| CiError::new(format!("cannot preserve restored inputs: {e}")))?;
     for input in &plan.restore {
         set_modified_ns(&top.join(&input.file.path), input.mtime_ns)?;
