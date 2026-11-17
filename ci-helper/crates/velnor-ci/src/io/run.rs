@@ -97,12 +97,29 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
     let (sender, receiver) = mpsc::channel();
     let mut slots = Vec::new();
+    let mut reports = Vec::new();
     if let Some(from) = child.stdout.take() {
         let counted = args.require_doctests.then(|| Arc::clone(&doctests));
-        watch_stream(&mut slots, from, std::io::stdout(), &log, counted, &sender);
+        watch_stream(
+            &mut slots,
+            &mut reports,
+            from,
+            std::io::stdout(),
+            &log,
+            counted,
+            &sender,
+        );
     }
     if let Some(from) = child.stderr.take() {
-        watch_stream(&mut slots, from, std::io::stderr(), &log, None, &sender);
+        watch_stream(
+            &mut slots,
+            &mut reports,
+            from,
+            std::io::stderr(),
+            &log,
+            None,
+            &sender,
+        );
     }
     drop(sender);
     let handle = signals.handle();
@@ -111,7 +128,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     handle.close();
     let status = status.map_err(|e| (2, format!("cannot wait for {}: {e}", args.command[0])))?;
     let mut code = exit_code(status);
-    let (mut lost, console, counts) = collect(&receiver, &slots);
+    let (mut lost, console, counts) = collect(&receiver, &slots, &reports);
     if runs_nextest(&args.command)
         && let Some(counts) = counts
     {
@@ -203,27 +220,20 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     });
 }
 
-struct Finished {
-    pumped: Pumped,
-}
-
 fn collect(
-    receiver: &mpsc::Receiver<Finished>,
+    receiver: &mpsc::Receiver<()>,
     slots: &[Arc<Mutex<Option<TestCounts>>>],
+    reports: &[Arc<Mutex<Pumped>>],
 ) -> (
     Option<std::io::Error>,
     Option<std::io::Error>,
     Option<TestCounts>,
 ) {
-    let mut lost = None;
-    let mut console = None;
     let mut waiting = slots.len();
     let deadline = Instant::now() + pump_grace();
     while waiting > 0 {
         match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
-            Ok(finished) => {
-                lost = lost.or(finished.pumped.failure);
-                console = console.or(finished.pumped.console);
+            Ok(()) => {
                 waiting -= 1;
             }
             Err(_) => break,
@@ -234,6 +244,14 @@ fn collect(
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     });
+    let mut lost = None;
+    let mut console = None;
+    for report in reports {
+        if let Ok(mut report) = report.lock() {
+            lost = lost.or(report.failure.take());
+            console = console.or(report.console.take());
+        }
+    }
     (lost, console, counts)
 }
 
@@ -253,15 +271,18 @@ fn exit_code(status: std::process::ExitStatus) -> i32 {
 
 fn watch_stream(
     slots: &mut Vec<Arc<Mutex<Option<TestCounts>>>>,
+    reports: &mut Vec<Arc<Mutex<Pumped>>>,
     from: impl Read + Send + 'static,
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
-    done: &mpsc::Sender<Finished>,
+    done: &mpsc::Sender<()>,
 ) {
-    let slot = Arc::new(Mutex::new(None));
-    slots.push(Arc::clone(&slot));
-    spawn_pump(from, to, log, count, slot, done.clone());
+    let reported = Arc::new(Mutex::new(Pumped::default()));
+    reports.push(Arc::clone(&reported));
+    let parsed = Arc::new(Mutex::new(None));
+    slots.push(parsed.clone());
+    spawn_pump(from, to, log, count, parsed, reported, done.clone());
 }
 
 fn spawn_pump(
@@ -270,11 +291,19 @@ fn spawn_pump(
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
     parsed: Arc<Mutex<Option<TestCounts>>>,
-    done: mpsc::Sender<Finished>,
+    reported: Arc<Mutex<Pumped>>,
+    done: mpsc::Sender<()>,
 ) {
     let log = Arc::clone(log);
     thread::spawn(move || {
-        let pumped = pump_counted(from, to, &log, count.as_deref(), Some(&parsed));
-        done.send(Finished { pumped }).ok();
+        pump_counted(
+            from,
+            to,
+            &log,
+            count.as_deref(),
+            Some(&parsed),
+            Some(&reported),
+        );
+        done.send(()).ok();
     });
 }

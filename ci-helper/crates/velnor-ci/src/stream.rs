@@ -16,7 +16,7 @@ pub struct Pumped {
 }
 
 pub fn pump<L: Write>(from: impl Read, to: impl Write, log: &Mutex<L>) -> Option<Error> {
-    pump_counted(from, to, log, None, None).failure
+    pump_counted(from, to, log, None, None, None).failure
 }
 
 pub fn pump_counted<L: Write>(
@@ -25,6 +25,7 @@ pub fn pump_counted<L: Write>(
     log: &Mutex<L>,
     count: Option<&Mutex<DoctestCount>>,
     parsed: Option<&Mutex<Option<TestCounts>>>,
+    reported: Option<&Mutex<Pumped>>,
 ) -> Pumped {
     let mut tap = SummaryTap::default();
     let mut buffer = [0_u8; CHUNK];
@@ -42,6 +43,7 @@ pub fn pump_counted<L: Write>(
             Err(error) if error.kind() == ErrorKind::Interrupted => continue,
             Err(error) => {
                 failed = failed.or(Some(error));
+                publish(reported, &failed, &console);
                 break;
             }
         };
@@ -52,11 +54,13 @@ pub fn pump_counted<L: Write>(
             && let Err(error) = to.write_all(chunk).and_then(|()| to.flush())
         {
             console = Some(error);
+            publish(reported, &failed, &console);
         }
         if let Ok(mut file) = log.lock()
             && let Err(error) = file.write_all(chunk)
         {
             failed.get_or_insert(error);
+            publish(reported, &failed, &console);
         }
         if let Some(Ok(mut seen)) = count.map(Mutex::lock) {
             seen.feed(chunk);
@@ -67,6 +71,25 @@ pub fn pump_counted<L: Write>(
         failure: failed,
         console,
     }
+}
+
+fn publish(reported: Option<&Mutex<Pumped>>, failure: &Option<Error>, console: &Option<Error>) {
+    if let Some(reported) = reported
+        && let Ok(mut reported) = reported.lock()
+    {
+        reported.failure = reported
+            .failure
+            .take()
+            .or_else(|| failure.as_ref().map(copy_error));
+        reported.console = reported
+            .console
+            .take()
+            .or_else(|| console.as_ref().map(copy_error));
+    }
+}
+
+fn copy_error(error: &Error) -> Error {
+    Error::new(error.kind(), error.to_string())
 }
 
 fn remember(parsed: Option<&Mutex<Option<TestCounts>>>, counts: Option<TestCounts>) {

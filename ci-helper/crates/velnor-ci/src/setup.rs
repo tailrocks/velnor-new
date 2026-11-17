@@ -226,6 +226,7 @@ pub fn missing_toolchain(
 #[derive(Debug, Default)]
 pub struct DoctestCount {
     line: Vec<u8>,
+    pending: u64,
     running: u64,
     ignored: u64,
 }
@@ -243,6 +244,8 @@ impl DoctestCount {
 
     pub fn end_stream(&mut self) {
         self.end_line();
+        self.running += self.pending;
+        self.pending = 0;
     }
 
     #[must_use]
@@ -252,8 +255,15 @@ impl DoctestCount {
 
     fn end_line(&mut self) {
         let line = String::from_utf8_lossy(&self.line);
-        self.running += doctests_in(&line);
-        self.ignored += ignored_in(&line);
+        self.pending += doctests_in(&line);
+        if crate::logscan::strip_ansi(&line)
+            .trim()
+            .starts_with("test result:")
+        {
+            self.running += self.pending;
+            self.pending = 0;
+            self.ignored += ignored_in(&line);
+        }
         self.line.clear();
     }
 }

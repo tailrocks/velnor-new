@@ -110,6 +110,14 @@ fn an_ignored_doctest_does_not_count_as_a_doctest_that_ran() {
 }
 
 #[test]
+fn colored_doctest_result_lines_commit_running_counts_before_the_pipe_grace() {
+    let passed = "printf '\\033[32mrunning 1 test\\033[0m\\n\\033[32mtest result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out\\033[0m\\n'; sleep 3 & exit 0";
+    assert_eq!(doctests("colored-passed", passed).status.code(), Some(0));
+    let ignored = "printf '\\033[32mrunning 1 test\\033[0m\\n\\033[32mtest result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out\\033[0m\\n'; sleep 3 & exit 0";
+    assert_eq!(doctests("colored-ignored", ignored).status.code(), Some(1));
+}
+
+#[test]
 fn a_doctest_line_still_being_written_when_the_grace_ends_is_not_counted() {
     let body = "printf 'running 2'; (sleep 3; printf -- '-not\\n') & exit 0";
     let output = doctests("partial", body);
