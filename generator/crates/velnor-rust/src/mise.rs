@@ -221,7 +221,11 @@ fn runs_a_command(value: &Value) -> bool {
 
 fn literal_config(bytes: &[u8]) -> Result<toml::Table, Reason> {
     let parsed = table(bytes)?;
-    if parsed.values().any(is_template) {
+    if parsed
+        .iter()
+        .filter(|(key, _)| key.as_str() != "tasks")
+        .any(|(_, value)| is_template(value))
+    {
         return Err(Reason::MiseTemplate);
     }
     Ok(parsed)

@@ -42,6 +42,15 @@ fn plan_rejects_a_variable_template_that_executes_before_installation() -> TestR
 }
 
 #[test]
+fn plan_accepts_a_task_template_because_mise_renders_it_when_the_task_runs() -> TestResult {
+    let facts = detect(&locked_mise_view(
+        "[tools]\nrust = \"1.99.1\"\n[vars]\nmode = \"release\"\n[tasks.test]\nrun = \"echo {{ vars.mode }}\"\n",
+    )?)?;
+    assert_eq!(facts.tools.tools["rust"].requested, ["1.99.1"]);
+    Ok(())
+}
+
+#[test]
 fn plan_accepts_a_plain_tool_version_with_its_matching_lock() -> TestResult {
     let facts = detect(&locked_mise_view("[tools]\nrust = \"1.99.1\"\n")?)?;
     assert_eq!(facts.tools.tools["rust"].requested, ["1.99.1"]);
