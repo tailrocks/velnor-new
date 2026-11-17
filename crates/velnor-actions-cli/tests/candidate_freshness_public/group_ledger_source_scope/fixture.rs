@@ -159,7 +159,9 @@ struct Parts {
 impl Parts {
     fn new(run_key: &str) -> Result<Self, Box<dyn Error>> {
         let task_id = task_id_for_internal("lint", "source-scope")?;
-        let task_digest = digest_b3(b"group-ledger-source-scope-task");
+        let (argv, toolchain_inputs) = execution();
+        let task_digest =
+            task_digest_for_execution(&task_id, &argv, &toolchain_id(&toolchain_inputs)?)?;
         let input_digest = digest_b3(b"group-ledger-source-scope-input");
         let closure_digest = digest_b3(b"group-ledger-source-scope-closure");
         let planned = PlannedPlatform::new("ubuntu-26.04", "x86_64-unknown-linux-gnu")?;
@@ -298,32 +300,13 @@ impl Parts {
     }
 
     fn manifest(&self) -> Result<TaskExecutionManifestV1, Box<dyn Error>> {
-        let toolchain_inputs = ToolchainInputs {
-            tools: vec!["rust@1.89.0".to_owned()],
-            components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
-            compile_driver: "cargo".to_owned(),
-            test_runner: "cargo_test".to_owned(),
-        };
-        let argv = vec![
-            "mise".to_owned(),
-            "--no-config".to_owned(),
-            "--no-env".to_owned(),
-            "--no-hooks".to_owned(),
-            "exec".to_owned(),
-            "rust@1.89.0".to_owned(),
-            "--".to_owned(),
-            "cargo".to_owned(),
-            "test".to_owned(),
-            "--locked".to_owned(),
-        ];
-        let task_digest =
-            task_digest_for_execution(&self.task_id, &argv, &toolchain_id(&toolchain_inputs)?)?;
+        let (argv, toolchain_inputs) = execution();
         let matrix_id = format!("stack:rust|task:{}", self.task_id);
         let matrix_key = matrix_key_for_id(&matrix_id)?;
         let mut entry = TaskExecutionManifestEntryV1 {
             task_id: self.task_id.clone(),
             execution_digest: String::new(),
-            task_digest,
+            task_digest: self.task_digest.clone(),
             toolchain_inputs,
             argv,
             env: BTreeMap::from([
@@ -364,6 +347,28 @@ impl Parts {
         manifest.validate()?;
         Ok(manifest)
     }
+}
+
+fn execution() -> (Vec<String>, ToolchainInputs) {
+        let toolchain_inputs = ToolchainInputs {
+            tools: vec!["rust@1.89.0".to_owned()],
+            components: vec!["clippy".to_owned(), "rustfmt".to_owned()],
+            compile_driver: "cargo".to_owned(),
+            test_runner: "cargo_test".to_owned(),
+        };
+        let argv = vec![
+            "mise".to_owned(),
+            "--no-config".to_owned(),
+            "--no-env".to_owned(),
+            "--no-hooks".to_owned(),
+            "exec".to_owned(),
+            "rust@1.89.0".to_owned(),
+            "--".to_owned(),
+            "cargo".to_owned(),
+            "test".to_owned(),
+            "--locked".to_owned(),
+        ];
+    (argv, toolchain_inputs)
 }
 
 fn success(output: &Output, what: &str) -> Result<(), Box<dyn Error>> {
