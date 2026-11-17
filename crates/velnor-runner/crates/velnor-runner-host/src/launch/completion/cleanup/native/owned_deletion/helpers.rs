@@ -237,10 +237,15 @@ async fn list_volume_users(docker: &Docker, volume: &str) -> Result<Vec<String>,
     })))
     .await?
     .map_err(|error| docker_error("volume helper list", volume, &error))?;
-    Ok(listed
+    listed
         .into_iter()
-        .filter_map(|container| container.id)
-        .collect())
+        .map(|container| {
+            container
+                .id
+                .filter(|id| !id.is_empty())
+                .ok_or(HostError::Docker)
+        })
+        .collect()
 }
 
 pub(super) async fn stop_helper(context: &Context<'_>, id: &str) -> Result<(), HostError> {

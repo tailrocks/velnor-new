@@ -5,6 +5,9 @@ use super::super::super::TestResult;
 use super::helper_stub::Life;
 use super::{CancelledObservation, HelperSpec, Kind, run_cancelled_before_start_scenario};
 
+#[path = "helper_cases_review.rs"]
+mod review;
+
 const CASE_ENV: &str = "VELNOR_HELPER_CASE";
 const FOREIGN_ENGINE: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
@@ -61,6 +64,23 @@ fn helper_case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
         "unlisted_unmounted" => (vec![unmounted(false), publication], true),
         "lookalike_publication" => (vec![foreign("execution-publication")], false),
         "lookalike_initializer" => (vec![foreign("storage-initializer")], false),
+        "missing_id" => (
+            vec![
+                publication,
+                HelperSpec {
+                    missing_id: true,
+                    ..foreign("resource-probe")
+                },
+            ],
+            false,
+        ),
+        "volume_error" => (
+            vec![HelperSpec {
+                listed: false,
+                ..foreign("resource-probe")
+            }],
+            false,
+        ),
         "foreign_beside_journaled" => (vec![publication, foreign("resource-probe")], false),
         "journaled_foreign_engine" => (
             vec![HelperSpec {

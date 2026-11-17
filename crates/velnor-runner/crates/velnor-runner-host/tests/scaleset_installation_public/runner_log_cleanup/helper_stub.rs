@@ -38,6 +38,7 @@ pub(crate) struct HelperSpec {
     pub(crate) kind: Kind,
     pub(crate) mounts: bool,
     pub(crate) listed: bool,
+    pub(crate) missing_id: bool,
     pub(crate) life: Life,
     pub(crate) engine: Option<&'static str>,
     pub(crate) operation: Option<&'static str>,
@@ -50,6 +51,7 @@ impl HelperSpec {
             kind,
             mounts: true,
             listed: true,
+            missing_id: false,
             life: Life::Created,
             engine: None,
             operation: None,
@@ -61,6 +63,7 @@ impl HelperSpec {
 struct Helper {
     id: String,
     name: String,
+    missing_id: bool,
     body: Value,
     list_volumes: Vec<String>,
     mount_volumes: Vec<String>,
@@ -132,6 +135,7 @@ fn build_helper(index: usize, spec: &HelperSpec, instance_id: &str) -> Helper {
     Helper {
         id,
         name,
+        missing_id: spec.missing_id,
         body,
         list_volumes: if spec.listed { mounted } else { Vec::new() },
         mount_volumes: actual,
@@ -234,7 +238,13 @@ fn write_container_response(
                         .iter()
                         .any(|name| query.contains(name.as_str()))
                 })
-                .map(|helper| json!({"Id": helper.id}))
+                .map(|helper| {
+                    if helper.missing_id {
+                        json!({})
+                    } else {
+                        json!({"Id": helper.id})
+                    }
+                })
                 .collect();
             write_json(stream, 200, "OK", &Value::Array(listed))
         }

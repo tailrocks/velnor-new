@@ -25,12 +25,13 @@ pub(crate) struct CancelledObservation {
     pub(crate) phase: String,
     pub(crate) lease: String,
     pub(crate) initializer: String,
+    pub(crate) reservation: String,
 }
 
 impl CancelledObservation {
     pub(crate) fn encode(&self) -> String {
         format!(
-            "OBS {} {} {} {} {} {} {} {}",
+            "OBS {} {} {} {} {} {} {} {} {}",
             self.helpers_left,
             self.unmounted_left,
             self.stops,
@@ -38,7 +39,8 @@ impl CancelledObservation {
             self.present_left,
             self.phase,
             self.lease,
-            self.initializer
+            self.initializer,
+            self.reservation
         )
     }
 
@@ -60,6 +62,7 @@ impl CancelledObservation {
             phase: fields.next()?.to_owned(),
             lease: fields.next()?.to_owned(),
             initializer: fields.next()?.to_owned(),
+            reservation: fields.next()?.to_owned(),
         })
     }
 }
@@ -72,7 +75,7 @@ async fn query_first(conn: &turso::Connection, sql: &str) -> TestResult<String> 
     })
 }
 
-async fn journal_state(journal_path: &Path) -> TestResult<[String; 3]> {
+async fn journal_state(journal_path: &Path) -> TestResult<[String; 4]> {
     let db = turso::Builder::new_local(journal_path.to_str().ok_or("journal path utf8")?)
         .build()
         .await?;
@@ -80,6 +83,7 @@ async fn journal_state(journal_path: &Path) -> TestResult<[String; 3]> {
     Ok([
         query_first(&conn, "SELECT phase FROM resource_probe_operations WHERE helper_role = 'execution-publication'").await?,
         query_first(&conn, "SELECT state FROM host_operation_leases WHERE singleton = 1").await?,
+        query_first(&conn, "SELECT state FROM capacity_reservations WHERE id = 2").await?,
         query_first(&conn, "SELECT remove_state || '/' || abort_state FROM capacity_reservation_storage_initialization WHERE reservation_id = 2").await?,
     ])
 }
@@ -108,7 +112,7 @@ pub(crate) fn run_cancelled_before_start_scenario(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let [phase, lease, initializer] = runtime.block_on(async {
+    let [phase, lease, reservation, initializer] = runtime.block_on(async {
         let journal = seed::seed_completed_launch_with(&journal_path, &connection, 2).await?;
         let instance_id = helper_seed::seed_helper_rows(
             &journal_path,
@@ -137,7 +141,7 @@ pub(crate) fn run_cancelled_before_start_scenario(
             let done = scenario_done(&stub, expect_success)?
                 && if expect_success {
                     matches!(
-                        journal_state(&journal_path).await?[2].as_str(),
+                        journal_state(&journal_path).await?[3].as_str(),
                         "-" | "removed/not_requested"
                     )
                 } else {
@@ -171,6 +175,7 @@ pub(crate) fn run_cancelled_before_start_scenario(
         phase,
         lease,
         initializer,
+        reservation,
     })
 }
 
