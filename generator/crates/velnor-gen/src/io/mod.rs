@@ -287,11 +287,8 @@ pub fn view_of(
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
     for source in build_script_sources(&view) {
-        match read_files(root, std::slice::from_ref(&source)) {
-            Ok(files) => view.files.extend(files),
-            Err(Error::NotRegular(_)) => {}
-            Err(error) => return Err(error),
-        }
+        view.files
+            .extend(read_files(root, std::slice::from_ref(&source))?);
     }
     add_manifests(&mut view, |paths| read_files(root, paths))?;
     Ok((view, recorded))
