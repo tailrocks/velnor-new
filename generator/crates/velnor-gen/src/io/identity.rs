@@ -40,5 +40,5 @@ fn repository_path(url: &str) -> Option<String> {
         .collect();
     let owner = *parts.get(parts.len().checked_sub(2)?)?;
     let repo = parts.last()?.strip_suffix(".git").unwrap_or(parts.last()?);
-    (!owner.is_empty() && !repo.is_empty()).then(|| format!("{owner}/{repo}"))
+    (!owner.is_empty() && !repo.is_empty()).then(|| format!("{owner}/{repo}").to_ascii_lowercase())
 }
