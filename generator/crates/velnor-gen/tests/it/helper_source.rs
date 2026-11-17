@@ -87,19 +87,15 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
     let text = text_of(&view)?;
     assert!(job_ids(&text).contains(&"policy"));
     let jobs = job_ids(&text);
-    assert_eq!(
-        text.matches("Install velnor-ci 0.1.81").count(),
-        jobs.len() - 1
-    );
-    for pair in jobs.windows(2) {
-        let job = pair[0];
+    assert_eq!(text.matches("Install velnor-ci 0.1.81").count(), jobs.len());
+    for (index, job) in jobs.iter().enumerate() {
         let start = text.find(&format!("  {job}:\n")).ok_or("job missing")?;
-        let end = text
-            .find(&format!("  {}:\n", pair[1]))
-            .ok_or("next job missing")?;
+        let end = jobs.get(index + 1).map_or(Ok(text.len()), |next| {
+            text.find(&format!("  {next}:\n")).ok_or("next job missing")
+        })?;
         let body = &text[start..end];
         assert!(body.contains("Install velnor-ci 0.1.81"), "{job}");
-        if matches!(job, "rust-root" | "rust-ci_helper" | "rust-inputs-audit") {
+        if matches!(*job, "rust-root" | "rust-ci_helper" | "rust-inputs-audit") {
             let restore = body
                 .find("velnor-ci inputs restore")
                 .ok_or("no inputs restore")?;
@@ -126,7 +122,11 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
         assert!(step.contains("working-directory: ci-helper"), "{step}");
     }
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
-    assert!(!verdict.contains("velnor-ci"));
+    assert!(verdict.contains("Install velnor-ci 0.1.81"));
+    assert!(verdict.contains("velnor-ci gate --spec-env GATE_SPEC"));
+    assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
+    assert!(!verdict.contains("Check out"));
+    assert!(!verdict.contains("download-artifact"));
     Ok(())
 }
 
@@ -183,7 +183,13 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
         job_ids(&text),
         ["rust-plan", "rust-helper", "rust", "required"]
     );
-    assert_eq!(text.matches("Install velnor-ci").count(), 3);
+    assert_eq!(text.matches("Install velnor-ci").count(), 4);
+    let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
+    assert!(verdict.contains("Install velnor-ci 0.1.81"));
+    assert!(verdict.contains("velnor-ci gate --spec-env GATE_SPEC"));
+    assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
+    assert!(!verdict.contains("Check out"));
+    assert!(!verdict.contains("download-artifact"));
     let helper = text
         .split("  rust-helper:\n")
         .nth(1)

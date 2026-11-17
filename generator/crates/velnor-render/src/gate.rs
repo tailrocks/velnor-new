@@ -7,6 +7,7 @@ const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
 pub(crate) const CACHE_DEBUG_ON: &str = "vars.VELNOR_CACHE_DEBUG == '1'";
 const NOT_CANCELLED: &str = "!cancelled()";
+const ALWAYS: &str = "always()";
 const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -15,31 +16,13 @@ const ON_DEFAULT_BRANCH: &str =
     "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
 pub(crate) fn output(slug: &RootSlug, need: GateNeed) -> String {
-    if need.is_global() {
-        format!("rust_{}", need_name(need))
-    } else {
-        format!("rust_{slug}_{}", need_name(need))
-    }
+    need.output_name(slug)
 }
 
 pub(crate) fn plan_source(from: &PlanFrom) -> String {
     match from {
         PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
         PlanFrom::Job(job) => format!("needs.{job}.outputs"),
-    }
-}
-
-fn need_name(need: GateNeed) -> &'static str {
-    match need {
-        GateNeed::Selected => "mode",
-        GateNeed::Doctests => "doctests",
-        GateNeed::DoctestsKnown => "doctests_known",
-        GateNeed::Docs => "docs",
-        GateNeed::TestFilter => "test_filter",
-        GateNeed::PackageArgs => "package_args",
-        GateNeed::Deny => "deny",
-        GateNeed::Machete => "machete",
-        GateNeed::Policy => "policy",
     }
 }
 
@@ -52,6 +35,7 @@ pub(crate) fn condition(
     let mut parts = Vec::new();
     match when {
         When::Success => {}
+        When::Always => parts.push(ALWAYS.to_owned()),
         When::NotCancelled => {
             parts.push(NOT_CANCELLED.to_owned());
             if after_setup {
@@ -119,7 +103,10 @@ fn gate_parts(gate: &Gate) -> Vec<String> {
                 format!("(contains({args}, ' -p {package} ') || contains({args}, ' --workspace '))")
             }));
         }
-        GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+        GateNeed::TestFilter
+        | GateNeed::PackageArgs
+        | GateNeed::DoctestsKnown
+        | GateNeed::TestsExpected => {
             parts.push(format!("{} != ''", read(gate.need)));
         }
     }
