@@ -178,8 +178,49 @@ fn failed_setup_still_writes_metrics_with_unknown_provenance() {
     let repo = Repo::new("report-failed-setup");
     assert!(cli(&repo, &["report"]).status.success());
     let metrics = read(&repo);
-    assert_ne!(metrics.diagnostics, [] as [String; 0]);
+    assert_eq!(metrics.first_cargo_seconds, None);
     assert_eq!(metrics.violations, [] as [String; 0]);
+}
+
+#[test]
+fn local_report_does_not_contact_github_even_with_an_ambient_token() -> ResultTest {
+    let repo = Repo::new("report-local-no-api");
+    let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
+    listener.set_nonblocking(true)?;
+    let address = listener.local_addr()?;
+    let finished = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stopped = finished.clone();
+    let server = std::thread::spawn(move || {
+        use std::io::{Read, Write};
+        let mut contacted = false;
+        while !stopped.load(std::sync::atomic::Ordering::SeqCst) {
+            if let Ok((mut stream, _)) = listener.accept() {
+                contacted = true;
+                let mut request = [0; 4096];
+                let _ = stream.read(&mut request);
+                let _ = stream.write_all(b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n");
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        contacted
+    });
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .arg("report")
+        .current_dir(repo.root())
+        .env("RUNNER_TEMP", repo.root())
+        .env("GITHUB_JOB", "rust")
+        .env("GITHUB_REPOSITORY", "owner/repo")
+        .env("GITHUB_RUN_ID", "1")
+        .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("GITHUB_TOKEN", "fixture")
+        .env("GITHUB_API_URL", format!("http://{address}"))
+        .output();
+    finished.store(true, std::sync::atomic::Ordering::SeqCst);
+    let contacted = server.join().map_err(|_| "API listener failed")?;
+    assert!(output?.status.success());
+    assert!(!contacted, "local report contacted GitHub");
+    assert_eq!(read(&repo).first_cargo_seconds, None);
+    Ok(())
 }
 
 #[test]

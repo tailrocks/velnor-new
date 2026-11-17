@@ -67,7 +67,46 @@ fn save_outcomes(cases: &[(&str, Option<bool>, SaveOutcome)]) -> super::ResultTe
         }
         let output = command.output()?;
         assert!(output.status.success(), "{output:?}");
+        let local = read(&repo);
+        assert_eq!(
+            local.caches[0].save,
+            match outcome {
+                "success" => SaveOutcome::Unknown,
+                "failure" | "cancelled" => SaveOutcome::Failed,
+                _ => SaveOutcome::NotAttempted,
+            }
+        );
+        assert_eq!(local.caches[0].bytes, None);
+        let mut check = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        check
+            .args(["report", "--check"])
+            .arg(repo.root())
+            .env("GITHUB_REF", "refs/heads/main")
+            .env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
+            .env("GITHUB_REPOSITORY", "owner/repo")
+            .env("GITHUB_RUN_ID", "1")
+            .env("GITHUB_RUN_ATTEMPT", "1")
+            .env("VELNOR_REPORT_NEEDS", "{}")
+            .env("GITHUB_STEP_SUMMARY", repo.root().join("checked-summary"));
+        for name in ["GITHUB_TOKEN", "GITHUB_API_URL"] {
+            if let Some(value) = command
+                .get_envs()
+                .find_map(|(key, value)| (key == name).then_some(value).flatten())
+            {
+                check.env(name, value);
+            } else {
+                check.env_remove(name);
+            }
+        }
+        let checked = check.output()?;
         let metrics = read(&repo);
+        assert_eq!(
+            checked.status.success(),
+            matches!(expected, SaveOutcome::Saved | SaveOutcome::NotAttempted),
+            "{checked:?}"
+        );
+        assert_eq!(metrics.invocations.len(), local.invocations.len());
+        assert_eq!(metrics.verification_errors, local.verification_errors);
         if outcome == "success" && inventory.is_none() {
             let checked = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
                 .args(["report", "--check"])
@@ -157,11 +196,25 @@ fn cache_inventory_requires_unique_eligible_entries_and_complete_results() -> su
         .env("GITHUB_RUN_ID", "1")
         .env("GITHUB_RUN_ATTEMPT", "1")
         .env("GITHUB_TOKEN", "fixture")
-        .env("GITHUB_API_URL", crate::io::serve(responses))
+        .env("GITHUB_API_URL", crate::io::serve(responses.clone()))
         .env("VELNOR_REPORT_CACHES", json!(caches).to_string())
         .env("VELNOR_REPORT_STEPS", json!(steps).to_string())
         .output()?;
     assert!(output.status.success(), "{output:?}");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["report", "--check"])
+        .arg(repo.root())
+        .env("GITHUB_REF", "refs/heads/main")
+        .env("GITHUB_BASE_REF", "release")
+        .env("VELNOR_REPORT_DEFAULT_BRANCH", "main")
+        .env("GITHUB_REPOSITORY", "owner/repo")
+        .env("GITHUB_RUN_ID", "1")
+        .env("GITHUB_RUN_ATTEMPT", "1")
+        .env("GITHUB_TOKEN", "fixture")
+        .env("GITHUB_API_URL", crate::io::serve(responses))
+        .env("VELNOR_REPORT_NEEDS", "{}")
+        .output()?;
+    assert!(!output.status.success(), "{output:?}");
     let metrics = read(&repo);
     assert_inventory(&metrics);
     Ok(())
