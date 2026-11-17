@@ -49,6 +49,7 @@ mod release_publish_guards;
 mod release_record;
 mod release_tag_patterns;
 mod report;
+mod report_accounting;
 mod rulesets;
 mod run;
 mod run_archives;
