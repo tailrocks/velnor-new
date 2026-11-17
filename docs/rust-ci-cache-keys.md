@@ -62,6 +62,8 @@ With helper `0.1.81` or a supported source-built helper, each reporting-enabled
 Cargo lane ends with `velnor-ci report` and uploads `ci-metrics.json`. These
 steps also run after an earlier failure unless the run was cancelled. Report
 and upload failures do not replace the lane's build result.
+The workflow supplies only each cache's family, root, and restore/save step IDs;
+the helper derives observed facts from step results and filesystem evidence.
 
 The separate `Cache` job checks the same-run metrics from every reporting
 lane. It fails on cache waste, missing metrics, or unverifiable required

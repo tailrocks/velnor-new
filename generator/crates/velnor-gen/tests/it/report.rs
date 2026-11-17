@@ -197,14 +197,23 @@ fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() 
                 let raw = report["env"]["VELNOR_REPORT_CACHES"]
                     .as_str()
                     .ok_or("cache descriptors")?;
+                assert_eq!(report["env"]["VELNOR_REPORT_STEPS"], "${{ toJSON(steps) }}");
                 assert!(!raw.contains("${{"), "{raw}");
                 assert!(!raw.contains("fromJSON"), "{raw}");
                 let caches: serde_json::Value = serde_json::from_str(raw)?;
                 for cache in caches.as_array().ok_or("caches")? {
-                    assert_eq!(cache["requested_key"], "");
-                    assert_eq!(cache["save"], "not_attempted");
-                    assert!(cache.get("save_failed").is_none());
-                    assert!(cache.get("lock_prefix").is_none());
+                    assert_eq!(
+                        cache
+                            .as_object()
+                            .ok_or("cache plan")?
+                            .keys()
+                            .map(String::as_str)
+                            .collect::<Vec<_>>(),
+                        ["family", "restore_step", "root", "save_step"]
+                    );
+                    for key in ["family", "restore_step", "save_step"] {
+                        assert!(cache[key].as_str().is_some_and(|value| !value.is_empty()));
+                    }
                     if !cache["root"].is_null() {
                         assert_eq!(cache["root"], root);
                         reported_root = true;
