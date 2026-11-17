@@ -247,3 +247,38 @@ fn release_publish_no_files_un_drafts_an_empty_app_draft_and_conflicts_with_name
     assert!(!fake.is_draft(id));
     assert_eq!(fake.assets(id), BTreeMap::new());
 }
+
+#[test]
+fn release_record_with_a_verified_commit_writes_nothing_when_it_cannot_check_the_tags() {
+    let dir = Dir::new("record-commits");
+    let ci = dir.write("ci-helper.json", CI);
+    let outputs = dir.write("github-output", "ready=true\n");
+    let path = ci.to_string_lossy();
+    for sha in ["main", "abc"] {
+        let output = velnor_ci(
+            &[
+                "release",
+                "record",
+                "--repo",
+                REPO,
+                "--verified-commit",
+                sha,
+                &path,
+            ],
+            &[("GITHUB_OUTPUT", &outputs)],
+        );
+        assert_eq!(output.status.code(), Some(1), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("is not a full lowercase commit SHA")
+        );
+        assert_eq!(
+            fs::read_to_string(&outputs).unwrap_or_default(),
+            "ready=true\n"
+        );
+    }
+    let output = velnor_ci(
+        &["release", "record", "--repo", REPO, &path],
+        &[("GITHUB_OUTPUT", &outputs)],
+    );
+    assert_eq!(output.status.code(), Some(2), "{output:?}");
+}
