@@ -19,6 +19,8 @@ pub struct Invocation {
     pub compilations: Vec<Compilation>,
     pub downloads: Vec<String>,
     #[serde(default)]
+    pub verified_download_archives: Option<Vec<String>>,
+    #[serde(default)]
     pub artifacts: Vec<crate::cargo_artifacts::CargoArtifact>,
     #[serde(default)]
     pub progress: Option<Vec<crate::cargo_artifacts::CargoProgress>>,

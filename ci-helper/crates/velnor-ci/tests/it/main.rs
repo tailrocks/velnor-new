@@ -46,6 +46,7 @@ mod release_record;
 mod release_tag_patterns;
 mod rulesets;
 mod run;
+mod run_archives;
 mod run_capture;
 mod run_env;
 mod run_evidence;

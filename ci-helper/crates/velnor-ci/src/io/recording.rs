@@ -38,6 +38,7 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
         log_end: 0,
         compilations: Vec::new(),
         downloads: Vec::new(),
+        verified_download_archives: None,
         artifacts: Vec::new(),
         progress: Some(Vec::new()),
         capture_complete: false,

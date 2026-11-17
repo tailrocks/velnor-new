@@ -12,6 +12,7 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
         ("quiet", false, false),
         ("fresh", true, false),
         ("verbose", false, true),
+        ("targets", false, false),
     ] {
         let temp = std::env::temp_dir().join(format!("velnor-quiet-{}-{name}", std::process::id()));
         let program = crate::run_capture::fixture(&temp, true, false).expect("fixture");
@@ -29,6 +30,22 @@ fn quiet_nonfresh_artifacts_save_the_cache_without_counting_verbose_artifacts_tw
             ),
         )
         .expect("events");
+        if name == "targets" {
+            use std::io::Write;
+            let mut test = crate::cargo_artifacts::record(false);
+            test["target"]["name"] = serde_json::json!("app_integration");
+            test["target"]["kind"] = serde_json::json!(["test"]);
+            test["profile"]["test"] = serde_json::json!(true);
+            test["filenames"] = serde_json::json!(["target/debug/deps/app_integration-opaque"]);
+            writeln!(
+                fs::OpenOptions::new()
+                    .append(true)
+                    .open(temp.join("events"))
+                    .expect("events"),
+                "{test}"
+            )
+            .expect("test artifact");
+        }
         let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
             .args(["run", "--"])
             .arg(&program)

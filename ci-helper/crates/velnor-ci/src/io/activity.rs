@@ -3,6 +3,7 @@
 
 use crate::error::CiError;
 use crate::telemetry::{INVOCATIONS, Invocation};
+use std::collections::BTreeSet;
 use std::fs;
 
 pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
@@ -39,7 +40,9 @@ pub(super) fn activity() -> Result<Option<crate::logscan::LogScan>, CiError> {
             .artifacts
             .iter()
             .filter(|artifact| !artifact.fresh)
-            .count() as u64;
+            .map(|artifact| &artifact.package_id)
+            .collect::<BTreeSet<_>>()
+            .len() as u64;
         counts.compiling += artifacts.saturating_sub(counts.crates_compiled() - before);
     }
     if !crate::cache::should_save(&counts)

@@ -98,6 +98,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
     let signals = Signals::new([SIGINT, SIGTERM])
         .map_err(|e| (2, format!("cannot watch for SIGINT and SIGTERM: {e}")))?;
+    let archives = super::archive_witness::ArchiveWitness::start();
     let (mut child, own_group) = spawn_child(&args.command)?;
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
@@ -137,6 +138,7 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
     }
     invocation.log_end =
         usize::try_from(log.metadata().map_err(write_error)?.len()).unwrap_or(usize::MAX);
+    invocation.verified_download_archives = archives.finish();
     invocation.seconds = started.elapsed().as_secs_f64();
     if let Err(error) = super::recording::save_invocation(&invocation) {
         if code == 0 {
