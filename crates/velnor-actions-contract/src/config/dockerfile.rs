@@ -237,7 +237,7 @@ impl State {
             operands.pop();
         }
         for source in operands {
-            if source.starts_with("<<") {
+            if !json_form && source.starts_with("<<") {
                 continue;
             }
             if source.contains(['\\', '\'', '"']) {

@@ -118,7 +118,9 @@ fn claims(root: &Path, image: &ImageConfig) -> Option<Claims> {
     let mut claims = Claims::default();
     let context = image.context.as_str();
     let under = |relative: &str| {
-        if context == "." {
+        if relative == "." {
+            context.to_owned()
+        } else if context == "." {
             relative.to_owned()
         } else {
             format!("{context}/{relative}")
