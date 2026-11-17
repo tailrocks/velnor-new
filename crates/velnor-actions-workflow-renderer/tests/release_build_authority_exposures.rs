@@ -9,18 +9,23 @@ fn release_authority_rejects_credential_environment_objects() -> Result<(), Box<
     let mut missed = Vec::new();
     for expression in ["${{ secrets }}", "${{ fromJSON(secrets.ENVIRONMENT) }}"] {
         for scope in ["workflow", "job", "step", "composite"] {
+            let mut scoped_files = files.clone();
             let mut workflow = json!({"jobs": {"build": {"steps": [{"run": "mbx build"}]}}});
             match scope {
                 "workflow" => workflow["env"] = json!(expression),
                 "job" => workflow["jobs"]["build"]["env"] = json!(expression),
                 "step" => workflow["jobs"]["build"]["steps"][0]["env"] = json!(expression),
                 "composite" => {
-                    workflow["env"] = json!(expression);
-                    workflow["jobs"]["build"]["steps"][0] = json!({"uses": "./.github/actions/generator-release-build-linux"});
+                    scoped_files.push(RenderedFile {
+                        path: ".github/actions/dynamic-env/action.yml".to_owned(),
+                        bytes: json!({"runs": {"using": "composite", "steps": [{"run": "mbx build", "env": expression}]}}).to_string(),
+                    });
+                    workflow["jobs"]["build"]["steps"][0] =
+                        json!({"uses": "./.github/actions/dynamic-env"});
                 }
                 _ => unreachable!(),
             }
-            if violations(&workflow, &files)? != ["build"] {
+            if violations(&workflow, &scoped_files)? != ["build"] {
                 missed.push(format!("{scope} {expression}"));
             }
         }
