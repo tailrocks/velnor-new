@@ -36,16 +36,39 @@ fn job_ids(text: &str) -> Vec<&str> {
 
 #[test]
 fn the_helper_build_and_upload_require_an_artifact_consumer() -> TestResult {
-    let text = text_of(&sample(Some("helper = { path = \"ci-helper/\" }\nskip_draft_pull_requests = true\n"))?)?;
-    let helper = text.split("  rust-helper:\n").nth(1).ok_or("no helper")?
-        .split("\n  rust-root:").next().ok_or("no helper body")?;
-    assert!(helper.contains("needs: rust-plan"), "{helper}");
+    let mut view = sample(Some(
+        "helper = { path = \"ci-helper/\" }\nskip_draft_pull_requests = true\n",
+    ))?;
+    view.tracked_paths.insert(RepoPath::new("deny.toml")?);
+    view.files.insert(RepoPath::new("deny.toml")?, Vec::new());
+    let text = text_of(&view)?;
+    let helper = text
+        .split("  rust-helper:\n")
+        .nth(1)
+        .ok_or("no helper")?
+        .split("\n  rust-root:")
+        .next()
+        .ok_or("no helper body")?;
+    assert!(helper.contains("needs:\n      - rust-plan"), "{helper}");
     for name in ["Build velnor-ci", "Upload velnor-ci"] {
-        let step = helper.split("      - ").find(|step| step.contains(&format!("name: {name}"))).ok_or("no helper step")?;
-        for clause in ["rust_root_mode != ''none''", "rust_ci_helper_mode != ''none''", "rust_deny == ''run''", "rust_machete == ''run''", "github.event_name == ''schedule''"] {
+        let step = helper
+            .split("      - ")
+            .find(|step| step.contains(&format!("name: {name}")))
+            .ok_or("no helper step")?;
+        for clause in [
+            "rust_root_mode != ''none''",
+            "rust_ci_helper_mode != ''none''",
+            "rust_deny == ''run''",
+            "rust_machete == ''run''",
+            "github.event_name == ''schedule''",
+        ] {
             assert!(step.contains(clause), "{name}: {step}");
         }
         assert!(step.contains(" || "), "{step}");
+        assert!(
+            step.contains("github.event.pull_request.draft != true"),
+            "{step}"
+        );
     }
     assert_eq!(text.matches("cargo build -p velnor-ci --locked").count(), 1);
     assert_eq!(text.matches("name: Upload velnor-ci").count(), 1);

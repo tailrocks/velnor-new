@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef,
-    RepoFacts, RootSlug, Step, StepKind, When,
+    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanGate,
+    PlanRef, RepoFacts, RootSlug, Step, StepKind, When,
 };
 
 use crate::plan::{
@@ -40,19 +40,21 @@ impl Lane {
     }
 
     fn gate(&self, need: GateNeed) -> Gate {
-        Gate {
+        Gate::Plan(PlanGate {
             slug: self.slug.clone(),
             need,
             from: self.from(),
             package: None,
-        }
+        })
     }
 
     fn package_gate(&self, package: PackageName) -> Gate {
-        Gate {
+        Gate::Plan(PlanGate {
             package: Some(package),
-            ..self.gate(GateNeed::PackageArgs)
-        }
+            slug: self.slug.clone(),
+            need: GateNeed::PackageArgs,
+            from: self.from(),
+        })
     }
 
     pub(crate) fn steps(&self) -> Option<Gate> {

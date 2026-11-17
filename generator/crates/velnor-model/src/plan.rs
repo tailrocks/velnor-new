@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::admission::Gate;
 use crate::cache::CacheKey;
 use crate::cron::CronExpr;
 use crate::ids::{
@@ -107,38 +108,6 @@ pub struct Step {
 pub struct PlanRef {
     pub slug: RootSlug,
     pub from: PlanFrom,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Gate {
-    pub slug: RootSlug,
-    pub need: GateNeed,
-    pub from: PlanFrom,
-    pub package: Option<PackageName>,
-}
-
-impl Gate {
-    #[must_use]
-    pub fn outputs(&self) -> Vec<(RootSlug, GateNeed)> {
-        let own = |need| (self.slug.clone(), need);
-        match self.need {
-            GateNeed::Selected => vec![own(GateNeed::Selected)],
-            GateNeed::Doctests | GateNeed::Docs => vec![
-                own(GateNeed::Selected),
-                own(self.need),
-                own(GateNeed::PackageArgs),
-            ],
-            GateNeed::Deny => vec![own(GateNeed::Deny)],
-            GateNeed::Machete => vec![own(GateNeed::Machete)],
-            GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
-            GateNeed::TestFilter
-            | GateNeed::PackageArgs
-            | GateNeed::DoctestsKnown
-            | GateNeed::TestsExpected => {
-                vec![own(self.need)]
-            }
-        }
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]

@@ -172,7 +172,7 @@ fn a_single_root_workflow_starts_policy_only_when_the_shared_plan_selects_it() -
         .take_while(|line| line.starts_with("   "))
         .collect::<Vec<_>>()
         .join("\n");
-    assert!(job.contains("needs: rust-plan"), "{job}");
+    assert!(job.contains("needs:\n      - rust-plan"), "{job}");
     assert!(!job.contains("run: velnor-ci plan"), "{job}");
     assert!(job.contains("needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run'"), "{job}");
     let deny = step(&job, "Dependency policy").join("\n");

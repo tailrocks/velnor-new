@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, When};
+use velnor_model::{Gate, GateNeed, PlanFrom, PlanGate, RootSlug, When};
 
 const SETUP_DONE: &str = "steps.restored.outcome == 'success'";
 pub(crate) const PLAN_STEP: &str = "plan";
@@ -72,6 +72,42 @@ pub(crate) fn condition(
 }
 
 fn gate_parts(gate: &Gate) -> Vec<String> {
+    match gate {
+        Gate::Plan(gate) => plan_gate_parts(gate),
+        Gate::Any(admissions) => {
+            let branches = admissions
+                .iter()
+                .map(|admission| {
+                    condition(
+                        admission.when,
+                        admission.gate.as_ref(),
+                        false,
+                        admission.skip_on_draft,
+                    )
+                    .map_or_else(
+                        || "true".to_owned(),
+                        |text| {
+                            format!(
+                                "({})",
+                                text.trim_start_matches("${{ ").trim_end_matches(" }}")
+                            )
+                        },
+                    )
+                })
+                .collect::<Vec<_>>();
+            vec![format!(
+                "({})",
+                if branches.is_empty() {
+                    "false".to_owned()
+                } else {
+                    branches.join(" || ")
+                }
+            )]
+        }
+    }
+}
+
+fn plan_gate_parts(gate: &PlanGate) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],

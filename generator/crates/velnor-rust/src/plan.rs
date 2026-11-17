@@ -4,9 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    Access, Admission, CacheKey, CacheRoot, CargoCommand, Concurrency, Gate, HelperCommand, Host,
+    Job, JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
+    RustRoot, Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -41,8 +41,10 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             .iter()
             .find(|root| root.manifest.parent().as_ref() == Some(path))
     });
-    let single =
-        facts.rust_roots.len() == 1 && decisions[0].shape == Shape::OneJob && helper_root.is_none();
+    let single = facts.rust_roots.len() == 1
+        && decisions[0].shape == Shape::OneJob
+        && helper_root.is_none()
+        && !facts.policy.any();
     let mut jobs: Vec<Job> = facts
         .rust_roots
         .iter()
@@ -78,7 +80,8 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         expose_in_single(&mut jobs);
     }
     if let Some(root) = helper_root {
-        jobs.insert(1, helper_job(facts, root));
+        let consumers = helper_consumers(&jobs);
+        jobs.insert(1, helper_job(facts, root, &consumers));
     }
     upload_cargo_logs(&mut jobs);
     let required = verdict_job(facts, &jobs, single, draft_guard);
@@ -106,7 +109,24 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
 }
 
-fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
+fn helper_consumers(jobs: &[Job]) -> Gate {
+    Gate::Any(
+        jobs.iter()
+            .filter(|job| {
+                job.steps
+                    .iter()
+                    .any(|step| step.kind == StepKind::HelperFromArtifact)
+            })
+            .map(|job| Admission {
+                when: job.when,
+                gate: job.gate.clone(),
+                skip_on_draft: job.skip_on_draft,
+            })
+            .collect(),
+    )
+}
+
+fn helper_job(facts: &RepoFacts, root: &RustRoot, consumers: &Gate) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
@@ -122,7 +142,17 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     steps.push(step(StepKind::PublishHelper {
         binary: root.target_dir.child("debug/velnor-ci"),
     }));
+    for step in &mut steps {
+        if !matches!(
+            step.kind,
+            StepKind::Checkout { .. } | StepKind::InstallHelper(_)
+        ) {
+            step.gate = Some(consumers.clone());
+        }
+    }
     Job {
+        needs: vec![PLAN_JOB],
+        skip_on_draft: false,
         steps,
         ..job(facts, HELPER_JOB)
     }

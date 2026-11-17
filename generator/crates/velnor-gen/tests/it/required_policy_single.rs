@@ -73,25 +73,41 @@ fn verdict(
     text: &str,
     policy: &str,
     keep: impl Fn(&str) -> bool,
+    run_policy: bool,
 ) -> Result<(bool, String), Box<dyn std::error::Error>> {
     let spec = spec(text)?;
-    let outputs: BTreeMap<String, String> = exported(text, "rust")?
+    let outputs: BTreeMap<String, String> = exported(text, spec.plan.as_str())?
         .into_iter()
         .filter(|key| keep(key))
-        .map(|key| (key, "run".to_owned()))
+        .map(|key| {
+            let value = if key.ends_with("_mode") {
+                "some"
+            } else if !run_policy && matches!(key.as_str(), "rust_deny" | "rust_machete") {
+                "skip"
+            } else {
+                "run"
+            };
+            (key, value.to_owned())
+        })
         .collect();
     let mut needs = BTreeMap::new();
+    needs.insert(
+        spec.plan.clone(),
+        Need {
+            result: Some("success".to_owned()),
+            outputs,
+        },
+    );
     needs.insert(
         JobId::new("rust")?,
         Need {
             result: Some("success".to_owned()),
-            outputs: outputs
-                .into_iter()
-                .chain([
-                    ("tests_run".to_owned(), "3".to_owned()),
-                    ("tests_listed".to_owned(), "3".to_owned()),
-                ])
-                .collect(),
+            outputs: [
+                ("tests_run".to_owned(), "3".to_owned()),
+                ("tests_listed".to_owned(), "3".to_owned()),
+            ]
+            .into_iter()
+            .collect(),
         },
     );
     needs.insert(
@@ -114,9 +130,9 @@ fn one_job_with_policy_enabled_exports_what_the_policy_gate_reads() -> TestResul
             .iter()
             .any(|job| job.id.to_string() == "policy")
     );
-    let (green, table) = verdict(&text, "success", |_| true)?;
+    let (green, table) = verdict(&text, "success", |_| true, true)?;
     assert!(green, "{table}");
-    let (green, table) = verdict(&text, "failure", |_| true)?;
+    let (green, table) = verdict(&text, "failure", |_| true, true)?;
     assert!(!green, "{table}");
     assert!(table.contains("policy"), "{table}");
     Ok(())
@@ -126,17 +142,19 @@ fn one_job_with_policy_enabled_exports_what_the_policy_gate_reads() -> TestResul
 fn a_policy_job_that_did_not_succeed_fails_the_gate() -> TestResult {
     let text = rendered()?;
     for result in ["skipped", "cancelled"] {
-        let (green, table) = verdict(&text, result, |_| true)?;
+        let (green, table) = verdict(&text, result, |_| true, true)?;
         assert!(!green, "{table}");
     }
     Ok(())
 }
 
 #[test]
-fn the_gate_does_not_read_policy_outputs_the_rust_job_cannot_export() -> TestResult {
+fn the_gate_requires_policy_outputs_from_the_shared_plan() -> TestResult {
     let text = rendered()?;
-    let (green, table) = verdict(&text, "success", |key| key.ends_with("_tests"))?;
+    let (green, table) = verdict(&text, "success", |key| key.ends_with("_tests"), true)?;
+    assert!(!green, "{table}");
+    assert!(table.contains("plan output"), "{table}");
+    let (green, table) = verdict(&text, "skipped", |_| true, false)?;
     assert!(green, "{table}");
-    assert!(spec(&text)?.jobs.iter().all(|job| job.when.is_empty()));
     Ok(())
 }

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod admission;
 mod cache;
 mod cron;
 mod ids;
@@ -9,6 +10,7 @@ mod repo;
 mod selection;
 mod verdict;
 
+pub use admission::{Admission, Gate, PlanGate};
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
 pub use cron::CronExpr;
 pub use ids::{
@@ -16,10 +18,10 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName,
 };
 pub use plan::{
-    Access, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, HelperCommand, HelperRelease,
-    Job, LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType,
-    Shape, ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
-    Triggers, When, WorkflowPlan,
+    Access, CargoCommand, Concurrency, FilterRef, GateNeed, HelperCommand, HelperRelease, Job,
+    LINT_STEP, PermissionScope, Permissions, PlanFrom, PlanRef, Platform, PullRequestType, Shape,
+    ShapeDecision, Step, StepKind, TEST_STEP, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
+    When, WorkflowPlan,
 };
 pub use repo::{
     CiDebugInfo, CompileInputs, CustomHarness, DependencyKind, FullRun, InputRule,

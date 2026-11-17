@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, JobCondition, JobId, RepoFacts, RootSlug, RustRoot, RustSelection,
-    Step, StepKind, VerdictJob, VerdictSpec, When,
+    CargoCommand, Gate, GateNeed, Job, JobCondition, JobId, RepoFacts, RootSlug, RustRoot,
+    RustSelection, Step, StepKind, VerdictJob, VerdictSpec, When,
 };
 
 use crate::harness::uses_nextest;
@@ -33,10 +33,15 @@ fn tests_lane(job: &Job) -> Option<RootSlug> {
 }
 
 fn conditions(job: &Job) -> Vec<JobCondition> {
-    let gate = job.gate.as_ref().and_then(|gate| match gate.need {
-        GateNeed::Selected => Some(JobCondition::Lane(gate.slug.clone())),
-        GateNeed::Policy => Some(JobCondition::Policy),
-        _ => None,
+    let gate = job.gate.as_ref().and_then(|gate| {
+        let Gate::Plan(gate) = gate else {
+            return None;
+        };
+        match gate.need {
+            GateNeed::Selected => Some(JobCondition::Lane(gate.slug.clone())),
+            GateNeed::Policy => Some(JobCondition::Policy),
+            _ => None,
+        }
     });
     let when = match job.when {
         When::Scheduled => Some(JobCondition::Schedule),

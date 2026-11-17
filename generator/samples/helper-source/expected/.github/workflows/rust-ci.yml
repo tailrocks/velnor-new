@@ -65,6 +65,8 @@ jobs:
         name: velnor-ci plan
         run: velnor-ci plan --explain
   rust-helper:
+    needs:
+      - rust-plan
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
       contents: read
@@ -85,6 +87,7 @@ jobs:
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - id: tools
         name: Restore the tools cache
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -92,18 +95,21 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: '2026.11.1'
           cache: false
       - name: Add Rust components
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         working-directory: ci-helper
         run: rustup component add clippy rustfmt
       - name: Add Rust targets
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         working-directory: ci-helper
         run: rustup target add aarch64-unknown-linux-gnu x86_64-unknown-linux-gnu
       - name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -112,11 +118,14 @@ jobs:
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         run: velnor-ci prepare
       - name: velnor-ci check-metadata
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         working-directory: ci-helper
         run: velnor-ci check-metadata
       - name: Restore the sources cache
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -126,6 +135,7 @@ jobs:
           key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
           restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
       - name: Restore the target cache
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: ci-helper/target
@@ -135,13 +145,16 @@ jobs:
             velnor-tgt-rust-helper-ci_helper-${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - id: restored
         name: velnor-ci restored
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         run: velnor-ci restored
       - name: Build velnor-ci
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         working-directory: ci-helper
         env:
           CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'
         run: velnor-ci run -- cargo build -p velnor-ci --locked
       - name: Upload velnor-ci
+        if: '${{ ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: velnor-ci
@@ -151,7 +164,7 @@ jobs:
           retention-days: 1
           overwrite: true
       - name: Upload the cargo fingerprint log
-        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && vars.VELNOR_CACHE_DEBUG == ''1'' && steps.restored.outcome == ''success'' && ((needs.rust-plan.outputs.rust_root_mode != ''none'') || (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') || (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') || (needs.rust-plan.outputs.rust_generator_mode != ''none'') || (needs.rust-plan.outputs.rust_local_mode != ''none'') || (github.event_name == ''schedule'')) }}'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: 'velnor-cargo-log-${{ github.job }}'
