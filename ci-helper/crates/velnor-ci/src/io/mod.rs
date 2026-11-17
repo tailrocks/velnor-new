@@ -7,6 +7,7 @@ mod cache;
 mod cold;
 mod configurations;
 mod delta;
+mod delta_snapshot;
 mod delta_trim;
 mod git;
 mod http;

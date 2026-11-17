@@ -10,6 +10,7 @@ mod collect;
 mod compare;
 mod configuration_targets;
 mod delta;
+mod delta_integrity;
 mod delta_trim;
 mod event;
 mod gate;

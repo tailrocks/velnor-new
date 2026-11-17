@@ -99,7 +99,7 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
             step.gate.as_ref(),
             restores,
             step.skip_on_draft,
-            &saved_unless_hit(&step.kind),
+            &step_conditions(&step.kind),
         ) {
             body.condition = Some(condition);
         }
@@ -120,8 +120,12 @@ fn rendered_steps(step: &Step, restores: bool) -> Vec<RenderedStep> {
     rendered
 }
 
-fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
+fn step_conditions(kind: &StepKind) -> Vec<String> {
     match kind {
+        StepKind::CacheRestore(CacheKey::Delta { root, .. }) => vec![format!(
+            "steps.target_{}.outputs.cache-matched-key != ''",
+            root.slug()
+        )],
         StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
             sources_step(root.slug())

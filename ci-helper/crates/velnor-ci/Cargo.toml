@@ -31,6 +31,7 @@ path = "tests/it/main.rs"
 clap = { version = "=4.6.7", features = ["derive", "string"] }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154" }
+sha2 = { version = "=0.11.1" }
 libc = "=0.2.191"
 nix = { version = "=0.31.3", default-features = false, features = ["signal"] }
 signal-hook = { version = "=0.3.18", default-features = false, features = ["iterator"] }

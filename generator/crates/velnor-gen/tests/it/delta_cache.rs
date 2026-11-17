@@ -71,6 +71,18 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
                     !value.contains("github.event.repository.private"),
                     "{value}"
                 );
+                let condition = value
+                    .lines()
+                    .find(|line| line.trim_start().starts_with("if: "))
+                    .ok_or("no delta condition")?;
+                if name == "Restore the delta cache" {
+                    assert!(
+                        condition.contains("steps.target_root.outputs.cache-matched-key != ''''"),
+                        "{condition}"
+                    );
+                } else {
+                    assert!(!condition.contains("cache-matched-key"), "{condition}");
+                }
                 if name == "Save the delta cache" || name == "velnor-ci delta stage" {
                     assert!(
                         value.contains("head.repo.full_name == github.repository"),
@@ -144,6 +156,63 @@ fn private_sources_disable_deltas() -> TestResult {
         assert!(!text.contains(forbidden), "{text}");
     }
     assert!(!expected_files(&private_sources)?.contains_key(&velnor_render::DELTA_CLEANUP_PATH));
+    Ok(())
+}
+
+#[test]
+fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResult {
+    for path in ["target.velnor-delta", "target.velnor-delta/owned"] {
+        let path = RepoPath::new(path)?;
+        let mut repo = pinned("0.1.81", "")?;
+        repo.tracked_paths.insert(path.clone());
+        repo.files.insert(path.clone(), b"project data".to_vec());
+        let error = expected_files(&repo).expect_err("tracked staging must not be overwritten");
+        assert_eq!(
+            error.to_string(),
+            format!("tracked path {path} collides with delta cache staging")
+        );
+    }
+    for path in [
+        "target.velnor-delta-other",
+        "target.velnor-delta-other/owned",
+    ] {
+        let path = RepoPath::new(path)?;
+        let mut repo = pinned("0.1.81", "")?;
+        repo.tracked_paths.insert(path.clone());
+        repo.files.insert(path, b"project data".to_vec());
+        assert!(workflow(&repo)?.contains("Restore the delta cache"));
+    }
+    for unsupported in ["old-helper", "private-source", "custom-target"] {
+        let version = if unsupported == "old-helper" {
+            "0.1.80"
+        } else {
+            "0.1.81"
+        };
+        let mut repo = pinned(version, "")?;
+        let path = RepoPath::new(if unsupported == "custom-target" {
+            "build.velnor-delta/owned"
+        } else {
+            "target.velnor-delta/owned"
+        })?;
+        repo.tracked_paths.insert(path.clone());
+        repo.files.insert(path, b"project data".to_vec());
+        if unsupported == "private-source" {
+            repo.files.insert(
+                RepoPath::new("Cargo.lock")?,
+                b"version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/private#0123456789abcdef\"\n".to_vec(),
+            );
+        }
+        if unsupported == "custom-target" {
+            let config = RepoPath::new(".cargo/config.toml")?;
+            repo.tracked_paths.insert(config.clone());
+            repo.files
+                .insert(config, b"[build]\ntarget-dir = 'build'\n".to_vec());
+        }
+        assert!(
+            !workflow(&repo)?.contains("Restore the delta cache"),
+            "{unsupported}"
+        );
+    }
     Ok(())
 }
 

@@ -7,7 +7,7 @@ use std::io::Write;
 use std::process::{Command, Output, Stdio};
 use std::time::{Duration, SystemTime};
 
-fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
+pub(super) fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
     let output_file = repo.root().join("delta-output");
     fs::remove_file(&output_file).ok();
     let mut command_line = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
@@ -34,7 +34,7 @@ fn run(repo: &Repo, command: &str, base: &str) -> (Output, String) {
     (output, written)
 }
 
-fn success(output: &Output) {
+pub(super) fn success(output: &Output) {
     assert!(
         output.status.success(),
         "{}",
@@ -42,13 +42,13 @@ fn success(output: &Output) {
     );
 }
 
-fn time(repo: &Repo, path: &str) -> SystemTime {
+pub(super) fn time(repo: &Repo, path: &str) -> SystemTime {
     fs::metadata(repo.root().join(path))
         .and_then(|m| m.modified())
         .unwrap_or_else(|e| unreachable!("{e}"))
 }
 
-fn set_time(repo: &Repo, path: &str, time: SystemTime) {
+pub(super) fn set_time(repo: &Repo, path: &str, time: SystemTime) {
     File::options()
         .write(true)
         .open(repo.root().join(path))
@@ -56,7 +56,7 @@ fn set_time(repo: &Repo, path: &str, time: SystemTime) {
         .unwrap_or_else(|e| unreachable!("{e}"));
 }
 
-fn compiled(repo: &Repo) {
+pub(super) fn compiled(repo: &Repo) {
     repo.write_unstaged("velnor-run.log", "   Compiling app v0.1.0 (/work/app)\n");
 }
 
@@ -214,12 +214,12 @@ fn no_workspace_compilation_and_oversized_deltas_save_nothing_before_copying() {
     compiled(&repo);
     let huge =
         File::create(repo.root().join("target/huge")).unwrap_or_else(|e| unreachable!("{e}"));
-    huge.set_len(500_000_000)
+    huge.set_len(499_999_995)
         .unwrap_or_else(|e| unreachable!("{e}"));
     let (output, save) = run(&repo, "stage", "base");
     success(&output);
     assert_eq!(save, "save=false\n");
-    assert!(String::from_utf8_lossy(&output.stdout).contains("500000004"));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("500000001"));
     assert!(!repo.root().join("delta").exists());
     fs::remove_file(repo.root().join("target/huge")).unwrap_or_else(|e| unreachable!("{e}"));
     success(&run(&repo, "apply", "base").0);
