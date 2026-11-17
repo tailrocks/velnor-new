@@ -153,6 +153,11 @@ fn future_metadata_in_a_base_cannot_make_changed_source_fresh() {
     future_restore("base");
 }
 
+#[test]
+fn an_unavailable_base_inventory_cannot_hide_future_metadata_from_reuse() {
+    future_restore("unsupported-base");
+}
+
 fn future_restore(layer: &str) {
     let (repo, expected) = fixture("delta-future-restore");
     save_inputs(&repo);
@@ -179,6 +184,10 @@ fn future_restore(layer: &str) {
             .unwrap_or_else(|error| unreachable!("{error}"));
     } else {
         future_tree(&repo.root().join("target"));
+        if layer == "unsupported-base" {
+            std::os::unix::fs::symlink("app", repo.root().join("target/debug/unrelated-link"))
+                .unwrap_or_else(|error| unreachable!("{error}"));
+        }
     }
     repo.write_unstaged("src/main.rs", SOURCE_B);
     let (output, _) = helper(
