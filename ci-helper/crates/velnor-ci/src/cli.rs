@@ -29,7 +29,7 @@ pub enum Command {
     )]
     Inputs(InputsCommand),
     #[command(
-        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and all required checks outside the explicit --pr-only-check list passed in push jobs on that branch at the exact commit; ready=false while a check is unfinished; exit 1 on a failed check, invalid exemption or off-branch commit. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read"
+        about = "Print and write to $GITHUB_OUTPUT ready=true when the commit is on the default branch and all required checks outside the explicit --pr-only-check list passed in push jobs on that branch at the exact commit; ready=false while a check is unfinished; exit 1 on a failed check, invalid exemption or off-branch commit. Reads GITHUB_TOKEN, which needs contents: read, actions: read and statuses: read; PR-only exemptions also need checks: read and visible ruleset bypass_actors metadata"
     )]
     ReleaseGate(ReleaseGateArgs),
     #[command(
@@ -51,6 +51,10 @@ pub enum Command {
         about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
     )]
     Prepare,
+    #[command(
+        about = "Write the crates mirror under $RUNNER_TEMP and install a Cargo wrapper for every working directory and Cargo home"
+    )]
+    CratesMirror(CratesMirrorArgs),
     #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
@@ -354,4 +358,12 @@ pub struct CompareArgs {
     pub a: PathBuf,
     #[arg(help = "Metrics file of the second run")]
     pub b: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct CratesMirrorArgs {
+    #[arg(long)]
+    pub registry: String,
+    #[arg(long)]
+    pub cainfo: PathBuf,
 }

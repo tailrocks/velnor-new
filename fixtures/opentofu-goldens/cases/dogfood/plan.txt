@@ -55,7 +55,7 @@ Detected stacks
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence crates/velnor-runner/.config/nextest.toml:3 [profile.ci] [durable]
+    evidence crates/velnor-runner/.config/nextest.toml:8 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
     evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile generator: mbx compile driver (declared), cargo_nextest test runner (declared)
@@ -69,7 +69,7 @@ Detected stacks
   Nextest profile local: ci (local/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
-    evidence local/.config/nextest.toml:3 [profile.ci] [durable]
+    evidence local/.config/nextest.toml:8 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
     evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
