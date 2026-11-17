@@ -29,6 +29,7 @@ mod policy;
 mod reads;
 mod repo_profile;
 mod required_job;
+mod required_size;
 mod root_jobs;
 mod roots;
 mod schedule;
