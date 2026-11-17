@@ -58,11 +58,19 @@ fn a_source_built_helper_never_runs_in_the_job_that_holds_actions_write() -> Tes
 }
 
 #[test]
-fn a_source_helper_repository_without_a_released_helper_from_0_1_81_gets_no_trim_job() -> TestResult
-{
+fn a_source_helper_repository_without_a_safe_released_trimmer_saves_no_base() -> TestResult {
     let text = text_of(&source_helper("0.1.79")?)?;
     assert!(!text.contains("rust-trim"), "{text}");
     assert!(!text.contains("cache trim"), "{text}");
+    assert!(
+        !text.contains("Save the target cache"),
+        "unbounded target writes"
+    );
+    assert!(
+        !text.contains("Save the sources cache"),
+        "unbounded Sources writes"
+    );
+    assert!(!text.contains("Build the tests"), "unused prebuild");
     assert!(!text.contains("actions: write"), "{text}");
     Ok(())
 }
@@ -305,5 +313,31 @@ fn the_test_prebuild_runs_only_on_a_run_that_can_save() -> TestResult {
     }
     let older = workflow(&pinned("0.1.79", "")?)?;
     assert!(!older.contains("Build the tests"), "{older}");
+    Ok(())
+}
+
+#[test]
+fn input_timestamps_save_and_restore_in_the_configured_target_directory() -> TestResult {
+    for (manifest, config, configured, expected) in [
+        ("Cargo.toml", ".cargo/config.toml", "out", "out"),
+        (
+            "app/Cargo.toml",
+            "app/.cargo/config.toml",
+            "../out/app",
+            "../out/app",
+        ),
+    ] {
+        let mut view = rooted(manifest, &[])?;
+        crate::cache_key_defects::with_config(
+            &mut view,
+            config,
+            &format!("[build]\ntarget-dir = \"{configured}\"\n"),
+        )?;
+        let text = text_of(&view)?;
+        for verb in ["save", "restore"] {
+            let command = format!("run: velnor-ci inputs {verb} --target-dir {expected}");
+            assert!(text.contains(&command), "{command} missing");
+        }
+    }
     Ok(())
 }

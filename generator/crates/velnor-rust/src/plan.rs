@@ -273,7 +273,7 @@ pub(crate) fn setup_roots(
     if lane.from_source || breaks_ties(facts) {
         toolchain.extend(restore_file_times(roots));
     }
-    toolchain.extend(restored(facts, lane));
+    toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
@@ -312,7 +312,7 @@ fn breaks_ties(facts: &RepoFacts) -> bool {
 fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
     roots.iter().map(|root| Step {
         directory: root.manifest.parent(),
-        ..step(StepKind::Helper(HelperCommand::InputsRestore))
+        ..step(StepKind::InputsRestore(root.target_dir.clone()))
     })
 }
 

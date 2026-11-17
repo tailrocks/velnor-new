@@ -2,21 +2,19 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, Step, StepKind, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT,
+    CacheKey, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
 use crate::artifact_steps::{
     download_helper, download_step, publish_helper, upload_cargo_log, upload_step,
 };
-use crate::base_steps::{
-    base_age, cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane,
-};
+use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, cargo_step, reports_tests};
 use crate::gate::{
-    PLAN_STEP, REPLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read,
-    plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
+    sources_step, verdict_step,
 };
 use crate::permission_pairs;
 use crate::rules::{
@@ -24,7 +22,6 @@ use crate::rules::{
 };
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
-const RESTORED_STEP: &str = "restored";
 pub(crate) const RUN: &str = "velnor-ci run --";
 pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
@@ -128,7 +125,12 @@ fn rendered_steps(
     tests: bool,
     artifacts: ArtifactFormat,
 ) -> Vec<RenderedStep> {
-    let mut rendered = vec![step_body(&step.kind, tests, artifacts)];
+    let mut rendered = vec![step_body(
+        &step.kind,
+        step.directory.as_ref(),
+        tests,
+        artifacts,
+    )];
     if step.kind == StepKind::HelperFromArtifact {
         rendered.push(RenderedStep {
             name: "Make velnor-ci executable".to_owned(),
@@ -184,7 +186,12 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(kind: &StepKind, tests: bool, artifacts: ArtifactFormat) -> RenderedStep {
+fn step_body(
+    kind: &StepKind,
+    directory: Option<&RepoPath>,
+    tests: bool,
+    artifacts: ArtifactFormat,
+) -> RenderedStep {
     match kind {
         StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests),
         StepKind::UploadMetrics => crate::report::artifact(true),
@@ -231,13 +238,12 @@ fn step_body(kind: &StepKind, tests: bool, artifacts: ArtifactFormat) -> Rendere
             ..RenderedStep::default()
         },
         StepKind::Cargo(command) => cargo_step(command, artifacts),
-        StepKind::Helper(command) => helper_step(*command),
-StepKind::CratesMirror(mirror) => RenderedStep {
-    name: "Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml".to_owned(),
-    condition: Some("${{ runner.environment == 'self-hosted' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}".to_owned()),
-    run: Some(format!("velnor-ci crates-mirror --registry {} --cainfo {}", crate::release_steps::shell_word(&mirror.registry), crate::release_steps::shell_word(&mirror.cainfo))),
-    ..RenderedStep::default()
-},
+        StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
+        StepKind::InputsRestore(target) => {
+            crate::helper_steps::inputs_step("restore", target, directory)
+        }
+        StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::GeneratorCheck => RenderedStep {
             name: "Check the generated workflow".to_owned(),
             run: Some("velnor-gen check".to_owned()),
@@ -288,19 +294,6 @@ fn cache_step(action: &str, verb: &str, key: &CacheKey, fallbacks: bool) -> Rend
     }
 }
 
-fn helper_arguments(command: HelperCommand) -> &'static str {
-    match command {
-        HelperCommand::Plan => "plan",
-        HelperCommand::PlanFull => "plan --full",
-        HelperCommand::Prepare => "prepare",
-        HelperCommand::CheckMetadata => "check-metadata",
-        HelperCommand::Restored(..) => "restored",
-        HelperCommand::InputsSave => "inputs save",
-        HelperCommand::InputsRestore => "inputs restore",
-        HelperCommand::InputsAudit => "inputs audit",
-    }
-}
-
 pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     let version = release.version();
     let mut with = vec![("version".to_owned(), Value::Text(version.to_string()))];
@@ -315,27 +308,6 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
         uses_comment: Some(format!("rust-ci-v{version}")),
         with,
-        ..RenderedStep::default()
-    }
-}
-
-fn helper_step(command: HelperCommand) -> RenderedStep {
-    let arguments = helper_arguments(command);
-    let (id, env) = match command {
-        HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
-        HelperCommand::PlanFull => (Some(REPLAN_STEP), Vec::new()),
-        HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
-        HelperCommand::Restored(expiry) => (Some(RESTORED_STEP), base_age(expiry)),
-        _ => (None, Vec::new()),
-    };
-    RenderedStep {
-        name: format!("velnor-ci {arguments}"),
-        id: id.map(str::to_owned),
-        env,
-        run: Some(match command {
-            HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
-            _ => format!("velnor-ci {arguments}"),
-        }),
         ..RenderedStep::default()
     }
 }

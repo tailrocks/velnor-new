@@ -8,6 +8,7 @@ mod cargo;
 mod events;
 mod gate;
 mod header;
+mod helper_steps;
 mod key_length;
 mod release;
 mod release_binaries;

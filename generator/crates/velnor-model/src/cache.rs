@@ -4,8 +4,6 @@
 use crate::ids::{JobId, RepoPath, RootSlug};
 
 const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
-const DEFAULT_TARGET: RepoPath = RepoPath::from_static("target");
-const INPUTS_FILE: RepoPath = RepoPath::from_static("target/.velnor/inputs.tsv");
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Host;
@@ -94,14 +92,9 @@ impl CacheKey {
                 CachePath::CargoRegistryCache,
                 CachePath::CargoGitDb,
             ],
-            Self::Target { root, .. } => {
-                let mut paths = vec![CachePath::Target(root.target_dir().clone())];
-                if root.target_dir() != &root.manifest.sibling(&DEFAULT_TARGET) {
-                    paths.push(CachePath::Target(root.manifest.sibling(&INPUTS_FILE)));
-                }
-                paths
+            Self::Target { root, .. } | Self::Delta { root, .. } => {
+                vec![CachePath::Target(root.target_dir().clone())]
             }
-            Self::Delta { root, .. } => vec![CachePath::Target(root.target_dir().clone())],
         }
     }
 }

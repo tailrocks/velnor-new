@@ -115,7 +115,7 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
     assert!(
         target_cache_paths(&text)?
             .iter()
-            .all(|paths| { paths == &["out", "target/.velnor/inputs.tsv"] })
+            .all(|paths| { paths == &["out"] })
     );
 
     let mut nested = view(&["Cargo.toml", "lab/Cargo.toml", "tools/Cargo.toml"], None)?;
@@ -141,18 +141,9 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
     )?;
     let text = workflow(&nested)?;
     let paths = target_cache_paths(&text)?;
-    assert!(paths.contains(&vec![
-        "shared".to_owned(),
-        "target/.velnor/inputs.tsv".to_owned()
-    ]));
-    assert!(paths.contains(&vec![
-        "out/lab".to_owned(),
-        "lab/target/.velnor/inputs.tsv".to_owned()
-    ]));
-    assert!(paths.contains(&vec![
-        "tools/build".to_owned(),
-        "tools/target/.velnor/inputs.tsv".to_owned()
-    ]));
+    assert!(paths.contains(&vec!["shared".to_owned()]));
+    assert!(paths.contains(&vec!["out/lab".to_owned()]));
+    assert!(paths.contains(&vec!["tools/build".to_owned()]));
     assert!(!paths.contains(&vec!["lab/target".to_owned()]));
 
     let plain = workflow(&view(&["lab/Cargo.toml"], None)?)?;

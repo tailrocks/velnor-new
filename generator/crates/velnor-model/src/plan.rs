@@ -3,12 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use crate::cache::CacheKey;
 use crate::cron::CronExpr;
-use crate::helper::HelperRelease;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::TargetKind;
-use crate::verdict::VerdictSpec;
+use crate::steps::StepKind;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
@@ -201,85 +199,6 @@ pub enum When {
     SaveBaseDecided,
     BaseExpired,
     SavingRun,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StepKind {
-    Checkout {
-        depth: u32,
-    },
-    InstallTools {
-        only: Option<String>,
-    },
-    CacheRestore(CacheKey),
-    CacheSave(CacheKey),
-    CacheDecide {
-        target: RepoPath,
-        archive: Option<RepoPath>,
-    },
-    CacheTrim {
-        lane: JobId,
-        family: TrimFamily,
-    },
-    RustComponents(Vec<String>),
-    RustTargets(Vec<String>),
-    UploadArchive {
-        name: String,
-        file: RepoPath,
-    },
-    DownloadArchive {
-        name: String,
-        into: Option<RepoPath>,
-    },
-    Cargo(CargoCommand),
-    Helper(HelperCommand),
-    CratesMirror(crate::repo::CratesMirror),
-    GeneratorCheck,
-    InstallHelper(HelperRelease),
-    HelperFromArtifact,
-    PublishHelper {
-        binary: RepoPath,
-    },
-    FailWhenANeedFailed,
-    FailOnDraftRun,
-    Verdict {
-        spec: VerdictSpec,
-        needs_max_bytes: usize,
-    },
-    UploadCargoLog,
-    ReportCaches {
-        caches: Vec<CacheKey>,
-        nextest_artifacts: bool,
-    },
-    UploadMetrics,
-    DownloadMetrics,
-    CheckMetrics {
-        needs_max_bytes: usize,
-    },
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TrimFamily {
-    Target,
-    Sources,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum BaseExpiry {
-    Never,
-    OnDefaultBranch,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HelperCommand {
-    Plan,
-    PlanFull,
-    Prepare,
-    CheckMetadata,
-    Restored(BaseExpiry),
-    InputsSave,
-    InputsRestore,
-    InputsAudit,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

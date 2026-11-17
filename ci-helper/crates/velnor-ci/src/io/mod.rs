@@ -109,11 +109,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
-        Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
-        Command::Inputs(InputsCommand::Restore) => {
+        Command::Inputs(InputsCommand::Save(args)) => {
+            save_inputs(&current_dir()?, &args.target_dir)
+        }
+        Command::Inputs(InputsCommand::Restore(args)) => {
             let root = current_dir()?;
-            cold_on_failure(&root_target(&root), "inputs restore", || {
-                restore_inputs(&root)
+            cold_on_failure(&[root.join(&args.target_dir)], "inputs restore", || {
+                restore_inputs(&root, &args.target_dir)
             })
         }
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
@@ -134,9 +136,11 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Decide(args)) => {
             let log = std::env::var_os("RUNNER_TEMP")
                 .filter(|dir| !dir.is_empty())
-                .and_then(|dir| fs::read_to_string(Path::new(&dir).join("velnor-run.log")).ok());
+                .and_then(|dir| fs::read(Path::new(&dir).join("velnor-run.log")).ok());
             let decision = decide(
-                log.as_deref(),
+                log.as_ref()
+                    .map(|bytes| String::from_utf8_lossy(bytes))
+                    .as_deref(),
                 &args.target_dir,
                 args.archive.as_deref(),
                 now_seconds(),

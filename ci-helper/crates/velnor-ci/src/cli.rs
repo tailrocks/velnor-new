@@ -317,16 +317,22 @@ fn file_name(text: &str) -> Result<PlainName, CiError> {
     PlainName::new("file", text)
 }
 
+#[derive(Debug, Args)]
+pub struct InputTimesArgs {
+    #[arg(long, default_value = "target")]
+    pub target_dir: PathBuf,
+}
+
 #[derive(Debug, Subcommand)]
 pub enum InputsCommand {
     #[command(
         about = "Write target/.velnor/inputs.tsv: path, blob id of the bytes on disk, modification time in nanoseconds and mode of every regular tracked file in the worktree; paths a TSV field cannot hold are counted and left out"
     )]
-    Save,
+    Save(InputTimesArgs),
     #[command(
         about = "Set the saved modification time on every tracked file whose path, bytes on disk and mode equal the saved ones; report changed, new, deleted, absent and left-out files"
     )]
-    Restore,
+    Restore(InputTimesArgs),
     #[command(
         about = "Run after a build of all targets in every Cargo root: read cargo's dep-info and build script output, and exit 1 when .velnor/rust-inputs.lock does not list a file that a package read at compile time from outside its own directory, lists a line nothing reads, or the build is incomplete: every unit an all-targets build makes (each target, its test harness when it is tested, each build script run, and the library and build script run of each path dependency outside the workspaces wherever cargo built it) needs a current unit, identified by cargo's fingerprint, in each dev-profile directory (debug or <triple>/debug) that holds a test harness of a member, with proc-macro libraries in the host debug directory (targets that need features are skipped). A unit with a cargo fingerprint and no dep-info, and Cargo roots whose target directories hold one another, are refused. Only the features, target and profile of that build are seen. Files that tests read at run time, and files a build script reads without naming them with cargo:rerun-if-changed, are not seen here; declare them with [[inputs]] in .velnor/rust-ci.toml"
     )]

@@ -244,7 +244,7 @@ jobs:
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir target
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -455,7 +455,7 @@ jobs:
             velnor-tgt-rust-ci_helper.ci_helper.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         working-directory: ci-helper
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../ci-helper/target
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -606,7 +606,7 @@ jobs:
             velnor-tgt-rust-crates_velnor_runner.crates_velnor_runner.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         working-directory: crates/velnor-runner
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../../crates/velnor-runner/target
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -799,7 +799,7 @@ jobs:
             velnor-tgt-rust-generator.generator.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         working-directory: generator
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../generator/target
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -968,7 +968,7 @@ jobs:
             velnor-tgt-rust-local.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         working-directory: local
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../local/target
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
@@ -1203,19 +1203,19 @@ jobs:
             velnor-tgt-rust-inputs-audit.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('local/Cargo.lock') }}-
             velnor-tgt-rust-inputs-audit.local.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir target
       - name: velnor-ci inputs restore
         working-directory: ci-helper
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../ci-helper/target
       - name: velnor-ci inputs restore
         working-directory: crates/velnor-runner
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../../crates/velnor-runner/target
       - name: velnor-ci inputs restore
         working-directory: generator
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../generator/target
       - name: velnor-ci inputs restore
         working-directory: local
-        run: velnor-ci inputs restore
+        run: velnor-ci inputs restore --target-dir ../local/target
       - id: restored
         name: velnor-ci restored
         run: velnor-ci restored
