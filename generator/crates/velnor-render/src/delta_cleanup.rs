@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::GENERATED_HEADER;
+use crate::release::LINT_IGNORE;
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 use crate::workflow::yaml_job;
@@ -53,10 +54,13 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
                 "on",
                 Yaml::Map(vec![entry(
                     "workflow_run",
-                    Yaml::Map(vec![
-                        entry("workflows", Yaml::Seq(vec![text(workflow)])),
-                        entry("types", Yaml::Seq(vec![text("completed")]))
-                    ])
+                    Yaml::Noted(
+                        LINT_IGNORE.to_owned(),
+                        Box::new(Yaml::Map(vec![
+                            entry("workflows", Yaml::Seq(vec![text(workflow)])),
+                            entry("types", Yaml::Seq(vec![text("completed")]))
+                        ])),
+                    )
                 )])
             ),
             entry("permissions", Yaml::Map(Vec::new())),

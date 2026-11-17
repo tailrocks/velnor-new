@@ -270,6 +270,10 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
         let cleanup = cleanup.ok_or("no cleanup")?;
         assert!(cleanup.contains("workflow_run:"), "{cleanup}");
         assert!(
+            cleanup.contains("  # jactionlint ignore=dangerous-triggers\n  workflow_run:"),
+            "{cleanup}"
+        );
+        assert!(
             cleanup.contains("group: 'velnor-pr-delta-cleanup-${{ github.event.workflow_run.pull_requests[0].number || github.event.workflow_run.id }}'"),
             "{cleanup}"
         );
