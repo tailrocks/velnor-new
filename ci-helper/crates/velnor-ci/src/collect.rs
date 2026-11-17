@@ -47,8 +47,7 @@ pub fn collect(
     let runner_seconds = jobs
         .iter()
         .filter(|job| job.ran())
-        .map(|job| job.duration_seconds)
-        .sum();
+        .try_fold(0_u64, |total, job| total.checked_add(job.duration_seconds?));
     Ok(RunMetrics {
         repo: repo.to_string(),
         run_id,
@@ -59,8 +58,7 @@ pub fn collect(
         wall_seconds: seconds_between(
             Some(run.run_started_at.as_deref().unwrap_or(&run.created_at)),
             Some(&run.updated_at),
-        )
-        .unwrap_or_default(),
+        ),
         runner_seconds,
         jobs,
     })
@@ -132,12 +130,11 @@ fn job_metrics(
     };
     let (queue_seconds, duration_seconds) = if ran {
         (
-            seconds_between(Some(&job.created_at), job.started_at.as_deref()).unwrap_or_default(),
-            seconds_between(job.started_at.as_deref(), job.completed_at.as_deref())
-                .unwrap_or_default(),
+            seconds_between(Some(&job.created_at), job.started_at.as_deref()),
+            seconds_between(job.started_at.as_deref(), job.completed_at.as_deref()),
         )
     } else {
-        (0, 0)
+        (None, None)
     };
     let steps = job
         .steps

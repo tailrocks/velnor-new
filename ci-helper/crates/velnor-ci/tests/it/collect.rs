@@ -3,6 +3,7 @@
 
 use serde_json::{Value, json};
 use velnor_ci::collect::collect;
+use velnor_ci::compare::compare;
 use velnor_ci::github::{Repo, job_log_path, jobs_path, run_path};
 
 use crate::support::{
@@ -17,14 +18,14 @@ fn recorded_run_becomes_metrics() {
     assert_eq!(metrics.run_attempt, 1);
     assert_eq!(metrics.event, "push");
     assert_eq!(metrics.head_sha, "41f0a2dd1fee1a11c35a172ef1298fca69fc62e8");
-    assert_eq!(metrics.wall_seconds, 963);
-    assert_eq!(metrics.runner_seconds, 12 + 854 + 70);
+    assert_eq!(metrics.wall_seconds, Some(963));
+    assert_eq!(metrics.runner_seconds, Some(12 + 854 + 70));
     assert_eq!(metrics.jobs.len(), 3);
     let cli = &metrics.jobs[1];
     assert_eq!(cli.name, "Rust / velnor-actions-cli");
     assert_eq!(cli.conclusion, "success");
-    assert_eq!(cli.queue_seconds, 2);
-    assert_eq!(cli.duration_seconds, 854);
+    assert_eq!(cli.queue_seconds, Some(2));
+    assert_eq!(cli.duration_seconds, Some(854));
     assert_eq!(cli.steps.len(), 6);
     assert_eq!(cli.steps[1].name, "Checkout");
     assert_eq!(cli.steps[1].seconds, Some(5));
@@ -75,7 +76,7 @@ fn a_job_carried_over_from_an_earlier_attempt_is_not_a_job_run() {
     let metrics = collect(&fake, &repo(), RUN_ID, true).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(metrics.jobs.len(), 3);
     assert_eq!(metrics.jobs_run(), 2);
-    assert_eq!(metrics.runner_seconds, 854 + 70);
+    assert_eq!(metrics.runner_seconds, Some(854 + 70));
 }
 
 #[test]
@@ -98,7 +99,7 @@ fn wall_time_starts_at_run_started_at_not_created_at() {
     assert_ne!(early, RUN);
     fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), &early);
     let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(metrics.wall_seconds, 963);
+    assert_eq!(metrics.wall_seconds, Some(963));
 }
 
 #[test]
@@ -137,7 +138,7 @@ fn skipped_jobs_cost_nothing_and_have_no_log_fetched() {
     let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(metrics.jobs_skipped(), 1);
     assert_eq!(metrics.jobs_run(), 2);
-    assert_eq!(metrics.runner_seconds, 854 + 70);
+    assert_eq!(metrics.runner_seconds, Some(854 + 70));
 }
 
 #[test]
@@ -164,8 +165,9 @@ fn a_job_cancelled_before_it_started_is_not_a_job_run() {
     assert_eq!(metrics.jobs.len(), 3);
     assert_eq!(metrics.jobs_run(), 2);
     assert_eq!(metrics.jobs_skipped(), 1);
-    assert_eq!(metrics.jobs[0].queue_seconds, 0);
-    assert_eq!(metrics.runner_seconds, 854 + 70);
+    assert_eq!(metrics.jobs[0].queue_seconds, None);
+    assert_eq!(metrics.jobs[0].duration_seconds, None);
+    assert_eq!(metrics.runner_seconds, Some(854 + 70));
 }
 
 #[test]
@@ -182,8 +184,8 @@ fn jobs_on_later_pages_are_collected() {
     let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(metrics.jobs.len(), 4);
     assert_eq!(metrics.jobs[3].name, "Late");
-    assert_eq!(metrics.jobs[3].queue_seconds, 10);
-    assert_eq!(metrics.jobs[3].duration_seconds, 30);
+    assert_eq!(metrics.jobs[3].queue_seconds, Some(10));
+    assert_eq!(metrics.jobs[3].duration_seconds, Some(30));
 }
 
 #[test]
@@ -253,6 +255,15 @@ fn unmeasured_run_and_job_timestamps_stay_distinct_from_measured_zero() {
         "not-a-time",
     );
     let summary = unmeasured.summary();
+    assert_eq!(unmeasured.wall_seconds, None);
+    assert_eq!(unmeasured.runner_seconds, None);
+    assert!(
+        unmeasured
+            .jobs
+            .iter()
+            .filter(|job| job.ran())
+            .all(|job| { job.queue_seconds.is_none() && job.duration_seconds.is_none() })
+    );
     assert!(
         summary.contains("wall unmeasured, runner unmeasured"),
         "{summary}"
@@ -266,11 +277,30 @@ fn unmeasured_run_and_job_timestamps_stay_distinct_from_measured_zero() {
         "2026-11-12T08:36:32Z",
         "2026-11-12T08:36:32Z",
     );
+    assert_eq!(measured_zero.wall_seconds, Some(0));
+    assert_eq!(measured_zero.runner_seconds, Some(0));
+    assert!(
+        measured_zero
+            .jobs
+            .iter()
+            .filter(|job| job.ran())
+            .all(|job| job.queue_seconds == Some(0) && job.duration_seconds == Some(0))
+    );
     assert!(
         measured_zero
             .summary()
             .contains("wall 0s, runner 0s (0.0 runner-minutes)")
     );
+    let comparison = compare(&unmeasured, &measured_zero).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        comparison.contains("| Wall seconds | - | 0 | - |"),
+        "{comparison}"
+    );
+    assert!(
+        comparison.contains("| Runner seconds | - | 0 | - |"),
+        "{comparison}"
+    );
+    assert!(comparison.contains("unmeasured | 0 | -"), "{comparison}");
 }
 
 #[test]

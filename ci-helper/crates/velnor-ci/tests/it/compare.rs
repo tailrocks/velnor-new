@@ -33,9 +33,9 @@ fn runs_of_different_workloads_are_not_compared() {
 fn faster_second_run_shows_negative_changes_and_the_changed_job() {
     let a = recorded_metrics();
     let mut b = recorded_metrics();
-    b.wall_seconds = 600;
-    b.runner_seconds = 500;
-    b.jobs[1].duration_seconds = 400;
+    b.wall_seconds = Some(600);
+    b.runner_seconds = Some(500);
+    b.jobs[1].duration_seconds = Some(400);
     b.jobs[1].log.compiling = 0;
     b.jobs.remove(2);
 
@@ -87,17 +87,35 @@ fn only_the_ten_largest_job_changes_are_listed() {
     for index in 0..12_u64 {
         let mut left = template.clone();
         left.name = format!("job-{index:02}");
-        left.duration_seconds = 100;
+        left.duration_seconds = Some(100);
         let mut right = left.clone();
-        right.duration_seconds = 100 + index + 1;
+        right.duration_seconds = Some(100 + index + 1);
         a.jobs.push(left);
         b.jobs.push(right);
     }
+    let mut absent = template.clone();
+    absent.name = "job-absent".to_owned();
+    absent.duration_seconds = Some(500);
+    a.jobs.push(absent);
     let table = rendered(&a, &b);
+    assert!(table.contains("| job-absent | 500 | - | -500 |"), "{table}");
     assert!(table.contains("| job-11 | 100 | 112 | +12 |"), "{table}");
-    assert!(table.contains("| job-02 | 100 | 103 | +3 |"), "{table}");
+    assert!(table.contains("| job-03 | 100 | 104 | +4 |"), "{table}");
+    assert!(!table.contains("| job-02 |"), "{table}");
     assert!(!table.contains("| job-01 |"), "{table}");
     assert!(!table.contains("| job-00 |"), "{table}");
+}
+
+#[test]
+fn a_measured_zero_job_missing_from_the_other_run_is_not_a_change() {
+    let mut a = recorded_metrics();
+    let b = recorded_metrics();
+    let mut zero = a.jobs[0].clone();
+    zero.name = "job-zero-absent".to_owned();
+    zero.duration_seconds = Some(0);
+    a.jobs.push(zero);
+    let table = rendered(&a, &b);
+    assert!(!table.contains("job-zero-absent"), "{table}");
 }
 
 #[test]
@@ -105,9 +123,9 @@ fn jobs_with_the_same_name_are_compared_one_to_one() {
     let mut a = recorded_metrics();
     let mut b = recorded_metrics();
     let mut twin = a.jobs[0].clone();
-    twin.duration_seconds = 100;
+    twin.duration_seconds = Some(100);
     a.jobs.push(twin.clone());
-    twin.duration_seconds = 150;
+    twin.duration_seconds = Some(150);
     b.jobs.push(twin);
     let name = a.jobs[0].name.clone();
     let table = rendered(&a, &b);
@@ -124,16 +142,16 @@ fn a_job_literally_named_like_a_duplicate_does_not_collide() {
     let mut b = recorded_metrics();
     let mut build = a.jobs[0].clone();
     build.name = "build".to_owned();
-    build.duration_seconds = 10;
+    build.duration_seconds = Some(10);
     let mut literal = build.clone();
     literal.name = "build #2".to_owned();
-    literal.duration_seconds = 20;
+    literal.duration_seconds = Some(20);
     a.jobs
         .extend([build.clone(), build.clone(), literal.clone()]);
-    build.duration_seconds = 11;
-    literal.duration_seconds = 25;
+    build.duration_seconds = Some(11);
+    literal.duration_seconds = Some(25);
     let mut second = build.clone();
-    second.duration_seconds = 10;
+    second.duration_seconds = Some(10);
     b.jobs.extend([build, second, literal]);
     let table = rendered(&a, &b);
     assert!(table.contains("| build | 10 | 11 | +1 |"), "{table}");
@@ -146,7 +164,7 @@ fn a_pipe_in_a_job_name_does_not_add_a_table_column() {
     let a = recorded_metrics();
     let mut b = recorded_metrics();
     b.jobs[0].name = "test | linux".to_owned();
-    b.jobs[0].duration_seconds += 5;
+    b.jobs[0].duration_seconds = b.jobs[0].duration_seconds.map(|seconds| seconds + 5);
     let table = rendered(&a, &b);
     assert!(table.contains("| test \\| linux | - | "), "{table}");
 }

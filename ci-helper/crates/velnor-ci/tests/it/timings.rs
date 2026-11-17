@@ -8,7 +8,8 @@ use velnor_model::{RepoPath, RunnerLabel};
 
 use crate::support::FakeGitHub;
 
-pub(crate) const LIST: &str = include_str!("data/timings/list.json");
+pub(crate) const LIST: &str = include_str!("data/timings/list-main-pr.json");
+pub(crate) const RECORDED_LIST: &str = include_str!("data/timings/list.json");
 const REPO: &str = include_str!("data/timings/repo.json");
 
 const RUNS: [(u64, &str, &str); 3] = [

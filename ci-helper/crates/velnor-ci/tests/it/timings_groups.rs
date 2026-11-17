@@ -7,7 +7,7 @@ use velnor_ci::timings::gather;
 use velnor_model::RepoPath;
 
 use crate::support::FakeGitHub;
-use crate::timings::{LIST, lab, recorded, roots, runner};
+use crate::timings::{LIST, RECORDED_LIST, lab, recorded, roots, runner};
 
 const NEWEST: [u64; 3] = [43_636_016_430, 43_628_937_052, 43_618_131_619];
 
@@ -192,7 +192,7 @@ fn unmeasured_lint_steps_do_not_create_samples_but_a_measured_zero_does() {
 
 #[test]
 fn recorded_pull_requests_without_base_metadata_are_not_written_as_default_branch_timings() {
-    let report = gather(&recorded(LIST), &lab(), &roots(), &runner())
+    let report = gather(&recorded(RECORDED_LIST), &lab(), &roots(), &runner())
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(report.timings.is_empty());
 
