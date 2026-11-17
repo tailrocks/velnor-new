@@ -105,7 +105,7 @@ pub(crate) fn glob_literal(text: &str) -> String {
             other => vec![other],
         })
         .collect();
-    if escaped.starts_with(['!', '#']) {
+    if escaped.starts_with(['!', '#', '~']) {
         format!("./{escaped}")
     } else {
         escaped

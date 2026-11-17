@@ -108,7 +108,8 @@ pub(super) fn set_time(repo: &Repo, path: &str, time: SystemTime) {
 
 pub(super) fn compiled(repo: &Repo) {
     repo.write_unstaged("velnor-run.log", "   Compiling app v0.1.0 (/work/app)\n");
-    velnor_ci::io::save_inputs(repo.root()).unwrap_or_else(|error| unreachable!("{error}"));
+    velnor_ci::io::save_inputs(repo.root(), std::path::Path::new("target"))
+        .unwrap_or_else(|error| unreachable!("{error}"));
 }
 
 #[test]
@@ -162,7 +163,8 @@ fn a_delta_survives_three_pushes_with_prior_artifacts_latest_inputs_and_original
                 .unwrap_or_else(|e| unreachable!("{e}"));
             repo.write_unstaged("target/debug/second", "second");
             repo.write_unstaged("source", "second source");
-            velnor_ci::io::save_inputs(repo.root()).unwrap_or_else(|error| unreachable!("{error}"));
+            velnor_ci::io::save_inputs(repo.root(), std::path::Path::new("target"))
+                .unwrap_or_else(|error| unreachable!("{error}"));
             expected_inputs = fs::read_to_string(repo.root().join("target/.velnor/inputs.tsv"))
                 .unwrap_or_else(|error| unreachable!("{error}"));
         }

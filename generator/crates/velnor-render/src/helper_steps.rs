@@ -1,35 +1,45 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::HelperCommand;
+use velnor_model::{HelperCommand, RepoPath};
 
 use crate::base_steps::base_age;
 use crate::gate::{PLAN_STEP, REPLAN_STEP};
+use crate::release_steps::shell_word;
 use crate::rules::RenderedStep;
 use crate::steps::PREPARE_STEP;
 
-const RESTORED_STEP: &str = "restored";
+pub(crate) fn inputs_step(
+    verb: &str,
+    target: &RepoPath,
+    directory: Option<&RepoPath>,
+) -> RenderedStep {
+    let depth = directory.map_or(0, |dir| dir.as_str().split('/').count());
+    let relative = format!("{}{}", "../".repeat(depth), target.as_str());
+    RenderedStep {
+        name: format!("velnor-ci inputs {verb}"),
+        run: Some(format!(
+            "velnor-ci inputs {verb} --target-dir {}",
+            shell_word(&relative)
+        )),
+        ..RenderedStep::default()
+    }
+}
 
-fn helper_arguments(command: HelperCommand) -> &'static str {
-    match command {
+pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
+    let arguments = match command {
         HelperCommand::Plan => "plan",
         HelperCommand::PlanFull => "plan --full",
         HelperCommand::Prepare => "prepare",
         HelperCommand::CheckMetadata => "check-metadata",
         HelperCommand::Restored(..) => "restored",
-        HelperCommand::InputsSave => "inputs save",
-        HelperCommand::InputsRestore => "inputs restore",
         HelperCommand::InputsAudit => "inputs audit",
-    }
-}
-
-pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
-    let arguments = helper_arguments(command);
+    };
     let (id, env) = match command {
         HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
         HelperCommand::PlanFull => (Some(REPLAN_STEP), Vec::new()),
         HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
-        HelperCommand::Restored(expiry) => (Some(RESTORED_STEP), base_age(expiry)),
+        HelperCommand::Restored(expiry) => (Some("restored"), base_age(expiry)),
         _ => (None, Vec::new()),
     };
     RenderedStep {

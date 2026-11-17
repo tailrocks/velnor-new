@@ -4,9 +4,7 @@
 use crate::base_cache::has_saving_helper;
 use crate::lane::Lane;
 use crate::plan::step;
-use velnor_model::{
-    CacheKey, CacheRoot, HelperCommand, Host, JobId, RepoFacts, RustRoot, Step, StepKind, When,
-};
+use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoFacts, RustRoot, Step, StepKind, When};
 
 pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId) -> Vec<Step> {
     if !supported(facts, root) {
@@ -39,7 +37,7 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
         Step {
             directory: root.manifest.parent(),
             when: When::SaveDelta,
-            ..step(StepKind::Helper(HelperCommand::InputsSave))
+            ..step(StepKind::InputsSave(root.target_dir.clone()))
         },
         Step {
             when: When::SaveDelta,

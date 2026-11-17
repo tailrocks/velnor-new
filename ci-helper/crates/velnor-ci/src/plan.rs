@@ -62,6 +62,21 @@ pub fn outputs(
     Ok(lines.concat())
 }
 
+#[must_use]
+pub fn tests_outputs(expected: &BTreeMap<RepoPath, bool>) -> String {
+    expected
+        .iter()
+        .map(|(root, run)| {
+            format!(
+                "rust_{}_tests={}\n",
+                RootSlug::of(root),
+                if *run { "run" } else { "skip" }
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
 fn package_args(names: &[&str]) -> String {
     if names.iter().all(|name| cargo_name(name)) {
         names

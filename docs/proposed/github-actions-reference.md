@@ -64,6 +64,12 @@ These are review criteria, not new runtime behavior or cache capacity. Existing
 [cache decisions](cache-decisions.md) and stricter
 [compiled-state admission](compiled-state-persistence.md#budget) remain binding.
 
+### Runner-scoped crates mirror
+
+The official runner [sets the runner environment context](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/JobRunner.cs#L150-L156) from the job message before executing steps. GitHub’s [runner context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#runner-context) defines `runner.environment` as `github-hosted` or `self-hosted` and permits the runner context in step conditions.
+
+The new generator emits mirror setup only for the configured matching runner label. Every emitted mirror step additionally requires `runner.environment == 'self-hosted'` and excludes fork pull requests by requiring the pull-request head repository to match `github.repository`. Label spelling alone cannot establish the runner environment: new hosted labels and custom scale-set names remain protected by the runtime condition. An absent or unrecognized runner environment skips mirror setup.
+
 ### Ledger event and source identity
 
 The runner's [`GitHubContext.GetRuntimeEnvironmentVariables`](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/GitHubContext.cs)
@@ -700,6 +706,13 @@ The maintenance drift job uses the [pinned github-script API client](https://git
 The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential requests Administration read permission.
 
 ## Generated Rust CI workflow events and concurrency
+
+The runner's [`toJSON` implementation](https://github.com/actions/runner/blob/main/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/ToJson.cs)
+serializes nested mappings with two spaces per level, LF newlines, a space after
+each colon, and commas between entries. The Required gate's environment size
+estimate includes this formatting and JSON string escaping for job identifiers,
+output names, and output values. The expression stays in `env`; the shell command
+contains no interpolated expressions.
 
 These behaviors are GitHub service semantics, so the runner source does not define them. The generator relies on the GitHub documentation below and tests the rendered text, not the service.
 

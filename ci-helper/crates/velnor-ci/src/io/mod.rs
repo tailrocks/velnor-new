@@ -6,6 +6,9 @@ mod build_inputs;
 mod cache;
 mod cold;
 mod configurations;
+mod crates_mirror;
+mod crates_mirror_dispatch;
+mod crates_mirror_mise;
 mod delta;
 mod delta_freshness;
 mod delta_paths;
@@ -20,6 +23,7 @@ mod inputs;
 mod manifests;
 mod plan;
 mod release;
+mod required;
 mod restored;
 mod run;
 mod setup;
@@ -53,6 +57,7 @@ use clap::{CommandFactory, FromArgMatches};
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const API_VARIABLE: &str = "GITHUB_API_URL";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
+const SUMMARY_VARIABLE: &str = "GITHUB_STEP_SUMMARY";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
 const SOURCE_LIMIT: u64 = 1 << 20;
 const SOURCE_TOTAL_LIMIT: u64 = 8 << 20;
@@ -82,6 +87,9 @@ where
 
 #[must_use]
 pub fn main() -> ExitCode {
+    if crates_mirror::is_wrapper() {
+        return crates_mirror::run();
+    }
     let cli = match parse_cli(std::env::args_os()) {
         Ok(cli) => cli,
         Err(error) if error.use_stderr() => {
@@ -110,11 +118,13 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Delta(command) => delta::run(command),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
-        Command::Inputs(InputsCommand::Save) => save_inputs(&current_dir()?),
-        Command::Inputs(InputsCommand::Restore) => {
+        Command::Inputs(InputsCommand::Save(args)) => {
+            save_inputs(&current_dir()?, &args.target_dir)
+        }
+        Command::Inputs(InputsCommand::Restore(args)) => {
             let root = current_dir()?;
-            cold_on_failure(&root_target(&root), "inputs restore", || {
-                restore_inputs(&root)
+            cold_on_failure(&[root.join(&args.target_dir)], "inputs restore", || {
+                restore_inputs(&root, &args.target_dir)
             })
         }
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => {
@@ -126,16 +136,20 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
+        Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
         Command::Cache(CacheCommand::Decide(args)) => {
             let log = std::env::var_os("RUNNER_TEMP")
                 .filter(|dir| !dir.is_empty())
-                .and_then(|dir| fs::read_to_string(Path::new(&dir).join("velnor-run.log")).ok());
+                .and_then(|dir| fs::read(Path::new(&dir).join("velnor-run.log")).ok());
             let decision = decide(
-                log.as_deref(),
+                log.as_ref()
+                    .map(|bytes| String::from_utf8_lossy(bytes))
+                    .as_deref(),
                 &args.target_dir,
                 args.archive.as_deref(),
                 now_seconds(),

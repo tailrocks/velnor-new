@@ -8,6 +8,7 @@ use velnor_model::{
     RustMetadata, RustPackage, RustRoot,
 };
 
+use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
@@ -134,18 +135,34 @@ pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
     })
 }
 
+pub(crate) fn effective_configs(
+    files: &BTreeMap<RepoPath, Vec<u8>>,
+) -> impl Iterator<Item = (&RepoPath, &Vec<u8>)> {
+    files.iter().filter(|(file, _)| {
+        is_cargo_config(file)
+            && !file
+                .as_str()
+                .strip_suffix(".toml")
+                .and_then(|name| RepoPath::new(name).ok())
+                .is_some_and(|name| files.contains_key(&name))
+    })
+}
+
 pub(crate) fn patch_files<'v>(
     view: &'v RepoView,
     manifest: &RepoPath,
 ) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
     let folder = manifest.parent();
+    let effective: BTreeSet<&RepoPath> = effective_configs(&view.files)
+        .map(|(file, _)| file)
+        .collect();
     view.files
         .iter()
         .filter_map(|(file, bytes)| {
             if file == manifest {
                 return Some((file, bytes.as_slice(), folder.clone()));
             }
-            if !is_cargo_config(file) {
+            if !effective.contains(file) {
                 return None;
             }
             let base = file.parent().and_then(|cargo| cargo.parent());
@@ -192,7 +209,11 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
         .flatten()
         .any(|flags| {
             let text = flags.to_string();
-            text.contains("cap-lints") || text.contains("force-warn") || text.contains("\"@")
+            text.contains("cap-lints")
+                || text.contains("force-warn")
+                || flag_tokens(flags)
+                    .iter()
+                    .any(|token| token.starts_with('@'))
         });
     if caps {
         return Err(DetectError::invalid(file, Reason::CapLints));

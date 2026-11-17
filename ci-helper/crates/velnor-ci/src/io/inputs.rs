@@ -11,19 +11,19 @@ use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
 
 use crate::error::CiError;
 use crate::inputs::{
-    INPUTS_FILE, SavedInput, Tracked, TrackedFile, is_representable, parse_ls_files, plan_restore,
+    SavedInput, Tracked, TrackedFile, is_representable, parse_ls_files, plan_restore,
     with_worktree_blobs,
 };
 use crate::scope::Scope;
 
-pub fn save_inputs(root: &Path) -> Result<String, CiError> {
+pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
     let CapturedInputs {
         top,
         tracked,
         source_identity: identity,
         ..
     } = capture_inputs(root, false)?;
-    let path = root.join(INPUTS_FILE);
+    let path = root.join(target).join(".velnor/inputs.tsv");
     if std::env::var("EXPECTED_SOURCE_IDENTITY")
         .is_ok_and(|expected| identity.is_empty() || expected != identity)
     {
@@ -64,9 +64,10 @@ pub fn save_inputs(root: &Path) -> Result<String, CiError> {
     fs::write(&path, super::input_snapshot::encode(&identity, &saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
-        "saved {} tracked files and {} symlinks to {INPUTS_FILE}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
+        "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
         tracked.files.len(),
         tracked.links.len(),
+        target.join(".velnor/inputs.tsv").display(),
         tracked.absent.len(),
         tracked.unsupported,
         tracked.submodules
@@ -97,12 +98,15 @@ pub(super) fn capture_inputs(root: &Path, strict: bool) -> Result<CapturedInputs
     })
 }
 
-pub fn restore_inputs(root: &Path) -> Result<String, CiError> {
-    let path = root.join(INPUTS_FILE);
+pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
+    let path = root.join(target).join(".velnor/inputs.tsv");
     let text = match fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == ErrorKind::NotFound => {
-            return Ok(format!("no {INPUTS_FILE}; nothing restored (cold run)\n"));
+            return Ok(format!(
+                "no {}; nothing restored (cold run)\n",
+                target.join(".velnor/inputs.tsv").display()
+            ));
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };

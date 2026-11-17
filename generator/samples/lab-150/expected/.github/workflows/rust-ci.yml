@@ -64,6 +64,8 @@ jobs:
     outputs:
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
+      # jactionlint ignore=unused-job-output
+      tests_listed: '${{ steps.test.outputs.tests_listed }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -953,6 +955,8 @@ jobs:
     outputs:
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
+      # jactionlint ignore=unused-job-output
+      tests_listed: '${{ steps.test.outputs.tests_listed }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:

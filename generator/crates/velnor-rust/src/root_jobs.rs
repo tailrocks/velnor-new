@@ -15,7 +15,8 @@ use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
 use crate::mise::nextest_tool;
 use crate::plan::{
-    CHECKOUT_DEPTH, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, setup, step, tools_restore,
+    CHECKOUT_DEPTH, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, mirror_step, setup, step,
+    tools_restore,
 };
 
 const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
@@ -306,19 +307,19 @@ impl RootJobs<'_> {
         );
         build.extend(self.audit());
         let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
+        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),
             ..restore
         }));
-        group.extend([
-            self.gated(StepKind::InstallTools {
-                only: nextest_tool(&self.facts.tools).map(str::to_owned),
-            }),
-            self.gated(StepKind::DownloadArchive {
-                name: artifact,
-                into: self.root.manifest.parent(),
-            }),
-        ]);
+        group.push(self.gated(StepKind::InstallTools {
+            only: nextest_tool(&self.facts.tools).map(str::to_owned),
+        }));
+        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
+        group.push(self.gated(StepKind::DownloadArchive {
+            name: artifact,
+            into: self.root.manifest.parent(),
+        }));
         group.extend(
             self.cargo(vec![CargoCommand::NextestRunArchive {
                 file: ARCHIVE_FILE,
