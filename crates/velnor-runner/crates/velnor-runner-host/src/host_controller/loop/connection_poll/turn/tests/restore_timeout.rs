@@ -33,25 +33,16 @@ async fn a_timed_out_restore_releases_its_claim_before_retry() -> TestResult<()>
     )?)?;
     let version = config
         .get("tools")
-        .and_then(|tools| tools.get("bun"))
-        .and_then(toml::Value::as_str)
+        .and_then(|tools| tools.get("bun")?.as_str())
         .ok_or("repository Bun pin")?;
     let bun = Command::new("mise")
-        .args([
-            "--no-config",
-            "--no-env",
-            "--no-hooks",
-            "which",
-            "bun",
-            "--tool",
-            &format!("bun@{version}"),
-        ])
+        .args(["--no-config", "--no-env", "--no-hooks", "which", "bun"])
+        .args(["--tool", &format!("bun@{version}")])
         .output()?;
     assert!(
         bun.status.success(),
-        "Bun resolution failed with {}\n{}\n{}",
+        "Bun resolution failed with {}\n{}",
         bun.status,
-        String::from_utf8_lossy(&bun.stdout),
         String::from_utf8_lossy(&bun.stderr),
     );
     let bun = String::from_utf8(bun.stdout)?;
@@ -60,7 +51,7 @@ async fn a_timed_out_restore_releases_its_claim_before_retry() -> TestResult<()>
         .ok_or("script")?;
     fs::write(&curl, format!("#!{}\n{script}", bun.trim()))?;
     fs::set_permissions(&curl, fs::Permissions::from_mode(0o700))?;
-    let output = Command::new(std::env::current_exe()?)
+    let status = Command::new(std::env::current_exe()?)
         .args(["--exact", TEST, "--nocapture"])
         .env(CHILD, temp.path())
         .env(
@@ -69,13 +60,8 @@ async fn a_timed_out_restore_releases_its_claim_before_retry() -> TestResult<()>
                 std::env::split_paths(&std::env::var_os("PATH").ok_or("PATH")?),
             ))?,
         )
-        .output()?;
-    assert!(
-        output.status.success(),
-        "{}\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr),
-    );
+        .status()?;
+    assert!(status.success(), "{status}");
     Ok(())
 }
 
@@ -90,8 +76,7 @@ async fn timed_out_restore() -> TestResult<()> {
     let completed_at = tokio::time::Instant::now().into_std();
     writer.await??;
     assert!(!first_result?);
-    assert!(began.elapsed() >= Duration::from_secs(10));
-    assert!(began.elapsed() < Duration::from_secs(60));
+    assert!((10..60).contains(&began.elapsed().as_secs()));
     assert!(fixture.prepared.credentials.is_none());
     let first = refreshes(&fixture).await?;
     let retry_at = fixture.prepared.restore_retry_at.ok_or("retry deadline")?;
@@ -136,14 +121,9 @@ fn hold_terminal_write(journal: &Journal, root: &std::path::Path) -> Result<(), 
         }
         std::thread::sleep(Duration::from_millis(2));
     }
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| error.to_string())?;
-    let guard = runtime.block_on(journal.write_guard());
+    let _guard = tokio::runtime::Handle::current().block_on(journal.write_guard());
     fs::write(root.join("journal-held"), "held").map_err(|error| error.to_string())?;
     std::thread::sleep(Duration::from_secs(12));
-    drop(guard);
     Ok(())
 }
 
@@ -185,10 +165,8 @@ fn authority(fixture: &Fixture) -> TestResult<Link> {
 }
 
 async fn refreshes(fixture: &Fixture) -> TestResult<Vec<(i64, String)>> {
-    let mut rows = fixture
-        .journal
-        .connection()
-        .await?
+    let connection = fixture.journal.connection().await?;
+    let mut rows = connection
         .query(
             "SELECT generation, state FROM connection_session_refreshes ORDER BY generation",
             (),
