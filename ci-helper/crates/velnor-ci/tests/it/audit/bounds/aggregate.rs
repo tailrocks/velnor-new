@@ -74,7 +74,7 @@ fn dep_info_budget_is_shared_across_cargo_roots() {
     );
 }
 
-fn write_dep_info_files(
+pub(super) fn write_dep_info_files(
     repo: &crate::io::Repo,
     target: &str,
     source: &str,
