@@ -38,6 +38,7 @@ const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<("
 pub enum Value {
     Text(String),
     Expr(String),
+    BoundedExpr { text: String, max_bytes: usize },
     Int(u64),
     Bool(bool),
 }
@@ -152,7 +153,7 @@ impl fmt::Display for RuleViolation {
             ),
             Rule::EnvTooLong(length) => write!(
                 f,
-                "an env value is {length} characters long, and the limit is {MAX_ENV_CHARACTERS}; the gate spec grows with the number of jobs, so split the repository's Cargo roots"
+                "an env value can expand to {length} UTF-8 bytes, and the limit is {MAX_ENV_CHARACTERS}; the required gate's needs JSON includes every dependency's outputs, so reduce the Cargo roots or package outputs"
             ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
@@ -264,7 +265,8 @@ fn longest_env(step: &RenderedStep) -> Option<usize> {
     step.env
         .iter()
         .filter_map(|(_, value)| match value {
-            Value::Text(text) => Some(text.chars().count()),
+            Value::Text(text) => Some(text.len()),
+            Value::BoundedExpr { max_bytes, .. } => Some(*max_bytes),
             _ => None,
         })
         .max()
