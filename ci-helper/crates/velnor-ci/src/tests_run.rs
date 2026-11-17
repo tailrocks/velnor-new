@@ -77,6 +77,13 @@ pub fn output_lines(counts: TestCounts) -> String {
     lines.join("\n") + "\n"
 }
 
+fn skipped(line: &str) -> Option<u64> {
+    let (_, tail) = line.split_once(" run:")?;
+    tail.split(',')
+        .find_map(|part| part.trim().strip_suffix(" skipped"))
+        .and_then(|count| count.trim().parse().ok())
+}
+
 #[must_use]
 pub(crate) fn list_argv(run: &[String]) -> Option<Vec<String>> {
     if !runs_nextest(run) {
@@ -135,7 +142,6 @@ pub(crate) fn apply_runnable(
     matches: Option<BTreeMap<String, u64>>,
 ) -> TestCounts {
     let Some(matches) = matches else {
-        counts.listed = None;
         counts.by_package = None;
         return counts;
     };
@@ -143,7 +149,6 @@ pub(crate) fn apply_runnable(
         .values()
         .try_fold(0u64, |total, count| total.checked_add(*count))
     else {
-        counts.listed = None;
         counts.by_package = None;
         return counts;
     };
@@ -259,7 +264,7 @@ impl SummaryTap {
             self.closed = true;
             self.counts = Some(TestCounts {
                 run: summary.tests_run,
-                listed: None,
+                listed: skipped(trimmed).and_then(|skipped| skipped.checked_add(summary.tests_run)),
                 by_package: None,
                 runs,
             });

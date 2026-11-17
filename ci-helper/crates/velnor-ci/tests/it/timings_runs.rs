@@ -17,7 +17,7 @@ fn list(entries: &[Value]) -> String {
 }
 
 fn entry(id: u64, event: &str, branch: &str) -> Value {
-    json!({ "id": id, "event": event, "run_attempt": 1, "head_branch": branch, "pull_requests": [] })
+    json!({ "id": id, "event": event, "run_attempt": 1, "head_branch": branch, "pull_requests": [{"base": {"ref": "main"}}] })
 }
 
 fn ordinary(ids: &[u64]) -> Vec<Value> {
@@ -44,7 +44,10 @@ fn an_even_number_of_runs_takes_the_mean_of_the_middle_two() {
             .map(|run| {
                 let job = run.jobs.iter().find(|j| j.name == name);
                 let step = job.and_then(|j| j.steps.iter().find(|s| s.name == "Lint"));
-                f64::from(u32::try_from(step.map_or(0, |s| s.seconds)).unwrap_or_default())
+                f64::from(
+                    u32::try_from(step.and_then(|s| s.seconds).unwrap_or_default())
+                        .unwrap_or_default(),
+                )
             })
             .collect::<Vec<_>>()
     };
