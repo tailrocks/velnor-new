@@ -12,6 +12,9 @@ const CASE_ENV: &str = "VELNOR_HELPER_CASE";
 const FOREIGN_ENGINE: &str = "0000000000000000000000000000000000000000000000000000000000000000";
 
 fn helper_case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
+    if let Some(case) = review::case(name) {
+        return Some(case);
+    }
     let publication = HelperSpec::of(Kind::Publication);
     let initializer = HelperSpec::of(Kind::Initializer);
     let foreign = |role| HelperSpec::of(Kind::Foreign(role));
@@ -64,23 +67,6 @@ fn helper_case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
         "unlisted_unmounted" => (vec![unmounted(false), publication], true),
         "lookalike_publication" => (vec![foreign("execution-publication")], false),
         "lookalike_initializer" => (vec![foreign("storage-initializer")], false),
-        "missing_id" => (
-            vec![
-                publication,
-                HelperSpec {
-                    missing_id: true,
-                    ..foreign("resource-probe")
-                },
-            ],
-            false,
-        ),
-        "volume_error" => (
-            vec![HelperSpec {
-                listed: false,
-                ..foreign("resource-probe")
-            }],
-            false,
-        ),
         "foreign_beside_journaled" => (vec![publication, foreign("resource-probe")], false),
         "journaled_foreign_engine" => (
             vec![HelperSpec {

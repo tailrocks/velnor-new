@@ -2,7 +2,32 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::super::PRIVATE_VOLUME;
-use super::{TestResult, run_helper_case};
+use super::super::helper_stub::ListedId;
+use super::{HelperSpec, Kind, TestResult, run_helper_case};
+
+pub(super) fn case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
+    let foreign = HelperSpec::of(Kind::Foreign("resource-probe"));
+    match name {
+        "missing_id" => Some((
+            vec![
+                HelperSpec::of(Kind::Publication),
+                HelperSpec {
+                    listed_id: ListedId::Missing,
+                    ..foreign
+                },
+            ],
+            false,
+        )),
+        "volume_error" => Some((
+            vec![HelperSpec {
+                listed: false,
+                ..foreign
+            }],
+            false,
+        )),
+        _ => None,
+    }
+}
 
 #[test]
 fn missing_foreign_id_preserves_owned_helper_and_reservation() -> TestResult<()> {
