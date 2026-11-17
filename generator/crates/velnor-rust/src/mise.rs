@@ -229,7 +229,7 @@ fn versions(bytes: &[u8]) -> Result<Versions, Reason> {
             value: other.to_string(),
         }),
     }?;
-    render_versions(&mut versions, &parsed)?;
+    render_versions(&mut versions, &parsed, bytes)?;
     Ok(versions)
 }
 

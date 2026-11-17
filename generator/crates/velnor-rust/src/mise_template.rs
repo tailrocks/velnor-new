@@ -3,15 +3,23 @@
 
 use std::collections::BTreeMap;
 
+use serde::Deserialize;
 use tera::{Context, Tera};
 use toml::Value;
 use velnor_model::ToolRequest;
 
 use crate::error::Reason;
 
+#[derive(Deserialize)]
+struct OrderedVars {
+    #[serde(default)]
+    vars: BTreeMap<String, toml::Spanned<Value>>,
+}
+
 pub(crate) fn render_versions(
     versions: &mut BTreeMap<String, Vec<ToolRequest>>,
     config: &toml::Table,
+    bytes: &[u8],
 ) -> Result<(), Reason> {
     if !versions
         .values()
@@ -29,28 +37,15 @@ pub(crate) fn render_versions(
     {
         return Err(invalid("tera_v1 version templates are unsupported"));
     }
-    let mut pending = config
-        .get("vars")
-        .and_then(Value::as_table)
-        .cloned()
-        .unwrap_or_default();
+    let text = std::str::from_utf8(bytes).map_err(|_| Reason::NotUtf8)?;
+    let parsed: OrderedVars =
+        toml::from_str(text).map_err(|error| Reason::Syntax(error.message().to_owned()))?;
+    let mut vars: Vec<_> = parsed.vars.into_iter().collect();
+    vars.sort_by_key(|(_, value)| value.span().start);
     let mut resolved = toml::Table::new();
-    while !pending.is_empty() {
-        let mut progress = false;
-        let mut failure = None;
-        for (name, value) in pending.clone() {
-            match render_value(value, &context(&resolved)) {
-                Ok(value) => {
-                    resolved.insert(name.clone(), value);
-                    pending.remove(&name);
-                    progress = true;
-                }
-                Err(error) => failure = Some(error),
-            }
-        }
-        if !progress {
-            return Err(failure.unwrap_or_else(|| invalid("unresolved vars")));
-        }
+    for (name, value) in vars {
+        let value = render_value(value.into_inner(), &context(&resolved))?;
+        resolved.insert(name, value);
     }
     let context = context(&resolved);
     for request in versions.values_mut().flatten() {
