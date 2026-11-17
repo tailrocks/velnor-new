@@ -1227,7 +1227,6 @@ jobs:
         shell: bash
         run: /usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py
         env:
-          GH_TOKEN: ${{ github.token }}
           SOURCES_ID: ${{ needs.stable-sources-producer-linux.outputs.artifact_id }}
           SOURCES_DIGEST: ${{ needs.stable-sources-producer-linux.outputs.artifact_digest }}
           SOURCES_TREE: ${{ needs.stable-sources-producer-linux.outputs.tree }}
@@ -1495,7 +1494,6 @@ jobs:
         shell: bash
         run: /usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py
         env:
-          GH_TOKEN: ${{ github.token }}
           SOURCES_ID: ${{ needs.stable-sources-producer-macos.outputs.artifact_id }}
           SOURCES_DIGEST: ${{ needs.stable-sources-producer-macos.outputs.artifact_digest }}
           SOURCES_TREE: ${{ needs.stable-sources-producer-macos.outputs.tree }}
@@ -1763,7 +1761,6 @@ jobs:
         shell: bash
         run: /usr/bin/python3 -I -S scripts/generator-release/stable-source-admission.py
         env:
-          GH_TOKEN: ${{ github.token }}
           SOURCES_ID: ${{ needs.stable-sources-producer-intel.outputs.artifact_id }}
           SOURCES_DIGEST: ${{ needs.stable-sources-producer-intel.outputs.artifact_digest }}
           SOURCES_TREE: ${{ needs.stable-sources-producer-intel.outputs.tree }}
