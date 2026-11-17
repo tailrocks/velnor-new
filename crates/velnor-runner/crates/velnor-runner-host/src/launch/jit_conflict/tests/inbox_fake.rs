@@ -19,7 +19,11 @@ pub(super) fn isolated(name: &str) -> TestResult<bool> {
     }
     let directory = tempfile::tempdir()?;
     let executable = directory.path().join("curl");
-    std::fs::write(&executable, include_str!("inbox_fake.ts"))?;
+    let bun = bun_executable()?;
+    let (_, source) = include_str!("inbox_fake.ts")
+        .split_once('\n')
+        .ok_or("fake curl script shebang")?;
+    std::fs::write(&executable, format!("#!{}\n{source}", bun.display()))?;
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700))?;
     let mut paths = vec![directory.path().to_owned()];
     paths.extend(std::env::split_paths(
@@ -40,6 +44,46 @@ pub(super) fn isolated(name: &str) -> TestResult<bool> {
         output.status
     );
     Ok(true)
+}
+
+fn bun_executable() -> TestResult<PathBuf> {
+    let direct = Command::new("bun")
+        .args(["--print", "process.execPath"])
+        .output();
+    let output = match direct {
+        Ok(output) if output.status.success() => output,
+        _ => {
+            let version = std::env::var("VELNOR_TOOL_BUN")
+                .map_err(|_| "inbox fake requires Bun on PATH or installed VELNOR_TOOL_BUN")?;
+            Command::new("mise")
+                .args([
+                    "--no-config",
+                    "--no-env",
+                    "--no-hooks",
+                    "which",
+                    "--tool",
+                    &format!("bun@{version}"),
+                    "bun",
+                ])
+                .env("MISE_AUTO_INSTALL", "false")
+                .env("MISE_EXEC_AUTO_INSTALL", "false")
+                .output()?
+        }
+    };
+    if !output.status.success() {
+        return Err(format!(
+            "inbox fake could not locate installed Bun: {}",
+            String::from_utf8_lossy(&output.stderr)
+        )
+        .into());
+    }
+    let path = String::from_utf8(output.stdout)?;
+    let path = path.trim();
+    let executable = PathBuf::from(path);
+    if !executable.is_absolute() || !executable.is_file() || path.chars().any(char::is_whitespace) {
+        return Err(format!("invalid inbox fake Bun executable: {path:?}").into());
+    }
+    Ok(executable)
 }
 
 pub(super) async fn poll(case: &Case, body: &str) -> TestResult<()> {
