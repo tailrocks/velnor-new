@@ -1,5 +1,5 @@
-- 6737e1ca43b65221cd3cd7bd8a0ae626e0b42c45c1fb6387d507dd3621ff8ffb  ./dogfood/dogfood.diff
-- 705fb192cda51a31cfd0c6c2e47d90fcb5d7e11e6fdf48a2aa92d2be78cf972a  ./dogfood/dogfood.verdict
+- e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/dogfood.diff
+- 1cc103f316d7707bb7ead8d7a203934bbf0f1251b615eb6056deb22c90d6144f  ./dogfood/dogfood.verdict
 - 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./dogfood/generate.exit
 - a95857e90d57257bb0c59cbb1f85bf45509656f5b6d6a7c3cbcb62f990073f7a  ./dogfood/generate.stderr.txt
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./dogfood/generate.stdout.txt
