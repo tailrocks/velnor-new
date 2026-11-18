@@ -11,6 +11,7 @@ mod cargo_directory;
 mod fixture;
 mod mise;
 mod setup;
+mod toolchain_view;
 mod toolchains;
 use fixture::{
     TestResult, active_toolchain, mirror_fixture, repeated_mirror_fixture, rustup_binary,
