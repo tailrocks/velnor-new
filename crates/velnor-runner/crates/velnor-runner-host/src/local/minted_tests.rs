@@ -3,10 +3,10 @@
 
 use std::os::unix::fs::PermissionsExt;
 
-use super::{COMPACT_SLACK, MINTED_FILE, MintedAgents};
+use super::{COMPACT_SLACK, MINTED_FILE, MintedAgents, encode};
 
 fn lines(state: &std::path::Path) -> usize {
-    std::fs::read_to_string(state.join(MINTED_FILE)).map_or(0, |text| text.lines().count())
+    std::fs::read_to_string(state.join(MINTED_FILE)).map_or(0, |text| text.lines().filter(|line| !line.is_empty()).count())
 }
 
 #[tokio::test]
@@ -45,9 +45,10 @@ async fn an_intent_is_refused_when_the_state_directory_entry_cannot_be_synced() 
 #[tokio::test]
 async fn a_torn_or_malformed_line_never_names_an_agent_to_delete() {
     let state = tempfile::tempdir().expect("state");
+    let whole = encode("+", "trusted", "whole");
     std::fs::write(
         state.path().join(MINTED_FILE),
-        "+ trusted whole\n+ bogus other\n+ trusted bad/name\n+ trusted a b\n+ trusted cut",
+        format!("{whole}+ bogus other\n+ trusted bad/name\n+ trusted a b\n+ trusted whole\n+ trusted cut"),
     )
     .expect("seed");
     let journal = MintedAgents::new(state.path());
@@ -59,13 +60,40 @@ async fn a_torn_or_malformed_line_never_names_an_agent_to_delete() {
 }
 
 #[tokio::test]
-async fn a_complete_record_that_follows_a_torn_fragment_is_still_an_intent() {
+async fn a_torn_record_followed_by_a_whole_one_loses_only_the_torn_one() {
     let state = tempfile::tempdir().expect("state");
-    std::fs::write(
-        state.path().join(MINTED_FILE),
-        "+ trusted whole\n+ trusted cut+ untrusted second\n+ trusted cut- trusted whole\n",
-    )
-    .expect("seed");
+    let whole = encode("+", "trusted", "kept");
+    let torn = &encode("+", "trusted", "cut")[..14];
+    std::fs::write(state.path().join(MINTED_FILE), format!("{whole}{torn}")).expect("seed");
+    let journal = MintedAgents::new(state.path());
+    journal.intent("untrusted", "second").await.expect("intent");
     let open = MintedAgents::new(state.path()).load().await.expect("load");
-    assert_eq!(open, [("untrusted".to_owned(), "second".to_owned())]);
+    assert_eq!(
+        open,
+        [
+            ("trusted".to_owned(), "kept".to_owned()),
+            ("untrusted".to_owned(), "second".to_owned())
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_torn_retirement_never_reads_as_a_retirement() {
+    let state = tempfile::tempdir().expect("state");
+    let intent = encode("+", "trusted", "a");
+    let retired = encode("-", "trusted", "a");
+    let torn = &retired[..retired.len() - 4];
+    std::fs::write(state.path().join(MINTED_FILE), format!("{intent}{torn}")).expect("seed");
+    let open = MintedAgents::new(state.path()).load().await.expect("load");
+    assert_eq!(open, [("trusted".to_owned(), "a".to_owned())]);
+}
+
+#[tokio::test]
+async fn a_record_whose_name_was_cut_but_whose_line_ended_is_not_a_record() {
+    let state = tempfile::tempdir().expect("state");
+    let full = encode("+", "trusted", "abcdef");
+    let cut = format!("{}\n", full.replacen("abcdef", "abc", 1).trim_end());
+    std::fs::write(state.path().join(MINTED_FILE), cut).expect("seed");
+    let open = MintedAgents::new(state.path()).load().await.expect("load");
+    assert!(open.is_empty(), "{open:?}");
 }
