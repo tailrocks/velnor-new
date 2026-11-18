@@ -171,6 +171,14 @@ impl RootJobs<'_> {
         }
     }
 
+    fn feature_lanes(&self) -> Vec<CargoCommand> {
+        let direct = match self.filter() {
+            FilterRef::AllExcept(binaries) => binaries,
+            FilterRef::All | FilterRef::Expr { .. } => Vec::new(),
+        };
+        crate::config_test_lane::commands(&self.facts.config, self.root, &direct)
+    }
+
     fn tests(&self) -> Vec<CargoCommand> {
         let run = CargoCommand::NextestRun {
             filter: self.filter(),
@@ -178,6 +186,7 @@ impl RootJobs<'_> {
         self.nextest
             .then_some(run)
             .into_iter()
+            .chain(self.feature_lanes())
             .chain(self.direct_harnesses())
             .chain(self.doctests())
             .collect()
@@ -199,6 +208,7 @@ impl RootJobs<'_> {
                     StepKind::Cargo(
                         CargoCommand::NextestBuild
                             | CargoCommand::NextestRun { .. }
+                            | CargoCommand::NextestFeatures { .. }
                             | CargoCommand::TestTarget { .. }
                             | CargoCommand::Doctest
                     )
@@ -311,8 +321,9 @@ impl RootJobs<'_> {
         ));
         build.extend(
             self.cargo(
-                self.direct_harnesses()
+                self.feature_lanes()
                     .into_iter()
+                    .chain(self.direct_harnesses())
                     .chain(self.doctests())
                     .collect(),
             ),

@@ -224,6 +224,10 @@ pub enum CargoCommand {
     NextestRun {
         filter: FilterRef,
     },
+    NextestFeatures {
+        features: Vec<String>,
+        filter: FilterRef,
+    },
     NextestArchive {
         file: RepoPath,
     },
@@ -241,6 +245,8 @@ pub enum CargoCommand {
     Doc,
     Deny {
         manifest: RepoPath,
+        locked: bool,
+        config: Option<RepoPath>,
     },
     Machete,
 }
@@ -249,7 +255,9 @@ impl CargoCommand {
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
-            Self::NextestRun { .. } | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
+            Self::NextestRun { .. }
+            | Self::NextestFeatures { .. }
+            | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
             Self::Doctest => &[GateNeed::DoctestsKnown],
             _ => &[],
         }
@@ -260,6 +268,7 @@ impl CargoCommand {
 pub enum FilterRef {
     All,
     AllExcept(Vec<String>),
+    Expr { expr: String, except: Vec<String> },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

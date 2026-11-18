@@ -56,6 +56,9 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    UnknownTestLaneRoot(String),
+    TestLaneWithoutNextest(String),
+    MissingDenyConfig(RepoPath),
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
@@ -88,6 +91,28 @@ impl DetectError {
 }
 
 impl Reason {
+    fn fmt_test_config(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownTestSetupRoot(root) => write!(
+                f,
+                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            Self::UnknownTestLaneRoot(root) => write!(
+                f,
+                "test_lane names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            Self::TestLaneWithoutNextest(root) => write!(
+                f,
+                "test_lane names the root {root}, which runs no nextest tests; remove the lane or give the root a test the lane can run"
+            ),
+            Self::MissingDenyConfig(path) => write!(
+                f,
+                "deny.config needs the tracked file {path}; commit it, or remove deny.config"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_build_target(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UndeclaredTarget(target) => write!(
@@ -199,10 +224,10 @@ impl fmt::Display for Reason {
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
             ),
-            Self::UnknownTestSetupRoot(root) => write!(
-                f,
-                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
-            ),
+            Self::UnknownTestSetupRoot(_)
+            | Self::UnknownTestLaneRoot(_)
+            | Self::TestLaneWithoutNextest(_)
+            | Self::MissingDenyConfig(_) => self.fmt_test_config(f),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),

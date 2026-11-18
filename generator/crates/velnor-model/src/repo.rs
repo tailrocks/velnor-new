@@ -261,6 +261,21 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub test_setup: Vec<TestSetup>,
+    pub test_lanes: Vec<TestLane>,
+    pub deny: DenyConfig,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestLane {
+    pub root: Option<RepoPath>,
+    pub features: Vec<String>,
+    pub filter: Option<String>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct DenyConfig {
+    pub locked: bool,
+    pub config: Option<RepoPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,6 +347,8 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             test_setup: Vec::new(),
+            test_lanes: Vec::new(),
+            deny: DenyConfig::default(),
         }
     }
 }
