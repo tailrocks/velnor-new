@@ -18,7 +18,7 @@ macro_rules! validate_v40_stage {
     }};
 }
 
-pub(in crate::journal) async fn validate_persisted_schema_v39(
+pub(super) async fn validate_persisted_schema_v39(
     conn: &turso::Connection,
 ) -> Result<(), HostError> {
     validate_persisted_schema_v38(conn).await?;
@@ -242,14 +242,6 @@ pub(super) async fn validate_persisted_schema_v32_core(
     execution_publication::validate_v30(conn).await?;
     cleanup_observer_witness::validate_current(conn).await?;
     pre_jit_cleanup::validate(conn).await
-}
-
-pub(in crate::journal) async fn validate_persisted_schema_v27(
-    conn: &turso::Connection,
-) -> Result<(), HostError> {
-    validate_persisted_schema_v27_core(conn).await?;
-    storage_network::validate(conn).await?;
-    storage_root_backing::validate_v27(conn).await
 }
 
 async fn validate_persisted_schema_v27_core(conn: &turso::Connection) -> Result<(), HostError> {

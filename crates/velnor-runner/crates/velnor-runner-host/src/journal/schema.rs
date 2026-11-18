@@ -20,6 +20,10 @@ mod jit_conflict_settlement;
 pub(in crate::journal) mod jit_interrupted_claims;
 mod jit_tombstone_completion;
 #[cfg(test)]
+pub(in crate::journal) use driver::migrate_historical_to;
+#[cfg(test)]
+mod tamper_tests;
+#[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v45;
 #[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v46;
@@ -160,7 +164,6 @@ async fn validate_persisted_schema_v46(conn: &turso::Connection) -> Result<(), H
 
 mod legacy_validation;
 pub(super) use legacy_validation::{
-    validate_persisted_schema_v19, validate_persisted_schema_v20, validate_persisted_schema_v27,
     validate_persisted_schema_v32, validate_persisted_schema_v33, validate_persisted_schema_v34,
     validate_persisted_schema_v36, validate_persisted_schema_v37, validate_persisted_schema_v38,
     validate_persisted_schema_v39,
