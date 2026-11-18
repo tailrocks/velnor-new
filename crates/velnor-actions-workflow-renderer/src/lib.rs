@@ -75,6 +75,7 @@ mod preview_setup;
 pub mod private_source_steps;
 mod project_tool_resolver;
 mod runner_family_sources;
+mod support_placement;
 pub use project_tool_resolver::quote_project_tool_run_refs;
 mod ledger_cli_steps;
 mod native_verifiers;

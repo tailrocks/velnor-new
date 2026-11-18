@@ -87,8 +87,8 @@ Workflow to generate
     - cargo-machete (7 steps)
     - check-generator-samples (7 steps)
     - check-maintenance-helpers (7 steps)
-    - jactionlint (7 steps)
-    - ledger-cli (17 steps)
+    - jactionlint (5 steps)
+    - ledger-cli (15 steps)
     - plan (19 steps)
     - required (10 steps)
     - required-gate (1 steps)
@@ -133,9 +133,7 @@ Workflow to generate
     - state-seal-local (9 steps)
     - state-seal-root (9 steps)
     - tools-producer-06f9acb0 (8 steps)
-    - tools-producer-924ced60 (11 steps)
     - tools-producer-c957c0bd (8 steps)
-    - tools-producer-caf63d48 (9 steps)
     - 29 Rust crate jobs
       Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
