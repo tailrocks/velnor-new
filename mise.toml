@@ -34,6 +34,9 @@ gitleaks = "8.30.1"
 rumdl = "0.3.0"
 cargo-deny = "0.20.2"
 opentofu = "1.13.8"
+# Release PRs and tags: release-plz.toml at the repository root and under
+# crates/velnor-runner; velnor-gen reads this pin when it plans releases.
+"aqua:release-plz/release-plz" = "0.4.3"
 
 [settings]
 cargo.binstall = true
