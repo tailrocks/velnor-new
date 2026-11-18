@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{HelperRelease, Platform};
-use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
+use velnor_release::{
+    BinaryPlan, RELEASE_APP_SLUG, ReleasePlan, asset_name_uses_version, expand_asset_name,
+};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_outputs::commit_output;
@@ -47,12 +49,85 @@ fn target(platform: Platform) -> (&'static str, &'static str) {
     }
 }
 
+const VERSION_REFERENCE: &str = "${VERSION}";
+const STAGE: &str = "stage";
+
+fn versioned(binary: &BinaryPlan) -> bool {
+    binary
+        .asset_name
+        .as_deref()
+        .is_some_and(asset_name_uses_version)
+}
+
 fn asset(binary: &BinaryPlan, platform: Platform) -> String {
-    format!("{}-{}.tar.gz", binary.bin, platform.file_suffix())
+    match &binary.asset_name {
+        None => format!("{}-{}.tar.gz", binary.bin, platform.file_suffix()),
+        Some(template) => format!(
+            "{}.tar.gz",
+            expand_asset_name(
+                template,
+                &binary.bin,
+                platform.file_suffix(),
+                target(platform).1,
+                VERSION_REFERENCE,
+            )
+        ),
+    }
+}
+
+fn word(binary: &BinaryPlan, name: &str) -> String {
+    if versioned(binary) {
+        format!("\"{name}\"")
+    } else {
+        shell_word(name)
+    }
 }
 
 fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
     format!("{}-{}", binary.package, platform.file_suffix())
+}
+
+fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
+    versioned(binary).then(|| {
+        let pattern = binary
+            .tag_pattern
+            .as_str()
+            .replace("{{ package }}", &binary.package);
+        let prefix = pattern.split("{{ version }}").next().unwrap_or_default();
+        RenderedStep {
+            env: variables(&[(
+                "TAG",
+                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
+            )]),
+            ..command(
+                "Read the version of the tag".to_owned(),
+                format!("echo \"VERSION=${{TAG#{prefix}}}\" >> \"$GITHUB_ENV\""),
+            )
+        }
+    })
+}
+
+fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
+    if versioned(binary) {
+        format!(
+            "tar -czf \"{STAGE}/{file}\" -C {release_dir} {}",
+            binary.bin
+        )
+    } else {
+        format!(
+            "tar -czf {} -C {release_dir} {}",
+            shell_word(file),
+            binary.bin
+        )
+    }
+}
+
+fn uploaded(binary: &BinaryPlan, file: &str) -> String {
+    if versioned(binary) {
+        format!("{STAGE}/*")
+    } else {
+        file.to_owned()
+    }
 }
 
 fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
@@ -112,11 +187,17 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
                 ),
             )
         },
-        command(
-            format!("Pack {file}"),
-            format!("tar -czf {file} -C {release_dir} {}", binary.bin),
-        ),
-        upload(artifact(binary, platform), file),
+    ]);
+    steps.extend(read_version(binary));
+    if versioned(binary) {
+        steps.push(command(
+            "Create the stage folder".to_owned(),
+            format!("mkdir {STAGE}"),
+        ));
+    }
+    steps.extend([
+        command(format!("Pack {file}"), pack(binary, &file, &release_dir)),
+        upload(artifact(binary, platform), uploaded(binary, &file)),
     ]);
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
@@ -167,6 +248,7 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
         .iter()
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
+    steps.extend(read_version(binary));
     let names = assets(binary).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
@@ -201,6 +283,7 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             .map(|platform| download(artifact(binary, *platform))),
     );
     steps.push(download(format!("{}-sums", binary.package)));
+    steps.extend(read_version(binary));
     steps.push(RenderedStep {
         name: format!("Publish the release of {}", binary.package),
         env: variables(&[
@@ -242,7 +325,7 @@ fn assets(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
-        .map(|platform| asset(binary, *platform))
+        .map(|platform| word(binary, &asset(binary, *platform)))
         .collect()
 }
 

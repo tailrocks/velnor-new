@@ -4,6 +4,7 @@
 use serde::Deserialize;
 use velnor_model::Platform;
 
+use crate::asset_name;
 use crate::error::ReleaseError;
 use crate::release_plz::valid_package_name;
 
@@ -12,6 +13,7 @@ pub(crate) struct Binary {
     pub(crate) package: String,
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
+    pub(crate) asset_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,6 +30,7 @@ struct RawBinary {
     package: String,
     bin: Option<String>,
     platforms: Option<Vec<String>>,
+    asset_name: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -120,6 +123,14 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             bin,
         });
     }
+    if let Some(template) = &raw.asset_name
+        && !asset_name::valid(template)
+    {
+        return Err(ReleaseError::InvalidAssetName {
+            package: raw.package,
+            template: template.clone(),
+        });
+    }
     let platforms = match raw.platforms {
         None => Platform::ALL.to_vec(),
         Some(names) if names.is_empty() => {
@@ -148,5 +159,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         package: raw.package,
         bin,
         platforms,
+        asset_name: raw.asset_name,
     })
 }

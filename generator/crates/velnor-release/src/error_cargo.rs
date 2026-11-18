@@ -131,7 +131,7 @@ impl ReleaseError {
                 f,
                 "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
             ),
-            _ => Ok(()),
+            _ => self.fmt_binary(f),
         }
     }
 }
