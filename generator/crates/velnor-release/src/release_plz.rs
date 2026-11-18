@@ -177,7 +177,25 @@ fn released_packages(
             released.push((entry.name.clone(), effective));
         }
     }
+    refuse_nested_git_only(root, &document.workspace, &released)?;
     Ok(released)
+}
+
+fn refuse_nested_git_only(
+    root: &str,
+    workspace: &Settings,
+    released: &[(String, Settings)],
+) -> Result<(), ReleaseError> {
+    let git_only = workspace.git_only == Some(true)
+        || released
+            .iter()
+            .any(|(_, settings)| settings.git_only == Some(true));
+    if root != "." && git_only {
+        return Err(ReleaseError::NestedGitOnlyRoot {
+            root: root.to_owned(),
+        });
+    }
+    Ok(())
 }
 
 fn workspace_tags(

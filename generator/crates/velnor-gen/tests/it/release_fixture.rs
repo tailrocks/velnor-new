@@ -64,7 +64,7 @@ pub(crate) fn release_plz(root: &Root) -> String {
     let publishing = if root.publishes {
         "publish_no_verify = true\npublish_timeout = \"5m\""
     } else {
-        "git_only = true"
+        "publish = false"
     };
     format!(
         "[workspace]\ngit_tag_name = \"{{{{ package }}}}-v{{{{ version }}}}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npr_branch_prefix = \"{}\"\n{publishing}\n\n[[package]]\nname = \"{}\"\n",

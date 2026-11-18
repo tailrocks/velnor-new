@@ -16,6 +16,7 @@ mod inheritance;
 mod inventory;
 mod lock_version;
 mod mise_lock;
+mod nested_git_only;
 mod publishing_shared;
 mod refs;
 mod refusals;
