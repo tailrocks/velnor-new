@@ -31,7 +31,7 @@
 - 7fad48cdf09d58769f8ff0764b34562299ed97b8f98b642f08ab69266e81be07  ./dogfood/preview/.github/velnor/producer-executions-v1.json
 - e130bc3ecc6c05bd7cadbd66fd2a92e40e540f3c13ac920ccfbbe14de0c2f576  ./dogfood/preview/.github/velnor/task-execution-manifest-v1.json
 - 8159f6da4e8dacf040c336704550a0c6e56f7091b60e9913b887cf8aeb301a64  ./dogfood/preview/.github/workflows/cache-prune.yml
-- b6137f96e3917e09e629fb7cc5aadce67131741d210fcaaf39c338a8d77464e8  ./dogfood/preview/.github/workflows/ci.yml
+- 276837812f526631a7dfaa9b0653b5070ecbc7d8ddbe859b56e3d28dc5952aea  ./dogfood/preview/.github/workflows/ci.yml
 - 169affc84d343f4e5e6f06933614f312afa200e08ac72af09063ddaa4cf5df3a  ./dogfood/preview/.github/workflows/freshness.yml
 - a02d900b282d0bba32469f1e0d6d72bfbe22958c1740e71aab2fe7f8846aba2a  ./dogfood/preview/.github/workflows/homebrew-adoption.yml
 - 673a052fb9c8e74fbcb57194bb3e116569c17082e2ac2ceb329defee581817fa  ./dogfood/preview/.github/workflows/job-image-candidate.yml
@@ -44,9 +44,9 @@
 - a4bd0eed062eda89a30d33dd7619800786b98392de6b8c59764dcf699e4fc26e  ./dogfood/preview/.github/workflows/source-preview-mac-proof.yml
 - 20adfde90e8c27cba5bcd66ac3f905f9084bea08db17728fcc19d024e0dc1e0b  ./dogfood/preview/.github/workflows/source-preview-publication.yml
 - 342302f17a56dd151ebf615f44218afef84edacfb572b7eb8e778ecbf9b40e77  ./dogfood/preview/.github/workflows/source-preview-runtime.yml
-- 2ff1278feb24f67838a468534fa82c1fa467b69a0a2a9707854f0c11da22a32e  ./dogfood/preview/.github/workflows/source-qualification.yml
-- b3a5f11589d6dbe96c85803e548b11b6d73be6bb9eeab2c6c1a8f1adc31f73c4  ./dogfood/preview/.github/workflows/state-seal.yml
-- 5b8cbddf02095647aa0c096b09204cdadeb237f14c8648cc2ce0b69bafc2124e  ./dogfood/tree.sha256
+- 6f0e37d0e8ef7847affb4edf60b02e4e9613436fd04639a934aad2dc5fc09305  ./dogfood/preview/.github/workflows/source-qualification.yml
+- 9c21291b60f1f53b56ecc6148cf45cbf8577955db4a7045ff2c0996a5391f5d1  ./dogfood/preview/.github/workflows/state-seal.yml
+- f22f848d4bdc890e3f0ec25498e3b848b6613bdaacc49f8402878388dc63d8cb  ./dogfood/tree.sha256
 - 9a271f2a916b0b6ee6cecb2426f0b3206ef074578be55d9bc94f6f3fe3ab86aa  ./empty-suite/generate.exit
 - 7125dcf5a8d89819a0501cff72fe43cc145b74f36bcc6d7502f172343780ea23  ./empty-suite/generate.stderr.txt
 - e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855  ./empty-suite/generate.stdout.txt
