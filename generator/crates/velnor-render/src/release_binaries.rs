@@ -7,7 +7,7 @@ use velnor_release::{BinaryFormat, BinaryPlan, Libc, RELEASE_APP_SLUG, ReleasePl
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_assets::{
     COMMIT_FILE, STAGE, archive_packaging, asset, assets, bind_version, quoted, read_version,
-    selection, uploaded, versioned, word,
+    selection, uploaded, versioned,
 };
 use crate::release_binary_sums::{steps as binary_sums_steps, upload_paths};
 use crate::release_checks::publish_needs;
@@ -17,21 +17,22 @@ use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,
 };
+use crate::release_verify::verify;
 use crate::rules::{ATTEST_ACTION, RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 
 const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 const ATTEST_COMMIT: &str = "4d101475d8b20a2381f78447822ac1eab6504dd8";
 const ATTEST_VERSION: &str = "v4.2.2";
-const GH_VERSION: &str = "2.103.3";
+pub(crate) const GH_VERSION: &str = "2.103.3";
 const UPLOAD_VERSION: &str = "v7.0.2";
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 const DOWNLOAD_VERSION: &str = "v8.0.2";
 const BUILD_TIMEOUT_MINUTES: u16 = 60;
-const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
+pub(crate) const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
 pub(crate) const DIST: &str = "dist";
-const SUMS_FILE: &str = "SHA256SUMS";
+pub(crate) const SUMS_FILE: &str = "SHA256SUMS";
 
 pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<RenderedJob> {
     plan.binaries
@@ -62,7 +63,7 @@ pub(crate) fn target(platform: Platform, binary: &BinaryPlan) -> (&'static str, 
     }
 }
 
-fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
+pub(crate) fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
     artifact_name(&binary.package, platform)
 }
 
@@ -74,7 +75,7 @@ pub(crate) fn build_id(package: &str, platform: Platform) -> String {
     format!("build-{package}-{}", platform.file_suffix())
 }
 
-fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
+pub(crate) fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
     let mut all = vec!["gate".to_owned(), "tag".to_owned()];
     all.extend(needs);
     RenderedJob {
@@ -263,45 +264,6 @@ fn attest(binary: &BinaryPlan) -> RenderedStep {
         uses_comment: Some(ATTEST_VERSION.to_owned()),
         with: vec![("subject-path".to_owned(), Value::Text(format!("{DIST}/*")))],
         ..RenderedStep::default()
-    }
-}
-
-fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
-    assets(binary)
-        .into_iter()
-        .chain([SUMS_FILE.to_owned()])
-        .map(|name| RenderedStep {
-            name: format!("Verify the build provenance of {name}"),
-            env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
-            run: Some(format!(
-                "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\" --deny-self-hosted-runners",
-                word(binary, &format!("{DIST}/{name}"))
-            )),
-            ..RenderedStep::default()
-        })
-        .collect()
-}
-
-fn verify(binary: &BinaryPlan) -> RenderedJob {
-    let mut steps: Vec<RenderedStep> = binary
-        .platforms
-        .iter()
-        .map(|platform| download(artifact(binary, *platform)))
-        .collect();
-    steps.push(download(format!("{}-sums", binary.package)));
-    steps.extend(read_version(binary));
-    steps.push(install_tool(&format!("gh@{GH_VERSION}")));
-    steps.extend(verifications(binary));
-    RenderedJob {
-        permissions: permissions(&[("attestations", "read")]),
-        runs_on: HOSTED_RUNNER.to_owned(),
-        timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
-        steps,
-        ..behind_the_gate(
-            format!("verify-{}", binary.package),
-            binary,
-            vec![format!("sums-{}", binary.package)],
-        )
     }
 }
 
