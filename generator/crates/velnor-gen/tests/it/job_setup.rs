@@ -3,7 +3,7 @@
 
 use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::RepoPath;
-use velnor_rust::DetectError;
+use velnor_rust::{DetectError, Reason};
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -239,6 +239,31 @@ fn a_toolchain_channel_that_mise_does_not_pin_is_an_error() -> TestResult {
         Err(GenerateError::Detect(DetectError::RustPinRequired {
             channel: "1.99.1".to_owned(),
             path: RepoPath::new("mise.toml")?,
+        }))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_rust_pin_with_an_os_filter_is_an_error() -> TestResult {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut view = view(&["Cargo.toml"], None)?;
+    view.tracked_paths.insert(file.clone());
+    view.files
+        .insert(file, b"[toolchain]\nchannel = \"1.99.1\"\n".to_vec());
+    view.files.insert(
+        RepoPath::new("mise.toml")?,
+        b"[tools]\nrust = { version = \"1.99.1\", os = [\"macos\"] }\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+    );
+    crate::facts::lock_pinned_tools(&mut view)?;
+    assert_eq!(
+        expected_with_notes(&view).map(|(files, _)| files),
+        Err(GenerateError::Detect(DetectError::Invalid {
+            path: RepoPath::new("mise.toml")?,
+            reason: Reason::InvalidValue {
+                key: "tools.rust",
+                value: "one version, without os filters or alternatives".to_owned(),
+            },
         }))
     );
     Ok(())
