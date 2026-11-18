@@ -85,7 +85,7 @@ jobs:
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -270,7 +270,7 @@ jobs:
         if: '${{ steps.plan.outcome == ''success'' && (steps.plan.outputs.rust_deny == ''run'' || steps.plan.outputs.rust_machete == ''run'') }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - id: save_tools
         name: Save the tools cache

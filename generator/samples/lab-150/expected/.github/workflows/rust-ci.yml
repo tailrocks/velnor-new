@@ -127,7 +127,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -788,7 +788,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         working-directory: lab
@@ -977,7 +977,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
