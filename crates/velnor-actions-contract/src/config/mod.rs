@@ -41,6 +41,7 @@ mod qualified_tools;
 mod release;
 mod release_validation;
 mod resources;
+mod runner_workspace;
 mod runs_on;
 mod rust_configuration_validate;
 mod rust_inputs;
@@ -155,6 +156,7 @@ pub use release::{BootstrapRelease, ReleaseAuthentication, ReleaseRegistry, Rust
 pub use resources::{
     ResourcesConfig, ShardTimingEvidence, TestShardingConfig, validate_shard_changes_need_evidence,
 };
+pub use runner_workspace::{DEFAULT_RUNNER_WORKSPACE_ROOT, RunnerWorkspaceConfig};
 pub use runs_on::{
     LINUX_AMD64, RunsOn, SCALE_SET_NAME, ScaleSetSelector, VELNOR_LABEL, is_hosted_catalog,
     is_legacy_hosted_label,
@@ -263,6 +265,9 @@ pub struct VelnorConfig {
 
     #[serde(default, skip_serializing_if = "PublishConfig::is_empty")]
     pub publish: PublishConfig,
+
+    #[serde(default, skip_serializing_if = "RunnerWorkspaceConfig::is_default")]
+    pub runner_workspace: RunnerWorkspaceConfig,
 }
 
 mod review_completion;
