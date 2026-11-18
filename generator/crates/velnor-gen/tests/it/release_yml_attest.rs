@@ -160,7 +160,7 @@ fn attest_with_a_versioned_asset_name_verifies_the_expanded_names_after_reading_
     let all = steps(verify);
     let run_of = |step: &Node| step.get("run").and_then(Node::text).map(str::to_owned);
     let reader = (0..all.len())
-        .find(|i| run_of(&all[*i]).is_some_and(|r| r.contains("VERSION=")))
+        .find(|i| run_of(&all[*i]).is_some_and(|r| r.contains("version=")))
         .ok_or("no version step")?;
     let verifying: Vec<(usize, String)> = (0..all.len())
         .filter_map(|i| run_of(&all[i]).map(|run| (i, run)))

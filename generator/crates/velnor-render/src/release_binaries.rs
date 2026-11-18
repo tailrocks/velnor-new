@@ -6,8 +6,8 @@ use velnor_release::{BinaryFormat, BinaryPlan, Libc, RELEASE_APP_SLUG, ReleasePl
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_assets::{
-    COMMIT_FILE, STAGE, asset, assets, pack, quoted, read_version, selection, sidecar_step,
-    uploaded, versioned, word,
+    COMMIT_FILE, STAGE, asset, assets, bind_version, pack, quoted, read_version, selection,
+    sidecar_step, uploaded, versioned, word,
 };
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
@@ -158,6 +158,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
         artifact(binary, platform),
         uploaded(binary, platform),
     ));
+    bind_version(&mut steps);
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
@@ -242,6 +243,7 @@ fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
         format!("{DIST}/{SUMS_FILE}")
     };
     steps.push(upload(format!("{}-sums", binary.package), sums_files));
+    bind_version(&mut steps);
     RenderedJob {
         no_permissions: !binary.attest,
         permissions: if binary.attest {
@@ -331,6 +333,7 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
         )),
         ..RenderedStep::default()
     });
+    bind_version(&mut steps);
     RenderedJob {
         permissions: permissions(&[("contents", "write")]),
         runs_on: HOSTED_RUNNER.to_owned(),
