@@ -26,7 +26,6 @@ fn prepare_and_render_scope_repository_maintenance_owner_and_feature_union()
         "maintenance-feature",
         "maintenance-only",
         Some("maintenance-only"),
-        true,
         VelnorV1TaskOwner::RepositoryMaintenance,
     )?;
     assert_owner_feature_success(
@@ -35,7 +34,6 @@ fn prepare_and_render_scope_repository_maintenance_owner_and_feature_union()
         "default",
         "default",
         None,
-        false,
         VelnorV1TaskOwner::RepositoryMaintenance,
     )?;
     assert_repository_feature_union_excludes_tagged_member()?;
@@ -45,7 +43,6 @@ fn prepare_and_render_scope_repository_maintenance_owner_and_feature_union()
         "maintenance-feature",
         "maintenance-only",
         Some("maintenance-only"),
-        true,
         VelnorV1TaskOwner::Project,
     )?;
     Ok(())
@@ -57,7 +54,6 @@ fn assert_owner_feature_success(
     configuration_name: &str,
     feature: &str,
     member_features: Option<&str>,
-    expect_fallback: bool,
     expected_owner: VelnorV1TaskOwner,
 ) -> Result<(), Box<dyn Error>> {
     let repo = owner_feature_repo(policy, tagged, configuration_name, feature)?;
@@ -66,11 +62,6 @@ fn assert_owner_feature_success(
     assert_owner_workspace(&prepared, expected_owner)?;
     let proposal_paths =
         owner_feature_proposal_paths(&prepared, configuration_name, member_features)?;
-    if expect_fallback {
-        assert_owner_feature_fallback(&prepared, configuration_name);
-    } else {
-        assert_eq!(prepared.discovery.feature_fallbacks, Vec::new());
-    }
     let rendered = render_staged_tree(&prepared)?;
     let workflow = rendered
         .get(WORKFLOW_PATH)
@@ -243,20 +234,6 @@ fn owner_feature_proposal_paths(
     );
     assert!(!paths.is_empty());
     Ok(paths)
-}
-
-fn assert_owner_feature_fallback(prepared: &GenerationPreparation, configuration_name: &str) {
-    let fallbacks: Vec<_> = prepared
-        .discovery
-        .feature_fallbacks
-        .iter()
-        .filter(|fallback| {
-            fallback.package_name == "demo" && fallback.configuration == configuration_name
-        })
-        .collect();
-    assert_eq!(fallbacks.len(), 1);
-    assert_eq!(fallbacks[0].requested, vec!["maintenance-only".to_owned()]);
-    assert_eq!(fallbacks[0].applied, vec!["default".to_owned()]);
 }
 
 pub(super) fn assert_required_owner_routes(

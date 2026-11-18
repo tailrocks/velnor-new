@@ -19,7 +19,6 @@ mod gc1_scene_key;
 mod gc1_scene_resolve;
 mod gc1_scene_seal;
 mod gc1_scene_tree;
-mod gc1_seal_support;
 mod gc1_t13;
 mod gc1_t14;
 mod gc1_t16;
@@ -41,10 +40,6 @@ mod gc1_workflow_cases_common;
 mod gc1_workflow_cases_preserve;
 mod gc1_workflow_cases_reject;
 #[cfg(target_os = "linux")]
-mod state_round_trip;
-mod state_v4_admit;
-mod state_v4_attest_save;
-mod state_v4_bind;
 #[cfg(target_os = "linux")]
 mod state_v4_bounds;
 #[cfg(target_os = "linux")]
@@ -53,12 +48,6 @@ mod state_v4_key;
 mod state_v4_pack;
 #[cfg(target_os = "linux")]
 mod state_v4_packer;
-mod state_v4_producer;
-mod state_v4_restore;
-mod state_v4_seal;
-mod state_v4_select;
-mod state_v4_snapshot;
-mod state_v4_tip;
 
 mod ubuntu_owned_publication;
 

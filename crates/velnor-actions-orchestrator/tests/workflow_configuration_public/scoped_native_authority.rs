@@ -145,9 +145,6 @@ fn authority_error_for(
         workspace_format: format,
         tools: PlanJobToolNeeds::default(),
         rust_detected: true,
-        state_roots: &[],
-        seal: &velnor_actions_workflow_renderer::plan_sources::state_select::StateSealPlan::default(
-        ),
     };
     Ok(NativeAuthority::build(input)
         .err()

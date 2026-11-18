@@ -13,7 +13,7 @@ use velnor_actions_contract::{
     CachePolicy, IdentityInputs, ProposedTask, ResourceClass, ResourceDemand,
 };
 
-use self::crate_jobs_stage::{is_mbx, is_nextest, is_opentofu, is_rust, needs};
+use self::crate_jobs_stage::{is_nextest, is_opentofu, is_rust, needs};
 
 fn fail(message: &str) -> Box<dyn Error> {
     io::Error::other(message).into()
@@ -70,7 +70,6 @@ fn check_group_classification() -> Result<(), Box<dyn Error>> {
     let mbx = fixture_task("rust", "mbx", "cargo_nextest");
     let tofu = fixture_task("tofu", "cargo", "cargo_test");
     if !is_rust(&cargo)
-        || is_mbx(&cargo)
         || is_nextest(&cargo)
         || is_opentofu(&cargo)
         || needs(&cargo).mbx
@@ -78,7 +77,7 @@ fn check_group_classification() -> Result<(), Box<dyn Error>> {
     {
         return Err(fail("cargo group misclassified"));
     }
-    if !is_rust(&mbx) || !is_mbx(&mbx) || !is_nextest(&mbx) || is_opentofu(&mbx) {
+    if !is_rust(&mbx) || !is_nextest(&mbx) || is_opentofu(&mbx) {
         return Err(fail("mbx group misclassified"));
     }
     if is_rust(&tofu) || !is_opentofu(&tofu) || needs(&tofu).mbx || needs(&tofu).nextest {
