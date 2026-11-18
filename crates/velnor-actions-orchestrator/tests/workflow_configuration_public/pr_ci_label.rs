@@ -12,8 +12,10 @@ use super::source_qualification::WORKFLOW_PATH as SOURCE_QUALIFICATION_PATH;
 use super::support::rendered_job_block;
 use super::workflow_configuration_fixture;
 
-const FULL_GATE: &str = "github.event_name != 'pull_request' || (github.event.pull_request.head.repo.fork == false && (contains(github.event.pull_request.labels.*.name, 'ci:run') || contains(github.event.pull_request.labels.*.name, 'ci:auto')))";
-const ADMIT_GATE: &str = "github.event_name != 'pull_request' || (github.event.pull_request.draft == false && (github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto'))";
+const FULL_GATE: &str = "github.event_name != 'pull_request' || (github.event.pull_request.head.repo.fork == false && (contains(github.event.pull_request.labels.*.name, 'ci:run') || contains(github.event.pull_request.labels.*.name, 'ci:auto')) && !((github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.event.label.name != 'ci:auto') || (github.event.action == 'edited' && github.event.changes.base.ref.from == '')))";
+const ADMIT_GATE: &str =
+    "github.event_name != 'pull_request' || github.event.pull_request.draft == false";
+const IGNORED_EVENTS: &str = "(github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.event.label.name != 'ci:auto') || (github.event.action == 'edited' && github.event.changes.base.ref.from == '')";
 
 fn config(pr_ci: Option<&str>) -> String {
     let pr_ci = pr_ci.map_or_else(String::new, |mode| format!("pr_ci = \"{mode}\"\n"));
@@ -63,13 +65,13 @@ fn pr_ci_label_rewrites_the_ci_workflow() -> Result<(), Box<dyn Error>> {
     let tree = render(Some("label"))?;
     let ci = text(&tree, WORKFLOW_PATH)?;
     assert!(ci.contains(
-        "pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n      - ready_for_review\n      - labeled\n  push:"
+        "pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n      - ready_for_review\n      - labeled\n      - edited\n  push:"
     ));
-    assert!(!ci.contains("      - edited\n"));
+    assert!(ci.contains("      - edited\n"));
     assert!(ci.contains("  merge_group:\n"));
-    assert!(ci.contains(
-        "  group: velnor-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}${{ github.event.action == 'labeled'"
-    ));
+    assert!(ci.contains(&format!(
+        "  group: velnor-${{{{ github.workflow }}}}-${{{{ github.event.pull_request.number || github.ref }}}}${{{{ ({IGNORED_EVENTS}) && format('-ignored-{{0}}', github.run_id) || '' }}}}"
+    )));
     assert!(ci.contains("  cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n"));
 
     let plan = rendered_job_block(ci, "plan")?;
@@ -86,6 +88,8 @@ fn pr_ci_label_rewrites_the_ci_workflow() -> Result<(), Box<dyn Error>> {
 
     let gate = rendered_job_block(ci, "required-gate")?;
     assert!(gate.contains("    needs:\n      - required\n      - plan\n"));
+    assert!(gate.contains("      - pr-ci-claim\n"));
+    assert!(gate.contains("needs.pr-ci-claim.result == 'failure'"));
     assert!(gate.contains(&format!("    if: ${{{{ always() && ({ADMIT_GATE}) }}}}\n")));
     assert!(gate.contains("needs.required.result != 'success'"));
     assert!(gate.contains(&format!("!({FULL_GATE})")));
@@ -113,7 +117,7 @@ fn pr_ci_label_gate_tolerates_skipped_quick_lanes_but_not_failed_ones() -> Resul
         .ok_or("gate needs are missing")?
         .lines()
         .filter_map(|line| line.trim().strip_prefix("- "))
-        .filter(|id| *id != "required")
+        .filter(|id| *id != "required" && *id != "pr-ci-claim")
         .collect();
     assert!(quick.contains(&"plan"), "plan is a quick need: {quick:?}");
     let failed = quick
@@ -121,11 +125,8 @@ fn pr_ci_label_gate_tolerates_skipped_quick_lanes_but_not_failed_ones() -> Resul
         .map(|id| format!("needs.{id}.result == 'failure' || needs.{id}.result == 'cancelled'"))
         .collect::<Vec<_>>()
         .join(" || ");
-    // pull_request without a request label: a skipped quick lane passes, a
-    // failed or cancelled one fails, and `required` is not consulted.
-    // merge_group and push: the full strict verdict alone decides.
     let verdict = format!(
-        "((({FULL_GATE}) && needs.required.result != 'success') || (!({FULL_GATE}) && ({failed})))"
+        "(((({FULL_GATE}) && needs.required.result != 'success') || (!({FULL_GATE}) && ({failed}))) || needs.pr-ci-claim.result == 'failure')"
     );
     assert!(
         gate.contains(&format!("if: ${{{{ always() && {verdict} }}}}")),
@@ -149,9 +150,9 @@ fn pr_ci_label_gates_source_qualification() -> Result<(), Box<dyn Error>> {
     assert!(source.contains(
         "pull_request:\n    types:\n      - opened\n      - synchronize\n      - reopened\n      - ready_for_review\n      - labeled\n"
     ));
-    assert!(source.contains(
-        "group: source-qualification-${{ github.event.pull_request.number || github.ref }}${{ github.event.action == 'labeled'"
-    ));
+    assert!(source.contains(&format!(
+        "group: source-qualification-${{{{ github.event.pull_request.number || github.ref }}}}${{{{ ({IGNORED_EVENTS}) && format('-ignored-{{0}}', github.run_id) || '' }}}}"
+    )));
     assert!(source.contains("cancel-in-progress: ${{ github.event_name == 'pull_request' }}\n"));
     assert!(!source.contains("pr-ci-claim"));
     for job in [

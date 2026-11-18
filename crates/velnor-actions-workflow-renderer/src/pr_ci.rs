@@ -1,13 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Opt-in label-triggered pull-request CI (`[execution] pr_ci = "label"`).
-//!
-//! The transform runs on the finished workflow document, after every IR
-//! validator has accepted the default shape, so the default output stays
-//! byte-identical and the label mode only rewrites triggers, concurrency and
-//! job conditions.
-
 use velnor_actions_contract::{PrCiMode, ValidatorKind};
 
 use crate::RenderError;
@@ -22,22 +15,19 @@ pub const PR_TYPES: &[&str] = &[
     "reopened",
     "ready_for_review",
     "labeled",
+    "edited",
 ];
 
 const REQUIRED_JOB: &str = "required";
 const REQUIRED_GATE_JOB: &str = "required-gate";
 const PLAN_JOB: &str = "plan";
-
-/// Draft pull requests and unrelated label events run nothing.
-pub const ADMIT: &str = "github.event_name != 'pull_request' || (github.event.pull_request.draft == false && (github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto'))";
-
-/// Everything except a same-repository pull request that carries a request
-/// label runs the full suite.
-pub const FULL: &str = "github.event_name != 'pull_request' || (github.event.pull_request.head.repo.fork == false && (contains(github.event.pull_request.labels.*.name, 'ci:run') || contains(github.event.pull_request.labels.*.name, 'ci:auto')))";
+pub const ADMIT: &str =
+    "github.event_name != 'pull_request' || github.event.pull_request.draft == false";
+pub const FULL: &str = "github.event_name != 'pull_request' || (github.event.pull_request.head.repo.fork == false && (contains(github.event.pull_request.labels.*.name, 'ci:run') || contains(github.event.pull_request.labels.*.name, 'ci:auto')) && !((github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.event.label.name != 'ci:auto') || (github.event.action == 'edited' && github.event.changes.base.ref.from == '')))";
 
 const CLAIM_CONDITION: &str = "github.event_name == 'pull_request' && github.event.pull_request.head.repo.fork == false && github.event.pull_request.draft == false && contains(github.event.pull_request.labels.*.name, 'ci:run')";
 
-const IGNORED_SUFFIX: &str = "${{ github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.event.label.name != 'ci:auto' && format('-ignored-{0}', github.run_id) || '' }}";
+const IGNORED_SUFFIX: &str = "${{ ((github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.event.label.name != 'ci:auto') || (github.event.action == 'edited' && github.event.changes.base.ref.from == '')) && format('-ignored-{0}', github.run_id) || '' }}";
 
 const CLAIM_SCRIPT: &str = "code=$(curl -sS -o /dev/null -w '%{http_code}' -X DELETE -H \"Authorization: Bearer $GH_TOKEN\" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' \"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/ci%3Arun\"); case \"$code\" in 200|404) : ;; *) echo \"ci:run removal failed: HTTP $code\" >&2; exit 1 ;; esac";
 
@@ -45,7 +35,6 @@ const CLAIM_SCRIPT: &str = "code=$(curl -sS -o /dev/null -w '%{http_code}' -X DE
 pub struct PrCiShape<'a> {
     pub quick: &'a [&'a str],
     pub claim: bool,
-    /// Also trigger on `merge_group`; only for workflows that can run there.
     pub merge_group: bool,
 }
 
@@ -87,7 +76,7 @@ pub fn apply(document: &mut Yaml, mode: PrCiMode, shape: PrCiShape<'_>) -> Resul
             return Err(bad("job"));
         };
         if id == REQUIRED_GATE_JOB {
-            gate_job(fields, &quick)?;
+            gate_job(fields, &quick, shape.claim)?;
         } else if quick.contains(&id.as_str()) {
             wrap_if(fields, &format!("({ADMIT})"));
         } else {
@@ -196,21 +185,27 @@ fn wrap_if(fields: &mut Vec<(String, Yaml)>, extra: &str) {
     }
 }
 
-fn gate_job(fields: &mut [(String, Yaml)], quick: &[&str]) -> Result<(), RenderError> {
+fn gate_job(fields: &mut [(String, Yaml)], quick: &[&str], claim: bool) -> Result<(), RenderError> {
     let mut needs = vec![REQUIRED_JOB.to_owned()];
     needs.extend(quick.iter().map(|id| (*id).to_owned()));
+    if claim {
+        needs.push(CLAIM_JOB_ID.to_owned());
+    }
     let quick_failed = quick
         .iter()
         .map(|id| format!("needs.{id}.result == 'failure' || needs.{id}.result == 'cancelled'"))
         .collect::<Vec<_>>()
         .join(" || ");
-    let verdict = if quick_failed.is_empty() {
+    let mut verdict = if quick_failed.is_empty() {
         "needs.required.result != 'success'".to_owned()
     } else {
         format!(
             "(({FULL}) && needs.required.result != 'success') || (!({FULL}) && ({quick_failed}))"
         )
     };
+    if claim {
+        verdict = format!("({verdict}) || needs.{CLAIM_JOB_ID}.result == 'failure'");
+    }
     for (key, value) in fields.iter_mut() {
         match key.as_str() {
             "needs" => *value = Yaml::Seq(needs.iter().cloned().map(Yaml::str).collect()),
