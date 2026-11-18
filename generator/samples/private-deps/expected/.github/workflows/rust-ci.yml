@@ -20,6 +20,9 @@ permissions:
 concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+env:
+  MISE_AUTO_INSTALL: 'false'
+  RUSTUP_AUTO_INSTALL: '0'
 defaults:
   run:
     shell: 'bash -p {0}'
@@ -120,11 +123,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         working-directory: ci-helper
@@ -140,7 +143,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -247,11 +250,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -265,7 +268,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -425,11 +428,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         working-directory: ci-helper
@@ -445,7 +448,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -573,11 +576,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         working-directory: crates/velnor-runner
@@ -593,7 +596,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -749,11 +752,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         working-directory: generator
@@ -769,7 +772,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -909,11 +912,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         working-directory: local
@@ -929,7 +932,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -1053,11 +1056,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -1071,7 +1074,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
