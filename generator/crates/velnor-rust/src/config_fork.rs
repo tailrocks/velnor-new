@@ -33,3 +33,11 @@ pub(crate) fn fork_runner(
         Err(invalid())
     }
 }
+
+pub(crate) fn expression_safe(runner: &RunnerLabel) -> bool {
+    github_hosted(runner.as_str())
+        || runner
+            .as_str()
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+}
