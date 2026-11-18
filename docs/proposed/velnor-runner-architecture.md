@@ -26,7 +26,12 @@ P50 and P90 per week over every merged pull request, next to PR verdict time (pu
 check), the admission span (run created → first job), runner-minutes per merged pull request, the
 compile-cache hit rate and the false-failure rate. Every PR class (generator and helper, runner,
 engine, local, no Rust, mixed) is reported, and superseded pushes, time-outs and open pull requests
-stay visible beside the merged cohort.
+stay visible beside the merged cohort. Three guardrails keep a faster last push from hiding slower
+feedback: time to the first actionable failure, first-push-to-merge, and failed attempts per merged
+change. Runner-minutes charge foreground jobs, remote execution slots, cancelled attempts, discarded
+predictions, the builder and audits to the repository that consumed them, count each occupied
+execution slot once (one job fanning out to ten one-minute workers spends ten worker-minutes), and
+are published beside idle reserved core-hours, CPU-seconds and GiB-minutes.
 
 | Measure | Today | Basis |
 |---|---|---|
@@ -101,11 +106,14 @@ only tests that run, so the cost is small [E: `velnor-ci`'s step is 10 s median,
 A *false failure* is a required run that fails on inputs where an immediate rerun passes. It costs a
 rerun or a merge-queue ejection, and every queued entry behind an ejection is rebuilt.
 
-- **Budget:** at most 1% false failures per full required run from phase 3 (committed), at most 3%
-  from phase 1. Today 8.1% [M].
-- **Measure:** a paired-rerun sampler re-executes 5% of green merge-group SHAs on idle capacity and
-  counts disagreements. It replaces the push run as the denominator once the push run stops
-  re-verifying.
+- **Budget:** at most 1% false failures per full required run from phase 3, at most 3% from phase 1,
+  each claimed only once enough pairs exist. Today's figure, 8.1% [M], is a one-direction
+  discordance rate: push runs that failed on a SHA whose merge group had passed.
+- **Measure:** a paired-rerun sampler re-runs green and red required results in both directions,
+  under representative load rather than on idle capacity, classified by obligation and environment.
+  No bound is claimed before about 300 pairs: zero disagreements in 299 pairs give a one-sided 95%
+  bound just under 1%, while 50 merges at a 5% sample give 2.5 pairs. The sampler replaces the push
+  run as the denominator once the push run stops re-verifying.
 - **Report:** nextest marks a test that passed only on retry as flaky; retries stay at 0 in the
   required profile, so a flaky test fails the run and is counted.
 - **Act:** a test with two false failures in seven days gets an owner-labelled issue. It is fixed,
@@ -375,8 +383,11 @@ build accepts. That costs the request's delta build, 10–20 s for the generator
 ### 4.3 What a request executes
 
 - **Every event lists every obligation.** A merge group stays a full verification, as hard decision
-  3 requires; most of its obligations are satisfied by a receipt with the same key. An obligation
-  with no such receipt runs. A missing report or a test step that ran zero tests fails.
+  3 requires; most of its obligations are satisfied by a receipt with the same key. The consuming
+  plan's inventory is recomputed from the protected policy (the released planner and the ruleset's
+  requirements) and the actual event, never copied from the run that produced the receipts. Evidence
+  is matched per obligation, configuration and expected test inventory. An obligation with no such
+  receipt runs. A missing report or a test step that ran zero tests fails.
 - **"Executes nothing" holds only when every obligation of the consuming plan has a receipt.** A PR
   run's receipts cover what its tree's keys cover; for a generator-only PR, the other roots' keys
   equal `main`'s, so their receipts come from `main`.
@@ -567,6 +578,15 @@ seeds in the background.
   `Journal::open` on a pre-migrated template takes at most 1 s, measured, and that no test exceeds
   10 CPU-seconds measured alone outside a recorded, shrinking list. Splitting the 40-case and 6-case
   loops into one test per case comes with it.
+- **The floor behind the loops is measured.** With the two looped tests excluded, the longest test
+  is still 132 s median in actions-cli, 125 s in runner-host and 138 s in its local-mode run; a
+  median of 12, 41 and 51 other tests exceed 60 s, and one receipt-integrity test took 924.8 s,
+  building the same pre-corruption state four times [M, 28 job logs, design review F-H33]. The
+  method: build the expensive valid prefix once with the real code, clone the closed journal or the
+  publication artifacts into a private fixture per case, and keep the reopen, corruption-rejection,
+  readback and preserved-file assertions in each case. Fresh migrations, historical upgrades and
+  real process deadlines stay as their own obligations. Reaching 15 s needs about a threefold cut in
+  the work of one journal case.
 - **A test-time budget** check enforces that list: non-blocking in phase 1, blocking for new tests
   from phase 2.
 - **The compile floor.** `velnor-runner-host` splits into five or six crates along its module
@@ -588,7 +608,7 @@ seeds in the background.
 |---|---|---|---|---|
 | PR push | full selected set | same | selected set; roots with a receipted key skipped | `ensure` on the push; packages with a receipted key skipped |
 | Merge group | everything | everything | every obligation listed; roots with a receipted key satisfied by lookup | `ensure` on the group; packages satisfied by lookup; queue-tip candidates pre-verified (M5) |
-| Push to `main` | everything again | release duties only when the SHA passed its merge group | same | same |
+| Push to `main` | everything again | one real `Required` job: it skips each obligation the merge group verified on the same tree, never on the group run's conclusion alone, then does release duties | the same, by key lookup | the same |
 | Direct push to `main` (no queue) | everything | everything | everything | everything |
 
 ### 6.5 Merge queue
@@ -665,12 +685,14 @@ obligations whose keys changed.
 - **Warm slots.** Per worker: 2 idle build sandboxes with at most 4 running, 1 idle docker sandbox
   on each tainted docker node; ARC keeps warm gate runners for the witness. The agent resizes pools
   from the last hour's arrivals. An idle pod costs about 45 MiB (§B.2.2).
-- **Sizes.** Build: request 16 CPU with no CPU limit, memory 32 GiB request equal to limit (the
-  heaviest observed job peaked at 15.7–16.8 GiB, §B.2.2 and decision log I036). Docker: 8 CPU plus 4
-  for dind, 24 GiB, for Docker-needing test binaries only; the runner root itself builds in the
-  build class, although it is touched by 55 of 100 merges and its Docker tests would otherwise pull
-  it into the smallest class. Gate: 1 CPU, 2 GiB. Cargo and nextest parallelism follow the sandbox's
-  CPUs, not a constant.
+- **Sizes.** Idle and running sandboxes share one memory budget per worker: 125.5 GiB less 6 GiB for
+  the system, 2 GiB of eviction margin and 8 GiB for four gate pods leaves 109.5 GiB. Build: request
+  16 CPU with no CPU limit, memory 24 GiB request equal to limit (the heaviest observed job peaked
+  at 15.7–16.8 GiB, §B.2.2 and decision log I036), so four build sandboxes fit, idle ones included;
+  32 GiB would fit only three. Docker: 8 CPU plus 4 for dind, 24 GiB, for Docker-needing test
+  binaries only; the runner root itself builds in the build class, although it is touched by 55 of
+  100 merges and its Docker tests would otherwise pull it into the smallest class. Gate: 1 CPU, 2
+  GiB. Cargo and nextest parallelism follow the sandbox's CPUs, not a constant.
 - **Node settings.** Kube and system reservations (3 CPU, 6 GiB), a `memory.available` eviction
   threshold of 2 GiB, `podPidsLimit` 16384, the kubelet root directory on the XFS data volume (today
   `emptyDir` lands on the ext4 OS disk, `velnor-runners/PLAN.md:45`), topology labels for site.
@@ -778,16 +800,20 @@ merges or two weeks. Killed below a 70% match.
 
 **M6. Test-granularity scheduling.** Must be true: some suite's summed test time divided by one
 sandbox's threads exceeds its longest test after M7, and binaries move within a site in ≤ 5 s.
-Attacked by: the agent's executor distributing test cases (section 6.3). Cheapest experiment: one
-week of per-test CPU-seconds from nextest's JSON output, plus `iperf3` between same-site workers.
-Killed if no suite's summed time exceeds its longest test by more than the transfer cost.
+Attacked by: the agent's executor distributing test cases (section 6.3), fetching each changed test
+executable and its verified fixtures by digest; moving the whole 1.48 GB archive to four workers in
+5 s from one sender would need 9.5 Gbit/s. Cheapest experiment: one week of per-test CPU-seconds
+from nextest's JSON output, plus `iperf3` between same-site workers. Killed if no suite's summed
+time exceeds its longest test by more than the transfer cost.
 
 **M7. Break the single-test floor.** Must be true: journal set-up dominates the slow tests, and
-cases can share a pre-built valid prefix. Attacked by: the pre-migrated journal template, one test
-per case, the per-test CPU budget, and optionally optimised dependencies in tests (owner question
-8). Cheapest experiment, 1–2 days on one worker: CPU-seconds of the 20 slowest tests under four
-profile variants, and a branch with the template. The 15 s stretch is killed if the cases share
-state that cannot be separated.
+cases can share a pre-built valid prefix. Attacked by: the pre-migrated journal template, a valid
+prefix built once and cloned per case, one test per case, the per-test CPU budget, and optionally
+optimised dependencies in tests (owner question 8). After the two loop splits the logs still show a
+125–138 s floor and a 924.8 s test, so the splits alone do not reach the gate. Cheapest experiment,
+1–2 days on one worker: CPU-seconds of the 20 slowest tests under four profile variants, and a
+branch with the template. The 15 s stretch is killed if the cases share state that cannot be
+separated.
 
 **M8. Verification that begins before the push.** Must be true: agents spend time between "code
 done" and "pushed" that verification can overlap. Attacked by: `velnor verify`, the agents' test
@@ -848,10 +874,12 @@ passed a four-week soak, and the hosted break-glass workflow always.
    (M2). Acceptance: a daily report with P50, P90 and denominators that reproduces the 85-min
    baseline from past data. Depends on: nothing.
 5. **The test floor.** Scope: a pre-migrated journal template for `Journal::open`; one test per case
-   for the two looped tests; the per-test CPU budget and its list; `ci-helper` tests in parallel
-   with timeouts sized to the pod; the `event.json` snapshot before parallel steps. Acceptance:
-   `Journal::open` on the template ≤ 1 s measured on a worker; the list shrinks; no new false
-   failures in 100 paired reruns. Depends on: nothing.
+   for the two looped tests; valid prefixes built once and cloned per case for the receipt-integrity
+   and publication-recheck tests; the 20 slowest tests ranked by CPU-seconds alone after each
+   change; the per-test CPU budget and its list; `ci-helper` tests in parallel with timeouts sized
+   to the pod; the `event.json` snapshot before parallel steps. Acceptance: `Journal::open` on the
+   template ≤ 1 s measured on a worker; the list shrinks; no new false failures in 100 paired
+   reruns. Depends on: nothing.
 6. **Selection in the engine.** Scope: declare the inputs of the crate-root build scripts and the
    test reads the plan names; replay the last 200 PRs through the fixed planner in shadow.
    Acceptance: the replay selects every job that failed in those PRs; a generator or helper PR runs
@@ -860,9 +888,11 @@ passed a four-week soak, and the hosted break-glass workflow always.
    kubelet reservations, eviction and PID limits; priority classes and per-org quotas; the `-j` caps
    removed; toolchain, tools and action archives as read-only node mounts. Acceptance: job-duration
    p90/p50 ≤ 1.3 at peak; tool setup ≤ 2 s; no OOM kills over a week. Depends on: 2.
-8. **No third run.** Scope: the push run checks for a green merge-group run on the exact SHA and
-   then does only release and publication duties; otherwise it runs everything. Acceptance: ≤ 2
-   runner-min per matching push; the release gate on `main` still passes. Depends on: 4.
+8. **No third run.** Scope: the push run keeps one real Actions job named `Required`, which the
+   release gate reads; that job lists every obligation, skips each one the merge group verified on
+   the same tree, never on the group run's conclusion alone, and then does release and publication
+   duties; without that evidence it runs everything. Acceptance: ≤ 2 runner-min per matching push;
+   the release gate on `main` still passes. Depends on: 4.
 9. **`velnor-gen` cutover with parity.** Scope: one job per root with parallel lanes, whose steps
    call `ensure` on the node's agent; the local-mode configuration, the maintenance checks, both
    required names, the Velnor classes in `runs-on`; no `edited` trigger once the ledger re-plans a
@@ -875,8 +905,9 @@ passed a four-week soak, and the hosted break-glass workflow always.
     sparse-checkout experiment for root and package keys; webhook replay; the M1 measurements.
     Acceptance: 50 pushes with webhook arrival P50 ≤ 8 s and verdict P50 ≤ 60 s for a
     generator-sized change; a killed webhook still yields a correct verdict through the witness; at
-    most 20% of packages fail closure-only; 0 disagreements in 500 sampled re-executions. Depends
-    on: owner question 1 for the phase-3 cutover, nothing for the lab.
+    most 20% of packages fail closure-only; a merge group's inventory recomputed from the protected
+    policy matches per obligation, configuration and test inventory; 0 disagreements in 500 sampled
+    re-executions. Depends on: owner question 1 for the phase-3 cutover, nothing for the lab.
 
 ## 12. Top risks
 
@@ -894,6 +925,7 @@ passed a four-week soak, and the hosted break-glass workflow always.
 | Other organisations starve, or starve velnor-new | Wait per organisation | Quotas and priorities; preempt only batch work |
 | The new code grows like velnor-legacy | Line budgets checked in CI; phase gates | Stop and review at a budget; the per-job workflow keeps working at every phase |
 | The `velnor-gen` cutover drops a configuration or check | Shadow inventory comparison | Keep the engine workflow until the inventories match |
+| A new planner, sandbox or verifier passes a change that ordinary CI would fail | A corpus of known-bad changes with green controls (a new failing golden sample, an omitted `local-mode` case, a stale publication attempt, a broken queue prefix repaired by the next PR), replayed after every planner, sandbox or verifier change, warm caches included | A candidate that passes one bad change loses authority for that class |
 | Speculation or the builder starves real work | Batch-class CPU share | Lowest priority, preempted first |
 
 ## 13. Owner questions
