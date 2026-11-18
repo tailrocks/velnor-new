@@ -259,6 +259,28 @@ fn a_task_in_the_runner_mount_namespace_is_an_owned_reference() -> TestResult<()
 }
 
 #[test]
+fn a_descriptor_held_outside_the_pair_namespace_is_an_owned_reference() -> TestResult<()> {
+    let mut pair = PairNamespace::start("held-namespace")?;
+    let mut holder = Command::new("sh")
+        .args(["-c", "exec 3<\"$1\" && echo held && exec sleep 300", "sh"])
+        .arg(format!("/proc/{}/ns/mnt", pair.pid()))
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let held = BufReader::new(holder.stdout.take().ok_or("no stdout")?)
+        .lines()
+        .next();
+    pair.child.kill().and_then(|()| pair.child.wait())?;
+    let record = scan(Scenario {
+        runner_namespace: pair.namespace,
+        volume_override: None,
+    });
+    holder.kill().and_then(|()| holder.wait())?;
+    assert_eq!(held.transpose()?.as_deref(), Some("held"));
+    assert!(record?.owned_reference_count >= 1);
+    Ok(())
+}
+
+#[test]
 fn a_pair_volume_mounted_in_another_namespace_is_an_owned_reference() -> TestResult<()> {
     let pair = PairNamespace::start("volume-mount")?;
     let record = scan(Scenario {
