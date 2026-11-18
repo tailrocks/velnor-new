@@ -22,8 +22,9 @@ use velnor_rust::{
     parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
+use super::groups::{group_dirs, shared_groups, workspaces};
 use super::unit_platforms::platforms;
-use super::units::{UnitFile, apart, group_dirs, profile, shared_groups, workspace};
+use super::units::{UnitFile, apart, profile};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind};
 use crate::error::CiError;
 use crate::platform::Platforms;
@@ -65,11 +66,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .map_err(|e| failed(&e))?
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
-    let workspaces = facts
-        .rust_roots
-        .iter()
-        .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
-        .collect::<Result<Vec<_>, _>>()?;
+    let workspaces = workspaces(&facts, &checkout.root)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
     let groups = group_dirs(&facts, &checkout.root);

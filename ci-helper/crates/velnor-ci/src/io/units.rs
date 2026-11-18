@@ -203,42 +203,6 @@ pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(
     Ok(())
 }
 
-pub(super) fn shared_groups(facts: &velnor_model::RepoFacts) -> Vec<Vec<usize>> {
-    facts
-        .config
-        .workspace_groups
-        .iter()
-        .map(|group| {
-            facts
-                .rust_roots
-                .iter()
-                .enumerate()
-                .filter(|(_, root)| group.roots.contains(&root.manifest))
-                .map(|(index, _)| index)
-                .collect()
-        })
-        .collect()
-}
-
-pub(super) fn group_dirs(facts: &velnor_model::RepoFacts, repository: &Path) -> Vec<PathBuf> {
-    facts
-        .config
-        .workspace_groups
-        .iter()
-        .map(|group| repository.join(group.target_dir().as_str()))
-        .collect()
-}
-
-pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
-    let mut directories = Vec::new();
-    for workspace in workspaces {
-        if !directories.contains(&workspace.target_directory) {
-            directories.push(workspace.target_directory.clone());
-        }
-    }
-    directories
-}
-
 pub(super) struct MetadataInvocation<'a> {
     pub(super) executable: &'a str,
     pub(super) arguments: &'a [String],
@@ -252,7 +216,7 @@ pub(super) fn workspace(
     metadata(manifest, invocation, false)
 }
 
-pub(super) fn standalone_workspace(
+pub(super) fn own_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
 ) -> Result<Workspace, CiError> {

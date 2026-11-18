@@ -6,7 +6,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
-use super::super::super::units::{UnitFile, Workspace, scan_dirs, unit_files};
+use super::super::super::groups::scan_dirs;
+use super::super::super::units::{UnitFile, Workspace, unit_files};
 use super::super::inventory::{self, Evidence, State};
 use super::{identity, output};
 use crate::error::CiError;

@@ -3,7 +3,8 @@
 
 use std::path::{Path, PathBuf};
 
-use super::super::super::units::{MetadataInvocation, Workspace, standalone_workspace, workspace};
+use super::super::super::groups::root_workspace;
+use super::super::super::units::{MetadataInvocation, Workspace};
 use crate::error::CiError;
 
 pub(super) struct Invocation {
@@ -143,6 +144,7 @@ impl Invocation {
         directory: &Path,
         workspaces: &[Workspace],
         standalone: &[bool],
+        groups: &[PathBuf],
     ) -> Result<(), CiError> {
         if !self.cargo {
             return Ok(());
@@ -172,11 +174,7 @@ impl Invocation {
         };
         for (expected, alone) in workspaces.iter().zip(standalone) {
             let manifest = expected.workspace_root.join("Cargo.toml");
-            let actual = if *alone {
-                standalone_workspace(&manifest, Some(&invocation))?
-            } else {
-                workspace(&manifest, Some(&invocation))?
-            };
+            let actual = root_workspace(&manifest, Some(&invocation), *alone, groups)?;
             if actual.workspace_root != expected.workspace_root
                 || actual.target_directory != expected.target_directory
             {
