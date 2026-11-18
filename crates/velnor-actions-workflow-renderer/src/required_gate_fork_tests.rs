@@ -62,7 +62,7 @@ fn evaluate(condition: &str, event: &Event) -> bool {
             let mut rest = word;
             while !rest.is_empty() {
                 let end = rest
-                    .find(|c| c == '(' || c == ')' || c == '!')
+                    .find(['(', ')', '!'])
                     .map_or(rest.len(), |i| if i == 0 { 1 } else { i });
                 out.push(&rest[..end]);
                 rest = &rest[end..];
