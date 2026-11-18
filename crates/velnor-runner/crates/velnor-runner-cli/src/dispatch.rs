@@ -72,6 +72,8 @@ fn dispatch(cli: &Cli) -> ExitCode {
             branches: args.branches.clone(),
             tag_prefixes: args.tag_prefixes.clone(),
             pull_request_rules: args.pull_request_rules.clone(),
+            organization: args.organization.as_deref(),
+            runner_group: args.runner_group.as_deref(),
             platform: &args.platform,
             max_jobs: args.max_jobs,
             docker_context: args.docker_context.as_deref(),

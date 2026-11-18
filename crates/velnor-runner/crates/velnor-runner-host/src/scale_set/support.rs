@@ -3,7 +3,7 @@
 
 use super::{EnsureError, EnsuredSet, GITHUB_API, ensured_from_record, observed_scale_set};
 use crate::{
-    config::ScaleSetSelector,
+    config::{RepositoryConnection, ScaleSetSelector},
     error::HostError,
     https::HttpsTransport,
     journal::{
@@ -11,10 +11,10 @@ use crate::{
     },
 };
 use velnor_runner_github::{
-    AdminConnectionCall, CreateLabel, Exchange, RegistrationScope, RegistrationTokenCall,
-    RunnerGroup, ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, ScaleSetView,
-    SessionError, SessionRequest, Transport, TransportFail, WireError, admin_connection,
-    create_runner_scale_set, get_runner_scale_set, get_runner_scale_set_by_id, registration_token,
+    AdminConnectionCall, CreateLabel, Exchange, RegistrationTokenCall, RunnerGroup, ScaleSetById,
+    ScaleSetByName, ScaleSetCreate, ScaleSetFound, ScaleSetView, SessionError, SessionRequest,
+    Transport, TransportFail, WireError, admin_connection, create_runner_scale_set,
+    get_runner_scale_set, get_runner_scale_set_by_id, registration_token,
     workflow_run::{
         RepositoryTarget, VerifiedRepositoryScope, WorkflowRunError, get_repository_scope,
     },
@@ -23,20 +23,22 @@ use velnor_runner_github::{
 pub(super) fn open_admin(
     pat: &str,
     scope: &VerifiedRepositoryScope,
+    binding: &RepositoryConnection,
 ) -> Result<(Recording, velnor_runner_github::AdminConnection), EnsureError> {
+    let target = binding.registration_target().map_err(map_host)?;
+    if scope.owner() != binding_owner(binding)? {
+        return Err(EnsureError::Rejected);
+    }
     let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
     let registration = registration_token(
         &mut transport,
         &RegistrationTokenCall {
-            scope: RegistrationScope::Repository {
-                owner: scope.owner(),
-                repo: scope.name(),
-            },
+            scope: target.scope(),
             pat,
         },
     )
     .map_err(|err| map_session(err, &transport))?;
-    let config_url = format!("https://github.com/{}/{}", scope.owner(), scope.name());
+    let config_url = target.config_url();
     let admin = admin_connection(
         &mut transport,
         &AdminConnectionCall {
@@ -314,15 +316,21 @@ fn scale_set_label_names(view: &ScaleSetView) -> Vec<String> {
     view.labels.iter().map(|label| label.name.clone()).collect()
 }
 
-pub(super) fn default_group_id(groups: &[RunnerGroup]) -> Result<i64, EnsureError> {
-    let mut defaults = groups.iter().filter(|group| group.is_default);
-    let Some(group) = defaults.next() else {
-        return Err(EnsureError::Rejected);
-    };
-    if group.id <= 0 || defaults.next().is_some() {
-        return Err(EnsureError::Rejected);
-    }
-    Ok(group.id)
+fn binding_owner(binding: &RepositoryConnection) -> Result<&str, EnsureError> {
+    binding
+        .repository
+        .split_once('/')
+        .map(|pair| pair.0)
+        .ok_or(EnsureError::Rejected)
+}
+
+pub(super) fn selected_group_id(
+    binding: &RepositoryConnection,
+    groups: &[RunnerGroup],
+) -> Result<i64, EnsureError> {
+    binding
+        .select_runner_group(groups)
+        .map_err(|_| EnsureError::Rejected)
 }
 
 pub(super) fn selector_valid(selector: &ScaleSetSelector) -> bool {

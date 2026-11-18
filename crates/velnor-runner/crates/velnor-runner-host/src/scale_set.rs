@@ -18,8 +18,8 @@ use crate::listen::{Link, link_from_admin};
 mod support;
 
 use support::{
-    create_connection_scale_set, default_group_id, map_host, map_repository, map_session,
-    open_admin, revalidate_repository_scope, selector_valid,
+    create_connection_scale_set, map_host, map_repository, map_session, open_admin,
+    revalidate_repository_scope, selected_group_id, selector_valid,
 };
 
 const GITHUB_API: &str = "https://api.github.com";
@@ -109,10 +109,10 @@ pub(crate) async fn ensure_connection_scale_set(
         pat,
     )
     .map_err(map_repository)?;
-    let (mut transport, admin) = open_admin(pat, &scope)?;
+    let (mut transport, admin) = open_admin(pat, &scope, binding)?;
     let groups = list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|error| map_session(error, &transport))?;
-    let group_id = default_group_id(&groups)?;
+    let group_id = selected_group_id(binding, &groups)?;
     let request = ScaleSetCreateRequest::new(binding, group_id).map_err(map_host)?;
     let record = scoped
         .prepare_scale_set_create(&request)
@@ -235,12 +235,13 @@ fn repository_parts(repository: &str) -> Result<(&str, &str), EnsureError> {
 pub fn product_runner_groups(
     pat: &str,
     scope: &VerifiedRepositoryScope,
+    binding: &RepositoryConnection,
 ) -> Result<Vec<RunnerGroup>, EnsureError> {
     if pat.is_empty() {
         return Err(EnsureError::Rejected);
     }
     revalidate_repository_scope(pat, scope)?;
-    let (mut transport, admin) = open_admin(pat, scope)?;
+    let (mut transport, admin) = open_admin(pat, scope, binding)?;
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
 }

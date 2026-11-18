@@ -124,20 +124,17 @@ impl Link {
         binding: &RepositoryConnection,
         pat: &str,
     ) -> Result<(), HostError> {
-        let (owner, repo) = binding
-            .repository
-            .split_once('/')
-            .ok_or(HostError::Config)?;
+        let target = binding.registration_target()?;
         let mut transport = HttpsTransport::new(GITHUB_API)?;
         let registration = velnor_runner_github::registration_token(
             &mut transport,
             &velnor_runner_github::RegistrationTokenCall {
-                scope: velnor_runner_github::RegistrationScope::Repository { owner, repo },
+                scope: target.scope(),
                 pat,
             },
         )
         .map_err(|_| HostError::Endpoint)?;
-        let config_url = format!("https://github.com/{owner}/{repo}");
+        let config_url = target.config_url();
         let admin = velnor_runner_github::admin_connection(
             &mut transport,
             &velnor_runner_github::AdminConnectionCall {
