@@ -65,6 +65,10 @@ impl GitHub for HttpGitHub {
 }
 
 impl GitHubWrite for HttpGitHub {
+    fn wait(&self, duration: Duration) {
+        std::thread::sleep(duration);
+    }
+
     fn upload(&self, url: &str, bytes: &[u8]) -> Result<String, CiError> {
         body(
             &format!("POST {url}"),

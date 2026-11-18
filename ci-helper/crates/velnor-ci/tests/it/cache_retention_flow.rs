@@ -38,7 +38,10 @@ fn five_push_saves_leave_only_the_newest_two_entries_through_the_trim_cli() {
                 ids.push(pushes);
                 let entries = ids.iter().map(|id| format!("{{\"id\":{id},\"key\":\"base-{id}\",\"created_at\":\"2026-11-{id:02}T00:00:00Z\"}}"))
                     .collect::<Vec<_>>().join(",");
-                format!("{{\"actions_caches\":[{entries}]}}")
+                format!(
+                    "{{\"total_count\":{},\"actions_caches\":[{entries}]}}",
+                    ids.len()
+                )
             } else {
                 assert!(request.starts_with("DELETE "), "{request}");
                 let id = request

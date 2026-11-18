@@ -1096,8 +1096,10 @@ jobs:
       - rust-test-root
       - rust-lint-lab
       - rust-test-lab
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (needs.rust-lint-root.outputs.base_save == ''true'' || needs.rust-test-root.outputs.base_save == ''true'' || (needs.rust-test-root.outputs.sources_saved == ''true'' || needs.rust-test-root.outputs.sources_key != '''') || needs.rust-lint-lab.outputs.base_save == ''true'' || needs.rust-test-lab.outputs.base_save == ''true'' || (needs.rust-test-lab.outputs.sources_saved == ''true'' || needs.rust-test-lab.outputs.sources_key != '''')) }}'
+      - rust-inputs-audit
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
     permissions:
+      pull-requests: read
       actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1132,7 +1134,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-test-root sources entries
-        if: '${{ needs.rust-test-root.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-test-root.outputs.sources_prefix != '''' && (needs.rust-test-root.outputs.sources_saved == ''true'' || needs.rust-test-root.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-test-root.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1150,7 +1152,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-test-lab sources entries
-        if: '${{ needs.rust-test-lab.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-test-lab.outputs.sources_prefix != '''' && (needs.rust-test-lab.outputs.sources_saved == ''true'' || needs.rust-test-lab.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-test-lab.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1207,6 +1209,10 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-lint-root-target_key.outcome != ''failure'' && steps.verify-rust-test-root-target_key.outcome != ''failure'' && steps.verify-rust-test-root-sources_key.outcome != ''failure'' && steps.verify-rust-lint-lab-target_key.outcome != ''failure'' && steps.verify-rust-test-lab-target_key.outcome != ''failure'' && steps.verify-rust-test-lab-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+      - name: Enforce the repository cache budget
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
   required:
     name: Required
     needs:
