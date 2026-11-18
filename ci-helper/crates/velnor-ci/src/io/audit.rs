@@ -21,7 +21,8 @@ use velnor_rust::{
     parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::units::{UnitFile, Workspace, apart, platforms, profile, unit_files, workspace};
+use super::unit_platforms::platforms;
+use super::units::{UnitFile, Workspace, apart, profile, unit_files, workspace};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 use crate::platform::Platforms;
