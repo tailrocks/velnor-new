@@ -153,6 +153,8 @@ mod scoped_workspace;
 mod seed_ids;
 #[path = "workflow_configuration_public/seed_off.rs"]
 mod seed_off;
+#[path = "workflow_configuration_public/rust_ci_off.rs"]
+mod rust_ci_off;
 #[path = "workflow_configuration_public/source_qualification.rs"]
 mod source_qualification;
 #[path = "workflow_configuration_public/source_qualification_aggregation.rs"]

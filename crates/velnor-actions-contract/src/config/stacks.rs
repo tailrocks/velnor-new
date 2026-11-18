@@ -78,7 +78,14 @@ pub enum DeclaredTestRunner {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "each flag is an independent operator-facing config key"
+)]
 pub struct RustStackConfig {
+    #[serde(default = "default_true", skip_serializing_if = "is_true")]
+    pub ci: bool,
+
     #[serde(default = "default_configurations")]
     pub configurations: Vec<RustConfiguration>,
 
@@ -144,6 +151,18 @@ fn is_false(value: &bool) -> bool {
     !value
 }
 
+fn default_true() -> bool {
+    true
+}
+
+#[expect(
+    clippy::trivially_copy_pass_by_ref,
+    reason = "serde skip_serializing_if requires a borrowed boolean"
+)]
+fn is_true(value: &bool) -> bool {
+    *value
+}
+
 fn default_configurations() -> Vec<RustConfiguration> {
     vec![RustConfiguration {
         name: "default".to_owned(),
@@ -202,6 +221,7 @@ impl RustStackConfig {
     #[must_use]
     pub fn default_config() -> Self {
         Self {
+            ci: true,
             configurations: default_configurations(),
             toolchain: None,
             toolchain_source: None,
@@ -223,6 +243,11 @@ impl RustStackConfig {
 }
 
 impl StacksConfig {
+    #[must_use]
+    pub fn rust_ci_enabled(&self) -> bool {
+        self.rust.as_ref().is_none_or(|rust| rust.ci)
+    }
+
     #[must_use]
     pub fn compiled_state(&self) -> CompiledStateMode {
         self.rust
