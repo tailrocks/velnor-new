@@ -31,6 +31,7 @@ pub(crate) struct Binary {
     pub(crate) platforms: Vec<Platform>,
     pub(crate) bins: Vec<ExtraBin>,
     pub(crate) include: Vec<String>,
+    pub(crate) files: Vec<String>,
     pub(crate) format: BinaryFormat,
     pub(crate) libc: Libc,
     pub(crate) asset_name: Option<String>,
@@ -59,6 +60,8 @@ struct RawBinary {
     bins: Vec<RawExtraBin>,
     #[serde(default)]
     include: Vec<String>,
+    #[serde(default)]
+    files: Vec<String>,
     format: Option<BinaryFormat>,
     target: Option<Libc>,
     #[serde(default)]
@@ -218,22 +221,40 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             package: raw.package,
         });
     }
-    let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;
-    if format == BinaryFormat::Raw
-        && let Some(path) = include.first()
+    if let Some(path) = raw.files.first()
+        && format == BinaryFormat::Archive
     {
         return Err(ReleaseError::InvalidBundle {
             package: raw.package,
             entry: path.clone(),
-            reason: "cannot be included in a raw binary, which publishes only executables",
+            reason: "cannot be listed in files of an archive binary; list it in include",
         });
     }
+    if let Some(path) = raw.include.first()
+        && format == BinaryFormat::Raw
+    {
+        return Err(ReleaseError::InvalidBundle {
+            package: raw.package,
+            entry: path.clone(),
+            reason: "cannot be included in a raw binary, which publishes its files flat; list it in files",
+        });
+    }
+    let listed = match format {
+        BinaryFormat::Archive => raw.include,
+        BinaryFormat::Raw => raw.files,
+    };
+    let (bins, listed) = bundle(&raw.package, &bin, raw.bins, listed)?;
+    let (include, files) = match format {
+        BinaryFormat::Archive => (listed, Vec::new()),
+        BinaryFormat::Raw => (Vec::new(), listed),
+    };
     Ok(Binary {
         package: raw.package,
         bin,
         platforms,
         bins,
         include,
+        files,
         format,
         libc,
         asset_name: raw.asset_name,

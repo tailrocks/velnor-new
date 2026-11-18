@@ -56,6 +56,18 @@ pub(crate) fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<St
     }
 }
 
+pub(crate) fn file_name(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+pub(crate) fn file_names(binary: &BinaryPlan) -> impl Iterator<Item = String> + '_ {
+    binary.files.iter().map(|path| file_name(path).to_owned())
+}
+
+pub(crate) fn carries_files(binary: &BinaryPlan, platform: Platform) -> bool {
+    binary.platforms.first() == Some(&platform)
+}
+
 pub(crate) fn word(binary: &BinaryPlan, name: &str) -> String {
     if versioned(binary) {
         format!("\"{name}\"")
@@ -99,7 +111,11 @@ pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {
     } else if versioned(binary) {
         format!("{STAGE}/*")
     } else {
-        published_files(binary, platform).join("\n")
+        let mut names = published_files(binary, platform);
+        if carries_files(binary, platform) {
+            names.extend(file_names(binary));
+        }
+        names.join("\n")
     }
 }
 
@@ -110,6 +126,7 @@ pub(crate) fn assets(binary: &BinaryPlan) -> Vec<String> {
         .platforms
         .iter()
         .flat_map(|platform| published_files(binary, *platform))
+        .chain(file_names(binary))
         .chain(binary.commit_file.then(|| COMMIT_FILE.to_owned()))
         .collect()
 }

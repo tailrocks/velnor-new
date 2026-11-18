@@ -11,7 +11,7 @@ use crate::release_assets::{
 };
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
-use crate::release_raw::{raw_packaging, smoke_steps};
+use crate::release_raw::{file_steps, raw_packaging, smoke_steps};
 use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,
@@ -103,6 +103,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
         )],
         BinaryFormat::Raw => {
             let mut steps = raw_packaging(binary, platform, triple, &release_dir);
+            steps.extend(file_steps(binary, platform));
             steps.extend(smoke_steps(binary, platform));
             steps
         }

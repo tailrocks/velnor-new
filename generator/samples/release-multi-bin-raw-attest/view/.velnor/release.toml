@@ -1,0 +1,9 @@
+after = ["CI", "Rust CI"]
+
+[[binaries]]
+package = "host"
+platforms = ["macos-arm64"]
+format = "raw"
+attest = true
+bins = [{ package = "helper", bin = "helper" }]
+files = ["LICENSE", "NOTICE"]
