@@ -87,7 +87,89 @@ fn qualification_accepts_advanced_base_and_rejects_unrelated_event_shas()
         )
         .is_err()
     );
-    check_results(&checkout, &runner, &merge, &stale_base, &base, &head)
+    check_results(&checkout, &runner, &merge, &stale_base, &base, &head)?;
+    rejects_first_parent_outside_base_branch(&root, &source, &origin, &stale_base, &base, &head)
+}
+
+fn rejects_first_parent_outside_base_branch(
+    root: &Path,
+    source: &Path,
+    origin: &Path,
+    stale_base: &str,
+    base: &str,
+    head: &str,
+) -> Result<(), Box<dyn Error>> {
+    git(source, &["checkout", "--quiet", "-b", "side", base])?;
+    fs::write(source.join("side"), b"side")?;
+    git(source, &["add", "."])?;
+    git(source, &["commit", "--quiet", "-m", "side"])?;
+    git(
+        source,
+        &["merge", "--quiet", "--no-ff", "topic", "-m", "side merge"],
+    )?;
+    let side_merge = git(source, &["rev-parse", "HEAD"])?;
+    git(
+        source,
+        &["push", "--quiet", "origin", "HEAD:refs/heads/side"],
+    )?;
+    let checkout = root.join("checkout-side");
+    let runner = root.join("runner-side");
+    fs::create_dir(&checkout)?;
+    fs::create_dir_all(runner.join("source-qualification-artifacts"))?;
+    git(&checkout, &["init", "--quiet"])?;
+    let url = format!("file://{}", origin.display());
+    git(&checkout, &["remote", "add", "origin", &url])?;
+    git(
+        &checkout,
+        &["fetch", "--quiet", "--depth=1", "origin", &side_merge],
+    )?;
+    git(
+        &checkout,
+        &["checkout", "--quiet", "--detach", "FETCH_HEAD"],
+    )?;
+    let off_branch = run_script(&checkout, &runner, &side_merge, stale_base, head)?;
+    assert!(!off_branch.status.success());
+    assert!(
+        String::from_utf8_lossy(&off_branch.stderr).contains("not on the base branch"),
+        "{}",
+        String::from_utf8_lossy(&off_branch.stderr)
+    );
+    Ok(())
+}
+
+fn run_script(
+    checkout: &Path,
+    runner: &Path,
+    merge: &str,
+    event_base: &str,
+    event_head: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    let script = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../scripts/generator-release/source-qualification.sh"
+    );
+    Ok(Command::new("bash")
+        .arg(script)
+        .arg("verify-exact-clean-source-checkout")
+        .current_dir(checkout)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("RUNNER_TEMP", runner)
+        .env("GITHUB_SHA", merge)
+        .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
+        .env("GITHUB_EVENT_NAME", "pull_request")
+        .env("GITHUB_REF", "refs/pull/1/merge")
+        .env(
+            "GITHUB_WORKFLOW_REF",
+            "tailrocks/velnor-new/.github/workflows/source-qualification.yml@refs/pull/1/merge",
+        )
+        .env("GITHUB_WORKFLOW_SHA", merge)
+        .env("RUNNER_OS", "Linux")
+        .env("RUNNER_ARCH", "X64")
+        .env("PR_BASE_SHA", event_base)
+        .env("PR_BASE_REF", "main")
+        .env("PR_HEAD_SHA", event_head)
+        .output()?)
 }
 
 fn check_results(
@@ -98,34 +180,9 @@ fn check_results(
     base: &str,
     head: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let script = concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../scripts/generator-release/source-qualification.sh"
-    );
-    let run =
-        |event_base: &str, event_head: &str| -> Result<std::process::Output, Box<dyn Error>> {
-            Ok(Command::new("bash")
-            .arg(script)
-            .arg("verify-exact-clean-source-checkout")
-            .current_dir(checkout)
-            .env("GIT_CONFIG_NOSYSTEM", "1")
-            .env("GIT_CONFIG_GLOBAL", "/dev/null")
-            .env("RUNNER_TEMP", runner)
-            .env("GITHUB_SHA", merge)
-            .env("GITHUB_REPOSITORY", "tailrocks/velnor-new")
-            .env("GITHUB_EVENT_NAME", "pull_request")
-            .env("GITHUB_REF", "refs/pull/1/merge")
-            .env(
-                "GITHUB_WORKFLOW_REF",
-                "tailrocks/velnor-new/.github/workflows/source-qualification.yml@refs/pull/1/merge",
-            )
-            .env("GITHUB_WORKFLOW_SHA", merge)
-            .env("RUNNER_OS", "Linux")
-            .env("RUNNER_ARCH", "X64")
-            .env("PR_BASE_SHA", event_base)
-            .env("PR_HEAD_SHA", event_head)
-            .output()?)
-        };
+    let run = |event_base: &str, event_head: &str| {
+        run_script(checkout, runner, merge, event_base, event_head)
+    };
     let advanced = run(stale_base, head)?;
     assert!(
         advanced.status.success(),

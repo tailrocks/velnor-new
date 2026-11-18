@@ -327,14 +327,25 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
     echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
     exit 1
   fi
-  if [ "$merge_parent_base" != "$PR_BASE_SHA" ]; then
-    if [ "$(GIT_OPTIONAL_LOCKS=0 git rev-parse --is-shallow-repository)" = true ]; then
-      GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --unshallow origin "$GITHUB_SHA"
-    fi
-    if ! GIT_OPTIONAL_LOCKS=0 git merge-base --is-ancestor "${PR_BASE_SHA}^{commit}" "$merge_parent_base" 2>/dev/null; then
-      echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
-      exit 1
-    fi
+  if [ -z "${PR_BASE_REF-}" ] || ! GIT_OPTIONAL_LOCKS=0 git check-ref-format --branch "$PR_BASE_REF" >/dev/null 2>&1 \
+    || [[ "$PR_BASE_REF" == -* ]] || [[ "$PR_BASE_REF" == *@\{* ]]; then
+    echo 'FATAL: pull_request event lacks a valid base branch name' >&2
+    exit 1
+  fi
+  base_tip_ref=refs/velnor/pr-base-tip
+  if [ "$(GIT_OPTIONAL_LOCKS=0 git rev-parse --is-shallow-repository)" = true ]; then
+    GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --unshallow origin "+refs/heads/$PR_BASE_REF:$base_tip_ref" "$GITHUB_SHA"
+  else
+    GIT_OPTIONAL_LOCKS=0 git fetch --no-tags origin "+refs/heads/$PR_BASE_REF:$base_tip_ref"
+  fi
+  if ! GIT_OPTIONAL_LOCKS=0 git merge-base --is-ancestor "$merge_parent_base" "$base_tip_ref"; then
+    echo 'FATAL: pull request merge first parent is not on the base branch; trigger a new pull request event for the current merge' >&2
+    exit 1
+  fi
+  if [ "$merge_parent_base" != "$PR_BASE_SHA" ] \
+    && ! GIT_OPTIONAL_LOCKS=0 git merge-base --is-ancestor "${PR_BASE_SHA}^{commit}" "$merge_parent_base" 2>/dev/null; then
+    echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
+    exit 1
   fi
   for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}" "${PR_BASE_SHA}^{commit}"; do
     if ! GIT_OPTIONAL_LOCKS=0 git cat-file -e "$rev" 2>/dev/null; then
