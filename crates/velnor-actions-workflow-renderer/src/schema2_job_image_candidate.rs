@@ -48,7 +48,13 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
         (
             "on".to_owned(),
             Yaml::Map(vec![
-                ("push".to_owned(), Yaml::Map(Vec::new())),
+                (
+                    "push".to_owned(),
+                    Yaml::Map(vec![(
+                        "branches".to_owned(),
+                        Yaml::Seq(vec![Yaml::str("main")]),
+                    )]),
+                ),
                 ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
             ]),
         ),
