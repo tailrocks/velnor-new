@@ -4,12 +4,15 @@
 use velnor_local::io::env::Environment;
 
 use crate::fake_docker::FakeDocker;
-use crate::support::temp_dir;
+use crate::support::{Harness, MAIN, temp_dir};
 
 fn seeded(name: &str) -> std::path::PathBuf {
     let dir = temp_dir(name);
     for (path, text) in [
-        ("cache/index.json", "{}"),
+        (
+            "cache/index.json",
+            r#"{"next_id":0,"records":[],"pull_request_bases":{}}"#,
+        ),
         ("cache/archives/blob", "bytes"),
         ("cache/restores.jsonl", "{\"run\":1}\n"),
         ("api/pulls.json", "[]"),
@@ -51,6 +54,55 @@ async fn a_rerun_that_keeps_the_cache_finds_its_entries_but_not_the_old_run_stat
     for directory in ["cache", "api", "events", "logs", "metrics"] {
         assert!(env.dir.join(directory).is_dir(), "{directory}");
     }
+}
+
+async fn rerun(harness: Harness, dir: &std::path::Path) -> Harness {
+    let docker = FakeDocker::default();
+    let env = Environment::at(dir, &docker)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    drop(harness);
+    env.reset(true)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    Harness::at(dir.join("cache"), 10_000_000_000).await
+}
+
+#[tokio::test]
+async fn a_rerun_on_another_default_branch_registers_pull_request_1_and_finds_the_old_entries() {
+    let dir = temp_dir("reset-rebase");
+    let first = Harness::at(dir.join("cache"), 10_000_000_000).await;
+    assert_eq!(first.register_base(1, "main").await, 200);
+    assert_eq!(
+        first.save(MAIN, "tools", b"saved by run one").await["ok"],
+        true
+    );
+    assert_eq!(first.register_base(1, "trunk").await, 412);
+
+    let second = rerun(first, &dir).await;
+
+    assert_eq!(second.register_base(1, "trunk").await, 200);
+    let hit = second.restore(MAIN, "tools").await;
+    assert_eq!(hit["ok"], true);
+    let url = hit["signed_download_url"].as_str().unwrap_or_default();
+    assert_eq!(second.get(url).await.body, b"saved by run one"[..]);
+}
+
+#[tokio::test]
+async fn a_rerun_forgets_a_reservation_the_old_run_never_committed() {
+    let dir = temp_dir("reset-reservation");
+    let first = Harness::at(dir.join("cache"), 10_000_000_000).await;
+    let entry = serde_json::json!({"key": "crashed", "version": "v"});
+    let created = first.twirp(MAIN, "CreateCacheEntry", &entry).await.json();
+    let url = created["signed_upload_url"].as_str().unwrap_or_default();
+    assert_eq!(first.put(url, b"partial").await.status, 201);
+    assert_eq!(first.save(MAIN, "crashed", b"again").await["ok"], false);
+
+    let second = rerun(first, &dir).await;
+
+    assert_eq!(second.save(MAIN, "crashed", b"whole").await["ok"], true);
+    let archives = std::fs::read_dir(dir.join("cache/archives")).map_or(0, Iterator::count);
+    assert_eq!(archives, 1);
 }
 
 #[tokio::test]

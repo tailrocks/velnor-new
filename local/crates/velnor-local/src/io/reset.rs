@@ -8,6 +8,7 @@ use tokio::fs;
 
 use super::RESTORES;
 use super::env::{Engine, Environment};
+use super::index_file::{lock_index, read_index, write_index};
 
 const CACHE_DIRECTORY: &str = "cache";
 const RUN_STATE: [&str; 5] = [CACHE_DIRECTORY, "api", "events", "logs", "metrics"];
@@ -22,9 +23,28 @@ impl<E: Engine> Environment<E> {
                 remove_dir(&path).await?;
             }
             fs::create_dir_all(&path).await?;
+            if keep_cache && directory == CACHE_DIRECTORY {
+                end_run(&path).await?;
+            }
         }
         Ok(())
     }
+}
+
+/// Keeps the cache entries and their archives, and forgets the index's
+/// per-run state (see `Index::end_run`) together with the partial uploads.
+async fn end_run(cache: &Path) -> io::Result<()> {
+    if !fs::try_exists(cache.join("index.json")).await? {
+        return Ok(());
+    }
+    let _lock = lock_index(cache).await?;
+    let mut index = read_index(cache).await?;
+    let abandoned = index.end_run();
+    write_index(cache, &index).await?;
+    for record in abandoned {
+        remove_file(&cache.join("archives").join(&record.blob)).await?;
+    }
+    remove_dir(&cache.join("blocks")).await
 }
 
 async fn remove_dir(path: &Path) -> io::Result<()> {
