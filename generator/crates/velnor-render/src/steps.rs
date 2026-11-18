@@ -58,6 +58,10 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             .steps
             .iter()
             .any(|step| step.kind == StepKind::UploadCargoLog),
+        offline: job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
     };
     let tests = job
         .steps
@@ -274,6 +278,8 @@ fn step_body(
             crate::helper_steps::inputs_step("restore", target, directory)
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::PrivateToken(sources) => crate::private_steps::token(sources),
+        StepKind::PrivateFetch { manifests } => crate::private_steps::fetch(manifests),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),

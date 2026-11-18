@@ -31,6 +31,23 @@ Writing the configuration only above the checkout misses temporary directories. 
 
 This repository selects its scale-set runner and names its mirror in this configuration. Its existing engine and maintenance workflows are separate from the new generator and do not consume this setting. Running a generated Rust workflow requires the compatible helper release.
 
+## Optional private dependencies
+
+A project whose crates depend on private repositories names them in `.velnor/rust-ci.toml`. The table is off when absent, and then the generated workflow is unchanged.
+
+```toml
+[private_sources]
+app_id = "vars.DEPS_APP_ID"
+private_key = "secrets.DEPS_APP_PRIVATE_KEY"
+repositories = ["owner/shared-lib"]
+```
+
+`app_id` must be a `vars.` name and `private_key` a `secrets.` name. `repositories` is a non-empty list of `owner/name` entries with one owner. Anything else is refused. The key needs a helper release of `0.1.82` or later.
+
+Each job that compiles gets two steps after `jdx/mise-action` and before its first compiling cargo command. The first creates a read-only token for the listed repositories with `actions/create-github-app-token`. It does not run for pull requests from forks. The second runs `velnor-ci fetch` with the token in its step environment only. `velnor-ci fetch` runs `cargo fetch --locked` for each Cargo root, gives the token to git through `GIT_CONFIG_*` variables of that command alone, and then revokes it with `DELETE /installation/token`. It starts `cargo` and `git` by absolute path from the tool directories the runner installed, with an environment it builds itself, so a changed `mise.toml` cannot redirect the token. It refuses a `CARGO_HOME` outside those directories. Without a token it runs `cargo fetch --locked --offline` and fails with a message that names the fork case when the caches lack a dependency.
+
+Every later cargo command of the job runs with `--offline` and `CARGO_NET_OFFLINE=true`. The token is written to no file, to `$GITHUB_ENV` or to any git configuration.
+
 ## Test setup steps
 
 A test that needs a fixture, such as a built example executable or a provisioned service, declares one step per fixture. The generator runs each step before the first test step of every job of that root, in the order written. Each step is one command, because a generated `run:` value is one command with no shell logic; the logic lives in a script the repository commits. The script exports variables to later steps through `$GITHUB_ENV`.

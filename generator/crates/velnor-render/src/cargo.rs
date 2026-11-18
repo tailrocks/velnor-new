@@ -19,6 +19,7 @@ const DOC_RUN: &str =
 pub(crate) struct CargoLane {
     pub(crate) artifacts: ArtifactFormat,
     pub(crate) cache_debug: bool,
+    pub(crate) offline: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -46,6 +47,11 @@ impl ArtifactFormat {
 
 pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -> RenderedStep {
     let (name, run, env) = cargo_command(command, lane.artifacts);
+    let run = if lane.offline {
+        run.replacen(" --locked", " --locked --offline", 1)
+    } else {
+        run
+    };
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
     } else {
@@ -57,6 +63,7 @@ pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -
         env: env
             .into_iter()
             .chain(lane.cache_debug.then(cache_debug_env))
+            .chain(lane.offline.then(offline_env))
             .collect(),
         run: Some(format!(
             "{prefix} {}{run}",
@@ -161,6 +168,13 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
         .collect::<Vec<_>>()
         .join(" "),
         vec![],
+    )
+}
+
+fn offline_env() -> (String, Value) {
+    (
+        "CARGO_NET_OFFLINE".to_owned(),
+        Value::Text("true".to_owned()),
     )
 }
 

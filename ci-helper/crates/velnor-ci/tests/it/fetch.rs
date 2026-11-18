@@ -1,0 +1,200 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::error::Error;
+use std::fs;
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::process::{Command, Output};
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+use crate::io::Repo;
+
+type TestResult = Result<(), Box<dyn Error>>;
+
+const TOKEN: &str = "ghs_recorded_installation_token";
+
+fn script(path: &Path, body: &str) -> TestResult {
+    fs::create_dir_all(path.parent().ok_or("parent")?)?;
+    fs::write(path, format!("#!/bin/sh\n{body}\n"))?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
+    Ok(())
+}
+
+struct Api {
+    url: String,
+    requests: Arc<Mutex<Vec<String>>>,
+}
+
+fn serve(status: u16) -> Result<Api, Box<dyn Error>> {
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let url = format!("http://{}", listener.local_addr()?);
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&requests);
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut buffer = [0_u8; 4096];
+            let read = stream.read(&mut buffer).unwrap_or(0);
+            let text = String::from_utf8_lossy(&buffer[..read]).to_lowercase();
+            let first = text.lines().next().unwrap_or_default().to_owned();
+            let bearer = text
+                .lines()
+                .find(|line| line.starts_with("authorization:"))
+                .unwrap_or_default()
+                .to_owned();
+            if let Ok(mut seen) = seen.lock() {
+                seen.push(format!("{first} | {bearer}"));
+            }
+            drop(
+                stream.write_all(
+                    format!(
+                        "HTTP/1.1 {status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                    )
+                    .as_bytes(),
+                ),
+            );
+        }
+    });
+    Ok(Api { url, requests })
+}
+
+struct Fixture {
+    repo: Repo,
+}
+
+impl Fixture {
+    fn new(name: &str, cargo_exit: u8) -> Result<Self, Box<dyn Error>> {
+        let repo = Repo::empty(name);
+        let root = repo.root().to_path_buf();
+        let log = root.join("log");
+        fs::create_dir_all(&log)?;
+        let trusted = root.join("trusted/bin");
+        script(
+            &trusted.join("cargo"),
+            &format!(
+                "env > {log}/cargo.env\necho \"$*\" > {log}/cargo.args\ngit ls-remote > /dev/null 2>&1\nexit {cargo_exit}",
+                log = log.display()
+            ),
+        )?;
+        script(
+            &trusted.join("git"),
+            &format!("env >> {}/git.env", log.display()),
+        )?;
+        for tool in ["cargo", "git"] {
+            script(
+                &root.join("hostile/bin").join(tool),
+                &format!("echo ran >> {}/hostile.log", log.display()),
+            )?;
+        }
+        repo.write_unstaged("Cargo.toml", "");
+        Ok(Self { repo })
+    }
+
+    fn run(&self, api: &Api, token: Option<&str>, home: Option<&str>) -> Output {
+        let root = self.repo.root();
+        let path = format!(
+            "{}:{}:/usr/bin:/bin",
+            root.join("hostile/bin").display(),
+            root.join("trusted/bin").display()
+        );
+        let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+        command
+            .current_dir(root)
+            .args(["fetch", "--manifest-path", "Cargo.toml", "--trusted-dir"])
+            .arg(root.join("trusted"))
+            .env_clear()
+            .env("PATH", path)
+            .env("VELNOR_API_URL", &api.url)
+            .env("GIT_CONFIG_COUNT", "1")
+            .env("GIT_CONFIG_KEY_0", "core.sshCommand")
+            .env("GIT_CONFIG_VALUE_0", "hostile-config")
+            .env("CARGO_HTTP_PROXY", "http://hostile-proxy.invalid")
+            .env("CARGO_NET_OFFLINE", "false");
+        if let Some(token) = token {
+            command.env("VELNOR_PRIVATE_TOKEN", token);
+        }
+        if let Some(home) = home {
+            command.env("CARGO_HOME", home);
+        }
+        command.output().unwrap_or_else(|e| unreachable!("{e}"))
+    }
+
+    fn log(&self, name: &str) -> String {
+        fs::read_to_string(self.repo.root().join("log").join(name)).unwrap_or_default()
+    }
+}
+
+#[test]
+fn the_token_reaches_only_the_real_cargo_and_git_and_is_revoked_after_the_fetch() -> TestResult {
+    let fixture = Fixture::new("fetch-token", 0)?;
+    let api = serve(204)?;
+    let output = fixture.run(&api, Some(TOKEN), None);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(fixture.log("hostile.log"), "");
+    assert_eq!(
+        fixture.log("cargo.args").trim(),
+        "fetch --locked --manifest-path Cargo.toml"
+    );
+    let cargo_env = fixture.log("cargo.env");
+    let git_env = fixture.log("git.env");
+    assert!(cargo_env.contains(TOKEN) && git_env.contains(TOKEN));
+    for environment in [&cargo_env, &git_env] {
+        assert!(!environment.contains("hostile"), "{environment}");
+        assert!(!environment.contains("CARGO_NET_OFFLINE"), "{environment}");
+        assert!(environment.contains("GIT_CONFIG_NOSYSTEM=1"));
+    }
+    assert!(!cargo_env.contains("PRIVATE_TOKEN"), "{cargo_env}");
+    let requests = api.requests.lock().map_err(|e| e.to_string())?.clone();
+    assert_eq!(
+        requests,
+        [format!(
+            "delete /installation/token http/1.1 | authorization: bearer {}",
+            TOKEN.to_lowercase()
+        )]
+    );
+    Ok(())
+}
+
+#[test]
+fn without_a_token_the_fetch_is_offline_and_a_miss_says_why() -> TestResult {
+    let fixture = Fixture::new("fetch-offline", 101)?;
+    let api = serve(204)?;
+    let output = fixture.run(&api, None, None);
+    assert!(!output.status.success());
+    assert_eq!(
+        fixture.log("cargo.args").trim(),
+        "fetch --locked --manifest-path Cargo.toml --offline"
+    );
+    assert!(!fixture.log("cargo.env").contains("GIT_CONFIG_KEY_0=url."));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("fork"), "{stderr}");
+    assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());
+    Ok(())
+}
+
+#[test]
+fn a_cargo_home_outside_the_tool_directories_runs_nothing_and_still_revokes() -> TestResult {
+    let fixture = Fixture::new("fetch-home", 0)?;
+    let api = serve(204)?;
+    let hostile = fixture.repo.root().join("checkout-cargo-home");
+    let output = fixture.run(&api, Some(TOKEN), Some(&hostile.display().to_string()));
+    assert!(!output.status.success());
+    assert_eq!(fixture.log("cargo.args"), "");
+    assert_eq!(fixture.log("hostile.log"), "");
+    assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
+    Ok(())
+}
+
+#[test]
+fn a_token_that_cannot_be_revoked_fails_the_step() -> TestResult {
+    let fixture = Fixture::new("fetch-revoke", 0)?;
+    let api = serve(401)?;
+    let output = fixture.run(&api, Some(TOKEN), None);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("revoked"));
+    Ok(())
+}

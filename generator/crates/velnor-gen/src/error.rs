@@ -21,6 +21,7 @@ pub enum GenerateError {
     HelperNotPinned,
     ReleaseHelperTooOld(HelperVersion),
     MirrorHelperTooOld(HelperVersion),
+    PrivateSourcesHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
@@ -55,6 +56,7 @@ impl fmt::Display for GenerateError {
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
             ),
             Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
+            Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"),
             Self::InputsBuildHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot record pre-build directory inventories for inputs audit; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"

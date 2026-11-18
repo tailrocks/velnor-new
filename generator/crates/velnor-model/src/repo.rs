@@ -244,6 +244,7 @@ pub struct ToolPin {
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
+    pub private_sources: Option<PrivateSources>,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -316,6 +317,7 @@ impl Default for RustCiConfig {
         Self {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
+            private_sources: None,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),
@@ -343,4 +345,12 @@ pub struct CratesMirror {
     pub runner: RunnerLabel,
     pub registry: String,
     pub cainfo: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateSources {
+    pub app_id: String,
+    pub private_key: String,
+    pub owner: String,
+    pub repositories: Vec<String>,
 }

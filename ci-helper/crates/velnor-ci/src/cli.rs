@@ -62,6 +62,10 @@ pub enum Command {
     )]
     CratesMirror(CratesMirrorArgs),
     #[command(
+        about = "Run cargo fetch --locked for each manifest with the token in VELNOR_PRIVATE_TOKEN given to git for that command only, then revoke the token with DELETE /installation/token on the API in VELNOR_API_URL. Starts cargo and git by absolute path from the tool directories the runner installed, with an environment it builds itself, so that the checkout's configuration cannot redirect the token. Without a token it runs cargo fetch --locked --offline and fails when the restored caches lack a dependency"
+    )]
+    Fetch(FetchArgs),
+    #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
     CheckMetadata,
@@ -101,6 +105,22 @@ pub struct CheckConfigurationsArgs {
         help = "JSON array of named feature configurations; without a file, check the default configuration"
     )]
     pub configurations: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct FetchArgs {
+    #[arg(
+        long,
+        required = true,
+        help = "Cargo manifest to fetch; repeat for each Cargo root"
+    )]
+    pub manifest_path: Vec<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        help = "An extra absolute directory whose programs and CARGO_HOME count as installed by the runner"
+    )]
+    pub trusted_dir: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

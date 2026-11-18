@@ -81,6 +81,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if facts.config.cache_debug == CacheDebug::On {
         upload_cargo_logs(&mut jobs);
     }
+    if let Some(sources) = &facts.config.private_sources {
+        crate::private_fetch::insert(sources, &mut jobs);
+    }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),

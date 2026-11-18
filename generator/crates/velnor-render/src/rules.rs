@@ -200,9 +200,11 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
 
 fn holds_app_token(job: &RenderedJob) -> bool {
     job.steps.iter().any(|step| {
-        step.uses
-            .as_deref()
-            .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+        step.id.as_deref() != Some(crate::private_steps::TOKEN_STEP)
+            && step
+                .uses
+                .as_deref()
+                .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
     })
 }
 
