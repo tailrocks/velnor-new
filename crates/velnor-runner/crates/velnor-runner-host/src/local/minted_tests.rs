@@ -6,7 +6,17 @@ use std::os::unix::fs::PermissionsExt;
 use super::{COMPACT_SLACK, MINTED_FILE, MintedAgents};
 
 fn lines(state: &std::path::Path) -> usize {
-    std::fs::read_to_string(state.join(MINTED_FILE)).map_or(0, |text| text.lines().count())
+    std::fs::read_to_string(state.join(MINTED_FILE))
+        .expect("the journal must be readable to be measured")
+        .lines()
+        .count()
+}
+
+#[test]
+#[should_panic(expected = "the journal must be readable")]
+fn an_unreadable_journal_fails_the_measurement_instead_of_counting_zero_lines() {
+    let state = tempfile::tempdir().expect("state");
+    let _ = lines(state.path());
 }
 
 #[tokio::test]
