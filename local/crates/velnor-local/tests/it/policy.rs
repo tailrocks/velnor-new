@@ -59,9 +59,8 @@ async fn start(dir: &Path, policy: Option<&Path>) -> io::Result<()> {
     let pairs = Pairs {
         host: script.clone(),
         trusted: 1,
-        untrusted: 0,
         policy: policy.map(Path::to_path_buf),
-        labels: Vec::new(),
+        ..Pairs::default()
     };
     let started = supervisor::start_pairs(
         dir,
@@ -152,7 +151,7 @@ fn the_plan_names_the_policy_file_only_when_one_is_given() {
         runner_image: "sha256:aa",
         dind_image: "sha256:bb",
         sides: &sides,
-        policy: None,
+        ..PlanInput::default()
     };
     assert!(plan(&input)["policy"].is_null());
     input.policy = Some("policy.json");

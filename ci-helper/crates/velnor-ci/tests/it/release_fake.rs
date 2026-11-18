@@ -278,6 +278,8 @@ impl GitHub for FakeReleases {
 }
 
 impl GitHubWrite for FakeReleases {
+    fn wait(&self, _: std::time::Duration) {}
+
     fn upload(&self, url: &str, bytes: &[u8]) -> Result<String, CiError> {
         let mut state = self.state();
         state.requests += 1;
