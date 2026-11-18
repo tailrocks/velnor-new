@@ -6,8 +6,8 @@ use crate::lane::Lane;
 use crate::plan::step;
 use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoFacts, RustRoot, Step, StepKind, When};
 
-pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId) -> Vec<Step> {
-    if !supported(facts, root) {
+pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId, lane: &Lane) -> Vec<Step> {
+    if !supported(facts, root, lane.deltas) {
         return Vec::new();
     }
     let root = CacheRoot::new(&root.manifest, root.target_dir.clone());
@@ -29,7 +29,7 @@ pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId) -> Vec<St
 }
 
 pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId) -> Vec<Step> {
-    if !supported(facts, root) {
+    if !supported(facts, root, lane.deltas) {
         return Vec::new();
     }
     let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
@@ -66,8 +66,9 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
     .collect()
 }
 
-fn supported(facts: &RepoFacts, root: &RustRoot) -> bool {
-    facts.private_sources.is_none()
+fn supported(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> bool {
+    deltas
+        && facts.private_sources.is_none()
         && has_saving_helper(facts)
         && root.target_dir
             == root

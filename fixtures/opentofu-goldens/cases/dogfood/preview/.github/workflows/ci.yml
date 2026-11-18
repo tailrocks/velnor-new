@@ -78,6 +78,9 @@ jobs:
           format: github
           path: .
           version: v0.21.0
+      - name: Check the Rust line cap with probe files
+        if: hashFiles('scripts/alint-line-cap-probe.sh') != ''
+        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/alint-line-cap-probe.sh
   cargo-deny:
     name: Cargo Deny
     runs-on: ubuntu-26.04

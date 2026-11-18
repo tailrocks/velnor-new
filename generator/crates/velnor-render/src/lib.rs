@@ -11,6 +11,7 @@ mod delta_steps;
 mod events;
 mod gate;
 mod header;
+mod helper_integrity;
 mod helper_steps;
 mod key_length;
 mod release;
@@ -33,8 +34,8 @@ use crate::events::{concurrency, triggers};
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
 pub use crate::rules::{
-    ALLOWED_ACTIONS, APP_TOKEN_ACTION, HELPER_FROM_ARTIFACT_RUN, MAX_CACHE_KEY_CHARACTERS,
-    MAX_ENV_CHARACTERS, MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedStep,
+    ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,
+    MAX_RUN_CHARACTERS, MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep,
     RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
@@ -61,12 +62,13 @@ pub fn render_workflow(
     rendered: &RenderedWorkflow,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     check_rules(rendered)?;
-    let workflow = [
-        entry("name", text(&plan.name)),
-        entry("on", triggers(&plan.triggers)),
-        entry("permissions", permissions(&plan.permissions)),
-        entry("concurrency", concurrency(plan.concurrency)),
-        entry(
+    let workflow: Vec<_> = [
+        Some(entry("name", text(&plan.name))),
+        Some(entry("on", triggers(&plan.triggers))),
+        Some(entry("permissions", permissions(&plan.permissions))),
+        Some(entry("concurrency", concurrency(plan.concurrency))),
+        helper_integrity::defaults(&rendered.jobs).map(|defaults| entry("defaults", defaults)),
+        Some(entry(
             "jobs",
             Yaml::Map(
                 rendered
@@ -75,12 +77,20 @@ pub fn render_workflow(
                     .map(|job| (job.id.clone(), yaml_job(job)))
                     .collect(),
             ),
-        ),
-    ];
-    Ok(BTreeMap::from([(
-        WORKFLOW_PATH,
-        format!("{GENERATED_HEADER}{}", emit(&workflow)),
-    )]))
+        )),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let file = format!("{GENERATED_HEADER}{}", emit(&workflow));
+    if file.len() > rules::MAX_WORKFLOW_BYTES {
+        return Err(vec![RuleViolation {
+            job: String::new(),
+            step: 0,
+            rule: Rule::WorkflowTooLarge(file.len()),
+        }]);
+    }
+    Ok(BTreeMap::from([(WORKFLOW_PATH, file)]))
 }
 
 pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String)> {

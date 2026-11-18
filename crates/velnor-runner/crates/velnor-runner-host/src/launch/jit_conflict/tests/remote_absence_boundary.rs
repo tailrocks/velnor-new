@@ -72,7 +72,10 @@ async fn upgrades_only_fenced_history() -> TestResult<()> {
             drop(opened?);
             let case = case.reopen(Schema::Current).await?;
             assert_eq!(super::historical::proof_rows(&case.journal).await?, before);
-            assert_eq!(super::historical::version(&case.journal).await?, 50);
+            assert_eq!(
+                super::historical::version(&case.journal).await?,
+                crate::journal::Journal::current_schema_version_for_test()
+            );
             Box::pin(case.finish(&claim, false)).await?;
         }
     }
@@ -84,9 +87,15 @@ async fn prepared(
     outcome: JitOutcome,
 ) -> TestResult<(Case, JitConflictRecoveryClaim)> {
     let case = Box::pin(Case::new(schema, outcome, false)).await?;
-    case.journal
-        .recover_after_restart_without_authority()
-        .await?;
+    if matches!(schema, Schema::Historical46 | Schema::Historical47) {
+        case.journal
+            .recover_after_restart_v46_v47_for_test()
+            .await?;
+    } else {
+        case.journal
+            .recover_after_restart_without_authority()
+            .await?;
+    }
     let candidates = case.scope.recoverable_jit_conflict_candidates().await?;
     let claim = case
         .scope

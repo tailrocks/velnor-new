@@ -5,8 +5,37 @@ use crate::base_save::{jobs, names, pinned, step};
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
 use velnor_gen::expected_files;
-use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath};
+use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoPath, RepoView};
 use velnor_render::render_key;
+
+fn source_repo(version: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let lock = pinned(version, config_for(version))?
+        .files
+        .get(&velnor_rust::LOCK_PATH)
+        .ok_or("no lock")?
+        .clone();
+    let mut repo = crate::golden::load(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/helper-source"),
+    )?;
+    repo.files.insert(velnor_rust::LOCK_PATH, lock);
+    let config = repo
+        .files
+        .get_mut(&velnor_rust::CONFIG_PATH)
+        .ok_or("no config")?;
+    config.extend_from_slice(config_for(version).as_bytes());
+    Ok(repo)
+}
+
+#[test]
+fn a_source_helper_locked_below_the_restoring_release_is_refused() -> TestResult {
+    let error = expected_files(&source_repo("0.1.80")?)
+        .err()
+        .ok_or("accepted")?;
+    let message = error.to_string();
+    assert!(message.contains("helper.path"), "{message}");
+    assert!(message.contains("0.1.81"), "{message}");
+    Ok(())
+}
 
 fn config_for(version: &str) -> &'static str {
     if version == "0.1.80" {
@@ -235,30 +264,12 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
 
 #[test]
 fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags() -> TestResult {
-    for (version, source) in [
-        ("0.1.80", false),
-        ("0.1.81", false),
-        ("0.1.80", true),
-        ("0.1.81", true),
-    ] {
-        let mut repo = pinned(version, config_for(version))?;
-        if source {
-            let lock = repo
-                .files
-                .get(&velnor_rust::LOCK_PATH)
-                .ok_or("no lock")?
-                .clone();
-            repo = crate::golden::load(
-                &std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-                    .join("../../samples/helper-source"),
-            )?;
-            repo.files.insert(velnor_rust::LOCK_PATH, lock);
-            let config = repo
-                .files
-                .get_mut(&velnor_rust::CONFIG_PATH)
-                .ok_or("no config")?;
-            config.extend_from_slice(config_for(version).as_bytes());
-        }
+    for (version, source) in [("0.1.80", false), ("0.1.81", false), ("0.1.81", true)] {
+        let repo = if source {
+            source_repo(version)?
+        } else {
+            pinned(version, config_for(version))?
+        };
         let text = workflow(&repo)?;
         let files = expected_files(&repo)?;
         let cleanup = files.get(&velnor_render::DELTA_CLEANUP_PATH);

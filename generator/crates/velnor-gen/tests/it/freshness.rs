@@ -55,7 +55,10 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
         let end = rest
             .find("\n  rust-")
             .or_else(|| rest.find("\n  required:"));
-        let order = names_of(end.map_or(rest, |end| &rest[..end]));
+        let order: Vec<&str> = names_of(end.map_or(rest, |end| &rest[..end]))
+            .into_iter()
+            .filter(|name| *name != "Verify the released helper")
+            .collect();
         let restored = order
             .iter()
             .position(|name| *name == "velnor-ci restored")
@@ -94,11 +97,22 @@ fn a_helper_older_than_0_1_81_gets_no_inputs_restore_and_a_newer_one_gets_it() -
 }
 
 #[test]
-fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
+fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() -> TestResult {
     let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert!(!text.contains("vars."), "{text}");
+    assert!(!text.contains("CARGO_LOG"), "{text}");
+    assert_eq!(named(&text, "Upload the cargo fingerprint log").len(), 0);
+    let off = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = false\n"))?)?;
+    assert_eq!(off, text);
+    Ok(())
+}
+
+#[test]
+fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
+    let text = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = true\n"))?)?;
     let cargo: Vec<&str> = steps(&text)
         .into_iter()
-        .filter(|step| step.contains("run: velnor-ci run -- cargo"))
+        .filter(|step| step.contains(r#""$VELNOR_EXEC" run -- cargo"#))
         .collect();
     assert_ne!(cargo.len(), 0);
     for step in cargo {
@@ -280,7 +294,7 @@ fn compile_steps_build_the_whole_workspace_because_a_narrower_package_set_unifie
             .lines()
             .filter_map(|line| line.trim().strip_prefix("run: "))
             .map(|run| run.trim_matches('\''))
-            .filter(|run| run.starts_with("velnor-ci run"))
+            .filter(|run| run.contains("\"$VELNOR_EXEC\" run"))
             .filter(|run| {
                 run.contains("clippy")
                     || run.contains("nextest")
@@ -289,7 +303,11 @@ fn compile_steps_build_the_whole_workspace_because_a_narrower_package_set_unifie
             })
         {
             assert!(run.contains("--workspace"), "{run}");
-            assert!(!run.contains(" -p "), "{run}");
+            let arguments = run
+                .split_once("\"$VELNOR_EXEC\" ")
+                .ok_or("no invocation")?
+                .1;
+            assert!(!arguments.contains(" -p "), "{run}");
         }
     }
     Ok(())

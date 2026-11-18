@@ -20,7 +20,7 @@ fn rust_ci_workflow() -> Result<String, Box<dyn Error>> {
 
 #[test]
 fn only_a_pull_request_not_known_closed_can_cancel_an_older_run() -> TestResult {
-    let tree = serde_saphyr::from_str::<serde_json::Value>(&rust_ci_workflow()?)?;
+    let tree = crate::yaml_tree::document(&rust_ci_workflow()?)?;
     assert_eq!(
         tree.pointer("/concurrency/cancel-in-progress")
             .and_then(serde_json::Value::as_str),
@@ -34,7 +34,7 @@ fn only_a_pull_request_not_known_closed_can_cancel_an_older_run() -> TestResult 
 
 #[test]
 fn closed_pull_requests_and_non_pull_request_runs_use_their_unique_run_id() -> TestResult {
-    let tree = serde_saphyr::from_str::<serde_json::Value>(&rust_ci_workflow()?)?;
+    let tree = crate::yaml_tree::document(&rust_ci_workflow()?)?;
     assert_eq!(
         tree.pointer("/concurrency/group")
             .and_then(serde_json::Value::as_str),

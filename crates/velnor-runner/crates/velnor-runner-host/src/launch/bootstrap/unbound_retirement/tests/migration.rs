@@ -69,7 +69,7 @@ async fn dump(journal: &Journal) -> TestResult<Vec<String>> {
 }
 
 #[tokio::test]
-async fn a_v43_journal_with_in_flight_intents_migrates_to_v50_unchanged() -> TestResult<()> {
+async fn a_v43_journal_with_in_flight_intents_migrates_to_current_unchanged() -> TestResult<()> {
     let dir = tempfile::tempdir()?;
     let path = dir.path().join("launch.db");
     let journal = Journal::open_historical_v45_for_test(&path).await?;
@@ -84,7 +84,10 @@ async fn a_v43_journal_with_in_flight_intents_migrates_to_v50_unchanged() -> Tes
 
     let journal = Journal::open(&path).await?;
 
-    assert_eq!(version(&journal).await?, 50);
+    assert_eq!(
+        version(&journal).await?,
+        crate::journal::Journal::current_schema_version_for_test()
+    );
     assert_eq!(dump(&journal).await?, before);
     assert_eq!(journal.read(pending).await?, IntentState::Pending);
     assert_eq!(journal.read(uncertain).await?, IntentState::Uncertain);

@@ -16,6 +16,12 @@ const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 #[derive(Clone, Copy)]
+pub(crate) struct CargoLane {
+    pub(crate) artifacts: ArtifactFormat,
+    pub(crate) cache_debug: bool,
+}
+
+#[derive(Clone, Copy)]
 pub(crate) enum ArtifactFormat {
     Disabled,
     CargoOnly,
@@ -38,12 +44,8 @@ impl ArtifactFormat {
     }
 }
 
-pub(crate) fn cargo_step(
-    command: &CargoCommand,
-    audit: bool,
-    artifacts: ArtifactFormat,
-) -> RenderedStep {
-    let (name, run, env) = cargo_command(command, artifacts);
+pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -> RenderedStep {
+    let (name, run, env) = cargo_command(command, lane.artifacts);
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
     } else {
@@ -52,7 +54,10 @@ pub(crate) fn cargo_step(
     RenderedStep {
         name,
         id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
-        env: env.into_iter().chain([cache_debug_env()]).collect(),
+        env: env
+            .into_iter()
+            .chain(lane.cache_debug.then(cache_debug_env))
+            .collect(),
         run: Some(format!(
             "{prefix} {}{run}",
             inventory_prefix(command, audit)
@@ -114,9 +119,9 @@ fn cargo_command(
             format!("cargo check -p {package} --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Build { package } => (
+        CargoCommand::BuildBinary { package, binary } => (
             format!("Build {package}"),
-            format!("cargo build -p {package} --locked{cargo}"),
+            format!("cargo build -p {package} --bin {binary} --locked{cargo}"),
             vec![],
         ),
         CargoCommand::BuildAll => (

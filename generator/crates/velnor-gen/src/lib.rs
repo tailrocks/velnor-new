@@ -18,12 +18,12 @@ use std::io::Write;
 
 use velnor_model::{
     CacheKey, FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView,
-    StepKind,
+    StepKind, WorkflowPlan,
 };
-use velnor_render::render;
+use velnor_render::{MAX_WORKFLOW_BYTES, Rule, RuleViolation, render};
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
-    silent_build_scripts,
+    plan_without_deltas, silent_build_scripts,
 };
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
@@ -69,10 +69,7 @@ pub fn expected_with_notes(
     let facts = detect(view)?;
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
-    let plan = plan(&facts);
-    delta_cache::validate_staging(view, &plan)?;
-    check_required_check(&facts, &plan)?;
-    let mut files = render(&plan).map_err(GenerateError::Rules)?;
+    let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
     if plan
         .jobs
         .iter()
@@ -87,7 +84,55 @@ pub fn expected_with_notes(
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
     notes.extend(release_notes);
+    notes.extend(budget_notes);
     Ok((files, notes))
+}
+
+type RenderedPlan = (WorkflowPlan, BTreeMap<RepoPath, String>, Vec<String>);
+
+fn plan_and_render(view: &RepoView, facts: &RepoFacts) -> Result<RenderedPlan, GenerateError> {
+    let full = plan(facts);
+    delta_cache::validate_staging(view, &full)?;
+    check_required_check(facts, &full)?;
+    let violations = match render(&full) {
+        Ok(files) => return Ok((full, files, Vec::new())),
+        Err(violations) => violations,
+    };
+    let Some(bytes) = oversized(&violations) else {
+        return Err(GenerateError::Rules(violations));
+    };
+    if !has_deltas(&full) {
+        return Err(GenerateError::Rules(violations));
+    }
+    let reduced = plan_without_deltas(facts);
+    delta_cache::validate_staging(view, &reduced)?;
+    check_required_check(facts, &reduced)?;
+    let files = render(&reduced).map_err(GenerateError::Rules)?;
+    let note = format!(
+        "the delta cache layer was left out because the workflow with it would be {bytes} bytes, above the {MAX_WORKFLOW_BYTES}-byte limit GitHub sets on a workflow file"
+    );
+    Ok((reduced, files, vec![note]))
+}
+
+fn oversized(violations: &[RuleViolation]) -> Option<usize> {
+    let mut bytes = None;
+    for violation in violations {
+        let Rule::WorkflowTooLarge(size) = &violation.rule else {
+            return None;
+        };
+        bytes = Some(*size);
+    }
+    bytes
+}
+
+fn has_deltas(plan: &WorkflowPlan) -> bool {
+    plan.jobs.iter().flat_map(|job| &job.steps).any(|step| {
+        matches!(
+            step.kind,
+            StepKind::CacheRestore(CacheKey::Delta { .. })
+                | StepKind::CacheSave(CacheKey::Delta { .. })
+        )
+    })
 }
 
 pub fn plan_generate(

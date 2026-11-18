@@ -11,7 +11,9 @@ mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_helper;
 mod config_mirror;
+mod config_test_setup;
 mod credentials;
 mod delta_cache;
 mod detect;
@@ -45,6 +47,7 @@ mod sha256;
 mod shape;
 mod sibling_features;
 mod target_dir;
+mod test_setup;
 mod timings;
 mod toml_file;
 mod toolchain;
@@ -72,7 +75,7 @@ pub use metadata_file::{
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
-pub use plan::{check_required_check, plan};
+pub use plan::{check_required_check, plan, plan_without_deltas};
 pub use policy::{PolicyRuns, policy_runs};
 pub use reads::{
     INPUTS_LOCK, Located, dep_info_paths, format_inputs_lock, locate, normalize, parse_inputs_lock,

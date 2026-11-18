@@ -7,11 +7,11 @@ use velnor_model::{
 };
 
 use crate::lane::{Lane, PLAN_JOB};
-use crate::plan::{HELPER_JOB, job, setup_roots, step};
+use crate::plan::{job, setup_roots, step};
 
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
-pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job], from_source: bool) -> Option<Job> {
+pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     if facts.rust_roots.len() == 1 && !jobs.iter().any(|job| job.needs.contains(&AUDIT_JOB)) {
         return None;
     }
@@ -19,7 +19,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job], from_source: bool) -> O
     let lane = Lane {
         slug: RootSlug::from_static("inputs_audit"),
         plan: Some(PLAN_JOB),
-        from_source,
+        deltas: false,
     };
     let families: Vec<JobId> = facts
         .rust_roots
@@ -37,10 +37,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job], from_source: bool) -> O
     Some(Job {
         when,
         skip_on_draft: false,
-        needs: [PLAN_JOB]
-            .into_iter()
-            .chain(from_source.then_some(HELPER_JOB))
-            .collect(),
+        needs: vec![PLAN_JOB],
         steps,
         ..job(facts, AUDIT_JOB)
     })
