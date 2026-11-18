@@ -23,6 +23,7 @@ pub(crate) fn build_check_jobs(
     catalog: &ToolCatalog,
     published_lock: Option<&velnor_actions_contract::GeneratorLock>,
     helper_version: &str,
+    fetch_roots: &[String],
 ) -> Result<Vec<(String, Job)>, OrchestratorError> {
     let mut jobs = Vec::with_capacity(discovery.mise_checks.len() + discovery.native_checks.len());
     for discovered in &discovery.mise_checks {
@@ -49,6 +50,7 @@ pub(crate) fn build_check_jobs(
                 catalog,
                 helper_version,
                 published_lock.is_some_and(|lock| lock.source_preview.is_some()),
+                fetch_roots,
             )?,
         ));
     }
@@ -156,11 +158,18 @@ fn check_job(
     catalog: &ToolCatalog,
     helper_version: &str,
     preview: bool,
+    fetch_roots: &[String],
 ) -> Result<Job, OrchestratorError> {
     let check = &discovered.check;
     let mut steps = vec![crate::workflow::wire_w1::checkout_step_for(check.history)?];
     steps.extend(acquire);
     steps.push(crate::matrix_step::download_plan_step()?);
+    // Restore only: the plan's source producer is the one saver, so a pull
+    // request never writes the shared cache.
+    steps.extend(crate::source_cache::restore_step_for_crate(
+        fetch_roots,
+        true,
+    )?);
     steps.push(execute_check_step(
         discovered,
         catalog,

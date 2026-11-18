@@ -339,6 +339,7 @@ fn build_workflow_jobs(
         &prepared.catalog,
         input.published_generator_lock,
         &prepared.report_helper_version,
+        input.fetch_roots,
     )? {
         required_ids.push(id.clone());
         jobs.insert(id, job);

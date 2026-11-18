@@ -19,7 +19,9 @@ pub(crate) const TRANSPORT_DIR: &str = "transport";
 pub(crate) const SOURCE_DIR: &str = "sources";
 pub(crate) const TOOL_DIR: &str = "tools";
 pub(crate) const OBSERVATION_DIR: &str = "observations";
-pub(crate) const CARGO_DIR: &str = "cargo";
+/// Shared with the Rust lanes (`CARGO_HOME_EXPR`), so a restored sources
+/// cache is the registry the check resolves against.
+pub(crate) const SHARED_CARGO_DIR: &str = "velnor/cargo";
 pub(crate) const CHECK_HOME_PREFIX: &str = "velnor-check-";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,7 +58,7 @@ pub(crate) fn resolve_roots(temp: &Path) -> Result<OwnedExecutionRoots, Orchestr
         transport_root: owned_root.join(TRANSPORT_DIR),
         source_root: owned_root.join(SOURCE_DIR),
         tool_root: owned_root.join(TOOL_DIR),
-        cargo_home: owned_root.join(CARGO_DIR),
+        cargo_home: temp.join(SHARED_CARGO_DIR),
         rustup_home: owned_root.join(velnor_actions_mise::checks::RUSTUP_HOME_SUFFIX),
         observation_root: owned_root.join(OBSERVATION_DIR),
         owned_root,
