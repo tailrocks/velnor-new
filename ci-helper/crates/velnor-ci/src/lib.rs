@@ -28,6 +28,7 @@ pub mod progress_evidence;
 pub mod publish;
 pub mod release;
 pub mod release_commit;
+pub mod release_family;
 pub mod release_preflight;
 pub mod report;
 mod report_caches;
