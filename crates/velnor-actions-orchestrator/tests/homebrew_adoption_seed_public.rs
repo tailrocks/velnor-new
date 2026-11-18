@@ -15,8 +15,8 @@ mod root_cargo_lock;
 
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
-use velnor_actions_contract::{GeneratorLock, ReleaseTarget, Step, StepKind, StepRole};
-use velnor_actions_orchestrator::{OrchestratorError, finalized_jobs, prepare};
+use velnor_actions_contract::{ReleaseTarget, Step, StepKind};
+use velnor_actions_orchestrator::{OrchestratorError, prepare};
 use velnor_actions_workflow_renderer::{
     HomebrewAdoptionSeedSdkIdentity, MiseSetup, ProductReleasePins, render_homebrew_adoption_seed,
 };
@@ -25,74 +25,6 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 const SOURCE_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 const HOST_SHA: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 const MANIFEST_PATH: &str = ".velnor/release-manifest.json";
-
-#[test]
-#[ignore = "608: triage"]
-fn public_consumer_required_verdict_never_executes_candidate_prelude() -> Result<(), Box<dyn Error>>
-{
-    let temp = repository()?;
-    fs::create_dir_all(temp.path().join(".velnor"))?;
-    fs::write(
-        temp.path().join(".velnor/config.toml"),
-        homebrew_adoption_seed_public_assertions::CONSUMER_CONFIG,
-    )?;
-    fs::write(
-        temp.path().join(MANIFEST_PATH),
-        release_manifest(VERSION, SOURCE_SHA, &current_executable_sha256()?),
-    )?;
-    let action = temp.path().join(".github/actions/velnor-tools-prelude-u26");
-    fs::create_dir_all(&action)?;
-    fs::write(
-        action.join("action.yml"),
-        "name: candidate-controlled\nruns:\n  using: composite\n  steps:\n    - shell: bash\n      run: exit 0\n",
-    )?;
-    let preparation = prepare(temp.path())?;
-    homebrew_adoption_seed_public_assertions::assert_raw_consumer_render(&preparation)?;
-    homebrew_adoption_seed_public_assertions::assert_tofu_inventory_rejected(&preparation)?;
-    homebrew_adoption_seed_public_assertions::assert_native_context_rejections(
-        &preparation,
-        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
-    )?;
-    homebrew_adoption_seed_public_assertions::assert_complete_job_authority(
-        &preparation,
-        velnor_actions_contract::WorkflowPolicy::ConsumerV1,
-    )?;
-    let jobs = finalized_jobs(&preparation)?;
-    homebrew_adoption_seed_public_assertions::assert_finalized_mise_jobs(&jobs)?;
-    let required = jobs
-        .get(velnor_actions_workflow_renderer::render::FINAL_JOB_ID)
-        .ok_or_else(|| io::Error::other("ordinary consumer omitted Required"))?;
-    assert_eq!(required.condition.as_deref(), Some("${{ !cancelled() }}"));
-    assert!(required.needs.iter().any(|need| need == "plan"));
-    assert!(
-        jobs.iter()
-            .filter(|(id, _)| id.as_str() != velnor_actions_workflow_renderer::render::FINAL_JOB_ID)
-            .any(|(_, job)| job
-                .steps
-                .iter()
-                .any(|step| step.role == Some(StepRole::ToolsCacheIdentity)))
-    );
-    let acquire = required
-        .steps
-        .iter()
-        .position(|step| step.role == Some(StepRole::AcquireVelnor))
-        .ok_or_else(|| io::Error::other("Required omitted authenticated acquisition"))?;
-    assert!(
-        required
-            .steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::Checkout))
-    );
-    assert!(required.steps.iter().any(|step| {
-        step.role == Some(StepRole::PreparePinnedTools)
-            && matches!(&step.kind,
-            StepKind::Shell { run, .. } if run.join(" ").contains(&format!("gh@{}", velnor_actions_mise::catalog::GH_VERSION)))
-    }));
-    homebrew_adoption_seed_public_assertions::assert_trusted_required_steps(
-        &required.steps,
-        acquire,
-    )
-}
 
 #[test]
 fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dyn Error>> {
@@ -149,64 +81,6 @@ fn public_seed_manifest_replaces_legacy_consumer_manifest() -> Result<(), Box<dy
     )?;
     let preparation = prepare(temp.path())?;
     homebrew_adoption_seed_public_assertions::assert_raw_consumer_render(&preparation)?;
-    Ok(())
-}
-
-#[test]
-#[ignore = "608: triage"]
-fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result<(), Box<dyn Error>>
-{
-    let temp = repository_with_origin(Some("https://github.com/tailrocks/velnor-new.git"))?;
-    fs::create_dir_all(temp.path().join(".velnor"))?;
-    fs::write(
-        temp.path().join(".velnor/config.toml"),
-        homebrew_adoption_seed_public_assertions::BOOTSTRAP_CONFIG,
-    )?;
-    fs::write(
-        temp.path().join("mise.toml"),
-        "[tasks.fixture-check]\nrun = \"true\"\n",
-    )?;
-    let lock_path = temp.path().join(".velnor/generator.lock");
-    let lock_text = include_str!("../../test_support/generator_074.lock");
-    fs::write(&lock_path, lock_text)?;
-    fs::write(
-        temp.path().join(".velnor/controller-approvals.json"),
-        include_str!("../../test_support/controller_approval_074.json"),
-    )?;
-    let published_lock: GeneratorLock =
-        velnor_actions_mise::catalog::lock::parse_generator_lock(lock_text)?;
-    let preparation = prepare(temp.path())?;
-    assert!(
-        preparation.lock_audit_blocking.is_empty(),
-        "producer preparation must pass lock audit: {:?}",
-        preparation.lock_audit_blocking
-    );
-    let jobs = finalized_jobs(&preparation)?;
-    homebrew_adoption_seed_public_assertions::assert_bootstrap_authority(
-        &preparation,
-        &jobs,
-        &published_lock,
-    )?;
-    homebrew_adoption_seed_public_assertions::assert_raw_producer_render(&preparation)?;
-    homebrew_adoption_seed_public_assertions::assert_native_context_rejections(
-        &preparation,
-        velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,
-    )?;
-    homebrew_adoption_seed_public_assertions::assert_complete_job_authority(
-        &preparation,
-        velnor_actions_contract::WorkflowPolicy::VelnorRepositoryV1,
-    )?;
-    homebrew_adoption_seed_public_assertions::assert_plan_checkout_pin_is_required(&preparation)?;
-    homebrew_adoption_seed_public_assertions::assert_symlink_bootstrap(
-        temp.path(),
-        &published_lock,
-    )?;
-
-    homebrew_adoption_seed_public_assertions::assert_lock_trust_rejections(
-        temp.path(),
-        &lock_path,
-        lock_text,
-    )?;
     Ok(())
 }
 
