@@ -68,7 +68,7 @@ mod tamper_tests;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 52;
+pub(super) const JOURNAL_VERSION: i64 = 53;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
