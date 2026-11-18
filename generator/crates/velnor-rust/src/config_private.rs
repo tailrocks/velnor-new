@@ -13,7 +13,7 @@ pub(crate) struct RawPrivateSources {
     repositories: Vec<String>,
 }
 
-pub(crate) fn private_sources(raw: RawPrivateSources) -> Result<PrivateSources, Reason> {
+pub(crate) fn private_sources(raw: &RawPrivateSources) -> Result<PrivateSources, Reason> {
     let invalid = |key, value| Reason::InvalidValue { key, value };
     let app_id = context_name(&raw.app_id, "vars")
         .ok_or_else(|| invalid("private_sources.app_id", raw.app_id.clone()))?;

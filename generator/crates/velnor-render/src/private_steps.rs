@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{PrivateSources, RepoPath};
+use velnor_model::{PrivateSources, RepoPath, StepKind};
 
 use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
@@ -9,7 +9,16 @@ use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 pub(crate) const TOKEN_STEP: &str = "private-token";
 const FORK_FREE: &str = "${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}";
 
-pub(crate) fn token(sources: &PrivateSources) -> RenderedStep {
+pub(crate) fn render(kind: &StepKind) -> RenderedStep {
+    match kind {
+        StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::PrivateToken(sources) => token(sources),
+        StepKind::PrivateFetch { manifests } => fetch(manifests),
+        _ => RenderedStep::default(),
+    }
+}
+
+fn token(sources: &PrivateSources) -> RenderedStep {
     RenderedStep {
         id: Some(TOKEN_STEP.to_owned()),
         name: "Create a read-only token for the private repositories".to_owned(),
@@ -40,7 +49,7 @@ pub(crate) fn token(sources: &PrivateSources) -> RenderedStep {
     }
 }
 
-pub(crate) fn fetch(manifests: &[RepoPath]) -> RenderedStep {
+fn fetch(manifests: &[RepoPath]) -> RenderedStep {
     let arguments: Vec<String> = manifests
         .iter()
         .map(|manifest| format!("--manifest-path {}", shell_word(manifest.as_str())))

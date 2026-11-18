@@ -15,6 +15,7 @@ use crate::gate::{
     sources_step, verdict_step,
 };
 use crate::permission_pairs;
+use crate::private_steps::render as private_step;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
@@ -261,25 +262,17 @@ fn step_body(
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
-        StepKind::RustComponents(components) => RenderedStep {
-            name: "Add Rust components".to_owned(),
-            run: Some(format!("rustup component add {}", components.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::RustTargets(targets) => RenderedStep {
-            name: "Add Rust targets".to_owned(),
-            run: Some(format!("rustup target add {}", targets.join(" "))),
-            ..RenderedStep::default()
-        },
+        StepKind::RustComponents(items) => rustup_step("component", items),
+        StepKind::RustTargets(items) => rustup_step("target", items),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
         StepKind::InputsRestore(target) => {
             crate::helper_steps::inputs_step("restore", target, directory)
         }
-        StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
-        StepKind::PrivateToken(sources) => crate::private_steps::token(sources),
-        StepKind::PrivateFetch { manifests } => crate::private_steps::fetch(manifests),
+        StepKind::CratesMirror(_) | StepKind::PrivateToken(_) | StepKind::PrivateFetch { .. } => {
+            private_step(kind)
+        }
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
@@ -308,6 +301,14 @@ fn step_body(
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+    }
+}
+
+fn rustup_step(noun: &str, items: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: format!("Add Rust {noun}s"),
+        run: Some(format!("rustup {noun} add {}", items.join(" "))),
+        ..RenderedStep::default()
     }
 }
 

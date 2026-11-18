@@ -47,6 +47,72 @@ fn cargo_commands(steps: &[serde_json::Value]) -> Vec<usize> {
         .collect()
 }
 
+fn assert_phase(
+    job: &serde_json::Value,
+    steps: &[serde_json::Value],
+    token: usize,
+    fetch: usize,
+) -> TestResult {
+    let compiling = cargo_commands(steps);
+    assert_eq!(token + 1, fetch);
+    assert!(compiling.iter().all(|index| *index > fetch), "{job}");
+    for (index, step) in steps.iter().enumerate() {
+        let rendered = step.to_string();
+        assert_eq!(
+            rendered.contains("private-token"),
+            index == fetch || index == token,
+            "{rendered}"
+        );
+        assert_eq!(
+            rendered.contains("DEPS_APP_PRIVATE_KEY"),
+            index == token,
+            "{rendered}"
+        );
+    }
+    for index in compiling {
+        let step = &steps[index];
+        assert!(
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains(" --offline")),
+            "{step}"
+        );
+        assert_eq!(step["env"]["CARGO_NET_OFFLINE"], "true", "{step}");
+    }
+    let fetch_step = &steps[fetch];
+    assert_eq!(
+        fetch_step["env"]["VELNOR_PRIVATE_TOKEN"],
+        "${{ steps.private-token.outputs.token }}"
+    );
+    let run = fetch_step["run"].as_str().ok_or("fetch run missing")?;
+    assert!(
+        run.contains("--manifest-path ") && run.contains("Cargo.toml"),
+        "{run}"
+    );
+    let create = &steps[token];
+    assert_eq!(create["with"]["permission-contents"], "read");
+    assert_eq!(create["with"]["owner"], "acme");
+    assert_eq!(
+        create["with"]["repositories"].as_str().map(str::trim_end),
+        Some("shared-lib\nother-lib")
+    );
+    assert!(
+        steps.iter().enumerate().all(|(index, step)| {
+            !step["uses"]
+                .as_str()
+                .is_some_and(|uses| uses.starts_with("jdx/mise-action@"))
+                || index < token
+        }),
+        "{job}"
+    );
+    assert!(
+        create["if"]
+            .as_str()
+            .is_some_and(|guard| guard.contains("head.repo.full_name == github.repository"))
+    );
+    Ok(())
+}
+
 #[test]
 fn the_token_reaches_only_the_fetch_step_and_every_cargo_command_after_it_runs_offline()
 -> TestResult {
@@ -67,67 +133,11 @@ fn the_token_reaches_only_the_fetch_step_and_every_cargo_command_after_it_runs_o
                     .is_some_and(|run| run.contains("\"$VELNOR_EXEC\" fetch "))
             });
             assert_eq!(token.is_some(), fetch.is_some(), "{job}");
-            let compiling = cargo_commands(steps);
             let (Some(token), Some(fetch)) = (token, fetch) else {
                 continue;
             };
             fetches += 1;
-            assert_eq!(token + 1, fetch);
-            assert!(compiling.iter().all(|index| *index > fetch), "{job}");
-            for (index, step) in steps.iter().enumerate() {
-                let rendered = step.to_string();
-                assert_eq!(
-                    rendered.contains("private-token"),
-                    index == fetch || index == token,
-                    "{rendered}"
-                );
-                assert_eq!(
-                    rendered.contains("DEPS_APP_PRIVATE_KEY"),
-                    index == token,
-                    "{rendered}"
-                );
-            }
-            for index in compiling {
-                let step = &steps[index];
-                assert!(
-                    step["run"]
-                        .as_str()
-                        .is_some_and(|run| run.contains(" --offline")),
-                    "{step}"
-                );
-                assert_eq!(step["env"]["CARGO_NET_OFFLINE"], "true", "{step}");
-            }
-            let fetch_step = &steps[fetch];
-            assert_eq!(
-                fetch_step["env"]["VELNOR_PRIVATE_TOKEN"],
-                "${{ steps.private-token.outputs.token }}"
-            );
-            let run = fetch_step["run"].as_str().ok_or("fetch run missing")?;
-            assert!(
-                run.contains("--manifest-path ") && run.contains("Cargo.toml"),
-                "{run}"
-            );
-            let create = &steps[token];
-            assert_eq!(create["with"]["permission-contents"], "read");
-            assert_eq!(create["with"]["owner"], "acme");
-            assert_eq!(
-                create["with"]["repositories"].as_str().map(str::trim_end),
-                Some("shared-lib\nother-lib")
-            );
-            assert!(
-                steps.iter().enumerate().all(|(index, step)| {
-                    !step["uses"]
-                        .as_str()
-                        .is_some_and(|uses| uses.starts_with("jdx/mise-action@"))
-                        || index < token
-                }),
-                "{job}"
-            );
-            assert!(
-                create["if"]
-                    .as_str()
-                    .is_some_and(|guard| guard.contains("head.repo.full_name == github.repository"))
-            );
+            assert_phase(&job, steps, token, fetch)?;
         }
         assert!(fetches > 0, "{text}");
         assert!(

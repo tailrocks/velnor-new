@@ -129,6 +129,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map_err(invalid)?,
         private_sources: raw
             .private_sources
+            .as_ref()
             .map(crate::config_private::private_sources)
             .transpose()
             .map_err(invalid)?,
