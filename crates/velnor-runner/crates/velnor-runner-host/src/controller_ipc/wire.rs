@@ -7,7 +7,7 @@ use crate::config::{ConnectionId, RepositoryConnection};
 use crate::launch::steady::PollObservation;
 use crate::readiness::Readiness;
 
-pub(super) const MAX_REQUEST_BYTES: usize = 65_536;
+pub(super) const MAX_REQUEST_BYTES: usize = crate::ipc::MAX_FRAME;
 pub(super) const SOCKET_NAME: &str = "controller.sock";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,3 +208,7 @@ impl Response {
         serde_json::from_slice(bytes).map_err(|_| ())
     }
 }
+
+#[cfg(test)]
+#[path = "wire/tests.rs"]
+mod tests;
