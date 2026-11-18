@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::config::HostConfig;
 use crate::error::HostError;
@@ -25,15 +25,72 @@ pub(crate) fn gate_line(decision: &Reconcile) -> String {
     }
 }
 
-pub(crate) async fn reconcile_gate(
+/// The gate decision plus one operator-facing line per blocking row.
+pub(crate) struct GateReport {
+    pub(crate) decision: Reconcile,
+    pub(crate) hold_lines: Vec<String>,
+}
+
+/// What the GitHub half of the gate saw. `unobserved` names, per scale set, why no listing was
+/// obtained, so a Hold is never anonymous.
+pub(crate) struct GithubObservation {
+    runners: Result<Vec<String>, EnsureError>,
+    unobserved: BTreeMap<i64, &'static str>,
+}
+
+impl GithubObservation {
+    pub(crate) fn listed(runners: Result<Vec<String>, EnsureError>) -> Self {
+        Self {
+            runners,
+            unobserved: BTreeMap::new(),
+        }
+    }
+
+    fn failed(reason: &'static str, scale_sets: &BTreeSet<i64>) -> Self {
+        Self {
+            runners: Err(EnsureError::Uncertain),
+            unobserved: scale_sets.iter().map(|id| (*id, reason)).collect(),
+        }
+    }
+}
+
+pub(crate) async fn evaluate_gate(
     journal: &Journal,
     docker: &Docker,
     config: &HostConfig,
-) -> Result<Reconcile, EnsureError> {
+) -> Result<GateReport, EnsureError> {
     let rows = journal.rows().await.map_err(map_journal)?;
+    let config = config.clone();
+    evaluate_rows(rows, docker, move |rows| observe_github(rows, &config)).await
+}
+
+/// Runs the blocking GitHub half (HTTPS and the keychain read) off the async runtime, so a slow
+/// GitHub cannot stall the controller loop that drives the 30 s retry.
+async fn evaluate_rows<F>(
+    rows: Vec<IntentRow>,
+    docker: &Docker,
+    github: F,
+) -> Result<GateReport, EnsureError>
+where
+    F: FnOnce(&[IntentRow]) -> GithubObservation + Send + 'static,
+{
     let observed_docker = running_ids(&rows, docker).await?;
-    let observed_github = observe_github(&rows, config);
-    Ok(decide(&rows, &observed_docker, observed_github))
+    let for_github = rows.clone();
+    let github = tokio::task::spawn_blocking(move || github(&for_github))
+        .await
+        .unwrap_or_else(|_| {
+            GithubObservation::failed("GitHub observation aborted", &all_sets(&rows))
+        });
+    let hold_lines = hold::hold_lines(&rows, &observed_docker, &github);
+    let decision = decide(&rows, &observed_docker, github.runners);
+    Ok(GateReport {
+        decision,
+        hold_lines,
+    })
+}
+
+fn all_sets(rows: &[IntentRow]) -> BTreeSet<i64> {
+    rows.iter().filter_map(|row| row.scale_set_id).collect()
 }
 
 /// Combines the Docker and GitHub observations. When GitHub could not be
@@ -71,9 +128,18 @@ fn scale_sets_to_observe(rows: &[IntentRow]) -> Result<BTreeSet<i64>, EnsureErro
     Ok(sets)
 }
 
-fn observe_github(rows: &[IntentRow], config: &HostConfig) -> Result<Vec<String>, EnsureError> {
-    let mut pending = scale_sets_to_observe(rows)?;
+fn observe_github(rows: &[IntentRow], config: &HostConfig) -> GithubObservation {
+    let mut pending = match scale_sets_to_observe(rows) {
+        Ok(pending) => pending,
+        Err(error) => {
+            return GithubObservation {
+                runners: Err(error),
+                unobserved: BTreeMap::new(),
+            };
+        }
+    };
     let mut observed = Vec::new();
+    let mut credential_gap = None;
     for binding in config.connections() {
         if pending.is_empty() {
             break;
@@ -82,23 +148,41 @@ fn observe_github(rows: &[IntentRow], config: &HostConfig) -> Result<Vec<String>
             binding.credential_ref.service(),
             binding.credential_ref.account(),
         ) else {
+            credential_gap = Some("keychain secret missing");
             continue;
         };
         let Ok(pat) = connection_pat(&credential) else {
+            credential_gap = Some("connection credential unusable");
             continue;
         };
         for scale_set_id in pending.clone() {
-            if let Some(runners) = observe_scale_set_runners(pat, binding, scale_set_id)? {
-                observed.extend(runners);
-                pending.remove(&scale_set_id);
+            match observe_scale_set_runners(pat, binding, scale_set_id) {
+                Ok(Some(runners)) => {
+                    observed.extend(runners);
+                    pending.remove(&scale_set_id);
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    return GithubObservation {
+                        runners: Err(error),
+                        unobserved: pending
+                            .iter()
+                            .map(|id| (*id, "GitHub listing failed"))
+                            .collect(),
+                    };
+                }
             }
         }
     }
     if pending.is_empty() {
-        Ok(observed)
-    } else {
-        Err(EnsureError::Uncertain)
+        return GithubObservation::listed(Ok(observed));
     }
+    let reason = if config.connections().is_empty() {
+        "connection removed"
+    } else {
+        credential_gap.unwrap_or("scale set unobservable")
+    };
+    GithubObservation::failed(reason, &pending)
 }
 
 fn str_refs(ids: &[String]) -> Vec<&str> {
@@ -134,5 +218,6 @@ fn map_journal(error: HostError) -> EnsureError {
     }
 }
 
+mod hold;
 #[cfg(test)]
 mod tests;
