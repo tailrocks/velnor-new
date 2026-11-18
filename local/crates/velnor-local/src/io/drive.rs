@@ -93,6 +93,17 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     summary(&results).map_err(io::Error::other)
 }
 
+async fn reset_state(dir: &Path) -> io::Result<()> {
+    for directory in ["cache", "api", "events", "logs", "metrics"] {
+        match fs::remove_dir_all(dir.join(directory)).await {
+            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
+            _ => {}
+        }
+        fs::create_dir_all(dir.join(directory)).await?;
+    }
+    Ok(())
+}
+
 async fn run_one(
     args: &RunArgs,
     scenario: &str,
@@ -131,14 +142,15 @@ async fn run_one(
         ));
     }
     let repo = env.dir.join("repo");
-    copy_checkout(&args.repo, &repo, &args.environment.default_branch, tag).await?;
-    for directory in ["cache", "api", "events", "logs", "metrics"] {
-        match fs::remove_dir_all(env.dir.join(directory)).await {
-            Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),
-            _ => {}
-        }
-        fs::create_dir_all(env.dir.join(directory)).await?;
-    }
+    copy_checkout(
+        &args.repo,
+        &repo,
+        &args.environment.default_branch,
+        tag,
+        &args.repository,
+    )
+    .await?;
+    reset_state(&env.dir).await?;
     let mut environment = args.environment.clone();
     if scenario.has_fork() {
         environment.fork_runners = environment.fork_runners.max(1);
