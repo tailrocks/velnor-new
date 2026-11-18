@@ -286,9 +286,9 @@ impl RootJobs<'_> {
             let saving = self.nextest && !saves.is_empty();
             if saving {
                 steps.extend(self.cargo(vec![CargoCommand::NextestBuild]).map(saving_run));
+                steps.extend(self.cargo(self.nextest_run()));
                 steps.extend(self.cargo(self.built_without_nextest()));
                 steps.extend(saves.iter().cloned());
-                steps.extend(self.cargo(self.nextest_run()));
             } else {
                 steps.extend(self.cargo(tests));
             }

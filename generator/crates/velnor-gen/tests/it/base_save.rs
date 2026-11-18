@@ -379,3 +379,22 @@ fn the_saving_lane_builds_the_doctests_and_the_direct_harnesses_before_the_targe
     }
     Ok(())
 }
+
+#[test]
+fn the_lane_runs_the_nextest_run_before_the_direct_harnesses_and_the_doctests() -> TestResult {
+    for config in ["", "shape = \"lint-test\"\n"] {
+        let order = names(&lane_building_doctests(config)?);
+        let run = order
+            .iter()
+            .position(|name| name == "Test")
+            .ok_or("no nextest run")?;
+        for built in ["Doctests", "Test package-0 custom"] {
+            let index = order.iter().position(|name| name == built).ok_or(built)?;
+            assert!(
+                run < index,
+                "{config}: the nextest run is after {built}: {order:?}"
+            );
+        }
+    }
+    Ok(())
+}
