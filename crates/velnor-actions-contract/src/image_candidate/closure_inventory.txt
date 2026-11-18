@@ -1437,6 +1437,7 @@ crates/velnor-actions-workflow-renderer/src/plan_sources/cargo_fetch.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/source_cache.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/state_select.rs
 crates/velnor-actions-workflow-renderer/src/playwright_install_step.rs
+crates/velnor-actions-workflow-renderer/src/pr_ci.rs
 crates/velnor-actions-workflow-renderer/src/premerge_event_probe.py
 crates/velnor-actions-workflow-renderer/src/premerge_event_proof.rs
 crates/velnor-actions-workflow-renderer/src/premerge_source.py
