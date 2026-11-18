@@ -84,6 +84,12 @@ pub struct SuperviseArgs {
     pub policy: bool,
     #[arg(long, help = "Repository whose workflow files the policy hashes")]
     pub repo: Option<PathBuf>,
+    #[arg(
+        long,
+        value_parser = runner_label,
+        help = "Extra runner label to register for every minted runner; `up` passes the --label values"
+    )]
+    pub label: Vec<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
@@ -176,6 +182,26 @@ pub struct EnvironmentArgs {
         help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it. Default: the one built in the checkout that holds this executable, never one from the working directory"
     )]
     pub velnor_host: Option<PathBuf>,
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_parser = runner_label,
+        help = "Runner label to register besides the built-in ubuntu-* ones, so a workflow whose runs-on names another label (for example ubuntu-26.04-scale-set) runs unchanged; repeatable or comma separated; letters, digits, '.', '_' and '-' only"
+    )]
+    pub label: Vec<String>,
+}
+
+pub fn runner_label(text: &str) -> Result<String, String> {
+    if !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return Ok(text.to_owned());
+    }
+    Err(format!(
+        "runner label {text:?} must be non-empty and hold only letters, digits, '.', '_' and '-'"
+    ))
 }
 
 impl EnvironmentArgs {

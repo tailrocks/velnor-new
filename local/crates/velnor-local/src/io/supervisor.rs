@@ -333,7 +333,9 @@ pub(super) async fn stop(dir: &Path) -> io::Result<Option<String>> {
 }
 
 pub(super) async fn serve(args: SuperviseArgs) -> io::Result<()> {
-    let env = Environment::at(&args.dir, DockerCli).await?;
+    let env = Environment::at(&args.dir, DockerCli)
+        .await?
+        .with_labels(&args.label);
     let dir = authority_dir(&env.dir);
     let token = fs::read_to_string(env.dir.join("keys/authority")).await?;
     let token = token.trim().to_owned();

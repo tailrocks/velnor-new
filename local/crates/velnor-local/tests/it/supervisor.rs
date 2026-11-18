@@ -320,6 +320,7 @@ fn fake_authority(dir: &Path) -> (std::path::PathBuf, supervisor::Pairs) {
         trusted: 1,
         untrusted: 0,
         policy: None,
+        labels: Vec::new(),
     };
     (script, pairs)
 }

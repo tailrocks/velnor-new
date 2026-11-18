@@ -12,6 +12,7 @@ mod environment;
 mod fake_docker;
 mod io;
 mod io_edges;
+mod labels;
 mod online;
 mod pair;
 mod pair_inputs;

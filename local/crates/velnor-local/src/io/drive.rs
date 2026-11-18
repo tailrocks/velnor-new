@@ -117,7 +117,9 @@ async fn run_one(
         .map_err(io::Error::other)?;
     refuse_fork_branches(&scenario.steps, &args.environment.default_branch)
         .map_err(io::Error::other)?;
-    let env = Environment::at(dir, DockerCli).await?;
+    let env = Environment::at(dir, DockerCli)
+        .await?
+        .with_labels(&args.environment.label);
     if !inside(&fs::canonicalize(&args.environment.dir).await?, &env.dir) {
         return Err(io::Error::other(format!(
             "{} leads outside the state directory",

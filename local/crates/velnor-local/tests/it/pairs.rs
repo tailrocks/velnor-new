@@ -220,6 +220,7 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
         runner: RunnerMode::Pair,
         velnor_host: Some(HOST_BINARY.into()),
         policy: None,
+        label: Vec::new(),
     };
     assert!(env.up(&dir, &args).await.is_err());
     let started = docker.started();
@@ -344,4 +345,39 @@ fn a_refusal_counts_only_for_the_runs_the_event_created_on_its_side() {
     assert!(!refused_among(&all, true, &[9]));
     assert!(refused_among(&all, false, &[9]));
     assert!(!refused_among(&[line("trusted", 5, true)], true, &[5]));
+}
+
+#[test]
+fn label_takes_comma_separated_and_repeated_values_and_refuses_what_a_shell_would_split() {
+    let up = |labels: &[&str]| {
+        let mut args = vec!["velnor-local", "up", "--dir", "s", "--repo", "r"];
+        for label in labels {
+            args.extend(["--label", label]);
+        }
+        Cli::try_parse_from(args)
+    };
+    let Ok(Cli {
+        command: Command::Up(parsed),
+    }) = up(&["a,b", "c"])
+    else {
+        unreachable!("labels were refused")
+    };
+    assert_eq!(parsed.environment.label, ["a", "b", "c"]);
+    let Ok(Cli {
+        command: Command::Up(none),
+    }) = up(&[])
+    else {
+        unreachable!("no labels were refused")
+    };
+    assert_eq!(none.environment.label, Vec::<String>::new());
+    for bad in ["x y", "x;y", "", "a,,b", "$HOME", "x'y"] {
+        let refused = up(&[bad]);
+        let Err(error) = refused else {
+            unreachable!("{bad:?} was accepted")
+        };
+        assert!(
+            error.to_string().contains("runner label"),
+            "{bad:?}: {error}"
+        );
+    }
 }
