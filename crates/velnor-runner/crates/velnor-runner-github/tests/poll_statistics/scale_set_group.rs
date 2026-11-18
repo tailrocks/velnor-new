@@ -58,7 +58,7 @@ fn find(body: &Value) -> Result<ScaleSetFound, SessionError> {
     )
 }
 
-fn assert_rejected<T: std::fmt::Debug>(result: Result<T, SessionError>) {
+fn assert_rejected<T: std::fmt::Debug>(result: &Result<T, SessionError>) {
     assert!(
         matches!(
             result,
@@ -70,12 +70,12 @@ fn assert_rejected<T: std::fmt::Debug>(result: Result<T, SessionError>) {
 
 #[test]
 fn create_response_naming_another_runner_group_is_rejected() {
-    assert_rejected(create(&scale_set(Some(json!(99)))));
+    assert_rejected(&create(&scale_set(Some(json!(99)))));
 }
 
 #[test]
 fn existing_lookup_naming_another_runner_group_is_rejected() {
-    assert_rejected(find(&scale_set(Some(json!(99)))));
+    assert_rejected(&find(&scale_set(Some(json!(99)))));
 }
 
 #[test]
