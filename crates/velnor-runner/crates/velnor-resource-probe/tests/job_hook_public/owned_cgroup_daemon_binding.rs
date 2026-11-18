@@ -106,6 +106,23 @@ fn owned_cgroup_observation_refuses_a_substituted_dockerd_while_the_real_binary_
         return Ok(());
     }
     let base = ScopedTempDir::new("daemon-binding-rootless")?;
+    let probe = Command::new("unshare")
+        .args([
+            "--user",
+            "--map-root-user",
+            "--mount",
+            "--cgroup",
+            "sh",
+            "-c",
+            "set -eu; mkdir -p \"$1/p\"; mount --bind /proc \"$1/p\"",
+            "sh",
+        ])
+        .arg(base.path())
+        .output()?;
+    if !probe.status.success() {
+        eprintln!("skipped: this host cannot bind-mount /proc in an unprivileged user namespace");
+        return Ok(());
+    }
     let status = Command::new("unshare")
         .args([
             "--user",
