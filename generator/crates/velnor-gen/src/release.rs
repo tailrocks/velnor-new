@@ -40,7 +40,7 @@ pub(crate) fn release_workflow(
             helper.version().clone(),
         ));
     }
-    if plan.family.is_some() && !helper.version().at_least((0, 1, 82)) {
+    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
         return Err(GenerateError::FamilyTagHelperTooOld(
             helper.version().clone(),
         ));

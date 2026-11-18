@@ -31,7 +31,7 @@ fn render_family(
 ) -> Result<Result<Node, GenerateError>, Box<dyn Error>> {
     let mut view = release_view(&[APP, TOOLS], Some(config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.82").into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.83").into_bytes());
     for (root, path) in [
         (&APP, "release-plz.toml"),
         (&TOOLS, "tools/release-plz.toml"),
@@ -147,6 +147,8 @@ fn family_job_binds_the_tag_to_the_verified_commit_with_the_helper() -> TestResu
 #[test]
 fn family_tag_needs_a_helper_that_knows_the_command() -> TestResult {
     let mut view = release_view(&[APP, TOOLS], Some(FAMILY))?;
+    view.files
+        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.82").into_bytes());
     for (root, path) in [
         (&APP, "release-plz.toml"),
         (&TOOLS, "tools/release-plz.toml"),

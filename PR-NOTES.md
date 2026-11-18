@@ -6,7 +6,7 @@
 
 - A `family` job reads the binaries' version from `cargo metadata` at the verified commit (all must agree), and runs the new `velnor-ci release family-tag`. The helper creates the tag on the verified commit, refuses unless the tag resolves to that commit itself, and opens one draft release.
 - Builds check out `refs/tags/<family tag>` and refuse any commit other than the verified one. One `sums-family` and one `publish-family` job publish all assets of all binaries under the one tag.
-- The generator refuses a config where a binary is still released by release-plz under its own tag, where the pattern names `{{ package }}`, or where the helper is older than `0.1.82`.
+- The generator refuses a config where a binary is still released by release-plz under its own tag, where the pattern names `{{ package }}`, or where the helper is older than `0.1.83`.
 - With `family_tag` unset the output is byte-identical (all 765 existing generator tests and goldens pass unchanged).
 
 ## What now matches the old engine
@@ -28,6 +28,6 @@ Proof: a throwaway config on the recorded velnor-new sample (roots `generator` a
 - Old tags that are not version-based: `binary-<sha>` and `runner-<sha>` (the `velnor-host` and image families). `family_tag` only supports `{{ version }}`.
 - Fixed-tag immutability checks: `immutable == true`, `gh release verify`, `verify-asset`, and the `gh attestation verify` calls (gap C and PR 1).
 - Asset format (gap A), multi-binary packaging (gap B), qualify, candidate-manifest and attest-manifest jobs (gap D), macOS x64 (dropped by the owner), source preview and homebrew jobs (later PRs).
-- The helper `release family-tag` lands here with its tests but needs a helper release that contains it. The generator requires `0.1.82` or later, which is an assumption to confirm when the helper is released.
+- The helper `release family-tag` lands here with its tests but needs a helper release that contains it. The generator requires `0.1.83` or later, the rust-ci release that carries the helper command.
 - A version bump is by hand or PR: binary packages are `release = false` in release-plz, so release-plz does not bump them. The family job tags whenever the current version has no release. A re-run at the same version is a no-op.
 - No real run: this is untested on GitHub; the proof is generated output and unit tests.

@@ -66,7 +66,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::FamilyTagHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+                "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {
