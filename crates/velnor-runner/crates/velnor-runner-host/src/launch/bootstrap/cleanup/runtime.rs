@@ -147,6 +147,46 @@ impl NativeCleanupRuntime {
         observer::verified_storage_cleanup(&current, &witness, &after, &guest)
     }
 
+    pub(crate) async fn owned_publication(
+        &self,
+        scope: &ConnectionJournal,
+        identity: &StorageCleanupIdentity,
+    ) -> Result<Option<crate::launch::resource_probe::OwnedPublication>, HostError> {
+        crate::launch::resource_probe::owned_publication(
+            &self.journal,
+            scope,
+            identity.reservation_id(),
+            identity.engine_id(),
+            identity.docker_root_digest(),
+        )
+        .await
+    }
+
+    pub(crate) async fn retire_owned_publication(
+        &self,
+        publication: &crate::launch::resource_probe::OwnedPublication,
+    ) -> Result<(), HostError> {
+        crate::launch::resource_probe::retire_owned_publication(
+            &self.docker,
+            &self.journal,
+            &self.selected,
+            publication,
+            std::time::Instant::now() + CLEANUP_OBSERVER_TIMEOUT,
+        )
+        .await
+    }
+
+    pub(crate) async fn publication_retired(
+        &self,
+        publication: &crate::launch::resource_probe::OwnedPublication,
+    ) -> Result<bool, HostError> {
+        Ok(self
+            .journal
+            .active_probe()
+            .await?
+            .is_none_or(|row| row.operation_id != publication.operation_id()))
+    }
+
     pub(crate) async fn remove_owned_network(
         &self,
         scope: &ConnectionJournal,
