@@ -26,18 +26,18 @@ serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154" }
 rustix = { version = "=1.1.6", default-features = false, features = ["event", "fs", "net", "process", "std"] }
 thiserror = { version = "=2.0.21" }
-clap = { version = "=4.6.7", features = ["derive"] }
-tokio = { version = "=1.53.3", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process", "fs"] }
+clap = { version = "=4.6.8", features = ["derive"] }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process", "fs"] }
 libc = { version = "=0.2.191" }
 bollard = { version = "=0.21.1", default-features = false, features = ["pipe"] }
 turso = { version = "=0.8.3", default-features = false, features = ["mimalloc"] }
-zeroize = { version = "=1.9.1", features = ["derive"] }
+zeroize = { version = "=1.9.2", features = ["derive"] }
 getrandom = { version = "=0.4.3" }
-toml = { version = "=1.1.8" }
+toml = { version = "=1.2.1" }
 sha2 = { version = "=0.11.1" }
 base64 = { version = "=0.23.1" }
 sha1_smol = { version = "=1.0.1" }
-flate2 = { version = "=1.1.10" }
+flate2 = { version = "=1.1.11" }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
