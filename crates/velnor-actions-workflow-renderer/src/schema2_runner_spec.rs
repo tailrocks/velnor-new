@@ -90,13 +90,21 @@ impl Schema2WorkflowRequest {
     /// The runner for a control job: the scale set when `execution.overrides`
     /// places it there, the hosted label otherwise.
     pub(super) fn control_runner(&self, job_id: &str) -> Result<RunnerSpec, RenderError> {
-        if self.scale_set_jobs.contains(job_id) {
-            Ok(RunnerSpec::scale_set(runs_on_yaml(
-                &self.scale_set.token(),
-            )?))
-        } else {
-            RunnerSpec::hosted(&self.hosted_label)
+        match self.scale_set_runner(job_id)? {
+            Some(runner) => Ok(runner),
+            None => RunnerSpec::hosted(&self.hosted_label),
         }
+    }
+
+    /// The scale-set runner of a job `execution.overrides` places there, or
+    /// `None` when the job keeps the runner its workflow hard-codes.
+    pub(super) fn scale_set_runner(&self, job_id: &str) -> Result<Option<RunnerSpec>, RenderError> {
+        if !self.scale_set_jobs.contains(job_id) {
+            return Ok(None);
+        }
+        Ok(Some(RunnerSpec::scale_set(runs_on_yaml(
+            &self.scale_set.token(),
+        )?)))
     }
 
     /// The runner label the cache steps of a control job are rendered for.

@@ -80,17 +80,32 @@ pub(crate) fn bound_workflow(document: &mut Yaml) -> Result<(), RenderError> {
         let Yaml::Map(fields) = job else {
             continue;
         };
-        let supported = !workflow_defaults
-            && !fields.iter().any(|(key, _)| key == "defaults" || key == "container")
-            && fields.iter().any(|(key, value)| {
-                key == "runs-on" && matches!(value, Yaml::Str(label) if label.starts_with("ubuntu-") || label.starts_with("macos-"))
-            });
+        let supported = !workflow_defaults && supported_runner(fields);
         let Some((_, Yaml::Seq(steps))) = fields.iter_mut().find(|(key, _)| key == "steps") else {
             continue;
         };
         *steps = bound_steps(std::mem::take(steps), supported)?;
     }
     Ok(())
+}
+
+/// A job can hold an oversized `run` when it runs on a hosted Linux or macOS
+/// label or on the scale set, and has no container or shell default.
+fn supported_runner(fields: &[(String, Yaml)]) -> bool {
+    !fields
+        .iter()
+        .any(|(key, _)| key == "defaults" || key == "container")
+        && fields.iter().any(|(key, value)| {
+            key == "runs-on"
+                && match value {
+                    Yaml::Str(label) => label.starts_with("ubuntu-") || label.starts_with("macos-"),
+                    Yaml::Flow(labels) => {
+                        labels.first().is_some_and(|label| label == "velnor")
+                            && labels.iter().any(|label| label.starts_with("ubuntu-"))
+                    }
+                    _ => false,
+                }
+        })
 }
 
 fn bound_steps(steps: Vec<Yaml>, supported: bool) -> Result<Vec<Yaml>, RenderError> {

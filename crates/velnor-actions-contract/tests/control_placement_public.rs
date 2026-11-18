@@ -301,6 +301,31 @@ fn schema2_control_jobs_are_override_keys_and_listed_for_the_scale_set()
 }
 
 #[test]
+fn image_candidate_preview_and_prune_jobs_are_override_keys() -> Result<(), Box<dyn Error>> {
+    let ids = [
+        "attest-image-candidate",
+        "build-image-candidate",
+        "prune",
+        "source-preview-build-linux",
+        "source-preview-qualify-linux",
+    ];
+    let overrides: serde_json::Map<String, serde_json::Value> = ids
+        .iter()
+        .map(|id| {
+            (
+                (*id).to_owned(),
+                json!({ "profile": "local", "role": "control" }),
+            )
+        })
+        .collect();
+    let config = config(&serde_json::Value::Object(overrides))?;
+    expand_workflow_with_lane_plan(&workflow(), &config, None)?;
+    let moved: Vec<String> = scale_set_control_jobs(&config).into_iter().collect();
+    assert_eq!(moved, ids);
+    Ok(())
+}
+
+#[test]
 fn the_dispatch_fence_adds_only_workflow_dispatch() {
     let fenced = fork_fenced_condition_admitting_dispatch(Some("always()"));
     assert_eq!(

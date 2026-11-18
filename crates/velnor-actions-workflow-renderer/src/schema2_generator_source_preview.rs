@@ -5,7 +5,7 @@ use crate::{RenderError, yaml::Yaml};
 use velnor_actions_contract::{JobTimeout, ReleaseTarget};
 
 use super::super::features::{base, finish};
-use super::{ProductReleasePins, assets, workflow_steps as steps};
+use super::{ProductReleasePins, Schema2WorkflowRequest, assets, workflow_steps as steps};
 
 const MAIN_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && github.ref == 'refs/heads/main' && github.workflow_ref == 'tailrocks/velnor-new/.github/workflows/product-release-generator.yml@refs/heads/main' }}";
 const TAG_PUSH: &str = "${{ github.event_name == 'push' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/tags/sdk-preview-') }}";
@@ -14,12 +14,15 @@ pub(super) const AUTHORITY_PATH: &str = ".github/workflows/source-preview-public
 const SOURCE_PREVIEW_AUTHORITY_SHA: Option<&str> =
     Some(velnor_actions_contract::source_preview::PUBLICATION_AUTHORITY_SHA);
 
-pub(super) fn producer_jobs(pins: &ProductReleasePins) -> Result<Vec<(String, Yaml)>, RenderError> {
+pub(super) fn producer_jobs(
+    pins: &ProductReleasePins,
+    request: &Schema2WorkflowRequest,
+) -> Result<Vec<(String, Yaml)>, RenderError> {
     Ok(vec![
-        build_job(pins, false)?,
-        qualify_job(pins, false)?,
-        build_job(pins, true)?,
-        qualify_job(pins, true)?,
+        build_job(pins, request, false)?,
+        qualify_job(pins, request, false)?,
+        build_job(pins, request, true)?,
+        qualify_job(pins, request, true)?,
     ])
 }
 
@@ -211,13 +214,39 @@ fn preview_target(
     }
 }
 
-fn replace_runner(fields: &mut [(String, Yaml)], runner: &str) {
+/// Sets the runner of a preview job and returns the runner label its cache
+/// steps are rendered for. A Linux job `execution.overrides` places on the scale
+/// set runs there; the job `if` already admits only a push to the protected
+/// main branch of this repository, so a fork pull request never reaches it.
+fn place_runner(
+    fields: &mut Vec<(String, Yaml)>,
+    request: &Schema2WorkflowRequest,
+    job_id: &str,
+    hosted: &str,
+) -> Result<String, RenderError> {
+    let placed = if hosted.starts_with("macos") {
+        None
+    } else {
+        request.scale_set_runner(job_id)?
+    };
+    let Some(runner) = placed else {
+        if let Some((_, value)) = fields.iter_mut().find(|(key, _)| key == "runs-on") {
+            *value = Yaml::str(hosted);
+        }
+        return Ok(hosted.to_owned());
+    };
     if let Some((_, value)) = fields.iter_mut().find(|(key, _)| key == "runs-on") {
-        *value = Yaml::str(runner);
+        *value = runner.runs_on.clone();
     }
+    runner.push_default_shell(fields, false);
+    Ok(request.scale_set.token())
 }
 
-fn build_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml), RenderError> {
+fn build_job(
+    pins: &ProductReleasePins,
+    request: &Schema2WorkflowRequest,
+    darwin: bool,
+) -> Result<(String, Yaml), RenderError> {
     let (product, target, label, id, payload, artifact, runner) = preview_target(darwin);
     let mut action_steps = vec![
         steps::checkout_step(),
@@ -262,17 +291,29 @@ fn build_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml), 
         Yaml::Map(steps::release_build_job_env(target)),
     ));
     fields.push(artifact_output());
-    replace_runner(&mut fields, runner);
+    place_runner(&mut fields, request, id, runner)?;
     Ok(finish(id, fields, action_steps))
 }
 
-fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml), RenderError> {
-    let (_, target, label, build_id, payload, _, runner) = preview_target(darwin);
+fn qualify_job(
+    pins: &ProductReleasePins,
+    request: &Schema2WorkflowRequest,
+    darwin: bool,
+) -> Result<(String, Yaml), RenderError> {
+    let (_, target, label, build_id, payload, _, hosted) = preview_target(darwin);
     let qualify_id = if darwin {
         "source-preview-qualify-darwin"
     } else {
         "source-preview-qualify-linux"
     };
+    let mut job_fields = fields(
+        &format!("Qualify source preview {label}"),
+        &[build_id],
+        steps::perm(&[("contents", "read")]),
+        MAIN_PUSH,
+        JobTimeout::PRODUCT_QUALIFICATION,
+    );
+    let runner = place_runner(&mut job_fields, request, qualify_id, hosted)?;
     let mut action_steps = vec![
         steps::checkout_step(),
         steps::bash_step(
@@ -282,7 +323,7 @@ fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml)
     ];
     if !darwin {
         action_steps.extend(super::super::source_qualification::sources_restore_steps(
-            pins, qualify_id, runner,
+            pins, qualify_id, &runner,
         )?);
     }
     action_steps.extend(vec![
@@ -316,14 +357,6 @@ fn qualify_job(pins: &ProductReleasePins, darwin: bool) -> Result<(String, Yaml)
             },
         ),
     ]);
-    let mut job_fields = fields(
-        &format!("Qualify source preview {label}"),
-        &[build_id],
-        steps::perm(&[("contents", "read")]),
-        MAIN_PUSH,
-        JobTimeout::PRODUCT_QUALIFICATION,
-    );
-    replace_runner(&mut job_fields, runner);
     Ok(finish(qualify_id, job_fields, action_steps))
 }
 

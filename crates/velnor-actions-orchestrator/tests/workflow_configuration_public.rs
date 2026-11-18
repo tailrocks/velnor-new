@@ -336,3 +336,6 @@ mod image_platform_selection;
 
 #[path = "workflow_configuration_public/runner_workspace_paths.rs"]
 mod runner_workspace_paths;
+
+#[path = "workflow_configuration_public/scale_set_placement.rs"]
+mod scale_set_placement;

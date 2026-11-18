@@ -39,8 +39,9 @@ pub(super) mod workflow_steps;
 
 pub(super) fn source_preview_jobs(
     pins: &ProductReleasePins,
+    request: &Schema2WorkflowRequest,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
-    let mut jobs = source_preview::producer_jobs(pins)?;
+    let mut jobs = source_preview::producer_jobs(pins, request)?;
     if let Some(caller) = source_preview::caller_job()? {
         jobs.push(caller);
     }

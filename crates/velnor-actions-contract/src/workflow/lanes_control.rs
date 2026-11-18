@@ -9,15 +9,21 @@ use crate::config::{
     EPHEMERAL_CHECK_ADMISSION_CONDITION, ExecutionConfig, ExecutionRole, VelnorConfig,
 };
 
-/// Jobs of the source qualification workflow, which the renderer writes
-/// outside the workflow IR (its `plan` job is the IR `plan` key). They are
-/// control jobs, so `execution.overrides` places them like the IR control jobs.
-pub const SCHEMA2_CONTROL_JOB_IDS: [&str; 5] = [
+/// Jobs of the schema-2 workflows (source qualification, job image candidate,
+/// generator source preview, cache prune), which the renderer writes outside the
+/// workflow IR (the source qualification `plan` job is the IR `plan` key). They
+/// are control jobs, so `execution.overrides` places them like the IR control jobs.
+pub const SCHEMA2_CONTROL_JOB_IDS: [&str; 10] = [
     "selection",
     "ordinary-harness",
     "keep-harness",
     "generation-checks",
     "source-qualification",
+    "build-image-candidate",
+    "attest-image-candidate",
+    "source-preview-build-linux",
+    "source-preview-qualify-linux",
+    "prune",
 ];
 
 /// Control jobs the renderer adds after lane expansion, so they are not part

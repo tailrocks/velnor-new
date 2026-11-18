@@ -40,8 +40,11 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
     let pins = request.product_release.as_ref().ok_or_else(|| {
         RenderError::InvalidWorkflow("image_candidate_missing_native_pins".to_owned())
     })?;
-    let build = build_job(hosted.clone(), pins)?;
-    let attest = attest_job(hosted.clone(), artifact_id);
+    let build = build_job(placed(request, "build-image-candidate", &hosted)?, pins)?;
+    let attest = attest_job(
+        placed(request, "attest-image-candidate", &hosted)?,
+        artifact_id,
+    );
     let publish = publish_job(hosted, artifact_id);
     Ok(Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Job image candidate")),
@@ -59,6 +62,16 @@ fn render(request: &Schema2WorkflowRequest) -> Result<Yaml, RenderError> {
         ),
         ("jobs".to_owned(), Yaml::Map(vec![build, attest, publish])),
     ]))
+}
+
+/// The runner of a candidate job: the scale set when `execution.overrides` places
+/// it there, the hosted label otherwise. The workflow starts only on `push` and
+/// `workflow_dispatch`, which a fork cannot run against this repository's
+/// runners, so the placement needs no fork fence. Publication stays hosted.
+fn placed(request: &Schema2WorkflowRequest, job: &str, hosted: &Yaml) -> Result<Yaml, RenderError> {
+    Ok(request
+        .scale_set_runner(job)?
+        .map_or_else(|| hosted.clone(), |runner| runner.runs_on))
 }
 
 fn workflow_concurrency() -> Yaml {

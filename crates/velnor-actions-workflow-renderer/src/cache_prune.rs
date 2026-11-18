@@ -103,9 +103,40 @@ pub fn render_cache_prune_yml(
     workflow_name: &str,
     version: &str,
 ) -> Result<RenderedFile, RenderError> {
-    let label = match RunsOn::parse(runs_on).map_err(RenderError::Contract)? {
-        RunsOn::Hosted(label) => label,
-        RunsOn::ScaleSet(_) => CACHE_PRUNE_FALLBACK_RUNNER.to_owned(),
+    render_cache_prune_yml_placed(runs_on, None, default_branch, workflow_name, version)
+}
+
+/// Renders the prune workflow. `scale_set` is the scale-set runner token that
+/// `execution.overrides` assigns to the `prune` job; without it the job keeps
+/// the hosted label (a scale-set default falls back to hosted on purpose).
+/// The job `if` admits only a push to the default branch of this repository, so
+/// a fork never reaches the self-hosted runner.
+pub fn render_cache_prune_yml_placed(
+    runs_on: &str,
+    scale_set: Option<&str>,
+    default_branch: &str,
+    workflow_name: &str,
+    version: &str,
+) -> Result<RenderedFile, RenderError> {
+    let (label, defaults) = match scale_set {
+        Some(token) => match RunsOn::parse(token).map_err(RenderError::Contract)? {
+            RunsOn::ScaleSet(selector) => (
+                format!("[{}]", selector.labels().join(", ")),
+                "    defaults:\n      run:\n        shell: bash -e {0}\n",
+            ),
+            RunsOn::Hosted(_) => {
+                return Err(RenderError::InvalidWorkflow(
+                    "cache_prune_placement_not_scale_set".to_owned(),
+                ));
+            }
+        },
+        None => (
+            match RunsOn::parse(runs_on).map_err(RenderError::Contract)? {
+                RunsOn::Hosted(label) => label,
+                RunsOn::ScaleSet(_) => CACHE_PRUNE_FALLBACK_RUNNER.to_owned(),
+            },
+            "",
+        ),
     };
     let safe = !default_branch.is_empty()
         && default_branch
@@ -120,7 +151,7 @@ pub fn render_cache_prune_yml(
     let sealed = quote_scalar(STATE_SEAL_WORKFLOW_NAME);
     let script = prune_script().replace('\\', "\\\\").replace('"', "\\\"");
     let body = format!(
-        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n          HEAD_BRANCH: ${{{{ github.event.workflow_run.head_branch }}}}\n        run: \"{script}\"\n"
+        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n{defaults}    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n          HEAD_BRANCH: ${{{{ github.event.workflow_run.head_branch }}}}\n        run: \"{script}\"\n"
     );
     Ok(RenderedFile {
         path: CACHE_PRUNE_PATH.to_owned(),

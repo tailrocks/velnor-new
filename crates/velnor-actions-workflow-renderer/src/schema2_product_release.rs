@@ -61,7 +61,9 @@ pub(super) fn render(
             let generated = super::generator_release::generator_release(request)?;
             actions.extend(generated.actions);
             let mut jobs = generator::compose_jobs(generated.workflow)?;
-            jobs.extend(super::generator_release::source_preview_jobs(pins)?);
+            jobs.extend(super::generator_release::source_preview_jobs(
+                pins, request,
+            )?);
             jobs
         } else {
             let family_document = family_jobs::family_document(family, request)?;
