@@ -24,7 +24,7 @@ fn a_versioned_asset_name_names_every_bin_of_a_raw_release() -> TestResult {
     let (_, tree) = render(&[APP], Some(&toml))?;
     let build = job(&tree, "build-app-linux-x64")?;
     let commands = runs(build);
-    let version = "echo \"VERSION=${TAG#app-v}\" >> \"$GITHUB_ENV\"";
+    let version = "echo \"version=${TAG#app-v}\" >> \"$GITHUB_OUTPUT\"";
     assert!(commands.contains(&version), "{commands:?}");
     assert!(commands.contains(&"mkdir stage"), "{commands:?}");
     for bin in ["app", "rg"] {
