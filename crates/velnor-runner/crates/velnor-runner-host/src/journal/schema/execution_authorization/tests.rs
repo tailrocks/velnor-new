@@ -306,7 +306,7 @@ async fn a_published_challenge_keeps_its_file_identity() -> TestResult<()> {
     Ok(())
 }
 
-async fn downgrade_to_v52(journal: &Journal) -> TestResult<()> {
+async fn downgrade_guards_to_v52(journal: &Journal) -> TestResult<()> {
     let connection = journal.connection().await?;
     for (name, sql) in super::ddl::v52_proof_transition_guards() {
         connection
@@ -314,7 +314,29 @@ async fn downgrade_to_v52(journal: &Journal) -> TestResult<()> {
             .await?;
         connection.execute(sql, ()).await?;
     }
+    Ok(())
+}
+
+async fn downgrade_to_v52(journal: &Journal) -> TestResult<()> {
+    downgrade_guards_to_v52(journal).await?;
+    let connection = journal.connection().await?;
     connection.execute("PRAGMA user_version = 52", ()).await?;
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_current_journal_refuses_the_version_52_proof_guards() -> TestResult<()> {
+    let dir = tempfile::tempdir()?;
+    let path = dir.path().join("journal.db");
+    let journal = Journal::open(&path).await?;
+    downgrade_guards_to_v52(&journal).await?;
+    drop(journal);
+
+    let reopened = Journal::open(&path).await;
+    assert!(
+        reopened.is_err(),
+        "a journal with the version 52 proof guards was accepted"
+    );
     Ok(())
 }
 

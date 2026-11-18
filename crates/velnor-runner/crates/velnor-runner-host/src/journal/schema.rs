@@ -127,7 +127,7 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v52(conn).await
+    validate_persisted_schema_v53(conn).await
 }
 
 pub(in crate::journal::schema) async fn validate_persisted_schema_v52(
