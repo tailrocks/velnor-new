@@ -73,6 +73,7 @@ mod release_record;
 mod release_tag_patterns;
 mod report;
 mod report_accounting;
+mod required_lane;
 mod rulesets;
 mod run;
 mod run_archives;
