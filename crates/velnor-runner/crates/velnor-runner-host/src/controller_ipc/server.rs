@@ -35,6 +35,11 @@ pub(crate) use state::{
 mod transport;
 pub(super) use transport::{read_drain_token, valid_token};
 
+#[cfg(test)]
+pub(super) fn read_request_for_test(stream: &mut UnixStream) -> Result<Request, HostError> {
+    read_request(stream)
+}
+
 const ACCEPT_PAUSE: Duration = Duration::from_millis(25);
 const IO_TIMEOUT: Duration = Duration::from_secs(5);
 
