@@ -49,35 +49,7 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
     let mut requested = Versions::new();
     for (config, bytes) in &present {
         requested.extend(versions(bytes).map_err(|reason| DetectError::invalid(config, reason))?);
-        let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
-        let settings = parsed.get("settings").and_then(Value::as_table);
-        let postinstall = parsed
-            .get("tools")
-            .and_then(Value::as_table)
-            .is_some_and(|tools| tools.values().any(runs_a_command));
-        if let Some(name) = [
-            "env",
-            "include",
-            "env_file",
-            "env_path",
-            "dotenv",
-            "hooks",
-            "tool_alias",
-            "alias",
-            "monorepo_root",
-            "monorepo",
-        ]
-        .into_iter()
-        .find(|key| {
-            parsed.contains_key(*key) || settings.is_some_and(|table| table.contains_key(*key))
-        })
-        .or(postinstall.then_some("tools.postinstall"))
-        {
-            return Err(DetectError::invalid(
-                config,
-                Reason::MiseOverridesFlags(name.to_owned()),
-            ));
-        }
+        validate_config(config, bytes)?;
     }
     let (mut locked, mut prebuilt) = match files.get(&MISE_LOCK) {
         Some(lock) => (
@@ -115,6 +87,41 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
             })
             .collect(),
     })
+}
+
+fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
+    let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
+    let unknown = parsed.keys().find(|key| {
+        !["tools", "settings", "min_version", "tasks", "wrappers"].contains(&key.as_str())
+    });
+    let settings = parsed.get("settings").and_then(Value::as_table);
+    let unknown_setting = settings.and_then(|settings| {
+        settings.keys().find(|key| {
+            !["cargo", "idiomatic_version_file_enable_tools", "lockfile"].contains(&key.as_str())
+        })
+    });
+    let unknown_cargo_setting = settings
+        .and_then(|settings| settings.get("cargo"))
+        .and_then(Value::as_table)
+        .and_then(|cargo| cargo.keys().find(|key| key.as_str() != "binstall"));
+    let postinstall = parsed
+        .get("tools")
+        .and_then(Value::as_table)
+        .is_some_and(|tools| tools.values().any(runs_a_command));
+    let templates = parsed.values().any(has_template);
+    if let Some(name) = unknown
+        .or(unknown_setting)
+        .or(unknown_cargo_setting)
+        .map(String::as_str)
+        .or(postinstall.then_some("tools.postinstall"))
+        .or(templates.then_some("template"))
+    {
+        return Err(DetectError::invalid(
+            config,
+            Reason::MiseOverridesFlags(name.to_owned()),
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn nextest_tool(pins: &ToolPins) -> Option<&str> {
@@ -207,6 +214,15 @@ pub(crate) fn rust_tool(pins: &ToolPins) -> Option<&str> {
     RUST_TOOLS
         .into_iter()
         .find(|name| pins.tools.contains_key(*name))
+}
+
+fn has_template(value: &Value) -> bool {
+    match value {
+        Value::String(text) => text.contains("{{") || text.contains("{%"),
+        Value::Array(items) => items.iter().any(has_template),
+        Value::Table(items) => items.values().any(has_template),
+        _ => false,
+    }
 }
 
 fn runs_a_command(value: &Value) -> bool {
