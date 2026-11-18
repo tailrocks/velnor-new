@@ -43,3 +43,55 @@ run = "bash scripts/ci-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
+
+## Optional reusable workflows
+
+`.velnor/workflows.toml` makes the generator write one reusable workflow, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is off when the file is absent, and then the generated files are byte-identical to the output without this feature. The workflow is called by another workflow, so it has the `workflow_call` trigger and no other trigger. It sets `permissions: {}` at the top, and each job lists only the scopes it names. The file names are `file = "native-checks"` and so on; `rust-ci` and `release` belong to other outputs and are refused. The sample `reusable-workflows` uses every key below.
+
+```toml
+[[workflow]]
+file = "native-checks"
+name = "Native checks"
+runner = "ubuntu-latest"
+
+[[workflow.input]]
+name = "sdk_version"
+description = "SDK version to check"
+required = true
+
+[[workflow.job]]
+id = "plan"
+helper = true
+timeout_minutes = 15
+permissions = { contents = "read" }
+outputs = { matrix = "steps.plan.outputs.matrix" }
+
+[[workflow.job.step]]
+id = "plan"
+name = "Plan the checks"
+run = "velnor-ci plan"
+env = { SDK_VERSION = "${{ inputs.sdk_version }}" }
+
+[[workflow.job]]
+id = "check"
+needs = ["plan"]
+
+[workflow.job.matrix]
+from_output = "plan.matrix"
+fail_fast = false
+max_parallel = 2
+
+[[workflow.job.step]]
+name = "Warm the cache"
+run = "velnor-ci warm"
+continue_on_error = true
+env = { TARGET = "${{ matrix.target }}" }
+```
+
+- Inputs. Each `[[workflow.input]]` becomes a typed `string` input of `workflow_call`. `required` is `true` unless you set it to `false`.
+- Matrix from a job output. A job with `[workflow.job.matrix]` renders `strategy.matrix: ${{ fromJSON(needs.<job>.outputs.<output>) }}`. `from_output` is `<job>.<output>`; that job must be in the job's `needs` and must declare the output. `fail_fast` and `max_parallel` are optional.
+- Job outputs. `outputs` maps a name to `steps.<step id>.outputs.<name>` of a step of the same job.
+- Per-step `continue_on_error = true` renders `continue-on-error: true` on that step only.
+- `helper = true` puts the pinned `velnor-ci` install step first in the job.
+- Every `run` follows the same rules as the other generated workflows: one command, no shell logic, no expression. Pass values through `env`.
+- An `env` value is plain text or exactly one expression. The allowed expressions are `github.token`, `github.repository`, `github.sha`, `inputs.<declared input>`, `matrix.<key>` in a matrix job, and `needs.<needed job>.outputs.<declared output>`. Anything else, and any `needs` on a job declared later, is refused with the path of the problem.

@@ -7,6 +7,7 @@ use velnor_model::{HelperVersion, RELEASE_CONFIG_PATH, RepoPath};
 use velnor_release::ReleaseError;
 use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MetadataFileError};
+use velnor_workflows::WorkflowsError;
 
 use crate::{COMPATIBLE_HELPER_SERIES, RELEASE_HELPER_MINIMUM};
 
@@ -24,6 +25,7 @@ pub enum GenerateError {
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
+    Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
 }
 
@@ -64,6 +66,7 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::Metadata(error) => error.fmt(f),
+            Self::Workflows(error) => error.fmt(f),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {

@@ -60,6 +60,13 @@ pub struct RenderedConcurrency {
     pub cancel_in_progress: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedMatrix {
+    pub from_output: String,
+    pub fail_fast: Option<bool>,
+    pub max_parallel: Option<u16>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -72,6 +79,7 @@ pub struct RenderedJob {
     pub no_permissions: bool,
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
+    pub matrix: Option<RenderedMatrix>,
     pub runs_on: String,
     pub timeout_minutes: u16,
     pub steps: Vec<RenderedStep>,

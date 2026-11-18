@@ -95,6 +95,7 @@ mod required_gate_lanes;
 mod required_job;
 mod required_policy_single;
 mod restored_term;
+mod reusable_workflows;
 mod rule_config;
 mod rules;
 mod rules_token;

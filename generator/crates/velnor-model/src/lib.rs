@@ -44,6 +44,7 @@ pub use repo::{
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
+    WORKFLOWS_CONFIG_PATH,
 };
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
