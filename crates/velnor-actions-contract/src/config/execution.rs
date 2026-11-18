@@ -179,10 +179,10 @@ impl ExecutionConfig {
             None => {
                 workflows
                     || self.default_profile == self.scale_set_profile
-                    || self.overrides.values().any(|item| {
-                        item.role == ExecutionRole::Verification
-                            && item.profile == self.scale_set_profile
-                    })
+                    || self
+                        .overrides
+                        .values()
+                        .any(|item| item.profile == self.scale_set_profile)
             }
         }
     }
