@@ -1088,8 +1088,10 @@ jobs:
     needs:
       - rust-root
       - rust-lab
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (needs.rust-root.outputs.base_save == ''true'' || (needs.rust-root.outputs.sources_saved == ''true'' || needs.rust-root.outputs.sources_key != '''') || needs.rust-lab.outputs.base_save == ''true'' || (needs.rust-lab.outputs.sources_saved == ''true'' || needs.rust-lab.outputs.sources_key != '''')) }}'
+      - rust-inputs-audit
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
     permissions:
+      pull-requests: read
       actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1118,7 +1120,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-root sources entries
-        if: '${{ needs.rust-root.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-root.outputs.sources_prefix != '''' && (needs.rust-root.outputs.sources_saved == ''true'' || needs.rust-root.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-root.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1130,7 +1132,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-lab sources entries
-        if: '${{ needs.rust-lab.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-lab.outputs.sources_prefix != '''' && (needs.rust-lab.outputs.sources_saved == ''true'' || needs.rust-lab.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-lab.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1171,6 +1173,10 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-root-target_key.outcome != ''failure'' && steps.verify-rust-root-sources_key.outcome != ''failure'' && steps.verify-rust-lab-target_key.outcome != ''failure'' && steps.verify-rust-lab-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+      - name: Enforce the repository cache budget
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
   required:
     name: Required
     needs:
