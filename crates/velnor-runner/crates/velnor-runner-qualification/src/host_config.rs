@@ -106,14 +106,24 @@ pub(super) fn validate_ownership<'a>(
     inspect: &'a bollard::models::ContainerInspectResponse,
     tracked: &TrackedContainer,
 ) -> Result<&'a str, HostError> {
+    if inspect
+        .name
+        .as_deref()
+        .is_none_or(|name| name.strip_prefix('/').unwrap_or(name) != tracked.name)
+    {
+        return Err(HostError::Ownership);
+    }
+    validate_owned_id(run_id, inspect, tracked)
+}
+
+pub(super) fn validate_owned_id<'a>(
+    run_id: &str,
+    inspect: &'a bollard::models::ContainerInspectResponse,
+    tracked: &TrackedContainer,
+) -> Result<&'a str, HostError> {
     let id = inspect.id.as_deref().ok_or(HostError::Ownership)?;
     valid_container_id(id)?;
-    if tracked.id.as_deref().is_some_and(|recorded| recorded != id)
-        || inspect
-            .name
-            .as_deref()
-            .is_none_or(|name| name.strip_prefix('/').unwrap_or(name) != tracked.name)
-    {
+    if tracked.id.as_deref().is_some_and(|recorded| recorded != id) {
         return Err(HostError::Ownership);
     }
     let labels = inspect
