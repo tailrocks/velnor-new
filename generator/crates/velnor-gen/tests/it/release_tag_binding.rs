@@ -15,7 +15,7 @@ type Step = (String, Vec<String>);
 fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
     )?;
     view.files.insert(
         velnor_rust::LOCK_PATH,
@@ -62,7 +62,7 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
     for (id, step) in found {
         let (prefixes, released) = if id == "tag" {
             (
-                " --branch-prefix release-plz.toml release-plz-app- --branch-prefix tools/release-plz.toml release-plz-tools-",
+                " --branch-prefix release-plz.toml release-plz-app-",
                 " --released-versions",
             )
         } else {
@@ -72,7 +72,7 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
             step,
             [
                 &format!(
-                    "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}'{prefixes} --repo=\"$REPOSITORY\" --manifests{released}"
+                    "velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}'{prefixes} --repo=\"$REPOSITORY\" --manifests{released}"
                 ),
                 "CARGO_BUILD_RUSTC=rustc",
                 "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
@@ -124,7 +124,7 @@ fn a_helper_that_predates_the_release_checks_is_refused_with_the_version_to_pin(
 fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
     )?;
     view.files.insert(
         velnor_rust::LOCK_PATH,

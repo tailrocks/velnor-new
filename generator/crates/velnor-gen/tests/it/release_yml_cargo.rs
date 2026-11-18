@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use crate::release_fixture::{SPACED, render, steps, two_binaries};
+use crate::release_fixture::{render, steps, two_binaries};
 use crate::yaml_tree::Node;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -22,7 +22,7 @@ fn runs(job: &Node) -> Vec<&str> {
 }
 
 #[test]
-fn release_yml_runs_cargo_from_the_release_root_with_a_fixed_target_directory_and_the_musl_compiler()
+fn release_yml_runs_cargo_from_the_git_root_with_a_fixed_target_directory_and_the_musl_compiler()
 -> TestResult {
     let (_, tree) = two_binaries()?;
     let build = job(&tree, "build-tools-linux-x64")?;
@@ -34,10 +34,7 @@ fn release_yml_runs_cargo_from_the_release_root_with_a_fixed_target_directory_an
                 .is_some_and(|run| run.starts_with("cargo "))
         })
         .ok_or("no cargo step")?;
-    assert_eq!(
-        cargo.get("working-directory").and_then(Node::text),
-        Some("tools")
-    );
+    assert!(cargo.get("working-directory").is_none());
     assert_eq!(
         cargo.at(&["env", "TARGET_CC"]).and_then(Node::text),
         Some("musl-gcc")
@@ -54,27 +51,6 @@ fn release_yml_runs_cargo_from_the_release_root_with_a_fixed_target_directory_an
         })
         .ok_or("no cargo step")?;
     assert!(at_root.get("working-directory").is_none());
-    Ok(())
-}
-
-#[test]
-fn release_yml_quotes_a_root_with_a_space_in_the_build_commands() -> TestResult {
-    let (_, tree) = render(
-        &[SPACED],
-        Some(
-            "roots = [\"my tools\"]\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n",
-        ),
-    )?;
-    assert_eq!(
-        runs(job(&tree, "build-tools-linux-x64")?),
-        [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
-            "sudo apt-get install --yes musl-tools",
-            "rustup target add x86_64-unknown-linux-musl",
-            "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
-            "tar -czf tools-linux-x64.tar.gz -C 'my tools/target/x86_64-unknown-linux-musl/release' tools",
-        ]
-    );
     Ok(())
 }
 
@@ -179,9 +155,7 @@ fn the_tag_job_is_serialized_across_commits_and_both_jobs_with_the_app_token_ref
             .iter()
             .position(|step| {
                 step.get("run").and_then(Node::text).is_some_and(|run| {
-                    run.starts_with(
-                        "velnor-ci release check-config release-plz.toml tools/release-plz.toml ",
-                    )
+                    run.starts_with("velnor-ci release check-config release-plz.toml ")
                 })
             })
             .ok_or("no refuse step")?;

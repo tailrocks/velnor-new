@@ -136,6 +136,11 @@ fn publishes(workspace: &Settings, released: &[(String, Settings)]) -> bool {
 }
 
 fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
+    if root != "." {
+        return Err(ReleaseError::NestedReleasePlzRoot {
+            root: root.to_owned(),
+        });
+    }
     let invalid = |error: toml::de::Error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
         message: error.to_string(),
@@ -177,25 +182,7 @@ fn released_packages(
             released.push((entry.name.clone(), effective));
         }
     }
-    refuse_nested_git_only(root, &document.workspace, &released)?;
     Ok(released)
-}
-
-fn refuse_nested_git_only(
-    root: &str,
-    workspace: &Settings,
-    released: &[(String, Settings)],
-) -> Result<(), ReleaseError> {
-    let git_only = workspace.git_only == Some(true)
-        || released
-            .iter()
-            .any(|(_, settings)| settings.git_only == Some(true));
-    if root != "." && git_only {
-        return Err(ReleaseError::NestedGitOnlyRoot {
-            root: root.to_owned(),
-        });
-    }
-    Ok(())
 }
 
 fn workspace_tags(

@@ -202,7 +202,7 @@ pub enum ReleaseError {
     RootWithoutCargoManifest {
         root: String,
     },
-    NestedGitOnlyRoot {
+    NestedReleasePlzRoot {
         root: String,
     },
     UnknownWorkflow {

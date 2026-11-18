@@ -194,7 +194,7 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
 }
 
 #[test]
-fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() -> TestResult {
+fn release_yml_runs_one_release_plz_command_for_the_root_and_records_its_output() -> TestResult {
     let (_, tree) = two_roots()?;
     let runs = |id: &str| -> Result<Vec<&str>, Box<dyn Error>> {
         Ok(steps(tree.at(&["jobs", id]).ok_or("no job")?)
@@ -205,7 +205,7 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     };
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
     let exec = "\"$RUNNER_TEMP/release-plz\"";
-    let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo=\"$REPOSITORY\" --manifests";
+    let refuse = "velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml 'tools-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --repo=\"$REPOSITORY\" --manifests";
     let mut prepared: Vec<String> = [
         "curl --fail --silent --show-error --location --output \"$RUNNER_TEMP/release-plz.tar.gz\" 'https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz'",
         "printf '%s  %s/release-plz.tar.gz\\n' a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90 \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/release-plz.sha256\"",
@@ -217,17 +217,13 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     .map(str::to_owned)
     .to_vec();
     let mut pr_runs = prepared.clone();
-    pr_runs.extend([
-        format!("{exec} release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"),
-        format!(
-            "{exec} release-pr {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml"
-        ),
-    ]);
+    pr_runs.extend([format!(
+        "{exec} release-pr {base} --manifest-path Cargo.toml --config release-plz.toml"
+    )]);
     assert_eq!(runs("release-pr")?, pr_runs);
     prepared.extend([
             format!("{exec} release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""),
-            format!("{exec} release {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > \"$RUNNER_TEMP/release-1.json\""),
-            "velnor-ci release record \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\"".to_owned(),
+            "velnor-ci release record \"$RUNNER_TEMP/release-0.json\"".to_owned(),
     ]);
     assert_eq!(runs("tag")?, prepared);
     for id in ["gate", "release-pr", "tag"] {

@@ -136,9 +136,9 @@ impl ReleaseError {
                 "{root}/release-plz.toml: {} sets publish = true together with git_only = true, which release-plz refuses",
                 subject(package.as_ref())
             ),
-            Self::NestedGitOnlyRoot { root } => write!(
+            Self::NestedReleasePlzRoot { root } => write!(
                 f,
-                "{root}/release-plz.toml: release root {root} is not the git root and sets git_only = true, and release-plz 0.4.3 cannot update or open a release PR there (it fails with \"failed to open repository\" because it looks for the git repository in the manifest directory); fold the packages of {root} into the git-root Cargo workspace and release them from the root release-plz.toml with one [[package]] entry and git_tag_name per package"
+                "{root}/release-plz.toml: release root {root} is not the git root, and release-plz 0.4.3 cannot update or open a release PR from a root below the git root (it fails with \"failed to open repository\" because it looks for the git repository in the manifest directory, whatever git_only or publish say); fold the packages of {root} into the git-root Cargo workspace and release them from the root release-plz.toml with one [[package]] entry and git_tag_name per package"
             ),
             _ => Ok(()),
         }

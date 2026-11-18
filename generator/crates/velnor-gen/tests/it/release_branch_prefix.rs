@@ -16,7 +16,7 @@ type TestResult = Result<(), Box<dyn Error>>;
 fn render(helper: &str) -> Result<Node, Box<dyn Error>> {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n"),
+        Some("roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n"),
     )?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
@@ -48,12 +48,10 @@ fn the_tag_job_binds_each_live_branch_prefix_before_the_app_token_is_minted() ->
     .ok_or("no app token step")?;
     assert!(check < token);
     let run = run_of(&all[check]);
-    for flag in [
-        "--branch-prefix release-plz.toml release-plz-app-",
-        "--branch-prefix tools/release-plz.toml release-plz-tools-",
-    ] {
-        assert!(run.contains(flag), "{run}");
-    }
+    assert!(
+        run.contains("--branch-prefix release-plz.toml release-plz-app-"),
+        "{run}"
+    );
     Ok(())
 }
 

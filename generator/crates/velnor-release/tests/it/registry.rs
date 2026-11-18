@@ -3,8 +3,7 @@
 
 use velnor_release::{ReleaseError, ReleaseFiles};
 
-use crate::fixture::{PLZ, TestResult, edit, files, metadata, refusal};
-use crate::sources::two_roots;
+use crate::fixture::{PLZ, edit, files, metadata, refusal};
 
 const OTHER_DEFAULT: &str = "[registry]\ndefault = \"company\"\n[registries.company]\nindex = \"sparse+https://example.test/\"\n";
 
@@ -58,39 +57,6 @@ fn a_publish_list_inherited_from_the_workspace_is_refused() {
         refusal(&files),
         Some(ReleaseError::PublishNamesOtherRegistry { manifest, .. }) if manifest == "member/Cargo.toml"
     ));
-}
-
-fn ancestor_files(workspace_publish: &str) -> ReleaseFiles {
-    let mut files = files();
-    files.release_toml = Some("roots = [\"crates/app\"]\n".to_owned());
-    let text = files.release_plz_toml.remove(".").unwrap_or_default();
-    files.release_plz_toml.insert("crates/app".to_owned(), text);
-    files.rust_metadata = Some(metadata(&[(
-        "Cargo.toml",
-        &[("app", "crates/app/Cargo.toml")],
-    )]));
-    files.cargo_manifest_texts.insert(
-        "Cargo.toml".to_owned(),
-        format!(
-            "[workspace]\nmembers = [\"crates/app\"]\n[workspace.package]\n{workspace_publish}"
-        ),
-    );
-    files.cargo_manifest_texts.insert(
-        "crates/app/Cargo.toml".to_owned(),
-        manifest("publish.workspace = true\n"),
-    );
-    files
-}
-
-#[test]
-fn a_publish_list_inherited_from_a_workspace_above_the_release_root_is_refused() {
-    let error = refusal(&ancestor_files("publish = [\"company\"]\n"));
-    assert!(
-        matches!(&error, Some(ReleaseError::PublishNamesOtherRegistry { manifest, root, .. })
-            if manifest == "crates/app/Cargo.toml" && root == "crates/app"),
-        "{error:?}"
-    );
-    assert_eq!(refusal(&ancestor_files("publish = false\n")), None);
 }
 
 #[test]
@@ -218,32 +184,6 @@ fn a_root_that_does_not_publish_accepts_another_registry_everywhere() {
         .cargo_configs
         .insert(".cargo/config.toml".to_owned(), OTHER_DEFAULT.to_owned());
     assert!(refusal(&files).is_none());
-}
-
-#[test]
-fn a_cargo_config_is_judged_by_the_roots_it_reaches_not_by_other_roots() -> TestResult {
-    let mut files = two_roots(
-        &edit(
-            PLZ,
-            "[workspace]\n",
-            "[workspace]\npr_branch_prefix = \"tools-\"\npublish = false\n",
-        )?
-        .replace("name = \"app\"", "name = \"tools\""),
-    )?;
-    files.cargo_configs.insert(
-        "tools/.cargo/config.toml".to_owned(),
-        OTHER_DEFAULT.to_owned(),
-    );
-    assert!(refusal(&files).is_none());
-    files.cargo_configs.clear();
-    files
-        .cargo_configs
-        .insert(".cargo/config.toml".to_owned(), OTHER_DEFAULT.to_owned());
-    assert!(matches!(
-        refusal(&files),
-        Some(ReleaseError::CargoRedirectsCratesIo { .. })
-    ));
-    Ok(())
 }
 
 #[test]
