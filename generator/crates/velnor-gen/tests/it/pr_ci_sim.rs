@@ -21,6 +21,7 @@ pub(crate) struct Pull {
     pub(crate) same_repository: bool,
     pub(crate) action: &'static str,
     pub(crate) label: &'static str,
+    pub(crate) base_changed: bool,
 }
 
 pub(crate) fn pull(draft: bool, labels: &[&'static str]) -> Event {
@@ -33,8 +34,18 @@ pub(crate) fn pull(draft: bool, labels: &[&'static str]) -> Event {
             same_repository: true,
             action: "synchronize",
             label: "",
+            base_changed: false,
         }),
     }
+}
+
+pub(crate) fn edited(base_changed: bool, labels: &[&'static str]) -> Event {
+    let mut event = pull(false, labels);
+    if let Some(pull) = event.pull_request.as_mut() {
+        pull.action = "edited";
+        pull.base_changed = base_changed;
+    }
+    event
 }
 
 pub(crate) fn labeled(added: &'static str, labels: &[&'static str]) -> Event {
@@ -83,6 +94,9 @@ pub(crate) fn context(
             }
             "github.event.pull_request.number" => pull.map_or(Value::Null, |_| text("7")),
             "github.event.action" => pull.map_or(Value::Null, |pull| text(pull.action)),
+            "github.event.changes.base" => pull
+                .filter(|pull| pull.action == "edited" && pull.base_changed)
+                .map_or(Value::Null, |_| text("main")),
             "github.event.label.name" => pull
                 .filter(|pull| pull.action == "labeled")
                 .map_or(Value::Null, |pull| text(pull.label)),

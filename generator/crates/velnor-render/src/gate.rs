@@ -16,7 +16,7 @@ const NOT_DRAFT: &str = "github.event.pull_request.draft != true";
 const IS_PULL_REQUEST_NOT: &str = "github.event_name != 'pull_request'";
 const IS_PULL_REQUEST: &str = "github.event_name == 'pull_request'";
 const PULL_REQUEST_LABELS: &str = "github.event.pull_request.labels.*.name";
-const RELATED_LABEL: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto')";
+const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.label.name == 'ci:run' || github.event.label.name == 'ci:auto') && (github.event.action != 'edited' || github.event.changes.base != null)";
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -188,11 +188,11 @@ fn pr_parts(pr: PrRun) -> Vec<String> {
     match pr {
         PrRun::Always => Vec::new(),
         PrRun::Ready => vec![NOT_DRAFT.to_owned()],
-        PrRun::Quick => vec![NOT_DRAFT.to_owned(), RELATED_LABEL.to_owned()],
-        PrRun::Related => vec![RELATED_LABEL.to_owned()],
+        PrRun::Quick => vec![NOT_DRAFT.to_owned(), RELATED_EVENT.to_owned()],
+        PrRun::Related => vec![RELATED_EVENT.to_owned()],
         PrRun::Requested => vec![
             NOT_DRAFT.to_owned(),
-            RELATED_LABEL.to_owned(),
+            RELATED_EVENT.to_owned(),
             format!("({IS_PULL_REQUEST_NOT} || {})", requested_here()),
         ],
         PrRun::Unrequested => vec![

@@ -9,7 +9,7 @@ use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::gh_expr::evaluate;
 use crate::pr_ci::{LABEL_CONFIG, label_workflow, render};
-use crate::pr_ci_sim::{Event, context, labeled, outcome, pull, state, strings};
+use crate::pr_ci_sim::{Event, context, edited, labeled, outcome, pull, state, strings};
 
 #[test]
 fn an_unrelated_label_runs_nothing_whatever_the_pull_request_already_carries() -> TestResult {
@@ -136,5 +136,40 @@ fn the_run_that_started_with_ci_run_still_runs_the_full_suite_and_a_following_pu
     assert_eq!(state(&next, "rust-lint"), "success");
     assert_eq!(state(&next, "rust-test"), "skipped");
     assert!(!verdict.steps.iter().any(|step| step == "velnor-ci gate"));
+    Ok(())
+}
+
+#[test]
+fn an_edit_that_keeps_the_base_runs_nothing_and_cannot_cancel_the_run_in_progress() -> TestResult {
+    let tree = label_workflow()?;
+    let running = group(&tree, &pull(false, &["ci:run"]))?;
+    for labels in [&[][..], &["ci:run"], &["ci:auto"]] {
+        let event = edited(false, labels);
+        let (results, _) = outcome(&tree, &event, &[])?;
+        for (job, result) in &results {
+            assert_eq!(result, "skipped", "{labels:?}: {job}");
+        }
+        let own = group(&tree, &event)?;
+        assert_ne!(own, running, "{labels:?}");
+        assert!(own.ends_with("-ignored-99"), "{own}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_base_retarget_runs_what_the_labels_request_and_shares_the_pull_request_group() -> TestResult {
+    let tree = label_workflow()?;
+    let running = group(&tree, &pull(false, &["ci:run"]))?;
+    for (labels, full) in [(&[][..], false), (&["ci:run"], true), (&["ci:auto"], true)] {
+        let event = edited(true, labels);
+        assert_eq!(group(&tree, &event)?, running, "{labels:?}");
+        let (results, _) = outcome(&tree, &event, &[])?;
+        assert_eq!(state(&results, "rust-plan"), "success", "{labels:?}");
+        assert_eq!(
+            state(&results, "rust-test"),
+            if full { "success" } else { "skipped" },
+            "{labels:?}"
+        );
+    }
     Ok(())
 }
