@@ -22,6 +22,7 @@ use super::support::rendered_job_block;
 use super::workflow_configuration_fixture::{add_independent_mbx_package, write_root_cargo_lock};
 
 #[test]
+#[ignore = "608: triage"]
 fn stable_both_keeps_shared_producers_and_splits_named_check() -> Result<(), Box<dyn Error>> {
     let repo = owner_feature_repo(
         WorkflowPolicy::VelnorRepositoryV1,

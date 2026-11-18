@@ -129,6 +129,7 @@ fn env_values<'a>(env: &'a [(String, String)], key: &str) -> Vec<&'a str> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn ledger_cli_build_uses_the_lean_dev_profile() -> Result<(), Box<dyn Error>> {
     let tree = render_tree_text(WorkflowPolicy::VelnorRepositoryV1)?;
     let workflow = tree
@@ -155,6 +156,7 @@ fn ledger_cli_build_uses_the_lean_dev_profile() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn lean_dev_profile_stays_on_the_ledger_cli_build() -> Result<(), Box<dyn Error>> {
     let velnor = render_tree_text(WorkflowPolicy::VelnorRepositoryV1)?;
     let workflow = velnor

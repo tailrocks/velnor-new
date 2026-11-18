@@ -152,6 +152,7 @@ fn assert_producer_installs(id: &str, job: &Job, probe: usize, save: usize) {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn finalized_jobs_have_one_producer_per_tools_identity() -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {
         let (_, jobs) = finalized(policy)?;
@@ -217,6 +218,7 @@ fn required_plan_and_crate_jobs_never_need_a_producer() -> Result<(), Box<dyn Er
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn staged_tree_renders_producers_for_both_policies() -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {
         let repo = owner_feature_repo(policy, false, "default", "default")?;

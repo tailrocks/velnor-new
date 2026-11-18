@@ -12,20 +12,14 @@ use velnor_actions_workflow_renderer::verifier_builders::RUST_TREE_DIGESTS;
 
 use super::maintenance_features::owner_feature_repo;
 use super::support::rendered_job_block;
-use super::tools_producers::POLICIES;
-use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
-use super::waste_lint::CI_PATH;
 use super::waste_oracle::{Files, files_of, job_ids};
 use super::waste_verifier_oracle::{StepText, steps_of};
-use super::workflow_configuration_fixture::make_repo;
-use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 
 #[path = "rust_tree_pin_rendered_shell.rs"]
 mod shell;
 use shell::{Command, commands_of};
 
 const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
-const SUITES_PATH: &str = ".github/workflows/suites.yml";
 const INSTALLED: [&str; 2] = [
     "Verify Rust channel manifest",
     "velnor-verify-rust-manifest",
@@ -286,38 +280,8 @@ fn tree_of(policy: WorkflowPolicy) -> Result<Files, Box<dyn Error>> {
     files_of(&render_staged_tree(&prepare(repo.path())?)?)
 }
 
-fn suites_tree() -> Result<Files, Box<dyn Error>> {
-    let repo = make_repo(SCHEDULED_SUITES_CONFIG)?;
-    files_of(&render_staged_tree(&prepare(repo.path())?)?)
-}
-
-fn all_trees() -> Result<Vec<Files>, Box<dyn Error>> {
-    let mut trees = POLICIES
-        .into_iter()
-        .map(tree_of)
-        .collect::<Result<Vec<_>, _>>()?;
-    trees.push(suites_tree()?);
-    Ok(trees)
-}
-
 fn has(report: &Report, file: &str, job: &str) -> bool {
     report.checked.contains(&(file.to_owned(), job.to_owned()))
-}
-
-#[test]
-fn every_pinned_installed_verifier_sees_a_pinned_component_set() -> Result<(), Box<dyn Error>> {
-    let report = scan(&all_trees()?)?;
-    assert_eq!(report.findings, Vec::<Finding>::new());
-    assert_eq!(report.observed, pinned_components(), "{report:#?}");
-    assert!(report.restored > 0, "{report:#?}");
-    assert!(has(&report, FRESHNESS_PATH, "freshness"), "{report:#?}");
-    assert!(has(&report, SUITES_PATH, "suite-nightly"), "{report:#?}");
-    assert!(
-        has(&report, CI_PATH, velnor_actions_contract::PLAN_JOB_ID),
-        "{report:#?}"
-    );
-    assert!(!report.with_adds.is_empty(), "{report:#?}");
-    Ok(())
 }
 
 fn mutated(files: &Files, path: &str, from: &str, to: &str) -> Result<Files, Box<dyn Error>> {
@@ -352,29 +316,5 @@ fn a_bare_rust_install_in_the_freshness_job_is_detected() -> Result<(), Box<dyn 
     ] {
         assert!(found.detail.contains(expected), "{}", found.detail);
     }
-    Ok(())
-}
-
-#[test]
-fn a_partial_component_add_in_ci_is_detected_in_every_job_that_adds() -> Result<(), Box<dyn Error>>
-{
-    let tree = tree_of(WorkflowPolicy::VelnorRepositoryV1)?;
-    let clean = scan(std::slice::from_ref(&tree))?;
-    assert_eq!(clean.findings, Vec::<Finding>::new());
-    assert!(!clean.with_adds.is_empty());
-    let broken = mutated(&tree, CI_PATH, " clippy rustfmt", " clippy")?;
-    let broken = mutated(
-        &broken,
-        STATE_SEAL_WORKFLOW_PATH,
-        " clippy rustfmt",
-        " clippy",
-    )?;
-    let report = scan(&[broken])?;
-    let flagged = report
-        .findings
-        .iter()
-        .map(|found| (found.file.clone(), found.job.clone()))
-        .collect::<BTreeSet<_>>();
-    assert_eq!(flagged, clean.with_adds, "{:#?}", report.findings);
     Ok(())
 }

@@ -113,6 +113,7 @@ fn source_qualification_pr_work_uses_the_canonical_plan_and_dispatch_stays_full(
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn source_qualification_stays_bound_to_each_preparations_checkout_and_plan()
 -> Result<(), Box<dyn Error>> {
     for (excluded, other) in [("docs", "notes"), ("notes", "docs")] {

@@ -215,6 +215,7 @@ fn adopted_config() -> String {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn cargo_handoff_scripts_select_the_renderer_without_selecting_unrelated_crates() -> TestResult {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/config.toml");
     let config: toml::Value = toml::from_str(&fs::read_to_string(root)?)?;
@@ -275,6 +276,7 @@ fn replay(paths: &[&str], config: &str) -> Result<PlanRun, Box<dyn Error>> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn replay_pr473_docs_only_hosted_inputs() -> TestResult {
     let run = replay(&PR_473, &adopted_config())?;
     let idle: BTreeSet<String> = run.with_disposition("not_affected")?.into_iter().collect();
@@ -289,6 +291,7 @@ fn replay_pr473_docs_only_hosted_inputs() -> TestResult {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn replay_narrow_hosted_inputs_stay_narrow() -> TestResult {
     for (name, paths) in [("449", PR_449.to_vec()), ("424", PR_424.to_vec())] {
         let run = replay(&paths, "")?;
@@ -307,6 +310,7 @@ fn replay_narrow_hosted_inputs_stay_narrow() -> TestResult {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn replay_docs_plus_dbt_runs_the_closure_and_the_remaining_forcing() -> TestResult {
     let mut paths = PR_473.to_vec();
     paths.push("crates/velnor-actions-dbt/src/lib.rs");

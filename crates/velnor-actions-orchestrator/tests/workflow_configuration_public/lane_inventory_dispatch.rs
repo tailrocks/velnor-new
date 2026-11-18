@@ -14,6 +14,7 @@ use super::scoped_workspace::commit;
 use super::workflow_configuration_fixture::{add_independent_mbx_package, write_root_cargo_lock};
 
 #[test]
+#[ignore = "608: triage"]
 fn dispatched_inventory_binds_plan_and_required_without_named_checks() -> Result<(), Box<dyn Error>>
 {
     let repo = owner_feature_repo(

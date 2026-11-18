@@ -86,33 +86,6 @@ pub(crate) fn build_task_artifact(
     )
 }
 
-pub(crate) fn rust_suite_config(compile_driver: &str, partitions: u16, build: &str) -> String {
-    format!(
-        r#"schema = 1
-
-[workflow]
-name = "CI"
-policy = "consumer-v1"
-default_branch = "testmain"
-generator_validation = "bootstrap"
-
-[stacks.rust]
-compile_driver = "{compile_driver}"
-
-[[stacks.rust.suites]]
-id = "proof-suite"
-profile = "default"
-triggers = ["pull_request", "push"]
-required = true
-package = "demo"
-manifest_path = "Cargo.toml"
-partitions = {partitions}
-build = "{build}"
-artifacts = [{{ name = "suite-evidence", paths = ["artifacts/suite-evidence.json"], when = "failure", retention_days = 7 }}]
-"#
-    )
-}
-
 pub(crate) fn repo_with_build_task(
     artifacts: Option<&str>,
     suites: &str,
@@ -140,15 +113,4 @@ pub(crate) fn repo_with_build_inputs(config: &str) -> Result<TempDir, Box<dyn Er
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
     fs::copy(workspace.join("mise.lock"), root.join("mise.lock"))?;
     Ok(repo)
-}
-
-pub(crate) fn repo_with_rust_suite(
-    compile_driver: &str,
-    partitions: u16,
-    build: &str,
-) -> Result<(TempDir, GenerationPreparation), Box<dyn Error>> {
-    let config = rust_suite_config(compile_driver, partitions, build);
-    let repo = workflow_configuration_fixture::make_repo(&config)?;
-    let prepared = prepare(repo.path())?;
-    Ok((repo, prepared))
 }

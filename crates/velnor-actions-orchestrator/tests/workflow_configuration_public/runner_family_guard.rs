@@ -274,7 +274,6 @@ fn render_prefetch_fixture(
     context.validator_commands.clear();
     context.preseed = false;
     context.tool_pins.clear();
-    context.standalone_tools_donors.clear();
     context.non_inputs = velnor_actions_contract::NonInputs::default();
     let runtime = velnor_actions_workflow_renderer::render::CanonicalRuntimeInputs::new(
         context.plan_consumer_env.clone(),

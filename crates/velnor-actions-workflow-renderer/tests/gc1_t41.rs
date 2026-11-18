@@ -126,10 +126,8 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         mise_quiet: config.workflow.mise_quiet,
         plan_consumer_env: plan_env(),
         tool_pins: Vec::new(),
-        standalone_tools_donors: std::collections::BTreeMap::new(),
         max_parallel_jobs: config.workflow.max_parallel_jobs,
         non_inputs: velnor_actions_contract::NonInputs::default(),
-        rust_ci: true,
     })
 }
 

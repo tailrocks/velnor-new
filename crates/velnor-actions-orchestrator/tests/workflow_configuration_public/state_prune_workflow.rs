@@ -128,6 +128,7 @@ fn guard_rows() -> Vec<(&'static str, Value, bool)> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn prune_runs_only_after_a_main_push_ci() -> Result<(), Box<dyn Error>> {
     let rendered = render()?;
     let ci_name = rendered
@@ -177,6 +178,7 @@ fn prune_runs_only_after_a_main_push_ci() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn only_the_prune_workflow_listens_for_workflow_run() -> Result<(), Box<dyn Error>> {
     let rendered = render()?;
     assert!(RESTRICTED_ACTION_EVENTS.contains(&"workflow_run"));

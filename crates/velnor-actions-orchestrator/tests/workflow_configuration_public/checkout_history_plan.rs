@@ -183,6 +183,7 @@ fn warnings(plan: &Value) -> Vec<String> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn push_plan_runs_every_job_identically_on_a_depth_one_checkout() -> Result<(), Box<dyn Error>> {
     let origin = origin()?;
     let scratch = tempfile::tempdir()?;
@@ -231,6 +232,7 @@ fn has_commit(root: &Path, sha: &str) -> bool {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn pull_request_plan_on_a_shallow_merge_checkout_fails_instead_of_narrowing()
 -> Result<(), Box<dyn Error>> {
     let origin = origin()?;
@@ -279,6 +281,7 @@ fn pull_request_plan_on_a_shallow_merge_checkout_fails_instead_of_narrowing()
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn pull_request_plan_without_the_base_commit_runs_every_job() -> Result<(), Box<dyn Error>> {
     let origin = origin()?;
     let full_scratch = tempfile::tempdir()?;

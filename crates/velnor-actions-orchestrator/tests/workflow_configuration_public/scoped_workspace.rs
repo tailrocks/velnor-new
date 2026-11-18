@@ -10,8 +10,7 @@ use std::process::Command;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use velnor_actions_orchestrator::{
-    MergeContext, PlanOutputMode, merge_internal_with_context, merge_passed, plan_internal,
-    plan_outputs,
+    MergeContext, merge_internal_with_context, merge_passed, plan_internal,
 };
 
 use super::workflow_configuration_fixture::{git, git_fixture, make_repo};
@@ -21,10 +20,6 @@ pub(super) type TestResult = Result<(), Box<dyn Error>>;
 pub(super) const PACKAGES: [&str; 10] = [
     "a1", "a2", "a3", "a4", "a5", "a6", "a7", "a8", "core", "util",
 ];
-
-pub(super) const FORCED_AND_DEPENDENTS: [&str; 3] = ["a2", "a7", "util"];
-
-pub(super) const CORE_CLOSURE: [&str; 6] = ["a1", "a3", "a4", "a5", "a6", "core"];
 
 macro_rules! a5_complete_rule {
     () => {
@@ -93,33 +88,6 @@ impl PlanRun {
             })
             .unwrap_or_default()
     }
-
-    pub(super) fn reasons(&self) -> BTreeSet<String> {
-        self.value["plan"]["obligations"]
-            .as_array()
-            .map(|all| {
-                all.iter()
-                    .filter_map(|ob| ob["reason"].as_str().map(str::to_owned))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
-    pub(super) fn not_affected_output(&self) -> Result<String, Box<dyn Error>> {
-        Ok(plan_outputs(&self.response, PlanOutputMode::Static)?.not_affected_jobs)
-    }
-}
-
-pub(super) fn set(items: &[&str]) -> BTreeSet<String> {
-    items.iter().map(|item| (*item).to_owned()).collect()
-}
-
-pub(super) fn union(parts: &[&[&str]]) -> BTreeSet<String> {
-    parts
-        .iter()
-        .flat_map(|part| part.iter())
-        .map(|item| (*item).to_owned())
-        .collect()
 }
 
 pub(super) fn put(root: &Path, path: &str, body: &str) -> TestResult {
@@ -258,36 +226,6 @@ pub(super) fn plan_request(request: &Value) -> Result<PlanRun, Box<dyn Error>> {
     Ok(PlanRun { response, value })
 }
 
-pub(super) fn qualification_plan_without_base(
-    repo: &ScopedRepo,
-    head: &str,
-) -> Result<PlanRun, Box<dyn Error>> {
-    let repository = "tailrocks/velnor-new";
-    plan_request(&json!({
-        "schema": 1,
-        "op": "plan-v1",
-        "run_key": "r190001-a1",
-        "base": null,
-        "head": head,
-        "event": "qualification",
-        "root": repo.root().to_string_lossy(),
-        "repository": repository,
-        "qualification": {
-            "campaign": "fixture",
-            "phase": "cold",
-            "repository": repository,
-            "default_branch": "testmain",
-            "git_ref": "refs/heads/testmain",
-            "ref_protected": true,
-            "workflow_ref": format!("{repository}/.github/workflows/ci.yml@refs/heads/testmain"),
-            "workflow_sha": head,
-            "source_sha": head,
-            "run_id": 190_001,
-            "run_attempt": 1,
-        },
-    }))
-}
-
 pub(super) fn merge_verdict(
     run: &PlanRun,
     event: &str,
@@ -330,19 +268,4 @@ pub(super) fn miss_reasons(report: &Value) -> BTreeSet<String> {
                 .collect()
         })
         .unwrap_or_default()
-}
-
-pub(super) fn crate_conclusions(
-    run: &PlanRun,
-    reported: &dyn Fn(&str, &str) -> &'static str,
-) -> Result<BTreeMap<String, &'static str>, Box<dyn Error>> {
-    Ok(run
-        .jobs()?
-        .into_iter()
-        .filter(|(id, _)| id.starts_with("rust-"))
-        .map(|(id, disposition)| {
-            let conclusion = reported(&id, &disposition);
-            (id, conclusion)
-        })
-        .collect())
 }

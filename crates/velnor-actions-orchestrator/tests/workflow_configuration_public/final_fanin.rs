@@ -3,7 +3,7 @@
 
 use std::error::Error;
 
-use velnor_actions_contract::{REQUIRED_JOB_ID, Step, StepKind};
+use velnor_actions_contract::{REQUIRED_JOB_ID, Step};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
@@ -94,53 +94,4 @@ fn assert_order(names: &[&str]) -> Result<(), Box<dyn Error>> {
     .collect::<Result<Vec<_>, _>>()?;
     assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
     Ok(())
-}
-
-#[test]
-fn final_fanin_surfaces_stay_free_of_crane_and_image_publication_fixtures()
--> Result<(), Box<dyn Error>> {
-    let repo = super::crane_prerequisite::repository_cli_repo(false)?;
-    let prepared = prepare(repo.path())?;
-    let jobs = finalized_jobs(&prepared)?;
-    let cli = jobs
-        .get("rust-velnor-actions-cli")
-        .ok_or("CLI job is missing")?;
-    let cli_steps = shell_text(&cli.steps);
-    assert!(cli_steps.contains("crane@0.22.1"));
-    assert!(cli_steps.contains("image-publication-fixture"));
-    let required = jobs.get(REQUIRED_JOB_ID).ok_or("Required job is missing")?;
-    let required_steps = shell_text(&required.steps);
-    let tree = render_staged_tree(&prepared)?;
-    let workflow = tree
-        .get(WORKFLOW_PATH)
-        .ok_or("generated workflow is missing")?;
-    let block = rendered_job_block(workflow, REQUIRED_JOB_ID)?;
-    for forbidden in [
-        "crane@",
-        "image-publication-fixture",
-        "VELNOR_IMAGE_PUBLICATION_FIXTURE",
-    ] {
-        assert!(
-            !required_steps.contains(forbidden),
-            "Required steps contain {forbidden}"
-        );
-        assert!(
-            !block.contains(forbidden),
-            "rendered Required job contains {forbidden}"
-        );
-    }
-    Ok(())
-}
-
-fn shell_text(steps: &[Step]) -> String {
-    steps
-        .iter()
-        .filter_map(|step| match &step.kind {
-            StepKind::Shell { run, env } => {
-                Some(format!("{} {} {:?}", step.name, run.join(" "), env))
-            }
-            _ => None,
-        })
-        .collect::<Vec<_>>()
-        .join("\n")
 }

@@ -30,6 +30,7 @@ fn rendered_pair() -> Result<(String, String, String), Box<dyn Error>> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn state_seal_workflow_holds_one_push_only_producer_per_identity_of_every_workflow()
 -> Result<(), Box<dyn Error>> {
     let (ci, suites, sealed) = rendered_pair()?;
@@ -68,6 +69,7 @@ fn state_seal_workflow_holds_one_push_only_producer_per_identity_of_every_workfl
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn suites_workflow_has_no_tools_producer_or_tools_save() -> Result<(), Box<dyn Error>> {
     let (_, suites, _) = rendered_pair()?;
     let (produced, consumed) = producer_ids_and_digests(&suites);

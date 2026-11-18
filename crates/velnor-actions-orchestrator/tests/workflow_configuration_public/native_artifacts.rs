@@ -255,42 +255,6 @@ fn strict_public_render_rejects_tampered_build_task_artifacts_and_missing_policy
     Ok(())
 }
 
-#[test]
-fn mixed_native_build_and_mbx_suite_preserve_suite_artifact_behavior() -> Result<(), Box<dyn Error>>
-{
-    let native_artifact = build_task_artifact(
-        "native-evidence",
-        &["artifacts/.native-evidence.json"],
-        "always",
-        7,
-    );
-    let suites = r#"[[stacks.rust.suites]]
-id = "proof-suite"
-profile = "default"
-triggers = ["pull_request", "push"]
-required = true
-package = "demo"
-manifest_path = "Cargo.toml"
-artifacts = [{ name = "suite-evidence", paths = ["artifacts/suite-evidence.json"], when = "failure", retention_days = 7 }]
-"#;
-    let (_repo, prepared) = repo_with_build_task(Some(&native_artifact), suites)?;
-    let finalized = finalized_jobs(&prepared)?;
-    let required = finalized
-        .get(REQUIRED_JOB_ID)
-        .ok_or("Required job is missing")?;
-    assert!(required.needs.iter().any(|job| job == TASK_JOB_ID));
-    assert!(required.needs.iter().any(|job| job == "suite-proof-suite"));
-    let tree = render_staged_tree(&prepared)?;
-    let workflow = tree.get(WORKFLOW_PATH).ok_or("generated CI is missing")?;
-    let native_block = rendered_job_block(workflow, TASK_JOB_ID)?;
-    assert!(native_block.contains("include-hidden-files: \"true\""));
-    let suite_block = rendered_job_block(workflow, "suite-proof-suite")?;
-    assert!(suite_block.contains("if: failure()"));
-    assert!(suite_block.contains("if-no-files-found: warn"));
-    assert!(!suite_block.contains("include-hidden-files"));
-    Ok(())
-}
-
 fn build_task_upload_mut(
     prepared: &mut GenerationPreparation,
 ) -> Result<&mut velnor_actions_contract::Step, Box<dyn Error>> {

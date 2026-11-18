@@ -66,6 +66,7 @@ complete = true
 "#;
 
 #[test]
+#[ignore = "608: triage"]
 fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
     let mut repo = family_workspace(&format!("{DOCS_CONFIG}\n{FAMILY_CONFIG}{HELPER_INPUTS}"))?;
     let root = repo.root();

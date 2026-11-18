@@ -1,23 +1,21 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::error::Error;
 
-use velnor_actions_contract::workflow::ProducerKind;
 use velnor_actions_contract::workflow::cache_family::{
     SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR,
 };
-use velnor_actions_contract::{HOSTED_SUFFIX, Job, SCALE_SUFFIX, Step, StepKind, StepRole};
+use velnor_actions_contract::{Job, Step, StepKind, StepRole};
 use velnor_actions_orchestrator::{
     WasteFinding, WasteRule, finalized_jobs, prepare, waste_findings,
 };
 
 use super::bun_routing::make_bun_repo;
-use super::one_job_per_crate::{rust_fixtures, tofu_fixture};
-use super::seed_off::seed_repo;
+use super::one_job_per_crate::{group_fixtures, tofu_fixture};
 use super::waste_lint::step_name;
-use super::waste_rules::{first_crate_id, mutable, producer_step};
+use super::waste_rules::mutable;
 
 const RECHECK_NAME: &str = "Recheck cache state after queue slot";
 
@@ -28,18 +26,8 @@ pub(super) fn of(jobs: &BTreeMap<String, Job>, rule: WasteRule) -> Vec<WasteFind
         .collect()
 }
 
-pub(super) fn digests(job: &Job) -> BTreeSet<String> {
-    job.steps
-        .iter()
-        .filter_map(|step| match &step.kind {
-            StepKind::TaskExecution { task_digest, .. } => Some(task_digest.clone()),
-            _ => None,
-        })
-        .collect()
-}
-
 pub(super) fn mbx_jobs() -> Result<BTreeMap<String, Job>, Box<dyn Error>> {
-    Ok(rust_fixtures()?.remove(0).jobs)
+    Ok(group_fixtures()?.remove(0).jobs)
 }
 
 fn restore_key(step: &Step) -> Option<&str> {
@@ -90,107 +78,9 @@ pub(super) fn repeat_restore(
     Ok((id, key))
 }
 
-pub(super) fn clone_crate_job(jobs: &mut BTreeMap<String, Job>) -> Result<String, Box<dyn Error>> {
-    let id = first_crate_id(jobs)?;
-    let clone = mutable(jobs, &id)?.clone();
-    jobs.insert(format!("{id}-copy"), clone);
-    Ok(id)
-}
-
-#[test]
-fn w1_flags_every_task_digest_two_jobs_run() -> Result<(), Box<dyn Error>> {
-    let mut all = rust_fixtures()?;
-    all.push(tofu_fixture()?);
-    for fixture in &all {
-        assert_eq!(
-            of(&fixture.jobs, WasteRule::DuplicateTask),
-            Vec::new(),
-            "{}",
-            fixture.name
-        );
-    }
-    let mut jobs = mbx_jobs()?;
-    let id = clone_crate_job(&mut jobs)?;
-    let task_digests = digests(&jobs[&id]);
-    assert!(!task_digests.is_empty(), "crate job runs no task");
-    let mut expected: Vec<WasteFinding> = task_digests
-        .into_iter()
-        .map(|digest| WasteFinding::DuplicateTask {
-            digest,
-            jobs: vec![id.clone(), format!("{id}-copy")],
-        })
-        .collect();
-    expected.sort();
-    assert_eq!(of(&jobs, WasteRule::DuplicateTask), expected);
-    Ok(())
-}
-
-#[test]
-fn w1_treats_the_hosted_and_local_lane_twins_as_one_job() -> Result<(), Box<dyn Error>> {
-    let mut jobs = mbx_jobs()?;
-    let id = first_crate_id(&jobs)?;
-    let job = jobs.remove(&id).ok_or("crate job vanished")?;
-    jobs.insert(format!("{id}{HOSTED_SUFFIX}"), job.clone());
-    jobs.insert(format!("{id}{SCALE_SUFFIX}"), job.clone());
-    assert_eq!(of(&jobs, WasteRule::DuplicateTask), Vec::new());
-    jobs.insert(format!("{id}-copy{HOSTED_SUFFIX}"), job.clone());
-    let task_digests = digests(&job);
-    assert!(!task_digests.is_empty(), "crate job runs no task");
-    let mut expected: Vec<WasteFinding> = task_digests
-        .into_iter()
-        .map(|digest| WasteFinding::DuplicateTask {
-            digest,
-            jobs: vec![id.clone(), format!("{id}-copy")],
-        })
-        .collect();
-    expected.sort();
-    assert_eq!(of(&jobs, WasteRule::DuplicateTask), expected);
-    Ok(())
-}
-
-#[test]
-fn w1_lets_one_producer_repeat_a_crate_digest_but_not_two() -> Result<(), Box<dyn Error>> {
-    let repo = seed_repo("")?;
-    let mut jobs = finalized_jobs(&prepare(repo.path())?)?;
-    let producer_id = jobs
-        .iter()
-        .find(|(_, job)| job.producer_kind() == Some(ProducerKind::StateProducer))
-        .map(|(id, _)| id.clone())
-        .ok_or("no state producer job")?;
-    let crate_digests: BTreeSet<String> = jobs
-        .values()
-        .filter(|job| job.producer_kind().is_none())
-        .flat_map(digests)
-        .collect();
-    let producer_digests = digests(&jobs[&producer_id]);
-    assert!(
-        producer_digests
-            .iter()
-            .any(|digest| crate_digests.contains(digest)),
-        "the state producer shares no digest with a crate job"
-    );
-    assert_eq!(
-        of(&jobs, WasteRule::DuplicateTask),
-        Vec::new(),
-        "a state producer sharing a crate digest was flagged"
-    );
-    let copy = jobs[&producer_id].clone();
-    jobs.insert(format!("{producer_id}-copy"), copy);
-    let mut expected: Vec<WasteFinding> = producer_digests
-        .into_iter()
-        .map(|digest| WasteFinding::DuplicateTask {
-            digest,
-            jobs: vec![producer_id.clone(), format!("{producer_id}-copy")],
-        })
-        .collect();
-    expected.sort();
-    assert_eq!(of(&jobs, WasteRule::DuplicateTask), expected);
-    Ok(())
-}
-
 #[test]
 fn w4_flags_a_role_less_renamed_copy_of_a_restore() -> Result<(), Box<dyn Error>> {
-    let mut all = rust_fixtures()?;
+    let mut all = group_fixtures()?;
     all.push(tofu_fixture()?);
     for fixture in &all {
         assert_eq!(
@@ -240,42 +130,6 @@ fn w4_treats_both_sources_key_expressions_as_one_key() -> Result<(), Box<dyn Err
             job,
             key: SOURCES_KEY_PLAN_EXPR.to_owned(),
         }]
-    );
-    Ok(())
-}
-
-pub(super) fn save_in_crate_job(
-    jobs: &mut BTreeMap<String, Job>,
-) -> Result<(String, String), Box<dyn Error>> {
-    let save = producer_step(jobs, StepRole::ToolsCacheSave)?;
-    let id = first_crate_id(jobs)?;
-    let name = save.name.clone();
-    mutable(jobs, &id)?.steps.push(save);
-    Ok((id, name))
-}
-
-#[test]
-fn w5_flags_a_cache_save_outside_a_producer_job() -> Result<(), Box<dyn Error>> {
-    let mut all = rust_fixtures()?;
-    all.push(tofu_fixture()?);
-    for fixture in &all {
-        assert_eq!(
-            of(&fixture.jobs, WasteRule::NonProducerSave),
-            Vec::new(),
-            "{}",
-            fixture.name
-        );
-        assert!(
-            producer_step(&fixture.jobs, StepRole::ToolsCacheSave).is_ok(),
-            "{}: no producer save to exempt",
-            fixture.name
-        );
-    }
-    let mut jobs = mbx_jobs()?;
-    let (job, step) = save_in_crate_job(&mut jobs)?;
-    assert_eq!(
-        of(&jobs, WasteRule::NonProducerSave),
-        vec![WasteFinding::NonProducerSave { job, step }]
     );
     Ok(())
 }

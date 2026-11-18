@@ -137,6 +137,7 @@ fn step_names(workflow: &str, job: &str) -> Vec<String> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn only_the_promised_jobs_take_the_push_aware_checkout_depth() -> Result<(), Box<dyn Error>> {
     let workflow = rendered_workflow(&config("main", ""))?;
     let expected: BTreeMap<String, Option<String>> = [

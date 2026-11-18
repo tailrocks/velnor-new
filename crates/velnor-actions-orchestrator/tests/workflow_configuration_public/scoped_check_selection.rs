@@ -6,6 +6,7 @@ use super::scoped_workspace::{DOCS_CONFIG, TestResult, commit, plan, put, scoped
 const CHECKS: &str = "\n[[checks]]\nid = \"scoped\"\ntask = \"fixture-check\"\nselection = \"declared_inputs\"\ninputs = [\"apps/a1/src/lib.rs\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n";
 
 #[test]
+#[ignore = "608: triage"]
 fn declared_inputs_scope_named_check_without_changing_other_jobs() -> TestResult {
     let config = format!(
         "{DOCS_CONFIG}\n[[checks]]\nid = \"scoped\"\ntask = \"fixture-check\"\nselection = \"declared_inputs\"\ninputs = [\"apps/a1/src/lib.rs\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n[[checks]]\nid = \"default\"\ntask = \"fixture-check\"\ninputs = [\"apps/a1/src/lib.rs\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"

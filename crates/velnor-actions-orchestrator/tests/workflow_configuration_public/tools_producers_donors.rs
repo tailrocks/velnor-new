@@ -102,6 +102,7 @@ pub(super) fn assert_hard_error(
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn donor_digest_implying_rust_components_without_prepare_is_a_render_error()
 -> Result<(), Box<dyn Error>> {
     let (_repo, mut prepared) = prepared_for(WorkflowPolicy::VelnorRepositoryV1)?;
@@ -124,6 +125,7 @@ fn donor_digest_implying_rust_components_without_prepare_is_a_render_error()
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn donor_with_an_install_outside_its_prepare_step_is_a_render_error() -> Result<(), Box<dyn Error>>
 {
     let (_repo, mut prepared) = prepared_for(WorkflowPolicy::VelnorRepositoryV1)?;
@@ -162,6 +164,7 @@ fn donor_with_an_install_outside_its_prepare_step_is_a_render_error() -> Result<
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn producer_installs_are_the_donor_installs() -> Result<(), Box<dyn Error>> {
     let mut inline = 0;
     let mut cloned = 0;

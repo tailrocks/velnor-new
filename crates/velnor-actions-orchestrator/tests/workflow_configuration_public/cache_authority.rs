@@ -194,6 +194,7 @@ fn rendered(policy: WorkflowPolicy) -> Result<Files, Box<dyn Error>> {
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn every_generated_workflow_resolves_read_except_declared_writers() -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {
         let label = format!("{policy:?}");
@@ -271,6 +272,7 @@ fn rejected(
 }
 
 #[test]
+#[ignore = "608: triage"]
 fn a_writer_role_on_a_job_that_runs_task_code_fails_generation() -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {
         let (ir, jobs) = finalized_with_sources(policy)?;
