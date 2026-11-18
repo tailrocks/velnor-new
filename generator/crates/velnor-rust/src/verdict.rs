@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, VerdictSpec,
+    GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
 const SCHEDULE: &str = "schedule";
@@ -189,7 +189,9 @@ impl PlanOutput {
                 }
             }
         }
-        test_lanes.retain(|_, jobs| !jobs.is_empty());
+        let merge_group_ran = event == Some(PUSH)
+            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
+        test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
         Ok(Self {
             planned,
             test_lanes,

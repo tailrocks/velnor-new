@@ -1,7 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Gate, GateNeed, PlanFrom, RootSlug, VerdictSpec, When};
+use velnor_model::{
+    Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PlanFrom, RootSlug, VerdictSpec,
+    When,
+};
 
 use crate::rules::{RenderedStep, Value};
 
@@ -83,6 +86,17 @@ pub(crate) fn plan_source(from: &PlanFrom) -> String {
     match from {
         PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
         PlanFrom::Job(job) => format!("needs.{job}.outputs"),
+    }
+}
+
+pub(crate) const MERGE_GROUP_ASKED_ON: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
+
+pub(crate) fn merge_group_skipped(from: &PlanFrom) -> String {
+    match from {
+        PlanFrom::ThisJob => format!("steps.{MERGE_GROUP_STEP}.outputs.skip != 'true'"),
+        PlanFrom::Job(job) => {
+            format!("needs.{job}.outputs.{MERGE_GROUP_SKIP_OUTPUT} != 'true'")
+        }
     }
 }
 

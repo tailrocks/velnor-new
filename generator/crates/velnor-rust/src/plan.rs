@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers, When,
-    WorkflowPlan,
+    JobId, PackageName, PermissionScope, Permissions, PullRequestType, PushAfterMergeGroup,
+    RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain,
+    Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -80,6 +80,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     if facts.config.cache_debug == CacheDebug::On {
         upload_cargo_logs(&mut jobs);
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
+        crate::merge_group_skip::apply(&mut jobs, single);
     }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
@@ -355,6 +358,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         directory: None,
         when: When::Success,
         skip_on_draft: false,
+        skip_after_merge_group: None,
         gate: None,
         reads: None,
     }

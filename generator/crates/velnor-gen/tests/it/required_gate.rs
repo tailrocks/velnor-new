@@ -8,6 +8,8 @@ use velnor_rust::{Need, decide};
 
 use crate::facts::TestResult;
 
+mod skip;
+
 fn spec() -> Result<VerdictSpec, String> {
     VerdictSpec::parse(
         "rust-plan",

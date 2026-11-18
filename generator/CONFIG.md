@@ -6,6 +6,21 @@ The new Rust generator reads `.velnor/rust-ci.toml`.
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
 
+## Skip the push run after a merge queue run
+
+`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.82 or later.
+
+```toml
+[ci]
+skip_push_after_merge_group = true
+```
+
+The merge queue fast-forwards the commit it tested, so the push to the default branch has the SHA of the `merge_group` run. On such a push, the plan job (or the single job, right after its plan) runs `velnor-ci merge-group-passed`. That step asks the GitHub API for runs of this same workflow file with `event=merge_group`, `head_sha=$GITHUB_SHA` and a completed, successful conclusion, and writes `skip=true` when one exists. It reads `github.token` and the plan job gains `actions: read`, nothing more.
+
+When the flag is true, Format, Lint, Documentation, the single-crate checks, test setup, tests and doctests skip. Builds that warm the caches and every cache save keep running, so the caches stay warm. The `Required` gate then passes without test counts for this case only: the event is `push` and the plan job output `skip_push` is exactly `true`. Any other value, event or a failed job fails the gate as before.
+
+The step fails safe. A non-push event, a missing variable, an API error, an unreadable response, a missing run or a run that failed or is still going all write `skip=false`, and everything runs. The step is `continue-on-error`, so a crash also runs everything.
+
 ## Optional crates mirror
 
 The new generator accepts an explicit mirror in `.velnor/rust-ci.toml`. It is off when the table is absent. It applies only when the configured job runner exactly matches the mirror's runner label. Every emitted mirror step requires the actual runner context to report `runner.environment == 'self-hosted'` and excludes fork pull requests. Hosted runners do not use the mirror, regardless of their label; a missing or unrecognized runner environment also skips setup.

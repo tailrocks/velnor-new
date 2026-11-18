@@ -14,6 +14,8 @@ pub const BUILD_TESTS_STEP: &str = "Build the tests";
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
+pub const MERGE_GROUP_STEP: &str = "merge_group";
+pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -96,6 +98,7 @@ pub struct Step {
     pub directory: Option<RepoPath>,
     pub when: When,
     pub skip_on_draft: bool,
+    pub skip_after_merge_group: Option<PlanFrom>,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
 }

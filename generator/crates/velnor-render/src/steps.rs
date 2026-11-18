@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
+    MERGE_GROUP_STEP, RepoPath, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -11,8 +12,8 @@ use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, wi
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
 use crate::gate::{
-    PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
-    sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
+    plan_source, sources_step, verdict_step,
 };
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
@@ -103,6 +104,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                         )
                     }),
             )
+            .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
             .collect(),
         steps: crate::helper_integrity::secure_steps(
@@ -111,6 +113,18 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         ),
         ..RenderedJob::default()
     }
+}
+
+fn merge_group_output(job: &Job) -> Option<(String, String)> {
+    job.steps
+        .iter()
+        .any(|step| step.kind == StepKind::Helper(HelperCommand::MergeGroupPassed))
+        .then(|| {
+            (
+                MERGE_GROUP_SKIP_OUTPUT.to_owned(),
+                format!("${{{{ steps.{MERGE_GROUP_STEP}.outputs.skip }}}}"),
+            )
+        })
 }
 
 fn job_steps(
@@ -163,6 +177,12 @@ fn rendered_steps(
                 Value::Text(name.to_owned()),
             ));
         }
+        let mut extra = saved_unless_hit(&step.kind);
+        extra.extend(
+            step.skip_after_merge_group
+                .as_ref()
+                .map(merge_group_skipped),
+        );
         body.condition = all_conditions(
             body.condition.take(),
             condition(
@@ -170,7 +190,7 @@ fn rendered_steps(
                 step.gate.as_ref(),
                 setup,
                 step.skip_on_draft,
-                &saved_unless_hit(&step.kind),
+                &extra,
             ),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);

@@ -1,10 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CratesMirror, HelperCommand, RepoPath};
+use velnor_model::{CratesMirror, HelperCommand, MERGE_GROUP_STEP, RepoPath};
 
 use crate::base_steps::base_age;
-use crate::gate::{PLAN_STEP, REPLAN_STEP};
+use crate::gate::{MERGE_GROUP_ASKED_ON, PLAN_STEP, REPLAN_STEP};
 use crate::release_steps::shell_word;
 use crate::rules::RenderedStep;
 use crate::steps::PREPARE_STEP;
@@ -34,7 +34,11 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
         HelperCommand::CheckMetadata => "check-metadata",
         HelperCommand::Restored(..) => "restored",
         HelperCommand::InputsAudit => "inputs audit",
+        HelperCommand::MergeGroupPassed => "merge-group-passed",
     };
+    if command == HelperCommand::MergeGroupPassed {
+        return merge_group_step();
+    }
     let (id, env) = match command {
         HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
         HelperCommand::PlanFull => (Some(REPLAN_STEP), Vec::new()),
@@ -79,4 +83,19 @@ pub(crate) fn restored_step(
         ),
     ));
     step
+}
+
+fn merge_group_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci merge-group-passed".to_owned(),
+        id: Some(MERGE_GROUP_STEP.to_owned()),
+        condition: Some(format!("${{{{ {MERGE_GROUP_ASKED_ON} }}}}")),
+        continue_on_error: true,
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            crate::rules::Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some("velnor-ci merge-group-passed".to_owned()),
+        ..RenderedStep::default()
+    }
 }

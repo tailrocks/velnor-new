@@ -19,6 +19,7 @@ mod git_witness;
 mod http;
 mod inputs;
 mod manifests;
+mod merge_group;
 mod plan;
 pub mod pump;
 mod recording;
@@ -175,6 +176,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
