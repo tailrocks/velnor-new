@@ -985,6 +985,8 @@ inputs = [
   "generator/samples/release-bin-raw-smoke/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-multi-bin/expected/.github/workflows/release.yml",
   "generator/samples/release-multi-bin/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/release-host-archive/expected/.github/workflows/release.yml",
+  "generator/samples/release-host-archive/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-multi-bin-raw/expected/.github/workflows/release.yml",
   "generator/samples/release-multi-bin-raw/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-checks/expected/.github/workflows/release.yml",
