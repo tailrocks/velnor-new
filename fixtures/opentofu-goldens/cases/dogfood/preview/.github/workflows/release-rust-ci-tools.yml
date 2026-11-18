@@ -58,6 +58,13 @@ jobs:
             if (releases.length !== 1 || releases[0].target !== 'tag' || releases[0].enforcement !== 'active') {
               throw new Error('release-tags must be exactly one active tag ruleset');
             }
+            const releaseRef = releases[0].conditions?.ref_name;
+            if (!releases[0].rules?.some(rule => rule.type === 'creation')
+                || !Array.isArray(releaseRef?.include) || releaseRef.include.length !== 1
+                || releaseRef.include[0] !== 'refs/tags/rust-ci-v*'
+                || !Array.isArray(releaseRef.exclude) || releaseRef.exclude.length !== 0) {
+              throw new Error('release-tags: creation rule and refs/tags/rust-ci-v* conditions differ');
+            }
             for (const ruleset of rulesets) {
               if (expectedBypassActors.has(ruleset.name) || ruleset.rules?.some(rule => ['update', 'deletion'].includes(rule.type))) {
                 if (!Array.isArray(ruleset.bypass_actors)) {

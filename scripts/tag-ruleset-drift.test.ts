@@ -23,7 +23,7 @@ if (typeof inputs.script !== "string") throw new Error("Drift script is missing"
 const execute = new Function("github", "context", "process", `return (async () => {${inputs.script}\n})();`);
 type Ruleset = Omit<typeof recorded, "bypass_actors" | "conditions"> & { conditions: { ref_name: { include: string[]; exclude: string[] } }; bypass_actors?: unknown[] };
 const baseline = (): Ruleset => structuredClone(recorded), actor = { actor_id: 5762496, actor_type: "Integration", bypass_mode: "always" };
-const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", rules: [{ type: "creation" }], bypass_actors: [{ ...actor }] });
+const release = (): Ruleset => ({ ...baseline(), id: recorded.id + 1, name: "release-tags", rules: [{ type: "creation" }], conditions: { ref_name: { include: ["refs/tags/rust-ci-v*"], exclude: [] } }, bypass_actors: [{ ...actor }] });
 type Scenario = { rulesets?: Ruleset[]; token?: string; failure?: "" | "list" | "detail" };
 async function run({ rulesets = [baseline(), release()], token = "admin-read-token", failure = "" }: Scenario = {}) {
   const detailed: number[] = [];
@@ -68,6 +68,19 @@ test.each([
   ["a wrong bypass mode", [{ ...actor, bypass_mode: "pull_request" }]],
 ])("release-tags rejects %s", async (_name, actors) => {
   await expect(run({ rulesets: [baseline(), { ...release(), bypass_actors: actors }] })).rejects.toThrow("release-tags: tag immutability bypass actors detected");
+});
+test.each([
+  ["a missing creation rule", { rules: [] }],
+  ["a non-creation rule only", { rules: [{ type: "update" }] }],
+  ["an unreadable rules list", { rules: undefined }],
+  ["a changed include pattern", { conditions: { ref_name: { include: ["refs/tags/other-v*"], exclude: [] } } }],
+  ["an extra include pattern", { conditions: { ref_name: { include: ["refs/tags/rust-ci-v*", "~ALL"], exclude: [] } } }],
+  ["an excluded release pattern", { conditions: { ref_name: { include: ["refs/tags/rust-ci-v*"], exclude: ["refs/tags/rust-ci-v*"] } } }],
+  ["missing conditions", { conditions: undefined }],
+  ["a missing exclude list", { conditions: { ref_name: { include: ["refs/tags/rust-ci-v*"] } } }],
+])("release-tags rejects %s", async (_name, change) => {
+  const rule = { ...release(), ...change } as Ruleset;
+  await expect(run({ rulesets: [baseline(), rule] })).rejects.toThrow("release-tags: creation rule and refs/tags/rust-ci-v* conditions differ");
 });
 test("an unreadable release bypass list cannot prove the pinned release app", async () => {
   const rule = release();
