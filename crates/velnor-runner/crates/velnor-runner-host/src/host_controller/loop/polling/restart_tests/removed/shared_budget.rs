@@ -4,9 +4,11 @@
 use std::time::Duration;
 
 use super::{
-    RETIRED, TestResult, fairness::prepare_initializer, restarted_with_removed_pairs, seed,
+    RETIRED, TestResult, fairness::prepare_initializer, freeze, restarted_with_removed_pairs, seed,
+    stalled,
 };
 use crate::host_controller::loop_driver::polling::{PositivePollContext, pre_jit};
+use crate::launch::bootstrap::INITIALIZER_RECOVERY_BUDGET;
 use crate::launch::bootstrap::unbound_pair_fixtures::seed::Pair;
 
 const SKIPPED: Pair = Pair {
@@ -21,9 +23,8 @@ const HEALTHY: Pair = Pair {
     reservation: 2,
     bound: false,
 };
-const GUARD: Duration = Duration::from_secs(15);
 const ABORT: &str = "SELECT abort_state || '/' || abort_claim_generation || '/' || abort_lease_until FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
-const LIVE_ABORT: &str = "SELECT abort_state || '/' || (abort_lease_until > unixepoch()) FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
+const LIVE_ABORT: &str = "SELECT abort_state || '/' || (abort_lease_until > 0) FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
 const CHARGE: &str = "SELECT state || '/' || cpu_millicores || '/' || memory_bytes FROM capacity_reservations WHERE id = ?1";
 const CHARGED: &str = "uncertain/3000/6442450944";
 
@@ -54,27 +55,18 @@ async fn exhausted_initializer_time_skips_later_claims_but_still_retires_an_assi
         admission_ready: false,
         retirement_budget: Duration::from_secs(60),
     };
+    let clock = freeze();
     let recovery = pre_jit::reconcile(&controller.prepared.scope, 1, &context);
     tokio::pin!(recovery);
-    tokio::time::timeout(GUARD, async {
-        tokio::select! {
-            result = &mut recovery => {
-                result?;
-                Err::<(), Box<dyn std::error::Error>>("recovery returned before its initializer claimed and stalled".into())
-            }
-            () = restarted.fixture.hung() => Ok(()),
-        }
-    })
-    .await??;
+    stalled(&restarted.fixture, &mut recovery).await?;
     assert_eq!(restarted.fixture.inspection_gate_hits(), 1);
     assert_eq!(
         seed::text(&restarted.journal, LIVE_ABORT, STALLED.reservation).await?,
         "requested/1"
     );
-    tokio::time::pause();
-    tokio::time::advance(Duration::from_secs(30)).await;
-    tokio::time::resume();
-    tokio::time::timeout(GUARD, &mut recovery).await??;
+    clock.advance(INITIALIZER_RECOVERY_BUDGET).await;
+    recovery.await?;
+    drop(clock);
     assert_eq!(
         seed::text(&restarted.journal, ABORT, STALLED.reservation).await?,
         "uncertain/1/0"

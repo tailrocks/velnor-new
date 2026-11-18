@@ -9,10 +9,6 @@ pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const HELPER_FROM_ARTIFACT_RUN: &str = "\
-chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
-echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"";
-
 pub const ALLOWED_ACTIONS: [&str; 8] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
@@ -101,6 +97,7 @@ pub enum Rule {
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
+    OutputNameCollision(String),
     EnvTooLong(usize),
 }
 
@@ -116,7 +113,13 @@ impl fmt::Display for RuleViolation {
         if let Rule::WorkflowTooLarge(bytes) = &self.rule {
             return write!(
                 f,
-                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
+                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; reduce the workflow size"
+            );
+        }
+        if let Rule::OutputNameCollision(name) = &self.rule {
+            return write!(
+                f,
+                "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
             );
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
@@ -146,7 +149,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
-            Rule::WorkflowTooLarge(_) => Ok(()),
+            Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
@@ -232,11 +235,7 @@ fn token_step_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
 
 fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     let mut rules = Vec::new();
-    if let Some(run) = step
-        .run
-        .as_deref()
-        .filter(|run| *run != HELPER_FROM_ARTIFACT_RUN)
-    {
+    if let Some(run) = step.run.as_deref() {
         run_rules(run, &mut rules);
     }
     if step.run.is_some() == step.uses.is_some() {
@@ -276,13 +275,16 @@ fn run_rules(run: &str, rules: &mut Vec<Rule>) {
     if run.contains('\n') {
         rules.push(Rule::MultiLineRun);
     }
+    let command = run
+        .strip_prefix(crate::helper_integrity::INVOCATION_PREFIX)
+        .unwrap_or(run);
     for word in FORBIDDEN_WORDS {
         if has_word(run, word) {
             rules.push(Rule::ForbiddenSyntax(word));
         }
     }
     for symbol in FORBIDDEN_SYMBOLS {
-        if run.contains(symbol) {
+        if command.contains(symbol) {
             rules.push(Rule::ForbiddenSyntax(symbol));
         }
     }

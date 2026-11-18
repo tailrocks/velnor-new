@@ -224,7 +224,9 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
             "  rust-lint-lab:",
             "  rust-test-lab:",
             "  rust-inputs-audit:",
-            "  required:"
+            "  rust-trim:",
+            "  required:",
+            "  cache:"
         ]
     );
     assert!(text.contains("  # lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)\n  rust-lint-lab:\n"), "{text}");

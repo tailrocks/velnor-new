@@ -9,6 +9,10 @@ pub struct DockerfileFacts {
 
     pub context_sources: BTreeSet<String>,
 
+    pub context_source_excludes: BTreeMap<String, Vec<BTreeSet<String>>>,
+
+    pub claims_whole_context: bool,
+
     pub named_contexts: BTreeSet<String>,
 }
 
@@ -23,6 +27,8 @@ pub enum DockerfileProblem {
     RemoteAdd(String),
 
     ContextEscape(String),
+
+    ContextSourceUnresolved(String),
 
     EscapeDirective,
 
@@ -40,6 +46,9 @@ impl DockerfileProblem {
             Self::SecretMount => "image_secret_mount".to_owned(),
             Self::RemoteAdd(source) => format!("image_add_remote_source:{source}"),
             Self::ContextEscape(source) => format!("image_context_escape:{source}"),
+            Self::ContextSourceUnresolved(source) => {
+                format!("image_context_source_unresolved:{source}")
+            }
             Self::EscapeDirective => "image_escape_directive".to_owned(),
             Self::SyntaxUnpinned(image) => format!("image_syntax_unpinned:{image}"),
             Self::UnsupportedRunnerSyntax(value) => {
@@ -49,11 +58,18 @@ impl DockerfileProblem {
     }
 }
 
+mod environment;
+mod exclusions;
 mod runner;
 mod syntax;
+mod variable;
 
 pub use runner::analyze_runner_dockerfile;
 use syntax::{check_directives, instructions};
+use variable::{
+    ArgValue, arg_value, arg_words, is_injected_arg, substitute, substitute_with_unknown,
+    valid_name,
+};
 
 #[must_use]
 pub fn is_digest_pinned(reference: &str) -> bool {
@@ -79,119 +95,235 @@ pub fn analyze_dockerfile(
             .collect(),
         ..State::default()
     };
-    check_directives(text)?;
+    state.facts.claims_whole_context = check_directives(text)?;
     for (keyword, args) in instructions(text) {
-        match keyword.as_str() {
-            "ARG" if !state.in_stage => state.record_global_arg(&args),
-            "FROM" => state.from(&args)?,
-            "COPY" | "ADD" => state.copy(&keyword, &args)?,
-            "RUN" => state.run(&args)?,
-            _ => {}
-        }
+        state.instruction(&keyword, &args)?;
     }
     Ok(state.facts)
 }
 
+type StageState = (BTreeMap<String, ArgValue>, BTreeMap<String, ArgValue>, bool);
+
 #[derive(Default)]
 struct State {
     facts: DockerfileFacts,
-    in_stage: bool,
-    args: BTreeMap<String, Option<String>>,
-    stages: BTreeSet<String>,
-    stage_count: usize,
+    unknown_environment: bool,
+    stage_env: BTreeMap<String, ArgValue>,
+    stage_states: Vec<StageState>,
+    global_args: BTreeMap<String, ArgValue>,
+    stage_args: BTreeMap<String, ArgValue>,
+    stages: BTreeMap<String, usize>,
+    triggers: Vec<Vec<(String, String)>>,
     known_contexts: BTreeSet<String>,
 }
 
 impl State {
-    fn record_global_arg(&mut self, args: &str) {
-        for token in args.split_whitespace() {
-            match token.split_once('=') {
-                Some((name, value)) => {
-                    self.args
-                        .insert(name.to_owned(), Some(unquote(value).to_owned()));
+    fn instruction(&mut self, keyword: &str, args: &str) -> Result<(), DockerfileProblem> {
+        match keyword {
+            "ARG" => self.record_arg(args)?,
+            "FROM" => self.from(args)?,
+            "ENV" => self.record_env(args),
+            "COPY" | "ADD" => self.copy(keyword, args)?,
+            "RUN" => self.run(args)?,
+            "ONBUILD" => {
+                let parsed = instructions(args);
+                if parsed.is_empty() {
+                    self.facts.claims_whole_context = true;
                 }
-                None => {
-                    self.args.insert(token.to_owned(), None);
+                if let Some(triggers) = self.triggers.last_mut() {
+                    triggers.extend(parsed);
                 }
             }
+            "CMD" | "LABEL" | "MAINTAINER" | "EXPOSE" | "ENTRYPOINT" | "VOLUME" | "USER"
+            | "WORKDIR" | "STOPSIGNAL" | "HEALTHCHECK" | "SHELL" => {}
+            _ => self.facts.claims_whole_context = true,
         }
+        Ok(())
+    }
+
+    fn record_arg(&mut self, args: &str) -> Result<(), DockerfileProblem> {
+        let unresolved = || DockerfileProblem::ContextSourceUnresolved(format!("ARG {args}"));
+        let words = arg_words(args).ok_or_else(unresolved)?;
+        if words.is_empty() {
+            return Err(unresolved());
+        }
+        for token in words {
+            let (name, value) = match token.split_once('=') {
+                Some((name, value)) => (
+                    name,
+                    arg_value(value).map_or(ArgValue::Unknown, ArgValue::Known),
+                ),
+                None => (
+                    token,
+                    self.stage_args
+                        .get(token)
+                        .or_else(|| self.global_args.get(token))
+                        .cloned()
+                        .unwrap_or(ArgValue::Unset),
+                ),
+            };
+            if !valid_name(name) {
+                return Err(unresolved());
+            }
+            let value = if is_injected_arg(name) {
+                ArgValue::Unknown
+            } else {
+                value
+            };
+            if self.triggers.is_empty() {
+                self.global_args.insert(name.to_owned(), value);
+            } else {
+                self.stage_args.insert(name.to_owned(), value);
+            }
+        }
+        Ok(())
     }
 
     fn from(&mut self, args: &str) -> Result<(), DockerfileProblem> {
-        self.in_stage = true;
         let mut tokens = args.split_whitespace().filter(|t| !t.starts_with("--"));
         let Some(raw) = tokens.next() else {
             return Ok(());
         };
-        let reference = self.substitute(raw)?;
-        let is_stage = self.stages.contains(&reference.to_ascii_lowercase());
-        if reference != "scratch" && !is_stage {
+        let reference = substitute(raw, &self.global_args)
+            .ok_or_else(|| DockerfileProblem::ImageBaseUnresolved(raw.to_owned()))?;
+        if !self.triggers.is_empty() {
+            self.stage_states.push((
+                self.stage_args.clone(),
+                self.stage_env.clone(),
+                self.unknown_environment,
+            ));
+        }
+        let local = self
+            .stages
+            .get(&reference.to_ascii_lowercase())
+            .copied()
+            .or_else(|| {
+                reference
+                    .parse::<usize>()
+                    .ok()
+                    .filter(|&index| index < self.triggers.len())
+            });
+        if let Some(index) = local {
+            (self.stage_args, self.stage_env, self.unknown_environment) =
+                self.stage_states[index].clone();
+        } else {
+            self.stage_args.clear();
+            self.stage_env.clear();
+            self.unknown_environment = reference != "scratch";
+        }
+        if reference != "scratch" && local.is_none() {
             require_pinned(&reference)?;
             self.facts.external_images.insert(reference);
+            self.facts.claims_whole_context = true;
+        }
+        if let Some(index) = local {
+            for (keyword, args) in self.triggers[index].clone() {
+                match keyword.as_str() {
+                    "COPY" | "ADD" | "RUN" | "ENV" => {
+                        let saved_args = self.stage_args.clone();
+                        for value in self.stage_args.values_mut() {
+                            *value = ArgValue::Unknown;
+                        }
+                        let result = self.instruction(&keyword, &args);
+                        self.stage_args = saved_args;
+                        result?;
+                    }
+                    "ARG" => self.instruction(&keyword, &args)?,
+                    _ => self.facts.claims_whole_context = true,
+                }
+            }
         }
         if tokens.next().is_some_and(|t| t.eq_ignore_ascii_case("AS"))
             && let Some(name) = tokens.next()
         {
-            self.stages.insert(name.to_ascii_lowercase());
+            self.stages
+                .insert(name.to_ascii_lowercase(), self.triggers.len());
         }
-        self.stage_count += 1;
+        self.triggers.push(Vec::new());
         Ok(())
-    }
-
-    fn substitute(&self, raw: &str) -> Result<String, DockerfileProblem> {
-        let mut out = String::new();
-        let mut rest = raw;
-        while let Some(at) = rest.find('$') {
-            out.push_str(&rest[..at]);
-            let tail = &rest[at + 1..];
-            let (name, default, consumed) = parse_variable(tail);
-            let value = match self.args.get(name) {
-                Some(Some(value)) => value.clone(),
-                _ => default
-                    .map(str::to_owned)
-                    .ok_or_else(|| DockerfileProblem::ImageBaseUnresolved(raw.to_owned()))?,
-            };
-            out.push_str(&value);
-            rest = &tail[consumed..];
-        }
-        out.push_str(rest);
-        Ok(out)
     }
 
     fn copy(&mut self, keyword: &str, args: &str) -> Result<(), DockerfileProblem> {
         let mut from_other = false;
-        let mut operands = Vec::new();
-        for token in split_operands(args) {
-            if let Some(source) = token.strip_prefix("--from=") {
+        let mut excludes = BTreeSet::new();
+        let mut args = args.trim_start();
+        while args.starts_with("--") {
+            let (option, remainder) = args.split_once(char::is_whitespace).unwrap_or((args, ""));
+            if let Some(source) = option.strip_prefix("--from=") {
                 from_other = true;
                 self.check_from_source(source)?;
-            } else if !token.starts_with("--") {
-                operands.push(token);
             }
+            if let Some(pattern) = option.strip_prefix("--exclude=") {
+                let supported = !pattern.is_empty()
+                    && pattern.bytes().all(|b| {
+                        b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-' | b'*')
+                    })
+                    && pattern.bytes().filter(|b| *b == b'*').count() <= 1
+                    && (!pattern.contains('*') || pattern.starts_with('*'));
+                if supported {
+                    excludes.insert(pattern.to_owned());
+                } else {
+                    self.facts.claims_whole_context = true;
+                }
+            } else if option.starts_with("--exclude") {
+                self.facts.claims_whole_context = true;
+            }
+            args = remainder.trim_start();
         }
-        if from_other || operands.len() < 2 {
-            return Ok(());
+        let json_form = args.trim_start().starts_with('[');
+        if args.contains('\\') || (!json_form && args.contains(['"', '\''])) {
+            return Err(DockerfileProblem::ContextSourceUnresolved(args.to_owned()));
         }
-        operands.pop();
+        let mut operands = split_operands(args)
+            .ok_or_else(|| DockerfileProblem::ContextSourceUnresolved(args.to_owned()))?;
+        let missing_destination = operands.len() < 2;
+        if !missing_destination {
+            operands.pop();
+        }
         for source in operands {
-            if source.starts_with("<<") {
+            if !json_form && source.starts_with("<<") {
                 continue;
+            }
+            if source.contains(['\\', '\'', '"']) {
+                return Err(DockerfileProblem::ContextSourceUnresolved(source));
+            }
+            check_parent_components(&source)?;
+            if keyword == "ADD" && is_remote(&source) {
+                return Err(DockerfileProblem::RemoteAdd(source));
+            }
+            let Some(source) =
+                substitute_with_unknown(&source, &self.variables(), self.unknown_environment)
+            else {
+                if keyword == "ADD" {
+                    return Err(DockerfileProblem::RemoteAdd(source));
+                }
+                self.facts.claims_whole_context |= !from_other;
+                continue;
+            };
+            check_parent_components(&source)?;
+            if !json_form && source.chars().any(char::is_whitespace) {
+                return Err(DockerfileProblem::ContextSourceUnresolved(source));
             }
             if keyword == "ADD" && is_remote(&source) {
                 return Err(DockerfileProblem::RemoteAdd(source));
             }
-            let relative = source.trim_start_matches("./").trim_start_matches('/');
-            if relative.split('/').any(|part| part == "..") {
-                return Err(DockerfileProblem::ContextEscape(source));
+            if !from_other {
+                let source = normalize_source(&source);
+                self.facts.context_sources.insert(source.clone());
+                self.facts
+                    .context_source_excludes
+                    .entry(source)
+                    .or_default()
+                    .push(excludes.clone());
             }
-            self.facts.context_sources.insert(relative.to_owned());
         }
+        self.facts.claims_whole_context |= missing_destination;
         Ok(())
     }
 
     fn check_from_source(&mut self, source: &str) -> Result<(), DockerfileProblem> {
         let is_stage = source.bytes().all(|b| b.is_ascii_digit())
-            || self.stages.contains(&source.to_ascii_lowercase());
+            || self.stages.contains_key(&source.to_ascii_lowercase());
         if self.known_contexts.contains(source) {
             self.facts.named_contexts.insert(source.to_owned());
         } else if !is_stage {
@@ -218,6 +350,25 @@ impl State {
     }
 }
 
+fn check_parent_components(source: &str) -> Result<(), DockerfileProblem> {
+    if source.split('/').any(|part| part == "..") {
+        return Err(DockerfileProblem::ContextEscape(source.to_owned()));
+    }
+    Ok(())
+}
+
+fn normalize_source(source: &str) -> String {
+    let parts = source
+        .split('/')
+        .filter(|part| !matches!(*part, "" | "."))
+        .collect::<Vec<_>>();
+    if parts.is_empty() {
+        ".".to_owned()
+    } else {
+        parts.join("/")
+    }
+}
+
 fn require_pinned(reference: &str) -> Result<(), DockerfileProblem> {
     if is_digest_pinned(reference) {
         Ok(())
@@ -234,36 +385,15 @@ fn unquote(value: &str) -> &str {
     value.trim_matches(|c| c == '"' || c == '\'')
 }
 
-fn parse_variable(tail: &str) -> (&str, Option<&str>, usize) {
-    if let Some(body) = tail.strip_prefix('{')
-        && let Some(end) = body.find('}')
-    {
-        let inner = &body[..end];
-        let (name, default) = match inner.split_once(":-") {
-            Some((name, default)) => (name, Some(default)),
-            None => (inner, None),
-        };
-        return (name, default, end + 2);
-    }
-    let end = tail
-        .bytes()
-        .position(|b| !(b.is_ascii_alphanumeric() || b == b'_'))
-        .unwrap_or(tail.len());
-    (&tail[..end], None, end)
-}
-
-fn split_operands(args: &str) -> Vec<String> {
+fn split_operands(args: &str) -> Option<Vec<String>> {
     let trimmed = args.trim();
-    if trimmed.starts_with('[')
-        && let Some(inner) = trimmed.strip_prefix('[').and_then(|s| s.strip_suffix(']'))
-    {
-        return inner
-            .split(',')
-            .map(|item| unquote(item.trim()).to_owned())
-            .collect();
+    if trimmed.starts_with('[') {
+        return serde_json::from_str(trimmed).ok();
     }
-    trimmed
-        .split_whitespace()
-        .map(|item| unquote(item).to_owned())
-        .collect()
+    Some(
+        trimmed
+            .split_whitespace()
+            .map(|item| unquote(item).to_owned())
+            .collect(),
+    )
 }

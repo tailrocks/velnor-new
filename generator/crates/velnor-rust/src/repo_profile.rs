@@ -41,6 +41,9 @@ pub fn repo_profile(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<String, Detec
     let mut sections = Vec::new();
     for (file, bytes) in effective_configs(files) {
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
+        if parsed.contains_key("include") {
+            return Err(DetectError::invalid(file, Reason::CargoConfigInclude));
+        }
         if let Some(profile) = parsed.get("profile") {
             let wrapped = toml::Table::from_iter([("profile".to_owned(), profile.clone())]);
             sections.push(format!("{file}\n{wrapped}\n"));

@@ -90,6 +90,7 @@ fn verdict(
                 .chain([
                     ("tests_run".to_owned(), "3".to_owned()),
                     ("tests_listed".to_owned(), "3".to_owned()),
+                    ("tests_by_package".to_owned(), "pkg=3/3".to_owned()),
                 ])
                 .collect(),
         },

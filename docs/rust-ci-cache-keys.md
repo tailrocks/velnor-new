@@ -8,7 +8,7 @@
 |---|---|---|---|
 | Tools | `velnor-tools-<host>-mise<version>-${{ hashFiles('mise.lock') }}` | none | `~/.local/share/mise`, `~/.rustup` |
 | Sources | `velnor-src-<host>-<root>-${{ hashFiles('<dir>/Cargo.lock') }}` | `velnor-src-<host>-<root>-` | `~/.cargo/registry/index`, `~/.cargo/registry/cache`, `~/.cargo/git/db` |
-| Target | `velnor-tgt-<job>-<root>-<host>-<compat>-<lockhash>-${{ github.sha }}-${{ github.run_id }}` | `...-<compat>-<lockhash>-`, then `...-<compat>-` | `build.target-dir`, default `<dir>/target` |
+| Target | `velnor-tgt-<job>.<root>.<host>-<compat>-<lockhash>-${{ github.sha }}-${{ github.run_id }}` | `...-<compat>-<lockhash>-`, then `...-<compat>-` | `build.target-dir`, default `<dir>/target` |
 | Delta | `velnor-dlt-<job>-<root>-<host>-<compat>-<base8>-${{ github.run_id }}` | `...-<compat>-<base8>-` | same as Target |
 
 `<lockhash>` is `${{ hashFiles('<dir>/Cargo.lock') }}` and `<base8>` is `${{ steps.restored.outputs.base8 }}`. A fallback is always a strict prefix of its key, and the second fallback of a Target key is a strict prefix of the first. A key never contains a branch name, a literal digest or `run_attempt`. `hashFiles` reads a root path literally. `*`, `?` and `[` are written as `[*]`, `[?]` and `[[]`, and a leading `!` or `#` gets a `./` prefix. `{` and `}` stay out of the quoted path. When the path contains either brace, the value is a `format` expression, and each brace is `fromJSON('"\u007b"')` or `fromJSON('"\u007d"')`. Generation fails when a key can pass 512 characters at run time (the `actions/cache` limit), counting every expression at its longest value. `build.target-dir` is read from the `.cargo/config.toml` or `.cargo/config` that applies to the root (the nearest wins, the file without `.toml` first); generation fails when it is absolute, outside the repository, holds the root, starts with `~`, or contains a `{` or `}` placeholder, and when `build.build-dir` is set, because the Target cache would not cover that directory. Generated jobs set no `CARGO_TARGET_DIR`. A cargo `[env]` entry is refused when its name starts with `CLIPPY`, `RUST` or `CARGO`, or when `force` is true. The run id at the end of a Target key lets a full run save a clean base when the commit has not changed since the last save. A rerun of the same run reuses that id on purpose: the save finds the key taken and writes nothing, so unchanged data is never saved twice, and a rerun after a failed save still saves because no entry exists yet.
@@ -18,6 +18,29 @@
 Every job that installs the tools restores the Tools entry in the step before `jdx/mise-action` (a shard job, which installs only cargo-nextest, restores it too; the plan job installs nothing and restores nothing). `~/.local/share/mise` holds the mise program itself (`bin/mise`, which the action finds and only verifies against the signed checksums, so it downloads nothing), the installed tools and the link to the Rust toolchain; `~/.rustup` holds the toolchain, because mise installs Rust through rustup. Rust components and targets are added in every job before the save, so every job saves the same content.
 
 Only a job that installs every tool saves it, only on the default branch and only when the restore was not an exact hit. A tool-set change on a pull request installs fresh for that pull request and saves nothing. The key covers `mise.lock`, the mise program version the generator passes to `jdx/mise-action` as `version:`, the runner OS and the runner architecture: a changed tool version or a mise bump moves it (the entry is saved only on a miss, so without the mise version a bump would keep restoring a directory built by the old mise), a comment in `mise.toml` does not. It does not cover the runner image version or the targets in `rust-toolchain.toml`; a change in either only causes a re-download, never a wrong tool. Generation fails when `mise.lock` is missing, or when a pinned tool has no prebuilt binary for the runner's platform in it (a `cargo:` tool, for example); the error names the tool.
+
+## Saving the build directory
+
+With helper 0.1.81 or later, the ordinary lint and test lanes save Target entries on the default branch for `push`, `schedule` and `workflow_dispatch`. Saves require successful setup and producer steps. Pull requests, merge groups and forks only restore. A saving Nextest run prebuilds with `--workspace --locked --ignore-default-filter --no-run`; the normal test command still builds and runs directly on events that cannot save.
+
+A single-job lane finishes its test commands and its full-run compile-input audit before publishing. Split and multi-root lanes depend on the independent compile-input audit job, which runs for schedules, manual full runs and pushes with `on_main = "everything"`. Failed or cancelled audits block every writer. A skipped audit permits an ordinary affected run to reuse its existing base, but an expired base cannot be published by a split lane without a successful full audit. The Required gate checks the same audit event conditions.
+
+The save sequence is:
+
+1. `velnor-ci inputs save --target-dir <configured target directory>` writes `.velnor/inputs.tsv` inside the directory being cached.
+2. `velnor-ci cache decide` reads `velnor-run.log` and rechecks dependency source safety. `save=true` requires at least one compiled, checked or documented crate. `sources=true` independently authorizes a missed Sources entry when all sources are proven public. A warm Target can therefore replenish Sources. Unreadable evidence produces no authorization.
+3. Before a Target save, the helper removes Cargo incremental directories at the profile and target-triple/profile levels and removes the Nextest archive. Build-script output directories with the same name remain. Traversal, metadata and cleanup errors fail the decision. The helper records the cold-build date in `.velnor/born`, carries it forward on later saves and reports the directory size. `velnor-ci run` overrides Cargo's quiet configuration and refuses explicit quiet arguments so compilation remains visible.
+4. `actions/cache/save` compresses the directory directly. The lane records each saved key as a job output without a token. The `rust-trim` Cache job, which runs no repository code, then runs `velnor-ci cache verify --key` with its own token against the read-only cache API to require an exact entry on the saving ref. This catches upload errors that the pinned action reports only as warnings. A failed verification fails the Cache check without changing Required.
+
+Build lanes hold only `contents: read` and `actions: read`. The separate `rust-trim` job is named `Cache`, installs the checksum-verified released helper, checks upload results and prunes old entries. It has `actions: write`, no checkout and no repository code. It runs only on a default-branch saving event when a lane requests trimming or reports an upload failure. Failed verification, listing or deletion makes Cache red. Required does not depend on Cache. A source-helper repository without a released helper of at least 0.1.81 saves no base because it cannot safely run privileged trimming.
+
+The test lane owns Sources saves, or the lint lane when no tests exist. An exact Sources hit is not uploaded again. Target and Sources families retain their newest two entries. Listing is paginated in batches of 100, with a bound of 20 pages and a warning if further pages remain.
+
+Generation suppresses Target and Sources saves for non-crates.io dependencies or applicable Cargo source configuration. Runtime admission rechecks the explicitly supplied Cargo root manifests, their locks including unused patches, applicable ancestor Cargo configurations and `CARGO_HOME`. Missing, unreadable or unmodelled sources and source-related environment overrides disable both writes. Unrelated fixture lockfiles and descendant configurations do not affect admission.
+
+Target paths cannot overlap tracked checkout content or repository control directories. Runtime validation also rejects paths outside the checkout and paths through symlinks. The generator supplies configured targets in `VELNOR_CACHE_TARGETS`; `restored` uses those exact directories for expiry and cold cleanup after failed timestamp validation. Inputs restore receives the same configured target path.
+
+A restored base more than seven days old, or with missing or unreadable `.velnor/born`, is removed on the default branch and reports `expired=true`. The following `replan` step selects everything, and subsequent commands read the full plan. A fresh base retains its partial selection. The limit is passed as `VELNOR_BASE_MAX_AGE_DAYS`.
 
 ## Compat
 
@@ -44,13 +67,45 @@ debug = "none"
 debug = "none"
 ```
 
+## Cache telemetry and enforcement
+
+With helper `0.1.81` or a supported source-built helper, each reporting-enabled
+Cargo lane ends with `velnor-ci report` and uploads `ci-metrics.json`. These
+steps also run after an earlier failure unless the run was cancelled. Report
+and upload failures do not replace the lane's build result. The report retains
+logs, provenance and step results, and emits local metrics without calling the
+API or using `GITHUB_TOKEN`.
+The workflow supplies each cache's family, root, and restore/save step IDs; the
+helper derives observed facts from step results and filesystem evidence. When a
+released bootstrap helper is older than `0.1.81`, the source-built artifact helper runs the
+tokenless local checks and diagnostics without API access.
+
+The separate `Cache` job checks the same-run metrics from every reporting
+lane. With released helper `0.1.81` or later, it runs `report --check` to add
+Actions API timings and cache archive sizes, then fails on cache waste, missing
+metrics, or unverifiable required evidence. The job has `actions: read` for
+this enrichment and receives an empty explicit API token on fork pull requests.
+It has no checkout and runs no Cargo commands. It is advisory by default. To
+include it in Required's dependencies and verdict specification, set this in
+`.velnor/rust-ci.toml`:
+
+```toml
+cache_check_blocks = true
+```
+
+`rust-trim` continues to verify cache uploads and prune old entries without a
+checkout or repository code. The `Cache` job needs no additional permission to
+download artifacts from its own run. The schema-1 JSON separates cache
+outcomes, captured Cargo invocations, display fields, verification errors, and
+optional diagnostics.
+
 ## Worked example
 
 A repository with the root `lab/Cargo.toml` and the job `rust-lint`, on `ubuntu-latest` (X64), at commit `c0ffee`, run `42`, compat `9f3a1c5e7b2d4a60`:
 
 - Sources: `velnor-src-Linux-X64-lab-<hash of lab/Cargo.lock>`
-- Target: `velnor-tgt-rust-lint-lab-Linux-X64-9f3a1c5e7b2d4a60-<hash of lab/Cargo.lock>-c0ffee-42`
-- Restore tries the Target key, then `velnor-tgt-rust-lint-lab-Linux-X64-9f3a1c5e7b2d4a60-<hash of lab/Cargo.lock>-` (the latest save for this lockfile), then `velnor-tgt-rust-lint-lab-Linux-X64-9f3a1c5e7b2d4a60-` (the latest save for this toolchain and profile).
+- Target: `velnor-tgt-rust-lint.lab.Linux-X64-9f3a1c5e7b2d4a60-<hash of lab/Cargo.lock>-c0ffee-42`
+- Restore tries the Target key, then `velnor-tgt-rust-lint.lab.Linux-X64-9f3a1c5e7b2d4a60-<hash of lab/Cargo.lock>-` (the latest save for this lockfile), then `velnor-tgt-rust-lint.lab.Linux-X64-9f3a1c5e7b2d4a60-` (the latest save for this toolchain and profile).
 - After a dependency bump the lock hash changes: the first two tries miss and the third restores the previous build directory. The workflow file is unchanged.
 
 The new generator supports a runner-scoped [optional crates mirror](../generator/CONFIG.md).

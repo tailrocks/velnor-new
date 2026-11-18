@@ -5,16 +5,36 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
 use crate::cron::CronExpr;
+use crate::helper::HelperRelease;
 use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
-use crate::plan::{HelperRelease, Shape};
+use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
-    pub repository: String,
+    pub repository: RepositoryIdentity,
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub symlinks: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepositoryIdentity {
+    Named(String),
+    Unhosted,
+}
+
+impl Default for RepositoryIdentity {
+    fn default() -> Self {
+        Self::Named(String::new())
+    }
+}
+
+impl FullRun {
+    #[must_use]
+    pub fn is_hashed(&self) -> bool {
+        matches!(self, Self::Hourly | Self::Nightly | Self::Weekly)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -80,6 +100,7 @@ pub struct RepoFacts {
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
+    pub private_sources: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
     pub weakenings: Vec<Weakening>,
@@ -158,7 +179,6 @@ pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 pub struct RustRoot {
     pub manifest: RepoPath,
     pub target_dir: RepoPath,
-    pub sets_build_target: bool,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,
@@ -238,6 +258,16 @@ pub struct RustCiConfig {
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
     pub ci_debuginfo: CiDebugInfo,
+    pub cache_check_blocks: bool,
+    pub cache_debug: CacheDebug,
+    pub test_setup: Vec<TestSetup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestSetup {
+    pub root: Option<RepoPath>,
+    pub name: String,
+    pub run: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -253,6 +283,18 @@ pub enum FullRun {
     Nightly,
     Weekly,
     Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheDebug {
+    Off,
+    On,
+}
+
+impl From<bool> for CacheDebug {
+    fn from(on: bool) -> Self {
+        if on { Self::On } else { Self::Off }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -287,6 +329,9 @@ impl Default for RustCiConfig {
             full_run: FullRun::Nightly,
             helper: None,
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
+            cache_check_blocks: false,
+            cache_debug: CacheDebug::Off,
+            test_setup: Vec::new(),
         }
     }
 }

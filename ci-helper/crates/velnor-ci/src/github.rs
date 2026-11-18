@@ -215,6 +215,26 @@ pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
 }
 
 #[must_use]
+pub fn commit_pulls_path(repo: &Repo, sha: &str) -> String {
+    format!("/repos/{repo}/commits/{}/pulls?per_page=100", encode(sha))
+}
+
+#[must_use]
+pub fn pull_commits_path(repo: &Repo, number: u64) -> String {
+    format!("/repos/{repo}/pulls/{number}/commits")
+}
+
+#[must_use]
+pub fn tag_ref_path(repo: &Repo, tag: &str) -> String {
+    format!("/repos/{repo}/git/ref/tags/{}", encode(tag))
+}
+
+#[must_use]
+pub fn tag_object_path(repo: &Repo, sha: &str) -> String {
+    format!("/repos/{repo}/git/tags/{sha}")
+}
+
+#[must_use]
 pub fn rules_path(repo: &Repo, branch: &str, page: u32) -> String {
     format!(
         "/repos/{repo}/rules/branches/{}?per_page=100&page={page}",

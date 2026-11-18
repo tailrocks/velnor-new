@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 mod network;
+#[cfg(test)]
+pub(crate) use network::remove_unbound_v48_for_test;
 pub(crate) mod pair;
 pub(crate) mod storage_object;
 

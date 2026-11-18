@@ -1,0 +1,61 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use clap::{Args, Subcommand};
+use std::path::PathBuf;
+
+#[derive(Debug, Subcommand)]
+pub enum CacheCommand {
+    #[command(
+        about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise or when any checkout Cargo.lock has dependency sources not proven public; a missing or unreadable run log is an error; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
+    )]
+    Decide(DecideArgs),
+    #[command(
+        about = "Delete all but the newest entries whose key starts with --prefix on $GITHUB_REF, through the GitHub API; reads GITHUB_TOKEN, which needs actions: write, and GITHUB_REPOSITORY. A missing token or a failed API call exits with an error"
+    )]
+    Trim(TrimArgs),
+    #[command(about = "Require an exact saved cache entry through the read-only cache API")]
+    Verify(VerifyArgs),
+    #[command(about = "Fail the Cache check when a lane could not verify its uploads")]
+    Check(CheckArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct DecideArgs {
+    #[arg(
+        long,
+        default_value = "Cargo.toml",
+        help = "Detected Cargo root manifests contributing to this job"
+    )]
+    pub manifest_path: Vec<PathBuf>,
+    #[arg(long, help = "The build directory the cache saves")]
+    pub target_dir: PathBuf,
+    #[arg(long, help = "A nextest archive file to remove before the save")]
+    pub archive: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct TrimArgs {
+    #[arg(long, help = "Key prefix of the family to trim")]
+    pub prefix: String,
+    #[arg(long, help = "Entries to keep, default 2")]
+    pub keep: Option<usize>,
+}
+
+#[derive(Debug, Args)]
+pub struct RestoredArgs {
+    #[arg(long, help = "Configured target directories restored in this job")]
+    pub target_dir: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyArgs {
+    #[arg(long)]
+    pub key: String,
+}
+
+#[derive(Debug, Args)]
+pub struct CheckArgs {
+    #[arg(long)]
+    pub success: String,
+}

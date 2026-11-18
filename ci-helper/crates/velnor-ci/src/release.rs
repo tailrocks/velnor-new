@@ -69,6 +69,17 @@ struct PackageRelease {
 }
 
 pub fn record(outputs: &[(String, String)]) -> Result<String, CiError> {
+    Ok(tag_lines(&recorded(outputs)?))
+}
+
+#[must_use]
+pub fn tag_lines(tags: &BTreeMap<PlainName, PlainName>) -> String {
+    tags.iter()
+        .map(|(package, tag)| [package.as_str(), "=", tag.as_str(), "\n"].concat())
+        .collect()
+}
+
+pub fn recorded(outputs: &[(String, String)]) -> Result<BTreeMap<PlainName, PlainName>, CiError> {
     let mut tags: BTreeMap<PlainName, PlainName> = BTreeMap::new();
     let mut packages: BTreeMap<PlainName, PlainName> = BTreeMap::new();
     for (file, text) in outputs {
@@ -92,10 +103,7 @@ pub fn record(outputs: &[(String, String)]) -> Result<String, CiError> {
             }
         }
     }
-    Ok(tags
-        .iter()
-        .map(|(package, tag)| [package.as_str(), "=", tag.as_str(), "\n"].concat())
-        .collect())
+    Ok(tags)
 }
 
 fn output_name(package: &str) -> Result<PlainName, CiError> {
@@ -182,6 +190,30 @@ pub fn check_tag_patterns(
         if found != want {
             return Err(CiError::new(format!(
                 "{file}: git_tag_name patterns {found:?} differ from {want:?}, the ones the tag rulesets were provisioned for"
+            )));
+        }
+    }
+    Ok(())
+}
+
+pub fn check_branch_prefixes(
+    files: &[(String, String)],
+    expected: &[(String, String)],
+) -> Result<(), CiError> {
+    if expected.is_empty() {
+        return Ok(());
+    }
+    for (file, text) in files {
+        let found = velnor_release::release_pr_branch_prefix(file, text)
+            .map_err(|e| CiError::new(e.to_string()))?;
+        let want: BTreeSet<&str> = expected
+            .iter()
+            .filter(|(name, _)| name == file)
+            .map(|(_, prefix)| prefix.as_str())
+            .collect();
+        if !want.contains(found.as_str()) || want.len() != 1 {
+            return Err(CiError::new(format!(
+                "{file}: pr_branch_prefix {found:?} differs from {want:?}, the one release.yml was generated for; regenerate release.yml"
             )));
         }
     }

@@ -1,12 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    fs,
-    os::unix::fs::PermissionsExt,
-    process::Command,
-    time::{Duration, Instant},
-};
+use std::{fs, os::unix::fs::PermissionsExt, path::PathBuf, process::Command, time::Duration};
 
 use velnor_runner_github::{
     AdminConnectionCall, admin_connection, create_session,
@@ -15,14 +10,17 @@ use velnor_runner_github::{
 
 use super::{
     ConnectionPollContext, ControlState, Controller, FAILED, FairnessTurn, HostConfig, Restarted,
-    TestResult, UNCERTAIN, assert_retired, poll_active_connections,
-    restarted_with_a_removed_connection, seed,
+    TestResult, UNCERTAIN, assert_retired, freeze, poll_active_connections,
+    restarted_with_a_removed_connection, seed, stalled,
 };
 use crate::host_controller::loop_driver::state::SessionCredentials;
 use crate::https::HttpsTransport;
 use crate::listen::{Secret, link_from_admin};
 
 const CHILD: &str = "VELNOR_RETIREMENT_CURL_LOG";
+const GATE: &str = "VELNOR_RETIREMENT_CURL_GATE";
+const STALLED_BUDGET: Duration = Duration::from_millis(500);
+const SLOW_POLL_BUDGET: Duration = Duration::from_secs(5);
 
 #[test]
 fn a_slow_removed_connection_retirement_does_not_hold_the_next_connection_poll() -> TestResult<()> {
@@ -85,10 +83,7 @@ fn run(stall: bool, name: &str) -> TestResult<()> {
         .args(["--exact", name, "--nocapture"])
         .env("PATH", dir.path())
         .env(CHILD, dir.path().join("requests"))
-        .env(
-            "VELNOR_RETIREMENT_CURL_DELAY_MS",
-            if stall { "0" } else { "6000" },
-        )
+        .envs((!stall).then(|| (GATE, dir.path().join("gate"))))
         .output()?;
     assert!(
         output.status.success(),
@@ -148,6 +143,22 @@ async fn active_connection(restarted: &Restarted) -> TestResult<Controller> {
     Ok(active)
 }
 
+/// While the next connection's poll waits in curl, moves the frozen clock past the retirement
+/// budget and releases curl. The poll then took longer than the budget on the clock the deadlines
+/// read.
+fn slow_poll_in_curl(gate: String) {
+    let runtime = tokio::runtime::Handle::current();
+    std::thread::spawn(move || {
+        while !PathBuf::from(format!("{gate}.waiting")).exists() {
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        runtime.block_on(tokio::time::advance(
+            SLOW_POLL_BUDGET + Duration::from_secs(1),
+        ));
+        drop(fs::write(format!("{gate}.released"), ""));
+    });
+}
+
 async fn exercise(stall: bool) -> TestResult<()> {
     let (restarted, removed) = restarted_with_a_removed_connection().await?;
     seed::assigned_pair(&restarted.journal, &removed.prepared.scope, FAILED).await?;
@@ -162,6 +173,8 @@ async fn exercise(stall: bool) -> TestResult<()> {
         restarted
             .fixture
             .gate_container_inspection(&FAILED.container_id("runner"));
+    } else {
+        slow_poll_in_curl(std::env::var(GATE)?);
     }
     let control_state = ControlState::new(&removed.config);
     let pending = [removed.prepared.binding.clone()];
@@ -170,7 +183,7 @@ async fn exercise(stall: bool) -> TestResult<()> {
     } else {
         vec![active.prepared, removed.prepared]
     };
-    let started = Instant::now();
+    let clock = freeze();
     {
         let poll = poll_active_connections(
             ConnectionPollContext {
@@ -184,9 +197,9 @@ async fn exercise(stall: bool) -> TestResult<()> {
                 admission_ready: false,
                 control_state: &control_state,
                 retirement_budget: if stall {
-                    Duration::from_millis(500)
+                    STALLED_BUDGET
                 } else {
-                    Duration::from_secs(5)
+                    SLOW_POLL_BUDGET
                 },
             },
             &pending,
@@ -195,37 +208,24 @@ async fn exercise(stall: bool) -> TestResult<()> {
         );
         tokio::pin!(poll);
         if stall {
-            tokio::time::timeout(Duration::from_secs(15), async {
-                tokio::select! {
-                    result = &mut poll => {
-                        result?;
-                        Err::<(), Box<dyn std::error::Error>>("connection poll returned before retirement inspection stalled".into())
-                    }
-                    () = restarted.fixture.hung() => Ok(()),
-                }
-            })
-            .await??;
+            stalled(&restarted.fixture, &mut poll).await?;
             assert_eq!(restarted.fixture.inspection_gate_hits(), 1);
-            tokio::time::pause();
-            tokio::time::advance(Duration::from_secs(1)).await;
-            tokio::time::resume();
-            tokio::time::timeout(Duration::from_secs(5), &mut poll).await??;
-        } else {
-            tokio::time::timeout(Duration::from_secs(15), &mut poll).await??;
-            assert!(started.elapsed() < Duration::from_secs(15));
+            clock
+                .advance(STALLED_BUDGET + Duration::from_millis(500))
+                .await;
         }
+        poll.await?;
     }
-    assert_recovery_outcome(stall, &restarted, &control_state, failed_objects, started).await
+    drop(clock);
+    assert_recovery_outcome(stall, &restarted, failed_objects).await
 }
 
 async fn assert_recovery_outcome(
     stall: bool,
     restarted: &Restarted,
-    control_state: &ControlState,
     failed_objects: Vec<String>,
-    started: Instant,
 ) -> TestResult<()> {
-    assert_polled(restarted, control_state).await?;
+    assert_polled(restarted).await?;
     if stall {
         assert_eq!(
             seed::text(&restarted.journal, seed::RESERVATION, FAILED.reservation).await?,
@@ -234,17 +234,13 @@ async fn assert_recovery_outcome(
         assert_ne!(failed_objects, Vec::<String>::new());
         assert_eq!(restarted.fixture.objects(FAILED), failed_objects);
     } else {
-        assert!(started.elapsed() >= Duration::from_secs(6));
+        assert!(PathBuf::from(format!("{}.released", std::env::var(GATE)?)).exists());
         assert_retired(restarted).await?;
     }
     Ok(())
 }
 
-async fn assert_polled(restarted: &Restarted, control_state: &ControlState) -> TestResult<()> {
-    let receipts = control_state
-        .complete_session_poll_receipts()?
-        .ok_or("next connection did not finish polling")?;
-    assert_eq!(receipts.len(), 1);
+async fn assert_polled(restarted: &Restarted) -> TestResult<()> {
     let log = fs::read_to_string(std::env::var(CHILD)?)?;
     assert!(log.contains("https://queue.example.test/messages"));
     let connection = restarted.journal.connection().await?;

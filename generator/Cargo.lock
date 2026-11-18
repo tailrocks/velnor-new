@@ -726,7 +726,7 @@ checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.80"
+version = "0.1.81"
 dependencies = [
  "clap",
  "serde-saphyr",
@@ -757,6 +757,7 @@ dependencies = [
 name = "velnor-render"
 version = "0.0.0"
 dependencies = [
+ "serde_json",
  "velnor-model",
  "velnor-release",
 ]

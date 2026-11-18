@@ -15,7 +15,24 @@ pub(in crate::journal) struct Target {
     pub(in crate::journal) scale_set_id: i64,
 }
 
+#[derive(Clone, Copy)]
+pub(in crate::journal) enum RecoverySource {
+    Conflict,
+    Interrupted,
+}
+
+impl RecoverySource {
+    pub(in crate::journal) fn parse(value: &str) -> Result<Self, HostError> {
+        match value {
+            "conflict" => Ok(Self::Conflict),
+            "interrupted" => Ok(Self::Interrupted),
+            _ => Err(HostError::Journal),
+        }
+    }
+}
+
 pub(in crate::journal) struct ConflictIdentity {
+    pub(in crate::journal) source: RecoverySource,
     pub(in crate::journal) lineage_id: i64,
     pub(in crate::journal) generation: i64,
     pub(in crate::journal) reservation_id: i64,
@@ -38,7 +55,10 @@ pub(in crate::journal) struct ConflictIdentity {
 impl ConflictIdentity {
     pub(in crate::journal) fn snapshot_sha256(&self) -> Result<String, serde_json::Error> {
         let value = json!([
-            "velnor-jit-conflict-recovery-identity-v1",
+            match self.source {
+                RecoverySource::Conflict => "velnor-jit-conflict-recovery-identity-v1",
+                RecoverySource::Interrupted => "velnor-jit-interrupted-claim-recovery-identity-v1",
+            },
             self.lineage_id,
             self.generation,
             self.reservation_id,

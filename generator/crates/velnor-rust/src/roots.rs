@@ -12,7 +12,7 @@ use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
-use crate::target_dir::{sets_build_target, target_dir};
+use crate::target_dir::target_dir;
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
@@ -116,7 +116,6 @@ fn root(
     Ok(RustRoot {
         manifest: manifest.clone(),
         target_dir: target_dir(view, manifest)?,
-        sets_build_target: sets_build_target(view, manifest)?,
         members,
         depends_on: depends_on.into_iter().collect(),
         external_dependencies: external_dependencies.into_iter().collect(),
@@ -259,6 +258,9 @@ fn patches(
                 continue;
             };
             let folder = folder.as_str().ok_or_else(|| invalid(key.clone()))?;
+            if rooted(folder) {
+                return Err(invalid(key));
+            }
             let package = match entry.get("package") {
                 Some(package) => package.as_str().ok_or_else(|| invalid(key.clone()))?,
                 None => name.as_str(),
@@ -272,6 +274,12 @@ fn patches(
     Ok(found)
 }
 
+fn rooted(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    path.starts_with(['/', '\\'])
+        || matches!(bytes, [drive, b':', ..] if drive.is_ascii_alphabetic())
+}
+
 pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
     let mut segments = resolve(base, relative)?;
     segments.push("Cargo.toml");
@@ -279,6 +287,9 @@ pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> 
 }
 
 pub(crate) fn resolve<'a>(base: Option<&'a RepoPath>, relative: &'a str) -> Option<Vec<&'a str>> {
+    if rooted(relative) {
+        return None;
+    }
     let mut segments: Vec<&str> =
         base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
     for segment in relative.split('/') {
