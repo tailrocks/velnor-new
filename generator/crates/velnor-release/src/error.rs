@@ -65,6 +65,9 @@ pub enum ReleaseError {
     SmokeNeedsRaw {
         package: String,
     },
+    Sha256FilesNeedsArchive {
+        package: String,
+    },
     MuslNeedsRawLinux {
         package: String,
     },

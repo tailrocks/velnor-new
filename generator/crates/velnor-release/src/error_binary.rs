@@ -28,6 +28,10 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} sets smoke, which needs format = \"raw\", because an archive holds no executable to run"
             ),
+            Self::Sha256FilesNeedsArchive { package } => write!(
+                f,
+                ".velnor/release.toml: binary {package} sets sha256_files, which needs the archive format, because a raw binary always publishes its own .sha256 file"
+            ),
             Self::MuslNeedsRawLinux { package } => write!(
                 f,
                 ".velnor/release.toml: binary {package} sets target = \"musl\", which needs format = \"raw\" and a linux platform"
