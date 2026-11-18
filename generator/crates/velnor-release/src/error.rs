@@ -62,11 +62,10 @@ pub enum ReleaseError {
     DuplicateBinary {
         package: String,
     },
-    SmokeNeedsRaw {
+    KeyNeedsFormat {
         package: String,
-    },
-    ChecksumFilesNeedsArchive {
-        package: String,
+        key: &'static str,
+        format: &'static str,
     },
     MuslNeedsLinux {
         package: String,

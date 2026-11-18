@@ -220,13 +220,17 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         });
     }
     if format == BinaryFormat::Raw && raw.checksum_files.is_some() {
-        return Err(ReleaseError::ChecksumFilesNeedsArchive {
+        return Err(ReleaseError::KeyNeedsFormat {
             package: raw.package,
+            key: "checksum_files",
+            format: "archive",
         });
     }
     if format == BinaryFormat::Archive && raw.smoke {
-        return Err(ReleaseError::SmokeNeedsRaw {
+        return Err(ReleaseError::KeyNeedsFormat {
             package: raw.package,
+            key: "smoke",
+            format: "raw",
         });
     }
     let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;

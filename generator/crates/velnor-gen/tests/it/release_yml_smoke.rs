@@ -123,7 +123,7 @@ fn smoke_run_values_have_no_expression_and_take_the_tag_from_env() -> TestResult
 fn smoke_on_an_archive_binary_is_refused() {
     assert!(matches!(
         refused("[[binaries]]\npackage = \"app\"\nsmoke = true\n"),
-        Some(ReleaseError::SmokeNeedsRaw { .. })
+        Some(ReleaseError::KeyNeedsFormat { key: "smoke", .. })
     ));
 }
 

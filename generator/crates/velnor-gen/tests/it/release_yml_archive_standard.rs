@@ -173,7 +173,10 @@ fn checksum_files_adds_one_sidecar_per_archive_that_sha256sum_check_reads() -> T
 fn checksum_files_is_refused_for_a_raw_binary_which_always_has_its_sidecar() {
     assert!(matches!(
         refused("[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nchecksum_files = \"sha256\"\n"),
-        Some(ReleaseError::ChecksumFilesNeedsArchive { .. })
+        Some(ReleaseError::KeyNeedsFormat {
+            key: "checksum_files",
+            ..
+        })
     ));
 }
 
