@@ -43,35 +43,35 @@ Detected stacks
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:47 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile ci-helper: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile ci-helper: ci (ci-helper/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence ci-helper/.config/nextest.toml:3 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:47 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile crates/velnor-runner: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile crates/velnor-runner: ci (crates/velnor-runner/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence crates/velnor-runner/.config/nextest.toml:8 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:47 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile generator: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile generator: ci (generator/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence generator/.config/nextest.toml:13 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:47 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
   Profile local: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile local: ci (local/.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
     evidence .mise/tasks/test:4 cargo nextest run --locked --profile ci --no-tests fail "$@" [durable]
     evidence local/.config/nextest.toml:8 [profile.ci] [durable]
     evidence mise.toml:19 ], mr_boxington = true } [durable]
-    evidence mise.toml:44 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
+    evidence mise.toml:47 wrappers.cargo.command = "mbx" (MBX_CARGO_SHIM_MODE = "1") [durable]
 
 Workflow to generate
   .github/jactionlint.yaml
