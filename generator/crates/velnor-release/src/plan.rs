@@ -65,6 +65,7 @@ pub struct BinaryPlan {
     pub smoke: bool,
     pub commit_file: bool,
     pub checksum_files: Option<Checksum>,
+    pub member_digests: Option<Checksum>,
     pub tag_pattern: TagPattern,
     pub asset_name: Option<String>,
 }
@@ -271,6 +272,7 @@ fn plan_binaries(
             smoke: binary.smoke,
             commit_file: binary.commit_file,
             checksum_files: binary.checksum_files,
+            member_digests: binary.member_digests,
             tag_pattern,
         });
     }

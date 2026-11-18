@@ -44,6 +44,7 @@ pub(crate) struct Binary {
     pub(crate) smoke: bool,
     pub(crate) commit_file: bool,
     pub(crate) checksum_files: Option<Checksum>,
+    pub(crate) member_digests: Option<Checksum>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -75,6 +76,7 @@ struct RawBinary {
     #[serde(default)]
     commit_file: bool,
     checksum_files: Option<Checksum>,
+    member_digests: Option<Checksum>,
 }
 
 #[derive(Deserialize)]
@@ -226,6 +228,13 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             format: "archive",
         });
     }
+    if format == BinaryFormat::Raw && raw.member_digests.is_some() {
+        return Err(ReleaseError::KeyNeedsFormat {
+            package: raw.package,
+            key: "member_digests",
+            format: "archive",
+        });
+    }
     if format == BinaryFormat::Archive && raw.smoke {
         return Err(ReleaseError::KeyNeedsFormat {
             package: raw.package,
@@ -256,5 +265,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         smoke: raw.smoke,
         commit_file: raw.commit_file,
         checksum_files: raw.checksum_files,
+        member_digests: raw.member_digests,
     })
 }

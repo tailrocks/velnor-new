@@ -9,6 +9,7 @@ use crate::release_assets::{
     COMMIT_FILE, STAGE, archive_packaging, asset, assets, bind_version, quoted, read_version,
     selection, uploaded, versioned, word,
 };
+use crate::release_binary_sums::{steps as binary_sums_steps, upload_paths};
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
 use crate::release_raw::{raw_packaging, smoke_steps};
@@ -29,7 +30,7 @@ const DOWNLOAD_ARTIFACT: &str =
 const DOWNLOAD_VERSION: &str = "v8.0.2";
 const BUILD_TIMEOUT_MINUTES: u16 = 60;
 const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
-const DIST: &str = "dist";
+pub(crate) const DIST: &str = "dist";
 const SUMS_FILE: &str = "SHA256SUMS";
 
 pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<RenderedJob> {
@@ -215,6 +216,7 @@ fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             )
         });
     }
+    steps.extend(binary_sums_steps(binary));
     let names = quoted(binary, &assets(binary)).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
@@ -230,11 +232,14 @@ fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     if binary.attest {
         steps.push(attest(binary));
     }
-    let sums_files = if binary.commit_file {
-        format!("{DIST}/{SUMS_FILE}\n{DIST}/{COMMIT_FILE}")
-    } else {
-        format!("{DIST}/{SUMS_FILE}")
-    };
+    let sums_files = upload_paths(
+        binary,
+        if binary.commit_file {
+            &[COMMIT_FILE]
+        } else {
+            &[]
+        },
+    );
     steps.push(upload(format!("{}-sums", binary.package), sums_files));
     bind_version(&mut steps);
     RenderedJob {
