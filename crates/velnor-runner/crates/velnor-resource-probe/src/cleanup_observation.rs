@@ -72,32 +72,51 @@ pub struct GuestDockerRootIdentity {
     pub read_only: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GuestObservation {
+    pub boot_id: String,
+    pub docker_root: GuestDockerRootIdentity,
+}
+
 pub fn observe_cleanup(
     request: CleanupObservationRequest,
 ) -> Result<CleanupObservation, ProbeError> {
+    observe_cleanup_in(request, Path::new(CGROUP_ROOT), observe_guest)
+}
+
+pub fn observe_cleanup_in(
+    request: CleanupObservationRequest,
+    cgroup_root: &Path,
+    mut observe_guest: impl FnMut() -> Result<GuestObservation, ProbeError>,
+) -> Result<CleanupObservation, ProbeError> {
     validate_request(&request)?;
-    let boot_before = read_boot_id()?;
-    if boot_before != request.expected_guest_boot_id {
+    let before = observe_guest()?;
+    if before.boot_id != request.expected_guest_boot_id {
         return Err(ProbeError::Invalid("cleanup_boot_id_mismatch"));
     }
-    let root_before = observe_guest_root()?;
-    let root = open_cgroup_root(Path::new(CGROUP_ROOT))?;
+    let root = open_cgroup_root(cgroup_root)?;
     observe_absent(&root, &request.cgroup_paths[0])?;
     observe_absent(&root, &request.cgroup_paths[1])?;
-    observe_absent(&root, &request.cgroup_paths[0])?;
-    observe_absent(&root, &request.cgroup_paths[1])?;
-    let root_after = observe_guest_root()?;
-    let boot_after = read_boot_id()?;
-    if boot_before != boot_after || root_before != root_after {
+    let after = observe_guest()?;
+    if before != after {
         return Err(ProbeError::Invalid("cleanup_guest_identity_changed"));
     }
+    observe_absent(&root, &request.cgroup_paths[0])?;
+    observe_absent(&root, &request.cgroup_paths[1])?;
     Ok(CleanupObservation {
         wire_mode: "cleanup_observation".to_owned(),
         schema_version: 1,
         operation_id: request.operation_id,
-        guest_boot_id: boot_after,
+        guest_boot_id: after.boot_id,
         absent_cgroup_paths: request.cgroup_paths,
-        docker_root: root_after,
+        docker_root: after.docker_root,
+    })
+}
+
+fn observe_guest() -> Result<GuestObservation, ProbeError> {
+    Ok(GuestObservation {
+        boot_id: read_boot_id()?,
+        docker_root: observe_guest_root()?,
     })
 }
 
