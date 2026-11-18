@@ -56,7 +56,6 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
-    WorkflowRunRefused(String),
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
@@ -203,10 +202,6 @@ impl fmt::Display for Reason {
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
-            ),
-            Self::WorkflowRunRefused(step) => write!(
-                f,
-                "workflow step {step} sets run: a declared workflow step is an allowed action (uses) or a helper command (helper), never a shell string"
             ),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",

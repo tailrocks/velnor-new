@@ -201,7 +201,10 @@ fn check_workflow(workflow: &DeclaredWorkflow, found: &mut Vec<RuleViolation>) {
         }
     };
     let file = &workflow.file;
-    let plain = file.ends_with(".yml") || file.ends_with(".yaml");
+    let plain = matches!(
+        std::path::Path::new(file).extension(),
+        Some(extension) if extension == "yml" || extension == "yaml"
+    );
     if !plain
         || file.starts_with('.')
         || !file

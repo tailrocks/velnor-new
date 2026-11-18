@@ -74,16 +74,12 @@ pub(crate) fn check_text(text: &str, scope: &Scope<'_>) -> Vec<DeclaredRule> {
     let mut rules = Vec::new();
     let mut rest = text;
     while let Some((_, after)) = rest.split_once("${{") {
-        match after.split_once("}}") {
-            Some((inner, next)) => {
-                rules.extend(check_expression(inner, scope));
-                rest = next;
-            }
-            None => {
-                rules.push(DeclaredRule::UnclosedExpression(text.to_owned()));
-                break;
-            }
-        }
+        let Some((inner, next)) = after.split_once("}}") else {
+            rules.push(DeclaredRule::UnclosedExpression(text.to_owned()));
+            break;
+        };
+        rules.extend(check_expression(inner, scope));
+        rest = next;
     }
     rules
 }

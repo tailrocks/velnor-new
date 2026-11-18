@@ -115,10 +115,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
-    let workflows = crate::config_workflow::parse(raw.workflow).map_err(invalid)?;
     Ok(RustCiConfig {
         test_setup,
-        workflows,
+        workflows: crate::config_workflow::parse(raw.workflow).map_err(invalid)?,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         crates_mirror: raw

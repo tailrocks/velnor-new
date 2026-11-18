@@ -106,7 +106,10 @@ fn step(raw: RawStep) -> Result<DeclaredStep, Reason> {
             .unwrap_or_default()
     };
     if raw.run.is_some() {
-        return Err(Reason::WorkflowRunRefused(label()));
+        return Err(Reason::InvalidValue {
+            key: "workflow.job.step.run (free run strings are refused; use uses or helper)",
+            value: label(),
+        });
     }
     let body = match (&raw.uses, &raw.helper) {
         (Some(action), None) => DeclaredBody::Action(action.clone()),

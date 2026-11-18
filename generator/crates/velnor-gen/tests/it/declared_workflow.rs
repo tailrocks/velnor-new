@@ -52,29 +52,31 @@ if = "needs.source.result == 'success'"
 env = { ARTIFACT_ID = "${{ needs.source.outputs.artifact_id }}" }
 "#;
 
-fn generate(config: &str) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
-    let mut repo = view(&["Cargo.toml"], Some(config.as_bytes())).unwrap_or_else(|e| panic!("{e}"));
-    crate::facts::lock_pinned_tools(&mut repo).unwrap_or_else(|e| panic!("{e}"));
-    expected_with_notes(&repo).map(|(files, _)| files)
+type Files = BTreeMap<RepoPath, String>;
+
+fn generate(config: &str) -> Result<Result<Files, GenerateError>, Box<dyn Error>> {
+    let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+    crate::facts::lock_pinned_tools(&mut repo)?;
+    Ok(expected_with_notes(&repo).map(|(files, _)| files))
 }
 
-fn declared_rules(config: &str) -> Vec<DeclaredRule> {
-    match generate(config) {
-        Err(GenerateError::Rules(violations)) => violations
+fn declared_rules(config: &str) -> Result<Vec<DeclaredRule>, Box<dyn Error>> {
+    match generate(config)? {
+        Err(GenerateError::Rules(violations)) => Ok(violations
             .into_iter()
             .filter_map(|violation| match violation.rule {
                 Rule::Declared(rule) => Some(rule),
                 _ => None,
             })
-            .collect(),
-        other => panic!("expected a rule violation, got {other:?}"),
+            .collect()),
+        _ => Err("expected a rule violation".into()),
     }
 }
 
 #[test]
 fn a_declared_workflow_renders_jobs_with_needs_outputs_environment_permissions_and_step_conditions()
 -> TestResult {
-    let files = generate(TWO_JOBS)?;
+    let files = generate(TWO_JOBS)??;
     let text = files.get(&RepoPath::new(DECLARED)?).ok_or("not rendered")?;
     let tree = crate::yaml_tree::document(text)?;
     let at = |pointer: &str| tree.pointer(pointer).cloned();
@@ -117,28 +119,30 @@ fn a_declared_workflow_renders_jobs_with_needs_outputs_environment_permissions_a
 
 #[test]
 fn without_a_workflow_table_no_declared_file_is_written() -> TestResult {
-    let files = generate("")?;
+    let files = generate("")??;
     assert!(!files.contains_key(&RepoPath::new(DECLARED)?));
     Ok(())
 }
 
 #[test]
-fn a_declared_workflow_refuses_a_free_run_string() {
+fn a_declared_workflow_refuses_a_free_run_string() -> TestResult {
     let config = TWO_JOBS.replace(
         "helper = \"validate-artifact-id\"",
         "run = \"echo $ARTIFACT_ID\"",
     );
     assert!(matches!(
-        generate(&config),
+        generate(&config)?,
         Err(GenerateError::Detect(DetectError::Invalid {
-            reason: Reason::WorkflowRunRefused(step),
+            reason: Reason::InvalidValue { key, value: step },
             ..
-        })) if step == "draft"
+        })) if step == "draft" && key.contains("run")
     ));
+    Ok(())
 }
 
 #[test]
-fn a_declared_workflow_refuses_unknown_needs_unknown_output_steps_and_unlisted_actions() {
+fn a_declared_workflow_refuses_unknown_needs_unknown_output_steps_and_unlisted_actions()
+-> TestResult {
     let cases = [
         (
             TWO_JOBS.replace("needs = [\"source\"]", "needs = [\"missing\"]"),
@@ -158,6 +162,7 @@ fn a_declared_workflow_refuses_unknown_needs_unknown_output_steps_and_unlisted_a
         ),
     ];
     for (config, expected) in cases {
-        assert!(declared_rules(&config).contains(&expected), "{expected:?}");
+        assert!(declared_rules(&config)?.contains(&expected), "{expected:?}");
     }
+    Ok(())
 }
