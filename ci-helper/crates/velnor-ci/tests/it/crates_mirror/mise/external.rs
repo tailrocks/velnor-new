@@ -33,10 +33,13 @@ fn main() {
                 std::fs::canonicalize(std::env::var("CONFIG_ROOT_MARKER").unwrap()).unwrap(),
                 std::fs::canonicalize(&root).unwrap()
             );
-            assert_eq!(
-                std::fs::canonicalize(std::env::var("CARGO").unwrap()).unwrap(),
-                std::fs::canonicalize(std::env::var("VELNOR_CARGO_WRAPPER").unwrap()).unwrap()
-            );
+            {
+                use std::os::unix::fs::MetadataExt;
+                let cargo = std::fs::metadata(std::env::var("CARGO").unwrap()).unwrap();
+                let wrapper =
+                    std::fs::metadata(std::env::var("VELNOR_CARGO_WRAPPER").unwrap()).unwrap();
+                assert_eq!((cargo.dev(), cargo.ino()), (wrapper.dev(), wrapper.ino()));
+            }
             assert!(
                 std::path::Path::new(&std::env::var("VELNOR_CARGO_REAL").unwrap()).is_absolute()
             );

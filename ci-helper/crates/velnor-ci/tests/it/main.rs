@@ -83,6 +83,7 @@ mod run_nextest_reconcile;
 mod run_process;
 mod run_summary;
 mod setup_pure;
+mod sources_fetch;
 mod support;
 mod telemetry;
 mod ties;
