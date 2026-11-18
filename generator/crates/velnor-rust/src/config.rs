@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use velnor_model::{
     CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName, github_hosted,
+    RunnerLabel, RustCiConfig, Shape, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 20] = [
+const KEYS: [&str; 21] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
@@ -32,6 +32,7 @@ const KEYS: [&str; 20] = [
     "full_run",
     "helper",
     "ci_debuginfo",
+    "cache_budget_bytes",
     "test_setup",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
@@ -61,6 +62,7 @@ struct RawConfig {
     full_run: Option<String>,
     helper: Option<crate::config_helper::RawHelper>,
     ci_debuginfo: Option<String>,
+    cache_budget_bytes: Option<u64>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
 }
@@ -110,12 +112,16 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         None => defaults.full_run,
         Some(value) => full_run(value).map_err(invalid)?,
     };
+    let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
+    let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
-        test_setup: crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?,
+        cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
+            .map_err(invalid)?,
+        test_setup,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         crates_mirror: raw
@@ -130,7 +136,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .unwrap_or(defaults.skip_draft_pull_requests),
         on_main,
         full_run,
-        helper: crate::config_helper::path(raw.helper).map_err(invalid)?,
+        helper,
         shape,
         ci_debuginfo,
         required_check,
@@ -140,19 +146,19 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
-        exclude: raw
-            .exclude
-            .into_iter()
-            .map(|entry| {
-                PathGlob::new(entry.trim_end_matches('/')).map_err(|_| {
-                    invalid(Reason::InvalidValue {
-                        key: "exclude",
-                        value: entry,
-                    })
-                })
-            })
-            .collect::<Result<_, _>>()?,
+        exclude: excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
+    let invalid = |value| Reason::InvalidValue {
+        key: "exclude",
+        value,
+    };
+    entries
+        .into_iter()
+        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
+        .collect()
 }
 
 fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
@@ -192,13 +198,7 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
     RunnerLabel::new(label.clone())
         .ok()
         .filter(|runner| !without_helper_build(runner.as_str()))
-        .filter(|runner| {
-            github_hosted(runner.as_str())
-                || runner
-                    .as_str()
-                    .chars()
-                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
-        })
+        .filter(crate::config_fork::expression_safe)
         .ok_or(Reason::InvalidValue {
             key: "runner",
             value: label,

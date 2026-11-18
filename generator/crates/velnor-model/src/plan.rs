@@ -64,6 +64,7 @@ pub struct Permissions(pub BTreeMap<PermissionScope, Access>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PermissionScope {
+    PullRequests,
     Actions,
     Contents,
 }
