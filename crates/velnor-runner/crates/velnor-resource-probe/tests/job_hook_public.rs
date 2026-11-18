@@ -25,6 +25,10 @@ mod cleanup_observer_scan;
 mod cleanup_observation_recheck;
 
 #[cfg(target_os = "linux")]
+#[path = "job_hook_public/owned_cgroup_daemon_binding.rs"]
+mod owned_cgroup_daemon_binding;
+
+#[cfg(target_os = "linux")]
 #[path = "job_hook_public/job_facts_guest_image.rs"]
 mod job_facts_guest_image;
 
