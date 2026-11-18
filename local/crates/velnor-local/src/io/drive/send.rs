@@ -12,15 +12,16 @@ use super::Driver;
 use super::refusal::CANCEL_GRACE;
 use crate::cli::RunnerMode;
 use crate::io::authority::Runners;
-use crate::io::env::{DockerCli, Environment, STANDIN_IMAGE, words};
+use crate::io::env::{Engine, Environment, STANDIN_IMAGE, words};
 use crate::io::probe::request;
 use crate::io::supervisor::await_replacement;
+use crate::pairs::{DECISIONS, consumed_agents};
 use crate::side::Side;
 use crate::standin;
 
 const REPLACEMENT_TIMEOUT: Duration = Duration::from_secs(300);
 
-impl Driver<'_> {
+impl<E: Engine + Copy + Send> Driver<'_, E> {
     async fn await_pairs(&self, side: Side) -> io::Result<()> {
         if self.args.environment.runner != RunnerMode::Pair {
             return Ok(());
@@ -29,8 +30,14 @@ impl Driver<'_> {
             Side::Trusted => self.args.environment.runners,
             Side::Untrusted => self.args.environment.fork_runners.max(1),
         };
-        let runners = Runners::open(Environment::at(&self.env.dir, DockerCli).await?).await?;
-        await_replacement(&runners, side, pairs, REPLACEMENT_TIMEOUT).await
+        let runners =
+            Runners::open(Environment::at(&self.env.dir, *self.env.engine()).await?).await?;
+        let served = match fs::read_to_string(self.env.dir.join("runner").join(DECISIONS)).await {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => String::new(),
+            read => read?,
+        };
+        let consumed = consumed_agents(&served).map_err(io::Error::other)?;
+        await_replacement(&runners, side, pairs, &consumed, REPLACEMENT_TIMEOUT).await
     }
 
     pub(super) async fn get<T: DeserializeOwned>(&self, side: Side, path: &str) -> io::Result<T> {

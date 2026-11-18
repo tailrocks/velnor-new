@@ -6,6 +6,7 @@ mod authority;
 mod cache_server;
 mod checkout;
 mod conformance;
+mod dispatch;
 mod doctor;
 mod driver;
 mod environment;

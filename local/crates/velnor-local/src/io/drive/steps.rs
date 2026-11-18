@@ -9,9 +9,10 @@ use tokio::fs;
 use tokio::process::Command;
 
 use super::Driver;
+use crate::io::env::Engine;
 use crate::scenario::{next_patch, with_path};
 
-impl Driver<'_> {
+impl<E: Engine + Copy + Send> Driver<'_, E> {
     pub(super) async fn update_lock(
         &self,
         branch: &str,

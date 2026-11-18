@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::future::Future;
 use std::io;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -229,8 +230,7 @@ impl Backend for Replaced {
         let asked = self.asked.fetch_add(1, Ordering::SeqCst);
         let replaced = asked >= self.replaced_after;
         let body = if path.contains("isagentonline") {
-            let consumed = path.ends_with("consumed");
-            format!(r#"{{"online":{}}}"#, replaced && !consumed)
+            format!(r#"{{"online":{}}}"#, !path.ends_with("fresh") || replaced)
         } else if replaced {
             r#"{"value":[{"name":"consumed"},{"name":"fresh"}]}"#.to_owned()
         } else {
@@ -252,24 +252,42 @@ impl Backend for Replaced {
     }
 }
 
+fn consumed() -> BTreeSet<String> {
+    BTreeSet::from(["consumed".to_owned()])
+}
+
 #[tokio::test]
-async fn it_waits_for_the_replacement_pair_not_the_consumed_agent() {
+async fn it_waits_for_the_replacement_pair_while_the_consumed_agent_still_answers_online() {
     let server = Replaced {
         asked: AtomicUsize::new(0),
         replaced_after: 6,
     };
-    let result = await_replacement(&server, Side::Trusted, 1, Duration::from_secs(10)).await;
+    let result = await_replacement(
+        &server,
+        Side::Trusted,
+        1,
+        &consumed(),
+        Duration::from_secs(10),
+    )
+    .await;
     assert!(result.is_ok(), "{result:?}");
     assert!(server.asked.load(Ordering::SeqCst) > 6);
 }
 
 #[tokio::test]
-async fn it_fails_clearly_when_no_replacement_pair_registers() {
+async fn it_fails_clearly_when_only_the_consumed_agent_is_online() {
     let server = Replaced {
         asked: AtomicUsize::new(0),
         replaced_after: usize::MAX,
     };
-    let error = await_replacement(&server, Side::Trusted, 1, Duration::from_millis(500)).await;
+    let error = await_replacement(
+        &server,
+        Side::Trusted,
+        1,
+        &consumed(),
+        Duration::from_millis(500),
+    )
+    .await;
     let message = error
         .expect_err("the consumed agent is not a replacement")
         .to_string();

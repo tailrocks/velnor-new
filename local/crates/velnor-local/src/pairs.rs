@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
+
 use serde::Deserialize;
 use serde_json::{Value, json};
 
@@ -116,6 +118,21 @@ impl Decision {
 pub fn refused_among(all: &[Decision], trusted: bool, runs: &[u64]) -> bool {
     all.iter()
         .any(|line| !line.allow && runs.iter().any(|run| line.of(*run, trusted)))
+}
+
+#[derive(Deserialize)]
+struct Served {
+    agent: Option<String>,
+}
+
+pub fn consumed_agents(text: &str) -> Result<BTreeSet<String>, String> {
+    let mut agents = BTreeSet::new();
+    for line in text.lines().filter(|line| !line.trim().is_empty()) {
+        let served: Served = serde_json::from_str(line)
+            .map_err(|error| format!("{DECISIONS} holds an unreadable line {line}: {error}"))?;
+        agents.extend(served.agent);
+    }
+    Ok(agents)
 }
 
 pub fn decisions(text: &str) -> Result<Vec<Decision>, String> {

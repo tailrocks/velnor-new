@@ -12,7 +12,7 @@ use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 
 use super::checkout::{changes, copy_checkout, git};
-use super::env::{Addresses, DockerCli, Environment};
+use super::env::{Addresses, DockerCli, Engine, Environment};
 use super::proxy::Proxy;
 use crate::cli::{EnvironmentArgs, RunArgs};
 use crate::event::{NO_COMMIT, Push, Repository};
@@ -23,16 +23,19 @@ use crate::scenario::{
 use crate::side::{fork_heads, push_event, refuse_fork_branches};
 use crate::verdict::{Check, conclude, verdict};
 
+mod dispatch;
 mod outcome;
 mod pulls;
 mod refusal;
 mod send;
 mod steps;
 
+pub use dispatch::{Event, dispatch};
+
 #[derive(Debug)]
-struct Driver<'a> {
+struct Driver<'a, E> {
     args: &'a RunArgs,
-    env: &'a Environment<DockerCli>,
+    env: &'a Environment<E>,
     addresses: Addresses,
     authority: Proxy,
     repo: PathBuf,
@@ -241,7 +244,7 @@ async fn session<'a>(
     (driver.outcomes, up_at, up_seconds, replayed)
 }
 
-impl Driver<'_> {
+impl<E: Engine + Copy + Send> Driver<'_, E> {
     async fn start(&mut self, steps: &[Step]) -> io::Result<()> {
         let branches = self
             .git(&["for-each-ref", "--format=%(refname:short)", "refs/heads"])

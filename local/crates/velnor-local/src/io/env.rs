@@ -31,7 +31,7 @@ pub trait Engine: Sync {
     fn logged(&self, args: &[&str], log: &Path) -> impl Future<Output = io::Result<bool>> + Send;
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug)]
 pub struct DockerCli;
 
 impl Engine for DockerCli {

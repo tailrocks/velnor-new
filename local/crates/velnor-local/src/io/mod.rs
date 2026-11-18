@@ -6,7 +6,7 @@ pub mod authority;
 pub mod checkout;
 mod cleanup;
 pub mod doctor;
-mod drive;
+pub mod drive;
 pub mod env;
 mod git;
 mod index_file;
