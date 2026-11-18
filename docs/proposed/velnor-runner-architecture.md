@@ -87,11 +87,11 @@ rejected, however much time it saves.
    `.velnor/runner.lock` (`build.rs:69-80`), stays in this clause until it reads a declared file
    instead.
 6. **C6. Reuse is audited, compile reuse included.** A random sample of reused results is executed
-   again (2% of reuse by key in its first month). The nightly and every-20th-merge full runs build
-   from an empty target in a fresh pod and compare their results and test-binary digests with the
-   warm path. A cache lineage restarts from empty on every lockfile or toolchain change and at least
-   daily. One disagreement disables that kind of reuse, or retires that lineage, until it is
-   explained.
+   again (2% of reuse by key in its first month), and every landed tree is executed in full once
+   within 24 h on batch capacity. The nightly and every-20th-merge full runs build from an empty
+   target in a fresh pod and compare their results and test-binary digests with the warm path. A
+   cache lineage restarts from empty on every lockfile or toolchain change and at least daily. One
+   disagreement disables that kind of reuse, or retires that lineage, until it is explained.
 7. **C7. Flakes are budgeted** (section 1.3).
 
 Where a repeat run carries information, and where it does not: for an obligation whose inputs the
@@ -119,8 +119,9 @@ rerun or a merge-queue ejection, and every queued entry behind an ejection is re
 - **Report:** nextest marks a test that passed only on retry as flaky; retries stay at 0 in the
   required profile, so a flaky test fails the run and is counted.
 - **Act:** a test with two false failures in seven days gets an owner-labelled issue. It is fixed,
-  or quarantined with the owner's sign-off. A quarantined test still runs in a visible non-blocking
-  lane, so no verification disappears silently.
+  or quarantined only when a blocking check covers the same property, or under a recorded owner
+  exception that expires; a quarantined test still runs visibly, so no verification disappears
+  silently.
 - **Known causes to remove first:** CPU starvation of tests with tight timeouts, such as the 2 s
   kill in `ci-helper/.config/nextest.toml`'s default profile, which the generated workflow would
   inherit after the cutover because its nextest commands pass no profile (the generated workflow
@@ -137,7 +138,7 @@ cancelled and superseded runs, and batch work.
 |---|---|---|---|---|
 | 0 | ≤ 12 / ≤ 20 min | ≤ 25 / ≤ 60 min (18 / 40) | baseline re-measured | the regenerated workflow is live; admission span p90 ≤ 5 s |
 | 1 | ≤ 5 / ≤ 10 min (3.5 / 8) | ≤ 12 / ≤ 30 min (10 / 22) | ≤ 150 runner-min | selection fixed in the engine (about 212 without it, 139 with it [E]); `Journal::open` on a template ≤ 1 s |
-| 2 | ≤ 2 / ≤ 6 min (80 s / 4 min) | ≤ 5 / ≤ 15 min (3.5 / 9) | ≤ 60 | per-root keys, with ≥ 65% of merge groups executing nothing; the cache engine chosen by its experiment; no test over 60 s measured alone |
+| 2 | ≤ 2 / ≤ 6 min (80 s / 4 min) | ≤ 5 / ≤ 15 min (3.5 / 9) | ≤ 60 | one job per run; per-root keys, with ≥ 65% of merge groups executing nothing; the cache engine chosen by its experiment; no test over 60 s measured alone |
 | 3 | ≤ 90 s / ≤ 4 min (60 s / 2.5 min) | ≤ 3 / ≤ 8 min (1.75 / 5) | ≤ 35 (15) | the week-1 experiments passed: webhook arrival under 8 s, closure-only checkout for ≥ 80% of packages, queue-tip match ≥ 70%; ≥ 85% of merge groups execute nothing; ≤ 0.5% of merges ejected by a false failure; demand-to-start p90 ≤ 2 s for merge and gate work |
 | 4 | (30 s / 100 s); ≤ 20 s after a preflighted push | (100 s / 4 min); about 50–75 s if Velnor lands the merge | (≤ 15) | stretch only |
 
@@ -268,7 +269,8 @@ prints its logs:
 - **Synthetic completion** is limited to a versioned generated job whose whole contract (outputs,
   step results, logs, post steps, dependents) is proven in the lab; it uploads and seals a log
   through Results and sends one synthetic step result, because `completejob` carries no log body. No
-  other job is completed without the Worker.
+  other job is completed without the Worker, and none at all before the required checks are bound to
+  the Actions integration (N12): until then a synthetic green and a forged one look the same.
 - **Experiment-gated behind the witness.** An idle ARC runner already starts the next job 2 s after
   the previous one ends, 3 s at p90 [M, `fable-5.2` design review F4], so owning acquisition buys at
   most a few seconds per run. The dispatcher that holds runner identities, the hot Worker, podless
@@ -307,6 +309,10 @@ Rules:
   after the build phase and decides where it may go (section 5.6).
 - Pull-request code now runs outside any GitHub job, so it holds no GitHub token at all.
 - `ensure` acts only on same-repository heads; a fork's tree never reaches a Velnor sandbox.
+- Docker without a privileged sidecar is an experiment: image builds go to a rootless BuildKit
+  service per site, and tests that run containers start them as sibling sandboxes through the agent.
+  If more than 5% of the Docker-declaring suites need a real daemon, a microVM docker class replaces
+  privileged pods instead.
 - The required checks are bound to one integration in the ruleset. Today the ruleset names `Required
   verdict` and `Required` with no integration, so any app, or a workflow token granted `statuses:
   write`, can post them (N12).
@@ -455,7 +461,9 @@ agent to observe the result anyway.
 - **Degraded mode.** If the ledger cannot be reached, nothing is satisfied by lookup: obligations
   run fresh, or, if the executor is down too, the per-job workflow takes over by a configuration
   switch. A missing receipt is slow, never wrong.
-- **Audit.** The audit sampler (C6), the cold differential builds of the nightly and
+- **Audit.** Every landed tree is executed once in full within 24 h on batch capacity, whatever its
+  receipts, so a receipt-greened tree is never left unexecuted; the nightly and every-20th-merge
+  runs check only the tip. The audit sampler (C6), the cold differential builds of the nightly and
   every-20th-merge full runs, the test-binary digests recorded with each receipt, and the file-read
   audit (phase 3, as telemetry) each produce a non-blocking check. A disagreement turns that reuse
   class off for the organisation, or retires that cache lineage, and opens an issue; it never turns
@@ -571,17 +579,21 @@ seeds in the background.
 
 ### 6.1 Shape
 
-- Phase 2: `velnor-gen` writes the workflow (decision log I056): one plan job, one job per Cargo
-  root, and one per configuration where it differs (`velnor-runner-host` with `local-mode`). Inside
-  a root's request the agent builds test binaries once per configuration, then runs format, lint,
+- Phase 2: `velnor-gen` writes one job, named `Required`, whose single step runs the released
+  verifier: it calls `ensure` on its node's agent with the whole obligation graph (plan, build once
+  per configuration, lanes, join), streams the logs and exits with the verdict (decision log I056).
+  Separate jobs remain only where permissions or publication need them. One job instead of 25
+  executed jobs removes about 33 s of per-job overhead each and their start-up tails [E]. Inside a
+  root's request the agent builds test binaries once per configuration, then runs format, lint,
   documentation, one combined "check alone" step and tests as parallel lanes. Lanes need one target
   lane per check kind, because cargo holds an exclusive lock per target directory
   (`docs/hard-decisions.md:56-62`); clippy and doc metadata pre-built by the `main` builder; and one
   CPU budget across lanes: a jobserver shared by the sandbox's lanes, or mbx's scheduler if
   candidate (a) wins (measured in work item 1). The generated workflow runs these steps one after
   another today.
-- Phase 3: the workflow is one witness job named `Required` plus the non-blocking `Cache` check;
-  every obligation runs through `ensure` (section 3.3).
+- Phase 3: the same job becomes a pure witness, because the push and merge-group webhooks have
+  already called `ensure` before GitHub creates it (section 3.3); the non-blocking `Cache` check
+  stays.
 - Until the owner changes the ruleset, the workflow emits both required names.
 - `runs-on` is fork-conditional, for example `${{ github.event.pull_request.head.repo.fork &&
   'ubuntu-26.04' || 'velnor-gate' }}`, so a fork's jobs run on hosted runners; today `velnor-gen`
@@ -659,7 +671,7 @@ change `gate.rs`, the release workflows and the publisher in one cutover.
 
 | Setting | Today | Phase 0 | Phase 3 |
 |---|---|---|---|
-| `max_entries_to_build` | 2 | 4 | 8, once false failures are ≤ 2% per run |
+| `max_entries_to_build` | 2 | 2, until the under-load sampler has data | from a replay of real arrivals with all failures counted: about 4 at ≤ 3% false failures, 8 at ≤ 2% with bypass trees |
 | Grouping, `max_entries_to_merge`, `min_entries_to_merge` | HEADGREEN, 10, 1 | same | owner question 3 (ALLGREEN) |
 | `min_entries_to_merge_wait_minutes` | 5 | unchanged: it never applies when the minimum is 1 [M: enqueue to merge-group run 19 s] | same |
 | `check_response_timeout_minutes` | 90 | 90 | 20 |
@@ -891,9 +903,9 @@ not the calendar, choose what phases 2 and 3 build. The targets are those of sec
 
 | Phase | Scope | Exit gate (at least 50 merges for regressions; at least 200 matched heads over peak and quiet periods for any P90, with intervals; every PR class) | Expected saving |
 |---|---|---|---|
-| 0, week 1 | Gate jobs on the cluster: the generator release that moves them is merged, but the workflow was never regenerated, so they still run hosted; regenerating it is the first measured gain. Narrow the image-candidate trigger; Source qualification on the cluster or only in the queue; auto-merge; no catch-up merges; depth 4; fixed cache paths; `event.json` race fix; push-to-merge, admission and flake instrumentation; the queue-tip shadow; the week-1 experiments | PR verdict P50 ≤ 12 min, P90 ≤ 20; push-to-merge P50 ≤ 25 min, P90 ≤ 60; hosted gate queue on the critical path p90 ≤ 1 min; admission span p90 ≤ 5 s | 5.8–57 min of gate queue per run; the cancelled-run stall shrinks from up to 2,203 s to one warm job; 7.5 min median enqueue delay; twice the queue throughput |
+| 0, week 1 | Gate jobs on the cluster: the generator release that moves them is merged, but the workflow was never regenerated, so they still run hosted; regenerating it is the first measured gain. Narrow the image-candidate trigger; Source qualification on the cluster or only in the queue; auto-merge; no catch-up merges; queue depth from the replay; fixed cache paths; `event.json` race fix; push-to-merge, admission and flake instrumentation; the queue-tip shadow; the week-1 experiments | PR verdict P50 ≤ 12 min, P90 ≤ 20; push-to-merge P50 ≤ 25 min, P90 ≤ 60; hosted gate queue on the critical path p90 ≤ 1 min; admission span p90 ≤ 5 s | 5.8–57 min of gate queue per run; the cancelled-run stall shrinks from up to 2,203 s to one warm job; 7.5 min median enqueue delay; twice the queue throughput |
 | 1, weeks 2–3 | Selection fixed in the engine; the test-floor programme; `-j` caps removed; gate, build and docker classes under ARC with warm pools and honest sizes; node tools and action archives; crates mirror; push run reduced to release duties; flake budget machinery; tested-tree recording | PR verdict P50 ≤ 5 min, P90 ≤ 10; push-to-merge P50 ≤ 12, P90 ≤ 30; runner-min per merged PR ≤ 150; false failures ≤ 3%; `Journal::open` ≤ 1 s | About 62 runner-min per merge from the push run; a generator or helper PR falls from 10.9 to about 3.5 min and from 52.9 to about 8 runner-min [E] |
-| 2, weeks 3–6 | `velnor-gen` cutover with parity; the root jobs call `ensure`, so the agent executes and observes every obligation; the ledger with per-root keys; the compile-cache engine the head-to-head chose; kubelet on XFS; the `main` builder; the crate split; the state seal and `cache-prune.yml` retired; test-time budget | PR verdict P50 ≤ 2 min, P90 ≤ 6; push-to-merge P50 ≤ 5, P90 ≤ 15; ≥ 65% of merge groups execute nothing; CPU per merged PR ≤ 60; no test over 60 s | Cold compiles of 196–497 crates per job become deltas; a merge group re-runs only roots whose key changed: 125 root-jobs per 100 merges instead of 500 [E] |
+| 2, weeks 3–6 | `velnor-gen` cutover with parity to one job named `Required` that calls `ensure`, so the agent executes and observes every obligation; the ledger with per-root keys; the compile-cache engine the head-to-head chose; kubelet on XFS; the `main` builder; the crate split; the state seal and `cache-prune.yml` retired; test-time budget | PR verdict P50 ≤ 2 min, P90 ≤ 6; push-to-merge P50 ≤ 5, P90 ≤ 15; ≥ 65% of merge groups execute nothing; CPU per merged PR ≤ 60; no test over 60 s; view set-up time on `velnor-runner-host` published by file count | Cold compiles of 196–497 crates per job become deltas; a merge group re-runs only roots whose key changed: 125 root-jobs per 100 merges instead of 500 [E] |
 | 3, weeks 6–10 | Before the cutover: control-plane and site loss qualified, and the rollback drilled. Then `ensure` on the push and merge-group webhooks; the witness job; per-package keys; queue-tip speculation; `velnor verify` as a stretch; depth 8 | PR verdict P50 ≤ 90 s, P90 ≤ 4 min; push-to-merge P50 ≤ 3, P90 ≤ 8; ≥ 85% of merge groups execute nothing; first cargo ≤ 5 s after the push; false failures ≤ 1%; CPU per merged PR ≤ 35 | Two of three job hops and the plan job disappear; most merges take the verdict plus about 1 min |
 | 4, weeks 10–18 | Moonshot M6, finer test-binary closures, the Velnor merge train if approved; the gated dispatcher, hot Worker or podless completion if the witness left a residual over 5 s | stretch: PR verdict P50 ≤ 30 s, P90 ≤ 100 s; push-to-merge P50 ≤ 100 s, P90 ≤ 4 min | GitHub's 45 s of queue latency per merge, if Velnor lands merges |
 | 5, after week 18 | Agent workspaces on the cluster; microVM fork and docker classes; other organisations on Velnor | stretch: push-to-merge P50 ≤ 75 s | Verification overlaps the agent's own work |
@@ -908,8 +920,10 @@ passed a four-week soak, and the hosted break-glass workflow always.
    workspace, at fixed checkout paths, on velnor-190 and velnor-5 in a throwaway namespace: an
    unchanged tree, a one-file edit, a lockfile change, a second node, four concurrent jobs; count
    rustc processes, wall and CPU time, disk, page cache, set-up and teardown, with
-   `CARGO_INCREMENTAL` off and on. Acceptance: section 5.3 filled with raw data and a decision by
-   its rule. Depends on: owner approval of the namespace (running).
+   `CARGO_INCREMENTAL` off and on; and the reproducibility gate C6's digest comparison needs: one
+   commit built on two nodes at two paths, every test binary compared. Acceptance: section 5.3
+   filled with raw data and a decision by its rule. Depends on: owner approval of the namespace
+   (running).
 2. **Gates on the cluster.** Scope: regenerate and land the workflow from the generator release that
    moves Plan, Ledger CLI, the lints and both required jobs to a `velnor-gate` scale set with warm
    pods and no dind; the image-candidate workflow triggered only where it is needed; Source
@@ -917,10 +931,10 @@ passed a four-week soak, and the hosted break-glass workflow always.
    queue on the critical path p90 ≤ 1 min and no CI job queued on a hosted label. Depends on:
    nothing.
 3. **Queue and agent procedure.** Scope: agents enable auto-merge when they open a pull request and
-   stop catch-up merges; `max_entries_to_build` 4; required checks bound to the GitHub Actions
-   integration; the list of a HEADGREEN group's intermediate commits for release tooling.
-   Acceptance: ≥ 90% of merged PRs have auto-merge; green → enqueue P50 ≤ 30 s. Depends on: owner
-   questions 3, 5 and 6.
+   stop catch-up merges; queue depth raised only as section 6.5 allows; required checks bound to the
+   GitHub Actions integration; the list of a HEADGREEN group's intermediate commits for release
+   tooling. Acceptance: ≥ 90% of merged PRs have auto-merge; green → enqueue P50 ≤ 30 s. Depends on:
+   owner questions 3, 5 and 6.
 4. **Measurement and shadows.** Scope: a push-to-merge collector from PR timelines, clocked from the
    accepted push of the final commit; the admission span (run created → first job) and the
    cancelled-run stall as their own spans; queue residence and merges per hour; the tested tree
@@ -951,14 +965,15 @@ passed a four-week soak, and the hosted break-glass workflow always.
    duties; without that evidence it runs everything. Acceptance: ≤ 2 runner-min per matching push;
    `velnor-ci release-gate` and `product-release.yml` still pass on `main`, finding exactly one
    Actions job named `Required` in the push run of `ci.yml`. Depends on: 4.
-9. **`velnor-gen` cutover with parity.** Scope: one job per root with parallel lanes, whose steps
-   call `ensure` on the node's agent; the local-mode configuration, the maintenance checks, both
-   required names, the Velnor classes in `runs-on`; the fixture builds of the three example binaries
-   as test set-up in `.velnor/rust-ci.toml`, with examples in the warm cache; the mise pin the two
-   suites expect (2026.11.1; the golden workflow carries 2026.11.9); no `edited` trigger once the
-   ledger re-plans a base retarget without restarting identical work; one week of shadow runs beside
-   the engine comparing obligation inventories. Acceptance: empty inventory difference over 100
-   runs; PR verdict P50 ≤ 2 min. Depends on: 1, 5, 10.
+9. **`velnor-gen` cutover with parity.** Scope: one job named `Required` whose single step runs the
+   obligation graph through `ensure` on the node's agent, with parallel lanes; the local-mode
+   configuration, the maintenance checks, both required names, the Velnor classes in `runs-on`; the
+   fixture builds of the three example binaries as test set-up in `.velnor/rust-ci.toml`, with
+   examples in the warm cache; the mise pin the two suites expect (2026.11.1; the golden workflow
+   carries 2026.11.9); no `edited` trigger once the ledger re-plans a base retarget without
+   restarting identical work; one week of shadow runs beside the engine comparing obligation
+   inventories. Acceptance: empty inventory difference over 100 runs; PR verdict P50 ≤ 2 min.
+   Depends on: 1, 5, 10.
 10. **The ledger and `ensure` on velnor-lab.** Scope: `velnor-hooks`, the ledger with per-root keys,
     per-obligation receipts and in-flight join, the signer and the append-only log, the agent's
     executor in pre-created sandboxes, and a one-job workflow whose witness calls `ensure`; the
@@ -979,6 +994,7 @@ passed a four-week soak, and the hosted break-glass workflow always.
 | The ingress or the ledger is down | Webhook replay backlog; ledger health | Witnesses run their obligations fresh; slower, never wrong |
 | False failures rise as work packs denser | Paired-rerun sampler; nextest flaky counts per test | Lower the per-node build cap; queue depth back to 4; quarantine with sign-off |
 | A PR poisons a cache another request trusts | Receipts record producer and scope; promotion only by the builder | Delete the generation; requests build cold, slowly and correctly |
+| Reuse fails silently because nobody watches it | Before phase 3: dashboards for receipt hit rate by mechanism (root key, package key, speculation), builder lag from a `main` advance to a ready generation, the audit's false-green bound, and placement regret | Placement is dropped to site stickiness if a site fetch at P90 costs no more than a delta rebuild at P50, or regret stays under 5 s P50 |
 | A revoked signer's or policy's green checks are already in the queue | Every verdict carries its policy epoch; the witness re-checks it | Raise the epoch; pause and re-verify affected entries; list landed commits that relied on them |
 | A signing key leaks, or a forged receipt reaches a verdict | The witness verifies each receipt's signature and its entry in the append-only log; audits re-execute a sample | Revoke that node's key and every receipt it signed; affected obligations run fresh |
 | FI workers run out of disk | Store budgets and alerts at 70% | Least-recently-used eviction, per-org caps |
@@ -1024,10 +1040,10 @@ passed a four-week soak, and the hosted break-glass workflow always.
    a pull request, stop merging `main` into their branches, and later run `velnor verify` before
    pushing.
 6. **Ruleset changes.** Bind `Required verdict` and `Required` to one integration now (anything can
-   post them today); move `max_entries_to_build` to 4 now and 8 in phase 3; accept a single
-   `Required` name at the `velnor-gen` cutover, keeping the push run's one Actions job named
-   `Required` that the release gate reads; the grouping as question 3 decides. Recommendation: yes
-   to the first three.
+   post them today); raise `max_entries_to_build` only when a replay with real arrivals and the
+   under-load false-failure rate shows more merges per hour; accept a single `Required` name at the
+   `velnor-gen` cutover, keeping the push run's one Actions job named `Required` that the release
+   gate reads; the grouping as question 3 decides. Recommendation: yes to the first three.
 7. **The Kubernetes runtime inside `velnor-runner-host`.** The proposal under review puts the
    cluster runtime behind a trait in `velnor-runner-host`. This design builds the cluster's executor
    as new crates instead: that crate is 157k lines with about 60 open correctness issues and sets
@@ -1042,8 +1058,10 @@ passed a four-week soak, and the hosted break-glass workflow always.
 9. **Other organisations.** Should ChainArgos and jackin share velnor-new's priority for PR jobs,
    with a guaranteed quota, and when do they move to Velnor's executor? Recommendation: equal PR
    priority with quotas now; offer Velnor in phase 5.
-10. **Hardware.** Rent one high-clock node for a month (section 14)? Recommendation: yes, after
-    phase 2, routed only runner-workspace work.
+10. **Hardware.** Rent one high-clock node for a month for the test-floor experiments, and set the
+    trigger and budget for more workers now? Recommendation: rent it in phase 1; buy a worker when
+    worker CPU stays above 70% at peak after dedupe, or the eligible wait for merge work exceeds a
+    p90 of 10 s for two weeks.
 11. **A Velnor merge train instead of GitHub's merge queue?** GitHub's queue adds 19 s to start a
     merge group and 26 s to merge it [M], about 45 s per merge, which becomes the largest term once
     a verdict takes under a minute. Velnor could land merges itself: it fast-forwards `main` to the
@@ -1065,8 +1083,8 @@ passed a four-week soak, and the hosted break-glass workflow always.
 
 | Purchase | Buys | When |
 |---|---|---|
-| One high-clock node (desktop-class cores at 5.5 GHz or more) | 1.3–1.5× on the serial path: rebuilding `velnor-runner-host` and the longest tests [E] | After phase 2, rented for a month first |
+| One high-clock node (desktop-class cores at 5.5 GHz or more) | 1.3–1.5× on the serial path: rebuilding `velnor-runner-host` and the longest tests [E] | Rented in phase 1 for the test-floor experiments |
 | 10 Gbit/s between same-site workers | Moonshot M6 and site replication; 1.48 GB of test binaries in about 1.2 s instead of 12 s [E] | When M6's experiment shows a suite that needs it |
 | Two more k3s server nodes, across failure domains | A control plane that survives one node or site; no speed | Before phase 3's cutover |
 | More NVMe on the FI workers | Cache headroom on the 3.5 TB data disks | When eviction starts dropping live generations |
-| More EPYC workers | +96 threads each, about +20% capacity | Only if the wait for merge and gate work exceeds 15 s p90 after phase 3 |
+| More EPYC workers | +96 threads each, about +20% capacity | Trigger set now: worker CPU above 70% at peak after dedupe, or eligible wait for merge work above a p90 of 10 s for two weeks |
