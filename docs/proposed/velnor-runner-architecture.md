@@ -20,17 +20,20 @@ us confident, **stretch** when an experiment must prove it first.
 
 ### 1.1 The metric
 
-The single metric is **push-to-merge**: the time from the last push to a pull request's head until
-the pull request is merged, measured from the pull request timeline. We report P50 and P90 per week
-over every merged pull request, next to PR verdict time (push to the `Required` check),
-runner-minutes per merged pull request, the compile-cache hit rate and the false-failure rate.
+The single metric is **push-to-merge**: the time from the final commit's accepted push to a pull
+request's head until the pull request is merged, measured from the pull request timeline. We report
+P50 and P90 per week over every merged pull request, next to PR verdict time (push to the `Required`
+check), the admission span (run created → first job), runner-minutes per merged pull request, the
+compile-cache hit rate and the false-failure rate.
 
 | Measure | Today | Basis |
 |---|---|---|
-| Push-to-merge, P50 / P90 | 85 min / 457 min | [M] 98 merged PRs, `proposals/opus-5.5.md` §1.1 |
+| Push-to-merge, P50 / P90 | 85 min / 457 min | [M] 98 merged PRs, `proposals/opus-5.5.md` §1.1 (clock from the first CI run on the final head) |
 | Push-to-merge on the worst measured day, P50 | 400 min, of which 278–282 min between queue entry and merge | [M] `proposals/opus-5.5.md`, `proposals/fable-5.2.md` |
 | PR run wall time, P50 / P90 (cluster era) | 26.7 min / 92.3 min | [M] §A T2 |
 | PR run with no hosted queue | about 11 min | [M] 10.9 min over 12 runs (`proposals/fable-5.2.md`); replays 11.4 and 12.0 min |
+| Admission span, PR runs: run created → first job | 2 s p50, 226 s p90, 2,203 s max; a run that supersedes a running one waits 60 s p50, 626 s p90 | [M] 200 sampled runs; every delay over 10 s had an unfinished earlier run on the branch (design review F-H06) |
+| PR runs started on an unchanged head SHA | 18.3%, most of them cancelling an identical run in flight | [M] 469 of 2,558, the `edited` trigger (F-H07) |
 | Runner-minutes per run (PR / merge group / push) | 52.9 / 64.6 / 62.0 | [M] §A T2 |
 | Runner-minutes per merged PR | 285–347 | [E] about 3–4.8 PR runs plus a merge group and a push per merge |
 | Full runs per merge | 3 (PR, merge group, push on the same SHA) | [M] §A T7: 120 of 159 green merge groups had a push run on their SHA |
@@ -42,18 +45,24 @@ runner-minutes per merged pull request, the compile-cache hit rate and the false
 "Same confidence" is a contract with seven clauses. A change to this design that breaks a clause is
 rejected, however much time it saves.
 
-1. **C1. Every landed tree is verified.** For every commit that lands on `main` and every obligation
-   the plan selects for it, there is a passing result whose key equals the obligation's key at that
-   commit, produced by Velnor's trusted execution in the sandbox class the obligation requires. An
-   *obligation* is one unit of verification: format, lint, docs, a per-crate check, one test binary
-   under one configuration, or a named check.
-2. **C2. Keys capture every input.** In phases 0–3 the key is the exact Git tree plus the
-   obligation's definition (workflow, helper version, toolchain, runner image, sandbox class). A
-   wider key, the *closure* of the files and settings one obligation can observe, is allowed only
-   for obligations whose inputs the sandbox enforces (section 4.3).
+1. **C1. Every tip of `main` is verified.** For every commit that becomes the tip of `main` and
+   every obligation the plan lists for it, there is a passing result whose key equals the
+   obligation's key at that commit, produced by Velnor's trusted execution in the sandbox class the
+   obligation requires. An *obligation* is one unit of verification: format, lint, docs, a per-crate
+   check, one test binary under one configuration, or a named check. Under the merge queue's
+   HEADGREEN grouping a group's earlier commits land as ancestors of a verified tip without a
+   passing result of their own; a failed entry has landed that way inside a passing group. Those
+   commits are marked for bisection and release tooling, and owner question 3 offers ALLGREEN
+   instead.
+2. **C2. Keys capture every input, by construction.** A key is the hash of what the obligation's
+   sandbox contains: the Git tree hashes of its inputs, and its definition (workflow, helper
+   version, toolchain, runner image, sandbox class). The sandbox is a sparse checkout of exactly
+   those paths, so an input that is not in the key is not on disk, and a lookup of it fails (section
+   4.1).
 3. **C3. Selection is sound or wide.** The plan comes from a released helper, never from the change
-   under test (`docs/goals.md` rule 12). A file the plan cannot place selects everything. A file
-   read that no declaration covers widens selection and is reported.
+   under test (`docs/goals.md` rule 12). A file the plan cannot place selects everything. Nothing is
+   skipped relative to a merge group's predecessor in the queue; an obligation is skipped only when
+   a receipt with its exact key exists.
 4. **C4. Reusable results are observed by Velnor.** A result that a run of a *different* tree may
    reuse is recorded by the node agent from test processes it started itself. A job's own report may
    back an exact-tree receipt only, because only runs of that identical tree reuse it, and that code
@@ -67,11 +76,11 @@ rejected, however much time it saves.
    Git objects, as `velnor-runner-host`'s build script does with `.velnor/runner.lock`
    (`build.rs:69-80`), stays in this clause until it reads a declared file instead.
 6. **C6. Reuse is audited, compile reuse included.** A random sample of reused results is executed
-   again (2% of exact-tree reuse, 10% of closure reuse in its first month). The nightly and
-   every-20th-merge full runs build from an empty target in a fresh pod and compare their results
-   and test-binary digests with the warm path. A cache lineage restarts from empty on every lockfile
-   or toolchain change and at least daily. One disagreement disables that kind of reuse, or retires
-   that lineage, until it is explained.
+   again (2% of reuse by key in its first month). The nightly and every-20th-merge full runs build
+   from an empty target in a fresh pod and compare their results and test-binary digests with the
+   warm path. A cache lineage restarts from empty on every lockfile or toolchain change and at least
+   daily. One disagreement disables that kind of reuse, or retires that lineage, until it is
+   explained.
 7. **C7. Flakes are budgeted** (section 1.3).
 
 Where a repeat run carries information, and where it does not: for an obligation whose inputs the
@@ -104,25 +113,22 @@ rerun or a merge-queue ejection, and every queued entry behind an ejection is re
 
 ### 1.4 Targets
 
-| Target | Phase | Committed | Stretch |
-|---|---|---|---|
-| Push-to-merge P50 / P90 | 0 | ≤ 25 / ≤ 60 min | |
-| Push-to-merge P50 / P90 | 1 | ≤ 12 / ≤ 30 min | ≤ 10 / ≤ 22 min |
-| Push-to-merge P50 / P90 | 2 | ≤ 9 / ≤ 20 min | |
-| Push-to-merge P50 / P90 | 3 | ≤ 6 / ≤ 15 min (P50 ≤ 8 without merge-group selection) | |
-| Push-to-merge P50 / P90 | 4 | | ≤ 4 / ≤ 10 min |
-| PR verdict P50 / P90 | 1 | ≤ 5 / ≤ 10 min | ≤ 3.5 / ≤ 8 min |
-| PR verdict P50 / P90 | 3 | ≤ 90 s / ≤ 4 min | ≤ 60 s / ≤ 2.5 min |
-| PR verdict after a preflighted push | 3 | | ≤ 20 s |
-| First cargo command, P50 | 2 / 3 | ≤ 15 s after the job starts (2); ≤ 5 s after the push (3) | ≤ 4 s after the push |
-| Test floor, measured alone | 1 / 2 | `Journal::open` on a template ≤ 1 s (1); no test over 60 s (2) | no test over 15 s |
-| Obligations executed twice on identical inputs | 1 / 3 / 4 | none on the same SHA (1); none on the same tree (3) | none on the same enforced closure (4) |
-| Runner-minutes per merged PR | 1 / 2 / 3 | ≤ 150 / ≤ 60 / ≤ 40 | ≤ 15 |
-| False failures per full run | 1 / 3 | ≤ 3% / ≤ 1% | ≤ 0.3% |
+Committed figures with the stretch in brackets, P50 / P90, following the design review's consensus.
+A phase's figures hold only if its conditions do. CPU per merged PR charges everything: completed,
+cancelled and superseded runs, and batch work.
 
-Phase 1's runner-minute target needs the engine's selection fixed in phase 1 (section 6.2): the
-phase's other items alone give about 212, and about 139 with it [E, `fable-5.2` design review H10,
-T3].
+| Phase | PR verdict | Push-to-merge | CPU per merged PR | Conditions |
+|---|---|---|---|---|
+| 0 | ≤ 12 / ≤ 20 min | ≤ 25 / ≤ 60 min (18 / 40) | baseline re-measured | the regenerated workflow is live; admission span p90 ≤ 5 s |
+| 1 | ≤ 5 / ≤ 10 min (3.5 / 8) | ≤ 12 / ≤ 30 min (10 / 22) | ≤ 150 runner-min | selection fixed in the engine (about 212 without it, 139 with it [E]); `Journal::open` on a template ≤ 1 s |
+| 2 | ≤ 2 / ≤ 6 min (80 s / 4 min) | ≤ 5 / ≤ 15 min (3.5 / 9) | ≤ 60 | per-root keys, with ≥ 65% of merge groups executing nothing; the cache engine chosen by its experiment; no test over 60 s measured alone |
+| 3 | ≤ 90 s / ≤ 4 min (60 s / 2.5 min) | ≤ 3 / ≤ 8 min (1.75 / 5) | ≤ 35 (15) | the week-1 experiments passed: webhook arrival under 8 s, closure-only checkout for ≥ 80% of packages, queue-tip match ≥ 70%; ≥ 85% of merge groups execute nothing; ≤ 0.5% of merges ejected by a false failure; demand-to-start p90 ≤ 2 s for merge and gate work |
+| 4 | (30 s / 100 s); ≤ 20 s after a preflighted push | (100 s / 4 min); about 50–75 s if Velnor lands the merge | (≤ 15) | stretch only |
+
+If phase 3's experiments fail, its own design still supports about 90 s / 4 min for the verdict and
+4 / 10 min push-to-merge. Further committed figures: first cargo command ≤ 15 s after the job starts
+(phase 2) and ≤ 5 s after the push (phase 3, stretch ≤ 4 s); `Journal::open` ≤ 1 s (phase 1), no
+test over 60 s (phase 2, stretch 15 s); false failures ≤ 3% per run (phase 1) and ≤ 1% (phase 3).
 
 ## 2. Where the time goes, and what changes the problem
 
@@ -131,8 +137,10 @@ Four facts set the design [M unless marked]:
 1. **Waiting, not working.** Without hosted queues a PR run takes about 11 min, but the median PR
    waits 85 min from push to merge. On the worst day the three serial gate jobs on GitHub-hosted
    runners waited 57.0 of a 71.8 min run (§A T5), on an organisation with the Free plan's 20
-   concurrent hosted jobs shared with two busy non-CI workflows (§A T11). The merge queue builds 2
-   entries at a time and no agent enables auto-merge (0 of 40 recent merged PRs [M, decision log]).
+   concurrent hosted jobs shared with two busy non-CI workflows (§A T11). A push that supersedes a
+   running PR run waits until the cancelled run's `Required` job, which runs on `always()`, has been
+   scheduled and finished: 60 s p50, 626 s p90 and up to 2,203 s. The merge queue builds 2 entries
+   at a time and no agent enables auto-merge (0 of 40 recent merged PRs [M, decision log]).
 2. **The same verification three times.** Each merge runs the full job set on the PR, on the merge
    group, and again on the push of the same SHA (§A T7). The third run found nothing and failed
    falsely 8.1% of the time.
@@ -145,10 +153,11 @@ Four facts set the design [M unless marked]:
 
 The design attacks each fact by removing work, not by speeding it up. Gates move off the hosted
 pool. Verification leaves GitHub jobs altogether: the push webhook starts it on the cluster, and one
-witness job reports it. A verification ledger makes "verify identical inputs once" structural.
-Caches live on the node that runs the work. The slow tests are rewritten. Rust components are built
-where owning the mechanism removes work: the node agent and its executor, the ledger, the stores and
-the webhook ingress. Owning job acquisition is kept as an experiment, because an idle runner already
+witness job reports it. A verification ledger with input-addressed keys makes "verify identical
+inputs once" structural, so a merge group stays a full verification and is mostly a lookup. Caches
+live on the node that runs the work. The slow tests are rewritten. Rust components are built where
+owning the mechanism removes work: the node agent and its executor, the ledger, the stores and the
+webhook ingress. Owning job acquisition is kept as an experiment, because an idle runner already
 starts the next job in 2 s (section 3.5).
 
 ## 3. Architecture
@@ -220,9 +229,8 @@ prints its logs:
   merge (section 5), so an obligation on any node starts from `main`. Placement no longer decides
   whether work is warm; it decides only the smaller things below.
 - **Per-obligation placement** (phase 3) minimises predicted finish time: sandbox availability +
-  view set-up + predicted rebuild on that node (smaller where the pull request's own scope lives) +
-  predicted tests + a site penalty when the request's other obligations and artifacts are in the
-  other site. An idle cold node beats a busy warm one.
+  view set-up + predicted rebuild on that node + predicted tests + a site penalty when the request's
+  other obligations and artifacts are in the other site. An idle cold node beats a busy warm one.
 - **Request stickiness.** All obligations of one request stay in one site; DE to FI is 35 ms over
   WireGuard (§B.5).
 - **Class routing** for workflow jobs works through labels: `velnor-gate`, `velnor-build`,
@@ -252,7 +260,7 @@ prints its logs:
 |---|---|---|---|---|
 | gate | the witness and other small jobs | ARC pod, 1 CPU | GitHub API | read-only tools |
 | build | same-repository PR, merge group and `main` obligations | agent-created pod: no Docker, seccomp `RuntimeDefault`, all capabilities dropped, no service-account token, no GitHub token, no `.git`, scrubbed environment | allow-list: crates mirror, site store | read-only trusted; per-obligation views; never a shared writable path |
-| docker | obligations that declare Docker | pod with a privileged dind sidecar, on two tainted nodes (one per site) | as build, plus a registry mirror | as build |
+| docker | only the test binaries that need a Docker daemon (`local_pair_public`, `local_host_public`, `velnor-local`'s Docker tests), run as their own obligation beside the build that produced them: placement puts that build, in the build class, on a docker node | pod with a privileged dind sidecar, on two tainted nodes (one per site) | as build, plus a registry mirror | the build's test binaries, cloned in about 1 s |
 | builder | `main` builds, no GitHub job | unprivileged pod | crates mirror | writes the trusted scope through the agent only |
 | fork | fork pull requests | GitHub-hosted runners until a microVM class exists | — | none |
 
@@ -293,62 +301,92 @@ Rules:
 
 The ledger is the mechanism that removes duplicate work while keeping C1–C7.
 
-### 4.1 Obligations and keys
+### 4.1 Obligations and input-addressed keys
 
-- The plan (`velnor-ci plan`, from a released version) lists the run's obligations. Each has a
-  **definition digest**: what runs and how (command, configuration and features, profile, nextest
-  profile and overrides, helper version, toolchain, runner image, sandbox class and its CPU count).
-- **Exact-tree key** (phase 3): Git tree hash + definition digest. Two runs with the same key
-  execute the same thing on the same bytes.
-- **Closure key** (phase 4, stretch): for a test obligation, the digest of the test binary
-  (output-addressed: whatever the build produced) + the digests of its declared runtime inputs + the
-  definition digest. For compile obligations cargo's own fingerprints play this role inside a target
-  view, audited by C6's cold builds.
+- The plan (`velnor-ci plan`, from a released version) lists every obligation of the tree, on every
+  event. Each has a **definition digest**: what runs and how (command, configuration and features,
+  profile, nextest profile and overrides, helper version, toolchain, runner image, sandbox class and
+  its CPU count).
+- **The key is the hash of what the sandbox contains.** Per Cargo root in phase 2: the Git tree
+  hashes of the root, of the roots it reaches (only `ci-helper` reaches outside its own root, into
+  five `generator` crates), of the shared files (toolchain pin, `mise.*`, `.github/`, `.velnor/`),
+  and any declared extra inputs, plus the definition digest. Per package in phase 3: the same over
+  the package's dependency closure from cargo's package graph. The hashes come from the commit
+  itself, in under 5 ms, with no build.
+- **The sandbox is a sparse checkout of exactly the key's paths.** An input the key does not hold is
+  not on disk, so reading it fails instead of passing on stale data, negative lookups included.
+  Every failure in a closure-only checkout names an undeclared input; it is declared or the key
+  widens.
+- **The exact tree is the degenerate key**, used when no narrower key is proven. Test-binary digests
+  are recorded with every receipt and audit the key; they are not part of it, so no bit-identical
+  build is needed.
+- **Package keys exist before the root workspaces merge.** The planned move to one root workspace
+  removes the root boundaries that phase-2 keys use.
 
-### 4.2 Receipts and scopes
+### 4.2 Receipts, joins and scopes
 
-A receipt binds a key to a result, the request that produced it, the sandbox class and node, and the
-observing agent's signature. A receipt expires after 7 days, which bounds how long a time-dependent
-failure can hide. Scopes decide who may reuse it:
+- **One receipt per obligation, written as it finishes.** A receipt binds a key to a result, the
+  request that produced it, the sandbox class and node, the expected test inventory it ran, and the
+  observing agent's signature. A receipt expires after 7 days, which bounds how long a
+  time-dependent failure can hide.
+- **In-flight join.** A request whose key is already executing waits for that execution instead of
+  starting a second one. A cancelled request drops its claim; the execution continues while another
+  request needs it. A partial result satisfies nothing.
+- **Why reuse across trees is safe here.** Everything that could forge or change a root's result is
+  inside its key: the root's files, `.github/`, the pinned helper and the toolchain. The ledger
+  accepts a receipt only for an obligation the released planner assigned to that execution.
 
 | Scope | Written by | Reusable by |
 |---|---|---|
-| `tree/<hash>` | the agent of any request that executed exactly that tree | any request for the same tree; the code that produced it is exactly the code being verified |
-| `pr/<number>` | the agent, from that pull request's work | that pull request's later pushes, for feedback only |
-| `trusted` | the `main` builder for landed commits; a merge group's receipts once its SHA is on `main` | every request of the organisation except forks |
+| key receipts | the agent, for an execution built from a `trusted` generation plus its own delta | any request whose obligation has the same key, except forks |
+| `trusted` | receipts of commits on `main`, and the `main` builder's outputs | every request of the organisation except forks |
 | fork | nothing | nothing |
 
-A request whose receipts can become `trusted` (a merge group, a push to `main`) builds from a
-`trusted` generation plus its own delta, never from a `pr/` scope: a stale build-script output left
-by an earlier push could otherwise let a tree pass that no clean build accepts. That costs the delta
-build, 10–20 s for the generator and 45–80 s for `velnor-runner-host` [E].
+A build that can mint a reusable receipt reads the `trusted` cache plus its own outputs only; a
+stale build-script output left by an earlier push could otherwise let a tree pass that no clean
+build accepts. That costs the request's delta build, 10–20 s for the generator and 45–80 s for
+`velnor-runner-host` [E], and it retires the separate PR-scope cache.
 
-### 4.3 Where reuse is allowed
+### 4.3 What a request executes
+
+- **Every event lists every obligation.** A merge group stays a full verification, as hard decision
+  3 requires; most of its obligations are satisfied by a receipt with the same key. An obligation
+  with no such receipt runs. A missing report or a test step that ran zero tests fails.
+- **"Executes nothing" holds only when every obligation of the consuming plan has a receipt.** A PR
+  run's receipts cover what its tree's keys cover; for a generator-only PR, the other roots' keys
+  equal `main`'s, so their receipts come from `main`.
 
 | Situation | Phase | What runs | Status |
 |---|---|---|---|
 | Push to `main` whose SHA passed its merge group | 1 | release and publication duties only | committed |
-| Merge-group candidate tree equals a tree the PR run verified | 3 | plan and verdict; obligations hold by `tree/` receipts | committed |
-| Re-run of a failed job on the same tree | 3 | only the obligations without a passing receipt | committed |
-| Merge-group candidate differs, test obligation's enforced closure unchanged | 4 | nothing for that obligation | stretch, gated by moonshot M4 |
-| Second push to a pull request, closure unchanged | 4 | nothing for that obligation | stretch, M4 |
+| A root whose key equals a receipted key (any event) | 2 | nothing for that root | committed |
+| A package whose closure key equals a receipted key | 3 | nothing for that package | committed after its experiment |
+| Re-run of a failed job | 2 | only the obligations without a passing receipt | committed |
+| Test-binary digest closures finer than packages | 4 | nothing for that test binary | stretch, moonshot M4 |
 | Any obligation in C5 | all | always runs | — |
 
-**Enforcement for closure reuse.** A test binary is eligible only when it passes inside a mount
-namespace that contains its binary, its declared inputs, the toolchain runtime and a private `/tmp`,
-with no network. An undeclared read finds no file and fails the test, so the binary becomes
-ineligible until its inputs are declared. Landlock is not used, because it cannot restrict `stat` or
+Replayed over 100 real merges, the root-jobs merge groups would execute fall from 500 (full) to 425
+with exact-tree receipts and 125 with per-root keys [E, `opus-5.5` design review T3].
+
+**Enforcement for finer closures.** Below the package level a test binary is eligible only when it
+passes inside a mount namespace that contains its binary, its declared inputs, the toolchain runtime
+and a private `/tmp`, with no network. Landlock is not used, because it cannot restrict `stat` or
 `access`. The agent's executor starts each test inside that namespace, and C4 wants the agent to
 observe the result anyway.
 
-### 4.4 Audit
+### 4.4 Trust root and audit
 
-The audit sampler (C6), the cold differential builds of the nightly and every-20th-merge full runs,
-and the file-read audit (phase 3: the agent records each build sandbox's file reads with fanotify
-and reports reads no declaration covers) each produce a non-blocking check. A disagreement turns
-that reuse class off for the organisation, or retires that cache lineage, and opens an issue; it
-never turns a red result green. If the ledger cannot be reached, every obligation executes: a
-missing receipt is slow, never wrong.
+- **Keys.** Each node's signing key lives outside every pod, in a signer the agent calls; no sandbox
+  can read it. Receipts go to an append-only log per site. The witness verifies each receipt's
+  signature and its log entry before it passes.
+- **Degraded mode.** If the ledger cannot be reached, nothing is satisfied by lookup: obligations
+  run fresh, or, if the executor is down too, the per-job workflow takes over by a configuration
+  switch. A missing receipt is slow, never wrong.
+- **Audit.** The audit sampler (C6), the cold differential builds of the nightly and
+  every-20th-merge full runs, the test-binary digests recorded with each receipt, and the file-read
+  audit (phase 3, as telemetry) each produce a non-blocking check. A disagreement turns that reuse
+  class off for the organisation, or retires that cache lineage, and opens an issue; it never turns
+  a red result green.
 
 ## 5. Cache system
 
@@ -422,15 +460,13 @@ seeds in the background.
 | Git objects | L1 mirror | — | agent on push webhooks | ≈ 100% except objects pushed seconds earlier | the ledger fetches the pushed commit before planning |
 | Action archives | L1, read-only | `owner_repo/<sha>.tar.gz` | provisioner | 100% for pinned actions | [M] about 4.4 s per job today (`proposals/opus-5.5.md`) |
 | Compiled outputs of `main` | L1 per node, L2 per site for candidate (a) | the engine's own key | the `main` builder | ≥ 95% of units fresh on PRs without a lockfile or toolchain change | [E] decided by section 5.3 |
-| PR scope | L1 on the node of the PR's last request | pull request, root | agent, after the build phase | hit when the next push lands on that node | [E] a miss costs only the PR's own delta |
 | Test binaries and archives | L2 | content digest | agent | — | [M] velnor-new's nextest archive is 1.48 GB; GitHub upload took 36–43 s (I045) |
 | Receipts | L2 ledger | obligation key | agents | exact tree: same-SHA push 100%; merge groups 0–18% today [M] and higher as verdicts shorten [E] | [M] decision log, (e) |
 
 ### 5.6 Trust and promotion
 
-- **Only the `main` builder writes the trusted scope.** Pull requests write only their own scope,
-  through the agent; with candidate (a), pull requests read the site server and only `main` pushes
-  write it.
+- **Only the `main` builder writes the trusted scope.** Pull-request builds write no shared scope;
+  with candidate (a), pull requests read the site server and only `main` pushes write it.
 - **Snapshots and generations are immutable.** Requests get views; nothing writes a frozen
   generation.
 - **Post-build harvest.** The agent takes a sandbox's outputs when the build phase ends and before
@@ -448,8 +484,8 @@ seeds in the background.
 
 ### 5.7 Eviction and budgets
 
-- Per node and organisation: the last three generations of `main` outputs per root, PR scopes until
-  the pull request closes or three idle days, then least-recently-used.
+- Per node and organisation: the last three generations of `main` outputs per root, then
+  least-recently-used.
 - Budget: 40% of the node's data volume across all organisations, alert at 70% of the volume. The FI
   workers have one 3.5 TB data disk each (§B.1.4), the DE workers 32–50 TB.
 - Sizes: a runner-workspace target is 5.9–7.1 GB and the root one 9.0 GB [M,
@@ -478,12 +514,14 @@ seeds in the background.
   build script (`crates/velnor-actions-rust/src/tasks.rs:254`), which is why the heavy jobs ran in
   97.4% of PR runs. Merge groups stay full under hard decision 3, so a missed input shows up as a
   merge-group failure, never as a false green.
-- From phase 2, selection follows `docs/goals.md` design rule 2: the Cargo package graph plus
-  declared inputs, with unknown files selecting everything.
-- Merge groups select by the change against the queue base only after the owner decides (section 13,
-  question 2), the file-read audit runs, and two weeks of shadow plans show zero selection misses
-  against full runs.
-- A scheduled full run (nightly) and every 20th merge select everything, built cold (C6).
+- From phase 2, a pull request's plan follows `docs/goals.md` design rule 2: the Cargo package graph
+  plus declared inputs, with unknown files selecting everything. Skipped obligations are not lost:
+  every merge group lists all of them.
+- **No selection relative to the queue.** A merge group diffed against the entry ahead of it would
+  never select a failed predecessor's change, and under HEADGREEN that change lands with the group
+  (`ci-helper/crates/velnor-ci/src/event.rs:42-45`). Merge groups therefore stay full and are
+  satisfied by key lookup (section 4.3), which keeps hard decision 3 literally.
+- A scheduled full run (nightly) and every 20th merge execute everything, built cold (C6).
 
 ### 6.3 Tests
 
@@ -494,6 +532,12 @@ seeds in the background.
   loops into one test per case comes with it.
 - **A test-time budget** check enforces that list: non-blocking in phase 1, blocking for new tests
   from phase 2.
+- **The compile floor.** `velnor-runner-host` splits into five or six crates along its module
+  boundaries, with one test binary per package instead of one per file, so a leaf edit recompiles
+  one part instead of 157k lines; a one-file edit cost 61 s and 159 CPU-s on a Mac [M, `opus-5.5`
+  design review]. Keeping incremental state in the cache is an experiment: 10.9 s instead of 61 s on
+  a Mac [M, `fable-5.2` design review], at the price of non-identical binaries, which input keys
+  tolerate.
 - **Changed tests run three times** in parallel (section 1.2).
 - **Shard only by arithmetic.** A suite is split only when its summed test time divided by the
   slot's threads exceeds its longest test plus the cost of moving binaries (I067).
@@ -503,10 +547,10 @@ seeds in the background.
 
 ### 6.4 No double or triple runs
 
-| Event | Today | Phase 1 | Phase 3 | Phase 4 |
+| Event | Today | Phase 1 | Phase 2 | Phase 3 |
 |---|---|---|---|---|
-| PR push | full selected set | same | `ensure` on the push; work held by receipts is skipped | closure receipts too |
-| Merge group | everything | everything | `ensure` on the group; everything not held by `tree/` receipts | closure receipts; candidates pre-verified (M5) |
+| PR push | full selected set | same | selected set; roots with a receipted key skipped | `ensure` on the push; packages with a receipted key skipped |
+| Merge group | everything | everything | every obligation listed; roots with a receipted key satisfied by lookup | `ensure` on the group; packages satisfied by lookup; queue-tip candidates pre-verified (M5) |
 | Push to `main` | everything again | release duties only when the SHA passed its merge group | same | same |
 | Direct push to `main` (no queue) | everything | everything | everything | everything |
 
@@ -515,11 +559,16 @@ seeds in the background.
 | Setting | Today | Phase 0 | Phase 3 |
 |---|---|---|---|
 | `max_entries_to_build` | 2 | 4 | 8, once false failures are ≤ 2% per run |
-| Grouping, `max_entries_to_merge`, `min_entries_to_merge` | HEADGREEN, 10, 1 | same | same |
+| Grouping, `max_entries_to_merge`, `min_entries_to_merge` | HEADGREEN, 10, 1 | same | owner question 3 (ALLGREEN) |
 | `min_entries_to_merge_wait_minutes` | 5 | unchanged: it never applies when the minimum is 1 [M: enqueue to merge-group run 19 s] | same |
 | `check_response_timeout_minutes` | 90 | 90 | 20 |
 | Auto-merge | 0 of 40 PRs | agents enable it when they open a PR | same |
 | Catch-up merges of `main` into PR branches | common | stopped | stopped |
+
+HEADGREEN lands every entry of a group on the strength of the group tip's checks. In the 15 days of
+evidence one failed queue entry landed that way: its own merge-group run failed and the next entry's
+passed. C1 is stated for tips; the earlier commits of a group are recorded in a list that bisection
+and release tooling read, and a release is never cut from one of them.
 
 ### 6.6 Minimum honest time to verdict
 
@@ -543,12 +592,24 @@ with incremental compilation (`fable-5.2` design review H10), plus tests]. Engin
 min until the image-publication fixture (89 s, a cold example build) and its suite are fixed.
 
 **Push-to-merge** adds: auto-merge enqueue (seconds), enqueue → merge-group run 19 s [M], the
-merge-group request, and merge-group finish → merged 26 s [M]. With an unchanged base the
-merge-group request finds its receipts and takes about 30 s [E]. With a moved base it re-runs the
-PR's selected obligations on the new tree. A moved base is the common case today: none of 40 merge
-groups on the worst measured day and 11 of 60 (18%) on two quieter days had the base the PR's last
-green run had tested (decision log, (e)). The committed P50 of 6 min assumes merge groups select by
-change (section 13, question 2); with full merge-group runs it is 8 min.
+merge-group request, and merge-group finish → merged 26 s [M]. A merge group finds every receipt it
+needs when its tree's keys equal those the PR verified. With per-root keys that holds unless another
+pull request touching the same roots landed in between, so the question is how long that window is.
+Today it is hours, and S4's 0–18% exact-tree matches describe it. In the design it is the verdict
+time plus about a minute. Two replays of real arrivals give the share of merge groups whose tree
+equals the PR-tested tree [E, `opus-5.5` and `fable-5.2` design reviews, 98 and 142 merges]:
+
+| Window between the PR's verdict and its merge group | Same tree |
+|---|---|
+| 1–2 min | 89% |
+| 2.5–5 min | 78–83% |
+| 10 min | 70% |
+| 11–20 min | 52–53% |
+| twice today's demand, at 2.5 and 11 min | 80% and 69% |
+
+Per-root and per-package keys add 3–10 points at every window. For those merges push-to-merge is the
+verdict plus about 1 min: about 2 min for the median PR in phase 3 [E]. The rest re-run the
+obligations whose keys changed.
 
 ## 7. Kubernetes
 
@@ -569,8 +630,10 @@ change (section 13, question 2); with full merge-group runs it is 8 min.
   from the last hour's arrivals. An idle pod costs about 45 MiB (§B.2.2).
 - **Sizes.** Build: request 16 CPU with no CPU limit, memory 32 GiB request equal to limit (the
   heaviest observed job peaked at 15.7–16.8 GiB, §B.2.2 and decision log I036). Docker: 8 CPU plus 4
-  for dind, 24 GiB. Gate: 1 CPU, 2 GiB. Cargo and nextest parallelism follow the sandbox's CPUs, not
-  a constant.
+  for dind, 24 GiB, for Docker-needing test binaries only; the runner root itself builds in the
+  build class, although it is touched by 55 of 100 merges and its Docker tests would otherwise pull
+  it into the smallest class. Gate: 1 CPU, 2 GiB. Cargo and nextest parallelism follow the sandbox's
+  CPUs, not a constant.
 - **Node settings.** Kube and system reservations (3 CPU, 6 GiB), a `memory.available` eviction
   threshold of 2 GiB, `podPidsLimit` 16384, the kubelet root directory on the XFS data volume (today
   `emptyDir` lands on the ext4 OS disk, `velnor-runners/PLAN.md:45`), topology labels for site.
@@ -621,9 +684,9 @@ velnor-lab or a drained worker, and none touches the required path.
 | Id | Moonshot | Phase | Status |
 |---|---|---|---|
 | M1 | PR verdict under 60 s for the median PR | 3 | stretch (committed ≤ 90 s) |
-| M2 | Push-to-merge under 5 min for the median PR | 3 (≤ 6 min), 4 (≤ 4 min) | committed / stretch |
+| M2 | Push-to-merge under 5 min for the median PR | 2 (≤ 5 min), 3 (≤ 3 min), 4 (100 s) | committed; stretch in phase 4 |
 | M3 | Zero cold start: the first cargo command 3–4 s after the push | 3 | stretch |
-| M4 | Zero duplicate verification across PR, merge queue and `main` | 1, 3, 4 | committed for SHA and tree; stretch for closures |
+| M4 | Zero duplicate verification across PR, merge queue and `main` | 1, 2, 3 | committed for the SHA, root and package keys; stretch below packages |
 | M5 | Speculative merge queue on the queue tip | 3 | stretch, shadow from phase 0 |
 | M6 | Test-granularity scheduling over all 480 threads | 4 | stretch |
 | M7 | Break the single-test floor | 1–2 | committed: `Journal::open` ≤ 1 s; stretch ≤ 15 s per test |
@@ -638,14 +701,15 @@ pod and a one-job workflow that waits for the result; 50 pushes, recording webho
 cargo command and verdict. Killed if webhook arrival P50 is worse than 8 s; the target then becomes
 90 s.
 
-**M2. Push-to-merge under 5 min.** Must be true: M1 or close to it, auto-merge always on, and a
-merge group that re-executes almost nothing. Exact trees alone do not get there: 0 of 40 merge
-groups on the worst measured day and 11 of 60 on two quieter days had the base the PR run had tested
-(decision log, (e)), because `main` moves while a PR waits. Attacked by: shorter verdicts (a smaller
-window for `main` to move), queue-tip speculation (M5), closure receipts (M4), merge-group-first
-admission and depth 8. Cheapest experiment: work item 4 records the tested tree of every run; from
-phase 1 on, measure how the share of merge groups with an already-verified tree grows as verdicts
-shorten. Committed ≤ 6 min in phase 3 (with merge-group selection), stretch ≤ 4 min in phase 4.
+**M2. Push-to-merge under 5 min.** Must be true: a short verdict, so that the window in which
+another pull request can land before the merge group stays short; auto-merge always on; and a merge
+group that finds its receipts by key. Attacked by: `ensure` on the push (a short window), per-root
+and per-package keys, queue-tip speculation (M5), merge-group-first admission and depth 8. In the
+window model of section 6.6, 78–89% of merge groups find every receipt when the window is 1–5 min,
+and those merges take the verdict plus about 1 min. Cheapest experiment: work item 4 records the
+tested tree and keys of every run; the replay of each week's merges at the measured verdict time
+gives the hit rate. Killed if that rate falls below 70%. Committed ≤ 5 min in phase 2 and ≤ 3 min in
+phase 3; stretch ≤ 100 s in phase 4.
 
 **M3. Zero cold start.** Must be true: the merge tree and plan take ≤ 2 s and a pre-created sandbox
 has its view ready in ≤ 1 s. Attacked by: `ensure` on the push webhook, pre-created sandboxes,
@@ -653,14 +717,13 @@ read-only stores and the cache engine's views; later, microVMs restored from a s
 and docker classes. Cheapest experiment: M1's run, recording push → first cargo command. Killed if
 that exceeds 10 s at P50.
 
-**M4. Zero duplicate verification.** Must be true for the closure stage: test binaries are
-bit-identical across nodes for identical inputs at fixed paths; at least 80% of test binaries pass
-under mount-namespace enforcement with declared inputs; the audit finds no disagreement in 1,000
-reuses. Attacked by: the ledger with output-addressed keys and enforced inputs. Cheapest experiment:
-build one commit twice on two nodes and compare test-binary digests; run each root's suite under
-enforcement and count failures; replay 200 merges to count how many merge-group test obligations had
-the same closure as the PR run. Killed if digests differ for reasons that cannot be pinned, or
-enforcement fails most suites.
+**M4. Zero duplicate verification.** Must be true: an obligation's inputs can be named, so its key
+is the hash of what its sandbox contains. Attacked by: input-addressed keys, per root in phase 2 and
+per package in phase 3 (section 4.1), and finer test-binary closures as a phase-4 refinement.
+Cheapest experiment, 1–2 days on velnor-lab: run each root, then each package, from a sparse
+checkout of its key's paths; every failure names an undeclared input; then replay 200 merges with
+the final declarations. Killed for package keys if more than 20% of packages cannot pass in a
+closure-only checkout once their inputs are declared; the root keys still stand.
 
 **M5. Speculative merge queue on the queue tip.** Must be true: Velnor predicts the tree GitHub will
 build, which is the queue tip plus the PR, not `main` plus the PR: 122 of 193 merge-group runs were
@@ -700,16 +763,16 @@ measured hour's arrivals against the capacities in section 7.
 ## 10. Phases
 
 Every moonshot experiment and the cache head-to-head run in week 1, beside phase 0; their results,
-not the calendar, choose what phases 2 and 3 build.
+not the calendar, choose what phases 2 and 3 build. The targets are those of section 1.4.
 
 | Phase | Scope | Exit gate (measured on velnor-new over at least 50 merges) | Expected saving |
 |---|---|---|---|
-| 0, week 1 | Gate jobs on the cluster: the generator release that moves them is merged, but the workflow was never regenerated, so they still run hosted; regenerating it is the first measured gain. Narrow the image-candidate trigger; Source qualification on the cluster or only in the queue; auto-merge; no catch-up merges; depth 4; fixed cache paths; `event.json` race fix; push-to-merge, queue and flake instrumentation; the queue-tip shadow; the week-1 experiments | push-to-merge P50 ≤ 25 min, P90 ≤ 60; hosted gate queue on the critical path p90 ≤ 1 min | 5.8–57 min of gate queue per run; 7.5 min median enqueue delay; twice the queue throughput |
+| 0, week 1 | Gate jobs on the cluster: the generator release that moves them is merged, but the workflow was never regenerated, so they still run hosted; regenerating it is the first measured gain. Narrow the image-candidate trigger; Source qualification on the cluster or only in the queue; auto-merge; no catch-up merges; depth 4; fixed cache paths; `event.json` race fix; push-to-merge, admission and flake instrumentation; the queue-tip shadow; the week-1 experiments | PR verdict P50 ≤ 12 min, P90 ≤ 20; push-to-merge P50 ≤ 25 min, P90 ≤ 60; hosted gate queue on the critical path p90 ≤ 1 min; admission span p90 ≤ 5 s | 5.8–57 min of gate queue per run; the cancelled-run stall shrinks from up to 2,203 s to one warm job; 7.5 min median enqueue delay; twice the queue throughput |
 | 1, weeks 2–3 | Selection fixed in the engine; the test-floor programme; `-j` caps removed; gate, build and docker classes under ARC with warm pools and honest sizes; node tools and action archives; crates mirror; push run reduced to release duties; flake budget machinery; tested-tree recording | PR verdict P50 ≤ 5 min, P90 ≤ 10; push-to-merge P50 ≤ 12, P90 ≤ 30; runner-min per merged PR ≤ 150; false failures ≤ 3%; `Journal::open` ≤ 1 s | About 62 runner-min per merge from the push run; a generator or helper PR falls from 10.9 to about 3.5 min and from 52.9 to about 8 runner-min [E] |
-| 2, weeks 3–6 | `velnor-gen` cutover with parity; kubelet on XFS; the compile-cache engine the head-to-head chose; the `main` builder; state seal retired; test-time budget | PR verdict P50 ≤ 3.5 min, P90 ≤ 8; push-to-merge P50 ≤ 9, P90 ≤ 20; ≥ 95% of units fresh on PRs without lockfile changes; first cargo ≤ 15 s after the job starts | Cold compiles of 196–497 crates per job become deltas; 24 of 29 per-job overheads disappear with one job per root |
-| 3, weeks 6–10 | `ensure` on the push and merge-group webhooks; the witness job; the ledger with `tree/` receipts; queue-tip speculation; PR scopes; `velnor verify` as a stretch; merge-group selection if approved; depth 8 | PR verdict P50 ≤ 90 s, P90 ≤ 4 min; push-to-merge P50 ≤ 6 (8 without merge-group selection), P90 ≤ 15; first cargo ≤ 5 s after the push; false failures ≤ 1%; runner-min per merged PR ≤ 40 | Two of three job hops and the plan job disappear; merge groups on verified trees take about 30 s |
-| 4, weeks 10–18 | Moonshots M4 and M6: closure receipts, the cluster test executor; the gated dispatcher, hot Worker or podless completion if the witness left a residual over 5 s | stretch: PR verdict P50 ≤ 60 s; push-to-merge P50 ≤ 4 min, P90 ≤ 10 | The second verification of unchanged obligations disappears |
-| 5, after week 18 | Agent workspaces on the cluster; microVM fork and docker classes; other organisations on Velnor | stretch: push-to-merge P50 ≤ 2.5 min | Verification overlaps the agent's own work |
+| 2, weeks 3–6 | `velnor-gen` cutover with parity; the root jobs call `ensure`, so the agent executes and observes every obligation; the ledger with per-root keys; the compile-cache engine the head-to-head chose; kubelet on XFS; the `main` builder; the crate split; state seal retired; test-time budget | PR verdict P50 ≤ 2 min, P90 ≤ 6; push-to-merge P50 ≤ 5, P90 ≤ 15; ≥ 65% of merge groups execute nothing; CPU per merged PR ≤ 60; no test over 60 s | Cold compiles of 196–497 crates per job become deltas; a merge group re-runs only roots whose key changed: 125 root-jobs per 100 merges instead of 500 [E] |
+| 3, weeks 6–10 | `ensure` on the push and merge-group webhooks; the witness job; per-package keys; queue-tip speculation; `velnor verify` as a stretch; depth 8 | PR verdict P50 ≤ 90 s, P90 ≤ 4 min; push-to-merge P50 ≤ 3, P90 ≤ 8; ≥ 85% of merge groups execute nothing; first cargo ≤ 5 s after the push; false failures ≤ 1%; CPU per merged PR ≤ 35 | Two of three job hops and the plan job disappear; most merges take the verdict plus about 1 min |
+| 4, weeks 10–18 | Moonshot M6, finer test-binary closures, the Velnor merge train if approved; the gated dispatcher, hot Worker or podless completion if the witness left a residual over 5 s | stretch: PR verdict P50 ≤ 30 s, P90 ≤ 100 s; push-to-merge P50 ≤ 100 s, P90 ≤ 4 min | GitHub's 45 s of queue latency per merge, if Velnor lands merges |
+| 5, after week 18 | Agent workspaces on the cluster; microVM fork and docker classes; other organisations on Velnor | stretch: push-to-merge P50 ≤ 75 s | Verification overlaps the agent's own work |
 
 A phase that misses its gate does not start the next one until the miss is explained. Each phase
 keeps a working fallback: hosted labels in phase 0, the per-job workflow until the witness has
@@ -731,12 +794,15 @@ passed a four-week soak, and the hosted break-glass workflow always.
    nothing.
 3. **Queue and agent procedure.** Scope: agents enable auto-merge when they open a pull request and
    stop catch-up merges; `max_entries_to_build` 4; required checks bound to the GitHub Actions
-   integration. Acceptance: ≥ 90% of merged PRs have auto-merge; green → enqueue P50 ≤ 30 s. Depends
-   on: owner questions 5 and 6.
-4. **Measurement and shadows.** Scope: a push-to-merge collector from PR timelines; queue residence
-   and merges per hour; per-job spans; the tested tree hash and obligation digests in every plan's
-   output; the paired-rerun flake sampler; the queue-tip prediction shadow (M5); webhook arrival
-   times (M1). Acceptance: a daily report with P50, P90 and denominators that reproduces the 85-min
+   integration; the list of a HEADGREEN group's intermediate commits for release tooling.
+   Acceptance: ≥ 90% of merged PRs have auto-merge; green → enqueue P50 ≤ 30 s. Depends on: owner
+   questions 3, 5 and 6.
+4. **Measurement and shadows.** Scope: a push-to-merge collector from PR timelines, clocked from the
+   accepted push of the final commit; the admission span (run created → first job) and the
+   cancelled-run stall as their own spans; queue residence and merges per hour; the tested tree
+   hash, root keys and obligation digests in every plan's output; the paired-rerun flake sampler;
+   the queue-tip prediction shadow (M5); webhook arrival times (M1); the weekly window-model replay
+   (M2). Acceptance: a daily report with P50, P90 and denominators that reproduces the 85-min
    baseline from past data. Depends on: nothing.
 5. **The test floor.** Scope: a pre-migrated journal template for `Journal::open`; one test per case
    for the two looped tests; the per-test CPU budget and its list; `ci-helper` tests in parallel
@@ -754,17 +820,20 @@ passed a four-week soak, and the hosted break-glass workflow always.
 8. **No third run.** Scope: the push run checks for a green merge-group run on the exact SHA and
    then does only release and publication duties; otherwise it runs everything. Acceptance: ≤ 2
    runner-min per matching push; the release gate on `main` still passes. Depends on: 4.
-9. **`velnor-gen` cutover with parity.** Scope: one job per root with parallel lanes, the local-mode
-   configuration, the maintenance checks, both required names, the Velnor classes in `runs-on`,
-   cache steps for the engine work item 1 chose; one week of shadow runs beside the engine comparing
-   obligation inventories. Acceptance: empty inventory difference over 100 runs; PR verdict P50 ≤
-   3.5 min. Depends on: 1, 5.
-10. **`ensure` and the witness on velnor-lab.** Scope: `velnor-hooks`, the ledger with `tree/`
-    receipts, the agent's executor in pre-created sandboxes, and a one-job workflow whose witness
-    calls `ensure`; webhook replay; the M1 measurements. Acceptance: 50 pushes with webhook arrival
-    P50 ≤ 8 s and verdict P50 ≤ 60 s for a generator-sized change; a killed webhook still yields a
-    correct verdict through the witness; 0 disagreements in 500 sampled re-executions. Depends on:
-    owner question 1 for the phase-3 cutover, nothing for the lab.
+9. **`velnor-gen` cutover with parity.** Scope: one job per root with parallel lanes, whose steps
+   call `ensure` on the node's agent; the local-mode configuration, the maintenance checks, both
+   required names, the Velnor classes in `runs-on`; no `edited` trigger once the ledger re-plans a
+   base retarget without restarting identical work; one week of shadow runs beside the engine
+   comparing obligation inventories. Acceptance: empty inventory difference over 100 runs; PR
+   verdict P50 ≤ 2 min. Depends on: 1, 5, 10.
+10. **The ledger and `ensure` on velnor-lab.** Scope: `velnor-hooks`, the ledger with per-root keys,
+    per-obligation receipts and in-flight join, the signer and the append-only log, the agent's
+    executor in pre-created sandboxes, and a one-job workflow whose witness calls `ensure`; the
+    sparse-checkout experiment for root and package keys; webhook replay; the M1 measurements.
+    Acceptance: 50 pushes with webhook arrival P50 ≤ 8 s and verdict P50 ≤ 60 s for a
+    generator-sized change; a killed webhook still yields a correct verdict through the witness; at
+    most 20% of packages fail closure-only; 0 disagreements in 500 sampled re-executions. Depends
+    on: owner question 1 for the phase-3 cutover, nothing for the lab.
 
 ## 12. Top risks
 
@@ -776,6 +845,7 @@ passed a four-week soak, and the hosted break-glass workflow always.
 | The ingress or the ledger is down | Webhook replay backlog; ledger health | Witnesses run their obligations fresh; slower, never wrong |
 | False failures rise as work packs denser | Paired-rerun sampler; nextest flaky counts per test | Lower the per-node build cap; queue depth back to 4; quarantine with sign-off |
 | A PR poisons a cache another request trusts | Receipts record producer and scope; promotion only by the builder | Delete the generation; requests build cold, slowly and correctly |
+| A signing key leaks, or a forged receipt reaches a verdict | The witness verifies each receipt's signature and its entry in the append-only log; audits re-execute a sample | Revoke that node's key and every receipt it signed; affected obligations run fresh |
 | FI workers run out of disk | Store budgets and alerts at 70% | Least-recently-used eviction, per-org caps |
 | Other organisations starve, or starve velnor-new | Wait per organisation | Quotas and priorities; preempt only batch work |
 | The new code grows like velnor-legacy | Line budgets checked in CI; phase gates | Stop and review at a budget; the per-job workflow keeps working at every phase |
@@ -792,17 +862,22 @@ passed a four-week soak, and the hosted break-glass workflow always.
    dispatcher, podless completion and a Worker replacement would contradict the line; each is
    decided separately if its experiment passes. Recommendation: amend line 16 to "every job runs in
    GitHub's official runner; verification may run in Velnor sandboxes that the job reports".
-2. **Hard decision 3 runs merge groups and pushes in full.** `docs/goals.md:86` makes "what the
-   change selects" the generator's default. Example: a docs-only pull request's merge group runs
-   every job today (64.6 runner-min median for a merge group, §A T2); with selection it runs the
-   plan and the verdict. Recommendation: choose selection for merge groups once the file-read audit
-   exists and two weeks of shadow plans show no miss, keeping the nightly and every-20th-merge full
-   runs; a push to `main` on a verified SHA does release duties only, and a direct push still runs
-   everything.
-3. **Receipts change what "ran and passed" means** (`docs/goals.md` "Green means verified").
-   Example: a merge group whose tree equals the PR's verified tree finishes in about 30 s and
-   executes nothing. Recommendation: approve exact-tree receipts now; decide closure receipts after
-   moonshot M4's experiment.
+2. **Merge groups keep running in full, and receipts satisfy most of it.** This replaces the earlier
+   question about selecting merge groups by change, which the design review showed unsound: diffing
+   a group against the entry ahead never selects a failed predecessor's change, and HEADGREEN lands
+   it. Hard decision 3 now holds literally, and the question is whether a receipt with the same
+   input key counts as "ran and passed" (`docs/goals.md`, "Green means verified"). Example: a
+   generator-only pull request's merge group lists every root's obligations; four roots have the
+   same key as on `main`, so their receipts satisfy them, and only the generator root executes. The
+   group takes about 1 min instead of a 3–5 min warm full run. Recommendation: yes, with C1–C7 and
+   the audit as written.
+3. **HEADGREEN or ALLGREEN?** HEADGREEN lands a whole group when its tip passes, so a failed entry
+   can land inside a passing group; it happened once in the evidence's 15 days. Example: entry A
+   fails its own merge-group run, entry B (main + A + B) passes, and both land. With ALLGREEN, A is
+   ejected and B is rebuilt without it. Recommendation: keep HEADGREEN while merge groups are slow,
+   with C1 stated for group tips and intermediate commits listed for bisection and release tooling;
+   switch to ALLGREEN once queue-tip speculation keeps the bypass trees verified, which makes an
+   ejection nearly free.
 4. **Stay on the Free plan?** The org's plan is `free` (20 concurrent hosted jobs). After phase 0 no
    job on the merge path runs on hosted runners; forks and macOS release builds still do.
    `docs/goals.md:45` keeps the generator inside free limits, and the cluster tiers do not change
@@ -814,7 +889,8 @@ passed a four-week soak, and the hosted break-glass workflow always.
    pushing.
 6. **Ruleset changes.** Bind `Required verdict` and `Required` to one integration now (anything can
    post them today); move `max_entries_to_build` to 4 now and 8 in phase 3; accept a single
-   `Required` name at the `velnor-gen` cutover. Recommendation: yes to all three.
+   `Required` name at the `velnor-gen` cutover; the grouping as question 3 decides. Recommendation:
+   yes to the first three.
 7. **The Kubernetes runtime inside `velnor-runner-host`.** The proposal under review puts the
    cluster runtime behind a trait in `velnor-runner-host`. This design builds the cluster's executor
    as new crates instead: that crate is 157k lines with about 60 open correctness issues and sets
@@ -831,6 +907,22 @@ passed a four-week soak, and the hosted break-glass workflow always.
    priority with quotas now; offer Velnor in phase 5.
 10. **Hardware.** Rent one high-clock node for a month (section 14)? Recommendation: yes, after
     phase 2, routed only runner-workspace work.
+11. **A Velnor merge train instead of GitHub's merge queue?** GitHub's queue adds 19 s to start a
+    merge group and 26 s to merge it [M], about 45 s per merge, which becomes the largest term once
+    a verdict takes under a minute. Velnor could land merges itself: it fast-forwards `main` to the
+    exact commit whose obligations all hold, a compare-and-swap that verifies every tip by
+    construction. Example: a green pull request lands 5 s after its verdict instead of about 50 s.
+    The cost: squashed pull requests must still show as merged, the queue's interface goes away, and
+    a Velnor outage stops merges until the queue rule is re-enabled. Recommendation: run a two-week
+    shadow train beside the queue in phase 4, kill it below a 95% tree match, then decide.
+12. **One counted re-execution for tests the change could not have caused to fail?** Retries are 0
+    today, so every flake ejects a queue entry and rebuilds the entries behind it. A test whose
+    package closure the change did not touch has the same inputs as on `main`, where it passed.
+    Example: a generator-only change hits a timing flake in a `velnor-runner-host` test; one
+    immediate re-execution passes, it is recorded in a non-blocking `Flaky` check and charged to the
+    flake budget, and the merge proceeds. Tests whose closure changed never get a retry; they run
+    three times instead (section 1.2). Recommendation: yes, after replaying the 10 false failures of
+    the evidence against their pull requests' closures.
 
 ## 14. What more hardware would buy
 
