@@ -351,3 +351,6 @@ fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         runner_completed: false,
     })
 }
+
+#[cfg(test)]
+mod tests;
