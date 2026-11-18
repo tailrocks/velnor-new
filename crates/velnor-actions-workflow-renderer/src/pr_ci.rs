@@ -199,7 +199,7 @@ fn gate_job(fields: &mut [(String, Yaml)], quick: &[&str]) -> Result<(), RenderE
     needs.extend(quick.iter().map(|id| (*id).to_owned()));
     let quick_failed = quick
         .iter()
-        .map(|id| format!("needs.{id}.result != 'success'"))
+        .map(|id| format!("needs.{id}.result == 'failure' || needs.{id}.result == 'cancelled'"))
         .collect::<Vec<_>>()
         .join(" || ");
     let verdict = if quick_failed.is_empty() {

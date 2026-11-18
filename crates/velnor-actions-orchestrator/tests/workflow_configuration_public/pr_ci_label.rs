@@ -88,7 +88,6 @@ fn pr_ci_label_rewrites_the_ci_workflow() -> Result<(), Box<dyn Error>> {
     assert!(gate.contains("    needs:\n      - required\n      - plan\n"));
     assert!(gate.contains(&format!("    if: ${{{{ always() && ({ADMIT_GATE}) }}}}\n")));
     assert!(gate.contains("needs.required.result != 'success'"));
-    assert!(gate.contains("needs.plan.result != 'success'"));
     assert!(gate.contains(&format!("!({FULL_GATE})")));
 
     let claim = rendered_job_block(ci, "pr-ci-claim")?;
@@ -98,6 +97,48 @@ fn pr_ci_label_rewrites_the_ci_workflow() -> Result<(), Box<dyn Error>> {
     assert!(claim.contains("-X DELETE"));
     assert!(!claim.contains("needs:"));
     assert_eq!(ci.matches("pull-requests: write").count(), 1);
+    Ok(())
+}
+
+#[test]
+fn pr_ci_label_gate_tolerates_skipped_quick_lanes_but_not_failed_ones() -> Result<(), Box<dyn Error>>
+{
+    let tree = render(Some("label"))?;
+    let ci = text(&tree, WORKFLOW_PATH)?;
+    let gate = rendered_job_block(ci, "required-gate")?;
+    let quick: Vec<&str> = gate
+        .split("    needs:\n")
+        .nth(1)
+        .and_then(|rest| rest.split("    if:").next())
+        .ok_or("gate needs are missing")?
+        .lines()
+        .filter_map(|line| line.trim().strip_prefix("- "))
+        .filter(|id| *id != "required")
+        .collect();
+    assert!(quick.contains(&"plan"), "plan is a quick need: {quick:?}");
+    let failed = quick
+        .iter()
+        .map(|id| format!("needs.{id}.result == 'failure' || needs.{id}.result == 'cancelled'"))
+        .collect::<Vec<_>>()
+        .join(" || ");
+    // pull_request without a request label: a skipped quick lane passes, a
+    // failed or cancelled one fails, and `required` is not consulted.
+    // merge_group and push: the full strict verdict alone decides.
+    let verdict = format!(
+        "((({FULL_GATE}) && needs.required.result != 'success') || (!({FULL_GATE}) && ({failed})))"
+    );
+    assert!(
+        gate.contains(&format!("if: ${{{{ always() && {verdict} }}}}")),
+        "{gate}"
+    );
+    for id in &quick {
+        assert!(
+            !gate.contains(&format!("needs.{id}.result != 'success'")),
+            "{id} must not fail the gate when skipped"
+        );
+    }
+    let on = ci.split("\njobs:").next().unwrap_or_default();
+    assert!(on.contains("  merge_group:") && on.contains("  push:"));
     Ok(())
 }
 
