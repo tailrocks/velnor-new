@@ -5,58 +5,71 @@ use crate::journal::Journal;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
-/// Versions whose journals a dropped trigger must keep from opening. Dropping
-/// the newest trigger of versions 16 to 19 and 23 to 25 is repaired by the
-/// migration that follows (no validator ever ran against it), so they are not
-/// part of the fail-closed contract.
-fn tampered_versions() -> impl Iterator<Item = i64> {
-    (20..=22).chain(26..=51)
+const GUARD: &str = "storage_initialization_insert_guard";
+
+async fn trigger_sql(journal: &Journal, name: &str) -> TestResult<String> {
+    let connection = journal.connection().await?;
+    let mut rows = connection
+        .query(
+            "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = ?1",
+            [name.to_owned()],
+        )
+        .await?;
+    Ok(rows.next().await?.ok_or("missing trigger")?.get(0)?)
+}
+
+async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
+    journal.connection().await?.execute(sql, ()).await?;
+    Ok(())
+}
+
+async fn replace_guard(journal: &Journal, rewrite: impl Fn(&str) -> String) -> TestResult<()> {
+    let original = trigger_sql(journal, GUARD).await?;
+    execute(journal, &format!("DROP TRIGGER {GUARD}")).await?;
+    execute(journal, &rewrite(&original)).await?;
+    Ok(())
 }
 
 #[tokio::test]
-async fn a_tampered_journal_at_any_historical_version_is_rejected_on_open() -> TestResult<()> {
+async fn a_current_version_journal_with_a_weakened_trigger_is_rejected() -> TestResult<()> {
     let directory = tempfile::tempdir()?;
-    let live_directory = directory.path().join("live");
-    std::fs::create_dir(&live_directory)?;
-    let live = live_directory.join("journal.db");
-    let mut accepted = Vec::new();
-    for version in tampered_versions() {
-        drop(
-            Journal::open_unvalidated_historical_for_test(&live, version)
-                .await
-                .map_err(|error| format!("advance live to {version}: {error:?}"))?,
-        );
-        let tampered_directory = directory.path().join(format!("tampered-{version}"));
-        std::fs::create_dir(&tampered_directory)?;
-        for entry in std::fs::read_dir(&live_directory)? {
-            let entry = entry?;
-            std::fs::copy(entry.path(), tampered_directory.join(entry.file_name()))?;
-        }
-        let tampered = tampered_directory.join("journal.db");
-        let journal = Journal::open_unvalidated_historical_for_test(&tampered, version)
-            .await
-            .map_err(|error| format!("reopen copy at {version}: {error:?}"))?;
-        let connection = journal.connection().await?;
-        let mut rows = connection
-            .query(
-                "SELECT name FROM sqlite_schema WHERE type='trigger' ORDER BY rowid DESC LIMIT 1",
-                (),
-            )
-            .await?;
-        let name: String = rows.next().await?.ok_or("no trigger")?.get(0)?;
-        drop(rows);
-        connection
-            .execute(&format!("DROP TRIGGER {name}"), ())
-            .await?;
-        drop(connection);
-        drop(journal);
-        if Journal::open(&tampered).await.is_ok() {
-            accepted.push(version);
-        }
-    }
-    assert!(
-        accepted.is_empty(),
-        "tampered journals opened at {accepted:?}"
-    );
+    let path = directory.path().join("journal.db");
+    let journal = Journal::open(&path).await?;
+    replace_guard(&journal, |sql| {
+        sql.replace("intent.kind = 'launch'", "intent.kind = 'x'")
+    })
+    .await?;
+    drop(journal);
+    assert!(Journal::open(&path).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_current_version_journal_with_an_extra_column_is_rejected() -> TestResult<()> {
+    let directory = tempfile::tempdir()?;
+    let path = directory.path().join("journal.db");
+    let journal = Journal::open(&path).await?;
+    execute(
+        &journal,
+        "ALTER TABLE capacity_reservation_storage_initialization ADD COLUMN tampered TEXT",
+    )
+    .await?;
+    drop(journal);
+    assert!(Journal::open(&path).await.is_err());
+    Ok(())
+}
+
+#[tokio::test]
+async fn a_current_version_journal_with_a_reformatted_trigger_is_accepted() -> TestResult<()> {
+    let directory = tempfile::tempdir()?;
+    let path = directory.path().join("journal.db");
+    let journal = Journal::open(&path).await?;
+    replace_guard(&journal, |sql| {
+        sql.replace(" WHEN ", "\n    when  ")
+            .replace(" BEGIN ", "\n begin\n")
+    })
+    .await?;
+    drop(journal);
+    Journal::open(&path).await?;
     Ok(())
 }

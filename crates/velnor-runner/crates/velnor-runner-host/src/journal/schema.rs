@@ -22,7 +22,7 @@ mod jit_tombstone_completion;
 #[cfg(test)]
 pub(in crate::journal) use driver::migrate_historical_to;
 #[cfg(test)]
-mod tamper_tests;
+mod historical_tamper_tests;
 #[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v45;
 #[cfg(test)]
@@ -31,6 +31,8 @@ pub(in crate::journal) use driver::bootstrap_historical_v46;
 pub(in crate::journal) use driver::bootstrap_historical_v47;
 #[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v48;
+#[cfg(test)]
+mod intents_tamper_tests;
 mod migration;
 mod physical_attempts;
 
@@ -65,6 +67,8 @@ mod storage_root_backing;
 mod unbound_retirement;
 pub(super) use unbound_retirement::UNBOUND_SHAPE;
 
+#[cfg(test)]
+mod tamper_tests;
 mod validation;
 mod worker_health;
 
@@ -191,6 +195,9 @@ async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
 
 pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
+    if columns.len() != CURRENT_COLUMNS.len() {
+        return Err(HostError::Journal);
+    }
     for expected in CURRENT_COLUMNS {
         let Some(actual) = columns.get(expected.name) else {
             return Err(HostError::Journal);

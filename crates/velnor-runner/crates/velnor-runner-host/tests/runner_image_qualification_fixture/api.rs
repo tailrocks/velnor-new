@@ -12,6 +12,6 @@ mod state;
 
 pub(crate) use server::DockerApiFixture;
 pub(crate) use state::{
-    ApiFault, ApiPlan, ContainerEvidence, ContainerRole, ImageFault, ImageRole, OuterMutation,
-    Probe, Snapshot,
+    ApiFault, ApiPlan, ContainerEvidence, ContainerRole, ExtraPrivilege, ImageFault, ImageRole,
+    OuterMutation, Probe, Snapshot,
 };
