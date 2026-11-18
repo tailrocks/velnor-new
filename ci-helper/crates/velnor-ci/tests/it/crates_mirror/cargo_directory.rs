@@ -13,7 +13,8 @@ use super::fixture::{TestResult, active_toolchain, rustup_binary, setup};
 const REGISTRY: &str = "sparse+https://mirror.example/index/";
 
 fn recorded_build() -> Result<(Repo, PathBuf), Box<dyn Error>> {
-    rustup_binary().ok_or("rustup unavailable: mirror integration requires a real Rustup binary")?;
+    rustup_binary()
+        .ok_or("rustup unavailable: mirror integration requires a real Rustup binary")?;
     let repo = Repo::empty("crates-mirror-cargo-directory");
     let root = repo.root();
     repo.write_unstaged("ca.pem", "not used by this fixture");
@@ -45,11 +46,7 @@ fn recorded_build() -> Result<(Repo, PathBuf), Box<dyn Error>> {
         .env("CARGO_TARGET_DIR", root.join("target"))
         .env(
             "PATH",
-            std::env::join_paths([
-                toolchain,
-                PathBuf::from("/usr/bin"),
-                PathBuf::from("/bin"),
-            ])?,
+            std::env::join_paths([toolchain, PathBuf::from("/usr/bin"), PathBuf::from("/bin")])?,
         )
         .env_remove("RUSTC_WRAPPER")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
@@ -81,7 +78,9 @@ fn job_config(root: &Path) -> Result<PathBuf, Box<dyn Error>> {
 fn rustc_sits_next_to_the_cargo_a_build_script_is_given() -> TestResult {
     let (_repo, recorded) = recorded_build()?;
     let directory = recorded.parent().ok_or("cargo executable has no parent")?;
-    let output = Command::new(directory.join("rustc")).args(["-vV"]).output()?;
+    let output = Command::new(directory.join("rustc"))
+        .args(["-vV"])
+        .output()?;
     assert!(output.status.success(), "{output:?}");
     let expected = Command::new(PathBuf::from(active_toolchain()?).join("bin/rustc"))
         .args(["-vV"])
@@ -101,7 +100,14 @@ fn a_path_rebuilt_from_the_cargo_directory_still_finds_cargo() -> TestResult {
     let directory = recorded.parent().ok_or("cargo executable has no parent")?;
     let wrapper = fs::canonicalize(root.join("velnor-cargo/cargo"))?;
     let output = Command::new(&recorded)
-        .args(["metadata", "--format-version", "1", "--no-deps", "--offline", "--manifest-path"])
+        .args([
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--offline",
+            "--manifest-path",
+        ])
         .arg(root.join("consumer/Cargo.toml"))
         .current_dir(root.join("consumer"))
         .env(
