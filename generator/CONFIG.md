@@ -46,7 +46,7 @@ run = "bash scripts/ci-fixtures.sh"
 
 ## Optional reusable workflows
 
-`.velnor/workflows.toml` makes the generator write one reusable workflow, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is off when the file is absent, and then the generated files are byte-identical to the output without this feature. The workflow is called by another workflow, so it has the `workflow_call` trigger and no other trigger. It sets `permissions: {}` at the top, and each job lists only the scopes it names. The file names are `file = "native-checks"` and so on; `rust-ci` and `release` belong to other outputs and are refused. The sample `reusable-workflows` uses every key below.
+`.velnor/workflows.toml` makes the generator write one reusable workflow, `.github/workflows/<file>.yml`, for each `[[workflow]]` table. It is off when the file is absent, and then the generated files are byte-identical to the output without this feature. The workflow is called by another workflow, so it has the `workflow_call` trigger and no other trigger. It sets `permissions: {}` at the top, and each job lists only the scopes it names. The file names are `file = "native-checks"` and so on; `rust-ci` and `release` belong to other outputs and are refused. The samples `reusable-workflows` and `declared-workflow` use every key below.
 
 ```toml
 [[workflow]]
@@ -93,5 +93,9 @@ env = { TARGET = "${{ matrix.target }}" }
 - Job outputs. `outputs` maps a name to `steps.<step id>.outputs.<name>` of a step of the same job.
 - Per-step `continue_on_error = true` renders `continue-on-error: true` on that step only.
 - `helper = true` puts the pinned `velnor-ci` install step first in the job.
+- A job can set `environment = "<name>"`. `permissions` accepts these scopes: `actions`, `artifact-metadata`, `attestations`, `checks`, `contents`, `deployments`, `id-token`, `issues`, `packages`, `pages`, `pull-requests`, `security-events` and `statuses`, each `read`, `write` or `none` (`id-token` has no `read`).
+- A workflow can set `if = "<expression>"`, with or without `${{ }}`. It is added to every job's `if`.
+- A step is exactly one of `run`, `uses` and `helper`. `uses` names a SHA-pinned action from this list: `checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache-restore` and `cache-save`; `with` sets its inputs. `helper = "<command>"` renders `run: velnor-ci <command>` and needs `helper = true` on its job. A step can set `if`; a name is optional for `uses` and `helper` steps.
+- An `if` may read `needs.<needed job>.result`, `steps.<earlier step id>.outcome` and `github.*`, besides what a value may read. An expression that names a job missing from `needs`, a later or unknown step, or any other context (such as `secrets`) is refused.
 - Every `run` follows the same rules as the other generated workflows: one command, no shell logic, no expression. Pass values through `env`.
-- An `env` value is plain text or exactly one expression. The allowed expressions are `github.token`, `github.repository`, `github.sha`, `inputs.<declared input>`, `matrix.<key>` in a matrix job, and `needs.<needed job>.outputs.<declared output>`. Anything else, and any `needs` on a job declared later, is refused with the path of the problem.
+- An `env` value is plain text or exactly one expression. The allowed expressions are `github.token`, `github.repository`, `github.sha`, `inputs.<declared input>`, `matrix.<key>` in a matrix job, `steps.<earlier step id>.outputs.<name>` and `needs.<needed job>.outputs.<declared output>`. Anything else, and any `needs` on a job declared later, is refused with the path of the problem.

@@ -8,4 +8,4 @@ mod plan;
 mod raw;
 
 pub use error::WorkflowsError;
-pub use plan::{Env, Input, Job, Matrix, Step, Workflow, WorkflowsPlan};
+pub use plan::{Action, Body, Env, Input, Job, Matrix, Step, Workflow, WorkflowsPlan};

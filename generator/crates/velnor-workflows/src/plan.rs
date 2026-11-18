@@ -18,6 +18,7 @@ pub struct Workflow {
     pub file: String,
     pub name: String,
     pub runner: String,
+    pub condition: Option<String>,
     pub inputs: Vec<Input>,
     pub jobs: Vec<Job>,
 }
@@ -34,6 +35,7 @@ pub struct Job {
     pub id: String,
     pub needs: Vec<String>,
     pub helper: bool,
+    pub environment: Option<String>,
     pub timeout_minutes: u16,
     pub permissions: Vec<(String, String)>,
     pub outputs: Vec<(String, String)>,
@@ -53,9 +55,52 @@ pub struct Matrix {
 pub struct Step {
     pub id: Option<String>,
     pub name: String,
-    pub run: String,
+    pub condition: Option<String>,
+    pub body: Body,
+    pub with: Vec<(String, Env)>,
     pub continue_on_error: bool,
     pub env: Vec<(String, Env)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Body {
+    Run(String),
+    Uses(Action),
+    Helper(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    Checkout,
+    Mise,
+    UploadArtifact,
+    DownloadArtifact,
+    CacheRestore,
+    CacheSave,
+}
+
+impl Action {
+    pub const NAMES: [&'static str; 6] = [
+        "checkout",
+        "mise",
+        "upload-artifact",
+        "download-artifact",
+        "cache-restore",
+        "cache-save",
+    ];
+
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "checkout" => Self::Checkout,
+            "mise" => Self::Mise,
+            "upload-artifact" => Self::UploadArtifact,
+            "download-artifact" => Self::DownloadArtifact,
+            "cache-restore" => Self::CacheRestore,
+            "cache-save" => Self::CacheSave,
+            _ => return None,
+        })
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

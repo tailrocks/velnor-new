@@ -19,6 +19,7 @@ mod compile_inputs;
 mod concurrency;
 mod crates_mirror;
 mod credential_hooks;
+mod declared_workflow;
 mod default_branch;
 mod detect;
 mod doc_steps;

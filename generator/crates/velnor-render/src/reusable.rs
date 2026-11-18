@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::HelperRelease;
-use velnor_workflows::{Env, Input, Job, Step, Workflow, WorkflowsPlan};
+use velnor_workflows::{Action, Body, Env, Input, Job, Step, Workflow, WorkflowsPlan};
 
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedJob, RenderedMatrix, RenderedStep, RenderedWorkflow, Rule,
     RuleViolation, Value, check_rules,
 };
-use crate::steps::install_helper;
+use crate::steps::{
+    CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE, UPLOAD_ARTIFACT, install_helper,
+};
 use crate::workflow::yaml_job;
 use crate::yaml::{Yaml, emit, entry, text};
 
@@ -95,6 +97,11 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
     RenderedJob {
         id: job.id.clone(),
         needs: job.needs.clone(),
+        condition: workflow
+            .condition
+            .as_deref()
+            .map(|condition| format!("${{{{ {condition} }}}}")),
+        environment: job.environment.clone(),
         permissions: job.permissions.clone(),
         no_permissions: job.permissions.is_empty(),
         outputs: job
@@ -117,23 +124,48 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
     }
 }
 
+fn pin(action: Action) -> &'static str {
+    match action {
+        Action::Checkout => CHECKOUT,
+        Action::Mise => MISE,
+        Action::UploadArtifact => UPLOAD_ARTIFACT,
+        Action::DownloadArtifact => DOWNLOAD_ARTIFACT,
+        Action::CacheRestore => CACHE_RESTORE,
+        Action::CacheSave => CACHE_SAVE,
+    }
+}
+
+fn values(items: &[(String, Env)]) -> Vec<(String, Value)> {
+    items
+        .iter()
+        .map(|(key, value)| {
+            let value = match value {
+                Env::Text(value) => Value::Text(value.clone()),
+                Env::Expression(inner) => Value::Expr(format!("${{{{ {inner} }}}}")),
+            };
+            (key.clone(), value)
+        })
+        .collect()
+}
+
 fn rendered_step(step: &Step) -> RenderedStep {
+    let (uses, run) = match &step.body {
+        Body::Run(run) => (None, Some(run.clone())),
+        Body::Uses(action) => (Some(pin(*action).to_owned()), None),
+        Body::Helper(command) => (None, Some(format!("velnor-ci {command}"))),
+    };
     RenderedStep {
         id: step.id.clone(),
         name: step.name.clone(),
+        condition: step
+            .condition
+            .as_deref()
+            .map(|condition| format!("${{{{ {condition} }}}}")),
         continue_on_error: step.continue_on_error,
-        env: step
-            .env
-            .iter()
-            .map(|(key, value)| {
-                let value = match value {
-                    Env::Text(value) => Value::Text(value.clone()),
-                    Env::Expression(inner) => Value::Expr(format!("${{{{ {inner} }}}}")),
-                };
-                (key.clone(), value)
-            })
-            .collect(),
-        run: Some(step.run.clone()),
+        uses,
+        with: values(&step.with),
+        env: values(&step.env),
+        run,
         ..RenderedStep::default()
     }
 }

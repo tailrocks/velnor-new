@@ -18,6 +18,8 @@ pub(crate) struct RawWorkflow {
     pub(crate) file: String,
     pub(crate) name: String,
     pub(crate) runner: Option<String>,
+    #[serde(rename = "if")]
+    pub(crate) condition: Option<String>,
     #[serde(default)]
     pub(crate) input: Vec<RawInput>,
     #[serde(default)]
@@ -40,6 +42,7 @@ pub(crate) struct RawJob {
     pub(crate) needs: Vec<String>,
     #[serde(default)]
     pub(crate) helper: bool,
+    pub(crate) environment: Option<String>,
     pub(crate) timeout_minutes: Option<u16>,
     #[serde(default)]
     pub(crate) permissions: BTreeMap<String, String>,
@@ -62,8 +65,14 @@ pub(crate) struct RawMatrix {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawStep {
     pub(crate) id: Option<String>,
-    pub(crate) name: String,
-    pub(crate) run: String,
+    pub(crate) name: Option<String>,
+    #[serde(rename = "if")]
+    pub(crate) condition: Option<String>,
+    pub(crate) run: Option<String>,
+    pub(crate) uses: Option<String>,
+    pub(crate) helper: Option<String>,
+    #[serde(default)]
+    pub(crate) with: BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) continue_on_error: bool,
     #[serde(default)]
