@@ -81,6 +81,15 @@ case "$verb" in
     read -r usage < "$d/usage"
     printf '%s\n' "$usage"
     ;;
+  "api repos/${GITHUB_REPOSITORY:?}/compare/"*)
+    [ "$mode" = compare_fail ] && exit 1
+    range=${verb#api repos/*/compare/}
+    base=${range%%...*}
+    head=${range#*...}
+    read -r tip < "$d/tip" || exit 1
+    [ "$base" = "$tip" ] || { printf '%s\n' ahead; exit 0; }
+    if [ -f "$d/ancestors" ] && grep -qx "$head" "$d/ancestors"; then printf '%s\n' behind; else printf '%s\n' diverged; fi
+    ;;
   "api repos/${GITHUB_REPOSITORY:?}/git/ref/"*)
     [ "$mode" = tip_fail ] && exit 1
     read -r tip < "$d/tip" || exit 1
@@ -186,6 +195,11 @@ impl Gh {
 
     pub(crate) fn tip(&self, sha: &str) -> Result<(), Box<dyn Error>> {
         std::fs::write(self.dir.join("tip"), format!("{sha}\n"))?;
+        Ok(())
+    }
+
+    pub(crate) fn ancestors(&self, shas: &[&str]) -> Result<(), Box<dyn Error>> {
+        std::fs::write(self.dir.join("ancestors"), shas.join("\n") + "\n")?;
         Ok(())
     }
 

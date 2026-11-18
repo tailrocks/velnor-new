@@ -45,11 +45,20 @@ gh api "repos/$repo/git/ref/${{ref#refs/}}" --jq .object.sha > "$d/tip" 2> /dev/
 tip=
 read -r tip < "$d/tip" || :
 case "$tip" in ''|*[!0-9a-f]*) refuse tip_malformed ;; esac
+case "$head" in *[!0-9a-f]*) refuse head_malformed ;; esac
 if [ "$tip" = "$head" ]; then
   printf '%s\n' '{STATE_SEAL_TIP_OUTPUT}=true' >> "$GITHUB_OUTPUT"
   printf 'velnor: state seal head %s is the tip of %s\n' "$head" "$ref"
+  exit 0
+fi
+gh api "repos/$repo/compare/$tip...$head" --jq .status > "$d/status" 2> /dev/null || refuse compare_unreadable
+status=
+read -r status < "$d/status" || :
+if [ "$status" = behind ] || [ "$status" = identical ]; then
+  printf '%s\n' '{STATE_SEAL_TIP_OUTPUT}=true' >> "$GITHUB_OUTPUT"
+  printf 'velnor: state seal head %s is an ancestor of %s at %s\n' "$head" "$ref" "$tip"
 else
-  printf 'velnor: state seal skipped: head %s is behind %s at %s; nothing saved or attested\n' "$head" "$ref" "$tip"
+  printf 'velnor: state seal skipped: head %s is not an ancestor of %s at %s (%s); nothing saved or attested\n' "$head" "$ref" "$tip" "$status"
   {skip}
 fi
 "#,

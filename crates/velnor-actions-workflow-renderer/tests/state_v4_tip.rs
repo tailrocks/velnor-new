@@ -11,6 +11,7 @@ use crate::gc1_seal_support::{Gh, MAIN, REPO};
 use crate::state_v4_seal::{seal_job, step_of};
 
 const HEAD: &str = "1111111111111111111111111111111111111111";
+const REWRITTEN: &str = "3333333333333333333333333333333333333333";
 const NEWER: &str = "2222222222222222222222222222222222222222";
 
 fn run_tip(scene: &Scene, gh: &Gh, job: &Job, head: &str) -> Result<String, Box<dyn Error>> {
@@ -53,13 +54,35 @@ fn only_the_head_that_is_still_the_tip_of_main_may_be_sealed() -> Result<(), Box
     }
 
     gh.tip(NEWER)?;
+    gh.ancestors(&[HEAD])?;
+    let log = run_tip(&scene, &gh, &job, HEAD)?;
+    if scene.output_value("current")? != "true" || !log.contains("is an ancestor of") {
+        return Err(fail(&format!("an ancestor of the tip was refused: {log}")));
+    }
+
+    gh.ancestors(&[])?;
     let log = run_tip(&scene, &gh, &job, HEAD)?;
     if scene.output_value("current")? != "false"
         || !log.contains(&format!(
-            "state seal skipped: head {HEAD} is behind refs/heads/main at {NEWER}"
+            "state seal skipped: head {HEAD} is not an ancestor of refs/heads/main at {NEWER}"
         ))
     {
-        return Err(fail(&format!("a head behind the tip was sealed: {log}")));
+        return Err(fail(&format!("a head not on main was sealed: {log}")));
+    }
+
+    gh.ancestors(&[REWRITTEN])?;
+    let log = run_tip(&scene, &gh, &job, HEAD)?;
+    if scene.output_value("current")? != "false" {
+        return Err(fail(&format!("a rewritten history was sealed: {log}")));
+    }
+
+    gh.ancestors(&[HEAD])?;
+    gh.mode("compare_fail")?;
+    let log = run_tip(&scene, &gh, &job, HEAD)?;
+    if scene.output_value("current")? != "false" || !log.contains("compare_unreadable") {
+        return Err(fail(&format!(
+            "a compare error was treated as current: {log}"
+        )));
     }
 
     gh.mode("tip_fail")?;
@@ -95,6 +118,13 @@ fn the_producer_stops_before_building_unless_its_head_is_the_tip() -> Result<(),
     }
 
     gh.tip(NEWER)?;
+    gh.ancestors(&[HEAD])?;
+    let log = run_step(&scene, &gh, &step, HEAD)?;
+    if !log.contains("is an ancestor of") {
+        return Err(fail(&format!("an ancestor of the tip was stopped: {log}")));
+    }
+
+    gh.ancestors(&[])?;
     match run_step(&scene, &gh, &step, HEAD) {
         Err(error) if error.to_string().contains("state seal skipped: head") => {}
         other => {
