@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use velnor_model::{
     CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName,
+    RunnerLabel, RustCiConfig, Shape, TargetName, github_hosted,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,10 +12,11 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 19] = [
+const KEYS: [&str; 20] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
+    "fork_runner",
     "crates_mirror",
     "timeout_minutes",
     "exclude",
@@ -40,6 +41,7 @@ struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     runner: Option<String>,
+    fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
@@ -108,12 +110,12 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         None => defaults.full_run,
         Some(value) => full_run(value).map_err(invalid)?,
     };
-    let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
-    let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
+    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
-        test_setup,
+        test_setup: crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         crates_mirror: raw
@@ -128,14 +130,15 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .unwrap_or(defaults.skip_draft_pull_requests),
         on_main,
         full_run,
-        helper,
+        helper: crate::config_helper::path(raw.helper).map_err(invalid)?,
         shape,
         ci_debuginfo,
         required_check,
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
+        runner,
+        fork_runner,
         timeout_minutes,
         exclude: raw
             .exclude
@@ -189,6 +192,13 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
     RunnerLabel::new(label.clone())
         .ok()
         .filter(|runner| !without_helper_build(runner.as_str()))
+        .filter(|runner| {
+            github_hosted(runner.as_str())
+                || runner
+                    .as_str()
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+        })
         .ok_or(Reason::InvalidValue {
             key: "runner",
             value: label,

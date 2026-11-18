@@ -21,6 +21,7 @@ pub struct WorkflowPlan {
     pub triggers: Triggers,
     pub concurrency: Concurrency,
     pub permissions: Permissions,
+    pub fork_runner: RunnerLabel,
     pub jobs: Vec<Job>,
 }
 
