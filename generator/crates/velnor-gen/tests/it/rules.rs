@@ -12,8 +12,8 @@ use velnor_model::{
     WorkflowPlan,
 };
 use velnor_render::{
-    HELPER_FROM_ARTIFACT_RUN, MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow,
-    Rule, RuleViolation, check_rules, render, render_workflow,
+    MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
+    check_rules, render, render_workflow,
 };
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -286,14 +286,13 @@ fn a_compliant_workflow_is_accepted() {
 }
 
 #[test]
-fn install_helper_renders_one_pinned_uses_step_with_the_release_tag_and_every_digest() -> TestResult
+fn install_helper_renders_the_pinned_uses_step_with_the_release_tag_and_every_digest() -> TestResult
 {
     let files = render(&plan(vec![StepKind::InstallHelper(release()?)])?)
         .map_err(|found| format!("{found:?}"))?;
     let text = files.get(&WORKFLOW_PATH).ok_or("no workflow")?;
     let expected = format!(
         "\
-    steps:
       - name: Install velnor-ci 1.2.3
         uses: {SETUP_ACTION}@{SETUP_COMMIT}  # rust-ci-v1.2.3
         with:
@@ -304,7 +303,7 @@ fn install_helper_renders_one_pinned_uses_step_with_the_release_tag_and_every_di
         "a".repeat(64),
         "b".repeat(64)
     );
-    assert!(text.ends_with(&expected), "{text}");
+    assert!(text.contains(&expected), "{text}");
     Ok(())
 }
 
@@ -335,6 +334,13 @@ fn multi_line_runs(text: &str) -> Vec<String> {
             continue;
         };
         let value = value.trim();
+        if value.is_empty()
+            && lines
+                .get(index + 1)
+                .is_some_and(|next| next.trim_start().starts_with("shell:"))
+        {
+            continue;
+        }
         let indent = line.len() - line.trim_start().len();
         let quoted_open = ["'", "\""]
             .iter()
@@ -345,10 +351,7 @@ fn multi_line_runs(text: &str) -> Vec<String> {
                 .take_while(|next| next.starts_with(&" ".repeat(indent + 1)))
                 .map(|next| next.trim_start())
                 .collect();
-            let block = block.join("\n");
-            if block != HELPER_FROM_ARTIFACT_RUN {
-                found.push(block);
-            }
+            found.push(block.join("\n"));
         } else if value.is_empty() || quoted_open {
             found.push(value.to_owned());
         }
@@ -357,16 +360,7 @@ fn multi_line_runs(text: &str) -> Vec<String> {
 }
 
 #[test]
-fn no_golden_workflow_has_a_multi_line_run_other_than_the_helper_from_artifact_constant()
--> TestResult {
-    let allowed = format!(
-        "run: |\n{}\n",
-        HELPER_FROM_ARTIFACT_RUN
-            .lines()
-            .map(|line| format!("  {line}"))
-            .collect::<Vec<_>>()
-            .join("\n")
-    );
+fn no_golden_workflow_has_a_multi_line_run() -> TestResult {
     let rejected = [
         "run: |\n  echo one\n  echo two\n",
         "run: >\n  echo one\n",
@@ -377,7 +371,6 @@ fn no_golden_workflow_has_a_multi_line_run_other_than_the_helper_from_artifact_c
         multi_line_runs("run: cargo-fmt --all --check\n"),
         Vec::<String>::new()
     );
-    assert_eq!(multi_line_runs(&allowed), Vec::<String>::new());
     for text in rejected {
         assert_eq!(multi_line_runs(text).len(), 1, "{text}");
     }

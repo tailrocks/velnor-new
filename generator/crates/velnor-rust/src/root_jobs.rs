@@ -15,8 +15,8 @@ use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
 use crate::mise::nextest_tool;
 use crate::plan::{
-    CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, HELPER_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job,
-    mirror_step, setup, step, tools_restore,
+    CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, mirror_step, setup,
+    step, tools_restore,
 };
 
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
@@ -90,6 +90,7 @@ impl RootJobs<'_> {
     }
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
+        let steps = crate::test_setup::inserted(self.facts, self.root, self.lane, steps);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
             needs: self
@@ -97,7 +98,6 @@ impl RootJobs<'_> {
                 .plan
                 .clone()
                 .into_iter()
-                .chain(self.lane.from_source.then_some(HELPER_JOB))
                 .chain(
                     ((self.audit == AuditLocation::Separate)
                         && crate::base_cache::writes_base(self.facts))
@@ -318,7 +318,7 @@ impl RootJobs<'_> {
             ),
         );
         build.extend(self.audit());
-        let mut group = head(self.facts, CHECKOUT_DEPTH, self.lane.from_source);
+        let mut group = head(self.facts, CHECKOUT_DEPTH);
         group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),

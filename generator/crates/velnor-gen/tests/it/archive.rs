@@ -9,7 +9,33 @@ use crate::job_shape::{job_ids, target};
 use crate::pipeline::{view, workflow};
 use crate::select::{facts, member};
 
+const LAUNCH: &str = ". \"$VELNOR_EXEC\" ";
+
+pub(crate) fn plain_invocations(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            let Some((indent, quoted)) = line.split_once("run: '") else {
+                return line.to_owned();
+            };
+            let Some(body) = quoted
+                .strip_prefix(LAUNCH)
+                .and_then(|rest| rest.strip_suffix('\''))
+            else {
+                return line.to_owned();
+            };
+            if body.contains(['"', '\'']) || body.contains(": ") {
+                format!("{indent}run: 'velnor-ci {body}'")
+            } else {
+                format!("{indent}run: velnor-ci {body}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
 pub(crate) fn jobs_of(text: &str) -> Vec<(String, String)> {
+    let text = plain_invocations(text);
     let mut jobs: Vec<(String, String)> = Vec::new();
     let mut in_jobs = false;
     for line in text.lines() {

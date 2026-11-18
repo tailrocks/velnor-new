@@ -248,6 +248,29 @@ async fn local_pair_removal_leaves_another_pair_of_the_environment_intact() -> T
 }
 
 #[tokio::test]
+async fn two_tests_never_build_the_same_image() -> TestResult<()> {
+    let Some(first) = Fixture::new().await? else {
+        return Ok(());
+    };
+    let second = Fixture::new().await;
+    let images = second
+        .as_ref()
+        .ok()
+        .and_then(Option::as_ref)
+        .map(|second| (first.image.clone(), second.image.clone()));
+    first.finish().await?;
+    if let Some(second) = second? {
+        second.finish().await?;
+    }
+    let (first_image, second_image) = images.ok_or("the second fixture was not built")?;
+    assert_ne!(
+        first_image, second_image,
+        "a shared image id lets one test's cleanup delete the other's build"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn local_pair_start_failure_removes_everything_it_created() -> TestResult<()> {
     let Some(fixture) = Fixture::new().await? else {
         return Ok(());

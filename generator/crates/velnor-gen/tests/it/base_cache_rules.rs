@@ -45,7 +45,10 @@ fn block(text: &str, id: &str) -> Option<String> {
 #[test]
 fn a_source_built_helper_never_runs_in_the_job_that_holds_actions_write() -> TestResult {
     let text = text_of(&source_helper("0.1.81")?)?;
-    assert!(text.contains("Download velnor-ci"), "lanes use the build");
+    assert!(
+        !text.contains("Download velnor-ci"),
+        "no lane downloads a build"
+    );
     let trim = block(&text, "rust-trim").ok_or("no trim job")?;
     assert!(!trim.contains("Download velnor-ci"), "{trim}");
     assert!(!trim.contains("download-artifact"), "{trim}");
@@ -313,7 +316,7 @@ fn input_timestamps_save_and_restore_in_the_configured_target_directory() -> Tes
             config,
             &format!("[build]\ntarget-dir = \"{configured}\"\n"),
         )?;
-        let text = text_of(&view)?;
+        let text = crate::archive::plain_invocations(&text_of(&view)?);
         for verb in ["save", "restore"] {
             let command = format!("run: velnor-ci inputs {verb} --target-dir {expected}");
             assert!(text.contains(&command), "{command} missing");

@@ -181,7 +181,11 @@ pub(crate) async fn build_program(
     program: Program,
 ) -> TestResult<String> {
     let mut context = tar::Builder::new(Vec::new());
-    let mut dockerfile = "FROM scratch\n".to_owned();
+    // Every test image starts with a layer no other test has: layers that are
+    // byte-identical share one snapshot chain on the containerd image store, so
+    // another test's image removal can delete the parent this build is on.
+    append(&mut context, "nonce", 0o644, tag.as_bytes())?;
+    let mut dockerfile = "FROM scratch\nCOPY nonce /velnor-test-nonce\n".to_owned();
     if cfg!(target_os = "linux") || std::env::var_os("VELNOR_TEST_JOB_HOOK_BINARY").is_some() {
         let binary = job_hook_binary()?;
         append(&mut context, "job-hook", 0o755, &std::fs::read(&binary)?)?;

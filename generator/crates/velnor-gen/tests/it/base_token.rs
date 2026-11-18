@@ -32,7 +32,8 @@ fn no_step_holds_a_token_after_cargo_ran_repository_code_in_the_same_job() -> Te
 #[test]
 fn report_api_tokens_are_confined_to_the_released_helper_without_repository_code() -> TestResult {
     let view = crate::golden::load(&crate::golden::samples().join("helper-source"))?;
-    let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+    let parsed: serde_json::Value =
+        serde_saphyr::from_str(&crate::archive::plain_invocations(&workflow(&view)?))?;
     let jobs = parsed["jobs"].as_object().ok_or("jobs")?;
     let cache = &jobs["cache"];
     let cache_steps = cache["steps"].as_array().ok_or("cache steps")?;

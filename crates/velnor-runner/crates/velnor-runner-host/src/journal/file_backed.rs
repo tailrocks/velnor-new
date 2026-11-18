@@ -55,6 +55,21 @@ pub struct Journal {
 
 impl Journal {
     #[cfg(test)]
+    pub(crate) async fn validate_historical_v48_for_test(&self) -> Result<(), HostError> {
+        schema::validate_historical_v48_for_test(&self.connection().await?).await
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn open_historical_v48_for_test(path: &Path) -> Result<Self, HostError> {
+        let journal = Self {
+            file: JournalFile::open(path).await?,
+        };
+        schema::bootstrap_historical_v48(&journal.connection().await?).await?;
+        journal.file.reset_after_bootstrap()?;
+        Ok(journal)
+    }
+
+    #[cfg(test)]
     pub(crate) async fn open_historical_v47_for_test(path: &Path) -> Result<Self, HostError> {
         let journal = Self {
             file: JournalFile::open(path).await?,
@@ -91,6 +106,11 @@ impl Journal {
         journal.bootstrap().await?;
         journal.file.reset_after_bootstrap()?;
         Ok(journal)
+    }
+
+    #[cfg(test)]
+    pub(crate) const fn current_schema_version_for_test() -> i64 {
+        schema::JOURNAL_VERSION
     }
 
     pub async fn begin(&self, kind: &str, subject: &str) -> Result<i64, HostError> {

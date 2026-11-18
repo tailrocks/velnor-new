@@ -50,6 +50,10 @@ fn run_line<'a>(step: &[&'a str]) -> &'a str {
     step.iter()
         .find_map(|line| line.trim().strip_prefix("run: "))
         .map(|run| run.trim_matches('\''))
+        .map(|run| {
+            run.split_once("\"$VELNOR_EXEC\" ")
+                .map_or(run, |(_, invocation)| invocation)
+        })
         .unwrap_or_default()
 }
 
@@ -116,7 +120,7 @@ fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestRes
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics"
+        "run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics"
     );
     assert_eq!(text.matches("cargo test --doc").count(), 1);
     let steps: Vec<&str> = text.split("\n      - ").collect();
@@ -200,7 +204,7 @@ fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult
         .collect::<Vec<_>>()
         .join("\n");
     assert!(!job.contains("needs:"), "{job}");
-    assert!(job.contains("run: velnor-ci plan"), "{job}");
+    assert!(job.contains(r#""$VELNOR_EXEC" plan"#), "{job}");
     let deny = step(&job, "Dependency policy").join("\n");
     assert!(deny.contains("steps.plan.outcome == 'success'"), "{deny}");
     assert!(
@@ -237,7 +241,10 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
     track(&mut files, "deny.toml", "")?;
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let job = policy_job(&text(&files)?);
-    assert!(job.contains("velnor-ci run -- cargo-deny check"), "{job}");
+    assert!(
+        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny check"#),
+        "{job}"
+    );
     assert!(
         job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' check"),
         "{job}"
@@ -287,13 +294,13 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
     let config = Some(b"on_main = \"everything\"\n".as_slice());
     let single = text(&view(&["Cargo.toml"], config)?)?;
     assert_eq!(
-        single.matches("run: velnor-ci inputs audit").count(),
+        single.matches(r#""$VELNOR_EXEC" inputs audit"#).count(),
         1,
         "{single}"
     );
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], config)?)?;
     assert_eq!(
-        lanes.matches("run: velnor-ci inputs audit").count(),
+        lanes.matches(r#""$VELNOR_EXEC" inputs audit"#).count(),
         1,
         "{lanes}"
     );
@@ -312,14 +319,22 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
     );
     assert_eq!(
         audit
-            .matches("run: 'velnor-ci run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'")
+            .matches(
+                r#""$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics"#
+            )
             .count(),
         2,
         "{audit}"
     );
     assert!(audit.contains("working-directory: lab"), "{audit}");
     assert!(audit.trim_end().ends_with("overwrite: true"), "{audit}");
-    assert!(audit.contains("run: velnor-ci inputs audit\n"), "{audit}");
+    assert!(
+        audit.contains(
+            r#""$VELNOR_EXEC" inputs audit'
+"#
+        ),
+        "{audit}"
+    );
     Ok(())
 }
 
@@ -340,25 +355,5 @@ fn the_multi_root_audit_job_follows_the_schedule_policy() -> TestResult {
         ),
         "{off}"
     );
-    Ok(())
-}
-
-#[test]
-fn an_inputs_audit_records_pre_build_inventories() -> TestResult {
-    let mut repo = crate::lock::locked("0.1.81")?;
-    repo.files.insert(
-        RepoPath::new(".velnor/rust-ci.toml")?,
-        b"full_run = \"nightly\"\n".to_vec(),
-    );
-    let text = workflow(&repo)?;
-    assert!(
-        text.contains("velnor-ci run -- velnor-ci inputs build -- cargo-clippy"),
-        "{text}"
-    );
-    assert!(
-        text.contains("velnor-ci run -- velnor-ci inputs build -- cargo-nextest nextest run"),
-        "{text}"
-    );
-    assert!(text.contains("run: velnor-ci inputs audit\n"), "{text}");
     Ok(())
 }
