@@ -252,7 +252,7 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
     steps.extend(read_version(binary));
-    let names = assets(binary).join(" ");
+    let names = quoted(binary, assets(binary)).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
         steps.push(RenderedStep {
@@ -304,7 +304,7 @@ fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
             env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
             run: Some(format!(
                 "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\"",
-                shell_word(&format!("{DIST}/{name}"))
+                word(binary, &format!("{DIST}/{name}"))
             )),
             ..RenderedStep::default()
         })
@@ -337,7 +337,7 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
         ]),
         run: Some(format!(
             "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
-            assets(binary).join(" ")
+            quoted(binary, assets(binary)).join(" ")
         )),
         ..RenderedStep::default()
     });
@@ -370,8 +370,12 @@ fn assets(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
-        .map(|platform| word(binary, &asset(binary, *platform)))
+        .map(|platform| asset(binary, *platform))
         .collect()
+}
+
+fn quoted(binary: &BinaryPlan, names: Vec<String>) -> Vec<String> {
+    names.iter().map(|name| word(binary, name)).collect()
 }
 
 fn command(name: String, run: String) -> RenderedStep {
