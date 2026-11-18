@@ -321,9 +321,20 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
     $1 == "parent" { parents = parents (parents ? " " : "") $2 }
     END { print parents }
   ')"
-  if [ "$merge_parents" != "$PR_BASE_SHA $PR_HEAD_SHA" ]; then
+  read -r merge_parent_base merge_parent_head merge_parent_extra <<<"$merge_parents"
+  if [ -z "$merge_parent_head" ] || [ -n "$merge_parent_extra" ] \
+    || [ "$merge_parent_head" != "$PR_HEAD_SHA" ]; then
     echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
     exit 1
+  fi
+  if [ "$merge_parent_base" != "$PR_BASE_SHA" ]; then
+    if [ "$(GIT_OPTIONAL_LOCKS=0 git rev-parse --is-shallow-repository)" = true ]; then
+      GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --unshallow origin "$GITHUB_SHA"
+    fi
+    if ! GIT_OPTIONAL_LOCKS=0 git merge-base --is-ancestor "${PR_BASE_SHA}^{commit}" "$merge_parent_base" 2>/dev/null; then
+      echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
+      exit 1
+    fi
   fi
   for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}" "${PR_BASE_SHA}^{commit}"; do
     if ! GIT_OPTIONAL_LOCKS=0 git cat-file -e "$rev" 2>/dev/null; then
@@ -339,7 +350,7 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
   merge_parent_2="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^2')"
   test "$pr_head_commit" = "$PR_HEAD_SHA"
   test "$pr_base_commit" = "$PR_BASE_SHA"
-  test "$merge_parent_1" = "$PR_BASE_SHA"
+  test "$merge_parent_1" = "$merge_parent_base"
   test "$merge_parent_2" = "$PR_HEAD_SHA"
 fi
 GIT_OPTIONAL_LOCKS=0 git status --porcelain=v1 --untracked-files=all >"$evidence/checkout-status.txt"

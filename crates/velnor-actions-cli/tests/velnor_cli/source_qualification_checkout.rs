@@ -21,7 +21,7 @@ fn git(root: &Path, args: &[&str]) -> Result<String, Box<dyn Error>> {
 }
 
 #[test]
-fn qualification_fetches_matching_shallow_merge_and_rejects_stale_event()
+fn qualification_accepts_advanced_base_and_rejects_unrelated_event_shas()
 -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
     let root = temp.path().canonicalize()?;
@@ -126,10 +126,27 @@ fn check_results(
             .env("PR_HEAD_SHA", event_head)
             .output()?)
         };
-    let stale = run(stale_base, head)?;
-    assert!(!stale.status.success());
+    let advanced = run(stale_base, head)?;
     assert!(
-        String::from_utf8_lossy(&stale.stderr).contains("pull request merge parents do not match")
+        advanced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&advanced.stderr)
+    );
+    let advanced_evidence =
+        fs::read_to_string(runner.join("source-qualification-artifacts/source-identity.txt"))?;
+    assert!(advanced_evidence.contains(&format!("pr_base_sha={stale_base}\n")));
+    assert!(advanced_evidence.contains(&format!("merge_parent_1={base}\n")));
+    assert!(advanced_evidence.contains(&format!("merge_parent_2={head}\n")));
+    let not_an_ancestor = run(head, head)?;
+    assert!(!not_an_ancestor.status.success());
+    assert!(
+        String::from_utf8_lossy(&not_an_ancestor.stderr)
+            .contains("pull request merge parents do not match")
+    );
+    let absent = run(&"f".repeat(40), head)?;
+    assert!(!absent.status.success());
+    assert!(
+        String::from_utf8_lossy(&absent.stderr).contains("pull request merge parents do not match")
     );
     let matching = run(base, head)?;
     assert!(
@@ -145,6 +162,10 @@ fn check_results(
     assert!(evidence.contains(&format!("merge_parent_2={head}\n")));
     let wrong_head = run(base, stale_base)?;
     assert!(!wrong_head.status.success());
+    assert!(
+        String::from_utf8_lossy(&wrong_head.stderr)
+            .contains("pull request merge parents do not match")
+    );
     let malformed = run("--upload-pack=ignored", head)?;
     assert!(!malformed.status.success());
     fs::write(checkout.join("untracked"), b"dirty")?;
