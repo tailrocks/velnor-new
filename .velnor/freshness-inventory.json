@@ -161,6 +161,15 @@
   "schema": 1,
   "temporary_holds": [
     {
+      "key": "RUSTSEC-2026-0543",
+      "held_version": "chrono (unmaintained; via turso 0.8.3)",
+      "owner": "Alexey Zhokhov",
+      "issue": "https://github.com/tailrocks/velnor-new/issues/1218",
+      "reason": "chrono is unmaintained but arrives only via turso 0.8.3 (velnor-runner-host); drop when turso does. Re-checked monthly in https://github.com/tailrocks/velnor-new/issues/1218.",
+      "granted": "2026-11-18",
+      "expires": "2026-12-02"
+    },
+    {
       "key": "mise",
       "held_version": "2026.11.1",
       "owner": "Alexey Zhokhov",
