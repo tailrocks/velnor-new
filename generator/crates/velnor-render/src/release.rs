@@ -8,9 +8,11 @@ use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
+use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
-    APP_TOKEN_OUTPUT, app_token, checkout, expression, install_release_plz, label, permissions,
-    refuse_commands, release_plz_arguments, release_plz_step, shell_word, variables,
+    APP_TOKEN_OUTPUT, TAGGED_COMMIT_HELPER, app_token, checkout, expression, install_release_plz,
+    label, permissions, refuse_commands, release_plz_arguments, release_plz_step, shell_word,
+    variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -40,11 +42,12 @@ pub fn render_release(
     helper: &HelperRelease,
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
-    let mut jobs = vec![
-        gate(plan, helper),
-        release_pr(plan, helper),
-        tag(plan, helper),
-    ];
+    let tag_job = tag(plan, helper);
+    let collisions = output_collisions(plan, helper, &tag_job.id);
+    if !collisions.is_empty() {
+        return Err(collisions);
+    }
+    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper), tag_job];
     jobs.extend(binary_jobs(plan, helper));
     jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
@@ -112,7 +115,7 @@ fn escape_filter(name: &str) -> String {
 }
 
 fn gate(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
-    let mut command = "velnor-ci release-gate --repo \"$REPOSITORY\" --sha \"$COMMIT\"".to_owned();
+    let mut command = "velnor-ci release-gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\"".to_owned();
     let mut scopes = vec![
         ("actions", "read"),
         ("contents", "read"),
@@ -220,6 +223,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
     steps.push(refuse_commands(&plan.roots, helper.version(), true));
+    steps.extend(source_preflight(plan, helper));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),
@@ -236,14 +240,12 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             ),
         )
     }));
-    steps.push(RenderedStep {
-        id: Some("record".to_owned()),
-        name: "Record the released packages".to_owned(),
-        run: Some(format!("velnor-ci release record {}", files.join(" "))),
-        ..RenderedStep::default()
-    });
+    steps.push(record(helper, &files));
     only_while_newest(&mut steps);
     let mut scopes = vec![("contents", "read")];
+    if helper.version().at_least(TAGGED_COMMIT_HELPER) {
+        scopes.push(("pull-requests", "read"));
+    }
     if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
         scopes.push(("id-token", "write"));
     }
@@ -262,6 +264,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
                 let output = format!("${{{{ steps.record.outputs.{package} }}}}");
                 (package, output)
             })
+            .chain(commit_outputs(plan, helper))
             .collect(),
         timeout_minutes: u16::try_from(
             u64::from(TAG_JOB_BASE_MINUTES).saturating_add(publish_budget_minutes(&plan.roots)),
@@ -269,6 +272,55 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         .unwrap_or(u16::MAX),
         steps,
         ..after_the_gate("tag")
+    }
+}
+
+fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<RenderedStep> {
+    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
+        return None;
+    }
+    let prefixes = plan
+        .roots
+        .iter()
+        .map(|root| format!("--branch-prefix={}", shell_word(&root.pr_branch_prefix)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    Some(RenderedStep {
+        name: "Check that release-plz would tag the verified commit".to_owned(),
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", VERIFIED_COMMIT),
+        ]),
+        run: Some(format!(
+            "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {prefixes}"
+        )),
+        ..RenderedStep::default()
+    })
+}
+
+fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {
+    let files = files.join(" ");
+    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
+        return RenderedStep {
+            id: Some("record".to_owned()),
+            name: "Record the released packages".to_owned(),
+            run: Some(format!("velnor-ci release record {files}")),
+            ..RenderedStep::default()
+        };
+    }
+    RenderedStep {
+        id: Some("record".to_owned()),
+        name: "Record the released packages and the commits their tags are on".to_owned(),
+        env: variables(&[
+            ("GITHUB_TOKEN", "${{ github.token }}"),
+            ("REPOSITORY", "${{ github.repository }}"),
+            ("COMMIT", VERIFIED_COMMIT),
+        ]),
+        run: Some(format!(
+            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {files}"
+        )),
+        ..RenderedStep::default()
     }
 }
 

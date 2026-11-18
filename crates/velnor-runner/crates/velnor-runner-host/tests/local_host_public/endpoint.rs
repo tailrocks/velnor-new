@@ -116,6 +116,31 @@ async fn absent_endpoint_skips_and_invalid_endpoint_fails_without_ambient_reques
     Ok(())
 }
 
+#[tokio::test]
+async fn guest_scenarios_skip_without_a_linux_hook_before_contacting_docker() -> TestResult<()> {
+    if !cfg!(target_os = "macos") {
+        return Ok(());
+    }
+    let ambient = Ambient::new()?;
+    let test = "refusals::local_job_start_check_refuses_a_run_whose_event_ref_or_sha_differ";
+    let output = Command::new(std::env::current_exe()?)
+        .args(["--exact", test, "--nocapture"])
+        .env("VELNOR_TEST_DOCKER_HOST", &ambient.address)
+        .env_remove("VELNOR_TEST_JOB_HOOK_BINARY")
+        .env_remove("VELNOR_TEST_JOB_HOOK_ROOTFS")
+        .output()?;
+    let transcript = transcript(&output);
+    assert!(output.status.success(), "{transcript}");
+    assert!(
+        transcript.contains(
+            "SKIP Docker integration test: set VELNOR_TEST_JOB_HOOK_BINARY to a Linux velnor-job-start-hook binary"
+        ),
+        "{transcript}"
+    );
+    assert_eq!(ambient.requests.load(Ordering::SeqCst), 0);
+    Ok(())
+}
+
 async fn selected_fixture() -> TestResult<()> {
     let fixture = Fixture::new()
         .await?

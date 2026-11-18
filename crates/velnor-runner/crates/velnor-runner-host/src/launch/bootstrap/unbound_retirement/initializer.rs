@@ -8,9 +8,9 @@ use bollard::{
 
 use crate::{error::HostError, journal::UnboundInitializer};
 
-use super::{Effects, Observation, inspect_container, observation, within};
+use super::{Observation, ReadyEffects, inspect_container, observation, within};
 
-impl Effects<'_> {
+impl ReadyEffects<'_> {
     pub(super) async fn remove_initializer(
         &self,
         helper: &UnboundInitializer,

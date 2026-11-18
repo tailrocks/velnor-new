@@ -104,11 +104,22 @@ fn candidate_steps(
             "Install pinned qualification tools",
             &pins.install_qualify_tools_argv,
         )?,
+        workflow_steps::command_step("Install pinned evidence transport", &pins.install_gh_argv)?,
+        workflow_steps::bash_step_with_env(
+            "Acquire bounded historical Homebrew evidence",
+            &acquisition_script(pins)?,
+            vec![
+                ("GH_TOKEN", "${{ github.token }}"),
+                (
+                    "VELNOR_HOMEBREW_EVIDENCE_DIR",
+                    "${{ runner.temp }}/velnor-homebrew-evidence",
+                ),
+            ],
+        ),
         workflow_steps::verify_rust_step(pins)?,
         workflow_steps::command_step("Verify jactionlint", &pins.verify_lint_argv)?,
-        workflow_steps::install_gh_step(&pins.install_gh_argv)?,
     ];
-    steps.extend(super::source_steps(product, pins));
+    steps.extend(super::source_steps(product, pins)?);
     steps.extend(assets::download_build_steps_for_id(
         product,
         "Download exact ARM candidate artifact",
@@ -141,9 +152,15 @@ fn candidate_steps(
         ),
         workflow_steps::bash_step_with_env(
             "Authenticate historical A and D; install and test preserved Homebrew kegs",
-            &format!("set -eu\n{candidate_path}"),
+            &format!(
+                "set -eu\n{}",
+                workflow_steps::credential_free_command(candidate_path)
+            ),
             vec![
-                ("GH_TOKEN", "${{ github.token }}"),
+                (
+                    "VELNOR_HOMEBREW_EVIDENCE_DIR",
+                    "${{ runner.temp }}/velnor-homebrew-evidence",
+                ),
                 ("VELNOR_INTERNAL_OP", "qualify-homebrew-v1"),
                 (
                     "VELNOR_RELEASE_MANIFEST_SHA256",
@@ -162,4 +179,34 @@ fn start_budget_step() -> Yaml {
             "set -eu\nnow=\"$(date +%s)\"\nprintf 'VELNOR_HOME_BUDGET_DEADLINE_EPOCH=%s\\n' \"$((now + {JOB_TIMEOUT_MINUTES} * 60))\" >> \"$GITHUB_ENV\""
         ),
     )
+}
+
+fn acquisition_script(pins: &ProductReleasePins) -> Result<String, RenderError> {
+    let command = crate::commands::join_argv_for_run(&[
+        "mise".to_owned(),
+        "--no-config".to_owned(),
+        "--no-env".to_owned(),
+        "--no-hooks".to_owned(),
+        "exec".to_owned(),
+        format!("bun@{}", pins.bun_version),
+        "--".to_owned(),
+        "bun".to_owned(),
+        "--no-env-file".to_owned(),
+        "--no-install".to_owned(),
+        "--config=/dev/null".to_owned(),
+        "acquire.ts".to_owned(),
+    ])?;
+    let gh = workflow_steps::gh_function(&pins.gh_argv)?;
+    let catalog = format!(
+        "[{},{}]",
+        include_str!("../../../.velnor/qualification/homebrew/preview-a.json"),
+        include_str!("../../../.velnor/qualification/homebrew/preview-d.json")
+    );
+    let literal = serde_json::to_string(&catalog)
+        .map_err(|error| RenderError::BadCommand(error.to_string()))?;
+    let source = include_str!("homebrew_qualification_acquire.ts")
+        .replace("\"__VELNOR_HOMEBREW_CATALOG__\"", &literal);
+    Ok(format!(
+        "set -eu\numask 077\nunset GH_HOST GH_CONFIG_DIR BUN_OPTIONS NODE_OPTIONS\nprivate=\"$(mktemp -d \"$RUNNER_TEMP/velnor-homebrew-acquire.XXXXXX\")\"\ntrap 'rm -rf \"$private\"' EXIT\ncat > \"$private/acquire.ts\" <<'VELNOR_HOMEBREW_ACQUIRE_TS'\n{source}\nVELNOR_HOMEBREW_ACQUIRE_TS\ncd \"$private\"\nexport MISE_DATA_DIR=\"${{MISE_DATA_DIR:-$HOME/.local/share/mise}}\"\nexport HOME=\"$private\"\n{command}\n{gh}\n(ulimit -f 4096; gh attestation trusted-root > \"$VELNOR_HOMEBREW_EVIDENCE_DIR/trusted_root.jsonl\")\ntest -s \"$VELNOR_HOMEBREW_EVIDENCE_DIR/trusted_root.jsonl\"\ntest \"$(wc -c < \"$VELNOR_HOMEBREW_EVIDENCE_DIR/trusted_root.jsonl\")\" -le 4194304"
+    ))
 }

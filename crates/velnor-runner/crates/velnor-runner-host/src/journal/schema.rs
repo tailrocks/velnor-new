@@ -14,8 +14,19 @@ mod driver;
 mod execution_authorization;
 mod execution_publication;
 pub(in crate::journal) mod image_import;
+mod jit_claim_deadline;
 mod jit_conflict_recovery;
 mod jit_conflict_settlement;
+pub(in crate::journal) mod jit_interrupted_claims;
+mod jit_tombstone_completion;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v45;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v46;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v47;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v48;
 mod migration;
 mod physical_attempts;
 
@@ -53,7 +64,7 @@ pub(super) use unbound_retirement::UNBOUND_SHAPE;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 45;
+pub(super) const JOURNAL_VERSION: i64 = 52;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -116,7 +127,35 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v45(conn).await
+    validate_persisted_schema_v42(conn).await?;
+    unbound_retirement::validate(conn).await?;
+    jit_interrupted_claims::validate(conn).await?;
+    jit_claim_deadline::validate(conn).await?;
+    jit_tombstone_completion::validate(conn).await
+}
+
+#[cfg(test)]
+async fn validate_persisted_schema_v48(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v46(conn).await?;
+    jit_interrupted_claims::validate_initial_absence(conn).await
+}
+
+async fn validate_persisted_schema_v50(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v46(conn).await?;
+    jit_claim_deadline::validate(conn).await?;
+    jit_tombstone_completion::validate(conn).await
+}
+
+#[cfg(test)]
+pub(in crate::journal) async fn validate_historical_v48_for_test(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v48(conn).await
+}
+
+async fn validate_persisted_schema_v46(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v45(conn).await?;
+    jit_interrupted_claims::validate(conn).await
 }
 
 mod legacy_validation;
@@ -270,5 +309,5 @@ async fn validate_persisted_schema_v44(conn: &turso::Connection) -> Result<(), H
 
 async fn validate_persisted_schema_v45(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v42(conn).await?;
-    unbound_retirement::validate(conn).await
+    unbound_retirement::validate_v45(conn).await
 }

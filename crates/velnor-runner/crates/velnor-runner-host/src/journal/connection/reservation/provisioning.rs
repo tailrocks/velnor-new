@@ -19,7 +19,8 @@ mod storage_plan;
 mod unbound_retirement;
 pub(in crate::journal) use unbound_retirement::recover_unbound_pairs_at_startup;
 pub(crate) use unbound_retirement::{
-    UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase,
+    UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
+    UnboundRetirementPhase,
 };
 
 pub(in crate::journal) use cleanup::validate_retirement_digest;
@@ -47,7 +48,8 @@ pub(crate) use initialization::{
 };
 pub(crate) use metadata_settlement::{MetadataSettlementResult, StorageMetadataSettlementClaim};
 pub(crate) use network::{
-    RecordedStorageNetwork, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
+    RecordedStorageNetwork, StorageNetworkCreateClaim, StorageNetworkRecoveryIdentity,
+    StorageNetworkRemovalClaim,
 };
 pub(crate) use objects::StorageObjectCreateClaim;
 pub(crate) use pre_jit_cleanup::PreJitCapacityProbeClaim;

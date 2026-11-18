@@ -51,7 +51,14 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
     };
     let plan = owned(&[("rust_root_mode", run.mode), ("rust_root_tests", "run")]);
     let counts = |(tests_run, listed): (&str, &str)| {
-        owned(&[("tests_run", tests_run), ("tests_listed", listed)])
+        let mut outputs = owned(&[("tests_run", tests_run), ("tests_listed", listed)]);
+        if canonical(tests_run) && canonical(listed) {
+            outputs.insert(
+                "tests_by_package".to_owned(),
+                format!("pkg={tests_run}/{listed}"),
+            );
+        }
+        outputs
     };
     let mut needs = BTreeMap::new();
     for (job, result, outputs) in [
@@ -71,6 +78,11 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
     }
     let verdict = decide(&spec()?, &needs, Some(run.event));
     Ok((verdict.passed, verdict.table()))
+}
+
+fn canonical(text: &str) -> bool {
+    !(text.is_empty() || text.len() > 1 && text.starts_with('0'))
+        && text.bytes().all(|byte| byte.is_ascii_digit())
 }
 
 fn expect(run: &Run, passes: bool, mention: &str) -> TestResult {
@@ -121,25 +133,42 @@ fn a_schedule_or_push_job_is_scheduled_on_a_push_and_a_schedule_only() -> TestRe
 }
 
 #[test]
-fn the_counts_of_every_test_job_of_a_lane_are_summed() -> TestResult {
+fn a_package_that_listed_tests_and_ran_none_fails_even_when_another_job_ran() -> TestResult {
     let run = Run {
         a: ("0", "3"),
         b: ("5", "5"),
         ..passing()
     };
-    expect(&run, true, "Required: pass")?;
+    expect(
+        &run,
+        false,
+        "package pkg of root listed 3 tests and ran none",
+    )?;
     let run = Run {
         a: ("5", "5"),
         b: ("0", "3"),
         ..passing()
     };
-    expect(&run, true, "Required: pass")?;
+    expect(
+        &run,
+        false,
+        "package pkg of root listed 3 tests and ran none",
+    )?;
     let run = Run {
         a: ("0", "3"),
         b: ("0", "2"),
         ..passing()
     };
-    expect(&run, false, "5 tests were listed for root and none ran")?;
+    expect(
+        &run,
+        false,
+        "package pkg of root listed 3 tests and ran none",
+    )?;
+    expect(
+        &run,
+        false,
+        "package pkg of root listed 2 tests and ran none",
+    )?;
     let run = Run {
         a: ("0", "0"),
         b: ("0", "0"),
@@ -154,6 +183,6 @@ fn the_counts_of_every_test_job_of_a_lane_are_summed() -> TestResult {
     expect(
         &run,
         false,
-        "is missing or not a number in a test job of root",
+        "tests_by_package is missing or malformed in a test job of root",
     )
 }

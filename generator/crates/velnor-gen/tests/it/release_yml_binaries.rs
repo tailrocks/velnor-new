@@ -205,7 +205,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
         Some("error")
     );
     let publish = job(&tree, "publish-app")?;
-    assert!(runs(publish)[0].ends_with(" --dir dist rg-linux-arm64.tar.gz"));
+    assert!(runs(publish)[0].ends_with(" --dir=dist rg-linux-arm64.tar.gz"));
     Ok(())
 }
 
@@ -317,7 +317,7 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
         assert_eq!(
             runs(publish),
             [format!(
-                "velnor-ci release publish --repo \"$REPOSITORY\" --tag \"$TAG\" --app velnor-release --dir dist {files}"
+                "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app=velnor-release --dir=dist {files}"
             )]
         );
         let command = steps(publish).last().ok_or("no steps")?;

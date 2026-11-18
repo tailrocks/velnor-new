@@ -6,17 +6,26 @@ use std::path::Path;
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use serde_json::{Value, json};
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{UnixListener, UnixStream};
+use tokio::net::UnixListener;
 use tokio::sync::Notify;
 
 use super::TestResult;
 use super::seed::{CONNECTION_ID, ENGINE_ID, Pair};
 
+#[path = "fixture/barriers.rs"]
+mod barriers;
+#[path = "fixture/http.rs"]
+mod http;
+#[path = "fixture/initializer.rs"]
+mod initializer;
+
+pub(crate) use barriers::{CreateBarrier, DeleteBarrier};
+
 struct Container {
     name: String,
     labels: Value,
     running: bool,
+    inspection: Option<Value>,
 }
 
 #[derive(Default)]
@@ -27,6 +36,8 @@ struct State {
     requests: Vec<String>,
     hang_after: Option<String>,
     armed: bool,
+    creates: BTreeMap<(String, String), (String, Arc<barriers::CreateGate>)>,
+    deletes: BTreeMap<String, Arc<barriers::DeleteGate>>,
     read_gate: Option<String>,
     read_gate_hits: usize,
 }
@@ -50,8 +61,9 @@ impl FixtureDocker {
                     pair.container_id(role),
                     Container {
                         name: format!("w{}-{role}", pair.nonce()),
-                        labels: json!({"io.velnor.managed": "true", "io.velnor.reservation-id": reservation, "io.velnor.operation-id": operation, "io.velnor.connection-id": CONNECTION_ID, "io.velnor.role": role}),
+                        labels: json!({"io.velnor.managed": "true", "io.velnor.reservation-id": reservation, "io.velnor.operation-id": operation, "io.velnor.connection-id": CONNECTION_ID, "io.velnor.role": role, "io.velnor.image.kind": role, "org.opencontainers.image.title": "ubuntu"}),
                         running: true,
+                        inspection: None,
                     },
                 );
             }
@@ -77,7 +89,7 @@ impl FixtureDocker {
         tokio::spawn(async move {
             while let Ok((stream, _)) = listener.accept().await {
                 let (state, hung) = (Arc::clone(&state), Arc::clone(&hung));
-                tokio::spawn(async move { drop(serve(stream, &state, &hung).await) });
+                tokio::spawn(async move { drop(http::serve(stream, &state, &hung).await) });
             }
         });
         Ok(fixture)
@@ -90,8 +102,34 @@ impl FixtureDocker {
                 name: pair.helper_name(),
                 labels: json!({"velnor.role": "storage-initializer", "velnor.operation": format!("{}-1", pair.reservation - 1)}),
                 running: false,
+                inspection: Some(initializer::inspection(pair)),
             },
         );
+    }
+
+    pub(crate) fn delay_create(&self, kind: &str, name: &str, id: &str) -> CreateBarrier {
+        let gate = Arc::new(barriers::CreateGate::default());
+        lock(&self.state).creates.insert(
+            (kind.to_owned(), name.to_owned()),
+            (id.to_owned(), Arc::clone(&gate)),
+        );
+        CreateBarrier(gate)
+    }
+
+    pub(crate) fn delay_delete(&self, kind: &str, id: &str) -> DeleteBarrier {
+        let gate = Arc::new(barriers::DeleteGate::default());
+        lock(&self.state)
+            .deletes
+            .insert(format!("DELETE /{kind}/{id}"), Arc::clone(&gate));
+        DeleteBarrier(gate)
+    }
+
+    pub(crate) fn remove_network(&self, pair: Pair) {
+        lock(&self.state).networks.remove(&pair.network_id());
+    }
+
+    pub(crate) fn remove_volume(&self, name: &str) {
+        lock(&self.state).volumes.remove(name);
     }
 
     pub(crate) fn relabel_initializer(&self, pair: Pair) {
@@ -149,6 +187,22 @@ impl FixtureDocker {
         lock(&self.state).containers.contains_key(id)
     }
 
+    pub(crate) fn remove_container(&self, id: &str) {
+        lock(&self.state).containers.remove(id);
+    }
+
+    pub(crate) fn relabel_network(&self, pair: Pair) {
+        if let Some((_, labels)) = lock(&self.state).networks.get_mut(&pair.network_id()) {
+            labels["io.velnor.reservation-id"] = json!("999");
+        }
+    }
+
+    pub(crate) fn set_container_running(&self, id: &str, running: bool) {
+        if let Some(container) = lock(&self.state).containers.get_mut(id) {
+            container.running = running;
+        }
+    }
+
     pub(crate) fn take_requests(&self) -> Vec<String> {
         std::mem::take(&mut lock(&self.state).requests)
     }
@@ -175,115 +229,39 @@ fn lock(state: &Mutex<State>) -> MutexGuard<'_, State> {
     state.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-fn respond(state: &mut State, method: &str, segments: &[&str]) -> (u16, Value) {
-    let found = |value: Option<Value>| {
-        value.map_or((404, json!({"message": "No such object"})), |value| {
-            (200, value)
-        })
-    };
-    match (method, segments) {
-        ("GET", ["info"]) => (200, json!({"ID": ENGINE_ID, "DockerRootDir": "/var/lib/docker", "OSType": "linux", "Architecture": "x86_64"})),
-        ("GET", ["containers", key, "json"]) => found(
-            state
-                .containers
-                .iter()
-                .find(|(id, container)| *id == key || container.name == *key)
-                .map(|(id, container)| json!({"Id": id, "Name": format!("/{}", container.name), "State": {"Running": container.running}, "Config": {"Labels": container.labels}})),
-        ),
-        ("POST", ["containers", id, "stop"]) => match state.containers.get_mut(*id) {
-            Some(container) => {
-                container.running = false;
-                (204, Value::Null)
-            }
-            None => found(None),
-        },
-        ("DELETE", ["containers", id]) => match state.containers.get(*id) {
-            Some(container) if container.running => (409, json!({"message": "running"})),
-            Some(_) => {
-                state.containers.remove(*id);
-                (204, Value::Null)
-            }
-            None => found(None),
-        },
-        ("GET", ["volumes", name]) => found(state.volumes.get(*name).map(|labels| {
-            json!({"Name": name, "Driver": "local", "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"), "Labels": labels, "Scope": "local", "Options": {}})
-        })),
-        ("DELETE", ["volumes", name]) => match state.volumes.remove(*name) {
-            Some(_) => (204, Value::Null),
-            None => found(None),
-        },
-        ("GET", ["networks", key]) => found(
-            state
-                .networks
-                .iter()
-                .find(|(id, (name, _))| *id == key || name == key)
-                .map(|(id, (name, labels))| json!({"Name": name, "Id": id, "Driver": "bridge", "Scope": "local", "Internal": false, "Attachable": false, "Ingress": false, "EnableIPv4": true, "EnableIPv6": false, "Containers": {}, "Labels": labels})),
-        ),
-        ("DELETE", ["networks", id]) => match state.networks.remove(*id) {
-            Some(_) => (204, Value::Null),
-            None => found(None),
-        },
-        _ => found(None),
+pub(crate) mod bound_neighbor {
+    use super::super::{TestResult, seed};
+    use crate::journal::Journal;
+    use seed::Pair;
+
+    mod binding {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/launch/jit_conflict/tests/binding.rs"
+        ));
     }
-}
 
-async fn serve(mut stream: UnixStream, state: &Mutex<State>, hung: &Notify) -> TestResult<()> {
-    let (method, target) = read_request(&mut stream).await?;
-    let route = target
-        .split_once('?')
-        .map_or(target.as_str(), |(route, _)| route);
-    let request = format!("{method} {route}");
-    let segments: Vec<&str> = route.split('/').skip(1).collect();
-    let response = {
-        let mut state = lock(state);
-        if state.read_gate.as_deref() == Some(request.as_str()) {
-            state.requests.push(request.clone());
-            state.read_gate_hits += 1;
-            None
-        } else if state.armed {
-            state.armed = false;
-            state.hang_after = None;
-            None
-        } else {
-            state.requests.push(request.clone());
-            state.armed = state.hang_after.as_deref() == Some(request.as_str());
-            Some(respond(&mut state, &method, &segments))
-        }
-    };
-    let Some((status, body)) = response else {
-        hung.notify_one();
-        return std::future::pending().await;
-    };
-    let body = if body.is_null() {
-        String::new()
-    } else {
-        body.to_string()
-    };
-    let head = format!(
-        "HTTP/1.1 {status} OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-        body.len()
-    );
-    stream.write_all(head.as_bytes()).await?;
-    stream.write_all(body.as_bytes()).await?;
-    Ok(stream.shutdown().await?)
-}
+    mod storage_seed {
+        include!(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/src/launch/jit_conflict/tests/storage_seed.rs"
+        ));
+    }
 
-async fn read_request(stream: &mut UnixStream) -> TestResult<(String, String)> {
-    let mut request = Vec::new();
-    let mut chunk = [0_u8; 4096];
-    loop {
-        if let Some(head_end) = request.windows(4).position(|window| window == b"\r\n\r\n") {
-            let head = String::from_utf8_lossy(&request[..head_end]).into_owned();
-            let mut words = head.split_whitespace().map(str::to_owned);
-            return Ok((
-                words.next().unwrap_or_default(),
-                words.next().unwrap_or_default(),
-            ));
-        }
-        let read = stream.read(&mut chunk).await?;
-        if read == 0 {
-            return Err("the request closed early".into());
-        }
-        request.extend_from_slice(&chunk[..read]);
+    async fn scalar(journal: &Journal, query: &str) -> TestResult<String> {
+        let connection = journal.connection().await?;
+        let mut rows = connection.query(query, ()).await?;
+        Ok(rows.next().await?.ok_or("scalar row")?.get(0)?)
+    }
+
+    pub(crate) async fn install(
+        journal: &Journal,
+        pair: Pair,
+        engine: &crate::launch::SelectedEngineContext,
+    ) -> TestResult<()> {
+        seed::bind_resources(journal, pair, engine.docker_root_digest()).await?;
+        binding::install(journal, pair).await?;
+        storage_seed::install(journal, pair).await?;
+        seed::execute(journal, &format!("UPDATE connection_intents SET launch_phase='resources_bound',docker_id='{}',dind_id='{}' WHERE id={}", pair.container_id("runner"), pair.container_id("dind"), pair.reservation - 1)).await
     }
 }

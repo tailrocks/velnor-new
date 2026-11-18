@@ -310,6 +310,13 @@ fn a_file_written_before_versions_were_recorded_is_refused_with_the_regenerate_c
 fn a_pin_below_0_1_81_gets_a_file_its_helper_can_read() -> TestResult {
     let mut files = two_workspaces()?;
     pin(&mut files, "0.1.79");
+    files
+        .tracked_paths
+        .insert(RepoPath::new(".velnor/rust-ci.toml")?);
+    files.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"off\"\n".to_vec(),
+    );
     let old = recorded(&files)?;
     assert!(!old.contains("\"version\""), "{old}");
     assert!(generated_files(&files).is_ok());

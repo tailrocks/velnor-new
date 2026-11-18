@@ -22,22 +22,22 @@ pub(super) fn build_steps(pins: &ProductReleasePins) -> Result<Vec<Yaml>, Render
         generator_release::verify_rust_step(pins)?,
         generator_release::command_step(
             "Build locked resource probe",
-            &pins.resource_probe_build_argv,
+            &crate::toolchain_env::with_env_unset_argv(&pins.resource_probe_build_argv),
         )?,
         generator_release::command_step(
             "Qualify public resource-probe release admission",
-            &pins.resource_probe_release_test_argv,
+            &crate::toolchain_env::with_env_unset_argv(&pins.resource_probe_release_test_argv),
         )?,
         generator_release::command_step(
             "Build locked native resource-probe producer",
-            &pins.resource_probe_release_build_argv,
+            &crate::toolchain_env::with_env_unset_argv(&pins.resource_probe_release_build_argv),
         )?,
         generator_release::bash_step(
             "Build and smoke-test resource-probe image",
             r#"set -euo pipefail
 producer_target="$(cd -- "${CARGO_TARGET_DIR:-crates/velnor-runner/target}" && pwd -P)"
 export VELNOR_RESOURCE_PROBE_RELEASE_BIN="$producer_target/x86_64-unknown-linux-gnu/debug/velnor-resource-probe-release"
-bash images/resource-probe/build-image.sh"#,
+env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash images/resource-probe/build-image.sh"#,
         ),
     ])
 }

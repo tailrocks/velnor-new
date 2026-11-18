@@ -178,3 +178,16 @@ fn scalar(value: &str) -> Result<Node, String> {
             .to_owned(),
     ))
 }
+
+pub(crate) fn document(text: &str) -> Result<serde_json::Value, serde_saphyr::Error> {
+    let mut budget = serde_saphyr::Budget::default();
+    budget.max_depth = 32;
+    budget.max_nodes = 262_144;
+    budget.max_events = 524_288;
+    budget.max_total_scalar_bytes = 16 * 1024 * 1024;
+    budget.max_documents = 1;
+    budget.enforce_alias_anchor_ratio = false;
+    let mut options = serde_saphyr::Options::default();
+    options.budget = Some(budget);
+    serde_saphyr::from_str_with_options(text, options)
+}

@@ -55,6 +55,11 @@ impl GitHubApi {
         &self,
         tag: &str,
     ) -> Result<Option<ReleaseResponse>, OrchestratorError> {
+        if crate::homebrew::qualification_evidence::active() {
+            return self
+                .get_json(&self.route(&format!("releases/tags/{}", super::encode_segment(tag))))
+                .map(Some);
+        }
         let (owner, name) = self
             .repository
             .split_once('/')

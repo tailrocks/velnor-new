@@ -14,20 +14,32 @@ use crate::journal::schema::UNBOUND_SHAPE;
 
 use super::hold_context;
 
+#[cfg(test)]
+#[path = "unbound_retirement/historical_v48.rs"]
+mod historical_v48;
+
+mod absence;
 #[path = "unbound_retirement/inventory.rs"]
 mod inventory;
 #[cfg(test)]
 #[path = "unbound_retirement/release_ready_tests.rs"]
 mod release_ready_tests;
+#[path = "unbound_retirement/ownership.rs"]
+mod ownership;
+#[path = "unbound_retirement/recovery.rs"]
+mod recovery;
 #[path = "unbound_retirement/settlement.rs"]
 mod settlement;
+#[path = "unbound_retirement/targets.rs"]
+mod targets;
+pub(super) use ownership::{owns_cleanup, reserves_cleanup};
+use recovery::abandon_unbound_pairs;
+pub(crate) use targets::{UnboundResourceKind, UnboundRetirementInventory};
 
-use inventory::{containers, current_claim, eligible, initializer, volumes};
+use inventory::{current_claim, eligible, initializer};
 
 const CLAIM_SECONDS: i64 = 45;
 
-/// The single unbound-pair shape: a started/uncertain pair of two containers,
-/// or a reservation with no containers whose storage-initializer abort is absent.
 fn unbound_pair() -> String {
     UNBOUND_SHAPE.replace("{s}", "s")
 }
@@ -48,16 +60,14 @@ pub(crate) struct UnboundRetirementClaim {
     docker_root_digest: String,
     generation: Arc<AtomicI64>,
     lease_until: Arc<AtomicI64>,
-    containers: Vec<UnboundContainer>,
     initializer: Option<UnboundInitializer>,
-    volumes: Vec<UnboundVolume>,
 }
 
 #[derive(Clone, Debug)]
 pub(crate) struct UnboundContainer {
     pub(crate) role: String,
     pub(crate) name: String,
-    pub(crate) id: String,
+    pub(crate) id: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -71,6 +81,7 @@ pub(crate) struct UnboundInitializer {
 pub(crate) struct UnboundVolume {
     pub(crate) role: String,
     pub(crate) name: String,
+    pub(crate) id: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -109,16 +120,8 @@ impl UnboundRetirementClaim {
         &self.docker_root_digest
     }
 
-    pub(crate) fn containers(&self) -> &[UnboundContainer] {
-        &self.containers
-    }
-
     pub(crate) fn initializer(&self) -> Option<&UnboundInitializer> {
         self.initializer.as_ref()
-    }
-
-    pub(crate) fn volumes(&self) -> &[UnboundVolume] {
-        &self.volumes
     }
 }
 
@@ -211,9 +214,7 @@ impl ConnectionJournal {
                 docker_root_digest: context.docker_root_digest,
                 generation: Arc::new(AtomicI64::new(generation)),
                 lease_until: Arc::new(AtomicI64::new(lease_until)),
-                containers: containers(connection, reservation_id).await?,
                 initializer: initializer(connection, reservation_id).await?,
-                volumes: volumes(connection, reservation_id).await?,
             }))
         })
         .await
@@ -331,6 +332,7 @@ impl ConnectionJournal {
 pub(in crate::journal) async fn recover_unbound_pairs_at_startup(
     connection: &turso::Connection,
 ) -> Result<(), HostError> {
+    recovery::normalize_requested(connection).await?;
     abandon_unbound_pairs(connection, None, None).await?;
     connection
         .execute(
@@ -342,27 +344,13 @@ pub(in crate::journal) async fn recover_unbound_pairs_at_startup(
     Ok(())
 }
 
-async fn abandon_unbound_pairs(
-    connection: &turso::Connection,
-    reservation_id: Option<i64>,
-    connection_id: Option<&str>,
-) -> Result<(), HostError> {
-    for template in [ABANDON_RESERVATIONS, ABANDON_INTENTS] {
-        connection
-            .execute(
-                &template.replace("{pair}", &unbound_pair()),
-                (reservation_id, connection_id),
-            )
-            .await
-            .map_err(|_| HostError::Journal)?;
-    }
-    Ok(())
-}
-
 async fn validate_claim_in_transaction(
     connection: &turso::Connection,
     claim: &UnboundRetirementClaim,
 ) -> Result<(), HostError> {
+    if !owns_cleanup(connection, &claim.connection_id, claim.reservation_id).await? {
+        return Err(HostError::Ownership);
+    }
     let mut rows = connection
         .query(
             "SELECT 1 FROM capacity_reservation_unbound_retirement_claims AS claim JOIN capacity_reservations AS reservation ON reservation.id = claim.reservation_id WHERE claim.reservation_id = ?1 AND claim.connection_id = ?2 AND claim.operation_id = ?3 AND claim.engine_id = ?4 AND claim.docker_root_digest = ?5 AND claim.claim_generation = ?6 AND claim.lease_until = ?7 AND claim.lease_until > CAST(strftime('%s', 'now') AS INTEGER) AND reservation.state = 'uncertain'",

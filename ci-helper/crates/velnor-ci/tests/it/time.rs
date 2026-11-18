@@ -18,7 +18,7 @@ fn numeric_offsets_are_converted_to_utc() {
             Some("2020-01-20T09:00:00-08:00"),
             Some("2020-01-20T17:00:30Z")
         ),
-        30
+        Some(30)
     );
 }
 
