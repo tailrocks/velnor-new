@@ -117,7 +117,6 @@ async fn an_info_body_over_the_cap_yields_no_engine_identity() -> TestResult {
     Ok(())
 }
 
-
 async fn journal_with(path: &Path, occupying_first: bool, rows: usize) -> Result<(), HostError> {
     let db = turso::Builder::new_local(path.to_str().ok_or(HostError::Path)?)
         .build()
