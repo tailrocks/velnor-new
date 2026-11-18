@@ -101,7 +101,6 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
 fn label_reset(facts: &RepoFacts) -> Option<Job> {
     (facts.config.pr_ci == PrCi::Label).then(|| Job {
         name: Some(format!("Remove the {CI_RUN_LABEL} label")),
-        needs: vec![crate::required_job::VERDICT_JOB],
         when: When::ClearRunLabel,
         pr: PrRun::Quick,
         permissions: Permissions(BTreeMap::from([(

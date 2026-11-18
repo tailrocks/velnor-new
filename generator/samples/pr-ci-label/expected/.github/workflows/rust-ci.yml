@@ -1102,9 +1102,7 @@ jobs:
         run: exit 1
   ci-run-label:
     name: 'Remove the ci:run label'
-    needs:
-      - required
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event_name == ''pull_request'' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, ''ci:run'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event_name == ''pull_request'' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, ''ci:run'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest

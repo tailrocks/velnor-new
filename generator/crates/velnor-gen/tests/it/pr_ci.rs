@@ -296,7 +296,10 @@ fn only_the_label_removal_job_can_write_pull_requests_and_it_runs_no_pull_reques
         reset.get("permissions"),
         Some(&serde_json::json!({"pull-requests": "write"}))
     );
-    assert_eq!(strings(reset.get("needs")), ["required"]);
+    assert!(
+        reset.get("needs").is_none(),
+        "the removal job starts at once"
+    );
     let steps = reset
         .get("steps")
         .and_then(Json::as_array)

@@ -9,7 +9,7 @@ use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::gh_expr::evaluate;
 use crate::pr_ci::{LABEL_CONFIG, label_workflow, render};
-use crate::pr_ci_sim::{Event, context, labeled, outcome, pull};
+use crate::pr_ci_sim::{Event, context, labeled, outcome, pull, state, strings};
 
 #[test]
 fn an_unrelated_label_runs_nothing_whatever_the_pull_request_already_carries() -> TestResult {
@@ -107,5 +107,34 @@ fn every_generated_workflow_that_verifies_a_pull_request_also_runs_on_the_merge_
     for (path, tree) in verifying {
         assert!(tree.pointer("/on/merge_group").is_some(), "{path}");
     }
+    Ok(())
+}
+
+#[test]
+fn the_run_that_started_with_ci_run_still_runs_the_full_suite_and_a_following_push_runs_the_quick_set()
+-> TestResult {
+    let tree = label_workflow()?;
+    let jobs = tree
+        .get("jobs")
+        .and_then(Json::as_object)
+        .ok_or("no jobs")?;
+    for (id, job) in jobs {
+        assert!(
+            !strings(job.get("needs"))
+                .iter()
+                .any(|need| need == "ci-run-label"),
+            "{id} waits for the label removal"
+        );
+    }
+    assert!(jobs["ci-run-label"].get("needs").is_none());
+    let (started, verdict) = outcome(&tree, &pull(false, &["ci:run"]), &[])?;
+    assert_eq!(state(&started, "ci-run-label"), "success");
+    assert_eq!(state(&started, "rust-test"), "success");
+    assert!(verdict.steps.iter().any(|step| step == "velnor-ci gate"));
+    let (next, verdict) = outcome(&tree, &pull(false, &[]), &[])?;
+    assert_eq!(state(&next, "ci-run-label"), "skipped");
+    assert_eq!(state(&next, "rust-lint"), "success");
+    assert_eq!(state(&next, "rust-test"), "skipped");
+    assert!(!verdict.steps.iter().any(|step| step == "velnor-ci gate"));
     Ok(())
 }

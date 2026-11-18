@@ -151,7 +151,6 @@ pub(crate) fn condition(
             parts.push(SAVING_EVENTS.to_owned());
         }
         When::ClearRunLabel => {
-            parts.push(NOT_CANCELLED.to_owned());
             parts.push(IS_PULL_REQUEST.to_owned());
             parts.push(SAME_REPOSITORY.to_owned());
             parts.push(has_label(CI_RUN_LABEL));
