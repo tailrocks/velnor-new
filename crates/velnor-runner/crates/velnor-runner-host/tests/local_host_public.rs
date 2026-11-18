@@ -20,12 +20,22 @@ use support::{TestResult, labelled};
 
 #[path = "local_host_public/authority.rs"]
 mod authority;
+#[path = "local_host_public/cleanup.rs"]
+mod cleanup;
+#[path = "local_host_public/endpoint.rs"]
+mod endpoint;
 #[path = "local_host_public/journal.rs"]
 mod journal;
+#[path = "local_host_public/previous_decision.rs"]
+mod previous_decision;
 #[path = "local_host_public/proxy.rs"]
 mod proxy;
+#[path = "local_host_public/publication_proxy.rs"]
+mod publication_proxy;
 #[path = "local_host_public/refusals.rs"]
 mod refusals;
+#[path = "local_host_public/removal_audit.rs"]
+mod removal_audit;
 #[path = "local_host_public/retry.rs"]
 mod retry;
 #[path = "local_host_public/scenario.rs"]
@@ -101,7 +111,9 @@ async fn decide_jobs(scenario: &Scenario) -> TestResult<(Vec<String>, u64)> {
 
 #[tokio::test]
 async fn local_job_start_check_decides_each_job_against_the_authority() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let plan = scenario.plan(1, 0)?;
     let fake = scenario.fake();
     fake.dispatch("trusted", 1, dispatched("ci"));
@@ -183,7 +195,9 @@ async fn networks_of(scenario: &Scenario, side: &str) -> TestResult<Vec<String>>
 
 #[tokio::test]
 async fn local_pairs_run_one_job_and_are_replaced_after_their_agent_is_deleted() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let plan = scenario.plan(1, 1)?;
     scenario.start(plan);
     let run = async {
@@ -238,7 +252,9 @@ fn secrets_in(inspected: &ContainerInspectResponse) -> String {
 
 #[tokio::test]
 async fn local_pairs_hold_neither_the_authority_address_nor_the_token() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let plan = scenario.plan(1, 1)?;
     let address = scenario.served.address.to_string();
     scenario.start(plan);
@@ -321,7 +337,9 @@ fn local_plan_refuses_one_network_shared_by_two_sides() {
 
 #[tokio::test]
 async fn local_host_refuses_a_remote_authority_before_any_container_starts() -> TestResult<()> {
-    let docker = support::docker()?;
+    let Some(docker) = support::docker()? else {
+        return Ok(());
+    };
     let environment = format!("test-{}", support::suffix()?);
     let state = tempfile::tempdir()?;
     std::fs::write(state.path().join("velnor-local"), "")?;

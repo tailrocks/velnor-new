@@ -218,6 +218,7 @@ fn valid_repo_part(part: &str) -> bool {
 
 fn valid_label(value: &str) -> bool {
     (1..=64).contains(&value.len())
+        && value != "."
         && !value.starts_with('-')
         && !value.ends_with('-')
         && !value.contains("..")
@@ -229,3 +230,7 @@ fn valid_label(value: &str) -> bool {
 fn is_hosted_label(label: &str) -> bool {
     HOSTED_LABELS.contains(&label)
 }
+
+#[cfg(test)]
+#[path = "connection/tests.rs"]
+mod tests;

@@ -46,7 +46,8 @@ esac
         .output()?;
     assert!(
         output.status.success(),
-        "child failed: {}",
+        "child failed:\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     Ok(())
@@ -60,16 +61,32 @@ fn exercise(log: &str) -> TestResult<()> {
         (old, result)
     });
     let started = format!("{log}.started");
-    for _ in 0..500 {
-        if std::path::Path::new(&started).exists() {
-            break;
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+    let refresh = (|| -> TestResult<()> {
+        while !std::path::Path::new(&started).exists() {
+            if handle.is_finished() {
+                return Err("lookup finished before fixture readiness".into());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err("fixture readiness exceeded the request deadline".into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
-        std::thread::sleep(std::time::Duration::from_millis(10));
-    }
-    assert!(std::path::Path::new(&started).exists());
-    client.refresh("https://b.example.test/new", "token-b")?;
-    fs::write(format!("{log}.release"), b"")?;
-    let (mut old, first) = handle.join().map_err(|_| "lookup thread panicked")?;
+        client.refresh("https://b.example.test/new", "token-b")?;
+        Ok(())
+    })();
+    let release = fs::write(format!("{log}.release"), b"");
+    let joined = handle.join();
+    let lookup = joined
+        .as_ref()
+        .map(|(_, result)| result)
+        .map_err(|_| "lookup thread panicked");
+    assert!(
+        refresh.is_ok() && release.is_ok() && matches!(&lookup, Ok(Ok(None))),
+        "refresh={refresh:?}; release={release:?}; lookup={lookup:?}; requests={:?}",
+        fs::read_to_string(log)
+    );
+    let (mut old, first) = joined.map_err(|_| "lookup thread panicked")?;
     assert!(first?.is_none());
     assert!(client.refresh("http://insecure.test", "bad").is_err());
     assert!(client.refresh("https://b.example.test/new", "").is_err());

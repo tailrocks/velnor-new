@@ -33,9 +33,9 @@ fn runs_of_different_workloads_are_not_compared() {
 fn faster_second_run_shows_negative_changes_and_the_changed_job() {
     let a = recorded_metrics();
     let mut b = recorded_metrics();
-    b.wall_seconds = 600;
-    b.runner_seconds = 500;
-    b.jobs[1].duration_seconds = 400;
+    b.wall_seconds = Some(600);
+    b.runner_seconds = Some(500);
+    b.jobs[1].duration_seconds = Some(400);
     b.jobs[1].log.compiling = 0;
     b.jobs.remove(2);
 
@@ -87,17 +87,165 @@ fn only_the_ten_largest_job_changes_are_listed() {
     for index in 0..12_u64 {
         let mut left = template.clone();
         left.name = format!("job-{index:02}");
-        left.duration_seconds = 100;
+        left.duration_seconds = Some(100);
         let mut right = left.clone();
-        right.duration_seconds = 100 + index + 1;
+        right.duration_seconds = Some(100 + index + 1);
         a.jobs.push(left);
         b.jobs.push(right);
     }
+    let mut absent = template.clone();
+    absent.name = "job-absent".to_owned();
+    absent.duration_seconds = Some(500);
+    a.jobs.push(absent);
     let table = rendered(&a, &b);
+    assert!(table.contains("| job-absent | 500 | - | -500 |"), "{table}");
     assert!(table.contains("| job-11 | 100 | 112 | +12 |"), "{table}");
-    assert!(table.contains("| job-02 | 100 | 103 | +3 |"), "{table}");
+    assert!(table.contains("| job-03 | 100 | 104 | +4 |"), "{table}");
+    assert!(!table.contains("| job-02 |"), "{table}");
     assert!(!table.contains("| job-01 |"), "{table}");
     assert!(!table.contains("| job-00 |"), "{table}");
+}
+
+#[test]
+fn skipped_jobs_are_not_reported_as_unmeasured_changes() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let skipped = &mut a.jobs[0];
+    skipped.conclusion = "skipped".to_owned();
+    skipped.started = false;
+    skipped.duration_seconds = None;
+    b.jobs.remove(0);
+
+    let table = rendered(&a, &b);
+    assert!(!table.contains(&a.jobs[0].name), "{table}");
+    assert!(
+        table.contains(&format!(
+            "| Jobs skipped | {} | {} | -1 |",
+            b.jobs_skipped() + 1,
+            b.jobs_skipped()
+        )),
+        "{table}"
+    );
+}
+
+#[test]
+fn a_changed_job_without_a_measurement_survives_the_display_limit() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let template = a.jobs[0].clone();
+    for index in 0..12_u64 {
+        let mut left = template.clone();
+        left.name = format!("job-{index:02}");
+        left.duration_seconds = Some(100);
+        let mut right = left.clone();
+        right.duration_seconds = Some(101 + index);
+        a.jobs.push(left);
+        b.jobs.push(right);
+    }
+    let mut lost_measurement = template;
+    lost_measurement.name = "job-unmeasured".to_owned();
+    lost_measurement.duration_seconds = Some(1_000);
+    a.jobs.push(lost_measurement.clone());
+    lost_measurement.duration_seconds = None;
+    b.jobs.push(lost_measurement);
+
+    let table = rendered(&a, &b);
+    assert!(
+        table.contains("| job-unmeasured | 1000 | unmeasured | - |"),
+        "{table}"
+    );
+}
+
+#[test]
+fn a_skipped_occurrence_does_not_renumber_the_jobs_that_follow_it() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let template = a.jobs[0].clone();
+    let mut skipped = template.clone();
+    skipped.name = "Shared".to_owned();
+    skipped.conclusion = "skipped".to_owned();
+    skipped.started = false;
+    skipped.duration_seconds = None;
+    let mut first = template.clone();
+    first.name = "Shared".to_owned();
+    first.duration_seconds = Some(10);
+    let mut second = template;
+    second.name = "Shared".to_owned();
+    second.duration_seconds = Some(20);
+    a.jobs = vec![skipped, second.clone()];
+    b.jobs = vec![first, second];
+
+    let table = rendered(&a, &b);
+    assert!(table.contains("| Shared | - | 10 | +10 |"), "{table}");
+    assert!(!table.contains("occurrence 2"), "{table}");
+}
+
+#[test]
+fn a_job_without_a_measurement_absent_from_the_other_run_survives_the_display_limit() {
+    let mut a = recorded_metrics();
+    let mut b = recorded_metrics();
+    let template = a.jobs[0].clone();
+    for index in 0..12_u64 {
+        let mut left = template.clone();
+        left.name = format!("job-{index:02}");
+        left.duration_seconds = Some(100);
+        let mut right = left.clone();
+        right.duration_seconds = Some(101 + index);
+        a.jobs.push(left);
+        b.jobs.push(right);
+    }
+    let mut unmeasured = template;
+    unmeasured.name = "job-unmeasured-absent".to_owned();
+    unmeasured.duration_seconds = None;
+    b.jobs.push(unmeasured);
+
+    let table = rendered(&a, &b);
+    assert!(
+        table.contains("| job-unmeasured-absent | - | unmeasured | - |"),
+        "{table}"
+    );
+}
+
+#[test]
+fn metrics_without_a_schema_version_are_rejected() {
+    use std::fs;
+
+    use velnor_ci::io::read_metrics;
+
+    let mut old_format =
+        serde_json::to_value(recorded_metrics()).unwrap_or_else(|error| unreachable!("{error}"));
+    old_format
+        .as_object_mut()
+        .unwrap_or_else(|| unreachable!("metrics must serialize as an object"))
+        .remove("schema_version");
+    let directory = crate::support::fresh_dir("velnor-ci-metrics", "old-schema");
+    let path = directory.join("metrics.json");
+    fs::write(
+        &path,
+        serde_json::to_vec(&old_format).unwrap_or_else(|error| unreachable!("{error}")),
+    )
+    .unwrap_or_else(|error| unreachable!("{error}"));
+
+    let result = read_metrics(&path).map(|_| ());
+    fs::remove_dir_all(&directory).unwrap_or_else(|error| unreachable!("{error}"));
+    assert!(
+        result
+            .as_ref()
+            .is_err_and(|error| error.to_string().contains("schema_version")),
+        "{result:?}"
+    );
+}
+
+#[test]
+fn a_measured_zero_job_missing_from_the_other_run_is_not_a_change() {
+    let mut a = recorded_metrics();
+    let b = recorded_metrics();
+    let mut zero = a.jobs[0].clone();
+    zero.name = "job-zero-absent".to_owned();
+    zero.duration_seconds = Some(0);
+    a.jobs.push(zero);
+    let table = rendered(&a, &b);
+    assert!(!table.contains("job-zero-absent"), "{table}");
 }
 
 #[test]
@@ -105,9 +253,9 @@ fn jobs_with_the_same_name_are_compared_one_to_one() {
     let mut a = recorded_metrics();
     let mut b = recorded_metrics();
     let mut twin = a.jobs[0].clone();
-    twin.duration_seconds = 100;
+    twin.duration_seconds = Some(100);
     a.jobs.push(twin.clone());
-    twin.duration_seconds = 150;
+    twin.duration_seconds = Some(150);
     b.jobs.push(twin);
     let name = a.jobs[0].name.clone();
     let table = rendered(&a, &b);
@@ -124,16 +272,16 @@ fn a_job_literally_named_like_a_duplicate_does_not_collide() {
     let mut b = recorded_metrics();
     let mut build = a.jobs[0].clone();
     build.name = "build".to_owned();
-    build.duration_seconds = 10;
+    build.duration_seconds = Some(10);
     let mut literal = build.clone();
     literal.name = "build #2".to_owned();
-    literal.duration_seconds = 20;
+    literal.duration_seconds = Some(20);
     a.jobs
         .extend([build.clone(), build.clone(), literal.clone()]);
-    build.duration_seconds = 11;
-    literal.duration_seconds = 25;
+    build.duration_seconds = Some(11);
+    literal.duration_seconds = Some(25);
     let mut second = build.clone();
-    second.duration_seconds = 10;
+    second.duration_seconds = Some(10);
     b.jobs.extend([build, second, literal]);
     let table = rendered(&a, &b);
     assert!(table.contains("| build | 10 | 11 | +1 |"), "{table}");
@@ -146,7 +294,7 @@ fn a_pipe_in_a_job_name_does_not_add_a_table_column() {
     let a = recorded_metrics();
     let mut b = recorded_metrics();
     b.jobs[0].name = "test | linux".to_owned();
-    b.jobs[0].duration_seconds += 5;
+    b.jobs[0].duration_seconds = b.jobs[0].duration_seconds.map(|seconds| seconds + 5);
     let table = rendered(&a, &b);
     assert!(table.contains("| test \\| linux | - | "), "{table}");
 }

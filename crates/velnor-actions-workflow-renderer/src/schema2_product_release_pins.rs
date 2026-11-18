@@ -33,6 +33,7 @@ pub struct ProductReleasePins {
     pub verify_rust_argv: Vec<String>,
     pub mr_boxington_version: String,
     pub gh_version: String,
+    pub bun_version: String,
 }
 
 impl ProductReleasePins {

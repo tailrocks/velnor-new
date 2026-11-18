@@ -9,6 +9,11 @@ mod pre_jit_recovery;
 mod publication;
 mod storage;
 mod unbound_retirement;
+pub(crate) use unbound_retirement::UnboundCreationObservation;
+#[cfg(test)]
+pub(crate) use unbound_retirement::historical_v48;
+#[cfg(test)]
+pub(crate) use unbound_retirement::retire_unbound_pair_at;
 mod uncertain_recovery;
 
 pub(crate) use adapter::PreparedAcquiredBootstrap;
@@ -36,9 +41,12 @@ pub(crate) use publication::JobFactsPublication;
 #[cfg(test)]
 pub(crate) use unbound_retirement::tests as unbound_pair_fixtures;
 pub(crate) use unbound_retirement::{
-    abandon_and_retire_unbound_pair_before, retire_unbound_pair, retire_uncertain_unbound_pairs,
+    InitializerPlan, abandon_and_retire_unbound_pair_before, plan_initializer_removal,
+    retire_unbound_pair, retire_uncertain_unbound_pairs,
 };
-pub(crate) use uncertain_recovery::{UncertainRecovery, recover_uncertain_reservations};
+pub(crate) use uncertain_recovery::{
+    INITIALIZER_RECOVERY_BUDGET, UncertainRecovery, UncertainRecoveryWork, uncertain_recovery_work,
+};
 
 pub(crate) use publication::job_facts_publication;
 pub(in crate::launch) use storage::StorageObservationContext;

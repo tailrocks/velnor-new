@@ -99,7 +99,7 @@ impl FakeDocker {
                     labelled.remove(&format!("volume:{id}"));
                 }
             }
-            ["rm", "-f", "-v", ids @ ..] => {
+            ["rm", "-f", ids @ ..] => {
                 for id in ids {
                     labelled.remove(&format!("container:{id}"));
                 }

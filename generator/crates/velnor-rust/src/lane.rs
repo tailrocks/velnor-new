@@ -9,7 +9,7 @@ use velnor_model::{
 };
 
 use crate::plan::{
-    CHECKOUT_DEPTH, HELPER_JOB, PLAN_DEPTH, head, job, step, tools_install, tools_restore,
+    CHECKOUT_DEPTH, PLAN_DEPTH, head, job, mirror_step, step, tools_install, tools_restore,
     tools_save,
 };
 
@@ -19,20 +19,18 @@ const POLICY_JOB: JobId = JobId::from_static("policy");
 pub(crate) struct Lane {
     pub(crate) slug: RootSlug,
     pub(crate) plan: Option<JobId>,
-    pub(crate) from_source: bool,
 }
 
 impl Lane {
-    pub(crate) fn root(slug: RootSlug, single: bool, from_source: bool) -> Self {
+    pub(crate) fn root(slug: RootSlug, single: bool) -> Self {
         Self {
             slug,
             plan: (!single).then_some(PLAN_JOB),
-            from_source,
         }
     }
 
-    pub(crate) fn policy(single: bool, from_source: bool) -> Self {
-        Self::root(RootSlug::from_static("policy"), single, from_source)
+    pub(crate) fn policy(single: bool) -> Self {
+        Self::root(RootSlug::from_static("policy"), single)
     }
 
     fn from(&self) -> PlanFrom {
@@ -118,7 +116,7 @@ pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
 }
 
 pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) -> Job {
-    let mut steps = head(facts, PLAN_DEPTH, false);
+    let mut steps = head(facts, PLAN_DEPTH);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
@@ -136,25 +134,31 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         } else {
             CHECKOUT_DEPTH
         },
-        lane.from_source,
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
     let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
-    steps.extend(
-        [
-            tools_restore(facts),
-            tools_install(facts),
-            tools_save(facts),
-        ]
-        .into_iter()
-        .flatten()
-        .map(|step| Step {
-            gate: policy_gate.clone(),
-            ..step
-        }),
-    );
+    steps.extend(mirror_step(facts).map(|step| Step {
+        gate: policy_gate.clone(),
+        ..step
+    }));
+    if !facts.tools.tools.is_empty() {
+        steps.extend(
+            [
+                tools_restore(facts),
+                tools_install(facts),
+                mirror_step(facts),
+                tools_save(facts),
+            ]
+            .into_iter()
+            .flatten()
+            .map(|step| Step {
+                gate: policy_gate.clone(),
+                ..step
+            }),
+        );
+    }
     if facts.policy.deny {
         steps.extend(facts.rust_roots.iter().map(|root| {
             lane.cargo(
@@ -169,12 +173,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         steps.push(lane.cargo(CargoCommand::Machete, None));
     }
     Job {
-        needs: lane
-            .plan
-            .clone()
-            .into_iter()
-            .chain(lane.from_source.then_some(HELPER_JOB))
-            .collect(),
+        needs: lane.plan.clone().into_iter().collect(),
         gate: lane.plan.is_some().then(|| lane.gate(GateNeed::Policy)),
         steps,
         ..job(facts, POLICY_JOB)

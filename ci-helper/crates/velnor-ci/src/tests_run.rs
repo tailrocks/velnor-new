@@ -1,38 +1,99 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::TESTS_RUN_OUTPUT;
+use std::collections::BTreeMap;
+
+use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_rust::{PackageCounts, encode_package_counts};
 
 use crate::logscan::{nextest_summary, strip_ansi};
 
-pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
+#[cfg(test)]
+mod list_argv;
+#[path = "tests_run/listed.rs"]
+mod listed;
+#[path = "tests_run/status.rs"]
+mod status;
+#[cfg(test)]
+mod statuses;
+
+pub(crate) use listed::runnable_matches;
 
 const LINE_LIMIT: usize = 4096;
+const RUN_FLAGS: &[&str] = &[
+    "--fail-fast",
+    "--hide-progress-bar",
+    "--no-capture",
+    "--no-fail-fast",
+    "--no-input-handler",
+    "--no-output-indent",
+    "--no-run",
+    "--nocapture",
+];
+const RUN_OPTIONS: &[&str] = &[
+    "--failure-output",
+    "--final-status-level",
+    "--flaky-result",
+    "--max-fail",
+    "--max-progress-running",
+    "--message-format",
+    "--no-tests",
+    "--retries",
+    "--status-level",
+    "--stress-count",
+    "--stress-duration",
+    "--success-output",
+    "--test-threads",
+];
 
-#[must_use]
-pub fn runs_nextest(command: &[String]) -> bool {
+fn nextest_run(command: &[String]) -> Option<&[String]> {
+    let command = if command
+        .first()
+        .and_then(|program| program.rsplit('/').next())
+        == Some("velnor-ci")
+        && command
+            .get(1..4)
+            .is_some_and(|args| args == ["inputs", "build", "--"])
+    {
+        &command[4..]
+    } else {
+        command
+    };
     let program = command
         .first()
         .and_then(|program| program.rsplit('/').next())
         .unwrap_or_default();
-    matches!(program, "cargo" | "cargo-nextest")
+    (matches!(program, "cargo" | "cargo-nextest")
         && command.get(1).map(String::as_str) == Some("nextest")
-        && command.get(2).map(String::as_str) == Some("run")
+        && command.get(2).map(String::as_str) == Some("run"))
+    .then_some(command)
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[must_use]
+pub fn runs_nextest(command: &[String]) -> bool {
+    nextest_run(command).is_some()
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestCounts {
     pub run: u64,
     pub listed: Option<u64>,
+    pub by_package: Option<BTreeMap<String, PackageCounts>>,
+    runs: Option<BTreeMap<String, u64>>,
 }
 
 #[must_use]
 pub fn output_lines(counts: TestCounts) -> String {
-    let run = format!("{TESTS_RUN_OUTPUT}={}\n", counts.run);
-    match counts.listed {
-        Some(listed) => format!("{run}{TESTS_LISTED_OUTPUT}={listed}\n"),
-        None => run,
+    let mut lines = vec![format!("{TESTS_RUN_OUTPUT}={}", counts.run)];
+    if let Some(listed) = counts.listed {
+        lines.push(format!("{TESTS_LISTED_OUTPUT}={listed}"));
     }
+    if let Some(packages) = counts.by_package
+        && let Some(encoded) = encode_package_counts(&packages)
+    {
+        lines.push(format!("{TESTS_BY_PACKAGE_OUTPUT}={encoded}"));
+    }
+    lines.join("\n") + "\n"
 }
 
 fn skipped(line: &str) -> Option<u64> {
@@ -42,11 +103,139 @@ fn skipped(line: &str) -> Option<u64> {
         .and_then(|count| count.trim().parse().ok())
 }
 
+#[must_use]
+pub(crate) fn list_argv(run: &[String]) -> Option<Vec<String>> {
+    let run = nextest_run(run)?;
+    let mut out = Vec::with_capacity(run.len() + 2);
+    out.extend(run.iter().take(2).cloned());
+    out.push("list".to_owned());
+    let mut index = 3;
+    let mut dashed = false;
+    while index < run.len() {
+        let arg = &run[index];
+        if !dashed && arg == "--" {
+            dashed = true;
+            out.push(arg.clone());
+            index += 1;
+            continue;
+        }
+        if dashed || !drop_run_only(run, &mut index) {
+            out.push(arg.clone());
+            index += 1;
+        }
+    }
+    let at = out.iter().position(|arg| arg == "--").unwrap_or(out.len());
+    out.insert(at, "json".to_owned());
+    out.insert(at, "--message-format".to_owned());
+    Some(out)
+}
+
+fn drop_run_only(run: &[String], index: &mut usize) -> bool {
+    let arg = &run[*index];
+    if RUN_FLAGS.contains(&arg.as_str()) {
+        *index += 1;
+        return true;
+    }
+    let equals = RUN_OPTIONS
+        .iter()
+        .any(|option| arg.starts_with(option) && arg.as_bytes().get(option.len()) == Some(&b'='));
+    if equals {
+        *index += 1;
+        return true;
+    }
+    if !RUN_OPTIONS.contains(&arg.as_str()) {
+        return false;
+    }
+    *index += 1;
+    if run.get(*index).is_some_and(|value| !value.starts_with('-')) {
+        *index += 1;
+    }
+    true
+}
+
+#[must_use]
+pub(crate) fn apply_runnable(
+    mut counts: TestCounts,
+    matches: Option<BTreeMap<String, u64>>,
+) -> TestCounts {
+    let Some(matches) = matches else {
+        counts.by_package = None;
+        return counts;
+    };
+    let Some(total) = matches
+        .values()
+        .try_fold(0u64, |total, count| total.checked_add(*count))
+    else {
+        counts.by_package = None;
+        return counts;
+    };
+    counts.listed = Some(total);
+    counts.by_package = counts
+        .runs
+        .as_ref()
+        .and_then(|runs| combine(runs, &matches))
+        .filter(|packages| reconciled(packages, counts.run, total));
+    counts
+}
+
+fn combine(
+    runs: &BTreeMap<String, u64>,
+    matches: &BTreeMap<String, u64>,
+) -> Option<BTreeMap<String, PackageCounts>> {
+    let mut packages = BTreeMap::new();
+    for (name, listed) in matches {
+        let run = runs.get(name).copied().unwrap_or(0);
+        if run > *listed {
+            return None;
+        }
+        packages.insert(
+            name.clone(),
+            PackageCounts {
+                run,
+                listed: *listed,
+            },
+        );
+    }
+    runs.iter()
+        .all(|(name, run)| *run == 0 || matches.contains_key(name))
+        .then_some(packages)
+}
+
+fn reconciled(packages: &BTreeMap<String, PackageCounts>, run: u64, listed: u64) -> bool {
+    let summed_run = packages
+        .values()
+        .try_fold(0u64, |total, package| total.checked_add(package.run));
+    let summed_listed = packages
+        .values()
+        .try_fold(0u64, |total, package| total.checked_add(package.listed));
+    summed_run == Some(run) && summed_listed == Some(listed)
+}
+
+#[derive(Debug)]
+enum Seen {
+    Open {
+        with_counter: BTreeMap<String, u64>,
+        without_counter: BTreeMap<String, u64>,
+    },
+    Poison,
+}
+
+impl Default for Seen {
+    fn default() -> Self {
+        Self::Open {
+            with_counter: BTreeMap::new(),
+            without_counter: BTreeMap::new(),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct SummaryTap {
     line: Vec<u8>,
     overlong: bool,
     counts: Option<TestCounts>,
+    seen: Seen,
+    closed: bool,
 }
 
 impl SummaryTap {
@@ -56,12 +245,11 @@ impl SummaryTap {
                 Some(text) => (text, true),
                 None => (part, false),
             };
-            if self.line.len() + text.len() > LINE_LIMIT {
+            let room = LINE_LIMIT.saturating_sub(self.line.len());
+            if text.len() > room {
                 self.overlong = true;
-                self.line.clear();
-            } else if !self.overlong {
-                self.line.extend_from_slice(text);
             }
+            self.line.extend_from_slice(&text[..text.len().min(room)]);
             if ended {
                 self.end_line();
             }
@@ -69,8 +257,8 @@ impl SummaryTap {
     }
 
     #[must_use]
-    pub const fn counts(&self) -> Option<TestCounts> {
-        self.counts
+    pub fn counts(&self) -> Option<TestCounts> {
+        self.counts.clone()
     }
 
     #[must_use]
@@ -80,18 +268,87 @@ impl SummaryTap {
     }
 
     fn end_line(&mut self) {
-        if !self.overlong {
-            let line = String::from_utf8_lossy(&self.line);
-            let cleaned = strip_ansi(&line);
-            if let Some(summary) = nextest_summary(cleaned.trim_start()) {
-                self.counts = Some(TestCounts {
-                    run: summary.tests_run,
-                    listed: skipped(cleaned.trim_start())
-                        .and_then(|skipped| skipped.checked_add(summary.tests_run)),
-                });
-            }
+        let line = String::from_utf8_lossy(&self.line);
+        let cleaned = strip_ansi(&line);
+        let trimmed = cleaned.trim_start();
+        let summary = if self.overlong {
+            None
+        } else {
+            nextest_summary(trimmed)
+        };
+        if let Some(summary) = summary {
+            let runs = self.reconcile_runs(summary.tests_run);
+            self.closed = true;
+            self.counts = Some(TestCounts {
+                run: summary.tests_run,
+                listed: skipped(trimmed).and_then(|skipped| skipped.checked_add(summary.tests_run)),
+                by_package: None,
+                runs,
+            });
+        } else if !self.closed {
+            let trimmed = trimmed.to_owned();
+            self.note(&trimmed);
         }
         self.line.clear();
         self.overlong = false;
     }
+
+    fn reconcile_runs(&self, run: u64) -> Option<BTreeMap<String, u64>> {
+        let Seen::Open {
+            with_counter,
+            without_counter,
+        } = &self.seen
+        else {
+            return None;
+        };
+        if summed(with_counter) == Some(run) {
+            return Some(with_counter.clone());
+        }
+        if summed(without_counter) == Some(run) {
+            return Some(without_counter.clone());
+        }
+        None
+    }
+
+    fn note(&mut self, line: &str) {
+        match status::status_line(line) {
+            status::Status::Ignore => {}
+            status::Status::Poison => self.seen = Seen::Poison,
+            status::Status::Count { package, counter } => self.count(package, counter),
+        }
+    }
+
+    fn count(&mut self, package: String, counter: bool) {
+        let overflow = {
+            let Seen::Open {
+                with_counter,
+                without_counter,
+            } = &mut self.seen
+            else {
+                return;
+            };
+            let packages = if counter {
+                with_counter
+            } else {
+                without_counter
+            };
+            let entry = packages.entry(package).or_default();
+            match entry.checked_add(1) {
+                Some(next) => {
+                    *entry = next;
+                    false
+                }
+                None => true,
+            }
+        };
+        if overflow {
+            self.seen = Seen::Poison;
+        }
+    }
+}
+
+fn summed(packages: &BTreeMap<String, u64>) -> Option<u64> {
+    packages
+        .values()
+        .try_fold(0u64, |total, count| total.checked_add(*count))
 }

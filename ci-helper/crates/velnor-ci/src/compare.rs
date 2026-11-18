@@ -8,38 +8,75 @@ use crate::metrics::RunMetrics;
 
 const CHANGED_JOBS_SHOWN: usize = 10;
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum JobDuration {
+    #[default]
+    Absent,
+    Unmeasured,
+    Measured(u64),
+}
+
 pub fn compare(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
-    for (what, left, right) in [
-        ("repository", &a.repo, &b.repo),
-        ("workflow", &a.workflow, &b.workflow),
-        ("event", &a.event, &b.event),
+    compare_runs(a, b, false)
+}
+
+pub fn compare_across_populations(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
+    compare_runs(a, b, true)
+}
+
+fn compare_runs(
+    a: &RunMetrics,
+    b: &RunMetrics,
+    allow_different_populations: bool,
+) -> Result<String, CiError> {
+    for (what, left, right, relaxable) in [
+        ("repository", &a.repo, &b.repo, false),
+        ("workflow", &a.workflow, &b.workflow, true),
+        ("event", &a.event, &b.event, true),
     ] {
-        if left != right {
-            return Err(CiError::new(format!(
-                "cannot compare runs of different {what}s: {left} and {right}"
-            )));
+        if left == right {
+            continue;
         }
+        if allow_different_populations && relaxable {
+            continue;
+        }
+        return Err(CiError::new(format!(
+            "cannot compare runs of different {what}s: {left} and {right}"
+        )));
     }
-    let rows: [(&str, u64, u64); 6] = [
+    let rows: [(&str, Option<u64>, Option<u64>); 6] = [
         ("Wall seconds", a.wall_seconds, b.wall_seconds),
         ("Runner seconds", a.runner_seconds, b.runner_seconds),
-        ("Jobs run", a.jobs_run() as u64, b.jobs_run() as u64),
+        (
+            "Jobs run",
+            Some(a.jobs_run() as u64),
+            Some(b.jobs_run() as u64),
+        ),
         (
             "Jobs skipped",
-            a.jobs_skipped() as u64,
-            b.jobs_skipped() as u64,
+            Some(a.jobs_skipped() as u64),
+            Some(b.jobs_skipped() as u64),
         ),
-        ("Crates compiled", a.crates_compiled(), b.crates_compiled()),
+        (
+            "Crates compiled",
+            Some(a.crates_compiled()),
+            Some(b.crates_compiled()),
+        ),
         (
             "Crates downloaded",
-            a.crates_downloaded(),
-            b.crates_downloaded(),
+            Some(a.crates_downloaded()),
+            Some(b.crates_downloaded()),
         ),
     ];
     let metric_lines: Vec<String> = rows
         .iter()
         .map(|(label, left, right)| {
-            format!("| {label} | {left} | {right} | {} |", signed(*left, *right))
+            format!(
+                "| {label} | {} | {} | {} |",
+                shown(*left),
+                shown(*right),
+                change(*left, *right)
+            )
         })
         .collect();
     let job_lines: Vec<String> = changed_jobs(a, b)
@@ -47,9 +84,9 @@ pub fn compare(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
         .map(|(name, left, right)| {
             format!(
                 "| {name} | {} | {} | {} |",
-                shown(left),
-                shown(right),
-                signed(left.unwrap_or(0), right.unwrap_or(0))
+                shown_job(left),
+                shown_job(right),
+                change_job(left, right)
             )
         })
         .collect();
@@ -62,41 +99,68 @@ pub fn compare(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
         )
     };
     Ok(format!(
-        "| Metric | A | B | Change |\n|---|---:|---:|---:|\n{}\n{jobs_table}",
+        "{}| Metric | A | B | Change |\n|---|---:|---:|---:|\n{}\n{jobs_table}",
+        caveat(a, b),
         metric_lines.join("\n")
     ))
 }
 
-fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, Option<u64>, Option<u64>)> {
-    let mut by_key: BTreeMap<(String, usize), (Option<u64>, Option<u64>)> = BTreeMap::new();
+fn caveat(a: &RunMetrics, b: &RunMetrics) -> String {
+    if a.workflow == b.workflow && a.event == b.event {
+        return String::new();
+    }
+    format!(
+        "> Different workflow or event populations: A is the `{}` workflow on `{}`, B is the `{}` workflow on `{}`. The workloads differ, so these numbers are not like for like.\n",
+        a.workflow, a.event, b.workflow, b.event
+    )
+}
+
+fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, JobDuration, JobDuration)> {
+    let mut by_key: BTreeMap<(String, usize), (JobDuration, JobDuration)> = BTreeMap::new();
     for (key, seconds) in occurrence_keys(a) {
-        by_key.entry(key).or_default().0 = Some(seconds);
+        by_key.entry(key).or_default().0 = seconds;
     }
     for (key, seconds) in occurrence_keys(b) {
-        by_key.entry(key).or_default().1 = Some(seconds);
+        by_key.entry(key).or_default().1 = seconds;
     }
     let mut changed: Vec<_> = by_key
         .into_iter()
-        .filter(|(_, (left, right))| left.unwrap_or(0) != right.unwrap_or(0))
+        .filter(|(_, (left, right))| changed_duration(*left, *right))
         .map(|((name, occurrence), (left, right))| (job_label(&name, occurrence), left, right))
         .collect();
-    changed.sort_by_key(|(_, left, right)| {
-        std::cmp::Reverse(left.unwrap_or(0).abs_diff(right.unwrap_or(0)))
+    changed.sort_by_key(|(_, left, right)| match (left, right) {
+        (JobDuration::Unmeasured, _) | (_, JobDuration::Unmeasured) => {
+            (false, std::cmp::Reverse(0))
+        }
+        _ => (
+            true,
+            std::cmp::Reverse(
+                left.seconds_or_absent()
+                    .unwrap_or_default()
+                    .abs_diff(right.seconds_or_absent().unwrap_or_default()),
+            ),
+        ),
     });
     changed.truncate(CHANGED_JOBS_SHOWN);
     changed
 }
 
-fn occurrence_keys(run: &RunMetrics) -> Vec<((String, usize), u64)> {
+fn occurrence_keys(run: &RunMetrics) -> Vec<((String, usize), JobDuration)> {
     let mut seen: BTreeMap<&str, usize> = BTreeMap::new();
-    run.jobs
-        .iter()
-        .map(|job| {
-            let count = seen.entry(&job.name).or_default();
-            *count += 1;
-            ((job.name.clone(), *count), job.duration_seconds)
-        })
-        .collect()
+    let mut keys = Vec::new();
+    for job in &run.jobs {
+        let count = seen.entry(job.name.as_str()).or_default();
+        *count += 1;
+        let occurrence = *count;
+        if job.ran() {
+            keys.push((
+                (job.name.clone(), occurrence),
+                job.duration_seconds
+                    .map_or(JobDuration::Unmeasured, JobDuration::Measured),
+            ));
+        }
+    }
+    keys
 }
 
 fn job_label(name: &str, occurrence: usize) -> String {
@@ -110,6 +174,50 @@ fn job_label(name: &str, occurrence: usize) -> String {
 
 fn shown(value: Option<u64>) -> String {
     value.map_or_else(|| "-".to_owned(), |v| v.to_string())
+}
+
+fn shown_job(duration: JobDuration) -> String {
+    match duration {
+        JobDuration::Absent => "-".to_owned(),
+        JobDuration::Unmeasured => "unmeasured".to_owned(),
+        JobDuration::Measured(seconds) => seconds.to_string(),
+    }
+}
+
+fn change(left: Option<u64>, right: Option<u64>) -> String {
+    match (left, right) {
+        (Some(left), Some(right)) => signed(left, right),
+        _ => "-".to_owned(),
+    }
+}
+
+fn change_job(left: JobDuration, right: JobDuration) -> String {
+    match (left, right) {
+        (JobDuration::Measured(left), JobDuration::Measured(right)) => signed(left, right),
+        (JobDuration::Measured(left), JobDuration::Absent) => signed(left, 0),
+        (JobDuration::Absent, JobDuration::Measured(right)) => signed(0, right),
+        (left, right) if left == right => "+0".to_owned(),
+        _ => "-".to_owned(),
+    }
+}
+
+fn changed_duration(left: JobDuration, right: JobDuration) -> bool {
+    match (left, right) {
+        (JobDuration::Measured(0) | JobDuration::Absent, JobDuration::Absent)
+        | (JobDuration::Absent, JobDuration::Measured(0))
+        | (JobDuration::Unmeasured, JobDuration::Unmeasured) => false,
+        (left, right) => left != right,
+    }
+}
+
+impl JobDuration {
+    fn seconds_or_absent(self) -> Option<u64> {
+        match self {
+            Self::Absent => Some(0),
+            Self::Unmeasured => None,
+            Self::Measured(seconds) => Some(seconds),
+        }
+    }
 }
 
 fn signed(left: u64, right: u64) -> String {

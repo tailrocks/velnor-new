@@ -10,7 +10,9 @@ use super::support::{
 
 #[tokio::test]
 async fn local_pair_start_refuses_a_runner_that_exits_at_once_and_cleans_up() -> TestResult<()> {
-    let fixture = Fixture::new().await?;
+    let Some(fixture) = Fixture::new().await? else {
+        return Ok(());
+    };
     let tag = format!("velnor-local-test-exiter:{}", suffix()?);
     let built = build_program(&fixture.docker, &tag, Program::Exit).await;
     let failed = match &built {

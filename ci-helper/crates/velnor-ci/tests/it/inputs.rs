@@ -47,7 +47,7 @@ fn a_corrupt_inputs_file_is_an_error_that_names_the_line() {
     assert_eq!(
         error.map_err(|e| e.to_string()),
         Err(
-            "target/.velnor/inputs.tsv line 2 is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `src/main.rs\tdef\tyesterday\t100644`"
+            ".velnor/inputs.tsv line 2 is not `path<TAB>blob<TAB>mtime_ns<TAB>mode`: `src/main.rs\tdef\tyesterday\t100644`"
                 .to_owned()
         )
     );

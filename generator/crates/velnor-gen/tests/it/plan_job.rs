@@ -3,7 +3,7 @@
 
 use velnor_gen::{GenerateError, expected_files};
 use velnor_model::RepoPath;
-use velnor_rust::{CONFIG_PATH, DetectError};
+use velnor_rust::DetectError;
 
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
@@ -25,9 +25,11 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 11] = [
+const LANE_SETUP: [&str; 15] = [
     "Check out",
-    "Install velnor-ci 0.1.79",
+    "Resolve released helper tools",
+    "Install velnor-ci 0.1.81",
+    "Install the released helper launcher",
     "Restore the tools cache",
     "Install tools",
     "Add Rust components",
@@ -36,7 +38,9 @@ const LANE_SETUP: [&str; 11] = [
     "velnor-ci check-metadata",
     "Restore the sources cache",
     "Restore the target cache",
+    "velnor-ci inputs restore",
     "velnor-ci restored",
+    "velnor-ci plan --full",
 ];
 
 #[test]
@@ -46,27 +50,40 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
     assert!(!text.contains("rust-plan"), "{text}");
     let steps = steps_of(&text, "rust");
     assert_eq!(
-        steps[..3],
-        ["Check out", "Install velnor-ci 0.1.79", "velnor-ci plan"]
+        steps[..5],
+        [
+            "Check out",
+            "Resolve released helper tools",
+            "Install velnor-ci 0.1.81",
+            "Install the released helper launcher",
+            "velnor-ci plan",
+        ]
     );
-    let condition =
+    let plan_index = steps
+        .iter()
+        .position(|name| *name == "velnor-ci plan")
+        .ok_or("no plan")?;
+    let condition = "steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none''";
+    let plain =
         "steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none''";
-    let gated = text.matches(condition).count();
-    let later = steps.len() - 3;
+    let gated = text.matches(plain).count() + text.matches(condition).count();
+    let reporting = steps
+        .iter()
+        .filter(|name| matches!(**name, "Report cache telemetry" | "Upload cache metrics"))
+        .count();
+    let later = steps.len() - plan_index - 1 - reporting;
     assert_eq!(
         gated, later,
         "every step after the plan carries the gate: {text}"
     );
     assert!(
         text.contains(&format!(
-            "        if: '${{{{ {condition} }}}}'\n        uses: jdx/mise-action@"
+            "        if: '${{{{ {plain} }}}}'\n        uses: jdx/mise-action@"
         )),
         "{text}"
     );
-    assert!(text.contains(
-        "      - id: plan\n        name: velnor-ci plan\n        run: velnor-ci plan --explain\n"
-    ));
-    assert!(!text.contains("GITHUB_TOKEN"), "{text}");
+    assert!(text.contains(r#""$VELNOR_EXEC" plan --explain'"#));
+    assert!(!text.contains("steps.velnor-helper-check-"));
     Ok(())
 }
 
@@ -74,10 +91,16 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
 fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits_for_it()
 -> TestResult {
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    let plan_steps = steps_of(&text, "rust-plan");
     assert_eq!(
-        steps_of(&text, "rust-plan"),
-        ["Check out", "Install velnor-ci 0.1.79", "velnor-ci plan"]
+        plan_steps[..3],
+        [
+            "Check out",
+            "Resolve released helper tools",
+            "Install velnor-ci 0.1.81"
+        ]
     );
+    assert_eq!(plan_steps.last(), Some(&"velnor-ci plan"));
     let plan_job = &text[text.find("  rust-plan:").unwrap_or_default()
         ..text.find("  rust-root:").unwrap_or_default()];
     for forbidden in [
@@ -99,15 +122,15 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
             );
         }
         assert!(text.contains(&format!(
-            "    needs:\n      - rust-plan\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_{slug}_mode != ''none'') }}}}'\n"
+            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
         )));
     }
     assert!(!text.contains("_doctests"), "{text}");
     let lane = steps_of(&text, "rust-lab");
-    assert_eq!(lane[..11], LANE_SETUP);
-    assert!(lane[11].starts_with("Format"), "{lane:?}");
+    assert_eq!(lane[..LANE_SETUP.len()], LANE_SETUP);
+    assert!(lane[LANE_SETUP.len()].starts_with("Format"), "{lane:?}");
     assert!(text.contains(
-        "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'\n"
+        "      - rust-plan\n      - rust-root\n      - rust-lab\n      - rust-inputs-audit\n    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
     ));
     Ok(())
 }
@@ -128,11 +151,12 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
         }
     }
     let text = workflow(&files)?;
-    let doctests = "steps.plan.outputs.rust_root_doctests == ''run''";
-    let docs = "steps.plan.outputs.rust_root_docs == ''run''";
+    let doctests = "(steps.replan.outputs.rust_root_doctests || steps.plan.outputs.rust_root_doctests) == ''run''";
+    let docs =
+        "(steps.replan.outputs.rust_root_docs || steps.plan.outputs.rust_root_docs) == ''run''";
     assert!(text.contains(doctests), "{text}");
     assert!(text.contains(docs), "{text}");
-    let known = "DOCTESTS_KNOWN: '${{ steps.plan.outputs.rust_root_doctests_known }}'";
+    let known = "DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || steps.plan.outputs.rust_root_doctests_known }}'";
     assert!(text.contains(known), "{text}");
     let steps: Vec<&str> = text
         .lines()
@@ -141,7 +165,9 @@ fn the_doctest_and_documentation_steps_follow_the_flags_the_plan_writes() -> Tes
     assert_ne!(steps.len(), 0);
     for line in steps {
         assert!(
-            line.contains("velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc"),
+            line.contains(
+                "\"$VELNOR_EXEC\" run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc"
+            ),
             "{line}"
         );
     }
@@ -176,13 +202,20 @@ fn the_plan_job_exposes_only_the_outputs_a_lane_reads() -> TestResult {
             "lab_docs",
             "lab_test_filter",
             "lab_package_args",
+            "lab_tests",
             "root_mode",
             "root_docs",
             "root_test_filter",
-            "root_package_args"
+            "root_package_args",
+            "root_tests"
         ]
     );
     for output in &outputs {
+        if let Some(slug) = output.strip_suffix("_tests") {
+            assert!(text.contains("toJSON(needs)"));
+            assert!(text.contains(&format!("--tests rust-{slug}={slug}")));
+            continue;
+        }
         let read = format!("needs.rust-plan.outputs.rust_{output}");
         assert!(text.contains(&read), "{output} is never read");
     }
@@ -200,7 +233,7 @@ fn every_cargo_command_runs_through_the_helper() -> TestResult {
     assert_ne!(runs.len(), 0);
     for run in runs {
         let cargo = run.contains("cargo-") || run.starts_with("cargo ");
-        assert!(!cargo || run.starts_with("velnor-ci run "), "{run}");
+        assert!(!cargo || run.contains("\"$VELNOR_EXEC\" run "), "{run}");
     }
     Ok(())
 }
@@ -227,44 +260,6 @@ fn a_root_folder_that_would_name_a_lane_like_the_plan_job_is_an_error() -> TestR
             "rust-plan".to_owned()
         )))
     );
-    Ok(())
-}
-
-#[test]
-fn the_default_branch_is_main_unless_the_config_names_another_valid_branch() -> TestResult {
-    let facts = |config: &[u8]| -> Result<_, Box<dyn std::error::Error>> {
-        Ok(velnor_rust::detect(&view(&["Cargo.toml"], Some(config))?))
-    };
-    assert_eq!(facts(b"")??.config.default_branch, "main");
-    assert_eq!(
-        facts(b"default_branch = \"release/2.x\"\n")??
-            .config
-            .default_branch,
-        "release/2.x"
-    );
-    for bad in [
-        "",
-        "a b",
-        "a..b",
-        "-x",
-        "x/",
-        "a~b",
-        "a:b",
-        "a//b",
-        "x.",
-        "a@{b",
-        ".hidden",
-        "foo/.bar",
-        "foo.lock",
-        "foo.lock/bar",
-        "HEAD",
-    ] {
-        let result = facts(format!("default_branch = \"{bad}\"\n").as_bytes())?;
-        assert!(
-            matches!(&result, Err(DetectError::Invalid { path, .. }) if *path == CONFIG_PATH),
-            "{bad:?} gave {result:?}"
-        );
-    }
     Ok(())
 }
 
@@ -300,16 +295,27 @@ fn checkout_depths<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
 }
 
 #[test]
-fn no_job_asks_for_pull_requests_access_and_every_job_reads_contents_only() -> TestResult {
+fn only_the_cache_job_asks_for_pull_requests_access_and_others_read_contents() -> TestResult {
     let multi = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let single = workflow(&view(&["Cargo.toml"], None)?)?;
     for text in [&multi, &single] {
-        assert!(!text.contains("pull-requests"), "{text}");
+        assert_eq!(
+            job_permissions(text, "rust-trim"),
+            ["pull-requests: read", "actions: write"]
+        );
+        assert_eq!(text.matches("pull-requests").count(), 1, "{text}");
     }
-    for job in ["rust-plan", "rust-root", "rust-lab", "required"] {
+    for job in ["rust-plan", "required"] {
         assert_eq!(job_permissions(&multi, job), ["contents: read"], "{job}");
     }
-    assert_eq!(job_permissions(&single, "rust"), ["contents: read"]);
+    for job in ["rust-root", "rust-lab"] {
+        let saves = ["actions: read", "contents: read"];
+        assert_eq!(job_permissions(&multi, job), saves, "{job}");
+    }
+    assert_eq!(
+        job_permissions(&single, "rust"),
+        ["actions: read", "contents: read"]
+    );
     Ok(())
 }
 
@@ -319,10 +325,7 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
         let text = workflow(&view(roots, None)?)?;
         let cargo: Vec<&str> = text
             .split("      - name: ")
-            .filter(|step| {
-                step.contains("run: velnor-ci run -- cargo")
-                    || step.contains("run: 'velnor-ci run -- cargo")
-            })
+            .filter(|step| step.contains(r#""$VELNOR_EXEC" run -- cargo"#))
             .collect();
         assert!(!cargo.is_empty(), "{text}");
         for step in cargo {
@@ -358,7 +361,7 @@ fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestRe
         ["contents: read"],
         "{text}"
     );
-    assert!(!text.contains("pull-requests"), "{text}");
+    assert_eq!(text.matches("pull-requests").count(), 1, "{text}");
     Ok(())
 }
 

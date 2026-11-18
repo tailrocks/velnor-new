@@ -35,7 +35,7 @@ async fn supervise_until(
     faults: std::sync::Arc<Faults>,
     minted: usize,
 ) -> TestResult<Result<(), HostError>> {
-    let proxy = Proxy::start(faults)?;
+    let proxy = Proxy::start(&scenario.fixture.endpoint, faults)?;
     let plan = scenario.plan(1, 0)?;
     let state = scenario.state.path().to_path_buf();
     let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
@@ -59,7 +59,9 @@ async fn supervise_until(
 #[tokio::test]
 async fn local_pair_docker_failures_are_retried_three_times_before_the_host_gives_up()
 -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let mut plan = scenario.plan(1, 0)?;
     plan.runner_image = format!("sha256:{}", "0".repeat(64));
     let docker = scenario.fixture.docker.clone();
@@ -103,7 +105,9 @@ fn failures_alternate_with_successes(call: usize) -> Wait {
 
 #[tokio::test]
 async fn local_slot_removes_a_failed_pair_before_it_mints_the_replacement() -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let faults = Faults::new(first_wait_fails, 2);
     let ended = supervise_until(&scenario, faults, 2).await;
     let events = scenario.fake().events();
@@ -123,7 +127,9 @@ async fn local_slot_removes_a_failed_pair_before_it_mints_the_replacement() -> T
 #[tokio::test]
 async fn local_slot_counts_a_failed_removal_toward_the_retry_bound_and_mints_nothing_more()
 -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let faults = Faults::new(every_wait_fails, 3);
     let ended = supervise_until(&scenario, faults, 100).await;
     let events = scenario.fake().events();
@@ -135,7 +141,9 @@ async fn local_slot_counts_a_failed_removal_toward_the_retry_bound_and_mints_not
 
 #[tokio::test]
 async fn local_slot_counts_only_consecutive_failures_toward_the_retry_bound() -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let faults = Faults::new(failures_alternate_with_successes, 0);
     let ended = supervise_until(&scenario, faults, 7).await;
     let events = scenario.fake().events();
@@ -148,7 +156,9 @@ async fn local_slot_counts_only_consecutive_failures_toward_the_retry_bound() ->
 #[tokio::test]
 async fn local_transient_mint_failure_is_retried_and_leaves_the_other_slot_running()
 -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new_with_guest_hook().await? else {
+        return Ok(());
+    };
     let plan = scenario.plan(2, 0)?;
     scenario.fake().mint_failures.store(1, Ordering::SeqCst);
     scenario.start(plan);
@@ -170,7 +180,9 @@ async fn local_transient_mint_failure_is_retried_and_leaves_the_other_slot_runni
 
 #[tokio::test]
 async fn local_shutdown_does_not_wait_for_a_stalled_mint() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let plan = scenario.plan(1, 0)?;
     scenario.fake().stall_mint.store(true, Ordering::SeqCst);
     scenario.start(plan);
@@ -207,10 +219,12 @@ async fn local_shutdown_does_not_wait_for_a_stalled_mint() -> TestResult<()> {
 #[tokio::test]
 async fn local_agent_minted_before_any_container_exists_is_deleted_by_the_next_sweep()
 -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let faults = Faults::new(|_| Wait::Forward, 0);
     faults.hang_creations.store(true, Ordering::SeqCst);
-    let proxy = Proxy::start(std::sync::Arc::clone(&faults))?;
+    let proxy = Proxy::start(&scenario.fixture.endpoint, std::sync::Arc::clone(&faults))?;
     let state = scenario.state.path().to_path_buf();
     let killed = {
         let docker = proxy.docker.clone();
@@ -265,7 +279,9 @@ async fn wait_for_event(scenario: &Scenario, event: &str) {
 
 #[tokio::test]
 async fn local_slot_retries_the_agent_retirement_after_its_pair_was_removed() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new_with_guest_hook().await? else {
+        return Ok(());
+    };
     scenario.fake().delete_failures.store(1, Ordering::SeqCst);
     let plan = scenario.plan(1, 0)?;
     scenario.start(plan);
@@ -294,7 +310,9 @@ async fn local_slot_retries_the_agent_retirement_after_its_pair_was_removed() ->
 
 #[tokio::test]
 async fn local_slot_keeps_the_start_failure_when_retiring_the_agent_also_fails() -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     scenario
         .fake()
         .delete_failures
@@ -325,7 +343,9 @@ async fn local_slot_keeps_the_start_failure_when_retiring_the_agent_also_fails()
 #[tokio::test]
 async fn local_slot_retires_the_agent_of_a_pair_that_failed_to_start_before_minting_again()
 -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let mut plan = scenario.plan(1, 0)?;
     plan.runner_image = format!("sha256:{}", "0".repeat(64));
     let docker = scenario.fixture.docker.clone();

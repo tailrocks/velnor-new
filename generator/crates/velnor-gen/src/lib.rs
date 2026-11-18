@@ -7,7 +7,6 @@ mod error;
 pub mod io;
 mod release;
 mod workflow_triggers;
-mod yaml_scalar;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
@@ -72,6 +71,7 @@ pub fn expected_with_notes(
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
     let mut notes = facts.timings_notes;
+    notes.extend(facts.private_sources);
     notes.extend(release_notes);
     Ok((files, notes))
 }
@@ -96,6 +96,16 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         .as_ref()
         .ok_or(GenerateError::HelperNotPinned)?;
     require_compatible(release.version())?;
+    if (facts.config.on_main == OnMain::Everything || facts.config.full_run != FullRun::Off)
+        && !release.version().at_least((0, 1, 81))
+    {
+        return Err(GenerateError::InputsBuildHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
+        return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
+    }
     Ok(release)
 }
 

@@ -8,10 +8,11 @@ use velnor_model::{
     RustMetadata, RustPackage, RustRoot,
 };
 
+use crate::cargo_flags::flag_tokens;
 use crate::config::excluded;
 use crate::error::{DetectError, Reason};
 use crate::harness::custom_harnesses;
-use crate::target_dir::{sets_build_target, target_dir};
+use crate::target_dir::target_dir;
 use crate::toml_file::table;
 
 pub(crate) const CARGO_LOCK: RepoPath = RepoPath::from_static("Cargo.lock");
@@ -115,7 +116,6 @@ fn root(
     Ok(RustRoot {
         manifest: manifest.clone(),
         target_dir: target_dir(view, manifest)?,
-        sets_build_target: sets_build_target(view, manifest)?,
         members,
         depends_on: depends_on.into_iter().collect(),
         external_dependencies: external_dependencies.into_iter().collect(),
@@ -134,18 +134,34 @@ pub(crate) fn is_cargo_config(path: &RepoPath) -> bool {
     })
 }
 
+pub(crate) fn effective_configs(
+    files: &BTreeMap<RepoPath, Vec<u8>>,
+) -> impl Iterator<Item = (&RepoPath, &Vec<u8>)> {
+    files.iter().filter(|(file, _)| {
+        is_cargo_config(file)
+            && !file
+                .as_str()
+                .strip_suffix(".toml")
+                .and_then(|name| RepoPath::new(name).ok())
+                .is_some_and(|name| files.contains_key(&name))
+    })
+}
+
 pub(crate) fn patch_files<'v>(
     view: &'v RepoView,
     manifest: &RepoPath,
 ) -> Vec<(&'v RepoPath, &'v [u8], Option<RepoPath>)> {
     let folder = manifest.parent();
+    let effective: BTreeSet<&RepoPath> = effective_configs(&view.files)
+        .map(|(file, _)| file)
+        .collect();
     view.files
         .iter()
         .filter_map(|(file, bytes)| {
             if file == manifest {
                 return Some((file, bytes.as_slice(), folder.clone()));
             }
-            if !is_cargo_config(file) {
+            if !effective.contains(file) {
                 return None;
             }
             let base = file.parent().and_then(|cargo| cargo.parent());
@@ -192,7 +208,11 @@ fn rustdocflags_list(bytes: &[u8], file: &RepoPath) -> Result<(), DetectError> {
         .flatten()
         .any(|flags| {
             let text = flags.to_string();
-            text.contains("cap-lints") || text.contains("force-warn") || text.contains("\"@")
+            text.contains("cap-lints")
+                || text.contains("force-warn")
+                || flag_tokens(flags)
+                    .iter()
+                    .any(|token| token.starts_with('@'))
         });
     if caps {
         return Err(DetectError::invalid(file, Reason::CapLints));
@@ -238,6 +258,9 @@ fn patches(
                 continue;
             };
             let folder = folder.as_str().ok_or_else(|| invalid(key.clone()))?;
+            if rooted(folder) {
+                return Err(invalid(key));
+            }
             let package = match entry.get("package") {
                 Some(package) => package.as_str().ok_or_else(|| invalid(key.clone()))?,
                 None => name.as_str(),
@@ -251,6 +274,12 @@ fn patches(
     Ok(found)
 }
 
+fn rooted(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    path.starts_with(['/', '\\'])
+        || matches!(bytes, [drive, b':', ..] if drive.is_ascii_alphabetic())
+}
+
 pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> {
     let mut segments = resolve(base, relative)?;
     segments.push("Cargo.toml");
@@ -258,6 +287,9 @@ pub(crate) fn within(base: Option<&RepoPath>, relative: &str) -> Option<String> 
 }
 
 pub(crate) fn resolve<'a>(base: Option<&'a RepoPath>, relative: &'a str) -> Option<Vec<&'a str>> {
+    if rooted(relative) {
+        return None;
+    }
     let mut segments: Vec<&str> =
         base.map_or_else(Vec::new, |base| base.as_str().split('/').collect());
     for segment in relative.split('/') {

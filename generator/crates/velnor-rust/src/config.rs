@@ -12,8 +12,11 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 15] = [
+const KEYS: [&str; 20] = [
+    "cache_check_blocks",
+    "cache_debug",
     "runner",
+    "crates_mirror",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -28,12 +31,17 @@ const KEYS: [&str; 15] = [
     "full_run",
     "helper",
     "ci_debuginfo",
+    "cache_budget_bytes",
+    "test_setup",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 struct RawConfig {
+    cache_check_blocks: Option<bool>,
+    cache_debug: Option<bool>,
     runner: Option<String>,
+    crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -50,14 +58,11 @@ struct RawConfig {
     skip_draft_pull_requests: Option<bool>,
     on_main: Option<String>,
     full_run: Option<String>,
-    helper: Option<RawHelper>,
+    helper: Option<crate::config_helper::RawHelper>,
     ci_debuginfo: Option<String>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawHelper {
-    path: String,
+    cache_budget_bytes: Option<u64>,
+    #[serde(default)]
+    test_setup: Vec<crate::config_test_setup::RawTestSetup>,
 }
 
 #[derive(Deserialize)]
@@ -98,7 +103,6 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             }));
         }
     };
-    let nextest_harnesses = harnesses(raw.nextest_harnesses).map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
@@ -106,15 +110,22 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         None => defaults.full_run,
         Some(value) => full_run(value).map_err(invalid)?,
     };
-    let helper = raw
-        .helper
-        .map(|helper| helper_path(helper.path))
-        .transpose()
-        .map_err(invalid)?;
+    let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
+    let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     Ok(RustCiConfig {
-        nextest_harnesses,
+        cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
+            .map_err(invalid)?,
+        test_setup,
+        cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
+        cache_debug: raw.cache_debug.unwrap_or(false).into(),
+        crates_mirror: raw
+            .crates_mirror
+            .map(crate::config_mirror::mirror)
+            .transpose()
+            .map_err(invalid)?,
+        nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
             .skip_draft_pull_requests
@@ -130,19 +141,19 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
         runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
         timeout_minutes,
-        exclude: raw
-            .exclude
-            .into_iter()
-            .map(|entry| {
-                PathGlob::new(entry.trim_end_matches('/')).map_err(|_| {
-                    invalid(Reason::InvalidValue {
-                        key: "exclude",
-                        value: entry,
-                    })
-                })
-            })
-            .collect::<Result<_, _>>()?,
+        exclude: excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
+    let invalid = |value| Reason::InvalidValue {
+        key: "exclude",
+        value,
+    };
+    entries
+        .into_iter()
+        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
+        .collect()
 }
 
 fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
@@ -186,13 +197,6 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
             key: "runner",
             value: label,
         })
-}
-
-fn helper_path(path: String) -> Result<RepoPath, Reason> {
-    RepoPath::new(path.trim_end_matches('/')).map_err(|_| Reason::InvalidValue {
-        key: "helper.path",
-        value: path,
-    })
 }
 
 fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {

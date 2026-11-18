@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -12,6 +13,7 @@ pub trait GitHub {
 }
 
 pub trait GitHubWrite: GitHub {
+    fn wait(&self, duration: Duration);
     fn upload(&self, url: &str, bytes: &[u8]) -> Result<String, CiError>;
     fn patch(&self, path: &str, json: &str) -> Result<String, CiError>;
     fn delete(&self, path: &str) -> Result<(), CiError>;
@@ -107,6 +109,9 @@ pub struct ApiRule {
     #[serde(rename = "type")]
     pub kind: String,
     pub parameters: Option<ApiRuleParameters>,
+    pub ruleset_id: Option<u64>,
+    pub ruleset_source: Option<String>,
+    pub ruleset_source_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,6 +150,8 @@ pub struct ApiPage<T> {
         rename = "items",
         alias = "workflow_runs",
         alias = "jobs",
+        alias = "check_runs",
+        alias = "check_suites",
         alias = "statuses"
     )]
     pub items: Vec<T>,
@@ -207,6 +214,26 @@ pub fn repo_path(repo: &Repo) -> String {
 #[must_use]
 pub fn compare_path(repo: &Repo, base: &str, head: &str) -> String {
     format!("/repos/{repo}/compare/{}...{head}?per_page=1", encode(base))
+}
+
+#[must_use]
+pub fn commit_pulls_path(repo: &Repo, sha: &str) -> String {
+    format!("/repos/{repo}/commits/{}/pulls?per_page=100", encode(sha))
+}
+
+#[must_use]
+pub fn pull_commits_path(repo: &Repo, number: u64) -> String {
+    format!("/repos/{repo}/pulls/{number}/commits")
+}
+
+#[must_use]
+pub fn tag_ref_path(repo: &Repo, tag: &str) -> String {
+    format!("/repos/{repo}/git/ref/tags/{}", encode(tag))
+}
+
+#[must_use]
+pub fn tag_object_path(repo: &Repo, sha: &str) -> String {
+    format!("/repos/{repo}/git/tags/{sha}")
 }
 
 #[must_use]

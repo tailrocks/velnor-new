@@ -24,6 +24,9 @@ const MAX_JOURNAL_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_JOURNAL_ROWS: usize = 4096;
 const HEX: &[u8; 16] = b"0123456789abcdef";
 
+#[cfg(test)]
+mod wal_tests;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum JournalFact {
     Clear,
@@ -247,15 +250,39 @@ async fn engine_identity(
 }
 
 async fn journal_mark(path: &Path, deadline: tokio::time::Instant) -> JournalFact {
-    match std::fs::symlink_metadata(path) {
-        Ok(metadata)
-            if metadata.file_type().is_file()
-                && metadata.len() <= MAX_JOURNAL_BYTES
-                && tokio::time::Instant::now() < deadline => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return JournalFact::Clear,
-        Ok(_) | Err(_) => return JournalFact::Unreadable,
+    journal_mark_with(path, deadline, scan_rows(path, deadline)).await
+}
+
+async fn journal_mark_with<F>(path: &Path, deadline: tokio::time::Instant, scan: F) -> JournalFact
+where
+    F: Future<Output = Result<bool, HostError>>,
+{
+    match regular_len(path) {
+        Ok(None) => return JournalFact::Clear,
+        Ok(Some(_)) if journal_fits(path) && tokio::time::Instant::now() < deadline => {}
+        Ok(Some(_)) | Err(()) => return JournalFact::Unreadable,
     }
-    bounded_journal_scan(scan_rows(path, deadline), deadline).await
+    match bounded_journal_scan(scan, deadline).await {
+        _ if !journal_fits(path) => JournalFact::Unreadable,
+        fact => fact,
+    }
+}
+
+fn regular_len(path: &Path) -> Result<Option<u64>, ()> {
+    match std::fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_file() => Ok(Some(metadata.len())),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Ok(_) | Err(_) => Err(()),
+    }
+}
+
+fn journal_fits(path: &Path) -> bool {
+    let mut wal = path.as_os_str().to_owned();
+    wal.push("-wal");
+    match (regular_len(path), regular_len(Path::new(&wal))) {
+        (Ok(Some(main)), Ok(wal)) => main.saturating_add(wal.unwrap_or(0)) <= MAX_JOURNAL_BYTES,
+        _ => false,
+    }
 }
 
 async fn bounded_journal_scan<F>(future: F, deadline: tokio::time::Instant) -> JournalFact
@@ -285,6 +312,7 @@ async fn scan_rows(path: &Path, deadline: tokio::time::Instant) -> Result<bool, 
         .await
         .map_err(|_| HostError::Journal)?;
     let mut row_count = 0_usize;
+    let mut occupied = false;
     loop {
         if tokio::time::Instant::now() >= deadline {
             return Err(HostError::Journal);
@@ -300,11 +328,9 @@ async fn scan_rows(path: &Path, deadline: tokio::time::Instant) -> Result<bool, 
             return Err(HostError::Journal);
         }
         row_count += 1;
-        if occupies(&marker_row(&row)?) {
-            return Ok(true);
-        }
+        occupied |= occupies(&marker_row(&row)?);
     }
-    Ok(false)
+    Ok(occupied)
 }
 
 fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
@@ -347,3 +373,6 @@ fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         runner_completed: false,
     })
 }
+
+#[cfg(test)]
+mod tests;

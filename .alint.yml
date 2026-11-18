@@ -153,6 +153,7 @@ rules:
         - ci-helper/Cargo.lock
         - generator/Cargo.lock
         - local/Cargo.lock
+        - "generator/samples/**/Cargo.lock"
     level: error
     message: "Stray Cargo.lock. Only the root lock, crates/velnor-runner/Cargo.lock, ci-helper/Cargo.lock, generator/Cargo.lock and local/Cargo.lock are resolved."
 
@@ -166,23 +167,11 @@ rules:
     level: error
     message: "Stray package-lock.json. Only the root lock and qualification/testcontainers/package-lock.json are allowed."
 
-  # Hard size limits for new handwritten code, physical lines (RQ §5).
-  # Scoped to Velnor-owned product paths; fixtures are test inputs and
-  # lockfiles/vendored/generated output are classified elsewhere, so they
-  # are excluded here rather than relabeled (ARCH-1.12, RQ-5.2).
   - id: rust-max-lines
     kind: file_max_lines
     paths:
       include:
-        - "crates/velnor-actions-*/src/**/*.rs"
-        - "crates/velnor-actions-*/tests/**/*.rs"
-        - "crates/velnor-archive-guard/**/*.rs"
-        - "crates/velnor-runner/crates/*/src/**/*.rs"
-        - "crates/velnor-runner/crates/*/tests/**/*.rs"
-        - "generator/crates/*/src/**/*.rs"
-        - "generator/crates/*/tests/**/*.rs"
-        - "local/crates/*/src/**/*.rs"
-        - "local/crates/*/tests/**/*.rs"
+        - "**/*.rs"
       exclude:
         - "**/fixtures/**"
         - "**/testdata/**"

@@ -153,6 +153,6 @@ pub(super) fn claimed_jit_is_consistent(
         && jit.runner_id.is_none()
         && jit.runner_name.is_none()
         && intent.runner_id.is_none()
-        && intent.runner_name.is_none()
+        && intent.runner_name.as_deref() == expected_name
         && intent.jit_requested == Some(true)
 }

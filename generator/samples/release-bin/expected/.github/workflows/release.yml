@@ -26,10 +26,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -39,7 +39,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release-gate --repo "$REPOSITORY" --sha "$COMMIT"'
+        run: 'velnor-ci release-gate --repo="$REPOSITORY" --sha="$COMMIT"'
   release-pr:
     needs:
       - gate
@@ -63,10 +63,10 @@ jobs:
         run: 'tar --extract --gzip --file "$RUNNER_TEMP/release-plz.tar.gz" --directory "$RUNNER_TEMP" release-plz'
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -101,7 +101,7 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -132,11 +132,13 @@ jobs:
     environment: release
     permissions:
       contents: read
+      pull-requests: read
     concurrency:
       group: release-tag
       cancel-in-progress: false
     outputs:
       app: '${{ steps.record.outputs.app }}'
+      app_commit: '${{ steps.record.outputs.app_commit }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -150,10 +152,10 @@ jobs:
         run: 'tar --extract --gzip --file "$RUNNER_TEMP/release-plz.tar.gz" --directory "$RUNNER_TEMP" release-plz'
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -171,7 +173,7 @@ jobs:
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
           BRANCH: '${{ github.event.repository.default_branch }}'
         run: 'gh api "repos/$REPOSITORY/git/ref/heads/$BRANCH" --jq ''"newest=\(.object.sha == env.COMMIT)"'' >> "$GITHUB_OUTPUT"'
-      - name: 'Refuse a release-plz config that runs commands, changes the tag patterns or names another registry'
+      - name: 'Refuse a release-plz config that runs commands, changes the tag patterns or the branch prefixes or names another registry'
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
         env:
           GITHUB_TOKEN: '${{ github.token }}'
@@ -183,7 +185,14 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --branch-prefix release-plz.toml release-plz- --repo="$REPOSITORY" --manifests --released-versions'
+      - name: Check that release-plz would tag the verified commit
+        if: '${{ steps.newest.outputs.newest == ''true'' }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          REPOSITORY: '${{ github.repository }}'
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+        run: 'velnor-ci release preflight --repo="$REPOSITORY" --verified-commit="$COMMIT" --branch-prefix=release-plz-'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -208,9 +217,13 @@ jobs:
           RUSTC: rustc
         run: '"$RUNNER_TEMP/release-plz" release --forge github --git-token "$GITHUB_TOKEN" --manifest-path Cargo.toml --config release-plz.toml -o json > "$RUNNER_TEMP/release-0.json"'
       - id: record
-        name: Record the released packages
+        name: Record the released packages and the commits their tags are on
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        run: 'velnor-ci release record "$RUNNER_TEMP/release-0.json"'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          REPOSITORY: '${{ github.repository }}'
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+        run: 'velnor-ci release record --repo="$REPOSITORY" --verified-commit="$COMMIT" "$RUNNER_TEMP/release-0.json"'
   build-app-linux-x64:
     needs:
       - gate
@@ -228,17 +241,17 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           install_args: rust
           cache: false
       - name: Add the x86_64-unknown-linux-musl target
@@ -273,17 +286,17 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           install_args: rust
           cache: false
       - name: Add the aarch64-unknown-linux-musl target
@@ -318,15 +331,15 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           install_args: rust
           cache: false
       - name: Add the aarch64-apple-darwin target
@@ -395,10 +408,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.80
+      - name: Install velnor-ci 0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
         with:
-          version: '0.1.80'
+          version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
           sha256-linux-arm64: de279a7db363cf6943489b379e2c9360786156245ba7a3ae0fc85467ea860c2c
           sha256-macos-arm64: '21015c7f0244d7fda84e36f26945ad11a811122b183224467ba4b8ed9bf68d51'
@@ -427,4 +440,4 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'velnor-ci release publish --repo "$REPOSITORY" --tag "$TAG" --app velnor-release --dir dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'
+        run: 'velnor-ci release publish --repo="$REPOSITORY" --tag="$TAG" --app=velnor-release --dir=dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'
