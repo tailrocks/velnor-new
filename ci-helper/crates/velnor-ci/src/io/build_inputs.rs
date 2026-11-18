@@ -2,14 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use velnor_gen::io::read_files;
 use velnor_model::RepoPath;
 use velnor_rust::{
-    METADATA_PATH, cargo_config_paths, check_runtime_configs, recorded_roots, repo_profile,
-    rustc_release,
+    METADATA_PATH, cargo_config_paths, check_runtime_configs, external_config_profile,
+    recorded_roots, repo_profile, rustc_release,
 };
 
 use crate::error::CiError;
@@ -28,7 +28,44 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
     }
     let tracked = tracked_among(root, &files);
     check_runtime_configs(&roots, &files, &tracked).map_err(|e| CiError::new(e.to_string()))?;
-    repo_profile(&files).map_err(|e| CiError::new(e.to_string()))
+    let inside = repo_profile(&files).map_err(|e| CiError::new(e.to_string()))?;
+    let outside = external_config_profile(&external_configs(root)?).map_err(CiError::new)?;
+    Ok(format!("{inside}{outside}"))
+}
+
+fn external_configs(root: &Path) -> Result<Vec<(String, Vec<u8>)>, CiError> {
+    let mut folders: Vec<PathBuf> = root
+        .ancestors()
+        .skip(1)
+        .map(|folder| folder.join(".cargo"))
+        .collect();
+    let home = std::env::var_os("CARGO_HOME")
+        .filter(|value| !value.is_empty())
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cargo")));
+    if let Some(home) = home
+        && !folders.contains(&home)
+    {
+        folders.push(home);
+    }
+    let mut found = Vec::new();
+    for folder in folders {
+        for name in ["config", "config.toml"] {
+            let file = folder.join(name);
+            match std::fs::read(&file) {
+                Ok(bytes) if bytes.starts_with(super::setup::OWNED_MARKER.as_bytes()) => {}
+                Ok(bytes) => found.push((file.display().to_string(), bytes)),
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(CiError::new(format!(
+                        "cannot read {}: {e}; the base cache key must cover every Cargo config Cargo reads",
+                        file.display()
+                    )));
+                }
+            }
+        }
+    }
+    Ok(found)
 }
 
 fn tracked_among(root: &Path, files: &BTreeMap<RepoPath, Vec<u8>>) -> BTreeSet<RepoPath> {
