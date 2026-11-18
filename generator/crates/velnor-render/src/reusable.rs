@@ -148,6 +148,15 @@ fn values(items: &[(String, Env)]) -> Vec<(String, Value)> {
         .collect()
 }
 
+fn locked_off(body: &Body) -> impl Iterator<Item = (String, Value)> {
+    let keys = match body {
+        Body::Uses(action) => action.locked_off(),
+        Body::Run(_) | Body::Helper(_) => &[],
+    };
+    keys.iter()
+        .map(|key| ((*key).to_owned(), Value::Bool(false)))
+}
+
 fn rendered_step(step: &Step) -> RenderedStep {
     let (uses, run) = match &step.body {
         Body::Run(run) => (None, Some(run.clone())),
@@ -163,7 +172,10 @@ fn rendered_step(step: &Step) -> RenderedStep {
             .map(|condition| format!("${{{{ {condition} }}}}")),
         continue_on_error: step.continue_on_error,
         uses,
-        with: values(&step.with),
+        with: values(&step.with)
+            .into_iter()
+            .chain(locked_off(&step.body))
+            .collect(),
         env: values(&step.env),
         run,
         ..RenderedStep::default()

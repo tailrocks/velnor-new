@@ -295,6 +295,7 @@ fn step(
     if !raw.with.is_empty() && !matches!(body, Body::Uses(_)) {
         return refuse(format!("a step of job {job} sets with without uses"));
     }
+    let raw_with = locked_inputs(job, &body, &label, raw.with)?;
     let condition = raw
         .condition
         .map(|text| check_condition(&text, scope))
@@ -304,10 +305,40 @@ fn step(
         name: raw.name.unwrap_or(label),
         condition,
         body,
-        with: values(job, raw.with, scope)?,
+        with: values(job, raw_with, scope)?,
         continue_on_error: raw.continue_on_error,
         env: values(job, raw.env, scope)?,
     })
+}
+
+fn locked_inputs(
+    job: &str,
+    body: &Body,
+    label: &str,
+    mut with: std::collections::BTreeMap<String, String>,
+) -> Result<std::collections::BTreeMap<String, String>, WorkflowsError> {
+    let Body::Uses(action) = body else {
+        return Ok(with);
+    };
+    for (key, value) in &with {
+        if action
+            .locked_off()
+            .iter()
+            .any(|locked| key.eq_ignore_ascii_case(locked))
+            && value != "false"
+        {
+            return refuse(format!(
+                "job {job} sets {key} = {value:?} on {label}, which is always false"
+            ));
+        }
+    }
+    with.retain(|key, _| {
+        !action
+            .locked_off()
+            .iter()
+            .any(|locked| key.eq_ignore_ascii_case(locked))
+    });
+    Ok(with)
 }
 
 fn values(

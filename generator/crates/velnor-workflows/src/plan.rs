@@ -101,6 +101,18 @@ impl Action {
             _ => return None,
         })
     }
+
+    #[must_use]
+    pub fn locked_off(self) -> &'static [&'static str] {
+        match self {
+            Self::Checkout => &["persist-credentials"],
+            Self::Mise => &["cache", "cache_save"],
+            Self::UploadArtifact
+            | Self::DownloadArtifact
+            | Self::CacheRestore
+            | Self::CacheSave => &[],
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
