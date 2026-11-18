@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use velnor_local::io::authority::Backend;
 use velnor_local::io::pair::{MintError, Minted};
-use velnor_local::io::supervisor::await_online;
+use velnor_local::io::supervisor::{await_online, await_replacement};
 use velnor_local::side::Side;
 
 struct Server {
@@ -217,4 +217,65 @@ async fn it_retries_a_transient_request_failure_until_the_deadline() {
     let result = await_online(&server, &sides, Duration::from_secs(5)).await;
     assert!(result.is_ok(), "{result:?}");
     assert!(server.listed.load(Ordering::SeqCst) >= 2);
+}
+
+struct Replaced {
+    asked: AtomicUsize,
+    replaced_after: usize,
+}
+
+impl Backend for Replaced {
+    fn get(&self, _: Side, path: &str) -> impl Future<Output = io::Result<Option<Vec<u8>>>> + Send {
+        let asked = self.asked.fetch_add(1, Ordering::SeqCst);
+        let replaced = asked >= self.replaced_after;
+        let body = if path.contains("isagentonline") {
+            let consumed = path.ends_with("consumed");
+            format!(r#"{{"online":{}}}"#, replaced && !consumed)
+        } else if replaced {
+            r#"{"value":[{"name":"consumed"},{"name":"fresh"}]}"#.to_owned()
+        } else {
+            r#"{"value":[{"name":"consumed"}]}"#.to_owned()
+        };
+        std::future::ready(Ok(Some(body.into_bytes())))
+    }
+
+    fn delete(&self, _: Side, _: &str) -> impl Future<Output = io::Result<()>> + Send {
+        std::future::ready(Ok(()))
+    }
+
+    fn mint(
+        &self,
+        _: Side,
+        _: Option<&str>,
+    ) -> impl Future<Output = Result<Option<Minted>, MintError>> + Send {
+        std::future::ready(Ok(None))
+    }
+}
+
+#[tokio::test]
+async fn it_waits_for_the_replacement_pair_not_the_consumed_agent() {
+    let server = Replaced {
+        asked: AtomicUsize::new(0),
+        replaced_after: 6,
+    };
+    let result = await_replacement(&server, Side::Trusted, 1, Duration::from_secs(10)).await;
+    assert!(result.is_ok(), "{result:?}");
+    assert!(server.asked.load(Ordering::SeqCst) > 6);
+}
+
+#[tokio::test]
+async fn it_fails_clearly_when_no_replacement_pair_registers() {
+    let server = Replaced {
+        asked: AtomicUsize::new(0),
+        replaced_after: usize::MAX,
+    };
+    let error = await_replacement(&server, Side::Trusted, 1, Duration::from_millis(500)).await;
+    let message = error
+        .expect_err("the consumed agent is not a replacement")
+        .to_string();
+    assert!(
+        message.contains("no replacement trusted pair registered"),
+        "{message}"
+    );
+    assert!(message.contains("0 of 1"), "{message}");
 }

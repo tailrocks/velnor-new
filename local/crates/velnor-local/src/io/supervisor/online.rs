@@ -83,3 +83,19 @@ pub async fn await_online<B: Backend>(
         tokio::time::sleep(POLL).await;
     }
 }
+
+pub async fn await_replacement<B: Backend>(
+    backend: &B,
+    side: Side,
+    pairs: u16,
+    timeout: Duration,
+) -> io::Result<()> {
+    await_online(backend, &[(side, pairs)], timeout)
+        .await
+        .map_err(|error| {
+            io::Error::other(format!(
+                "no replacement {} pair registered at runner.server before the next event: {error}",
+                side.name()
+            ))
+        })
+}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::io;
+use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -9,12 +10,29 @@ use tokio::fs;
 
 use super::Driver;
 use super::refusal::CANCEL_GRACE;
-use crate::io::env::{STANDIN_IMAGE, words};
+use crate::cli::RunnerMode;
+use crate::io::authority::Runners;
+use crate::io::env::{DockerCli, Environment, STANDIN_IMAGE, words};
 use crate::io::probe::request;
+use crate::io::supervisor::await_replacement;
 use crate::side::Side;
 use crate::standin;
 
+const REPLACEMENT_TIMEOUT: Duration = Duration::from_secs(300);
+
 impl Driver<'_> {
+    async fn await_pairs(&self, side: Side) -> io::Result<()> {
+        if self.args.environment.runner != RunnerMode::Pair {
+            return Ok(());
+        }
+        let pairs = match side {
+            Side::Trusted => self.args.environment.runners,
+            Side::Untrusted => self.args.environment.fork_runners.max(1),
+        };
+        let runners = Runners::open(Environment::at(&self.env.dir, DockerCli).await?).await?;
+        await_replacement(&runners, side, pairs, REPLACEMENT_TIMEOUT).await
+    }
+
     pub(super) async fn get<T: DeserializeOwned>(&self, side: Side, path: &str) -> io::Result<T> {
         let proxy = self.addresses.standin(side)?;
         let bytes = request(proxy, "GET", path, "")
@@ -36,6 +54,7 @@ impl Driver<'_> {
         fs::write(format!("{dir}/events/{name}.json"), payload.to_string()).await?;
         let runs = "/_apis/v1/Message/workflow/runs";
         let side = Side::of(payload);
+        self.await_pairs(side).await?;
         let known: Vec<standin::Run> = self.get(side, runs).await?;
         let entry = json!({
             "id": name,
