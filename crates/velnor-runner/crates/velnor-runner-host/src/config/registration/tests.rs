@@ -8,8 +8,8 @@ use velnor_runner_github::{
 
 use super::RegistrationTarget;
 use crate::config::{
-    ConnectionId, KeychainReference, RepositoryConnection, ScaleSetSelector, SourcePolicy,
-    SourcePolicyMode, WorkflowEvent,
+    ConnectionId, KeychainReference, PullRequestRule, RepositoryConnection, ScaleSetSelector,
+    SourcePolicy, SourcePolicyMode, WorkflowEvent,
 };
 
 type R = Result<(), Box<dyn std::error::Error>>;
@@ -183,5 +183,52 @@ fn identity_bytes_are_unchanged_for_repository_connections() -> R {
         text.contains(r#""organization":"acme""#)
             && text.contains(r#""runner_group":"velnor-host""#)
     );
+    Ok(())
+}
+
+#[test]
+fn the_p5_plan_values_register_at_org_level_in_the_velnor_ci_group() -> R {
+    let connection = RepositoryConnection::try_new(
+        ConnectionId::parse("velnor-new")?,
+        1_390_620_900,
+        "tailrocks/velnor-new".to_owned(),
+        KeychainReference::parse("keychain:velnor.test/velnor-new")?,
+        ScaleSetSelector::try_new(
+            "ubuntu-26.04-velnor-scale-set",
+            &[
+                "velnor".to_owned(),
+                "ubuntu-26.04-velnor-scale-set".to_owned(),
+            ],
+        )?,
+        SourcePolicy::try_new(
+            SourcePolicyMode::BranchRestricted,
+            vec!["p5/velnor-host-canary".to_owned()],
+            Vec::new(),
+            vec![WorkflowEvent::Push, WorkflowEvent::PullRequest],
+            vec![PullRequestRule {
+                number: None,
+                base_repository_id: 1_390_620_900,
+                base_branch: "main".to_owned(),
+                head_repository_id: 1_390_620_900,
+                head_branch: "p5/velnor-host-canary".to_owned(),
+            }],
+        )?,
+    )?
+    .with_organization_group("tailrocks", Some("velnor-ci"))?;
+    assert_eq!(
+        connection.registration_target()?.config_url(),
+        "https://github.com/tailrocks"
+    );
+    assert_eq!(
+        token_request(&connection)?.path,
+        "/orgs/tailrocks/actions/runners/registration-token"
+    );
+    let org_groups = vec![
+        group(1, "Default", true),
+        group(4, "velnor-ci", false),
+        group(5, "velnor-host", false),
+    ];
+    assert_eq!(connection.select_runner_group(&org_groups)?, 4);
+    assert!(connection.select_runner_group(&org_groups[..1]).is_err());
     Ok(())
 }
