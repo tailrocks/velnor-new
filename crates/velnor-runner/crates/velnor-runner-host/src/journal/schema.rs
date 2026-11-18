@@ -61,6 +61,8 @@ mod storage_root_backing;
 mod unbound_retirement;
 pub(super) use unbound_retirement::UNBOUND_SHAPE;
 
+#[cfg(test)]
+mod tamper_tests;
 mod validation;
 mod worker_health;
 
