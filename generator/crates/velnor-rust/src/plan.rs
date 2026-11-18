@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
     JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers, When,
-    WorkflowPlan,
+    RunnerLabel, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
+    When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -36,7 +36,13 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     let decisions: Vec<ShapeDecision> = facts
         .rust_roots
         .iter()
-        .map(|root| decide_shape(facts.config.shape, facts.timings.get(&root.manifest)))
+        .map(|root| {
+            crate::config_test_groups::archive_shape(
+                facts,
+                root,
+                decide_shape(facts.config.shape, facts.timings.get(&root.manifest)),
+            )
+        })
         .collect();
     let helper_root = facts.config.helper.as_ref().and_then(|path| {
         facts
@@ -157,11 +163,15 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
 }
 
 pub(crate) fn mirror_step(facts: &RepoFacts) -> Option<Step> {
+    mirror_step_on(facts, &facts.config.runner)
+}
+
+pub(crate) fn mirror_step_on(facts: &RepoFacts, runner: &RunnerLabel) -> Option<Step> {
     facts
         .config
         .crates_mirror
         .as_ref()
-        .filter(|mirror| mirror.runner == facts.config.runner)
+        .filter(|mirror| mirror.runner == *runner)
         .map(|mirror| step(StepKind::CratesMirror(mirror.clone())))
 }
 
@@ -193,7 +203,7 @@ pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId
     )
 }
 
-fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
+pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
     let mut steps = Vec::new();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> = declared

@@ -79,10 +79,15 @@ fn cargo_command(
         CargoCommand::NextestRun { filter } => {
             nextest_run(&format!("--workspace --locked{nextest}"), filter)
         }
-        CargoCommand::NextestRunArchive { file, filter } => nextest_run(
+        CargoCommand::NextestRunArchive {
+            file,
+            filter,
+            threads,
+        } => nextest_run(
             &format!(
-                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
-                file.as_str().replace('\'', "'\\''")
+                "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}",
+                file.as_str().replace('\'', "'\\''"),
+                threads.map_or_else(String::new, |count| format!(" --test-threads {count}"))
             ),
             filter,
         ),
@@ -197,12 +202,29 @@ fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String,
 fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
         FilterRef::All => "$TEST_FILTER".to_owned(),
-        FilterRef::AllExcept(binaries) => binaries
-            .iter()
-            .fold("($TEST_FILTER)".to_owned(), |text, id| {
-                format!("{text} - binary_id(={id})")
-            }),
+        FilterRef::AllExcept(binaries) => without_binaries("($TEST_FILTER)".to_owned(), binaries),
+        FilterRef::Group {
+            include,
+            exclude,
+            except,
+        } => {
+            let selected = include
+                .iter()
+                .fold("($TEST_FILTER)".to_owned(), |text, expr| {
+                    format!("({text} and ({expr}))")
+                });
+            let owned = exclude
+                .iter()
+                .fold(selected, |text, expr| format!("({text} and not ({expr}))"));
+            without_binaries(owned, except)
+        }
     }
+}
+
+fn without_binaries(base: String, binaries: &[String]) -> String {
+    binaries
+        .iter()
+        .fold(base, |text, id| format!("{text} - binary_id(={id})"))
 }
 
 fn feature_flag(features: &[String]) -> String {

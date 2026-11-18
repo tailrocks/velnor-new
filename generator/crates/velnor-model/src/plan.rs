@@ -231,6 +231,7 @@ pub enum CargoCommand {
     NextestRunArchive {
         file: RepoPath,
         filter: FilterRef,
+        threads: Option<u16>,
     },
     TestTarget {
         package: PackageName,
@@ -261,6 +262,11 @@ impl CargoCommand {
 pub enum FilterRef {
     All,
     AllExcept(Vec<String>),
+    Group {
+        include: Option<String>,
+        exclude: Vec<String>,
+        except: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

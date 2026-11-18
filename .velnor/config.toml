@@ -981,6 +981,7 @@ inputs = [
   "generator/samples/private-deps/expected/.github/workflows/rust-ci.yml",
   "generator/samples/on-main-everything/expected/.github/workflows/rust-ci.yml",
   "generator/samples/single-crate/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/test-groups/expected/.github/workflows/rust-ci.yml",
   "generator/samples/two-roots/expected/.github/workflows/rust-ci.yml",
   "generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml",
   "mise.toml",
