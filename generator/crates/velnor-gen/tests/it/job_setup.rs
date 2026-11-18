@@ -223,6 +223,28 @@ fn a_mise_configuration_may_not_change_what_the_steps_run() -> TestResult {
 }
 
 #[test]
+fn a_toolchain_channel_that_mise_does_not_pin_is_an_error() -> TestResult {
+    let file = RepoPath::new("rust-toolchain.toml")?;
+    let mut view = view(&["Cargo.toml"], None)?;
+    view.tracked_paths.insert(file.clone());
+    view.files
+        .insert(file, b"[toolchain]\nchannel = \"1.99.1\"\n".to_vec());
+    view.files.insert(
+        RepoPath::new("mise.toml")?,
+        b"[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n".to_vec(),
+    );
+    crate::facts::lock_pinned_tools(&mut view)?;
+    assert_eq!(
+        expected_with_notes(&view).map(|(files, _)| files),
+        Err(GenerateError::Detect(DetectError::RustPinRequired {
+            channel: "1.99.1".to_owned(),
+            path: RepoPath::new("mise.toml")?,
+        }))
+    );
+    Ok(())
+}
+
+#[test]
 fn a_path_toolchain_stands_alone_and_a_nested_toolchain_file_is_an_error() -> TestResult {
     let file = RepoPath::new("rust-toolchain.toml")?;
     let mise = RepoPath::new("mise.toml")?;

@@ -135,6 +135,17 @@ pub fn check_tools(facts: &RepoFacts) -> Result<(), DetectError> {
     if let Some((file, mise)) = toolchain_conflict(facts) {
         return Err(DetectError::ToolchainConflict { file, mise });
     }
+    if let Some(channel) = facts
+        .toolchain
+        .as_ref()
+        .and_then(|file| file.channel.clone())
+        && rust_tool(&facts.tools).is_none()
+    {
+        return Err(DetectError::RustPinRequired {
+            channel,
+            path: facts.tools.configs.first().cloned().unwrap_or(MISE_CONFIG),
+        });
+    }
     let rust_pins = rust_tool(&facts.tools)
         .and_then(|name| facts.tools.tools.get(name))
         .map_or(1, |pin| pin.requested.len());
