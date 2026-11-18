@@ -122,6 +122,15 @@ fn github_observation_error_keeps_gate_closed() {
 }
 
 #[test]
+fn truncated_page_where_count_exceeds_entries_holds_the_gate() {
+    let rows = [done_row_with_runner("77")];
+    let page = r#"{"count":3,"value":[{"id":1,"name":"a","runnerScaleSetId":10},{"id":2,"name":"b","runnerScaleSetId":10}]}"#;
+    let (decision, transport) = gate(&rows, vec![(200, page.to_owned())]);
+    assert_eq!(transport.seen.len(), 1);
+    assert!(matches!(decision, Reconcile::Hold { occupied: 1, .. }));
+}
+
+#[test]
 fn runner_without_a_scale_set_cannot_be_observed_and_closes_gate() {
     let mut row = done_row_with_runner("77");
     row.scale_set_id = None;
