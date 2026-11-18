@@ -45,6 +45,8 @@ const CLAIM_SCRIPT: &str = "code=$(curl -sS -o /dev/null -w '%{http_code}' -X DE
 pub struct PrCiShape<'a> {
     pub quick: &'a [&'a str],
     pub claim: bool,
+    /// Also trigger on `merge_group`; only for workflows that can run there.
+    pub merge_group: bool,
 }
 
 #[must_use]
@@ -62,7 +64,7 @@ pub fn apply(document: &mut Yaml, mode: PrCiMode, shape: PrCiShape<'_>) -> Resul
     let Yaml::Map(root) = document else {
         return Err(bad("document"));
     };
-    if !set_pr_types(root) {
+    if !set_pr_types(root, shape.merge_group) {
         return Ok(());
     }
     set_concurrency(root)?;
@@ -113,14 +115,14 @@ fn field<'a>(node: &'a Yaml, name: &str) -> Option<&'a Yaml> {
     }
 }
 
-fn set_pr_types(root: &mut [(String, Yaml)]) -> bool {
+fn set_pr_types(root: &mut [(String, Yaml)], merge_group: bool) -> bool {
     let Some((_, Yaml::Map(on))) = root.iter_mut().find(|(key, _)| key == "on") else {
         return false;
     };
     if !on.iter().any(|(key, _)| key == "pull_request") {
         return false;
     }
-    if !on.iter().any(|(key, _)| key == "merge_group") {
+    if merge_group && !on.iter().any(|(key, _)| key == "merge_group") {
         on.push(("merge_group".to_owned(), Yaml::Null));
     }
     let Some((_, Yaml::Map(pull_request))) = on.iter_mut().find(|(key, _)| key == "pull_request")

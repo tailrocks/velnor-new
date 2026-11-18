@@ -63,6 +63,7 @@ pub(crate) fn emit_shared(
         crate::pr_ci::PrCiShape {
             quick: &[&[PLAN_JOB_ID], crate::pr_ci::validator_job_ids().as_slice()].concat(),
             claim: true,
+            merge_group: true,
         },
     )?;
     let text = fallback::render_checked_workflow(WORKFLOW_PATH, &document, &ctx.generator_version)?;

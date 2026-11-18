@@ -163,31 +163,33 @@ fn pr_ci_label_gates_source_qualification() -> Result<(), Box<dyn Error>> {
         "source-qualification",
     ] {
         let block = rendered_job_block(source, job)?;
-        assert!(
-            block.contains(&format!("({ADMIT_GATE}) && ({FULL_GATE})")),
-            "{job} is not gated"
-        );
+        assert!(block.contains(ADMIT_GATE), "{job} is not admit-gated");
+        assert!(!block.contains(FULL_GATE), "{job} must not need a label");
     }
     Ok(())
 }
 
 #[test]
-fn pr_ci_label_runs_every_pull_request_workflow_on_merge_group() -> Result<(), Box<dyn Error>> {
+fn pr_ci_label_runs_merge_group_except_source_qualification() -> Result<(), Box<dyn Error>> {
     let tree = render(Some("label"))?;
     let source = text(&tree, SOURCE_QUALIFICATION_PATH)?;
-    assert!(source.contains("  merge_group:\n"));
+    let source_on = source.split("\njobs:").next().unwrap_or_default();
+    assert!(
+        !source_on.contains("merge_group"),
+        "source qualification is pull_request-only"
+    );
     let mut checked = 0;
     for (path, body) in &tree {
         if !path.starts_with(".github/workflows/") {
             continue;
         }
         let on = body.split("\njobs:").next().unwrap_or_default();
-        if on.contains("  pull_request:\n") {
+        if on.contains("  pull_request:\n") && path != SOURCE_QUALIFICATION_PATH {
             assert!(on.contains("  merge_group:"), "{path} lacks merge_group");
             checked += 1;
         }
     }
-    assert!(checked >= 2, "expected at least two pull_request workflows");
+    assert!(checked >= 1, "expected at least two pull_request workflows");
     Ok(())
 }
 

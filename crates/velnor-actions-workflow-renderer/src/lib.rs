@@ -79,7 +79,6 @@ pub use project_tool_resolver::quote_project_tool_run_refs;
 mod ledger_cli_steps;
 mod native_verifiers;
 mod native_verifiers_tree_digest;
-pub mod pr_ci;
 pub mod publish_render;
 pub mod publish_roles;
 pub mod publish_scripts;
