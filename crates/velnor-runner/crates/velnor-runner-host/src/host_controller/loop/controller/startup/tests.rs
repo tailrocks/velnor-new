@@ -75,31 +75,31 @@ fn admission_needs_storage_and_an_advertising_gate() {
 
 #[tokio::test]
 async fn a_pending_legacy_row_keeps_admission_closed_across_retries() -> TestResult {
-    let (_dir, journal, docker, _socket) = fixture().await?;
+    let (dir, journal, docker, _socket) = fixture().await?;
     journal.begin_launch("legacy-subject").await?;
     let mut log = HoldLog::default();
     for _ in 0..3 {
-        assert!(!legacy_admission(&journal, &docker, &config()?, &mut log).await);
+        assert!(!legacy_admission(&journal, &docker, &config()?, dir.path(), &mut log).await);
     }
     Ok(())
 }
 
 #[tokio::test]
 async fn a_cleanup_proof_lets_the_next_retry_open_admission() -> TestResult {
-    let (_dir, journal, docker, _socket) = fixture().await?;
+    let (dir, journal, docker, _socket) = fixture().await?;
     let (id, _) = journal.begin_launch("legacy-subject").await?;
     let mut log = HoldLog::default();
-    assert!(!legacy_admission(&journal, &docker, &config()?, &mut log).await);
+    assert!(!legacy_admission(&journal, &docker, &config()?, dir.path(), &mut log).await);
     journal.record_cleanup(id).await?;
-    assert!(legacy_admission(&journal, &docker, &config()?, &mut log).await);
+    assert!(legacy_admission(&journal, &docker, &config()?, dir.path(), &mut log).await);
     Ok(())
 }
 
 #[tokio::test]
 async fn a_journal_without_blocking_rows_opens_admission() -> TestResult {
-    let (_dir, journal, docker, _socket) = fixture().await?;
+    let (dir, journal, docker, _socket) = fixture().await?;
     let mut log = HoldLog::default();
-    assert!(legacy_admission(&journal, &docker, &config()?, &mut log).await);
+    assert!(legacy_admission(&journal, &docker, &config()?, dir.path(), &mut log).await);
     Ok(())
 }
 

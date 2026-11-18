@@ -19,6 +19,9 @@ use crate::{
     },
 };
 
+#[path = "removal_proof.rs"]
+mod removal_proof;
+
 pub(crate) const REMOVED_STARTUP_BUDGET: Duration = Duration::from_secs(120);
 
 pub(crate) struct RemovedStartup<'a> {
@@ -40,6 +43,7 @@ pub(crate) async fn reconcile_removed_at_startup(startup: &RemovedStartup<'_>) {
             defer(binding);
             break;
         }
+        removal_proof::record_github_absence(startup, binding).await;
         let scope = match startup.journal.existing_connection_scope(binding).await {
             Ok(scope) => scope,
             Err(error) => {
