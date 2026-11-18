@@ -3,11 +3,12 @@
 
 use std::error::Error;
 
-use velnor_gen::{expected_files, expected_with_notes};
+use velnor_gen::expected_with_notes;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
+use crate::release_unguarded::expected_release;
 use crate::release_yml_binaries::{job, permissions};
 use crate::yaml_tree::{Node, parse};
 
@@ -19,7 +20,7 @@ fn render_with(helper: &str, roots: &[Root], config: &str) -> Result<Node, Box<d
     let mut view = release_view(roots, Some(config))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     Ok(parse(&text)?)
@@ -84,7 +85,7 @@ fn a_package_without_a_binaries_entry_is_published_by_the_guarded_helper_command
 
 #[test]
 fn the_finalizer_runs_only_when_a_package_without_a_binary_was_released() -> TestResult {
-    let tree = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\"]\n")?;
+    let tree = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\", \"tools\"]\n")?;
     let finalize = job(&tree, "finalize")?;
     let condition = finalize.get("if").and_then(Node::text).ok_or("no if")?;
     assert!(
@@ -104,13 +105,13 @@ fn packages_with_a_binaries_entry_are_not_finalized() -> TestResult {
     let tree = render_with(
         "0.1.81",
         &[APP, TOOLS],
-        "roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\n",
+        "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\n",
     )?;
     assert!(tree.at(&["jobs", "finalize"]).is_none());
     let mixed = render_with(
         "0.1.81",
         &[APP, TOOLS],
-        "roots = [\".\"]\n[[binaries]]\npackage = \"tools\"\n",
+        "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"tools\"\n",
     )?;
     let condition = job(&mixed, "finalize")?
         .get("if")
@@ -163,7 +164,7 @@ fn an_old_helper_with_an_assetless_package_warns_naming_the_version_to_pin() -> 
 
 #[test]
 fn a_failed_finalization_does_not_skip_the_others_and_still_fails_the_job() -> TestResult {
-    let tree = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\"]\n")?;
+    let tree = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\", \"tools\"]\n")?;
     let all = steps(job(&tree, "finalize")?);
     let publishing: Vec<&Node> = all
         .iter()
@@ -203,7 +204,7 @@ fn the_finalize_timeout_grows_with_the_assetless_packages_by_five_requests_of_fi
             .and_then(Node::text),
         Some("30")
     );
-    let two = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\"]\n")?;
+    let two = render_with("0.1.81", &[APP, TOOLS], "roots = [\".\", \"tools\"]\n")?;
     assert_eq!(
         job(&two, "finalize")?
             .get("timeout-minutes")
@@ -214,7 +215,7 @@ fn the_finalize_timeout_grows_with_the_assetless_packages_by_five_requests_of_fi
 }
 
 const DOCS: Root = Root {
-    dir: ".",
+    dir: "docs",
     package: "docs",
     prefix: "release-plz-docs-",
     publishes: false,
@@ -223,7 +224,11 @@ const DOCS: Root = Root {
 #[test]
 fn the_finalize_timeout_is_capped_at_fifty_minutes_so_it_cannot_outlive_its_one_hour_app_token()
 -> TestResult {
-    let three = render_with("0.1.81", &[APP, TOOLS, DOCS], "roots = [\".\"]\n")?;
+    let three = render_with(
+        "0.1.81",
+        &[APP, TOOLS, DOCS],
+        "roots = [\".\", \"tools\", \"docs\"]\n",
+    )?;
     let minutes: u16 = job(&three, "finalize")?
         .get("timeout-minutes")
         .and_then(Node::text)

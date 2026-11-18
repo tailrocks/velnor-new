@@ -18,6 +18,46 @@ fn rooted(plz: &str, members: &[(&str, &str)]) -> ReleaseFiles {
     files
 }
 
+fn two_workspaces(root_plz: &str, tools_plz: &str) -> ReleaseFiles {
+    let mut files = files();
+    files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
+    files.release_plz_toml.insert(
+        ".".to_owned(),
+        root_plz.replace(
+            "[workspace]\n",
+            "[workspace]\npr_branch_prefix = \"app-\"\n",
+        ),
+    );
+    files
+        .release_plz_toml
+        .insert("tools".to_owned(), tools_plz.to_owned());
+    files
+}
+
+#[test]
+fn a_release_root_that_is_a_workspace_member_checks_the_package_inventory() {
+    let plz = |name: &str| PLZ.replace("name = \"app\"", &format!("name = \"{name}\""));
+    let members = [
+        ("foo", "crates/foo/Cargo.toml"),
+        ("bar", "crates/bar/Cargo.toml"),
+    ];
+    let build = |name: &str| {
+        let mut files = files();
+        files.release_toml = Some("roots = [\"crates/foo\"]\n".to_owned());
+        files
+            .release_plz_toml
+            .insert("crates/foo".to_owned(), plz(name));
+        with_metadata(&mut files, &[("Cargo.toml", &members)]);
+        files
+    };
+    let error = refusal(&build("fooo"));
+    assert!(
+        matches!(&error, Some(ReleaseError::PackageNotInRoot { package, .. }) if package == "fooo"),
+        "{error:?}"
+    );
+    assert_eq!(refusal(&build("foo")), None);
+}
+
 #[test]
 fn an_inherited_member_name_that_recording_rejects_is_refused_at_generation() -> TestResult {
     let members = |name: &'static str| [("app", "Cargo.toml"), (name, "other/Cargo.toml")];
@@ -61,6 +101,27 @@ fn a_binary_of_a_workspace_inherited_member_takes_the_instantiated_workspace_tag
         Some(ReleaseError::BinaryNotReleased { .. })
     ));
     Ok(())
+}
+
+#[test]
+fn a_member_a_root_disables_is_not_inherited_by_it() {
+    let root = PLZ.replace(
+        "name = \"app\"\n",
+        "name = \"app\"\n\n[[package]]\nname = \"shared\"\nrelease = false\n",
+    );
+    let tools = PLZ.replace("name = \"app\"", "name = \"shared\"");
+    let mut files = two_workspaces(&root, &tools);
+    with_metadata(
+        &mut files,
+        &[
+            (
+                "Cargo.toml",
+                &[("app", "Cargo.toml"), ("shared", "shared/Cargo.toml")],
+            ),
+            ("tools/Cargo.toml", &[("shared", "tools/shared/Cargo.toml")]),
+        ],
+    );
+    assert_eq!(refusal(&files), None);
 }
 
 #[test]

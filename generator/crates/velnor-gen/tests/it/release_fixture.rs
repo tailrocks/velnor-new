@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use velnor_gen::expected_files;
+use crate::release_unguarded::expected_release;
 use velnor_model::{
     PackageName, RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView, Target,
     TargetKind, TargetName,
@@ -37,7 +37,7 @@ pub(crate) const APP: Root = Root {
     publishes: false,
 };
 pub(crate) const TOOLS: Root = Root {
-    dir: ".",
+    dir: "tools",
     package: "tools",
     prefix: "release-plz-tools-",
     publishes: false,
@@ -49,39 +49,27 @@ pub(crate) const DASHED: Root = Root {
     prefix: "release-plz-my-app-",
     publishes: false,
 };
+pub(crate) const SPACED: Root = Root {
+    dir: "my tools",
+    package: "tools",
+    prefix: "release-plz-tools-",
+    publishes: false,
+};
+
 pub(crate) fn dashed() -> Result<(String, Node), Box<dyn Error>> {
     render(&[DASHED], Some("[[binaries]]\npackage = \"my-app\"\n"))
 }
 
 pub(crate) fn release_plz(root: &Root) -> String {
-    release_plz_of(&[root])
-}
-
-fn release_plz_of(group: &[&Root]) -> String {
-    let root = group[0];
     let publishing = if root.publishes {
         "publish_no_verify = true\npublish_timeout = \"5m\""
     } else {
-        "publish = false"
+        "git_only = true"
     };
-    let packages = group.iter().fold(String::new(), |text, member| {
-        text + "\n[[package]]\nname = \"" + member.package + "\"\n"
-    });
     format!(
-        "[workspace]\ngit_tag_name = \"{{{{ package }}}}-v{{{{ version }}}}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npr_branch_prefix = \"{}\"\n{publishing}\n{packages}",
-        root.prefix
+        "[workspace]\ngit_tag_name = \"{{{{ package }}}}-v{{{{ version }}}}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npr_branch_prefix = \"{}\"\n{publishing}\n\n[[package]]\nname = \"{}\"\n",
+        root.prefix, root.package
     )
-}
-
-fn groups(roots: &[Root]) -> Vec<Vec<&Root>> {
-    let mut groups: Vec<Vec<&Root>> = Vec::new();
-    for root in roots {
-        match groups.iter_mut().find(|group| group[0].dir == root.dir) {
-            Some(group) => group.push(root),
-            None => groups.push(vec![root]),
-        }
-    }
-    groups
 }
 
 fn join_manifest(dir: &str) -> String {
@@ -96,42 +84,28 @@ pub(crate) fn release_view(
     roots: &[Root],
     release_toml: Option<&str>,
 ) -> Result<RepoView, Box<dyn Error>> {
-    let groups = groups(roots);
-    let manifests: Vec<String> = if groups.is_empty() {
+    let manifests: Vec<String> = if roots.is_empty() {
         vec!["Cargo.toml".to_owned()]
     } else {
-        groups
-            .iter()
-            .map(|group| join_manifest(group[0].dir))
-            .collect()
+        roots.iter().map(|root| join_manifest(root.dir)).collect()
     };
     let refs: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let mut view = view(&refs, Some(b"full_run = \"off\"\n"))?;
-    for (group, manifest) in groups.iter().zip(&manifests) {
+    for (root, manifest) in roots.iter().zip(&manifests) {
         let metadata = view
             .rust_metadata
             .get_mut(&RepoPath::new(manifest.as_str())?)
             .ok_or("no metadata for the root")?;
-        let first = metadata.members[0].clone();
-        metadata.members.clear();
-        for (index, root) in group.iter().enumerate() {
-            let mut member = first.clone();
-            member.name = PackageName::new(root.package)?;
-            if index > 0 {
-                member.manifest = RepoPath::new(format!("{}/Cargo.toml", root.package))?;
-                view.tracked_paths.insert(member.manifest.clone());
-            }
-            for name in [root.package, "rg"] {
-                member.targets.push(Target {
-                    name: TargetName::new(name)?,
-                    kinds: vec![TargetKind::Bin],
-                    tests: false,
-                    doctest: false,
-                    source: None,
-                    requires_features: false,
-                });
-            }
-            metadata.members.push(member);
+        metadata.members[0].name = PackageName::new(root.package)?;
+        for name in [root.package, "rg"] {
+            metadata.members[0].targets.push(Target {
+                name: TargetName::new(name)?,
+                kinds: vec![TargetKind::Bin],
+                tests: false,
+                doctest: false,
+                source: None,
+                requires_features: false,
+            });
         }
     }
     view.tracked_paths.insert(LOCK_PATH);
@@ -153,9 +127,15 @@ pub(crate) fn release_view(
         view.files
             .insert(RELEASE_CONFIG_PATH, text.as_bytes().to_vec());
     }
-    for group in &groups {
-        let root = group[0];
-        let manifest = RepoPath::new(join_manifest(root.dir))?;
+    for root in roots {
+        let manifest = RepoPath::new(if root.dir == "." {
+            "Cargo.toml".to_owned()
+        } else {
+            format!("{}/Cargo.toml", root.dir)
+        })?;
+        if let Some(metadata) = view.rust_metadata.get_mut(&manifest) {
+            metadata.members[0].name = PackageName::new(root.package)?;
+        }
         view.files.entry(manifest).or_insert_with(|| {
             format!(
                 "[package]\nname = \"{}\"\nversion = \"0.1.0\"\n",
@@ -169,7 +149,7 @@ pub(crate) fn release_view(
             format!("{}/release-plz.toml", root.dir)
         };
         view.files
-            .insert(RepoPath::new(path)?, release_plz_of(group).into_bytes());
+            .insert(RepoPath::new(path)?, release_plz(root).into_bytes());
     }
     Ok(view)
 }
@@ -178,7 +158,7 @@ pub(crate) fn render(
     roots: &[Root],
     release_toml: Option<&str>,
 ) -> Result<(String, Node), Box<dyn Error>> {
-    let mut files = expected_files(&release_view(roots, release_toml)?)?;
+    let mut files = expected_release(&release_view(roots, release_toml)?)?;
     let text = files
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("release.yml was not rendered")?;
@@ -193,11 +173,11 @@ pub(crate) fn app() -> Result<(String, Node), Box<dyn Error>> {
 pub(crate) fn two_roots() -> Result<(String, Node), Box<dyn Error>> {
     render(
         &[APP, TOOLS],
-        Some("roots = [\".\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
     )
 }
 
-pub(crate) const TWO_BINARIES: &str = "roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
+pub(crate) const TWO_BINARIES: &str = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
 
 pub(crate) fn two_binaries() -> Result<(String, Node), Box<dyn Error>> {
     render(&[APP, TOOLS], Some(TWO_BINARIES))

@@ -210,7 +210,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
 }
 
 #[test]
-fn release_yml_builds_a_package_from_the_root_manifest_and_target_directory() -> TestResult {
+fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory() -> TestResult {
     let (_, tree) = two_binaries()?;
     let build = job(&tree, "build-tools-linux-x64")?;
     assert_eq!(
@@ -220,7 +220,7 @@ fn release_yml_builds_a_package_from_the_root_manifest_and_target_directory() ->
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
-            "tar -czf tools-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release tools",
+            "tar -czf tools-linux-x64.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools",
         ]
     );
     Ok(())

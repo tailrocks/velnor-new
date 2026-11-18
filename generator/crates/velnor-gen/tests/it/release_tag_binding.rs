@@ -3,10 +3,10 @@
 
 use std::error::Error;
 
-use velnor_gen::expected_files;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 
 use crate::release_fixture::{APP, APP_TOKEN, LOCK, TOOLS, release_view, steps, uses};
+use crate::release_unguarded::expected_release;
 use crate::yaml_tree::{Node, parse};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -15,13 +15,13 @@ type Step = (String, Vec<String>);
 fn refuse_steps(version: &str) -> Result<Vec<Step>, Box<dyn Error>> {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
     )?;
     view.files.insert(
         velnor_rust::LOCK_PATH,
         LOCK.replace("0.1.79", version).into_bytes(),
     );
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     let tree = parse(&text)?;
@@ -62,7 +62,7 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
     for (id, step) in found {
         let (prefixes, released) = if id == "tag" {
             (
-                " --branch-prefix release-plz.toml release-plz-app-",
+                " --branch-prefix release-plz.toml release-plz-app- --branch-prefix tools/release-plz.toml release-plz-tools-",
                 " --released-versions",
             )
         } else {
@@ -72,7 +72,7 @@ fn a_helper_that_knows_the_flag_gets_every_pattern_the_live_repository_and_the_t
             step,
             [
                 &format!(
-                    "velnor-ci release check-config release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}'{prefixes} --repo=\"$REPOSITORY\" --manifests{released}"
+                    "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{{{ version }}}}' --tag-pattern release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml 'tools-v{{{{ version }}}}' --tag-pattern tools/release-plz.toml '{{{{ package }}}}-v{{{{ version }}}}'{prefixes} --repo=\"$REPOSITORY\" --manifests{released}"
                 ),
                 "CARGO_BUILD_RUSTC=rustc",
                 "CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER=",
@@ -124,13 +124,13 @@ fn a_helper_that_predates_the_release_checks_is_refused_with_the_version_to_pin(
 fn the_check_runs_before_the_app_token_with_only_the_job_token() -> TestResult {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
+        Some("roots = [\".\", \"tools\"]\nafter = [\"Rust CI\", \"Lint\"]\n"),
     )?;
     view.files.insert(
         velnor_rust::LOCK_PATH,
         LOCK.replace("0.1.79", "0.1.80").into_bytes(),
     );
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     let tree = parse(&text)?;

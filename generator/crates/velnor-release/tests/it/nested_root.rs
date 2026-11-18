@@ -1,11 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_release::{ReleaseError, ReleaseFiles};
+use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan};
 
-use crate::fixture::{TestResult, files, plz_edited, refusal};
+use crate::fixture::{TestResult, files, plz_edited};
 
 const TOOLS_PLZ: &str = "[workspace]\npr_branch_prefix = \"tools-\"\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\n";
+
+fn refusal(files: &ReleaseFiles) -> Option<ReleaseError> {
+    ReleasePlan::read(files)
+        .and_then(|plan| plan.refuse_roots_below_git_root())
+        .err()
+}
 
 fn with_tools_root(roots: &str, extra: &str) -> ReleaseFiles {
     let mut files = files();
@@ -22,8 +28,7 @@ fn a_release_root_below_the_git_root_is_refused_whatever_it_publishes() {
     for extra in [
         "git_only = true\n",
         "publish = false\n",
-        "publish_no_verify = true\n",
-        "",
+        "publish_no_verify = true\npublish_timeout = \"5m\"\n",
     ] {
         let error = refusal(&with_tools_root("[\".\", \"tools\"]", extra));
         assert!(

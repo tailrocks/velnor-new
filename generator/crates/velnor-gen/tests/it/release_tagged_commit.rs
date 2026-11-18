@@ -3,11 +3,11 @@
 
 use std::error::Error;
 
-use velnor_gen::expected_files;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
+use crate::release_unguarded::expected_release;
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::{Node, parse};
 use velnor_gen::GenerateError;
@@ -15,7 +15,7 @@ use velnor_gen::GenerateError;
 type TestResult = Result<(), Box<dyn Error>>;
 
 const CHECK: &str = "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"";
-const TWO_BINARIES: &str = "roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n";
+const TWO_BINARIES: &str = "roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\"]\n";
 
 pub(crate) fn render_with(
     helper: &str,
@@ -25,7 +25,7 @@ pub(crate) fn render_with(
     let mut view = release_view(roots, Some(config))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     Ok(parse(&text)?)
@@ -58,7 +58,7 @@ fn the_tag_job_records_the_commit_each_tag_is_on_and_requires_it_to_equal_the_ve
     assert_eq!(
         record.get("run").and_then(Node::text),
         Some(
-            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" \"$RUNNER_TEMP/release-0.json\""
+            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\""
         )
     );
     for (key, value) in [
@@ -113,7 +113,7 @@ fn the_tag_job_checks_the_release_source_read_only_before_the_app_token_is_minte
     assert_eq!(
         step.get("run").and_then(Node::text),
         Some(
-            "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" --branch-prefix=release-plz-app-"
+            "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" --branch-prefix=release-plz-app- --branch-prefix=release-plz-tools-"
         )
     );
     assert_eq!(
@@ -172,7 +172,9 @@ fn a_helper_without_the_commit_flags_keeps_the_head_sha_check_which_a_merge_comm
     let tag = job(&tree, "tag")?;
     assert_eq!(
         runs(tag).last().copied(),
-        Some("velnor-ci release record \"$RUNNER_TEMP/release-0.json\"")
+        Some(
+            "velnor-ci release record \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\""
+        )
     );
     assert_eq!(
         tag.get("outputs").map(Node::keys),
@@ -212,18 +214,18 @@ fn a_build_refuses_an_empty_commit_output_instead_of_comparing_two_empty_strings
 #[test]
 fn a_package_named_like_another_packages_commit_output_is_refused_at_generation() -> TestResult {
     const SHADOW: Root = Root {
-        dir: ".",
+        dir: "tools",
         package: "app_commit",
         prefix: "release-plz-shadow-",
         publishes: false,
     };
     let mut view = release_view(
         &[APP, SHADOW],
-        Some("roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n"),
+        Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n"),
     )?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
-    let Err(GenerateError::Rules(violations)) = expected_files(&view) else {
+    let Err(GenerateError::Rules(violations)) = expected_release(&view) else {
         return Err("rendered".into());
     };
     assert_eq!(violations.len(), 1);
@@ -238,15 +240,15 @@ fn a_package_named_like_another_packages_commit_output_is_refused_at_generation(
 fn an_assetless_package_named_like_another_packages_commit_output_is_refused_at_generation()
 -> TestResult {
     const SHADOW: Root = Root {
-        dir: ".",
+        dir: "tools",
         package: "app_commit",
         prefix: "release-plz-shadow-",
         publishes: false,
     };
-    let mut view = release_view(&[APP, SHADOW], Some("roots = [\".\"]\n"))?;
+    let mut view = release_view(&[APP, SHADOW], Some("roots = [\".\", \"tools\"]\n"))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
-    let Err(GenerateError::Rules(violations)) = expected_files(&view) else {
+    let Err(GenerateError::Rules(violations)) = expected_release(&view) else {
         return Err("rendered".into());
     };
     assert_eq!(violations.len(), 1);

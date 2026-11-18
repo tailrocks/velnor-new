@@ -17,6 +17,21 @@ fn names(items: &[&str]) -> BTreeSet<String> {
     items.iter().map(|item| (*item).to_owned()).collect()
 }
 
+pub(crate) fn two_roots(tools_plz: &str) -> Result<ReleaseFiles, String> {
+    let mut files = files();
+    files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
+    let root = edit(
+        PLZ,
+        "[workspace]\n",
+        "[workspace]\npr_branch_prefix = \"app-\"\n",
+    )?;
+    files.release_plz_toml.insert(".".to_owned(), root);
+    files
+        .release_plz_toml
+        .insert("tools".to_owned(), tools_plz.to_owned());
+    Ok(files)
+}
+
 #[test]
 fn release_plz_must_be_pinned_to_an_exact_version_that_mise_cannot_redirect() {
     for version in [
@@ -64,17 +79,47 @@ fn the_hidden_mise_file_wins_over_mise_toml_for_the_same_selector() {
     ));
 }
 
+fn workspace_only(prefix: &str, tag: &str) -> String {
+    format!(
+        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"{prefix}\"\n"
+    )
+}
+
 #[test]
-fn every_release_root_needs_a_tracked_cargo_manifest() {
-    let mut files = files();
-    files.cargo_manifests = Some(names(&[]));
+fn workspace_wide_tag_patterns_of_two_roots_that_can_collide_are_refused() -> TestResult {
+    let mut files = two_roots(PLZ_TOOLS)?;
+    for (root, prefix) in [(".", "app-"), ("tools", "tools-")] {
+        files
+            .release_plz_toml
+            .insert(root.to_owned(), workspace_only(prefix, "v{{ version }}"));
+    }
     let error = refusal(&files);
     assert!(
-        matches!(&error, Some(ReleaseError::RootWithoutCargoManifest { root }) if root == "."),
+        matches!(error, Some(ReleaseError::DuplicateTagPattern { .. })),
         "{error:?}"
     );
-    files.cargo_manifests = Some(names(&["Cargo.toml"]));
+    files.release_plz_toml.insert(
+        "tools".to_owned(),
+        workspace_only("tools-", "tools-v{{ version }}"),
+    );
     assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+const PLZ_TOOLS: &str = "[workspace]\ngit_tag_name = \"{{ package }}-v{{ version }}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npublish_no_verify = true\npublish_timeout = \"5m\"\npr_branch_prefix = \"tools-\"\n\n[[package]]\nname = \"tools\"\n";
+
+#[test]
+fn every_release_root_needs_a_tracked_cargo_manifest() -> TestResult {
+    let mut files = two_roots(PLZ_TOOLS)?;
+    files.cargo_manifests = Some(names(&["Cargo.toml"]));
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::RootWithoutCargoManifest { root }) if root == "tools"),
+        "{error:?}"
+    );
+    files.cargo_manifests = Some(names(&["Cargo.toml", "tools/Cargo.toml"]));
+    assert_eq!(refusal(&files), None);
+    Ok(())
 }
 
 #[test]
@@ -110,6 +155,56 @@ fn a_binary_without_a_buildable_bin_target_in_its_root_is_refused() {
     ));
     files.bin_targets = Some(BTreeSet::from([target("Cargo.toml", "rg")]));
     assert_eq!(refusal(&files), None);
+}
+
+#[test]
+fn a_package_name_inherited_from_the_workspace_in_two_roots_is_refused() -> TestResult {
+    let mut files = two_roots(PLZ_TOOLS)?;
+    with_metadata(
+        &mut files,
+        &[
+            ("Cargo.toml", &[("app", "Cargo.toml")]),
+            (
+                "tools/Cargo.toml",
+                &[
+                    ("app", "tools/app/Cargo.toml"),
+                    ("tools", "tools/Cargo.toml"),
+                ],
+            ),
+        ],
+    );
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::DuplicatePackageName { package, .. }) if package == "app"),
+        "{error:?}"
+    );
+    with_metadata(
+        &mut files,
+        &[
+            ("Cargo.toml", &[("app", "Cargo.toml")]),
+            ("tools/Cargo.toml", &[("tools", "tools/Cargo.toml")]),
+        ],
+    );
+    assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
+fn two_roots_that_share_an_ancestor_workspace_release_its_packages_twice() -> TestResult {
+    let mut files = two_roots(PLZ_TOOLS)?;
+    with_metadata(
+        &mut files,
+        &[(
+            "Cargo.toml",
+            &[("app", "Cargo.toml"), ("tools", "tools/Cargo.toml")],
+        )],
+    );
+    let error = refusal(&files);
+    assert!(
+        matches!(&error, Some(ReleaseError::DuplicatePackageName { .. })),
+        "{error:?}"
+    );
+    Ok(())
 }
 
 #[test]

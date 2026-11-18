@@ -190,6 +190,24 @@ fn release_config_with_an_empty_after_or_unknown_platform_is_refused() {
 }
 
 #[test]
+fn a_package_released_from_two_roots_is_refused() -> TestResult {
+    let mut files = files();
+    files.release_toml =
+        Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n".to_owned());
+    let tools = edit(
+        PLZ,
+        "[workspace]\n",
+        "[workspace]\npr_branch_prefix = \"tools-\"\n",
+    )?;
+    let tools = edit(&tools, "{{ package }}-v", "tools-{{ package }}-v")?;
+    files.release_plz_toml.insert("tools".to_owned(), tools);
+    assert!(
+        matches!(refusal(&files), Some(ReleaseError::DuplicatePackageName { package, .. }) if package == "app")
+    );
+    Ok(())
+}
+
+#[test]
 fn empty_roots_and_blank_workflow_names_are_refused() {
     let mut files = files();
     files.release_toml = Some("roots = []\n".to_owned());

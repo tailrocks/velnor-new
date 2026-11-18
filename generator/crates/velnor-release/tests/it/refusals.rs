@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_release::ReleaseError;
+use velnor_release::{ReleaseError, ReleasePlan};
 
 use crate::fixture::{PLZ, TestResult, edit, files, plz_edited, refusal};
 
@@ -169,6 +169,31 @@ fn two_packages_with_the_same_tag_pattern_are_refused() -> TestResult {
 }
 
 #[test]
+fn two_roots_with_the_same_pr_branch_prefix_are_refused() -> TestResult {
+    let mut files = files();
+    files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
+    files.release_plz_toml.insert(
+        "tools".to_owned(),
+        edit(PLZ, "name = \"app\"", "name = \"cli\"")?,
+    );
+    let error = refusal(&files);
+    assert!(
+        matches!(error, Some(ReleaseError::DuplicatePrBranchPrefix { .. })),
+        "{error:?}"
+    );
+
+    let with_prefix = edit(
+        PLZ,
+        "[workspace]\n",
+        "[workspace]\npr_branch_prefix = \"tools-\"\n",
+    )?;
+    let tools = edit(&with_prefix, "name = \"app\"", "name = \"cli\"")?;
+    files.release_plz_toml.insert("tools".to_owned(), tools);
+    assert_eq!(ReleasePlan::read(&files)?.roots.len(), 2);
+    Ok(())
+}
+
+#[test]
 fn a_root_without_its_release_plz_toml_is_refused() {
     let mut files = files();
     files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
@@ -253,6 +278,28 @@ fn workspace_only_publishing_needs_publish_no_verify_unless_git_only() -> TestRe
     let git_only = edit(&text, "[workspace]\n", "[workspace]\ngit_only = true\n")?;
     files.release_plz_toml.insert(".".to_owned(), git_only);
     assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
+fn overlapping_pr_branch_prefixes_are_refused() -> TestResult {
+    let mut files = files();
+    files.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
+    let base = edit(
+        PLZ,
+        "[workspace]\n",
+        "[workspace]\npr_branch_prefix = \"release-plz-\"\n",
+    )?;
+    let nested = edit(&base, "release-plz-\"", "release-plz-tools-\"")?;
+    files.release_plz_toml.insert(".".to_owned(), base);
+    files.release_plz_toml.insert(
+        "tools".to_owned(),
+        edit(&nested, "name = \"app\"", "name = \"cli\"")?,
+    );
+    assert!(matches!(
+        refusal(&files),
+        Some(ReleaseError::DuplicatePrBranchPrefix { .. })
+    ));
     Ok(())
 }
 

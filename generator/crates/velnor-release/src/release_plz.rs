@@ -136,11 +136,6 @@ fn publishes(workspace: &Settings, released: &[(String, Settings)]) -> bool {
 }
 
 fn parse_document(root: &str, text: &str) -> Result<Document, ReleaseError> {
-    if root != "." {
-        return Err(ReleaseError::NestedReleasePlzRoot {
-            root: root.to_owned(),
-        });
-    }
     let invalid = |error: toml::de::Error| ReleaseError::InvalidToml {
         file: format!("{root}/release-plz.toml"),
         message: error.to_string(),

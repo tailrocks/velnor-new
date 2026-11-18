@@ -3,11 +3,11 @@
 
 use std::error::Error;
 
-use velnor_gen::expected_files;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, TOOLS, release_view, steps};
+use crate::release_unguarded::expected_release;
 use crate::release_yml_binaries::job;
 use crate::yaml_tree::{Node, parse};
 
@@ -16,11 +16,11 @@ type TestResult = Result<(), Box<dyn Error>>;
 fn render(helper: &str) -> Result<Node, Box<dyn Error>> {
     let mut view = release_view(
         &[APP, TOOLS],
-        Some("roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n"),
+        Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n"),
     )?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     Ok(parse(&text)?)
@@ -48,10 +48,12 @@ fn the_tag_job_binds_each_live_branch_prefix_before_the_app_token_is_minted() ->
     .ok_or("no app token step")?;
     assert!(check < token);
     let run = run_of(&all[check]);
-    assert!(
-        run.contains("--branch-prefix release-plz.toml release-plz-app-"),
-        "{run}"
-    );
+    for flag in [
+        "--branch-prefix release-plz.toml release-plz-app-",
+        "--branch-prefix tools/release-plz.toml release-plz-tools-",
+    ] {
+        assert!(run.contains(flag), "{run}");
+    }
     Ok(())
 }
 

@@ -46,6 +46,28 @@ fn changelog_processors_that_run_commands_or_read_other_files_are_refused() {
 }
 
 #[test]
+fn two_workspace_only_roots_with_the_same_literal_tag_are_refused() {
+    let mut two = files();
+    for (root, prefix) in [(".", "a-"), ("tools", "b-")] {
+        two.release_plz_toml.insert(
+            root.to_owned(),
+            format!("{WORKSPACE_ONLY}pr_branch_prefix = \"{prefix}\"\n"),
+        );
+    }
+    two.release_toml = Some("roots = [\".\", \"tools\"]\n".to_owned());
+    assert!(matches!(
+        ReleasePlan::read(&two).err(),
+        Some(ReleaseError::DuplicateTagPattern { .. })
+    ));
+    for root in [".", "tools"] {
+        let text =
+            two.release_plz_toml[root].replace("v{{ version }}", "{{ package }}-v{{ version }}");
+        two.release_plz_toml.insert(root.to_owned(), text);
+    }
+    assert_eq!(refusal(&two), None);
+}
+
+#[test]
 fn unlisted_packages_inherit_the_workspace_so_it_must_name_a_tag_unless_it_releases_nothing()
 -> TestResult {
     let listed = edit(
