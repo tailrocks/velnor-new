@@ -49,6 +49,10 @@ fn public_generation_keeps_plan_bootstrap_and_uses_required_verdict_controller()
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn consumer_required_uses_canonical_group_ledger_fanin() -> Result<(), Box<dyn Error>> {
     let temp = tempfile::tempdir()?;
