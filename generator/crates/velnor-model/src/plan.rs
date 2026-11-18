@@ -224,6 +224,7 @@ pub enum CargoCommand {
     NextestBuild,
     NextestRun {
         filter: FilterRef,
+        ci_profile: bool,
     },
     NextestArchive {
         file: RepoPath,
@@ -231,6 +232,7 @@ pub enum CargoCommand {
     NextestRunArchive {
         file: RepoPath,
         filter: FilterRef,
+        ci_profile: bool,
     },
     TestTarget {
         package: PackageName,
