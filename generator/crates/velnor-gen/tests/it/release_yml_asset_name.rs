@@ -36,7 +36,7 @@ fn an_asset_name_with_version_and_target_names_every_file_after_the_tag_version(
     let linux = "app-${VERSION}-x86_64-unknown-linux-musl.tar.gz";
     let mac = "app-${VERSION}-aarch64-apple-darwin.tar.gz";
 
-    let version = "echo \"VERSION=${TAG#app-v}\" >> \"$GITHUB_ENV\"";
+    let version = "echo \"version=${TAG#app-v}\" >> \"$GITHUB_OUTPUT\"";
     let build = job(&tree, "build-app-linux-x64")?;
     let build_runs = runs(build);
     assert!(build_runs.contains(&version), "{build_runs:?}");

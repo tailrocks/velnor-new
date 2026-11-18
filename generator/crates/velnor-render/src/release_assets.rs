@@ -7,9 +7,10 @@ use velnor_release::{BinaryFormat, BinaryPlan, asset_name_uses_version, expand_a
 use crate::release_binaries::{command, target};
 use crate::release_raw::bin_names;
 use crate::release_steps::{shell_word, variables};
-use crate::rules::RenderedStep;
+use crate::rules::{RenderedStep, Value};
 
 const VERSION_REFERENCE: &str = "${VERSION}";
+const VERSION_STEP: &str = "version";
 pub(crate) const STAGE: &str = "stage";
 
 pub(crate) fn versioned(binary: &BinaryPlan) -> bool {
@@ -84,16 +85,33 @@ pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
             .replace("{{ package }}", &binary.package);
         let prefix = pattern.split("{{ version }}").next().unwrap_or_default();
         RenderedStep {
+            id: Some(VERSION_STEP.to_owned()),
             env: variables(&[(
                 "TAG",
                 &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
             )]),
             ..command(
                 "Read the version of the tag".to_owned(),
-                format!("echo \"VERSION=${{TAG#{prefix}}}\" >> \"$GITHUB_ENV\""),
+                format!("echo \"version=${{TAG#{prefix}}}\" >> \"$GITHUB_OUTPUT\""),
             )
         }
     })
+}
+
+/// Hands the version to every step that names it, through that step's own `env`.
+pub(crate) fn bind_version(steps: &mut [RenderedStep]) {
+    for step in steps {
+        let reads = step
+            .run
+            .as_deref()
+            .is_some_and(|run| run.contains(VERSION_REFERENCE));
+        if reads && step.env.iter().all(|(name, _)| name != "VERSION") {
+            step.env.push((
+                "VERSION".to_owned(),
+                Value::Expr(format!("${{{{ steps.{VERSION_STEP}.outputs.version }}}}")),
+            ));
+        }
+    }
 }
 
 pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
