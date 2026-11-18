@@ -8,6 +8,8 @@ mod base_safety;
 mod base_save;
 mod base_token;
 mod build_target;
+mod cache_budget;
+mod cache_budget_workflow;
 mod cache_compat;
 mod cache_key_defects;
 mod cache_key_inputs;
@@ -51,6 +53,8 @@ mod io_record;
 mod io_record_boundaries;
 
 mod job_setup;
+mod mise_safety;
+
 mod job_shape;
 mod lock;
 mod lock_affected;
@@ -88,6 +92,7 @@ mod release_yml_limits;
 mod release_yml_quoting;
 mod release_yml_security;
 mod render_empty_key;
+mod rendered_expressions;
 mod repo_profile_include;
 mod repo_sample;
 mod report;

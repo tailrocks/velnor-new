@@ -63,7 +63,7 @@ pub(in crate::journal) async fn validate_resources_bound(
     reservation::resources_bound(connection, connection_id, intent_id).await
 }
 
-pub(in crate::journal) async fn reservation_release_ready(
+pub(crate) async fn reservation_release_ready(
     connection: &turso::Connection,
     reservation_id: i64,
 ) -> Result<bool, crate::error::HostError> {

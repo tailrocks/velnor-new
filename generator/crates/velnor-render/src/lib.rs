@@ -98,6 +98,7 @@ pub(crate) fn permission_pairs(permissions: &Permissions) -> Vec<(String, String
         .iter()
         .map(|(scope, access)| {
             let scope = match scope {
+                PermissionScope::PullRequests => "pull-requests",
                 PermissionScope::Actions => "actions",
                 PermissionScope::Contents => "contents",
             };

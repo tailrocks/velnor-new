@@ -241,7 +241,7 @@ impl RootJobs<'_> {
                     other => after.push(other),
                 }
             }
-            steps.extend(self.cargo(workspace));
+            steps.extend(self.cargo(workspace).map(skip_on_draft));
             steps.extend(self.cargo(after).map(skip_on_draft));
             steps.extend(self.audit());
             steps.extend(saves);

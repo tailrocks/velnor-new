@@ -7,7 +7,7 @@ use velnor_model::{
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
-use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane};
+use crate::base_steps::{cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
 use crate::gate::{
@@ -69,9 +69,9 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: Some(with_saved_lane(
-            crate::base_steps::audited_lane(admission(job.when, job.gate.as_ref(), job.skip_on_draft), job),
-            &job.steps,
+        condition: Some(crate::base_steps::audited_lane(
+            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
         permissions: permission_pairs(&job.permissions),
@@ -257,6 +257,7 @@ fn step_body(
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
+        StepKind::CacheBudget(bytes) => cache_budget(*bytes),
         StepKind::RustComponents(components) => RenderedStep {
             name: "Add Rust components".to_owned(),
             run: Some(format!("rustup component add {}", components.join(" "))),
