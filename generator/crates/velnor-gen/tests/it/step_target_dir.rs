@@ -157,3 +157,34 @@ fn the_cache_steps_and_the_cargo_steps_of_a_job_agree_on_each_roots_target_path(
     }
     Ok(())
 }
+
+fn archive_mode_with_custom_lab_target() -> Result<String, Box<dyn std::error::Error>> {
+    let mut repo = view(
+        &["Cargo.toml", "lab/Cargo.toml"],
+        Some(b"shape = \"groups\"\n"),
+    )?;
+    with_target_dir(
+        &mut repo,
+        "lab/.cargo/config.toml",
+        "[build]\ntarget-dir = \"build/lab-out\"\n",
+    )?;
+    workflow(&repo)
+}
+
+#[test]
+fn the_archive_run_step_gets_no_target_directory_because_it_only_extracts() -> TestResult {
+    let text = archive_mode_with_custom_lab_target()?;
+    let mut checked = 0;
+    for (job, steps) in steps_of(&text)? {
+        for step in steps.iter().filter(|step| {
+            step["run"]
+                .as_str()
+                .is_some_and(|run| run.contains("nextest run --archive-file"))
+        }) {
+            checked += 1;
+            assert_eq!(target_of(step), None, "{job}: {}", step["name"]);
+        }
+    }
+    assert_eq!(checked, 2, "one archive run per root");
+    Ok(())
+}

@@ -503,7 +503,6 @@ jobs:
       - id: test
         name: Test
         env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_root_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --archive-file ''nextest-archive.tar.zst'' --extract-to . --extract-overwrite --workspace-remap . --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - id: report_cache_metrics
@@ -948,7 +947,6 @@ jobs:
         name: Test
         working-directory: lab
         env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/lab/target'
           TEST_FILTER: '${{ needs.rust-plan.outputs.rust_lab_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --archive-file ''nextest-archive.tar.zst'' --extract-to . --extract-overwrite --workspace-remap . --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - id: report_cache_metrics

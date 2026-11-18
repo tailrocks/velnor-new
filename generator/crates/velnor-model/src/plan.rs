@@ -253,7 +253,10 @@ pub enum CargoCommand {
 impl CargoCommand {
     #[must_use]
     pub fn builds(&self) -> bool {
-        !matches!(self, Self::FmtCheck | Self::Deny { .. } | Self::Machete)
+        !matches!(
+            self,
+            Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
     }
 
     #[must_use]
