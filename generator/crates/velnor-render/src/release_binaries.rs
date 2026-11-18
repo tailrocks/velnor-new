@@ -273,6 +273,7 @@ fn verify(binary: &BinaryPlan) -> RenderedJob {
     steps.extend(read_version(binary));
     steps.push(install_tool(&format!("gh@{GH_VERSION}")));
     steps.extend(verifications(binary));
+    bind_version(&mut steps);
     RenderedJob {
         permissions: permissions(&[("attestations", "read")]),
         runs_on: HOSTED_RUNNER.to_owned(),
