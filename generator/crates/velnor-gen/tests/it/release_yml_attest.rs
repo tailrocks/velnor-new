@@ -65,7 +65,7 @@ fn attest_true_adds_a_pinned_provenance_step_over_the_assets_and_checksums_in_th
                 permissions(other)
                     .iter()
                     .all(|(scope, access)| scope != "id-token"
-                        && (scope != "attestations" || (id == "publish-app" && access == "read"))),
+                        && (scope != "attestations" || (id == "verify-app" && access == "read"))),
                 "{id}"
             );
         }
@@ -96,23 +96,13 @@ fn attest_false_or_absent_leaves_the_workflow_unchanged() -> TestResult {
 fn attest_true_verifies_every_asset_with_a_pinned_gh_before_publish_and_fails_closed() -> TestResult
 {
     let (_, tree) = render(&[APP, TOOLS], Some(&attested()))?;
-    let publish = job(&tree, "publish-app")?;
-    assert_eq!(
-        permissions(publish),
-        [
-            ("attestations".to_owned(), "read".to_owned()),
-            ("contents".to_owned(), "write".to_owned())
-        ]
-    );
-    let all = steps(publish);
+    let verify = job(&tree, "verify-app")?;
+    let all = steps(verify);
     let run_of = |step: &Node| step.get("run").and_then(Node::text).map(str::to_owned);
     let verifying: Vec<usize> = (0..all.len())
         .filter(|i| run_of(&all[*i]).is_some_and(|r| r.contains("gh attestation verify")))
         .collect();
-    let published = (0..all.len())
-        .find(|i| run_of(&all[*i]).is_some_and(|r| r.contains("release publish")))
-        .ok_or("no publish step")?;
-    assert!(verifying.iter().all(|i| *i < published));
+    assert_eq!(verifying.len(), 4);
     let commands: Vec<String> = verifying.iter().filter_map(|i| run_of(&all[*i])).collect();
     for subject in ["dist/app-linux-x64.tar.gz", "dist/SHA256SUMS"] {
         assert!(
@@ -135,7 +125,7 @@ fn attest_true_verifies_every_asset_with_a_pinned_gh_before_publish_and_fails_cl
         assert!(run.contains("mise --no-config --no-env --no-hooks exec gh@2."));
     }
     for (id, other) in jobs(&tree)? {
-        if id != "publish-app" {
+        if id != "verify-app" {
             assert!(
                 permissions(other)
                     .iter()
@@ -163,8 +153,8 @@ fn attest_with_a_versioned_asset_name_verifies_the_expanded_names_after_reading_
 -> TestResult {
     let toml = "[[binaries]]\npackage = \"app\"\nattest = true\nasset_name = \"{{ bin }}-{{ version }}-{{ platform }}\"\n";
     let (_, tree) = render(&[APP], Some(toml))?;
-    let publish = job(&tree, "publish-app")?;
-    let all = steps(publish);
+    let verify = job(&tree, "verify-app")?;
+    let all = steps(verify);
     let run_of = |step: &Node| step.get("run").and_then(Node::text).map(str::to_owned);
     let reader = (0..all.len())
         .find(|i| run_of(&all[*i]).is_some_and(|r| r.contains("VERSION=")))
@@ -190,6 +180,79 @@ fn attest_with_a_versioned_asset_name_verifies_the_expanded_names_after_reading_
     for step in all {
         let name = step.get("name").and_then(Node::text).unwrap_or_default();
         assert!(!name.contains('"') && !name.contains('\''), "{name}");
+    }
+    Ok(())
+}
+
+fn runs_of(job: &Node) -> Vec<String> {
+    steps(job)
+        .iter()
+        .filter_map(|step| step.get("run").and_then(Node::text).map(str::to_owned))
+        .collect()
+}
+
+#[test]
+fn verify_runs_in_its_own_job_with_attestations_read_only() -> TestResult {
+    let (_, tree) = render(&[APP, TOOLS], Some(&attested()))?;
+    let verify = job(&tree, "verify-app")?;
+    assert_eq!(
+        permissions(verify),
+        [("attestations".to_owned(), "read".to_owned())]
+    );
+    let verifying = runs_of(verify)
+        .iter()
+        .filter(|run| run.contains("gh attestation verify"))
+        .count();
+    assert_eq!(verifying, 4);
+    let publish = job(&tree, "publish-app")?;
+    for run in runs_of(publish) {
+        assert!(!run.contains("attestation verify"), "{run}");
+        assert!(!run.contains("exec gh@"), "{run}");
+        assert!(!run.contains("mise"), "{run}");
+    }
+    for step in steps(publish) {
+        assert!(
+            uses(step).is_none_or(|u| !u.contains("mise")),
+            "{:?}",
+            uses(step)
+        );
+        let name = step.get("name").and_then(Node::text).unwrap_or_default();
+        assert!(!name.contains("gh@") && !name.contains("Verify"), "{name}");
+    }
+    Ok(())
+}
+
+#[test]
+fn publish_needs_verify_and_holds_only_contents_write() -> TestResult {
+    let (_, tree) = render(&[APP, TOOLS], Some(&attested()))?;
+    let publish = job(&tree, "publish-app")?;
+    assert_eq!(
+        publish.get("needs").ok_or("no needs")?.texts(),
+        ["gate", "tag", "verify-app"]
+    );
+    assert_eq!(
+        permissions(publish),
+        [("contents".to_owned(), "write".to_owned())]
+    );
+    let verify = job(&tree, "verify-app")?;
+    assert_eq!(
+        verify.get("needs").ok_or("no needs")?.texts(),
+        ["gate", "tag", "sums-app"]
+    );
+    assert_eq!(publish.get("if"), verify.get("if"));
+    Ok(())
+}
+
+#[test]
+fn every_run_of_the_verify_job_is_one_plain_command() -> TestResult {
+    let (_, tree) = render(&[APP, TOOLS], Some(&attested()))?;
+    let runs = runs_of(job(&tree, "verify-app")?);
+    assert_eq!(runs.len(), 4);
+    for run in runs {
+        assert!(
+            !run.contains(['\n', ';', '|', '&']) && !run.contains("${{"),
+            "{run}"
+        );
     }
     Ok(())
 }

@@ -39,6 +39,9 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
                 .map(|platform| build(binary, *platform, helper))
                 .collect();
             jobs.push(sums(binary));
+            if binary.attest {
+                jobs.push(verify(binary));
+            }
             jobs.push(publish(binary, helper));
             jobs
         })
@@ -235,6 +238,29 @@ fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
         .collect()
 }
 
+fn verify(binary: &BinaryPlan) -> RenderedJob {
+    let mut steps: Vec<RenderedStep> = binary
+        .platforms
+        .iter()
+        .map(|platform| download(artifact(binary, *platform)))
+        .collect();
+    steps.push(download(format!("{}-sums", binary.package)));
+    steps.extend(read_version(binary));
+    steps.push(install_tool(&format!("gh@{GH_VERSION}")));
+    steps.extend(verifications(binary));
+    RenderedJob {
+        permissions: permissions(&[("attestations", "read")]),
+        runs_on: HOSTED_RUNNER.to_owned(),
+        timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
+        steps,
+        ..behind_the_gate(
+            format!("verify-{}", binary.package),
+            binary,
+            vec![format!("sums-{}", binary.package)],
+        )
+    }
+}
+
 fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![install_helper(helper)];
     steps.extend(
@@ -245,10 +271,6 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     );
     steps.push(download(format!("{}-sums", binary.package)));
     steps.extend(read_version(binary));
-    if binary.attest {
-        steps.push(install_tool(&format!("gh@{GH_VERSION}")));
-        steps.extend(verifications(binary));
-    }
     steps.push(RenderedStep {
         name: format!("Publish the release of {}", binary.package),
         env: variables(&[
@@ -266,18 +288,18 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
         ..RenderedStep::default()
     });
     RenderedJob {
-        permissions: if binary.attest {
-            permissions(&[("attestations", "read"), ("contents", "write")])
-        } else {
-            permissions(&[("contents", "write")])
-        },
+        permissions: permissions(&[("contents", "write")]),
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
         ..behind_the_gate(
             format!("publish-{}", binary.package),
             binary,
-            vec![format!("sums-{}", binary.package)],
+            vec![format!(
+                "{}-{}",
+                if binary.attest { "verify" } else { "sums" },
+                binary.package
+            )],
         )
     }
 }

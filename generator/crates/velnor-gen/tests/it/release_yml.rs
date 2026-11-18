@@ -20,7 +20,7 @@ const NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 
 type TestResult = Result<(), Box<dyn Error>>;
 fn package_of<'a>(id: &str, packages: &[&'a str]) -> Result<&'a str, Box<dyn Error>> {
-    let rest = ["build-", "sums-", "publish-"]
+    let rest = ["build-", "sums-", "verify-", "publish-"]
         .iter()
         .find_map(|kind| id.strip_prefix(kind))
         .ok_or("not a binary job")?;
