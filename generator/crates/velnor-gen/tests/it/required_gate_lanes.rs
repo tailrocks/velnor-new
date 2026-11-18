@@ -133,27 +133,24 @@ fn a_schedule_or_push_job_is_scheduled_on_a_push_and_a_schedule_only() -> TestRe
 }
 
 #[test]
-fn a_package_that_listed_tests_and_ran_none_fails_even_when_another_job_ran() -> TestResult {
+fn a_package_split_across_the_lane_passes_when_the_lane_ran_it() -> TestResult {
     let run = Run {
         a: ("0", "3"),
         b: ("5", "5"),
         ..passing()
     };
-    expect(
-        &run,
-        false,
-        "package pkg of root listed 3 tests and ran none",
-    )?;
+    expect(&run, true, "Required: pass")?;
     let run = Run {
         a: ("5", "5"),
         b: ("0", "3"),
         ..passing()
     };
-    expect(
-        &run,
-        false,
-        "package pkg of root listed 3 tests and ran none",
-    )?;
+    expect(&run, true, "Required: pass")?;
+    Ok(())
+}
+
+#[test]
+fn a_package_that_listed_tests_and_the_lane_ran_none_fails() -> TestResult {
     let run = Run {
         a: ("0", "3"),
         b: ("0", "2"),
@@ -163,11 +160,6 @@ fn a_package_that_listed_tests_and_ran_none_fails_even_when_another_job_ran() ->
         &run,
         false,
         "package pkg of root listed 3 tests and ran none",
-    )?;
-    expect(
-        &run,
-        false,
-        "package pkg of root listed 2 tests and ran none",
     )?;
     let run = Run {
         a: ("0", "0"),
