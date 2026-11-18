@@ -68,7 +68,11 @@ mod tamper_tests;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 53;
+// Schema 53 through 56 are reserved by the agreed order in
+// ~/.cache/velnor-journal-version-order.md (#1277, #1280, #1283, #1075). This branch
+// lands at 57 and applies directly from main's v52 until those land; see
+// ~/.cache/velnor-1078-body.md for the rebase steps that must run before merge.
+pub(super) const JOURNAL_VERSION: i64 = 57;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 

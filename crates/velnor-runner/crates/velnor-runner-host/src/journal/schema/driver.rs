@@ -77,7 +77,9 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
         49 => Box::pin(super::jit_tombstone_completion::migrate(conn)),
         50 => Box::pin(super::unbound_retirement::migrate_v50_to_v51(conn)),
         51 => Box::pin(super::unbound_retirement::migrate_v51_to_v52(conn)),
-        52 => Box::pin(super::doctor_probe::migrate_v52_to_v53(conn)),
+        // Direct v52 -> v57 step (see schema.rs JOURNAL_VERSION). Must be rebased onto
+        // #1075 v56 before merge; the v53-v56 steps then land ahead of this one.
+        52 => Box::pin(super::doctor_probe::migrate_v52_to_v57(conn)),
         _ => return Err(HostError::Journal),
     };
     Ok(step)
@@ -85,8 +87,9 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
 
 pub(super) const fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=52 => Some(version + 1),
+        0..=8 | 10..=51 => Some(version + 1),
         9 => Some(11),
+        52 => Some(57),
         _ => None,
     }
 }
