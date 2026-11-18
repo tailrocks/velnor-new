@@ -137,6 +137,8 @@ mod preview_gh_lane;
 mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/report_upload.rs"]
 mod report_upload;
+#[path = "workflow_configuration_public/rust_ci_off.rs"]
+mod rust_ci_off;
 #[path = "workflow_configuration_public/rust_tree_pin_jobs.rs"]
 mod rust_tree_pin_jobs;
 #[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]
@@ -153,8 +155,6 @@ mod scoped_workspace;
 mod seed_ids;
 #[path = "workflow_configuration_public/seed_off.rs"]
 mod seed_off;
-#[path = "workflow_configuration_public/rust_ci_off.rs"]
-mod rust_ci_off;
 #[path = "workflow_configuration_public/source_qualification.rs"]
 mod source_qualification;
 #[path = "workflow_configuration_public/source_qualification_aggregation.rs"]

@@ -25,7 +25,12 @@ fn repo(rust_header: &str) -> Result<TempDir, Box<dyn Error>> {
     let repo = make_repo(&config(rust_header))?;
     let root = repo.path();
     git(
-        &["remote", "add", "origin", "https://github.com/example/demo.git"],
+        &[
+            "remote",
+            "add",
+            "origin",
+            "https://github.com/example/demo.git",
+        ],
         root,
     )?;
     fs::write(
@@ -49,10 +54,7 @@ fn render(rust_header: &str) -> Result<BTreeMap<String, String>, Box<dyn Error>>
 }
 
 fn sha256(text: &str) -> String {
-    Sha256::digest(text.as_bytes())
-        .iter()
-        .map(|byte| format!("{byte:02x}"))
-        .collect()
+    format!("{:x}", Sha256::digest(text.as_bytes()))
 }
 
 fn job_ids(workflow: &str) -> Result<Vec<String>, Box<dyn Error>> {
@@ -94,7 +96,10 @@ fn ci_false_drops_every_rust_job_and_keeps_everything_else_byte_identical()
     }
     let parsed: serde_json::Value = serde_saphyr::from_str(&off[CI])?;
     let needs = serde_json::to_string(&parsed["jobs"]["required"])?;
-    assert!(!needs.contains("rust-"), "Required still needs Rust: {needs}");
+    assert!(
+        !needs.contains("rust-"),
+        "Required still needs Rust: {needs}"
+    );
     assert!(ids.iter().any(|id| id == "plan"));
     assert!(ids.iter().any(|id| id == "required"));
 
