@@ -12,6 +12,8 @@ use crate::pipeline::{view, workflow};
 const HELPER_LOCK: &[u8] =
     include_bytes!("../../../../samples/helper-source/view/.velnor/rust-ci.lock");
 
+const HELPER_CONFIG: &str = "exclude = [\"fixtures/**\"]\nhelper = { path = \"ci-helper\" }\n";
+
 fn sample(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut view = load(&samples().join("helper-source"))?;
     if let Some(config) = config {
@@ -142,7 +144,9 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
 
 #[test]
 fn the_job_that_builds_the_helper_uploads_the_fingerprint_log_too() -> TestResult {
-    let text = text_of(&sample(None)?)?;
+    let text = text_of(&sample(Some(&format!(
+        "{HELPER_CONFIG}cache_debug = true\n"
+    )))?)?;
     let start = text.find("  rust-helper:\n").ok_or("no helper job")?;
     let body = &text[start..];
     let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
