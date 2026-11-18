@@ -42,5 +42,5 @@ pub use ruleset::{
 };
 pub use tag::{TagPattern, is_tag_name};
 pub use timeout::TAG_JOB_BASE_MINUTES;
-pub use velnor_config::{BinaryFormat, Libc};
+pub use velnor_config::{BinaryFormat, Checksum, Libc};
 pub use versions::{Versions, check_release_versions};

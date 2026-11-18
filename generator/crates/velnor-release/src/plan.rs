@@ -21,7 +21,7 @@ use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES, publish_budget};
-use crate::velnor_config::{BinaryFormat, Libc, VelnorConfig, parse};
+use crate::velnor_config::{BinaryFormat, Checksum, Libc, VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
 pub struct ReleaseFiles {
@@ -64,7 +64,7 @@ pub struct BinaryPlan {
     pub attest: bool,
     pub smoke: bool,
     pub commit_file: bool,
-    pub sha256_files: bool,
+    pub checksum_files: Option<Checksum>,
     pub tag_pattern: TagPattern,
     pub asset_name: Option<String>,
 }
@@ -270,7 +270,7 @@ fn plan_binaries(
             attest: binary.attest,
             smoke: binary.smoke,
             commit_file: binary.commit_file,
-            sha256_files: binary.sha256_files,
+            checksum_files: binary.checksum_files,
             tag_pattern,
         });
     }

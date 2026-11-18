@@ -19,6 +19,12 @@ pub enum BinaryFormat {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "lowercase")]
+pub enum Checksum {
+    Sha256,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Libc {
     Gnu,
     Musl,
@@ -37,7 +43,7 @@ pub(crate) struct Binary {
     pub(crate) attest: bool,
     pub(crate) smoke: bool,
     pub(crate) commit_file: bool,
-    pub(crate) sha256_files: bool,
+    pub(crate) checksum_files: Option<Checksum>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -68,8 +74,7 @@ struct RawBinary {
     smoke: bool,
     #[serde(default)]
     commit_file: bool,
-    #[serde(default)]
-    sha256_files: bool,
+    checksum_files: Option<Checksum>,
 }
 
 #[derive(Deserialize)]
@@ -214,8 +219,8 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             package: raw.package,
         });
     }
-    if format == BinaryFormat::Raw && raw.sha256_files {
-        return Err(ReleaseError::Sha256FilesNeedsArchive {
+    if format == BinaryFormat::Raw && raw.checksum_files.is_some() {
+        return Err(ReleaseError::ChecksumFilesNeedsArchive {
             package: raw.package,
         });
     }
@@ -246,6 +251,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         attest: raw.attest,
         smoke: raw.smoke,
         commit_file: raw.commit_file,
-        sha256_files: raw.sha256_files,
+        checksum_files: raw.checksum_files,
     })
 }

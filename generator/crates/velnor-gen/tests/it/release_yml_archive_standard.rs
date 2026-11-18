@@ -20,8 +20,8 @@ const TRIPLES: [(&str, &str); 3] = [
 ];
 
 const DEFAULT: &str = "[[binaries]]\npackage = \"app\"\n";
-const SIDECARS: &str = "[[binaries]]\npackage = \"app\"\nsha256_files = true\n";
-const HOST: &str = "[[binaries]]\npackage = \"app\"\nplatforms = [\"macos-arm64\", \"linux-x64\"]\nattest = true\nsha256_files = true\nbins = [{ bin = \"rg\" }]\ninclude = [\"LICENSE\", \"NOTICE\"]\n";
+const SIDECARS: &str = "[[binaries]]\npackage = \"app\"\nchecksum_files = \"sha256\"\n";
+const HOST: &str = "[[binaries]]\npackage = \"app\"\nplatforms = [\"macos-arm64\", \"linux-x64\"]\nattest = true\nchecksum_files = \"sha256\"\nbins = [{ bin = \"rg\" }]\ninclude = [\"LICENSE\", \"NOTICE\"]\n";
 
 fn archive(triple: &str) -> String {
     format!("app-{triple}.tar.gz")
@@ -135,7 +135,7 @@ fn tree_text(tree: &Node) -> String {
 }
 
 #[test]
-fn sha256_files_adds_one_sidecar_per_archive_that_sha256sum_check_reads() -> TestResult {
+fn checksum_files_adds_one_sidecar_per_archive_that_sha256sum_check_reads() -> TestResult {
     let (_, tree) = render(&[APP], Some(SIDECARS))?;
     for (platform, triple) in TRIPLES {
         let build = job(&tree, &format!("build-app-{platform}"))?;
@@ -170,10 +170,10 @@ fn sha256_files_adds_one_sidecar_per_archive_that_sha256sum_check_reads() -> Tes
 }
 
 #[test]
-fn sha256_files_is_refused_for_a_raw_binary_which_always_has_its_sidecar() {
+fn checksum_files_is_refused_for_a_raw_binary_which_always_has_its_sidecar() {
     assert!(matches!(
-        refused("[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nsha256_files = true\n"),
-        Some(ReleaseError::Sha256FilesNeedsArchive { .. })
+        refused("[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nchecksum_files = \"sha256\"\n"),
+        Some(ReleaseError::ChecksumFilesNeedsArchive { .. })
     ));
 }
 
@@ -181,7 +181,7 @@ fn sha256_files_is_refused_for_a_raw_binary_which_always_has_its_sidecar() {
 fn attestation_covers_every_archive_sidecar_and_the_sums_file() -> TestResult {
     let (_, tree) = render(
         &[APP],
-        Some("[[binaries]]\npackage = \"app\"\nattest = true\nsha256_files = true\n"),
+        Some("[[binaries]]\npackage = \"app\"\nattest = true\nchecksum_files = \"sha256\"\n"),
     )?;
     let sums = job(&tree, "sums-app")?;
     let attest = steps(sums)

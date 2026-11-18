@@ -4,6 +4,6 @@ after = ["CI", "Rust CI"]
 package = "host"
 platforms = ["macos-arm64", "linux-x64", "linux-arm64"]
 attest = true
-sha256_files = true
+checksum_files = "sha256"
 bins = [{ package = "helper", bin = "helper" }]
 include = ["LICENSE", "NOTICE"]

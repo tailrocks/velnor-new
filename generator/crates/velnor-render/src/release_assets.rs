@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::Platform;
-use velnor_release::{BinaryFormat, BinaryPlan, asset_name_uses_version, expand_asset_name};
+use velnor_release::{
+    BinaryFormat, BinaryPlan, Checksum, asset_name_uses_version, expand_asset_name,
+};
 
 use crate::release_binaries::{command, target};
 use crate::release_raw::bin_names;
@@ -48,7 +50,7 @@ pub(crate) fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<St
         BinaryFormat::Archive => {
             let archive = asset(binary, platform);
             let sidecar = format!("{archive}.sha256");
-            if binary.sha256_files {
+            if binary.checksum_files.is_some() {
                 vec![archive, sidecar]
             } else {
                 vec![archive]
@@ -109,7 +111,7 @@ pub(crate) fn sidecar_step(
     platform: Platform,
     file: &str,
 ) -> Option<RenderedStep> {
-    binary.sha256_files.then(|| {
+    binary.checksum_files.map(|Checksum::Sha256| {
         let checksum = if platform == Platform::MacosArm64 {
             "shasum -a 256"
         } else {
