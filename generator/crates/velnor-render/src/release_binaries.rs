@@ -177,8 +177,18 @@ fn raw_packaging(
     } else {
         "sha256sum"
     };
+    let (before, after) = binary
+        .tag_pattern
+        .as_str()
+        .split_once("{{ version }}")
+        .unwrap_or_default();
+    let version = if after.is_empty() {
+        format!("$tag[{}:]", before.len())
+    } else {
+        format!("$tag[{}:-{}]", before.len(), after.len())
+    };
     let record = format!(
-        "jq -n --rawfile checksum {name}.sha256 --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {name} '{{schema: 1, tag: $tag, repository: $repository, commit: $commit, target: $target, asset: $asset, sha256: $checksum[0:64]}}' > {name}.provenance.json"
+        "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {name} --rawfile rust {name}.rustc '{{schema: 1}} + capture(\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\") + {{tag: $tag, version: {version}, repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {name}.sha256 > {name}.provenance.json"
     );
     vec![
         command(
@@ -188,6 +198,10 @@ fn raw_packaging(
         command(
             format!("Checksum {name}"),
             format!("{checksum} {name} > {name}.sha256"),
+        ),
+        command(
+            format!("Record the rustc version for {name}"),
+            format!("rustc --version > {name}.rustc"),
         ),
         RenderedStep {
             env: variables(&[
