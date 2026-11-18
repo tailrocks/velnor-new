@@ -17,7 +17,8 @@ pub enum Owner {
     Nobody,
 }
 
-/// Header line, digest line binding the body, then the body.
+/// Header line, digest line binding the body, then the body. The digest is
+/// unkeyed: it stops accidental copies of the marker, not a deliberate forger.
 #[must_use]
 pub fn seal(header: &str, body: &str) -> String {
     format!("{header}{DIGEST_PREFIX}{}\n{body}", digest(body.as_bytes()))
@@ -43,6 +44,19 @@ fn digest_verifies(contents: &[u8]) -> bool {
         .is_some_and(|hex| hex == digest(body).as_bytes())
 }
 
+/// Files written before the digest existed carry exactly one of our two
+/// headers and no digest line; a marker that is anything else stays forged.
+fn is_legacy_undigested(first: &[u8], contents: &[u8]) -> bool {
+    let has_digest_line = contents
+        .split(|byte| *byte == b'\n')
+        .nth(1)
+        .is_some_and(|second| second.starts_with(DIGEST_PREFIX.as_bytes()));
+    !has_digest_line
+        && [crate::GENERATED_HEADER, crate::RELEASE_HEADER]
+            .iter()
+            .any(|header| header.trim_end_matches('\n').as_bytes() == first)
+}
+
 #[must_use]
 pub fn owner_of(contents: &[u8]) -> Owner {
     let first = contents
@@ -53,7 +67,7 @@ pub fn owner_of(contents: &[u8]) -> Owner {
     if let Some(rest) = first.strip_prefix(VELNOR_GEN_MARKER.as_bytes())
         && (rest.is_empty() || rest.starts_with(b" "))
     {
-        if digest_verifies(contents) {
+        if digest_verifies(contents) || is_legacy_undigested(first, contents) {
             Owner::VelnorGen
         } else {
             Owner::Forged

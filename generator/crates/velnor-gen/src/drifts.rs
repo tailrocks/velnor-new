@@ -64,8 +64,8 @@ pub fn drift(
             (None, Some(_)) if *path == METADATA_PATH => Some(Drift::Stale(path.clone())),
             (Some(want), Some(have)) => match owner_of(have) {
                 Owner::VelnorGen if want.as_bytes() == have.as_slice() => None,
-                Owner::VelnorGen => Some(Drift::Changed(path.clone())),
-                Owner::Forged | Owner::Engine | Owner::Nobody => Some(Drift::Foreign(path.clone())),
+                Owner::VelnorGen | Owner::Forged => Some(Drift::Changed(path.clone())),
+                Owner::Engine | Owner::Nobody => Some(Drift::Foreign(path.clone())),
             },
             (Some(_), None) => Some(Drift::Missing(path.clone())),
             (None, Some(have)) => match owner_of(have) {
