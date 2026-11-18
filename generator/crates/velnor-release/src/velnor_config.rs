@@ -163,15 +163,12 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
     let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;
     let format = raw.format.unwrap_or(BinaryFormat::Archive);
     if format == BinaryFormat::Raw
-        && let Some(entry) = bins
-            .first()
-            .map(|extra| extra.bin.clone())
-            .or_else(|| include.first().cloned())
+        && let Some(path) = include.first()
     {
         return Err(ReleaseError::InvalidBundle {
             package: raw.package,
-            entry,
-            reason: "cannot be bundled into a raw binary, which publishes only the main executable",
+            entry: path.clone(),
+            reason: "cannot be included in a raw binary, which publishes only executables",
         });
     }
     Ok(Binary {

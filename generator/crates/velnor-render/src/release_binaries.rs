@@ -6,6 +6,7 @@ use velnor_release::{BinaryFormat, BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_outputs::commit_output;
+use crate::release_raw::{bin_names, raw_name, raw_packaging};
 use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,
@@ -55,26 +56,26 @@ fn target(platform: Platform, format: BinaryFormat) -> (&'static str, &'static s
     }
 }
 
-fn raw_name(binary: &BinaryPlan, platform: Platform) -> String {
-    format!("{}-{}", binary.bin, platform.file_suffix())
-}
-
 fn asset(binary: &BinaryPlan, platform: Platform) -> String {
     match binary.format {
-        BinaryFormat::Archive => format!("{}.tar.gz", raw_name(binary, platform)),
-        BinaryFormat::Raw => raw_name(binary, platform),
+        BinaryFormat::Archive => format!("{}.tar.gz", raw_name(&binary.bin, platform)),
+        BinaryFormat::Raw => raw_name(&binary.bin, platform),
     }
 }
 
 fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<String> {
-    let name = raw_name(binary, platform);
     match binary.format {
         BinaryFormat::Archive => vec![asset(binary, platform)],
-        BinaryFormat::Raw => vec![
-            name.clone(),
-            format!("{name}.sha256"),
-            format!("{name}.provenance.json"),
-        ],
+        BinaryFormat::Raw => bin_names(binary)
+            .flat_map(|bin| {
+                let name = raw_name(bin, platform);
+                [
+                    name.clone(),
+                    format!("{name}.sha256"),
+                    format!("{name}.provenance.json"),
+                ]
+            })
+            .collect(),
     }
 }
 
@@ -163,58 +164,6 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
             Vec::new(),
         )
     }
-}
-
-fn raw_packaging(
-    binary: &BinaryPlan,
-    platform: Platform,
-    triple: &str,
-    release_dir: &str,
-) -> Vec<RenderedStep> {
-    let name = raw_name(binary, platform);
-    let checksum = if platform == Platform::MacosArm64 {
-        "shasum -a 256"
-    } else {
-        "sha256sum"
-    };
-    let (before, after) = binary
-        .tag_pattern
-        .as_str()
-        .split_once("{{ version }}")
-        .unwrap_or_default();
-    let version = if after.is_empty() {
-        format!("$tag[{}:]", before.len())
-    } else {
-        format!("$tag[{}:-{}]", before.len(), after.len())
-    };
-    let record = format!(
-        "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {name} --rawfile rust {name}.rustc '{{schema: 1}} + capture(\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\") + {{tag: $tag, version: {version}, repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {name}.sha256 > {name}.provenance.json"
-    );
-    vec![
-        command(
-            format!("Name {} for {}", binary.bin, platform.file_suffix()),
-            format!("cp {release_dir}/{} {name}", binary.bin),
-        ),
-        command(
-            format!("Checksum {name}"),
-            format!("{checksum} {name} > {name}.sha256"),
-        ),
-        command(
-            format!("Record the rustc version for {name}"),
-            format!("rustc --version > {name}.rustc"),
-        ),
-        RenderedStep {
-            env: variables(&[
-                ("REPOSITORY", "${{ github.repository }}"),
-                ("COMMIT", "${{ steps.source.outputs.commit }}"),
-                (
-                    "TAG",
-                    &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
-                ),
-            ]),
-            ..command(format!("Record provenance of {name}"), record)
-        },
-    ]
 }
 
 fn selection(binary: &BinaryPlan) -> String {
@@ -365,7 +314,7 @@ fn assets(binary: &BinaryPlan) -> Vec<String> {
         .collect()
 }
 
-fn command(name: String, run: String) -> RenderedStep {
+pub(crate) fn command(name: String, run: String) -> RenderedStep {
     RenderedStep {
         name,
         run: Some(run),

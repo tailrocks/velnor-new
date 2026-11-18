@@ -80,4 +80,4 @@ package = "velnor-ci"
 format = "raw"
 ```
 
-`bins` and `include` have no meaning for a raw binary, which publishes only the main executable, so `format = "raw"` with either is refused at generation.
+With `bins`, each extra binary is published the same way, as its own `<bin>-<platform>` asset with its own `.sha256` and `.provenance.json`, and `SHA256SUMS` lists them all. `include` has no meaning for a raw binary, because the release holds no archive to put a file in, so `format = "raw"` with `include` is refused at generation.

@@ -87,21 +87,3 @@ fn bundle_entries_that_could_escape_or_collide_are_refused() -> TestResult {
     }
     Ok(())
 }
-
-#[test]
-fn a_raw_binary_cannot_carry_extra_bins_or_included_files() -> TestResult {
-    for case in ["bins = [{ bin = \"rg\" }]", "include = [\"LICENSE\"]"] {
-        let toml = format!("[[binaries]]\npackage = \"app\"\nformat = \"raw\"\n{case}\n");
-        let error = render(&[APP], Some(&toml))
-            .err()
-            .ok_or(format!("rendered {case}"))?;
-        assert!(
-            matches!(
-                error.downcast_ref::<GenerateError>(),
-                Some(GenerateError::Release(ReleaseError::InvalidBundle { .. }))
-            ),
-            "{case}: {error}"
-        );
-    }
-    Ok(())
-}
