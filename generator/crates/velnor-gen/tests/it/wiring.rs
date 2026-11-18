@@ -270,22 +270,39 @@ fn lint_builds_the_whole_workspace_so_that_cargo_unifies_features_as_in_the_cach
 
 #[test]
 fn a_one_job_workflow_that_skips_drafts_still_lints_them() -> TestResult {
-    let config = b"skip_draft_pull_requests = true\n";
-    let text = text(&view(&["Cargo.toml"], Some(config))?)?;
-    let job = text
-        .lines()
-        .skip_while(|line| *line != "  rust:")
-        .skip(1)
-        .take_while(|line| line.starts_with("   "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let draft = "github.event.pull_request.draft != true";
-    assert!(
-        !job.lines().take(4).any(|line| line.contains(draft)),
-        "{job}"
-    );
-    assert!(!step(&job, "Lint").join("\n").contains(draft), "{job}");
-    assert!(step(&job, "Test").join("\n").contains(draft), "{job}");
+    for executable in ["Test", "Doctests"] {
+        let mut repo = crate::base_save::pinned("0.1.81", "skip_draft_pull_requests = true\n")?;
+        if executable == "Doctests" {
+            with_doctest_library(&mut repo)?;
+            for target in repo
+                .rust_metadata
+                .values_mut()
+                .flat_map(|metadata| &mut metadata.members)
+                .flat_map(|member| &mut member.targets)
+            {
+                target.tests = false;
+            }
+        }
+        let text = text(&repo)?;
+        let job = text
+            .lines()
+            .skip_while(|line| *line != "  rust:")
+            .skip(1)
+            .take_while(|line| line.starts_with("   "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let draft = "github.event.pull_request.draft != true";
+        assert!(
+            !job.lines().take(4).any(|line| line.contains(draft)),
+            "{job}"
+        );
+        for name in ["Lint", "Documentation", executable] {
+            let command = step(&job, name);
+            assert!(!command.is_empty(), "no {name}: {job}");
+            let skipped = command.join("\n").contains(draft);
+            assert_eq!(skipped, name == executable, "{name}: {job}");
+        }
+    }
     Ok(())
 }
 

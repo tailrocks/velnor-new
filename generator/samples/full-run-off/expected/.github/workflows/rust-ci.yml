@@ -18,6 +18,9 @@ permissions:
 concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+env:
+  MISE_AUTO_INSTALL: 'false'
+  RUSTUP_AUTO_INSTALL: '0'
 defaults:
   run:
     shell: 'bash -p {0}'
@@ -79,12 +82,12 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -97,7 +100,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -229,8 +232,9 @@ jobs:
     name: Cache maintenance
     needs:
       - rust
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (needs.rust.outputs.base_save == ''true'' || (needs.rust.outputs.sources_saved == ''true'' || needs.rust.outputs.sources_key != '''')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
     permissions:
+      pull-requests: read
       actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -259,7 +263,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust sources entries
-        if: '${{ needs.rust.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust.outputs.sources_prefix != '''' && (needs.rust.outputs.sources_saved == ''true'' || needs.rust.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -284,6 +288,10 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-target_key.outcome != ''failure'' && steps.verify-rust-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+      - name: Enforce the repository cache budget
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
   # jactionlint ignore=shellcheck
   required:
     name: Required

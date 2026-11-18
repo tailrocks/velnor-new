@@ -179,6 +179,7 @@ pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 pub struct RustRoot {
     pub manifest: RepoPath,
     pub target_dir: RepoPath,
+    pub nextest_ci_profile: bool,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,
@@ -258,6 +259,7 @@ pub struct RustCiConfig {
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
     pub ci_debuginfo: CiDebugInfo,
+    pub cache_budget_bytes: u64,
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub test_setup: Vec<TestSetup>,
@@ -329,6 +331,7 @@ impl Default for RustCiConfig {
             full_run: FullRun::Nightly,
             helper: None,
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
+            cache_budget_bytes: 8_000_000_000,
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             test_setup: Vec::new(),

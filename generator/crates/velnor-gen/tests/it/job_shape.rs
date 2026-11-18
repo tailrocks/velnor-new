@@ -152,6 +152,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
             CargoCommand::Clippy { extra: Vec::new() },
             CargoCommand::NextestRun {
                 filter: FilterRef::All,
+                ci_profile: false,
             },
             CargoCommand::Doctest,
             CargoCommand::Doc,
