@@ -39,6 +39,7 @@ mod io_required;
 mod io_restore;
 mod io_restore_symlinks;
 mod io_stderr;
+mod lane_guard;
 mod logscan;
 mod plan;
 mod plan_api;
