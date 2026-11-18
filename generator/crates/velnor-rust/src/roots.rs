@@ -325,6 +325,7 @@ fn member(
                     name: dependency.name.clone(),
                     kind: dependency.kind,
                     platform: dependency.platform.clone(),
+                    optional: dependency.optional,
                     manifest,
                 })
             })
