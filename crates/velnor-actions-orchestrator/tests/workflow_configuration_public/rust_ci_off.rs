@@ -54,7 +54,16 @@ fn render(rust_header: &str) -> Result<BTreeMap<String, String>, Box<dyn Error>>
 }
 
 fn sha256(text: &str) -> String {
-    format!("{:x}", Sha256::digest(text.as_bytes()))
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    Sha256::digest(text.as_bytes())
+        .iter()
+        .flat_map(|byte| {
+            [
+                char::from(HEX[(byte >> 4) as usize]),
+                char::from(HEX[(byte & 15) as usize]),
+            ]
+        })
+        .collect()
 }
 
 fn job_ids(workflow: &str) -> Result<Vec<String>, Box<dyn Error>> {
