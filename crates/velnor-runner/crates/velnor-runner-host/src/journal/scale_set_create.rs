@@ -295,6 +295,21 @@ impl ScaleSetCreateNoEffect {
     }
 }
 
+/// A response that proves the service refused the create before doing any work.
+/// 409 is not here: it has its own `no_effect` row state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct ScaleSetCreateRefusal(u16);
+
+impl ScaleSetCreateRefusal {
+    pub(crate) fn from_http_status(status: u16) -> Result<Self, HostError> {
+        if matches!(status, 400 | 401 | 403 | 404 | 422) {
+            Ok(Self(status))
+        } else {
+            Err(HostError::Identity)
+        }
+    }
+}
+
 fn hex_digest(bytes: &[u8]) -> String {
     let mut output = String::with_capacity(64);
     for byte in Sha256::digest(bytes) {
@@ -302,4 +317,24 @@ fn hex_digest(bytes: &[u8]) -> String {
         output.push(char::from(b"0123456789abcdef"[usize::from(byte & 0x0f)]));
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ScaleSetCreateRefusal;
+
+    #[test]
+    fn only_refusing_statuses_prove_a_create_did_nothing() {
+        for status in [400, 401, 403, 404, 422] {
+            assert!(ScaleSetCreateRefusal::from_http_status(status).is_ok());
+        }
+        for status in [
+            0, 200, 201, 202, 204, 301, 302, 408, 409, 429, 500, 502, 503, 504,
+        ] {
+            assert!(
+                ScaleSetCreateRefusal::from_http_status(status).is_err(),
+                "{status}"
+            );
+        }
+    }
 }

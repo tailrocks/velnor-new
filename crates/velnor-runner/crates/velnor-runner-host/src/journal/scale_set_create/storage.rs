@@ -8,7 +8,8 @@ use crate::journal::connection::storage::in_transaction;
 
 use super::{
     CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim, ScaleSetCreateId,
-    ScaleSetCreateNoEffect, ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
+    ScaleSetCreateNoEffect, ScaleSetCreateRecord, ScaleSetCreateRefusal, ScaleSetCreateRequest,
+    ScaleSetCreateState,
 };
 
 mod rows;
@@ -44,12 +45,15 @@ pub(super) async fn claim(
         if current.id != prepared.id {
             return Err(HostError::Identity);
         }
-        if current.state != ScaleSetCreateState::Prepared {
+        if !matches!(
+            current.state,
+            ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect
+        ) {
             return Ok(None);
         }
         let changed = connection
             .execute(
-                "UPDATE connection_scale_set_intents SET state = 'requested' WHERE id = ?1 AND state = 'prepared'",
+                "UPDATE connection_scale_set_intents SET state = 'requested', no_effect_status = NULL WHERE id = ?1 AND state IN ('prepared', 'no_effect')",
                 [current.id.0],
             )
             .await
@@ -72,6 +76,22 @@ pub(super) async fn mark_uncertain(
         let current = require_row(connection, request, claim.id).await?;
         require_state(&current, ScaleSetCreateState::Requested)?;
         update_state(connection, current.id, "uncertain").await?;
+        record(connection, request).await?.ok_or(HostError::Journal)
+    })
+    .await
+}
+
+pub(super) async fn release(
+    scope: &ConnectionJournal,
+    claim: ScaleSetCreateClaim,
+    _proof: ScaleSetCreateRefusal,
+) -> Result<ScaleSetCreateRecord, HostError> {
+    let request = verify_claim(scope, &claim)?;
+    in_transaction(scope.journal_ref(), async |connection| {
+        verify_scope(scope, connection, request).await?;
+        let current = require_row(connection, request, claim.id).await?;
+        require_state(&current, ScaleSetCreateState::Requested)?;
+        update_state(connection, current.id, "prepared").await?;
         record(connection, request).await?.ok_or(HostError::Journal)
     })
     .await

@@ -181,7 +181,9 @@ fn lookup_action(state: ScaleSetCreateState, found: bool) -> ScaleSetLookupActio
         (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) => {
             ScaleSetLookupAction::Adopt
         }
-        (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
+        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, false) => {
+            ScaleSetLookupAction::Create
+        }
         (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
             ScaleSetLookupAction::Verify
         }
@@ -243,4 +245,29 @@ pub fn product_runner_groups(
     let (mut transport, admin) = open_admin(pat, scope)?;
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{ScaleSetCreateState as State, ScaleSetLookupAction as Action, lookup_action};
+
+    #[test]
+    fn lookup_action_creates_only_from_rows_with_no_remote_effect() {
+        assert_eq!(lookup_action(State::Prepared, false), Action::Create);
+        assert_eq!(lookup_action(State::NoEffect, false), Action::Create);
+        for state in [State::Requested, State::Uncertain] {
+            assert_eq!(lookup_action(state, false), Action::Hold);
+        }
+        for state in [State::Created, State::Adopted] {
+            assert_eq!(lookup_action(state, false), Action::Hold);
+        }
+    }
+
+    #[test]
+    fn lookup_action_adopts_or_verifies_a_set_that_exists() {
+        assert_eq!(lookup_action(State::Prepared, true), Action::Adopt);
+        assert_eq!(lookup_action(State::NoEffect, true), Action::Adopt);
+        assert_eq!(lookup_action(State::Created, true), Action::Verify);
+        assert_eq!(lookup_action(State::Adopted, true), Action::Verify);
+    }
 }

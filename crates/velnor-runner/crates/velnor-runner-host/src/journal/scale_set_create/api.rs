@@ -6,7 +6,7 @@ use crate::journal::connection::ConnectionJournal;
 
 use super::{
     CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim,
-    ScaleSetCreateNoEffect, ScaleSetCreateRecord, ScaleSetCreateRequest,
+    ScaleSetCreateNoEffect, ScaleSetCreateRecord, ScaleSetCreateRefusal, ScaleSetCreateRequest,
 };
 
 impl ConnectionJournal {
@@ -37,6 +37,14 @@ impl ConnectionJournal {
         proof: ScaleSetCreateNoEffect,
     ) -> Result<ScaleSetCreateRecord, HostError> {
         super::storage::record_no_effect(self, claim, proof).await
+    }
+
+    pub(crate) async fn release_scale_set_create(
+        &self,
+        claim: ScaleSetCreateClaim,
+        proof: ScaleSetCreateRefusal,
+    ) -> Result<ScaleSetCreateRecord, HostError> {
+        super::storage::release(self, claim, proof).await
     }
 
     pub(crate) async fn record_scale_set_created(

@@ -150,7 +150,7 @@ where
     };
     let exchange = execute(transport, &request)?;
     if exchange.status != 200 {
-        return Err(SessionError::Wire(WireError::UnexpectedStatus));
+        return Err(create_status_error(exchange.status));
     }
     let expected_labels = if call.labels.is_empty() {
         vec![call.name.to_owned()]
@@ -158,6 +158,19 @@ where
         call.labels.iter().map(|label| label.name.clone()).collect()
     };
     decode_one(&exchange.body, call.name, &expected_labels)
+}
+
+/// A create that did not return 200 proves "no set created" only for a status
+/// the service uses to refuse before doing the work. Everything else (5xx, 408,
+/// 429, other 2xx, 3xx) may have run after the backend committed, so it stays
+/// uncertain.
+fn create_status_error(status: u16) -> SessionError {
+    match status {
+        403 => SessionError::Wire(WireError::Forbidden),
+        409 => SessionError::Conflict,
+        201..=299 | 300..=399 | 408 | 429 | 500..=u16::MAX => SessionError::Uncertain,
+        _ => SessionError::Wire(WireError::UnexpectedStatus),
+    }
 }
 
 fn admin_headers(admin_token: &str) -> Result<Vec<(String, String)>, SessionError> {

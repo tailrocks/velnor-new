@@ -7,7 +7,8 @@ use crate::{
     error::HostError,
     https::HttpsTransport,
     journal::{
-        ConnectionJournal, CreatedScaleSetResponse, ScaleSetCreateNoEffect, ScaleSetCreateRequest,
+        ConnectionJournal, CreatedScaleSetResponse, ScaleSetCreateClaim, ScaleSetCreateNoEffect,
+        ScaleSetCreateRefusal, ScaleSetCreateRequest,
     },
 };
 use velnor_runner_github::{
@@ -137,6 +138,7 @@ impl<T> Recording<T> {
 impl<T: Transport> Transport for Recording<T> {
     fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
         self.step = step_for(&request.path);
+        self.status = 0;
         let exchange = self.inner.exchange(request)?;
         self.status = exchange.status;
         Ok(exchange)
@@ -215,13 +217,7 @@ async fn create_and_verify<T: Transport>(
             )
             .await;
         }
-        Err(error) => {
-            scoped
-                .mark_scale_set_create_uncertain(claim)
-                .await
-                .map_err(map_host)?;
-            return Err(map_session(error, transport));
-        }
+        Err(error) => return Err(settle_failed_create(scoped, claim, error, transport).await),
     };
     let reread = match reread_created_set(transport, admin_token, request, view.id) {
         Ok(reread) => reread,
@@ -255,6 +251,22 @@ async fn create_and_verify<T: Transport>(
         .await
         .map_err(map_host)?;
     ensured_from_record(&created)
+}
+
+async fn settle_failed_create<T>(
+    scoped: &ConnectionJournal,
+    claim: ScaleSetCreateClaim,
+    error: SessionError,
+    transport: &Recording<T>,
+) -> EnsureError {
+    let settled = match ScaleSetCreateRefusal::from_http_status(transport.status) {
+        Ok(refusal) => scoped.release_scale_set_create(claim, refusal).await,
+        Err(_) => scoped.mark_scale_set_create_uncertain(claim).await,
+    };
+    match settled {
+        Ok(_) => map_session(error, transport),
+        Err(journal) => map_host(journal),
+    }
 }
 
 fn reread_created_set<T: Transport>(
