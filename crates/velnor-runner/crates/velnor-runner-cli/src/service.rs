@@ -11,6 +11,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode};
 
 use crate::args::ServiceAction;
+use crate::dispatch::home_unresolved;
 use crate::state_directory::create_private_dir_all;
 use filesystem::write_plist;
 use plist::{plist_path, render_plist};
@@ -31,7 +32,10 @@ struct InstalledPlist {
 pub(crate) fn service(action: ServiceAction, state: &Path) -> ExitCode {
     match action {
         ServiceAction::Install => install(state),
-        ServiceAction::Start => start(state, &log_dir()),
+        ServiceAction::Start => match log_dir() {
+            Some(logs) => start(state, &logs),
+            None => home_unresolved(),
+        },
         ServiceAction::Stop => stop(state),
         ServiceAction::Uninstall => uninstall(state),
     }
@@ -78,8 +82,8 @@ fn uninstall(state: &Path) -> ExitCode {
 fn installed_plist(state: &Path) -> Option<InstalledPlist> {
     let uid = read_uid()?;
     let binary = std::env::current_exe().ok()?;
-    let path = plist_path();
-    let expected = render_plist(&binary, state, &log_dir())?;
+    let path = plist_path()?;
+    let expected = render_plist(&binary, state, &log_dir()?)?;
     let identity = open_expected_file(&path, expected.as_bytes()).ok()??;
     Some(InstalledPlist {
         uid,
@@ -93,8 +97,10 @@ fn install(state: &Path) -> ExitCode {
     let Ok(bin) = std::env::current_exe() else {
         return ExitCode::from(1);
     };
-    let path = plist_path();
-    if !write_plist(&bin, state, &path, &log_dir()) {
+    let (Some(path), Some(logs)) = (plist_path(), log_dir()) else {
+        return home_unresolved();
+    };
+    if !write_plist(&bin, state, &path, &logs) {
         return ExitCode::from(1);
     }
     println!("{}", path.display());
