@@ -123,6 +123,7 @@ fn prepare_inner(
     let mut discovery = discover_with_options(&canonical, &config, &catalog, phases, guard)?;
     let mut ci_discovery = ci_view(&config, &discovery);
     let fetch_roots = lockful_roots(&canonical, &ci_discovery.workspaces);
+    let ledger_fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let emission = catalog.for_emission();
     let workflow = crate::workflow::build_workflow_for_consumer_release(
@@ -133,6 +134,7 @@ fn prepare_inner(
             label: &runner_label,
             discovery: &ci_discovery,
             fetch_roots: &fetch_roots,
+            ledger_fetch_roots: &ledger_fetch_roots,
             consumer_release_version: env!("CARGO_PKG_VERSION"),
             published_generator_lock: published_generator_lock.as_ref(),
             approved_release: approved_release

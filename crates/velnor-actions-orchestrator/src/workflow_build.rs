@@ -35,6 +35,7 @@ pub(crate) struct WorkflowBuildInput<'a> {
     pub(crate) label: &'a str,
     pub(crate) discovery: &'a Discovery,
     pub(crate) fetch_roots: &'a [String],
+    pub(crate) ledger_fetch_roots: &'a [String],
     pub(crate) consumer_release_version: &'a str,
     pub(crate) published_generator_lock: Option<&'a GeneratorLock>,
     pub(crate) approved_release:
@@ -319,6 +320,7 @@ fn build_workflow_jobs(
         input.discovery,
         &prepared.catalog,
         input.fetch_roots,
+        input.ledger_fetch_roots,
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
         prepared.generator_version,

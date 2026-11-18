@@ -15,6 +15,7 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) discovery: &'a Discovery,
     pub(crate) catalog: &'a ToolCatalog,
     pub(crate) fetch_roots: &'a [String],
+    pub(crate) ledger_fetch_roots: &'a [String],
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) max_parallel_jobs: u32,
     pub(crate) timeout: velnor_actions_contract::JobTimeout,

@@ -244,3 +244,39 @@ fn ci_false_plan_lists_no_rust_jobs() -> Result<(), Box<dyn Error>> {
     );
     Ok(())
 }
+
+fn ci_false_velnor_repo() -> Result<TempDir, Box<dyn Error>> {
+    let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
+    let path = repo.path().join(".velnor/config.toml");
+    let mut config = fs::read_to_string(&path)?;
+    config.push_str("\n[stacks.rust]\nci = false\n");
+    fs::write(&path, config)?;
+    Ok(repo)
+}
+
+#[test]
+fn ci_false_state_seal_plan_emits_no_unread_plan_attempt() -> Result<(), Box<dyn Error>> {
+    let repo = ci_false_velnor_repo()?;
+    let tree = render_staged_tree(&prepare(repo.path())?)?;
+    let seal = tree
+        .files
+        .iter()
+        .find(|file| file.path == STATE_SEAL)
+        .ok_or("state-seal.yml missing")?;
+    let parsed: serde_json::Value = serde_saphyr::from_str(&seal.bytes)?;
+    let emitted = parsed["jobs"]["plan"]["outputs"]
+        .as_object()
+        .is_some_and(|outputs| outputs.contains_key("plan_attempt"));
+    let read = seal.bytes.contains("needs.plan.outputs.plan_attempt");
+    assert_eq!(emitted, read, "plan_attempt emitted={emitted} read={read}");
+    Ok(())
+}
+
+#[test]
+fn ci_false_keeps_ledger_cli_fetch_roots_for_the_repository_workflow() -> Result<(), Box<dyn Error>>
+{
+    let repo = ci_false_velnor_repo()?;
+    let jobs = finalized_jobs(&prepare(repo.path())?)?;
+    assert!(jobs.contains_key("ledger-cli"), "{:?}", jobs.keys());
+    Ok(())
+}
