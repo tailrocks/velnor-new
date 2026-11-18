@@ -220,6 +220,10 @@ fn checked_base(base: &str) -> Result<String, HostError> {
     let trimmed = base.trim_end_matches('/');
     if trimmed.starts_with("https://")
         && trimmed.len() > "https://".len()
+        && trimmed
+            .split('/')
+            .nth(2)
+            .is_some_and(|authority| !authority.is_empty() && !authority.contains('@'))
         && !trimmed
             .chars()
             .any(|ch| ch.is_whitespace() || matches!(ch, '"' | '\n' | '\r' | '\0' | '?' | '#'))
@@ -267,5 +271,34 @@ impl Scratch {
 impl Drop for Scratch {
     fn drop(&mut self) {
         let _removed = fs::remove_dir_all(&self.dir);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admin_service_url_rejects_userinfo() {
+        for url in [
+            "https://user:admin-token@pipelines.example/org/repo",
+            "https://user@pipelines.example/org/repo",
+            "https://@pipelines.example/org/repo",
+            "https://:password@pipelines.example/org/repo",
+            "https:///user:admin-token@pipelines.example/org/repo",
+        ] {
+            assert!(matches!(checked_base(url), Err(HostError::Endpoint)));
+        }
+    }
+
+    #[test]
+    fn admin_service_url_preserves_path() -> Result<(), HostError> {
+        for url in [
+            "https://pipelines.example/org/repo",
+            "https://pipelines.example/org/@repo",
+        ] {
+            assert_eq!(checked_base(url)?, url);
+        }
+        Ok(())
     }
 }
