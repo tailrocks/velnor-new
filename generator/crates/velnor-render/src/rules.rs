@@ -99,6 +99,7 @@ pub enum Rule {
     CacheKeyTooLong(usize),
     OutputNameCollision(String),
     EnvTooLong(usize),
+    Declared(crate::declared::DeclaredRule),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,6 +122,9 @@ impl fmt::Display for RuleViolation {
                 f,
                 "the tag job would define the output {name} twice: it is both a released package and the commit output of another package; rename the package"
             );
+        }
+        if let Rule::Declared(rule) = &self.rule {
+            return write!(f, "declared workflow job {:?}: {rule}", self.job);
         }
         write!(f, "job {} step {}: ", self.job, self.step + 1)?;
         match &self.rule {
@@ -149,7 +153,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
-            Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
+            Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) | Rule::Declared(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"

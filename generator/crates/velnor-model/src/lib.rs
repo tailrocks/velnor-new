@@ -5,6 +5,7 @@ mod cache;
 mod cache_layout;
 mod cache_outputs;
 mod cron;
+mod declared;
 mod helper;
 mod ids;
 mod plan;
@@ -23,6 +24,7 @@ pub use cache_outputs::{
     SOURCES_SAVED_OUTPUT, cache_lane_outputs,
 };
 pub use cron::CronExpr;
+pub use declared::{DeclaredBody, DeclaredJob, DeclaredStep, DeclaredWorkflow};
 pub use helper::{HelperRelease, Platform};
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,

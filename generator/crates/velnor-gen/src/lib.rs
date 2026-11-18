@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
-use velnor_render::render;
+use velnor_render::{render, render_declared};
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
     silent_build_scripts,
@@ -70,6 +70,19 @@ pub fn expected_with_notes(
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
+    for declared in &facts.config.workflows {
+        let rendered = render_declared(
+            declared,
+            facts.config.runner.as_str(),
+            facts.config.timeout_minutes,
+        )
+        .map_err(GenerateError::Rules)?;
+        for (path, text) in rendered {
+            if files.insert(path.clone(), text).is_some() {
+                return Err(GenerateError::DeclaredWorkflowCollides(path));
+            }
+        }
+    }
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
     notes.extend(release_notes);

@@ -6,6 +6,8 @@ mod base_steps;
 mod cache;
 mod cache_upload;
 mod cargo;
+mod declared;
+mod declared_expr;
 mod events;
 mod gate;
 mod header;
@@ -27,6 +29,7 @@ use std::collections::BTreeMap;
 use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH, WorkflowPlan};
 
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
+pub use crate::declared::{DeclaredRule, render_declared};
 use crate::events::{concurrency, triggers};
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;

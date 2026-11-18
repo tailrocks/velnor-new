@@ -25,6 +25,7 @@ pub enum GenerateError {
     PrOnlyChecksHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
+    DeclaredWorkflowCollides(RepoPath),
 }
 
 impl fmt::Display for GenerateError {
@@ -64,6 +65,10 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::Metadata(error) => error.fmt(f),
+            Self::DeclaredWorkflowCollides(path) => write!(
+                f,
+                "a declared workflow writes {path}, which another generated workflow already owns; choose another file"
+            ),
             Self::Rules(violations) => {
                 f.write_str("the generated workflow breaks the YAML rules:")?;
                 for violation in violations {

@@ -43,3 +43,39 @@ run = "bash scripts/ci-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
+
+## Declared workflows
+
+`[[workflow]]` in `.velnor/rust-ci.toml` declares one extra workflow file of fixed shape, such as an authority workflow with its own jobs, needs, outputs and environments. It is off when the table is absent, and then the generated files are unchanged. The file is written to `.github/workflows/<file>` and must not be a file another generated workflow owns.
+
+```toml
+[[workflow]]
+name = "Preview authority"
+file = "preview-authority.yml"
+on = "workflow_call"
+permissions = { contents = "read" }
+if = "github.event_name == 'push' && startsWith(github.ref, 'refs/tags/sdk-preview-')"
+
+[[workflow.job]]
+id = "draft"
+needs = ["source"]
+environment = "generator-source-preview"
+permissions = { actions = "read", contents = "write" }
+timeout_minutes = 10
+outputs = { sign = "steps.draft.outputs.sign" }
+
+[[workflow.job.step]]
+id = "draft"
+helper = "validate-artifact-id"
+if = "needs.source.result == 'success'"
+env = { ARTIFACT_ID = "${{ needs.source.outputs.artifact_id }}" }
+```
+
+- `on` is one event or a list of `workflow_call`, `workflow_dispatch`, `push`, `pull_request` and `merge_group`, without filters. Top-level `permissions` defaults to none.
+- `if` on the workflow gates every job. A job's own `if` is combined with it by `&&`. Write conditions and `outputs` values without `${{ }}`.
+- A job runs on the repository `runner` and takes `timeout_minutes` from the job or the repository default (1 to 360). `needs` must name jobs declared earlier in the file, so a cycle cannot be written.
+- A step is `uses` or `helper`. `uses` names a pinned action of the fixed list (`checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache-restore`, `cache-save`); the configuration never carries a SHA or a free `uses`. `helper` names one `velnor-ci` command and renders as `run: velnor-ci <name>`. A `run` key is refused, because a generated `run:` value is never a free shell string.
+- `with` and `env` values are literals or contain `${{ }}` expressions. `outputs`, `if`, `with` and `env` may read only `needs.<job>.outputs.*` for a listed `needs` entry, `steps.<id>.outputs.*` for a step id of the same job, `job.*` and `github.token`. A condition may also read `github.*`, `needs.*.result` and `steps.<id>.outcome`. Any other context, such as `secrets`, `vars` or `env`, is refused.
+- Every step id and job id is unique, and every `steps.<id>` an expression reads must be declared in that job.
+
+The helper must provide each named command; the generator does not check that the pinned `velnor-ci` release knows it.

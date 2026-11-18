@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 19] = [
+const KEYS: [&str; 20] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
@@ -32,6 +32,7 @@ const KEYS: [&str; 19] = [
     "helper",
     "ci_debuginfo",
     "test_setup",
+    "workflow",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -61,6 +62,8 @@ struct RawConfig {
     ci_debuginfo: Option<String>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
+    #[serde(default)]
+    workflow: Vec<crate::config_workflow::RawWorkflow>,
 }
 
 #[derive(Deserialize)]
@@ -112,8 +115,10 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let workflows = crate::config_workflow::parse(raw.workflow).map_err(invalid)?;
     Ok(RustCiConfig {
         test_setup,
+        workflows,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         crates_mirror: raw

@@ -261,6 +261,7 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub test_setup: Vec<TestSetup>,
+    pub workflows: Vec<crate::DeclaredWorkflow>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,6 +333,7 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             test_setup: Vec::new(),
+            workflows: Vec::new(),
         }
     }
 }

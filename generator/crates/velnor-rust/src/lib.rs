@@ -14,6 +14,7 @@ mod config;
 mod config_helper;
 mod config_mirror;
 mod config_test_setup;
+mod config_workflow;
 mod credentials;
 mod detect;
 mod doc_steps;
