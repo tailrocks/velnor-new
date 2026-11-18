@@ -78,7 +78,7 @@ fn open_log(path: &Path) -> std::io::Result<std::fs::File> {
 
 pub(super) fn run(args: &RunArgs) -> ExitCode {
     match execute(args) {
-        Ok(code) => code,
+        Ok(code) => ExitCode::from(code),
         Err((code, message)) => {
             eprintln!("velnor-ci: {message}");
             ExitCode::from(code)
@@ -86,7 +86,7 @@ pub(super) fn run(args: &RunArgs) -> ExitCode {
     }
 }
 
-fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
+pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let path = log_path()?;
     let started = Instant::now();
     let mut invocation =
@@ -162,9 +162,9 @@ fn execute(args: &RunArgs) -> Result<ExitCode, (u8, String)> {
         Some(error) if code == 0 => Err(write_error(error)),
         Some(error) => {
             eprintln!("velnor-ci: cannot write {}: {error}", path.display());
-            Ok(ExitCode::from(u8::try_from(code).unwrap_or(1)))
+            Ok(u8::try_from(code).unwrap_or(1))
         }
-        None => Ok(ExitCode::from(u8::try_from(code).unwrap_or(1))),
+        None => Ok(u8::try_from(code).unwrap_or(1)),
     }
 }
 

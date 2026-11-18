@@ -82,6 +82,8 @@ pub enum Command {
         about = "Run a command, stream its output unchanged, append it to velnor-run.log in $RUNNER_TEMP, and exit with its exit code"
     )]
     Run(RunArgs),
+    #[command(subcommand, about = "Work on the shared Sources cache")]
+    Sources(SourcesCommand),
     #[command(
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
@@ -101,6 +103,26 @@ pub struct CheckConfigurationsArgs {
         help = "JSON array of named feature configurations; without a file, check the default configuration"
     )]
     pub configurations: Option<PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SourcesCommand {
+    #[command(
+        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code"
+    )]
+    Fetch(SourcesFetchArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SourcesFetchArgs {
+    #[arg(
+        long,
+        required = true,
+        num_args = 1..,
+        value_name = "DIR",
+        help = "Cargo root directories, relative to the working directory or absolute, fetched in the order given"
+    )]
+    pub roots: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

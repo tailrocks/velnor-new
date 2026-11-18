@@ -31,6 +31,7 @@ mod required;
 mod restored;
 mod run;
 mod setup;
+mod sources;
 mod timings;
 mod unit_platforms;
 mod units;
@@ -48,7 +49,7 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
+    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs, SourcesCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -105,6 +106,9 @@ pub fn main() -> ExitCode {
     };
     if let Command::Run(args) = &cli.command {
         return run::run(args);
+    }
+    if let Command::Sources(SourcesCommand::Fetch(args)) = &cli.command {
+        return sources::fetch(args);
     }
     match run(cli) {
         Ok(output) => {
@@ -203,7 +207,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
             Ok(expiry.report + &ties)
         }
-        Command::Run(_) => Err(CiError::new("run is handled before commands")),
+        Command::Run(_) | Command::Sources(_) => {
+            Err(CiError::new("run and sources are handled before commands"))
+        }
     }
 }
 
