@@ -142,6 +142,9 @@ fn shell_words(line: &str, raw: bool) -> Option<Vec<String>> {
             '$' => {
                 word.push('$');
                 started = true;
+                if chars.peek() == Some(&'(') && !push_substitution(&mut word, &mut chars) {
+                    return None;
+                }
             }
             '<' => {
                 push_shift(&mut word, &mut chars);
@@ -176,6 +179,28 @@ fn push_shift(word: &mut String, chars: &mut Peekable<Chars<'_>>) {
         let Some(spaced) = chars.next() else { break };
         word.push(spaced);
     }
+}
+
+fn push_substitution(word: &mut String, chars: &mut Peekable<Chars<'_>>) -> bool {
+    let Some(open) = chars.next() else {
+        return false;
+    };
+    word.push(open);
+    let mut depth = 1usize;
+    for character in chars.by_ref() {
+        word.push(character);
+        match character {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 fn single_quoted(chars: &mut Peekable<Chars<'_>>) -> Option<String> {

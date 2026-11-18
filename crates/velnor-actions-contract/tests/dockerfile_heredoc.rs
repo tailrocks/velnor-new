@@ -11,18 +11,19 @@ fn problem_code(text: &str) -> Option<String> {
 }
 
 #[test]
-fn a_token_that_starts_no_heredoc_does_not_hide_the_next_stage() {
-    for instruction in [
-        "USER <<EOF",
-        "ENV NOTE=<<EOF",
-        "RUN echo <<EOF<bar",
-        "RUN echo <<<\"text\"",
-        "RUN echo $((1 << 3))",
-        "RUN [\"echo\", \"<<EOF\"]",
+fn a_shift_token_that_starts_no_heredoc_never_hides_a_stage() {
+    for text in [
+        "FROM scratch\nUSER <<EOF\nFROM ubuntu:latest\n",
+        "FROM scratch\nENV NOTE=<<EOF\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN echo <<EOF<bar\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN echo <<<\"text\"\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN [\"echo\", \"<<EOF\"]\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN echo $((1 << 3))\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN echo $((1 << 3))\nFROM ubuntu:latest\n3))\n",
+        "FROM scratch\nRUN echo $(cat <<EOF)\nFROM ubuntu:latest\n",
     ] {
-        let text = format!("FROM scratch\n{instruction}\nFROM ubuntu:latest\n");
         assert_eq!(
-            problem_code(&text).as_deref(),
+            problem_code(text).as_deref(),
             Some("image_base_unpinned:ubuntu:latest"),
             "{text}"
         );
