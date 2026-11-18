@@ -56,6 +56,7 @@ mod release_cargo_discovery;
 mod release_check_config;
 mod release_commit;
 mod release_fake;
+mod release_family;
 mod release_hyphen_values;
 mod release_manifests;
 mod release_preflight;
