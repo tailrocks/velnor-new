@@ -157,6 +157,7 @@ crates/velnor-actions-contract/src/config/release.rs
 crates/velnor-actions-contract/src/config/release_validation.rs
 crates/velnor-actions-contract/src/config/resources.rs
 crates/velnor-actions-contract/src/config/review_completion.rs
+crates/velnor-actions-contract/src/config/runner_workspace.rs
 crates/velnor-actions-contract/src/config/runs_on.rs
 crates/velnor-actions-contract/src/config/rust_configuration_validate.rs
 crates/velnor-actions-contract/src/config/rust_inputs.rs
@@ -316,6 +317,7 @@ crates/velnor-actions-contract/src/workflow/job_env.rs
 crates/velnor-actions-contract/src/workflow/job_validation.rs
 crates/velnor-actions-contract/src/workflow/jobs.rs
 crates/velnor-actions-contract/src/workflow/lanes.rs
+crates/velnor-actions-contract/src/workflow/lanes_control.rs
 crates/velnor-actions-contract/src/workflow/lanes_placement.rs
 crates/velnor-actions-contract/src/workflow/lanes_plan.rs
 crates/velnor-actions-contract/src/workflow/lanes_retarget.rs
@@ -1595,6 +1597,7 @@ crates/velnor-actions-workflow-renderer/src/steps_internal.rs
 crates/velnor-actions-workflow-renderer/src/steps_plain.rs
 crates/velnor-actions-workflow-renderer/src/steps_shell.rs
 crates/velnor-actions-workflow-renderer/src/support.rs
+crates/velnor-actions-workflow-renderer/src/support_placement.rs
 crates/velnor-actions-workflow-renderer/src/support_private_tokens.rs
 crates/velnor-actions-workflow-renderer/src/support_tokens.rs
 crates/velnor-actions-workflow-renderer/src/task_producer_manifest.rs
