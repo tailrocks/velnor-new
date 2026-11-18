@@ -229,9 +229,7 @@ fn double_quoted(chars: &mut Peekable<Chars<'_>>, raw: bool) -> Option<String> {
                     text.push(escaped);
                 }
                 Some(_) => {
-                    if raw {
-                        text.push('\\');
-                    }
+                    text.push('\\');
                 }
             },
             _ => text.push(character),
