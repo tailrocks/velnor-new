@@ -32,6 +32,10 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} bundle entry {entry:?} {reason}"
             ),
+            Self::InvalidAssetName { package, template } => write!(
+                f,
+                ".velnor/release.toml: binary {package} has asset_name {template:?}, which must use only letters, digits, '.', '_', '-' and the placeholders {{{{ bin }}}}, {{{{ platform }}}}, {{{{ target }}}} and {{{{ version }}}}, must name {{{{ platform }}}} or {{{{ target }}}}, and may use {{{{ version }}}} only when the tag name ends in the version"
+            ),
             _ => Ok(()),
         }
     }

@@ -5,9 +5,12 @@ use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryFormat, BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release_assets::{
+    STAGE, asset, assets, pack, quoted, read_version, selection, uploaded, versioned, word,
+};
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
-use crate::release_raw::{bin_names, raw_name, raw_packaging};
+use crate::release_raw::raw_packaging;
 use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,
@@ -44,7 +47,7 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
         .collect()
 }
 
-fn target(platform: Platform, format: BinaryFormat) -> (&'static str, &'static str) {
+pub(crate) fn target(platform: Platform, format: BinaryFormat) -> (&'static str, &'static str) {
     match (platform, format) {
         (Platform::LinuxX64, BinaryFormat::Archive) => {
             ("ubuntu-24.04", "x86_64-unknown-linux-musl")
@@ -57,29 +60,6 @@ fn target(platform: Platform, format: BinaryFormat) -> (&'static str, &'static s
             ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")
         }
         (Platform::MacosArm64, _) => ("macos-15", "aarch64-apple-darwin"),
-    }
-}
-
-fn asset(binary: &BinaryPlan, platform: Platform) -> String {
-    match binary.format {
-        BinaryFormat::Archive => format!("{}.tar.gz", raw_name(&binary.bin, platform)),
-        BinaryFormat::Raw => raw_name(&binary.bin, platform),
-    }
-}
-
-fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<String> {
-    match binary.format {
-        BinaryFormat::Archive => vec![asset(binary, platform)],
-        BinaryFormat::Raw => bin_names(binary)
-            .flat_map(|bin| {
-                let name = raw_name(bin, platform);
-                [
-                    name.clone(),
-                    format!("{name}.sha256"),
-                    format!("{name}.provenance.json"),
-                ]
-            })
-            .collect(),
     }
 }
 
@@ -121,7 +101,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
     let packaging = match binary.format {
         BinaryFormat::Archive => vec![command(
             format!("Pack {file}"),
-            format!("tar -czf {file} -C {release_dir}{}", contents(binary)),
+            pack(binary, &file, &release_dir),
         )],
         BinaryFormat::Raw => raw_packaging(binary, platform, triple, &release_dir),
     };
@@ -160,10 +140,17 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
             )
         },
     ]);
+    steps.extend(read_version(binary));
+    if versioned(binary) {
+        steps.push(command(
+            "Create the stage folder".to_owned(),
+            format!("mkdir {STAGE}"),
+        ));
+    }
     steps.extend(packaging);
     steps.push(upload(
         artifact(binary, platform),
-        published_files(binary, platform).join("\n"),
+        uploaded(binary, platform),
     ));
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
@@ -172,39 +159,6 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
         steps,
         ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
     }
-}
-
-fn selection(binary: &BinaryPlan) -> String {
-    let mut words = vec![
-        "--package".to_owned(),
-        binary.package.clone(),
-        "--bin".to_owned(),
-        binary.bin.clone(),
-    ];
-    let mut packages = vec![binary.package.as_str()];
-    for extra in &binary.extra_bins {
-        if !packages.contains(&extra.package.as_str()) {
-            packages.push(&extra.package);
-            words.extend(["--package".to_owned(), extra.package.clone()]);
-        }
-        words.extend(["--bin".to_owned(), extra.bin.clone()]);
-    }
-    format!(" {}", words.join(" "))
-}
-
-fn contents(binary: &BinaryPlan) -> String {
-    let mut words = vec![binary.bin.clone()];
-    words.extend(binary.extra_bins.iter().map(|extra| extra.bin.clone()));
-    for path in &binary.include {
-        let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
-        let base = if dir.is_empty() {
-            "$GITHUB_WORKSPACE".to_owned()
-        } else {
-            format!("$GITHUB_WORKSPACE/{dir}")
-        };
-        words.extend(["-C".to_owned(), format!("\"{base}\""), name.to_owned()]);
-    }
-    format!(" {}", words.join(" "))
 }
 
 fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
@@ -243,7 +197,8 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
         .iter()
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
-    let names = assets(binary).join(" ");
+    steps.extend(read_version(binary));
+    let names = quoted(binary, &assets(binary)).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
         steps.push(RenderedStep {
@@ -295,7 +250,7 @@ fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
             env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
             run: Some(format!(
                 "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\"",
-                shell_word(&format!("{DIST}/{name}"))
+                word(binary, &format!("{DIST}/{name}"))
             )),
             ..RenderedStep::default()
         })
@@ -311,6 +266,7 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
             .map(|platform| download(artifact(binary, *platform))),
     );
     steps.push(download(format!("{}-sums", binary.package)));
+    steps.extend(read_version(binary));
     if binary.attest {
         steps.push(install_tool(&format!("gh@{GH_VERSION}")));
         steps.extend(verifications(binary));
@@ -327,7 +283,7 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
         ]),
         run: Some(format!(
             "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
-            assets(binary).join(" ")
+            quoted(binary, &assets(binary)).join(" ")
         )),
         ..RenderedStep::default()
     });
@@ -356,14 +312,6 @@ fn builds(binary: &BinaryPlan) -> Vec<String> {
         .platforms
         .iter()
         .map(|platform| build_id(&binary.package, *platform))
-        .collect()
-}
-
-fn assets(binary: &BinaryPlan) -> Vec<String> {
-    binary
-        .platforms
-        .iter()
-        .flat_map(|platform| published_files(binary, *platform))
         .collect()
 }
 

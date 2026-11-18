@@ -156,3 +156,39 @@ fn attest_off_publish_job_has_no_verification() -> TestResult {
     );
     Ok(())
 }
+
+#[test]
+fn attest_with_a_versioned_asset_name_verifies_the_expanded_names_after_reading_the_version()
+-> TestResult {
+    let toml = "[[binaries]]\npackage = \"app\"\nattest = true\nasset_name = \"{{ bin }}-{{ version }}-{{ platform }}\"\n";
+    let (_, tree) = render(&[APP], Some(toml))?;
+    let publish = job(&tree, "publish-app")?;
+    let all = steps(publish);
+    let run_of = |step: &Node| step.get("run").and_then(Node::text).map(str::to_owned);
+    let reader = (0..all.len())
+        .find(|i| run_of(&all[*i]).is_some_and(|r| r.contains("VERSION=")))
+        .ok_or("no version step")?;
+    let verifying: Vec<(usize, String)> = (0..all.len())
+        .filter_map(|i| run_of(&all[i]).map(|run| (i, run)))
+        .filter(|(_, run)| run.contains("gh attestation verify"))
+        .collect();
+    assert_eq!(verifying.len(), 4);
+    assert!(verifying.iter().all(|(i, _)| reader < *i));
+    let archive = verifying
+        .iter()
+        .map(|(_, run)| run)
+        .find(|run| run.contains("tar.gz"))
+        .ok_or("no archive verification")?;
+    assert!(
+        archive.contains(" \"dist/app-${VERSION}-linux-x64.tar.gz\" --repo"),
+        "{archive}"
+    );
+    for (_, run) in &verifying {
+        assert!(!run.contains('\''), "{run}");
+    }
+    for step in all {
+        let name = step.get("name").and_then(Node::text).unwrap_or_default();
+        assert!(!name.contains('"') && !name.contains('\''), "{name}");
+    }
+    Ok(())
+}

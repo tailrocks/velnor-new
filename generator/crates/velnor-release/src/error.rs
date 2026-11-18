@@ -45,6 +45,10 @@ pub enum ReleaseError {
         package: String,
         bin: String,
     },
+    InvalidAssetName {
+        package: String,
+        template: String,
+    },
     EmptyAfter,
     EmptyRoots,
     EmptyPlatforms {

@@ -62,6 +62,7 @@ pub struct BinaryPlan {
     pub format: BinaryFormat,
     pub attest: bool,
     pub tag_pattern: TagPattern,
+    pub asset_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -260,6 +261,7 @@ fn plan_binaries(
             extra_bins: binary.bins.clone(),
             include: binary.include.clone(),
             format: binary.format,
+            asset_name: crate::asset_name::checked(binary, &tag_pattern)?,
             attest: binary.attest,
             tag_pattern,
         });
