@@ -54,6 +54,7 @@ pub enum ReleaseError {
         root: String,
     },
     VersionEndsInLock(String, String),
+    InvalidCheck(String, crate::check::CheckProblem),
     DuplicateBinary {
         package: String,
     },

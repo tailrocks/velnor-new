@@ -6,6 +6,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{Platform, RepoPath, RustMetadata};
 
 use crate::bundle::{ExtraBin, check_targets};
+use crate::check::{CheckPlan, plan_checks};
 use crate::error::ReleaseError;
 use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
@@ -19,7 +20,7 @@ use crate::mise;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
-use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
+use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES, publish_budget};
 use crate::velnor_config::{BinaryFormat, VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
@@ -68,6 +69,7 @@ pub struct ReleasePlan {
     pub after: Vec<String>,
     pub pr_only_checks: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
+    pub checks: Vec<CheckPlan>,
     pub release_plz_version: String,
     pub release_plz_url: String,
     pub release_plz_sha256: String,
@@ -263,19 +265,6 @@ fn plan_binaries(
     Ok(binaries)
 }
 
-fn publish_budget(config: &RootConfig, inherited: &[String]) -> u128 {
-    let publishing = inherited
-        .iter()
-        .filter(|package| config.publishes(package))
-        .count();
-    let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
-    let publishing = publishing.max(usize::from(none_known)) as u128;
-    config
-        .listed_nanos
-        .saturating_add(publishing.saturating_mul(config.unlisted_check_nanos))
-        .saturating_add(publishing.saturating_mul(config.unlisted_publish_nanos))
-}
-
 #[must_use]
 pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
     let nanos = roots.iter().fold(0u128, |total, root| {
@@ -385,6 +374,7 @@ impl ReleasePlan {
             roots,
             after: config.after,
             pr_only_checks: config.pr_only_checks,
+            checks: plan_checks(config.checks, &binaries)?,
             binaries,
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,

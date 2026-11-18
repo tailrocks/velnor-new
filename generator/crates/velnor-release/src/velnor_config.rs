@@ -5,6 +5,7 @@ use serde::Deserialize;
 use velnor_model::Platform;
 
 use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
+use crate::check::RawCheck;
 use crate::error::ReleaseError;
 use crate::release_plz::valid_package_name;
 
@@ -31,6 +32,7 @@ pub(crate) struct VelnorConfig {
     pub(crate) after: Vec<String>,
     pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
+    pub(crate) checks: Vec<RawCheck>,
 }
 
 #[derive(Deserialize)]
@@ -55,6 +57,8 @@ struct Raw {
     pr_only_checks: Vec<String>,
     #[serde(default)]
     binaries: Vec<RawBinary>,
+    #[serde(default)]
+    checks: Vec<RawCheck>,
 }
 
 pub(crate) fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
@@ -78,6 +82,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             after: None,
             pr_only_checks: Vec::new(),
             binaries: Vec::new(),
+            checks: Vec::new(),
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
@@ -119,6 +124,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         after,
         pr_only_checks: raw.pr_only_checks,
         binaries,
+        checks: raw.checks,
     })
 }
 

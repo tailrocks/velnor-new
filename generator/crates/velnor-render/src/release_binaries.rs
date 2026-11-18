@@ -5,6 +5,7 @@ use velnor_model::{HelperRelease, Platform};
 use velnor_release::{BinaryFormat, BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
 use crate::release_raw::{bin_names, raw_name, raw_packaging};
 use crate::release_steps::{
@@ -34,7 +35,7 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
                 .map(|platform| build(binary, *platform, helper))
                 .collect();
             jobs.push(sums(binary));
-            jobs.push(publish(binary, helper));
+            jobs.push(publish(plan, binary, helper));
             jobs
         })
         .collect()
@@ -80,7 +81,15 @@ fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<String> {
 }
 
 fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
-    format!("{}-{}", binary.package, platform.file_suffix())
+    artifact_name(&binary.package, platform)
+}
+
+pub(crate) fn artifact_name(package: &str, platform: Platform) -> String {
+    format!("{package}-{}", platform.file_suffix())
+}
+
+pub(crate) fn build_id(package: &str, platform: Platform) -> String {
+    format!("build-{package}-{}", platform.file_suffix())
 }
 
 fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
@@ -158,11 +167,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
         runs_on: runner.to_owned(),
         timeout_minutes: BUILD_TIMEOUT_MINUTES,
         steps,
-        ..behind_the_gate(
-            format!("build-{}-{suffix}", binary.package),
-            binary,
-            Vec::new(),
-        )
+        ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
     }
 }
 
@@ -260,7 +265,7 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
     }
 }
 
-fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
+fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![install_helper(helper)];
     steps.extend(
         binary
@@ -293,7 +298,10 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
         ..behind_the_gate(
             format!("publish-{}", binary.package),
             binary,
-            vec![format!("sums-{}", binary.package)],
+            [format!("sums-{}", binary.package)]
+                .into_iter()
+                .chain(publish_needs(plan, binary))
+                .collect(),
         )
     }
 }
@@ -302,7 +310,7 @@ fn builds(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
-        .map(|platform| format!("build-{}-{}", binary.package, platform.file_suffix()))
+        .map(|platform| build_id(&binary.package, *platform))
         .collect()
 }
 
@@ -340,7 +348,7 @@ fn upload(name: String, path: String) -> RenderedStep {
     }
 }
 
-fn download(name: String) -> RenderedStep {
+pub(crate) fn download(name: String) -> RenderedStep {
     RenderedStep {
         name: format!("Download {name}"),
         uses: Some(DOWNLOAD_ARTIFACT.to_owned()),

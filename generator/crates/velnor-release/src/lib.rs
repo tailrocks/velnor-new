@@ -3,6 +3,7 @@
 
 mod bundle;
 mod cargo_allowlist;
+mod check;
 mod collisions;
 mod error;
 mod error_binary;
@@ -23,6 +24,7 @@ mod velnor_config;
 mod versions;
 
 pub use bundle::ExtraBin;
+pub use check::{CheckArtifact, CheckPlan, CheckProblem, CheckStage};
 pub use error::ReleaseError;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,

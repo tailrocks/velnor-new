@@ -81,3 +81,29 @@ format = "raw"
 ```
 
 With `bins`, each extra binary is published the same way, as its own `<bin>-<platform>` asset with its own `.sha256` and `.provenance.json`, and `SHA256SUMS` lists them all. `include` has no meaning for a raw binary, because the release holds no archive to put a file in, so `format = "raw"` with `include` is refused at generation.
+
+## Release checks
+
+A repository that must pass its own checks before a release publishes declares one `[[checks]]` entry per check in `.velnor/release.toml`. Without an entry the generated `release.yml` is unchanged. Each entry becomes one job of `release.yml`, named `check-<name>` with the name lowercased and every run of other characters turned into `-`.
+
+```toml
+[[checks]]
+name = "Qualify linux"
+run = "bash scripts/qualify-linux.sh"
+before = "publish"
+artifacts = ["app-linux-x64"]
+needs = ["Verify release inputs"]
+runs_on = "ubuntu-24.04"
+timeout_minutes = 20
+[checks.permissions]
+actions = "read"
+```
+
+- `name` and `run` are required. `run` is one command, with the same limits as every generated `run:` value: no line break, no shell syntax and no expression. The logic lives in a script the repository commits.
+- `before` is `"tag"` (the default) or `"publish"`. A check that runs before the tag waits for the gate, and the `tag` job waits for it, so a failing check stops the release before release-plz tags or publishes a crate. A check that runs before publish waits for the gate, the `tag` job and the builds of its artifacts, and the `publish-<package>` job of every package it names waits for it, so a failing check leaves that release a draft.
+- `artifacts` lists the build artifacts a publish-stage check qualifies, each as `<package>-<platform>` of a `[[binaries]]` entry, such as `app-linux-x64`. They are downloaded into `dist` before `run`. A publish-stage check must name at least one, and a tag-stage check must name none.
+- `needs` lists the names of checks declared earlier in the file. A tag-stage check cannot need a publish-stage check.
+- `runs_on` is a runner label and defaults to `ubuntu-latest`. `timeout_minutes` defaults to 30 and is at most 360.
+- `permissions` adds token scopes to the job. The job holds `contents: read` and nothing else unless the table declares more. `contents: write` is refused, because the job runs repository code.
+
+A check job checks out the verified commit without persisting credentials, and runs without the `release` environment, so it holds no release App secret. A check cannot use `uses:`, so a step that needs an action must be a script step or a separate workflow.
