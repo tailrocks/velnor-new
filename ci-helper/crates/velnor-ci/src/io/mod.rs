@@ -56,6 +56,7 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
+use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use clap::{CommandFactory, FromArgMatches};
 
@@ -105,6 +106,9 @@ pub fn main() -> ExitCode {
     };
     if let Command::Run(args) = &cli.command {
         return run::run(args);
+    }
+    if let Command::LaneGuard(args) = &cli.command {
+        return lane_guard::run(args);
     }
     match run(cli) {
         Ok(output) => {
@@ -204,6 +208,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             Ok(expiry.report + &ties)
         }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
+        Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }
 }
 
