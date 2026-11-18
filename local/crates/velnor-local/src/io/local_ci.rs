@@ -8,7 +8,9 @@ use std::path::{Path, PathBuf};
 use tokio::fs;
 use tokio::io::AsyncReadExt;
 
+use super::checkout::git;
 use crate::cli::{EnvironmentArgs, RunnerMode};
+use crate::pin::{Sha256, rewrite};
 
 const FLAG: &str = "--velnor-ci-binary";
 const MAX_BYTES: u64 = 256 << 20;
@@ -19,6 +21,8 @@ const ELF_LITTLE_ENDIAN: u8 = 1;
 const ELF_MACHINE_AARCH64: [u8; 2] = [0xb7, 0];
 const TARBALLS: &str =
     "Runner.Server__ActionDownloadUrls__0__TarballUrl=http://api-stub/repos/{0}/tarball/{1}";
+const WORKFLOWS: &str = ".github/workflows";
+const COMMIT: &str = "velnor-local: pin the local velnor-ci";
 const MOUNT_DIR: &str = "/opt/velnor/local";
 
 fn refused(reason: impl std::fmt::Display) -> io::Error {
@@ -71,16 +75,66 @@ pub(super) struct LocalCi {
     pub(super) stub: Vec<String>,
 }
 
-pub(super) async fn flags(args: &EnvironmentArgs) -> io::Result<LocalCi> {
+async fn binary(args: &EnvironmentArgs) -> io::Result<Option<PathBuf>> {
     let Some(binary) = &args.velnor_ci_binary else {
-        return Ok(LocalCi::default());
+        return Ok(None);
     };
     if args.runner != RunnerMode::Plain {
         return Err(refused(
             "needs --runner plain: velnor-host owns the pair containers and mounts nothing from the host into them",
         ));
     }
-    let binary = checked(binary).await?;
+    checked(binary).await.map(Some)
+}
+
+async fn workflow_files(directory: &Path) -> io::Result<Vec<PathBuf>> {
+    let mut entries = match fs::read_dir(directory).await {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
+        listing => listing?,
+    };
+    let mut files = Vec::new();
+    while let Some(entry) = entries.next_entry().await? {
+        let path = entry.path();
+        let workflow = matches!(
+            path.extension().and_then(|ext| ext.to_str()),
+            Some("yml" | "yaml")
+        );
+        if workflow && fs::metadata(&path).await?.is_file() {
+            files.push(path);
+        }
+    }
+    Ok(files)
+}
+
+pub async fn pin_workflows(args: &EnvironmentArgs, repo: &Path, tag: &str) -> io::Result<()> {
+    let Some(binary) = binary(args).await? else {
+        return Ok(());
+    };
+    let pin = Sha256::of(&fs::read(&binary).await?);
+    let mut pinned = 0;
+    for path in workflow_files(&repo.join(WORKFLOWS)).await? {
+        let (text, count) = rewrite(&fs::read_to_string(&path).await?, &pin);
+        if count > 0 {
+            fs::write(&path, text).await?;
+            pinned += count;
+        }
+    }
+    println!(
+        "velnor-local {tag}: WARNING: --velnor-ci-binary replaces the pinned velnor-ci release with {} (SHA-256 {}) in this run's copy of the workflows, {pinned} pin(s) rewritten; the integrity check itself runs unchanged, and this run does not test a release",
+        binary.display(),
+        pin.as_str()
+    );
+    if pinned > 0 {
+        git(repo, &["add", "-A"], None).await?;
+        git(repo, &["commit", "-q", "-m", COMMIT], None).await?;
+    }
+    Ok(())
+}
+
+pub(super) async fn flags(args: &EnvironmentArgs) -> io::Result<LocalCi> {
+    let Some(binary) = binary(args).await? else {
+        return Ok(LocalCi::default());
+    };
     Ok(LocalCi {
         runner: vec![
             "-v".to_owned(),

@@ -12,11 +12,11 @@ use crate::fake_docker::{FakeDocker, after};
 use crate::support::temp_dir;
 
 const LOCAL_DIR: &str = "/opt/velnor/local";
-const ELF_ARM64: [u8; 20] = [
+pub(crate) const ELF_ARM64: [u8; 20] = [
     0x7f, b'E', b'L', b'F', 2, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 2, 0, 0xb7, 0,
 ];
 
-fn binary(dir: &Path, bytes: &[u8]) -> PathBuf {
+pub(crate) fn binary(dir: &Path, bytes: &[u8]) -> PathBuf {
     let file = dir.join("velnor-ci");
     std::fs::write(&file, bytes).unwrap_or_else(|e| unreachable!("{e}"));
     std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755))
@@ -24,7 +24,7 @@ fn binary(dir: &Path, bytes: &[u8]) -> PathBuf {
     file
 }
 
-fn parsed(dir: &Path, mode: &str, extra: &[&str]) -> EnvironmentArgs {
+pub(crate) fn parsed(dir: &Path, mode: &str, extra: &[&str]) -> EnvironmentArgs {
     let dir = dir.display().to_string();
     let mut argv = vec![
         "velnor-local",
