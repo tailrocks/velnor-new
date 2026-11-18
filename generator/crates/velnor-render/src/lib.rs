@@ -21,6 +21,7 @@ mod release_finalize;
 mod release_outputs;
 mod release_raw;
 mod release_steps;
+mod release_verify;
 mod rules;
 mod steps;
 mod workflow;
