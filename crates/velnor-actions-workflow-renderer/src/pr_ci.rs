@@ -117,6 +117,12 @@ fn set_pr_types(root: &mut [(String, Yaml)]) -> bool {
     let Some((_, Yaml::Map(on))) = root.iter_mut().find(|(key, _)| key == "on") else {
         return false;
     };
+    if !on.iter().any(|(key, _)| key == "pull_request") {
+        return false;
+    }
+    if !on.iter().any(|(key, _)| key == "merge_group") {
+        on.push(("merge_group".to_owned(), Yaml::Null));
+    }
     let Some((_, Yaml::Map(pull_request))) = on.iter_mut().find(|(key, _)| key == "pull_request")
     else {
         return false;

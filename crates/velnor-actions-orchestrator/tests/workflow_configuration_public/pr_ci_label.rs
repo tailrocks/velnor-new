@@ -131,6 +131,26 @@ fn pr_ci_label_gates_source_qualification() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
+fn pr_ci_label_runs_every_pull_request_workflow_on_merge_group() -> Result<(), Box<dyn Error>> {
+    let tree = render(Some("label"))?;
+    let source = text(&tree, SOURCE_QUALIFICATION_PATH)?;
+    assert!(source.contains("  merge_group:\n"));
+    let mut checked = 0;
+    for (path, body) in &tree {
+        if !path.starts_with(".github/workflows/") {
+            continue;
+        }
+        let on = body.split("\njobs:").next().unwrap_or_default();
+        if on.contains("  pull_request:\n") {
+            assert!(on.contains("  merge_group:"), "{path} lacks merge_group");
+            checked += 1;
+        }
+    }
+    assert!(checked >= 2, "expected at least two pull_request workflows");
+    Ok(())
+}
+
+#[test]
 fn pr_ci_rejects_unknown_modes() -> Result<(), Box<dyn Error>> {
     let repo = workflow_configuration_fixture::make_repo(&config(Some("always")))?;
     assert!(prepare(repo.path()).is_err());
