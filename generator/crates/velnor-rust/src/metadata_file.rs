@@ -59,6 +59,8 @@ struct File {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Root {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    target_dir: Option<String>,
     members: Vec<Member>,
 }
 
@@ -149,9 +151,12 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
                 .ok_or_else(|| MetadataFileError::Changed(path.clone()))?;
             manifests.insert(path.to_string(), sha256_hex(bytes));
         }
+        let target_dir = crate::target_dir::target_dir(view, workspace)
+            .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
         roots.insert(
             workspace.to_string(),
             Root {
+                target_dir: versions.then(|| target_dir.to_string()),
                 members: metadata
                     .members
                     .iter()
@@ -211,6 +216,19 @@ pub fn recorded_roots(recorded: Option<&[u8]>) -> Result<Vec<RepoPath>, Metadata
     let file: File = serde_json::from_slice(bytes)
         .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
     file.roots.keys().map(|root| path_of(root)).collect()
+}
+
+pub fn recorded_target_dirs(
+    recorded: Option<&[u8]>,
+) -> Result<BTreeMap<RepoPath, RepoPath>, MetadataFileError> {
+    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
+    let file: File = serde_json::from_slice(bytes)
+        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+    file.roots
+        .iter()
+        .filter_map(|(root, record)| Some((root, record.target_dir.as_ref()?)))
+        .map(|(root, dir)| Ok((path_of(root)?, path_of(dir)?)))
+        .collect()
 }
 
 pub fn recorded_metadata(
