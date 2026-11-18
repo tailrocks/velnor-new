@@ -75,7 +75,7 @@ fn a_group_of_two_roots_gets_one_job_set_that_names_each_manifest() -> TestResul
 fn the_group_shares_one_target_directory_and_one_cache_entry() -> TestResult {
     let text = grouped(GROUP)?;
     assert!(
-        text.contains("CARGO_TARGET_DIR: target-velnor/tools"),
+        text.contains("CARGO_TARGET_DIR: '${{ github.workspace }}/target-velnor/tools'"),
         "{text}"
     );
     assert!(

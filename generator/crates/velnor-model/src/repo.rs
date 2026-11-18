@@ -272,6 +272,14 @@ pub struct WorkspaceGroup {
     pub roots: Vec<RepoPath>,
 }
 
+impl WorkspaceGroup {
+    #[must_use]
+    pub fn target_dir(&self) -> RepoPath {
+        RepoPath::new(format!("target-velnor/{}", self.name))
+            .unwrap_or_else(|_| RepoPath::from_static("target"))
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestSetup {
     pub root: Option<RepoPath>,

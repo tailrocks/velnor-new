@@ -173,7 +173,7 @@ fn split(stem: &str) -> Option<(&str, &str)> {
     .then_some((name, hash))
 }
 
-pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
+pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(), CiError> {
     let directories: Vec<PathBuf> = workspaces
         .iter()
         .map(|w| {
@@ -182,7 +182,14 @@ pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
         .collect();
     for (outer, holder) in directories.iter().enumerate() {
         for (inner, held) in directories.iter().enumerate() {
-            if outer != inner && held.starts_with(holder) {
+            if outer == inner || !held.starts_with(holder) {
+                continue;
+            }
+            let grouped = held == holder
+                && shared
+                    .iter()
+                    .any(|group| group.contains(&outer) && group.contains(&inner));
+            if !grouped {
                 return Err(CiError::new(format!(
                     "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
                     holder.display(),
@@ -194,6 +201,42 @@ pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
         }
     }
     Ok(())
+}
+
+pub(super) fn shared_groups(facts: &velnor_model::RepoFacts) -> Vec<Vec<usize>> {
+    facts
+        .config
+        .workspace_groups
+        .iter()
+        .map(|group| {
+            facts
+                .rust_roots
+                .iter()
+                .enumerate()
+                .filter(|(_, root)| group.roots.contains(&root.manifest))
+                .map(|(index, _)| index)
+                .collect()
+        })
+        .collect()
+}
+
+pub(super) fn group_dirs(facts: &velnor_model::RepoFacts, repository: &Path) -> Vec<PathBuf> {
+    facts
+        .config
+        .workspace_groups
+        .iter()
+        .map(|group| repository.join(group.target_dir().as_str()))
+        .collect()
+}
+
+pub(super) fn scan_dirs(workspaces: &[Workspace]) -> Vec<PathBuf> {
+    let mut directories = Vec::new();
+    for workspace in workspaces {
+        if !directories.contains(&workspace.target_directory) {
+            directories.push(workspace.target_directory.clone());
+        }
+    }
+    directories
 }
 
 pub(super) struct MetadataInvocation<'a> {
@@ -280,21 +323,24 @@ impl Audit<'_> {
     pub(super) fn script(
         &mut self,
         workspace: &Path,
-        index: usize,
+        indices: &[usize],
         file: &Path,
-        profile: String,
-        package: String,
+        profile: &str,
+        package: &str,
     ) -> Result<(), CiError> {
-        if let Some((source, built)) = self.dep_info(workspace, file, Some(&package))? {
+        let Some((source, built)) = self.dep_info(workspace, file, Some(package))? else {
+            return Ok(());
+        };
+        for index in indices {
             if profile == HOST {
-                self.built[index]
+                self.built[*index]
                     .scripts
-                    .insert((package.clone(), source.clone()));
+                    .insert((package.to_owned(), source.clone()));
             }
             self.scripts
-                .entry((index, profile, package))
+                .entry((*index, profile.to_owned(), package.to_owned()))
                 .or_default()
-                .entry(source)
+                .entry(source.clone())
                 .and_modify(|compiled| *compiled = (*compiled).min(built))
                 .or_insert(built);
         }

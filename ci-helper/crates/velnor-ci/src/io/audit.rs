@@ -5,13 +5,14 @@ mod build;
 mod freshness;
 mod inventory;
 mod options;
+mod setup;
 
 pub(crate) use build::build;
 pub use options::AuditOptions;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use velnor_gen::io::read_checkout;
@@ -22,8 +23,8 @@ use velnor_rust::{
 };
 
 use super::unit_platforms::platforms;
-use super::units::{UnitFile, Workspace, apart, profile, unit_files, workspace};
-use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
+use super::units::{UnitFile, apart, group_dirs, profile, shared_groups, workspace};
+use crate::coverage::{Built, Fingerprint, Unit, UnitKind};
 use crate::error::CiError;
 use crate::platform::Platforms;
 
@@ -42,6 +43,8 @@ pub(super) struct Audit<'a> {
     pub(super) present: BTreeSet<(usize, String, String)>,
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
+    roots: Vec<PathBuf>,
+    members: BTreeMap<String, Vec<usize>>,
     found: CompileInputs,
     target_bytes: u64,
     stale: Vec<String>,
@@ -66,43 +69,18 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .iter()
         .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
         .collect::<Result<Vec<_>, _>>()?;
-    apart(&workspaces)?;
-    let mut audit = Audit {
-        repository: &checkout.root,
-        owners: Owners::new(&facts, &checkout.view.tracked_paths),
-        tracked: &checkout.view.tracked_paths,
-        freshness: freshness::Freshness::new(&workspaces, options.max_directory_entries),
-        fingerprints: BTreeMap::new(),
-        names: BTreeMap::new(),
-        runs: BTreeMap::new(),
-        placed: BTreeSet::new(),
-        rooted: BTreeSet::new(),
-        present: BTreeSet::new(),
-        scripts: BTreeMap::new(),
-        targets: workspaces
-            .iter()
-            .filter_map(|w| match locate(&checkout.root, &w.target_directory, "") {
-                Located::Inside(target) => Some(target),
-                Located::Repository | Located::Outside => None,
-            })
-            .collect(),
-        found: CompileInputs::new(),
-        target_bytes: 0,
-        stale: Vec::new(),
-        units: 0,
-        built: workspaces.iter().map(|_| Built::default()).collect(),
-    };
-    let mut files = Vec::new();
-    for (index, workspace) in workspaces.iter().enumerate() {
-        files.extend(
-            unit_files(&workspace.target_directory)?
-                .into_iter()
-                .map(|(unit, file)| (unit, file, index)),
-        );
-    }
-    files.sort();
-    for (unit, file, index) in files {
-        audit.record(&workspaces[index].workspace_root, index, &file, unit)?;
+    let shared = shared_groups(&facts);
+    apart(&workspaces, &shared)?;
+    let groups = group_dirs(&facts, &checkout.root);
+    let mut audit = setup::begin(
+        &checkout,
+        &facts,
+        &workspaces,
+        &groups,
+        options.max_directory_entries,
+    );
+    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups)? {
+        audit.record(&indices, &file, unit)?;
     }
     audit.orphans();
     let gated = gated(&facts);
@@ -117,7 +95,19 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
-    complete(&facts, &workspaces, &audit.built, &platforms)?;
+    let effective: Vec<PathBuf> = (0..workspaces.len())
+        .map(|index| {
+            shared
+                .iter()
+                .zip(&groups)
+                .find(|(indices, _)| indices.contains(&index))
+                .map_or_else(
+                    || workspaces[index].target_directory.clone(),
+                    |(_, directory)| directory.clone(),
+                )
+        })
+        .collect();
+    setup::complete(&facts, &effective, &audit.built, &platforms)?;
     audit.check_stale()?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
@@ -143,42 +133,6 @@ fn gated(facts: &RepoFacts) -> bool {
             .unowned
             .values()
             .any(|package| platformed(&package.dependencies))
-}
-
-fn complete(
-    facts: &RepoFacts,
-    workspaces: &[Workspace],
-    built: &[Built],
-    platforms: &[Platforms],
-) -> Result<(), CiError> {
-    let gaps: Vec<String> = facts
-        .rust_roots
-        .iter()
-        .zip(workspaces)
-        .zip(built)
-        .zip(platforms)
-        .flat_map(|(((root, workspace), built), platform)| {
-            gaps(root, &facts.unowned, built, platform)
-                .into_iter()
-                .map(|gap| {
-                    format!(
-                        "in {} for {}",
-                        workspace
-                            .target_directory
-                            .join(&gap.configuration)
-                            .display(),
-                        gap.missing.join(", ")
-                    )
-                })
-        })
-        .collect();
-    if gaps.is_empty() {
-        return Ok(());
-    }
-    Err(CiError::new(format!(
-        "found no current dep-info {}; run this after velnor-ci inputs build -- cargo build --workspace --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
-        gaps.join("; ")
-    )))
 }
 
 fn write_lock(lock: &Path, found: &CompileInputs) -> Result<(), CiError> {
@@ -225,122 +179,178 @@ impl Audit<'_> {
         )))
     }
 
-    fn record(
-        &mut self,
-        workspace: &Path,
-        index: usize,
-        file: &Path,
-        unit: UnitFile,
-    ) -> Result<(), CiError> {
+    fn record(&mut self, indices: &[usize], file: &Path, unit: UnitFile) -> Result<(), CiError> {
         match unit {
             UnitFile::Fingerprint {
                 configuration,
                 package,
                 hash,
                 name,
-            } => self.fingerprint(index, configuration, package, hash, &name),
+            } => {
+                for index in self.member_owners(&package, indices) {
+                    self.fingerprint(
+                        index,
+                        configuration.clone(),
+                        package.clone(),
+                        hash.clone(),
+                        &name,
+                    );
+                }
+            }
             UnitFile::DepInfo {
                 configuration,
                 hash,
                 stem,
-            } => {
-                let identity = configuration.as_ref().and_then(|configuration| {
-                    let key = (
-                        index,
-                        configuration.clone(),
-                        hash.clone().unwrap_or_else(|| stem.clone()),
-                    );
-                    self.present.insert(key.clone());
-                    match hash {
-                        Some(_) => self.fingerprints.get(&key),
-                        None => self.names.get(&key),
-                    }
-                    .cloned()
-                });
-                if hash.is_none() && identity.is_none() {
-                    return Ok(());
-                }
-                let package = identity.as_ref().map(|(package, _)| package.as_str());
-                let Some((source, _)) = self.dep_info(workspace, file, package)? else {
-                    return Ok(());
-                };
-                if let (Some(configuration), Some((package, fingerprint))) =
-                    (configuration, identity)
-                {
-                    self.built[index].units.insert(Unit {
-                        configuration,
-                        kind: fingerprint.kind,
-                        package,
-                        target: fingerprint.target,
-                        source,
-                    });
-                }
-            }
+            } => self.record_dep_info(
+                indices,
+                file,
+                configuration.as_deref(),
+                hash.as_deref(),
+                &stem,
+            )?,
             UnitFile::Script { profile, package } => {
-                self.script(workspace, index, file, profile, package)?;
+                let owners = self.member_owners(&package, indices);
+                if let Some(first) = owners.first() {
+                    let base = self.roots[*first].clone();
+                    self.script(&base, &owners, file, &profile, &package)?;
+                }
             }
             UnitFile::BuildOutput {
                 configuration,
                 package,
                 hash,
             } => {
-                if self.build_output(index, file, &configuration, &package)? {
-                    self.present.insert((index, configuration, hash));
+                let owners = self.member_owners(&package, indices);
+                if !owners.is_empty() {
+                    self.build_output(&owners, file, &configuration, &package, &hash)?;
                 }
             }
-            UnitFile::Directory { name, root } => self.directory(index, name, root),
+            UnitFile::Directory { name, root } => {
+                for index in indices {
+                    self.directory(*index, name.clone(), root);
+                }
+            }
         }
         Ok(())
     }
 
-    fn build_output(
+    fn record_dep_info(
         &mut self,
-        index: usize,
+        indices: &[usize],
         file: &Path,
-        configuration: &str,
-        package: &str,
-    ) -> Result<bool, CiError> {
-        let text = self.build_output_text(file)?;
-        let built = modified(file)?;
-        let paths = rerun_if_changed(&text);
-        let mut current = false;
-        let scripts: Vec<RepoPath> = self
-            .scripts
-            .get(&(index, profile(configuration).to_owned(), package.to_owned()))
-            .into_iter()
-            .flatten()
-            .filter(|(_, compiled)| **compiled <= built)
-            .map(|(source, _)| source.clone())
-            .collect();
-        let mut seen = BTreeSet::new();
-        for source in scripts {
-            let mut ran = false;
-            for owner in self.owners.of(Some(package), &source) {
-                let base = owner.directory().map_or_else(
-                    || self.repository.to_path_buf(),
-                    |d| self.repository.join(d.as_str()),
+        configuration: Option<&str>,
+        hash: Option<&str>,
+        stem: &str,
+    ) -> Result<(), CiError> {
+        let mut hits: Vec<(usize, (String, Fingerprint))> = Vec::new();
+        for index in indices {
+            let key = configuration.map(|configuration| {
+                let key = (
+                    *index,
+                    configuration.to_owned(),
+                    hash.unwrap_or(stem).to_owned(),
                 );
-                if self.changed_since(&base, &paths, built, file, true)? {
-                    continue;
-                }
-                ran = true;
-                if seen.insert((owner.manifest().clone(), owner.directory().cloned())) {
-                    self.credit(&owner, &base, &paths, true);
-                    self.units += 1;
-                }
+                self.present.insert(key.clone());
+                key
+            });
+            if let Some(identity) = key.and_then(|key| match hash {
+                Some(_) => self.fingerprints.get(&key),
+                None => self.names.get(&key),
+            }) {
+                hits.push((*index, identity.clone()));
             }
-            if ran {
-                current = true;
+        }
+        if hash.is_none() && hits.is_empty() {
+            return Ok(());
+        }
+        let base = hits.first().map_or_else(
+            || self.roots[indices[0]].clone(),
+            |(index, _)| self.roots[*index].clone(),
+        );
+        let package = hits.first().map(|(_, (package, _))| package.as_str());
+        let Some((source, _)) = self.dep_info(&base, file, package)? else {
+            return Ok(());
+        };
+        if let Some(configuration) = configuration {
+            for (index, (package, fingerprint)) in hits {
                 self.built[index].units.insert(Unit {
                     configuration: configuration.to_owned(),
-                    kind: UnitKind::Run,
-                    package: package.to_owned(),
-                    target: String::new(),
-                    source,
+                    kind: fingerprint.kind,
+                    package,
+                    target: fingerprint.target,
+                    source: source.clone(),
                 });
             }
         }
-        Ok(current)
+        Ok(())
+    }
+
+    fn member_owners(&self, package: &str, indices: &[usize]) -> Vec<usize> {
+        match self.members.get(package) {
+            Some(owners) => indices
+                .iter()
+                .copied()
+                .filter(|index| owners.contains(index))
+                .collect(),
+            None => indices.to_vec(),
+        }
+    }
+
+    fn build_output(
+        &mut self,
+        indices: &[usize],
+        file: &Path,
+        configuration: &str,
+        package: &str,
+        hash: &str,
+    ) -> Result<(), CiError> {
+        let text = self.build_output_text(file)?;
+        let built = modified(file)?;
+        let paths = rerun_if_changed(&text);
+        let mut seen = BTreeSet::new();
+        for &index in indices {
+            let scripts: Vec<RepoPath> = self
+                .scripts
+                .get(&(index, profile(configuration).to_owned(), package.to_owned()))
+                .into_iter()
+                .flatten()
+                .filter(|(_, compiled)| **compiled <= built)
+                .map(|(source, _)| source.clone())
+                .collect();
+            let mut current = false;
+            for source in scripts {
+                let mut ran = false;
+                for owner in self.owners.of(Some(package), &source) {
+                    let base = owner.directory().map_or_else(
+                        || self.repository.to_path_buf(),
+                        |d| self.repository.join(d.as_str()),
+                    );
+                    if self.changed_since(&base, &paths, built, file, true)? {
+                        continue;
+                    }
+                    ran = true;
+                    if seen.insert((owner.manifest().clone(), owner.directory().cloned())) {
+                        self.credit(&owner, &base, &paths, true);
+                        self.units += 1;
+                    }
+                }
+                if ran {
+                    current = true;
+                    self.built[index].units.insert(Unit {
+                        configuration: configuration.to_owned(),
+                        kind: UnitKind::Run,
+                        package: package.to_owned(),
+                        target: String::new(),
+                        source,
+                    });
+                }
+            }
+            if current {
+                self.present
+                    .insert((index, configuration.to_owned(), hash.to_owned()));
+            }
+        }
+        Ok(())
     }
 
     fn credit(&mut self, owner: &Owner<'_>, base: &Path, paths: &[String], declared: bool) {

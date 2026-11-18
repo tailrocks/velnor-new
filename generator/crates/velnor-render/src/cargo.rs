@@ -61,9 +61,12 @@ pub(crate) fn cargo_step(
         id: test_id,
         env: env
             .into_iter()
-            .chain(
-                target_dir.map(|dir| ("CARGO_TARGET_DIR".to_owned(), Value::Text(dir.to_string()))),
-            )
+            .chain(target_dir.map(|dir| {
+                (
+                    "CARGO_TARGET_DIR".to_owned(),
+                    Value::Expr(format!("${{{{ github.workspace }}}}/{dir}")),
+                )
+            }))
             .chain(lane.cache_debug.then(cache_debug_env))
             .collect(),
         run: Some(format!(

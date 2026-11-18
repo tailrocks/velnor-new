@@ -85,13 +85,8 @@ pub(crate) fn units(facts: &RepoFacts) -> Vec<Unit> {
             gate: group.gate.clone(),
             roots,
             grouped: true,
-            target_dir: target_dir(&group.name),
+            target_dir: group.target_dir(),
         });
     }
     units
-}
-
-pub(crate) fn target_dir(name: &str) -> RepoPath {
-    RepoPath::new(format!("target-velnor/{name}"))
-        .unwrap_or_else(|_| RepoPath::from_static("target"))
 }

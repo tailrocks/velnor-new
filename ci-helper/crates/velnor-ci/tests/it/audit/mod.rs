@@ -6,6 +6,7 @@ mod bounds;
 mod build_clock;
 mod freshness;
 mod gated;
+mod groups;
 mod guards;
 mod identity;
 mod inventory;

@@ -124,7 +124,7 @@ fn check_target_dir(
     group: &WorkspaceGroup,
     rust_roots: &[RustRoot],
 ) -> Result<(), DetectError> {
-    let folder = crate::units::target_dir(&group.name);
+    let folder = group.target_dir();
     let overlaps = |path: &RepoPath| {
         path == &folder
             || path.as_str().starts_with(&format!("{folder}/"))
