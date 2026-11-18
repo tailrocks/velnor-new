@@ -94,6 +94,17 @@ fn rustc_sits_next_to_the_cargo_a_build_script_is_given() -> TestResult {
 }
 
 #[test]
+fn no_toolchain_binary_is_shared_between_builds_through_the_wrapper_directory() -> TestResult {
+    let (repo, _recorded) = recorded_build()?;
+    let shared = repo.root().join("velnor-cargo");
+    assert!(
+        !shared.join("rustc").exists(),
+        "a rustc link in the shared wrapper directory is repointed by every toolchain"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_path_rebuilt_from_the_cargo_directory_still_finds_cargo() -> TestResult {
     let (repo, recorded) = recorded_build()?;
     let root = repo.root();
