@@ -67,6 +67,17 @@ id!(HelperVersion, version);
 id!(CommitSha, commit_sha);
 id!(Sha256, sha256);
 
+#[must_use]
+pub fn github_hosted(label: &str) -> bool {
+    let label = label.to_ascii_lowercase();
+    ["ubuntu-", "macos-", "windows-"].iter().any(|prefix| {
+        label.strip_prefix(prefix).is_some_and(|version| {
+            let version = version.split("-arm").next().unwrap_or(version);
+            version == "latest" || version.chars().all(|c| c.is_ascii_digit() || c == '.')
+        })
+    })
+}
+
 impl RepoPath {
     #[must_use]
     pub fn parent(&self) -> Option<Self> {
