@@ -50,7 +50,7 @@ use crate::cli::{
     DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
-use crate::compare::compare;
+use crate::compare::{compare, compare_across_populations};
 use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
@@ -294,7 +294,13 @@ pub fn write_metrics(path: &Path, metrics: &RunMetrics) -> Result<(), CiError> {
 }
 
 fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
-    compare(&read_metrics(&args.a)?, &read_metrics(&args.b)?)
+    let a = read_metrics(&args.a)?;
+    let b = read_metrics(&args.b)?;
+    if args.allow_different_populations {
+        compare_across_populations(&a, &b)
+    } else {
+        compare(&a, &b)
+    }
 }
 
 pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {
