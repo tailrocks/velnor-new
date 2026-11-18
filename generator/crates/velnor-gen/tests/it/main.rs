@@ -90,6 +90,7 @@ mod release_yml_isolation;
 mod release_yml_keys;
 mod release_yml_limits;
 mod release_yml_multibin;
+mod release_yml_multibin_raw_attest;
 mod release_yml_pairs;
 mod release_yml_quoting;
 mod release_yml_raw;
