@@ -22,3 +22,4 @@ doctest = false
 velnor-model.workspace = true
 velnor-release.workspace = true
 serde_json.workspace = true
+sha2.workspace = true
