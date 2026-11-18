@@ -45,6 +45,10 @@ pub enum ReleaseError {
         package: String,
         bin: String,
     },
+    InvalidAssetName {
+        package: String,
+        template: String,
+    },
     EmptyAfter,
     EmptyRoots,
     EmptyPlatforms {
@@ -54,8 +58,22 @@ pub enum ReleaseError {
         root: String,
     },
     VersionEndsInLock(String, String),
+    InvalidCheck(String, crate::check::CheckProblem),
     DuplicateBinary {
         package: String,
+    },
+    KeyNeedsFormat {
+        package: String,
+        key: &'static str,
+        format: &'static str,
+    },
+    MuslNeedsLinux {
+        package: String,
+    },
+    InvalidBundle {
+        package: String,
+        entry: String,
+        reason: &'static str,
     },
     DuplicatePackage {
         root: String,
@@ -291,25 +309,9 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} is not a released [[package]] in any release-plz.toml"
             ),
-            Self::UnknownPlatform { package, platform } => write!(
-                f,
-                ".velnor/release.toml: binary {package} names unknown platform {platform:?}"
-            ),
-            Self::InvalidBinName { package, bin } => write!(
-                f,
-                ".velnor/release.toml: binary {package} names bin {bin:?}, which is not a valid binary name"
-            ),
             Self::EmptyAfter => write!(
                 f,
                 ".velnor/release.toml: after must name at least one non-blank workflow"
-            ),
-            Self::EmptyPlatforms { package } => write!(
-                f,
-                ".velnor/release.toml: binary {package} must name at least one platform"
-            ),
-            Self::DuplicateBinary { package } => write!(
-                f,
-                ".velnor/release.toml: package {package} has more than one [[binaries]] entry"
             ),
             Self::UnsafeRoot { root } => write!(
                 f,

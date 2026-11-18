@@ -98,7 +98,7 @@ fn install_launcher(condition: Option<&str>, release: &HelperRelease) -> Rendere
 
 fn digest_choice(release: &HelperRelease) -> String {
     let choices: Vec<String> = release
-        .digests()
+        .launcher_digests()
         .iter()
         .map(|(platform, digest)| {
             let (os, arch) = platform.runner_key().split_once('-').unwrap_or(("", ""));

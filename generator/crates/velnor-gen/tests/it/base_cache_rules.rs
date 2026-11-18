@@ -21,7 +21,7 @@ fn source_helper(version: &str) -> Result<RepoView, Box<dyn std::error::Error>> 
     let mut view = load(&samples().join("helper-source"))?;
     view.files.insert(
         LOCK_PATH,
-        pin_lock(version, COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock(version, COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     view.files
         .insert(CONFIG_PATH, b"helper = { path = \"ci-helper\" }\n".to_vec());
@@ -253,7 +253,7 @@ fn rooted(root: &str, configs: &[(&str, &str)]) -> Result<RepoView, Box<dyn std:
     let mut view = crate::pipeline::view(&[root], Some(b""))?;
     view.files.insert(
         LOCK_PATH,
-        pin_lock("0.1.81", COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock("0.1.81", COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     for (path, text) in configs {
         view.files.insert(RepoPath::new(*path)?, (*text).into());

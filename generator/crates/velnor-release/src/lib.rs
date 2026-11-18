@@ -1,9 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod asset_name;
+mod bundle;
 mod cargo_allowlist;
+mod check;
 mod collisions;
 mod error;
+mod error_binary;
 mod error_cargo;
 mod git_ref;
 mod hazards;
@@ -20,6 +24,9 @@ mod timeout;
 mod velnor_config;
 mod versions;
 
+pub use asset_name::{asset_name_uses_version, expand_asset_name};
+pub use bundle::ExtraBin;
+pub use check::{CheckArtifact, CheckPlan, CheckProblem, CheckStage};
 pub use error::ReleaseError;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,
@@ -35,4 +42,5 @@ pub use ruleset::{
 };
 pub use tag::{TagPattern, is_tag_name};
 pub use timeout::TAG_JOB_BASE_MINUTES;
+pub use velnor_config::{BinaryFormat, Checksum, Libc};
 pub use versions::{Versions, check_release_versions};

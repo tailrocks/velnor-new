@@ -131,7 +131,10 @@ impl ReleaseError {
                 f,
                 "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
             ),
-            _ => Ok(()),
+            Self::InvalidCheck(check, problem) => {
+                write!(f, ".velnor/release.toml: check {check:?} {problem}")
+            }
+            _ => self.fmt_binary(f),
         }
     }
 }
