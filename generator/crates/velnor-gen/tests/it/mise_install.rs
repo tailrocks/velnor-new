@@ -42,6 +42,14 @@ fn plan_rejects_a_variable_template_that_executes_before_installation() -> TestR
 }
 
 #[test]
+fn plan_rejects_a_variable_source_directive_that_executes_during_install() -> TestResult {
+    let view =
+        locked_mise_view("[tools]\nrust = \"1.99.1\"\n[vars]\n_.source = \"scripts/ci-env.sh\"\n")?;
+    assert!(detect(&view).is_err());
+    Ok(())
+}
+
+#[test]
 fn plan_accepts_a_task_template_because_mise_renders_it_when_the_task_runs() -> TestResult {
     let facts = detect(&locked_mise_view(
         "[tools]\nrust = \"1.99.1\"\n[vars]\nmode = \"release\"\n[tasks.test]\nrun = \"echo {{ vars.mode }}\"\n",

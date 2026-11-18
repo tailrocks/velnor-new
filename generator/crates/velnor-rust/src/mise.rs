@@ -113,6 +113,10 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
         .and_then(|settings| settings.get("cargo"))
         .and_then(Value::as_table)
         .and_then(|cargo| cargo.keys().find(|key| key.as_str() != "binstall"));
+    let vars_directive = parsed
+        .get("vars")
+        .and_then(Value::as_table)
+        .and_then(|vars| vars.keys().find(|key| key.starts_with('_')));
     let postinstall = parsed
         .get("tools")
         .and_then(Value::as_table)
@@ -124,6 +128,7 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
     if let Some(name) = unknown
         .or(unknown_setting)
         .or(unknown_cargo_setting)
+        .or(vars_directive)
         .map(String::as_str)
         .or(postinstall.then_some("tools.postinstall"))
     {
