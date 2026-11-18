@@ -64,7 +64,8 @@ fn attest_true_adds_a_pinned_provenance_step_over_the_assets_and_checksums_in_th
             assert!(
                 permissions(other)
                     .iter()
-                    .all(|(scope, _)| scope != "id-token" && scope != "attestations"),
+                    .all(|(scope, access)| scope != "id-token"
+                        && (scope != "attestations" || (id == "publish-app" && access == "read"))),
                 "{id}"
             );
         }
@@ -87,6 +88,71 @@ fn attest_false_or_absent_leaves_the_workflow_unchanged() -> TestResult {
     assert_eq!(
         job(&tree, "sums-app")?.get("permissions"),
         Some(&Node::Map(Vec::new()))
+    );
+    Ok(())
+}
+
+#[test]
+fn attest_true_verifies_every_asset_with_a_pinned_gh_before_publish_and_fails_closed() -> TestResult
+{
+    let (_, tree) = render(&[APP, TOOLS], Some(&attested()))?;
+    let publish = job(&tree, "publish-app")?;
+    assert_eq!(
+        permissions(publish),
+        [
+            ("attestations".to_owned(), "read".to_owned()),
+            ("contents".to_owned(), "write".to_owned())
+        ]
+    );
+    let all = steps(publish);
+    let run_of = |step: &Node| step.get("run").and_then(Node::text).map(str::to_owned);
+    let verifying: Vec<usize> = (0..all.len())
+        .filter(|i| run_of(&all[*i]).is_some_and(|r| r.contains("gh attestation verify")))
+        .collect();
+    let published = (0..all.len())
+        .find(|i| run_of(&all[*i]).is_some_and(|r| r.contains("release publish")))
+        .ok_or("no publish step")?;
+    assert!(verifying.iter().all(|i| *i < published));
+    let commands: Vec<String> = verifying.iter().filter_map(|i| run_of(&all[*i])).collect();
+    for subject in ["dist/app-linux-x64.tar.gz", "dist/SHA256SUMS"] {
+        assert!(
+            commands.iter().any(|c| c.contains(subject)),
+            "{subject} is not verified"
+        );
+    }
+    for run in &commands {
+        assert!(!run.contains("||") && !run.contains("; true"));
+        for flag in [
+            "--repo \"$GITHUB_REPOSITORY\"",
+            "--source-digest \"$GITHUB_SHA\"",
+            "--source-ref \"$GITHUB_REF\"",
+            "--signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\"",
+            "--signer-digest \"$GITHUB_SHA\"",
+        ] {
+            assert!(run.contains(flag), "{flag}");
+        }
+        assert!(run.contains("mise --no-config --no-env --no-hooks exec gh@2."));
+    }
+    for (id, other) in jobs(&tree)? {
+        if id != "publish-app" {
+            assert!(
+                permissions(other)
+                    .iter()
+                    .all(|(scope, _)| scope != "attestations" || id == "sums-app"),
+                "{id}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn attest_off_publish_job_has_no_verification() -> TestResult {
+    let (plain, tree) = render(&[APP, TOOLS], Some(TWO_BINARIES))?;
+    assert!(!plain.contains("attestation verify"));
+    assert_eq!(
+        permissions(job(&tree, "publish-app")?),
+        [("contents".to_owned(), "write".to_owned())]
     );
     Ok(())
 }
