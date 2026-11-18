@@ -306,14 +306,20 @@ pub fn verdict(
                 "{TESTS_BY_PACKAGE_OUTPUT} is missing or malformed in a test job of {slug}"
             ));
         } else {
-            for job in counts.iter().flatten() {
-                for (name, package) in &job.packages {
-                    if package.listed > 0 && package.run == 0 {
-                        out.problems.push(format!(
-                            "package {name} of {slug} listed {} tests and ran none",
-                            package.listed
-                        ));
-                    }
+            // The default job and the group jobs each run part of one package:
+            // `run` adds up, and `listed` is the most any job saw.
+            let mut lane: BTreeMap<&str, PackageCounts> = BTreeMap::new();
+            for (name, package) in counts.iter().flatten().flat_map(|job| &job.packages) {
+                let total = lane.entry(name).or_default();
+                total.run = total.run.saturating_add(package.run);
+                total.listed = total.listed.max(package.listed);
+            }
+            for (name, package) in lane {
+                if package.listed > 0 && package.run == 0 {
+                    out.problems.push(format!(
+                        "package {name} of {slug} listed {} tests and ran none",
+                        package.listed
+                    ));
                 }
             }
         }
