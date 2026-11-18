@@ -57,6 +57,7 @@ impl PullRequestType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Concurrency {
     CancelOlderPullRequestRuns,
+    CancelOlderPullRequestRunsExceptUnrelatedLabels,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -110,6 +111,8 @@ pub enum PrRun {
     #[default]
     Always,
     Ready,
+    Quick,
+    Related,
     Requested,
     Unrequested,
 }

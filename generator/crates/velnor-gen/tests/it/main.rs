@@ -70,6 +70,7 @@ mod pipeline;
 mod plan_job;
 mod policy_exceptions;
 mod pr_ci;
+mod pr_ci_labels;
 mod pr_ci_sim;
 mod release_branch_prefix;
 mod release_cargo_include;

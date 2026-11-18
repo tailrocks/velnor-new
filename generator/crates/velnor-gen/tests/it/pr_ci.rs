@@ -8,9 +8,9 @@ use crate::base_save::pinned;
 use crate::events::DENY_MISE;
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
-use crate::pr_ci_sim::{Event, fork_pull, other, outcome, pull, state, strings};
+use crate::pr_ci_sim::{Event, fork_pull, labeled, other, outcome, pull, state, strings};
 
-const LABEL_CONFIG: &str = "pr_ci = \"label\"\nshape = \"lint-test\"\n";
+pub(crate) const LABEL_CONFIG: &str = "pr_ci = \"label\"\nshape = \"lint-test\"\n";
 const GATE: &str = "velnor-ci gate";
 const LENIENT: &str = "Fail when a Rust job failed or was cancelled";
 const NOTICE: &str = "Note that CI is not requested on a draft pull request";
@@ -18,7 +18,7 @@ const QUICK_JOBS: [&str; 3] = ["rust-plan", "rust-lint", "policy"];
 const FULL_JOBS: [&str; 1] = ["rust-test"];
 const RESET: &str = "ci-run-label";
 
-fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Error>> {
+pub(crate) fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut view = pinned(version, config)?;
     for (path, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let path = RepoPath::new(path)?;
@@ -28,7 +28,7 @@ fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Err
     workflow(&view)
 }
 
-fn label_workflow() -> Result<Json, Box<dyn std::error::Error>> {
+pub(crate) fn label_workflow() -> Result<Json, Box<dyn std::error::Error>> {
     Ok(crate::yaml_tree::document(&render(
         "0.1.82",
         LABEL_CONFIG,
@@ -48,20 +48,20 @@ fn an_unset_pr_ci_renders_the_same_workflow_as_always_and_none_of_the_label_mach
 }
 
 #[test]
-fn the_label_mode_starts_on_opened_synchronize_reopened_ready_for_review_and_labeled() -> TestResult
-{
+fn the_label_mode_starts_on_exactly_the_default_types_plus_labeled_and_keeps_edited_for_a_base_retarget()
+-> TestResult {
     let tree = label_workflow()?;
-    let types = strings(tree.pointer("/on/pull_request/types"));
-    for kind in [
-        "opened",
-        "synchronize",
-        "reopened",
-        "ready_for_review",
-        "labeled",
-    ] {
-        assert!(types.iter().any(|found| found == kind), "{kind}: {types:?}");
-    }
-    assert!(!types.iter().any(|found| found == "converted_to_draft"));
+    assert_eq!(
+        strings(tree.pointer("/on/pull_request/types")),
+        [
+            "opened",
+            "synchronize",
+            "reopened",
+            "ready_for_review",
+            "edited",
+            "labeled"
+        ]
+    );
     Ok(())
 }
 
@@ -140,6 +140,24 @@ fn rows() -> Vec<Row> {
         row(
             "ci:run on a fork pull request",
             fork_pull(&["ci:run"]),
+            Runs::Quick,
+            "skipped",
+        ),
+        row(
+            "ci:auto on a fork pull request",
+            fork_pull(&["ci:auto"]),
+            Runs::Quick,
+            "skipped",
+        ),
+        row(
+            "the ci:run label being added",
+            labeled("ci:run", &["ci:run"]),
+            Runs::Everything,
+            "success",
+        ),
+        row(
+            "the ci:auto label being added",
+            labeled("ci:auto", &["ci:auto"]),
             Runs::Everything,
             "skipped",
         ),

@@ -103,7 +103,7 @@ fn label_reset(facts: &RepoFacts) -> Option<Job> {
         name: Some(format!("Remove the {CI_RUN_LABEL} label")),
         needs: vec![crate::required_job::VERDICT_JOB],
         when: When::ClearRunLabel,
-        pr: PrRun::Ready,
+        pr: PrRun::Quick,
         permissions: Permissions(BTreeMap::from([(
             PermissionScope::PullRequests,
             Access::Write,

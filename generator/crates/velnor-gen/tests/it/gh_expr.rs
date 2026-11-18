@@ -28,7 +28,7 @@ impl Value {
         }
     }
 
-    fn text(&self) -> String {
+    pub(crate) fn text(&self) -> String {
         match self {
             Self::Null => String::new(),
             Self::Bool(flag) => flag.to_string(),

@@ -176,7 +176,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         needs: lane.plan.clone().into_iter().collect(),
         gate: lane.plan.is_some().then(|| lane.gate(GateNeed::Policy)),
         pr: if facts.config.pr_ci == PrCi::Label {
-            PrRun::Ready
+            PrRun::Quick
         } else {
             crate::plan::full(facts)
         },

@@ -127,7 +127,11 @@ pub(crate) fn verdict_job(
     };
     Job {
         name: Some(facts.config.required_check.clone()),
-        pr: PrRun::Always,
+        pr: if facts.config.pr_ci == PrCi::Label {
+            PrRun::Related
+        } else {
+            PrRun::Always
+        },
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
         when: When::Always,
         steps: draft_guard.into_iter().chain(steps).collect(),

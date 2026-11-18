@@ -19,6 +19,8 @@ pub(crate) struct Pull {
     pub(crate) draft: bool,
     pub(crate) labels: Vec<&'static str>,
     pub(crate) same_repository: bool,
+    pub(crate) action: &'static str,
+    pub(crate) label: &'static str,
 }
 
 pub(crate) fn pull(draft: bool, labels: &[&'static str]) -> Event {
@@ -29,8 +31,19 @@ pub(crate) fn pull(draft: bool, labels: &[&'static str]) -> Event {
             draft,
             labels: labels.to_vec(),
             same_repository: true,
+            action: "synchronize",
+            label: "",
         }),
     }
+}
+
+pub(crate) fn labeled(added: &'static str, labels: &[&'static str]) -> Event {
+    let mut event = pull(false, labels);
+    if let Some(pull) = event.pull_request.as_mut() {
+        pull.action = "labeled";
+        pull.label = added;
+    }
+    event
 }
 
 pub(crate) fn fork_pull(labels: &[&'static str]) -> Event {
@@ -64,6 +77,15 @@ pub(crate) fn context(
             "github.event_name" => text(event.name),
             "github.ref" => text(event.git_ref),
             "github.repository" => text("owner/repo"),
+            "github.run_id" => text("99"),
+            "github.workflow_ref" => {
+                text("owner/repo/.github/workflows/rust-ci.yml@refs/pull/7/merge")
+            }
+            "github.event.pull_request.number" => pull.map_or(Value::Null, |_| text("7")),
+            "github.event.action" => pull.map_or(Value::Null, |pull| text(pull.action)),
+            "github.event.label.name" => pull
+                .filter(|pull| pull.action == "labeled")
+                .map_or(Value::Null, |pull| text(pull.label)),
             "github.event.repository.default_branch" => text("main"),
             "github.event.pull_request.state" => pull.map_or(Value::Null, |_| text("open")),
             "github.event.pull_request.draft" => {

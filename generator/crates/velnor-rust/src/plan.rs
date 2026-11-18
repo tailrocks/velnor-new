@@ -103,7 +103,10 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             schedule: schedule(facts),
             workflow_dispatch: true,
         },
-        concurrency: Concurrency::CancelOlderPullRequestRuns,
+        concurrency: match facts.config.pr_ci {
+            PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
+            PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
+        },
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         jobs,
     }
@@ -338,7 +341,7 @@ fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
 
 pub(crate) fn quick(facts: &RepoFacts) -> PrRun {
     match facts.config.pr_ci {
-        PrCi::Label => PrRun::Ready,
+        PrCi::Label => PrRun::Quick,
         PrCi::Always => PrRun::Always,
     }
 }

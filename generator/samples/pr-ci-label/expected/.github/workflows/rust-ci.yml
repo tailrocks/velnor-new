@@ -19,14 +19,14 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}${{ github.event.action == ''labeled'' && github.event.label.name != ''ci:run'' && github.event.label.name != ''ci:auto'' && format(''-ignored-{0}'', github.run_id) || '''' }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
 defaults:
   run:
     shell: 'bash -p {0}'
 jobs:
   rust-plan:
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event.pull_request.draft != true) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
     permissions:
       contents: read
     outputs:
@@ -75,7 +75,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -244,7 +244,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event_name != ''pull_request'' || contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')) && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -431,7 +431,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -597,7 +597,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event_name != ''pull_request'' || contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')) && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -784,7 +784,7 @@ jobs:
   rust-inputs-audit:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && ((github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && ((github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -937,7 +937,7 @@ jobs:
       - rust-lint-lab
       - rust-test-lab
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
     permissions:
       pull-requests: read
       actions: write
@@ -1062,7 +1062,7 @@ jobs:
       - rust-lint-lab
       - rust-test-lab
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always() && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -1072,12 +1072,12 @@ jobs:
         if: '${{ github.event.pull_request.draft == true }}'
         run: 'echo "::notice title=Draft::draft: CI not requested"'
       - name: Resolve released helper tools
-        if: '${{ github.event.pull_request.draft != true && (github.event_name != ''pull_request'' || contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')) }}'
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.82
-        if: '${{ github.event.pull_request.draft != true && (github.event_name != ''pull_request'' || contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')) }}'
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.82
         with:
           version: '0.1.82'
@@ -1085,26 +1085,26 @@ jobs:
           sha256-linux-arm64: '56d836fd2ae8135b5306f154b3287dfe81328f7a89b0528b3b912fab6e6916a6'
           sha256-macos-arm64: '39431db3aeccf193088fa8845896c627e3da004f683d4d4699d3d697c808c607'
       - name: Install the released helper launcher
-        if: '${{ github.event.pull_request.draft != true && (github.event_name != ''pull_request'' || contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')) }}'
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - name: velnor-ci gate
-        if: '${{ github.event.pull_request.draft != true && (github.event_name != ''pull_request'' || contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')) }}'
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
           NEEDS_JSON: '${{ toJSON(needs) }}'
           GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-lint-root=lane:root --job rust-test-root=lane:root --job rust-lint-lab=lane:lab --job rust-test-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-test-root=root --tests rust-test-lab=lab'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
       - name: Fail when a Rust job failed or was cancelled
-        if: '${{ (contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'')) && (github.event_name == ''pull_request'' && github.event.pull_request.draft != true && !contains(github.event.pull_request.labels.*.name, ''ci:run'') && !contains(github.event.pull_request.labels.*.name, ''ci:auto'')) }}'
+        if: '${{ (contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'')) && (github.event_name == ''pull_request'' && github.event.pull_request.draft != true && !(github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         run: exit 1
   ci-run-label:
     name: 'Remove the ci:run label'
     needs:
       - required
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event_name == ''pull_request'' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, ''ci:run'') && github.event.pull_request.draft != true) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event_name == ''pull_request'' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, ''ci:run'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
     permissions:
       pull-requests: write
     runs-on: ubuntu-latest
@@ -1124,7 +1124,7 @@ jobs:
       - rust-test-lab
       - rust-inputs-audit
       - rust-trim
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'')) }}'
     permissions:
       actions: read
       contents: read
