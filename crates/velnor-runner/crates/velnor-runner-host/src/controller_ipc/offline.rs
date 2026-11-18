@@ -28,7 +28,7 @@ pub(super) fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
     ) {
         return Err(HostError::Lock);
     }
-    let _daemon = DaemonLock::try_acquire(&state.join("daemon.lock"))?;
+    let _daemon = DaemonLock::try_acquire_daemon(state)?;
     let _admission = DaemonLock::try_acquire(&state.join("admission.lock"))?;
     let result = with_journal(state, request)?;
     Ok(result)

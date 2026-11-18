@@ -137,7 +137,7 @@ async fn reading_while_the_daemon_holds_the_journal_neither_blocks_nor_changes_i
 {
     let state = tempfile::tempdir()?;
     let journal = fixture(state.path()).await?;
-    let _daemon = DaemonLock::try_acquire(&state.path().join("daemon.lock"))?;
+    let _daemon = DaemonLock::try_acquire_daemon(state.path())?;
     let writer = journal.connection().await?;
     writer.execute("BEGIN IMMEDIATE", ()).await?;
     let before = snapshot(state.path())?;

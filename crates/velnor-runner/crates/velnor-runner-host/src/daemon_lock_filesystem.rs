@@ -76,6 +76,16 @@ pub(super) fn open_lock(path: &Path) -> Result<File, HostError> {
     Ok(file)
 }
 
+pub(super) fn lock_directory(path: &Path) -> Result<File, HostError> {
+    create_private_directories(path).map_err(|_| HostError::Lock)?;
+    let directory = File::open(path).map_err(|_| HostError::Lock)?;
+    if !directory.metadata().map_err(|_| HostError::Lock)?.is_dir() {
+        return Err(HostError::Path);
+    }
+    directory.try_lock().map_err(|_| HostError::Lock)?;
+    Ok(directory)
+}
+
 fn create_private_directories(path: &Path) -> std::io::Result<()> {
     let mut builder = fs::DirBuilder::new();
     builder.recursive(true);

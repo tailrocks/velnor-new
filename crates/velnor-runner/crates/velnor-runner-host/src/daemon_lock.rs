@@ -19,7 +19,7 @@ mod filesystem;
 mod identity;
 
 pub(crate) use filesystem::canonical_journal_path;
-use filesystem::{ensure_regular_or_missing, open_lock, private_directory};
+use filesystem::{ensure_regular_or_missing, lock_directory, open_lock, private_directory};
 pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
 const ANCHOR_VERSION: u8 = 1;
@@ -29,13 +29,23 @@ const ANCHOR_DIR: &str = "runner-lineage";
 #[derive(Debug)]
 pub struct DaemonLock {
     file: File,
+    _state_directory: Option<File>,
     device: u64,
     inode: u64,
     controller_running: AtomicBool,
 }
 
 impl DaemonLock {
+    pub fn try_acquire_daemon(state: &Path) -> Result<Self, HostError> {
+        let directory = lock_directory(state)?;
+        Self::acquire(&state.join("daemon.lock"), Some(directory))
+    }
+
     pub fn try_acquire(path: &Path) -> Result<Self, HostError> {
+        Self::acquire(path, None)
+    }
+
+    fn acquire(path: &Path, state_directory: Option<File>) -> Result<Self, HostError> {
         let file = open_lock(path)?;
         file.try_lock().map_err(|_| HostError::Lock)?;
         let metadata = file.metadata().map_err(|_| HostError::Lock)?;
@@ -44,6 +54,7 @@ impl DaemonLock {
             use std::os::unix::fs::MetadataExt;
             Ok(Self {
                 file,
+                _state_directory: state_directory,
                 device: metadata.dev(),
                 inode: metadata.ino(),
                 controller_running: AtomicBool::new(false),
