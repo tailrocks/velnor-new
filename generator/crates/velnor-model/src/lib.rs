@@ -39,7 +39,7 @@ pub use repo::{
     InputRule, MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView,
     RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
     TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
-    Weakening,
+    Weakening, WorkspaceGroup,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

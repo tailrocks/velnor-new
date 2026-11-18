@@ -24,13 +24,16 @@ pub(crate) fn has_gate(facts: &RepoFacts) -> bool {
         .is_some_and(|release| release.version().at_least(VERDICT_HELPER))
 }
 
-fn tests_lane(job: &Job) -> Option<RootSlug> {
-    job.steps.iter().find_map(|step| match &step.kind {
-        StepKind::Cargo(
-            CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. },
-        ) => step.reads.as_ref().map(|plan| plan.slug.clone()),
-        _ => None,
-    })
+fn tests_lane(job: &Job) -> Vec<RootSlug> {
+    job.steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::Cargo(
+                CargoCommand::NextestRun { .. } | CargoCommand::NextestRunArchive { .. },
+            ) => step.reads.as_ref().map(|plan| plan.slug.clone()),
+            _ => None,
+        })
+        .collect()
 }
 
 fn conditions(job: &Job) -> Vec<JobCondition> {
@@ -74,7 +77,7 @@ pub(crate) fn spec(plan: JobId, jobs: &[Job]) -> VerdictSpec {
 }
 
 pub(crate) fn gate_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
-    let slugs: BTreeSet<RootSlug> = jobs.iter().filter_map(tests_lane).collect();
+    let slugs: BTreeSet<RootSlug> = jobs.iter().flat_map(tests_lane).collect();
     slugs
         .into_iter()
         .map(|slug| (slug, GateNeed::TestsExpected))

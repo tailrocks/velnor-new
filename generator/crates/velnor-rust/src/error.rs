@@ -76,6 +76,15 @@ pub enum Reason {
         used: RepoPath,
         rendered: RepoPath,
     },
+    DuplicateGroup(String),
+    GroupRootTwice {
+        name: String,
+        root: RepoPath,
+    },
+    UnknownGroupRoot(RepoPath),
+    GroupNameTaken(String),
+    GroupShape,
+    GroupHelper,
 }
 
 impl DetectError {
@@ -114,6 +123,44 @@ impl Reason {
             ),
             Self::HelperSourceRelease => f.write_str(
                 "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    fn fmt_groups(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::DuplicateGroup(name) => write!(
+                f,
+                "workspace_groups names the group {name} twice; a name names one group"
+            ),
+            Self::GroupRootTwice { name, root } => write!(
+                f,
+                "workspace_groups names the root {root} in the group {name} and in another group; a root belongs to at most one group"
+            ),
+            Self::UnknownGroupRoot(root) => write!(
+                f,
+                "workspace_groups names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            Self::GroupNameTaken(name) => write!(
+                f,
+                "workspace_groups names the group {name}, which is the name of a Cargo root of this repository; the group and the root would share one cache and one job name"
+            ),
+            Self::GroupHelper => f.write_str(
+                "workspace_groups needs velnor-ci 0.1.82 or later, which writes the plan output of every group; run `velnor-gen pin-helper 0.1.82`",
+            ),
+            Self::GroupShape => f.write_str(
+                "workspace_groups cannot be used with shape = \"groups\": a group's roots share one job, and the groups shape needs one archive and one test job per workspace; use shape = \"lint-test\" or leave the shape out",
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    fn fmt_mise(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MiseOverridesFlags(name) => write!(
+                f,
+                "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
             ),
             _ => Ok(()),
         }
@@ -183,6 +230,12 @@ impl fmt::Display for Reason {
                 f,
                 "nextest_harnesses names {entry}, which more than one test target declares"
             ),
+            Self::DuplicateGroup(_)
+            | Self::GroupRootTwice { .. }
+            | Self::UnknownGroupRoot(_)
+            | Self::GroupNameTaken(_)
+            | Self::GroupHelper
+            | Self::GroupShape => self.fmt_groups(f),
             Self::UnknownNextestHarness(entry) => write!(
                 f,
                 "nextest_harnesses names {entry}, which is not a test target with harness = false"
@@ -206,17 +259,11 @@ impl fmt::Display for Reason {
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
-            Self::MiseOverridesFlags(name) => write!(
-                f,
-                "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
-            ),
+            Self::MiseOverridesFlags(_) | Self::OtherMiseConfig => self.fmt_mise(f),
             Self::UndeclaredTarget(_) | Self::HostTupleVersion(_) => self.fmt_build_target(f),
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
-            ),
-            Self::OtherMiseConfig => f.write_str(
-                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
             Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperSourceRelease => self.fmt_setup(f),
             Self::BuildExecutable

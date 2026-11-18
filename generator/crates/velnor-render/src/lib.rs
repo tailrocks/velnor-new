@@ -19,6 +19,7 @@ mod release_outputs;
 mod release_steps;
 mod rules;
 mod steps;
+mod tests;
 mod workflow;
 mod yaml;
 

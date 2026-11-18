@@ -2,16 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CacheRoot, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, RustRoot,
-    StepKind,
+    CacheKey, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, StepKind,
 };
 
 use crate::lane::{Lane, PLAN_JOB};
-use crate::plan::{job, setup_roots, step};
+use crate::plan::{job, setup_units, step};
+use crate::units::Unit;
 
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
-pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
+pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Option<Job> {
     if facts.rust_roots.len() == 1 && !jobs.iter().any(|job| job.needs.contains(&AUDIT_JOB)) {
         return None;
     }
@@ -19,19 +19,24 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     let lane = Lane {
         slug: RootSlug::from_static("inputs_audit"),
         plan: Some(PLAN_JOB),
+        per_root: false,
     };
-    let families: Vec<JobId> = facts
-        .rust_roots
+    let families: Vec<JobId> = units
         .iter()
-        .map(|root| target_family(jobs, root).unwrap_or(AUDIT_JOB))
+        .map(|unit| target_family(jobs, unit).unwrap_or(AUDIT_JOB))
         .collect();
-    let mut steps = setup_roots(facts, &facts.rust_roots, &lane, &families);
-    steps.extend(
-        facts
-            .rust_roots
-            .iter()
-            .map(|root| lane.cargo(CargoCommand::BuildAll, root.manifest.parent())),
-    );
+    let mut steps = setup_units(facts, units, &lane, &families);
+    steps.extend(units.iter().flat_map(|unit| {
+        unit.roots.iter().map(|root| {
+            let mut build = lane.cargo(CargoCommand::BuildAll, root.manifest.parent());
+            if unit.grouped {
+                build.directory = None;
+                build.manifest = Some(root.manifest.clone());
+                build.target_dir = Some(unit.target_dir.clone());
+            }
+            build
+        })
+    }));
     steps.push(step(StepKind::Helper(HelperCommand::InputsAudit)));
     Some(Job {
         when,
@@ -45,8 +50,8 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
 /// The audit builds every target, so it restores, read-only, the target cache
 /// of the last lane that saves this root (the one that builds the tests) and
 /// starts warm instead of building cold.
-fn target_family(jobs: &[Job], root: &RustRoot) -> Option<JobId> {
-    let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+fn target_family(jobs: &[Job], unit: &Unit) -> Option<JobId> {
+    let cache_root = unit.cache_root();
     jobs.iter()
         .flat_map(|job| &job.steps)
         .filter_map(|step| match &step.kind {

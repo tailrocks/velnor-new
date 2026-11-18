@@ -18,17 +18,21 @@ mod credentials;
 mod detect;
 mod doc_steps;
 mod error;
+mod groups;
 mod harness;
+mod job_result;
 mod lane;
 mod lock;
 mod lock_affected;
 mod manifest_diff;
+mod members;
 mod metadata;
 mod metadata_file;
 mod mise;
 mod mise_lock;
 mod os_pins;
 mod owners;
+mod paths;
 mod plan;
 mod policy;
 mod private_sources;
@@ -50,6 +54,7 @@ mod test_setup;
 mod timings;
 mod toml_file;
 mod toolchain;
+mod units;
 mod unowned;
 mod verdict;
 mod weaken;
@@ -65,6 +70,7 @@ pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{member_sources, optional_steps, root_sources};
 pub use error::{DetectError, Reason};
+pub use job_result::JobResult;
 pub use lock::{LOCK_PATH, LockError, commit_url, pin_lock, release_version, sums_url};
 pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
@@ -89,7 +95,7 @@ pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use verdict::{
-    JobResult, Need, PackageCounts, PlanOutput, TestCounts, Verdict, decide, encode_package_counts,
+    Need, PackageCounts, PlanOutput, TestCounts, Verdict, decide, encode_package_counts,
     package_token, verdict,
 };
 pub use weaken::introduced;

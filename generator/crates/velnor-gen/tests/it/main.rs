@@ -120,4 +120,5 @@ mod weaken_nextest;
 mod weaken_review;
 mod weaken_scope;
 mod wiring;
+mod workspace_groups;
 mod yaml_tree;

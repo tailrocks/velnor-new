@@ -94,6 +94,8 @@ pub struct Job {
 pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
+    pub manifest: Option<RepoPath>,
+    pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_on_draft: bool,
     pub gate: Option<Gate>,

@@ -22,7 +22,7 @@ use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
-use crate::plan::{Steps, explain, outputs, tests_outputs, warnings, weakened};
+use crate::plan::{Steps, explain, group_outputs, outputs, tests_outputs, warnings, weakened};
 use crate::summary::summary;
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
@@ -89,7 +89,9 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             (root.manifest.clone(), tests)
         })
         .collect();
-    let outputs = outputs(&selections, &steps, policy)? + &tests_outputs(&expected);
+    let outputs = outputs(&selections, &steps, policy)?
+        + &tests_outputs(&expected)
+        + &group_outputs(&facts.config.workspace_groups, &selections);
     append_outputs(&outputs)?;
     append_to(
         SUMMARY_VARIABLE,

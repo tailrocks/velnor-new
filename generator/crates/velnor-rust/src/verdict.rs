@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::job_result::JobResult;
 use velnor_model::{
     GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
     TESTS_RUN_OUTPUT, VerdictSpec,
@@ -10,39 +11,6 @@ use velnor_model::{
 
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum JobResult {
-    Success,
-    Failure,
-    Cancelled,
-    Skipped,
-    Other(String),
-}
-
-impl JobResult {
-    #[must_use]
-    pub fn parse(text: &str) -> Self {
-        match text {
-            "success" => Self::Success,
-            "failure" => Self::Failure,
-            "cancelled" => Self::Cancelled,
-            "skipped" => Self::Skipped,
-            other => Self::Other(other.to_owned()),
-        }
-    }
-
-    #[must_use]
-    pub fn name(&self) -> &str {
-        match self {
-            Self::Success => "success",
-            Self::Failure => "failure",
-            Self::Cancelled => "cancelled",
-            Self::Skipped => "skipped",
-            Self::Other(_) => "unknown",
-        }
-    }
-}
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct PackageCounts {
@@ -181,7 +149,7 @@ impl PlanOutput {
                 };
             }
             planned.insert(job.id.clone(), holds);
-            if let Some(slug) = &job.tests {
+            for slug in &job.tests {
                 let expected = flag(GateNeed::TestsExpected.output_name(slug), "run", "skip")?;
                 let jobs = test_lanes.entry(slug.clone()).or_default();
                 if expected {
@@ -254,7 +222,7 @@ impl Verdict {
 pub fn verdict(
     plan: &PlanOutput,
     results: &BTreeMap<JobId, JobResult>,
-    tests: &BTreeMap<JobId, Option<TestCounts>>,
+    tests: &BTreeMap<(JobId, RootSlug), Option<TestCounts>>,
 ) -> Verdict {
     let mut out = Verdict {
         passed: true,
@@ -295,7 +263,7 @@ pub fn verdict(
         let counts: Vec<Option<TestCounts>> = jobs
             .iter()
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
-            .map(|job| tests.get(job).cloned().flatten())
+            .map(|job| tests.get(&(job.clone(), slug.clone())).cloned().flatten())
             .collect();
         if counts.is_empty() {
             out.problems.push(format!(
@@ -345,8 +313,15 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     let tests = spec
         .jobs
         .iter()
-        .filter(|job| job.tests.is_some())
-        .map(|job| (job.id.clone(), counts(needs.get(&job.id))))
+        .filter(|job| !job.tests.is_empty())
+        .flat_map(|job| {
+            job.tests.iter().map(|slug| {
+                (
+                    (job.id.clone(), slug.clone()),
+                    counts(needs.get(&job.id), slug),
+                )
+            })
+        })
         .collect();
     let mut out = verdict(&plan, &results, &tests);
     for id in needs.keys().filter(|id| !plan.planned.contains_key(*id)) {
@@ -357,11 +332,16 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     out
 }
 
-fn counts(need: Option<&Need>) -> Option<TestCounts> {
+fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts> {
     let need = need?;
-    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
+    let named = |name: &str| {
+        need.outputs
+            .get(&format!("{name}_{slug}"))
+            .or_else(|| need.outputs.get(name))
+    };
+    let packages = parse_package_counts(named(TESTS_BY_PACKAGE_OUTPUT)?)?;
+    let run = number(named(TESTS_RUN_OUTPUT)?)?;
+    let listed = number(named(TESTS_LISTED_OUTPUT)?)?;
     let summed_run = packages
         .values()
         .try_fold(0u64, |total, package| total.checked_add(package.run))?;

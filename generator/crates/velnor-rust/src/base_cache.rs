@@ -4,12 +4,13 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, PermissionScope,
-    Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
+    Access, BaseExpiry, CacheKey, HelperCommand, Host, Job, JobId, PermissionScope, Permissions,
+    RepoFacts, RepoPath, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
 use crate::plan::{job, step};
+use crate::units::Unit;
 
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
@@ -35,10 +36,9 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
     let restore = if has_saving_helper(facts) {
         StepKind::RestoredTargets {
             expiry,
-            targets: facts
-                .rust_roots
+            targets: crate::units::units(facts)
                 .iter()
-                .map(|root| root.target_dir.clone())
+                .map(|unit| unit.target_dir.clone())
                 .collect(),
         }
     } else {
@@ -63,7 +63,7 @@ fn expiry(facts: &RepoFacts) -> BaseExpiry {
 
 pub(crate) fn save_steps(
     facts: &RepoFacts,
-    root: &RustRoot,
+    unit: &Unit,
     lane: &Lane,
     job: &JobId,
     archive: Option<RepoPath>,
@@ -72,7 +72,7 @@ pub(crate) fn save_steps(
     if !writes_base(facts) {
         return Vec::new();
     }
-    let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+    let cache_root = unit.cache_root();
     let target = CacheKey::Target {
         job: job.clone(),
         root: cache_root.clone(),
@@ -80,9 +80,9 @@ pub(crate) fn save_steps(
     };
     let mut steps = vec![
         Step {
-            directory: root.manifest.parent(),
+            directory: unit.directory(),
             when: When::SaveBase,
-            ..step(StepKind::InputsSave(root.target_dir.clone()))
+            ..step(StepKind::InputsSave(unit.target_dir.clone()))
         },
         Step {
             when: When::SaveBase,
@@ -92,7 +92,7 @@ pub(crate) fn save_steps(
                     .iter()
                     .map(|root| root.manifest.clone())
                     .collect(),
-                target: root.target_dir.clone(),
+                target: unit.target_dir.clone(),
                 archive,
             })
         },

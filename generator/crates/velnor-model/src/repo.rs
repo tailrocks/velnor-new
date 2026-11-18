@@ -6,7 +6,7 @@ use std::fmt;
 
 use crate::cron::CronExpr;
 use crate::helper::HelperRelease;
-use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
+use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -261,6 +261,15 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub test_setup: Vec<TestSetup>,
+    pub workspace_groups: Vec<WorkspaceGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceGroup {
+    pub name: String,
+    pub slug: RootSlug,
+    pub gate: RootSlug,
+    pub roots: Vec<RepoPath>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,6 +341,7 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             test_setup: Vec::new(),
+            workspace_groups: Vec::new(),
         }
     }
 }

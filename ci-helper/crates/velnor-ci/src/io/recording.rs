@@ -16,7 +16,7 @@ pub(super) fn start_invocation(argv: &[String]) -> Result<Invocation, CiError> {
     let execution = execution(argv)?;
     Ok(Invocation {
         argv: argv.to_vec(),
-        root: super::current_dir()?.to_string_lossy().into_owned(),
+        root: root(argv)?,
         configuration: format!(
             "{} {:?}",
             configuration(argv),
@@ -62,6 +62,32 @@ pub(super) fn save_invocation(invocation: &Invocation) -> Result<(), CiError> {
             .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))?
     )
     .map_err(|error| CiError::new(format!("cannot write invocation records: {error}")))
+}
+
+fn root(argv: &[String]) -> Result<String, CiError> {
+    let directory = super::current_dir()?;
+    let Some(manifest) = manifest_path(argv) else {
+        return Ok(directory.to_string_lossy().into_owned());
+    };
+    let path = directory.join(manifest);
+    Ok(path
+        .parent()
+        .unwrap_or(&directory)
+        .to_string_lossy()
+        .into_owned())
+}
+
+fn manifest_path(argv: &[String]) -> Option<&str> {
+    let mut words = argv.iter().skip(1).take_while(|word| word.as_str() != "--");
+    while let Some(word) = words.next() {
+        if let Some(value) = word.strip_prefix("--manifest-path=") {
+            return Some(value);
+        }
+        if word == "--manifest-path" {
+            return words.next().map(String::as_str);
+        }
+    }
+    None
 }
 
 fn target_directory(argv: &[String]) -> Result<Option<String>, CiError> {

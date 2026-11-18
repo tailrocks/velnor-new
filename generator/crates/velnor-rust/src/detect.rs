@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    CompileInputs, PackageName, PolicyTools, RELEASE_CONFIG_PATH, RepoFacts, RepoPath, RepoView,
     RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain,
 };
 
@@ -14,6 +14,10 @@ use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::os_pins::pinned_for_runner;
+use crate::paths::{
+    is_cargo_lock, is_named, is_nested_toolchain, is_release_plz_config, is_workflow_file,
+    tracked_manifests,
+};
 use crate::policy::DENY_CONFIG;
 use crate::private_sources::private_sources;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
@@ -23,8 +27,9 @@ use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
 use crate::weaken::{is_nextest_config, weakenings};
 
-pub(crate) const HELPER_PACKAGE: &str = "velnor-ci";
 const CARGO_MANIFEST: &str = "Cargo.toml";
+
+pub(crate) const HELPER_PACKAGE: &str = "velnor-ci";
 
 #[must_use]
 pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
@@ -68,31 +73,6 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .collect()
 }
 
-fn is_cargo_lock(path: &RepoPath) -> bool {
-    path.as_str().rsplit('/').next() == Some(CARGO_LOCK.as_str())
-}
-
-fn is_nested_toolchain(path: &RepoPath) -> bool {
-    path.as_str().rsplit_once('/').is_some_and(|(_, name)| {
-        name == TOOLCHAIN_PLAIN.as_str() || name == TOOLCHAIN_TOML.as_str()
-    })
-}
-
-fn is_workflow_file(path: &RepoPath) -> bool {
-    path.as_str()
-        .strip_prefix(".github/workflows/")
-        .is_some_and(|name| {
-            !name.contains('/')
-                && std::path::Path::new(name)
-                    .extension()
-                    .is_some_and(|ext| ext == "yml" || ext == "yaml")
-        })
-}
-
-fn is_release_plz_config(path: &RepoPath) -> bool {
-    path.as_str().rsplit('/').next() == Some(RELEASE_PLZ_FILE)
-}
-
 pub fn metadata_roots(view: &RepoView) -> Result<Vec<RepoPath>, DetectError> {
     let config = config(view)?;
     let mut manifests: Vec<RepoPath> = tracked_manifests(&view.tracked_paths)
@@ -116,10 +96,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             });
         }
     }
-    let compile_inputs = view
-        .files
-        .get(&INPUTS_LOCK)
-        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_inputs_lock(bytes))?;
+    let compile_inputs = compile_inputs(view)?;
     let named = config.inputs.iter().flat_map(|input| &input.packages);
     if let Some(package) = unknown_package(&rust_roots, named) {
         return Err(DetectError::invalid(
@@ -136,6 +113,8 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
     crate::config_test_setup::check(&config, &rust_roots)?;
+    crate::groups::check(view, &config, &rust_roots)?;
+    crate::groups::check_shape(&config)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -158,6 +137,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::HelperSourceRelease,
         ));
     }
+    crate::groups::check_helper(&config, helper.as_ref())?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let policy = policy_tools(view, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
@@ -325,6 +305,12 @@ fn unknown_package<'p>(
         .map(ToString::to_string)
 }
 
+fn compile_inputs(view: &RepoView) -> Result<CompileInputs, DetectError> {
+    view.files
+        .get(&INPUTS_LOCK)
+        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_inputs_lock(bytes))
+}
+
 fn config(view: &RepoView) -> Result<RustCiConfig, DetectError> {
     let config = view
         .files
@@ -356,18 +342,6 @@ pub fn cargo_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
 #[must_use]
 pub fn manifests(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     tracked_manifests(tracked).cloned().collect()
-}
-
-fn tracked_manifests(tracked: &BTreeSet<RepoPath>) -> impl Iterator<Item = &RepoPath> {
-    tracked.iter().filter(|path| is_named(path, CARGO_MANIFEST))
-}
-
-fn is_named(path: &RepoPath, name: &str) -> bool {
-    path.as_str() == name
-        || path
-            .as_str()
-            .strip_suffix(name)
-            .is_some_and(|rest| rest.ends_with('/'))
 }
 
 fn check_nextest_harnesses(

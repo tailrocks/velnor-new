@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, Step, StepKind,
     TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
 };
 
@@ -16,6 +16,7 @@ use crate::gate::{
 };
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
+use crate::tests::Tests;
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
@@ -28,7 +29,6 @@ pub(crate) const UPLOAD_ARTIFACT: &str =
 pub(crate) const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 
-pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.1";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -59,10 +59,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             .iter()
             .any(|step| step.kind == StepKind::UploadCargoLog),
     };
-    let tests = job
-        .steps
-        .iter()
-        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
+    let tests = Tests::of(job);
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
@@ -96,18 +93,13 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                     ])
                     .into_iter()
                     .flatten()
-                    .map(|name| {
-                        (
-                            name.to_owned(),
-                            format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
-                        )
-                    }),
+                    .flat_map(|name| tests.outputs(name)),
             )
             .chain(lane_outputs(&job.steps))
             .collect(),
         steps: crate::helper_integrity::secure_steps(
             job,
-            job_steps(job, restores, audit, tests, lane),
+            job_steps(job, restores, audit, &tests, lane),
         ),
         ..RenderedJob::default()
     }
@@ -117,7 +109,7 @@ fn job_steps(
     job: &Job,
     restores: bool,
     audit: bool,
-    tests: bool,
+    tests: &Tests,
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     job.steps
@@ -139,21 +131,22 @@ fn rendered_steps(
     step: &Step,
     setup: Setup,
     audit: bool,
-    tests: bool,
+    tests: &Tests,
     lane: CargoLane,
     job_name: Option<&str>,
 ) -> Vec<RenderedStep> {
     let mut rendered = Vec::new();
     if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
-        rendered.push(cargo_step(&CargoCommand::BuildAll, true, lane));
+        rendered.push(cargo_step(
+            &CargoCommand::BuildAll,
+            step.manifest.as_ref(),
+            step.target_dir.as_ref(),
+            true,
+            lane,
+            None,
+        ));
     }
-    rendered.push(step_body(
-        &step.kind,
-        step.directory.as_ref(),
-        audit,
-        tests,
-        lane,
-    ));
+    rendered.push(step_body(step, audit, tests, lane));
     for body in &mut rendered {
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
@@ -216,15 +209,11 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
-fn step_body(
-    kind: &StepKind,
-    directory: Option<&RepoPath>,
-    audit: bool,
-    tests: bool,
-    lane: CargoLane,
-) -> RenderedStep {
+fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> RenderedStep {
+    let kind = &step.kind;
+    let directory = step.directory.as_ref();
     match kind {
-        StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests),
+        StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests.first_id()),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
         StepKind::CheckMetrics {
@@ -256,17 +245,22 @@ fn step_body(
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
-        StepKind::RustComponents(components) => RenderedStep {
-            name: "Add Rust components".to_owned(),
-            run: Some(format!("rustup component add {}", components.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::RustTargets(targets) => RenderedStep {
-            name: "Add Rust targets".to_owned(),
-            run: Some(format!("rustup target add {}", targets.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::Cargo(command) => cargo_step(command, audit, lane),
+        StepKind::RustComponents(components) => rustup_step(
+            "Add Rust components",
+            format!("rustup component add {}", components.join(" ")),
+        ),
+        StepKind::RustTargets(targets) => rustup_step(
+            "Add Rust targets",
+            format!("rustup target add {}", targets.join(" ")),
+        ),
+        StepKind::Cargo(command) => cargo_step(
+            command,
+            step.manifest.as_ref(),
+            step.target_dir.as_ref(),
+            audit,
+            lane,
+            reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
+        ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
         StepKind::InputsRestore(target) => {
@@ -284,23 +278,39 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::InstallHelper(release) => install_helper(release),
-        StepKind::FailOnDraftRun => RenderedStep {
-            name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
-            condition: Some(IS_DRAFT.to_owned()),
-            run: Some("exit 1".to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::FailOnDraftRun => fail_on_draft_run(),
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::Verdict {
             spec,
             needs_max_bytes,
         } => verdict_step(spec, *needs_max_bytes),
-        StepKind::FailWhenANeedFailed => RenderedStep {
-            name: "Fail when a Rust job failed or was cancelled".to_owned(),
-            condition: Some(A_NEED_FAILED.to_owned()),
-            run: Some("exit 1".to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::FailWhenANeedFailed => fail_when_a_need_failed(),
+    }
+}
+
+fn fail_when_a_need_failed() -> RenderedStep {
+    RenderedStep {
+        name: "Fail when a Rust job failed or was cancelled".to_owned(),
+        condition: Some(A_NEED_FAILED.to_owned()),
+        run: Some("exit 1".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+fn rustup_step(name: &str, run: String) -> RenderedStep {
+    RenderedStep {
+        name: name.to_owned(),
+        run: Some(run),
+        ..RenderedStep::default()
+    }
+}
+
+fn fail_on_draft_run() -> RenderedStep {
+    RenderedStep {
+        name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
+        condition: Some(IS_DRAFT.to_owned()),
+        run: Some("exit 1".to_owned()),
+        ..RenderedStep::default()
     }
 }
 

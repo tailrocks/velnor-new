@@ -8,12 +8,10 @@ use velnor_model::{
 
 use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
-use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
+use crate::steps::{RUN, RUN_DOCTESTS};
 
 const FINGERPRINT_LOG: &str =
     "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
-const DOC_RUN: &str =
-    "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 #[derive(Clone, Copy)]
 pub(crate) struct CargoLane {
@@ -44,8 +42,15 @@ impl ArtifactFormat {
     }
 }
 
-pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -> RenderedStep {
-    let (name, run, env) = cargo_command(command, lane.artifacts);
+pub(crate) fn cargo_step(
+    command: &CargoCommand,
+    manifest: Option<&RepoPath>,
+    target_dir: Option<&RepoPath>,
+    audit: bool,
+    lane: CargoLane,
+    test_id: Option<String>,
+) -> RenderedStep {
+    let (name, run, env) = cargo_command(command, lane.artifacts, manifest);
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
     } else {
@@ -53,9 +58,12 @@ pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -
     };
     RenderedStep {
         name,
-        id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
+        id: test_id,
         env: env
             .into_iter()
+            .chain(
+                target_dir.map(|dir| ("CARGO_TARGET_DIR".to_owned(), Value::Text(dir.to_string()))),
+            )
             .chain(lane.cache_debug.then(cache_debug_env))
             .collect(),
         run: Some(format!(
@@ -69,15 +77,21 @@ pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -
 fn cargo_command(
     command: &CargoCommand,
     artifacts: ArtifactFormat,
+    manifest: Option<&RepoPath>,
 ) -> (String, String, Vec<(String, Value)>) {
     let cargo = artifacts.cargo();
     let nextest = artifacts.nextest();
+    let path = manifest_flag(manifest);
     match command {
-        CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
-        CargoCommand::Clippy { extra } => clippy(cargo, extra),
-        CargoCommand::NextestBuild => nextest_build(nextest),
+        CargoCommand::FmtCheck => (
+            "Format".into(),
+            format!("cargo-fmt{path} --all --check"),
+            vec![],
+        ),
+        CargoCommand::Clippy { extra } => clippy(cargo, extra, &path),
+        CargoCommand::NextestBuild => nextest_build(nextest, &path),
         CargoCommand::NextestRun { filter } => {
-            nextest_run(&format!("--workspace --locked{nextest}"), filter)
+            nextest_run(&format!("--workspace --locked{nextest}"), filter, &path)
         }
         CargoCommand::NextestRunArchive { file, filter } => nextest_run(
             &format!(
@@ -85,11 +99,12 @@ fn cargo_command(
                 file.as_str().replace('\'', "'\\''")
             ),
             filter,
+            &path,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
             format!(
-                "cargo-nextest nextest archive --workspace --locked{nextest} --archive-file '{}'",
+                "cargo-nextest nextest archive{path} --workspace --locked{nextest} --archive-file '{}'",
                 file.as_str().replace('\'', "'\\''")
             ),
             vec![],
@@ -102,7 +117,7 @@ fn cargo_command(
         } => (
             format!("Test {package} {target}"),
             format!(
-                "cargo test -p {package} --locked{cargo} {}{}",
+                "cargo test{path} -p {package} --locked{cargo} {}{}",
                 test_selector(*kind, target),
                 feature_flag(features)
             ),
@@ -110,23 +125,29 @@ fn cargo_command(
         ),
         CargoCommand::Doctest => (
             "Doctests".into(),
-            format!("cargo test --doc --workspace --locked{cargo}"),
+            format!("cargo test{path} --doc --workspace --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Doc => ("Documentation".into(), format!("{DOC_RUN}{cargo}"), vec![]),
+        CargoCommand::Doc => (
+            "Documentation".into(),
+            format!(
+                "cargo doc{path} --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'{cargo}"
+            ),
+            vec![],
+        ),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
-            format!("cargo check -p {package} --locked{cargo}"),
+            format!("cargo check{path} -p {package} --locked{cargo}"),
             vec![],
         ),
         CargoCommand::BuildBinary { package, binary } => (
             format!("Build {package}"),
-            format!("cargo build -p {package} --bin {binary} --locked{cargo}"),
+            format!("cargo build{path} -p {package} --bin {binary} --locked{cargo}"),
             vec![],
         ),
         CargoCommand::BuildAll => (
             "Build every target".into(),
-            format!("cargo build --workspace --all-targets --locked{cargo}"),
+            format!("cargo build{path} --workspace --all-targets --locked{cargo}"),
             vec![],
         ),
         CargoCommand::Deny { manifest } => deny(manifest),
@@ -150,11 +171,11 @@ fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
     }
 }
 
-fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
+fn clippy(cargo: &str, extra: &[String], path: &str) -> (String, String, Vec<(String, Value)>) {
     (
         LINT_STEP.into(),
         [format!(
-            "cargo-clippy clippy --workspace --all-targets --locked{cargo} -- -D warnings"
+            "cargo-clippy clippy{path} --workspace --all-targets --locked{cargo} -- -D warnings"
         )]
         .into_iter()
         .chain(extra.iter().cloned())
@@ -173,25 +194,38 @@ fn cache_debug_env() -> (String, Value) {
     )
 }
 
-fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
+fn nextest_build(format: &str, path: &str) -> (String, String, Vec<(String, Value)>) {
     (
         BUILD_TESTS_STEP.into(),
         format!(
-            "cargo-nextest nextest run --workspace --locked{format} --ignore-default-filter --no-run"
+            "cargo-nextest nextest run{path} --workspace --locked{format} --ignore-default-filter --no-run"
         ),
         vec![],
     )
 }
 
-fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
+fn nextest_run(
+    scope: &str,
+    filter: &FilterRef,
+    path: &str,
+) -> (String, String, Vec<(String, Value)>) {
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run{path} {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
             nextest_filter(filter)
         ),
         vec![],
     )
+}
+
+fn manifest_flag(manifest: Option<&RepoPath>) -> String {
+    manifest.map_or_else(String::new, |path| {
+        format!(
+            " --manifest-path '{}'",
+            path.as_str().replace('\'', "'\\''")
+        )
+    })
 }
 
 fn nextest_filter(filter: &FilterRef) -> String {

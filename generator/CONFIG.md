@@ -31,6 +31,22 @@ Writing the configuration only above the checkout misses temporary directories. 
 
 This repository selects its scale-set runner and names its mirror in this configuration. Its existing engine and maintenance workflows are separate from the new generator and do not consume this setting. Running a generated Rust workflow requires the compatible helper release.
 
+## Workspace groups
+
+A repository with many small Cargo workspaces can check several of them in one job set, when the project asks for it. A group names the workspaces that share one job set; a workspace that no group names keeps its own jobs.
+
+```toml
+[[workspace_groups]]
+name = "tools"
+roots = ["tools/a", "tools/b", "tools/c"]
+```
+
+`name` is the group's job name and its cache name; it uses lowercase letters, digits and `_`, and it must not be the name of a Cargo root of the repository. `roots` are the folders of the roots' `Cargo.toml` files, or `.` for the repository root. Every root exists in the repository and belongs to at most one group, and a group has at least two roots.
+
+A group gets one set of jobs, named after the group. The job runs each cargo command once per root, one after another, with `--manifest-path` naming that root's manifest, from the repository root. All roots of a group share one build folder, `target-velnor/<name>`, so a crate that several of them use at the same version and features is compiled once. The group has one sources cache and one target cache, and the target cache key hashes the lock file of every root of the group. A root with nothing selected is skipped inside the job; the job itself runs when any root of the group is selected.
+
+The key needs a helper release that writes the plan output of every group (`0.1.82` or later); generation fails with an older pin.
+
 ## Test setup steps
 
 A test that needs a fixture, such as a built example executable or a provisioned service, declares one step per fixture. The generator runs each step before the first test step of every job of that root, in the order written. Each step is one command, because a generated `run:` value is one command with no shell logic; the logic lives in a script the repository commits. The script exports variables to later steps through `$GITHUB_ENV`.

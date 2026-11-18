@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, StepNeed, Unread,
-    Weakening,
+    Weakening, WorkspaceGroup,
 };
 use velnor_rust::{CONFIG_PATH, PolicyRuns};
 
@@ -60,6 +60,28 @@ pub fn outputs(
     lines.push(format!("rust_deny={}\n", lane(policy.deny)));
     lines.push(format!("rust_machete={}\n", lane(policy.machete)));
     Ok(lines.concat())
+}
+
+#[must_use]
+pub fn group_outputs(
+    groups: &[WorkspaceGroup],
+    selections: &BTreeMap<RepoPath, RustSelection>,
+) -> String {
+    groups
+        .iter()
+        .map(|group| {
+            let run = group
+                .roots
+                .iter()
+                .any(|root| !matches!(selections.get(root), None | Some(RustSelection::None)));
+            format!(
+                "rust_{}_mode={}\n",
+                group.gate,
+                if run { "run" } else { "none" }
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
 }
 
 #[must_use]
