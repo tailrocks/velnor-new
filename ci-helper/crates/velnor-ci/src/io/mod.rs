@@ -21,6 +21,7 @@ mod input_scopes;
 mod input_target;
 mod inputs;
 mod inputs_batch;
+mod inputs_git;
 mod manifests;
 mod plan;
 pub mod pump;
