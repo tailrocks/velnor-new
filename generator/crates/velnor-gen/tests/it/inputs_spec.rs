@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{BaseExpiry, RepoPath, StepKind, WORKFLOW_PATH};
+use velnor_model::{BaseExpiry, InputsCli, RepoPath, StepKind, WORKFLOW_PATH};
 use velnor_render::{MAX_RUN_CHARACTERS, render};
 
 use crate::facts::TestResult;
@@ -13,10 +13,14 @@ fn large_root_lists_use_short_commands_and_expression_safe_path_data() -> TestRe
         let manifest = RepoPath::new("dollar-${{x}} 'quoted/Cargo.toml")?;
         let target = RepoPath::new("cache-${{x}} 'quoted")?;
         let files = render(&plan(vec![
-            StepKind::InputsRestore(vec![(manifest, target.clone()); count]),
+            StepKind::InputsRestore {
+                roots: vec![(manifest, target.clone()); count],
+                cli: InputsCli::Batched,
+            },
             StepKind::RestoredTargets {
                 targets: vec![target; count],
                 expiry: BaseExpiry::Never,
+                cli: InputsCli::Batched,
             },
         ])?)
         .map_err(|found| format!("{found:?}"))?;

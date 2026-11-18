@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CratesMirror, HelperCommand, RepoPath};
+use velnor_model::{CratesMirror, HelperCommand, InputsCli, RepoPath};
 
 use crate::base_steps::base_age;
 use crate::gate::{PLAN_STEP, REPLAN_STEP};
@@ -11,7 +11,18 @@ use crate::steps::PREPARE_STEP;
 
 const SCOPE_CACHE: &str = "\"${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json\"";
 
-pub(crate) fn restore_inputs_step(roots: &[(RepoPath, RepoPath)]) -> RenderedStep {
+pub(crate) fn restore_inputs_step(
+    roots: &[(RepoPath, RepoPath)],
+    directory: Option<&RepoPath>,
+    cli: InputsCli,
+) -> RenderedStep {
+    if cli == InputsCli::PerRoot {
+        return roots
+            .first()
+            .map_or_else(RenderedStep::default, |(_, target)| {
+                inputs_step("restore", target, directory, cli)
+            });
+    }
     let mut args = String::new();
     for (manifest, target) in roots {
         let root = root_directory(manifest);
@@ -59,8 +70,22 @@ pub(crate) fn restore_inputs_step(roots: &[(RepoPath, RepoPath)]) -> RenderedSte
 pub(crate) fn restored_targets_step(
     targets: &[RepoPath],
     expiry: velnor_model::BaseExpiry,
+    cli: InputsCli,
 ) -> RenderedStep {
     let mut rendered = helper_step(HelperCommand::Restored(expiry));
+    if cli == InputsCli::PerRoot {
+        rendered.env.push((
+            "VELNOR_CACHE_TARGETS".to_owned(),
+            Value::Text(
+                targets
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            ),
+        ));
+        return rendered;
+    }
     let mut args = String::new();
     for target in targets {
         args.push_str(" --target-dir ");
@@ -111,9 +136,20 @@ pub(crate) fn inputs_step(
     verb: &str,
     target: &RepoPath,
     directory: Option<&RepoPath>,
+    cli: InputsCli,
 ) -> RenderedStep {
     let depth = directory.map_or(0, |dir| dir.as_str().split('/').count());
     let relative = format!("{}{}", "../".repeat(depth), target.as_str());
+    if cli == InputsCli::PerRoot {
+        return RenderedStep {
+            name: format!("velnor-ci inputs {verb}"),
+            run: Some(format!(
+                "velnor-ci inputs {verb} --target-dir {}",
+                shell_word(&relative)
+            )),
+            ..RenderedStep::default()
+        };
+    }
     let mut rendered = RenderedStep {
         id: (verb == "save").then(|| "inputs_save".to_owned()),
         name: format!("velnor-ci inputs {verb}"),

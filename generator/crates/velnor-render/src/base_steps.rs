@@ -3,8 +3,8 @@
 
 use velnor_model::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, BaseExpiry, CacheKey, CacheLaneOutput, HelperCommand,
-    JobId, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind, TrimFamily,
-    cache_lane_outputs,
+    InputsCli, JobId, RepoPath, SOURCES_PREFIX_OUTPUT, SOURCES_SAVED_OUTPUT, Step, StepKind,
+    TrimFamily, cache_lane_outputs,
 };
 
 use crate::cache::render_key;
@@ -23,9 +23,9 @@ pub(crate) fn cache_decide(
     target: &RepoPath,
     archive: Option<&RepoPath>,
     manifests: &[RepoPath],
+    cli: InputsCli,
 ) -> RenderedStep {
     let mut rendered = RenderedStep {
-        condition: Some("${{ steps.inputs_save.outcome == 'success' }}".to_owned()),
         id: Some(BASE_STEP.to_owned()),
         name: "Decide whether to save the build directory".to_owned(),
         env: vec![(
@@ -48,6 +48,10 @@ pub(crate) fn cache_decide(
         )),
         ..RenderedStep::default()
     };
+    if cli == InputsCli::PerRoot {
+        return rendered;
+    }
+    rendered.condition = Some("${{ steps.inputs_save.outcome == 'success' }}".to_owned());
     if target.as_str().contains("${{")
         || archive.is_some_and(|path| path.as_str().contains("${{"))
         || rendered

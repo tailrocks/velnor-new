@@ -4,13 +4,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers, When,
-    WorkflowPlan,
+    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host,
+    InputsCli, Job, JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts,
+    RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
+    When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
+use crate::base_cache::{inputs_cli, restored};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -279,36 +280,14 @@ pub(crate) fn setup_roots(
             })),
         ]);
     }
-    toolchain.extend(restore_steps(facts, roots));
+    if breaks_ties(facts) {
+        toolchain.extend(restore_file_times(facts, roots));
+    }
+    toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
     }));
-    steps
-}
-
-fn restore_steps(facts: &RepoFacts, roots: &[RustRoot]) -> Vec<Step> {
-    let mut steps = Vec::new();
-    if breaks_ties(facts) {
-        steps.push(step(StepKind::InputsRestore(
-            roots
-                .iter()
-                .map(|root| (root.manifest.clone(), root.target_dir.clone()))
-                .collect(),
-        )));
-    }
-    let mut restored = crate::base_cache::restored(facts);
-    if breaks_ties(facts) {
-        for step in &mut restored {
-            if let StepKind::Helper(HelperCommand::Restored(expiry)) = step.kind {
-                step.kind = StepKind::RestoredTargets {
-                    targets: roots.iter().map(|root| root.target_dir.clone()).collect(),
-                    expiry,
-                };
-            }
-        }
-    }
-    steps.extend(restored);
     steps
 }
 
@@ -325,8 +304,8 @@ fn upload_cargo_logs(jobs: &mut [Job]) {
                 .find(|step| {
                     matches!(
                         step.kind,
-                        StepKind::RestoredTargets { .. }
-                            | StepKind::Helper(HelperCommand::Restored(..))
+                        StepKind::Helper(HelperCommand::Restored(..))
+                            | StepKind::RestoredTargets { .. }
                     )
                 })
                 .and_then(|step| step.gate.clone());
@@ -344,6 +323,27 @@ fn breaks_ties(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|helper| helper.version().at_least(TIE_BREAKING_HELPER))
+}
+
+fn restore_file_times(facts: &RepoFacts, roots: &[RustRoot]) -> Vec<Step> {
+    let cli = inputs_cli(facts);
+    if cli == InputsCli::Batched {
+        let roots = roots
+            .iter()
+            .map(|root| (root.manifest.clone(), root.target_dir.clone()))
+            .collect();
+        return vec![step(StepKind::InputsRestore { roots, cli })];
+    }
+    roots
+        .iter()
+        .map(|root| Step {
+            directory: root.manifest.parent(),
+            ..step(StepKind::InputsRestore {
+                roots: vec![(root.manifest.clone(), root.target_dir.clone())],
+                cli,
+            })
+        })
+        .collect()
 }
 
 pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {

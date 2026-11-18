@@ -47,4 +47,4 @@ pub use selection::{
 };
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
-pub use steps::{BaseExpiry, HelperCommand, StepKind, TrimFamily};
+pub use steps::{BaseExpiry, HelperCommand, InputsCli, StepKind, TrimFamily};

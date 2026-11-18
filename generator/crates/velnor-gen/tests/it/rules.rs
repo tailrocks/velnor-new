@@ -7,9 +7,9 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform,
-    PullRequestType, RepoPath, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
-    WorkflowPlan,
+    CommitSha, Concurrency, HelperRelease, HelperVersion, InputsCli, Job, JobId, Permissions,
+    Platform, PullRequestType, RepoPath, RunnerLabel, Sha256, Step, StepKind, Triggers,
+    WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::{
     MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
@@ -312,8 +312,14 @@ fn one_command_steps_render_a_single_line_each() -> TestResult {
     let manifest = RepoPath::new("Cargo.toml")?;
     let target = RepoPath::new("target")?;
     let files = render(&plan(vec![
-        StepKind::InputsSave(target.clone()),
-        StepKind::InputsRestore(vec![(manifest, target)]),
+        StepKind::InputsSave {
+            target: target.clone(),
+            cli: InputsCli::Batched,
+        },
+        StepKind::InputsRestore {
+            roots: vec![(manifest, target)],
+            cli: InputsCli::Batched,
+        },
         StepKind::GeneratorCheck,
     ])?)
     .map_err(|found| format!("{found:?}"))?;

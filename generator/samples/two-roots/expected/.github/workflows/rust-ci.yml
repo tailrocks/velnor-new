@@ -165,12 +165,15 @@ jobs:
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
             velnor-tgt-rust-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        run: '. "$VELNOR_EXEC" inputs restore-all --root-target "${GITHUB_WORKSPACE}"/. "${GITHUB_WORKSPACE}"/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
+        run: '. "$VELNOR_EXEC" inputs restore --target-dir target'
       - id: restored
         name: velnor-ci restored
         env:
           VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
-        run: '. "$VELNOR_EXEC" restored --target-dir "${GITHUB_WORKSPACE}"/target --target-dir "${GITHUB_WORKSPACE}"/xtask/target'
+          VELNOR_CACHE_TARGETS: |
+            target
+            xtask/target
+        run: '. "$VELNOR_EXEC" restored'
       - id: replan
         name: velnor-ci plan --full
         if: '${{ steps.restored.outputs.expired == ''true'' }}'
@@ -204,13 +207,12 @@ jobs:
         env:
           DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
         run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
-      - id: inputs_save
-        name: velnor-ci inputs save
+      - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
-        run: '. "$VELNOR_EXEC" inputs save --target-dir target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
+        run: '. "$VELNOR_EXEC" inputs save --target-dir target'
       - id: base
         name: Decide whether to save the build directory
-        if: '${{ ((steps.inputs_save.outcome == ''success'') && (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch''))) && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         env:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
@@ -365,12 +367,16 @@ jobs:
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        run: '. "$VELNOR_EXEC" inputs restore-all --root-target "${GITHUB_WORKSPACE}"/xtask "${GITHUB_WORKSPACE}"/xtask/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
+        working-directory: xtask
+        run: '. "$VELNOR_EXEC" inputs restore --target-dir ../xtask/target'
       - id: restored
         name: velnor-ci restored
         env:
           VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
-        run: '. "$VELNOR_EXEC" restored --target-dir "${GITHUB_WORKSPACE}"/target --target-dir "${GITHUB_WORKSPACE}"/xtask/target'
+          VELNOR_CACHE_TARGETS: |
+            target
+            xtask/target
+        run: '. "$VELNOR_EXEC" restored'
       - id: replan
         name: velnor-ci plan --full
         if: '${{ steps.restored.outputs.expired == ''true'' }}'
@@ -402,14 +408,13 @@ jobs:
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_xtask_test_filter || needs.rust-plan.outputs.rust_xtask_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
-      - id: inputs_save
-        name: velnor-ci inputs save
+      - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: xtask
-        run: '. "$VELNOR_EXEC" inputs save --target-dir ../xtask/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
+        run: '. "$VELNOR_EXEC" inputs save --target-dir ../xtask/target'
       - id: base
         name: Decide whether to save the build directory
-        if: '${{ ((steps.inputs_save.outcome == ''success'') && (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch''))) && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
+        if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         env:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
@@ -568,12 +573,18 @@ jobs:
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('xtask/Cargo.lock') }}-
             velnor-tgt-rust-xtask.xtask.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
-        run: '. "$VELNOR_EXEC" inputs restore-all --root-target "${GITHUB_WORKSPACE}"/. "${GITHUB_WORKSPACE}"/target --root-target "${GITHUB_WORKSPACE}"/xtask "${GITHUB_WORKSPACE}"/xtask/target --scope-cache "${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json"'
+        run: '. "$VELNOR_EXEC" inputs restore --target-dir target'
+      - name: velnor-ci inputs restore
+        working-directory: xtask
+        run: '. "$VELNOR_EXEC" inputs restore --target-dir ../xtask/target'
       - id: restored
         name: velnor-ci restored
         env:
           VELNOR_BASE_MAX_AGE_DAYS: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && ''7'' || ''0'' }}'
-        run: '. "$VELNOR_EXEC" restored --target-dir "${GITHUB_WORKSPACE}"/target --target-dir "${GITHUB_WORKSPACE}"/xtask/target'
+          VELNOR_CACHE_TARGETS: |
+            target
+            xtask/target
+        run: '. "$VELNOR_EXEC" restored'
       - id: replan
         name: velnor-ci plan --full
         if: '${{ steps.restored.outputs.expired == ''true'' }}'

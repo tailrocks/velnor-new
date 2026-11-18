@@ -59,7 +59,7 @@ fn released_helper_restores_inputs_after_checkout_and_cache_before_repository_co
                 .get_mut(&path(".velnor/rust-ci.lock")?)
                 .ok_or("missing helper lock")?;
             *lock = String::from_utf8(lock.clone())?
-                .replace("0.1.79", "0.1.81")
+                .replace("0.1.81", "0.1.82")
                 .into_bytes();
             let yaml: serde_json::Value = serde_saphyr::from_str(&workflow(&repo)?)?;
             let jobs = yaml["jobs"].as_object().ok_or("missing jobs")?;
@@ -98,7 +98,7 @@ fn released_helper_restores_inputs_after_checkout_and_cache_before_repository_co
 
 #[test]
 fn custom_target_cache_and_inputs_restore_use_the_configured_directory() -> TestResult {
-    let mut repo = locked("0.1.81")?;
+    let mut repo = locked("0.1.82")?;
     let path = RepoPath::new(".cargo/config.toml")?;
     repo.tracked_paths.insert(path.clone());
     repo.files
@@ -131,7 +131,7 @@ fn custom_target_cache_and_inputs_restore_use_the_configured_directory() -> Test
 
 #[test]
 fn inputs_restore_uses_each_cached_target_directory_from_any_working_directory() -> TestResult {
-    let mut repo = locked("0.1.81")?;
+    let mut repo = locked("0.1.82")?;
     let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     repo.rust_metadata = more.rust_metadata;
     repo.tracked_paths.extend(more.tracked_paths);

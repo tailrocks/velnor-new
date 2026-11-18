@@ -207,10 +207,18 @@ fn a_cargo_config_outside_a_root_still_saves_and_one_on_the_root_does_not() -> T
 }
 
 fn rooted(root: &str, configs: &[(&str, &str)]) -> Result<RepoView, Box<dyn std::error::Error>> {
+    rooted_at("0.1.81", root, configs)
+}
+
+fn rooted_at(
+    version: &str,
+    root: &str,
+    configs: &[(&str, &str)],
+) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut view = crate::pipeline::view(&[root], Some(b""))?;
     view.files.insert(
         LOCK_PATH,
-        pin_lock("0.1.81", COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock(version, COMMIT_FILE, SUMS)?.into_bytes(),
     );
     for (path, text) in configs {
         view.files.insert(RepoPath::new(*path)?, (*text).into());
@@ -314,7 +322,7 @@ fn input_timestamps_save_and_restore_in_the_configured_target_directory() -> Tes
             "app",
         ),
     ] {
-        let mut view = rooted(manifest, &[])?;
+        let mut view = rooted_at("0.1.82", manifest, &[])?;
         crate::cache_key_defects::with_config(
             &mut view,
             config,

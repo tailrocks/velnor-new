@@ -14,6 +14,7 @@ use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
     sources_step, verdict_step,
 };
+use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
@@ -249,7 +250,8 @@ fn step_body(
             target,
             archive,
             manifests,
-        } => cache_decide(target, archive.as_ref(), manifests),
+            cli,
+        } => cache_decide(target, archive.as_ref(), manifests, *cli),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
@@ -265,11 +267,13 @@ fn step_body(
         },
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
-        StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
-        StepKind::InputsRestore(roots) => crate::helper_steps::restore_inputs_step(roots),
-        StepKind::RestoredTargets { targets, expiry } => {
-            crate::helper_steps::restored_targets_step(targets, *expiry)
-        }
+        StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
+        StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),
+        StepKind::RestoredTargets {
+            targets,
+            expiry,
+            cli,
+        } => restored_targets_step(targets, *expiry, *cli),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),

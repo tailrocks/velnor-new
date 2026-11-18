@@ -39,7 +39,7 @@ fn names_of(lane: &str) -> Vec<&str> {
 #[test]
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
-    let mut repo = locked("0.1.81")?;
+    let mut repo = locked("0.1.82")?;
     repo.files.insert(
         RepoPath::new(".velnor/rust-ci.toml")?,
         b"full_run = \"nightly\"\n".to_vec(),

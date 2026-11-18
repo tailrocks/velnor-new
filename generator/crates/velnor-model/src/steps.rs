@@ -7,6 +7,15 @@ use crate::ids::{JobId, RepoPath};
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
+/// The `velnor-ci` command line of the input and base-cache steps. A helper
+/// release renders only the commands it has: 0.1.81 has the per-root ones,
+/// and the batched ones need 0.1.82.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputsCli {
+    PerRoot,
+    Batched,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StepKind {
     Checkout {
@@ -20,11 +29,13 @@ pub enum StepKind {
     RestoredTargets {
         expiry: BaseExpiry,
         targets: Vec<RepoPath>,
+        cli: InputsCli,
     },
     CacheDecide {
         manifests: Vec<RepoPath>,
         target: RepoPath,
         archive: Option<RepoPath>,
+        cli: InputsCli,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -47,8 +58,14 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
-    InputsSave(RepoPath),
-    InputsRestore(Vec<(RepoPath, RepoPath)>),
+    InputsSave {
+        target: RepoPath,
+        cli: InputsCli,
+    },
+    InputsRestore {
+        roots: Vec<(RepoPath, RepoPath)>,
+        cli: InputsCli,
+    },
     CratesMirror(crate::repo::CratesMirror),
     TestSetup {
         name: String,

@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, PermissionScope,
-    Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
+    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, InputsCli, Job, JobId,
+    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -14,6 +14,21 @@ use crate::plan::{job, step};
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
+/// The first release with `inputs restore-all`, `--scope-cache` and the
+/// `--*-env` forms of the path arguments; 0.1.81 lacks them.
+const BATCHED_HELPER: (u64, u64, u64) = (0, 1, 82);
+
+pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
+    let batched = facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(BATCHED_HELPER));
+    if batched {
+        InputsCli::Batched
+    } else {
+        InputsCli::PerRoot
+    }
+}
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
@@ -40,6 +55,7 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
                 .iter()
                 .map(|root| root.target_dir.clone())
                 .collect(),
+            cli: inputs_cli(facts),
         }
     } else {
         StepKind::Helper(HelperCommand::Restored(expiry))
@@ -82,7 +98,10 @@ pub(crate) fn save_steps(
         Step {
             directory: root.manifest.parent(),
             when: When::SaveBase,
-            ..step(StepKind::InputsSave(root.target_dir.clone()))
+            ..step(StepKind::InputsSave {
+                target: root.target_dir.clone(),
+                cli: inputs_cli(facts),
+            })
         },
         Step {
             when: When::SaveBase,
@@ -94,6 +113,7 @@ pub(crate) fn save_steps(
                     .collect(),
                 target: root.target_dir.clone(),
                 archive,
+                cli: inputs_cli(facts),
             })
         },
         Step {
