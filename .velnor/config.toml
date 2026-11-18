@@ -982,6 +982,7 @@ inputs = [
   "generator/samples/on-main-everything/expected/.github/workflows/rust-ci.yml",
   "generator/samples/single-crate/expected/.github/workflows/rust-ci.yml",
   "generator/samples/two-roots/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/two-roots-per-root-audit/expected/.github/workflows/rust-ci.yml",
   "generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml",
   "mise.toml",
 ]

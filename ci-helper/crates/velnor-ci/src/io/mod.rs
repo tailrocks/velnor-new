@@ -160,10 +160,11 @@ fn run(cli: Cli) -> Result<String, CiError> {
                 || restore_inputs(&root, &args.target_dir),
             )
         }
-        Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => audit_inputs(
+        Command::Inputs(InputsCommand::Audit(AuditArgs { write, root })) => audit_inputs(
             &current_dir()?,
             &AuditOptions {
                 write,
+                root,
                 ..AuditOptions::default()
             },
         ),

@@ -216,6 +216,14 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
+fn rustup(noun: &str, plural: &str, names: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: format!("Add Rust {plural}"),
+        run: Some(format!("rustup {noun} add {}", names.join(" "))),
+        ..RenderedStep::default()
+    }
+}
+
 fn step_body(
     kind: &StepKind,
     directory: Option<&RepoPath>,
@@ -256,18 +264,13 @@ fn step_body(
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
-        StepKind::RustComponents(components) => RenderedStep {
-            name: "Add Rust components".to_owned(),
-            run: Some(format!("rustup component add {}", components.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::RustTargets(targets) => RenderedStep {
-            name: "Add Rust targets".to_owned(),
-            run: Some(format!("rustup target add {}", targets.join(" "))),
-            ..RenderedStep::default()
-        },
+        StepKind::RustComponents(components) => rustup("component", "components", components),
+        StepKind::RustTargets(targets) => rustup("target", "targets", targets),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::InputsAuditRoot(directory) => {
+            crate::helper_steps::audit_root_step(directory.as_ref())
+        }
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
         StepKind::InputsRestore(target) => {
             crate::helper_steps::inputs_step("restore", target, directory)

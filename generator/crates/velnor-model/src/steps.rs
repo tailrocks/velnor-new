@@ -47,6 +47,8 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    /// `velnor-ci inputs audit --root <directory>`: audit only the Cargo root that this lane built.
+    InputsAuditRoot(Option<RepoPath>),
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),

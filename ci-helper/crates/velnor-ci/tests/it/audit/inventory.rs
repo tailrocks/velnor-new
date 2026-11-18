@@ -185,6 +185,7 @@ fn directly_named_files_do_not_consume_the_directory_walk_budget() {
         &velnor_ci::io::AuditOptions {
             write: true,
             max_directory_entries: 8,
+            root: None,
         },
     );
     assert!(written.is_ok(), "{written:?}");

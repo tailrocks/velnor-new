@@ -48,6 +48,7 @@ mod io_identity;
 mod io_manifests;
 mod io_record;
 mod io_record_boundaries;
+mod per_root_audit;
 
 mod job_setup;
 mod mise_safety;

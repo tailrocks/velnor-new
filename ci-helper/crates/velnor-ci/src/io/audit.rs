@@ -15,7 +15,7 @@ use std::path::Path;
 use std::time::SystemTime;
 
 use velnor_gen::io::read_checkout;
-use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
+use velnor_model::{CompileInputs, MemberDependency, PackageName, RepoFacts, RepoPath, RustRoot};
 use velnor_rust::{
     INPUTS_LOCK, Located, Owner, Owners, add_reads, detect, format_inputs_lock, locate,
     parse_inputs_lock, rerun_if_changed, unlisted,
@@ -53,7 +53,7 @@ pub(super) struct Audit<'a> {
 pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
-    let listed = checkout
+    let mut listed = checkout
         .view
         .files
         .remove(&INPUTS_LOCK)
@@ -62,8 +62,8 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .map_err(|e| failed(&e))?
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
-    let workspaces = facts
-        .rust_roots
+    let roots = selected_roots(&facts, options.root.as_deref())?;
+    let workspaces = roots
         .iter()
         .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
         .collect::<Result<Vec<_>, _>>()?;
@@ -118,7 +118,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
             }
         })
         .collect::<Result<Vec<_>, _>>()?;
-    complete(&facts, &workspaces, &audit.built, &platforms)?;
+    complete(&facts, &roots, &workspaces, &audit.built, &platforms)?;
     audit.check_stale()?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
@@ -126,7 +126,60 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         write_lock(&checkout.root.join(INPUTS_LOCK.as_str()), &audit.found)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
+    if options.root.is_some() {
+        listed = within(listed, &roots);
+    }
     compare(&audit.found, &listed, &summary)
+}
+
+/// The lock lines of packages that are members of the selected roots.
+fn within(listed: CompileInputs, roots: &[&RustRoot]) -> CompileInputs {
+    let members: BTreeSet<&PackageName> = roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .map(|member| &member.name)
+        .collect();
+    listed
+        .into_iter()
+        .filter_map(|(path, packages)| {
+            let packages: BTreeSet<PackageName> = packages
+                .into_iter()
+                .filter(|package| members.contains(package))
+                .collect();
+            (!packages.is_empty()).then_some((path, packages))
+        })
+        .collect()
+}
+
+/// Every Cargo root, or with `--root` only the one whose manifest sits in that directory.
+fn selected_roots<'a>(
+    facts: &'a RepoFacts,
+    directory: Option<&str>,
+) -> Result<Vec<&'a RustRoot>, CiError> {
+    let Some(directory) = directory else {
+        return Ok(facts.rust_roots.iter().collect());
+    };
+    let wanted = directory.trim_end_matches('/');
+    let wanted = wanted.strip_prefix("./").unwrap_or(wanted);
+    let wanted = if wanted.is_empty() { "." } else { wanted };
+    let directory_of = |root: &RustRoot| {
+        root.manifest
+            .parent()
+            .map_or_else(|| ".".to_owned(), |parent| parent.as_str().to_owned())
+    };
+    let found: Vec<&RustRoot> = facts
+        .rust_roots
+        .iter()
+        .filter(|root| directory_of(root) == wanted)
+        .collect();
+    if found.is_empty() {
+        let known: Vec<String> = facts.rust_roots.iter().map(directory_of).collect();
+        return Err(CiError::new(format!(
+            "no Cargo root in {wanted}; the roots are {}",
+            known.join(", ")
+        )));
+    }
+    Ok(found)
 }
 
 fn gated(facts: &RepoFacts) -> bool {
@@ -148,12 +201,12 @@ fn gated(facts: &RepoFacts) -> bool {
 
 fn complete(
     facts: &RepoFacts,
+    roots: &[&RustRoot],
     workspaces: &[Workspace],
     built: &[Built],
     platforms: &[Platforms],
 ) -> Result<(), CiError> {
-    let gaps: Vec<String> = facts
-        .rust_roots
+    let gaps: Vec<String> = roots
         .iter()
         .zip(workspaces)
         .zip(built)

@@ -202,6 +202,11 @@ pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
     });
     (
         restores,
-        has(|kind| *kind == StepKind::Helper(HelperCommand::InputsAudit)),
+        has(|kind| {
+            matches!(
+                kind,
+                StepKind::Helper(HelperCommand::InputsAudit) | StepKind::InputsAuditRoot(..)
+            )
+        }),
     )
 }

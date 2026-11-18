@@ -232,6 +232,13 @@ pub struct AuditArgs {
         help = "Write .velnor/rust-inputs.lock, one path<TAB>package line per read, instead of checking it"
     )]
     pub write: bool,
+    #[arg(
+        long,
+        value_name = "DIR",
+        conflicts_with = "write",
+        help = "Audit only the Cargo root whose manifest is in DIR (. for the repository root), from that root's own target directory, so each lane that built a root can audit it. Other roots are neither read nor required to be built; lines of the lock for packages outside the root are not checked"
+    )]
+    pub root: Option<String>,
 }
 
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};

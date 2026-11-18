@@ -173,6 +173,7 @@ fn repeated_directory_declarations_share_the_audit_scan_budget() {
         &velnor_ci::io::AuditOptions {
             write: true,
             max_directory_entries: 8,
+            root: None,
         },
     );
     assert!(written.is_ok(), "{written:?}");
@@ -215,6 +216,7 @@ fn distinct_declared_trees_cannot_exceed_the_audit_scan_budget() {
         &velnor_ci::io::AuditOptions {
             write: true,
             max_directory_entries: 8,
+            root: None,
         },
     );
     assert!(

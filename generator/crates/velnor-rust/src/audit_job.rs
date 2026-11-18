@@ -11,7 +11,19 @@ use crate::plan::{job, setup_roots, step};
 
 pub(crate) const AUDIT_JOB: JobId = JobId::from_static("rust-inputs-audit");
 
+/// Helpers from this release audit one Cargo root with `inputs audit --root`,
+/// so each lane audits the root it built and no job builds the roots again.
+pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least((0, 1, 82)))
+}
+
 pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
+    if audits_per_root(facts) {
+        return None;
+    }
     if facts.rust_roots.len() == 1 && !jobs.iter().any(|job| job.needs.contains(&AUDIT_JOB)) {
         return None;
     }
