@@ -345,6 +345,21 @@ impl OwnedResources {
         }
         let identity = format!("volume:{name}");
         self.begin_delete(&identity)?;
+        let current = match deadline(docker.inspect_volume(name), Duration::from_secs(3)).await? {
+            Ok(current) => current,
+            Err(error) if missing(&error) => {
+                self.finish_delete(&identity)?;
+                return Ok(());
+            }
+            Err(_) => return Err(HostError::Docker),
+        };
+        if !volume_owned(&current, name, &self.run_id, role)
+            || current.created_at != volume.created_at
+            || current.mountpoint != volume.mountpoint
+        {
+            self.finish_delete(&identity)?;
+            return Err(HostError::Ownership);
+        }
         let options = RemoveVolumeOptionsBuilder::new().force(false).build();
         match deadline(
             docker.remove_volume(name, Some(options)),
