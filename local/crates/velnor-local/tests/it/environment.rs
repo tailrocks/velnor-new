@@ -16,10 +16,9 @@ fn plain(dir: &std::path::Path, runners: u16, fork_runners: u16) -> EnvironmentA
         dir: dir.to_path_buf(),
         runners,
         fork_runners,
-        default_branch: "main".to_owned(),
         runner: RunnerMode::Plain,
         velnor_host: Some("velnor-host".into()),
-        policy: None,
+        ..EnvironmentArgs::default()
     }
 }
 
