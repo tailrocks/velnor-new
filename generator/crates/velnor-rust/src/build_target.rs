@@ -12,7 +12,6 @@ const KEY: &str = "build.target";
 
 struct ConfigTargets {
     named: Vec<(RepoPath, String)>,
-    configured: bool,
     host: Option<RepoPath>,
 }
 
@@ -124,7 +123,6 @@ fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets,
     let mut named = Vec::new();
     let mut kind = None;
     let mut scalar_seen = false;
-    let mut configured = false;
     let mut host = None;
     for (file, bytes, _) in nearest_first(view, manifest) {
         let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
@@ -142,7 +140,6 @@ fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets,
         };
         match value {
             toml::Value::String(one) => {
-                configured = true;
                 if kind == Some(true) {
                     return Err(invalid());
                 }
@@ -154,7 +151,6 @@ fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets,
                 }
             }
             toml::Value::Array(many) => {
-                configured |= !many.is_empty();
                 if kind == Some(false) {
                     return Err(invalid());
                 }
@@ -173,13 +169,5 @@ fn config_targets(view: &RepoView, manifest: &RepoPath) -> Result<ConfigTargets,
         }
     }
     named.retain(|(_, name)| name != HOST);
-    Ok(ConfigTargets {
-        named,
-        configured,
-        host,
-    })
-}
-
-pub(crate) fn sets_build_target(view: &RepoView, manifest: &RepoPath) -> Result<bool, DetectError> {
-    config_targets(view, manifest).map(|config| config.configured)
+    Ok(ConfigTargets { named, host })
 }

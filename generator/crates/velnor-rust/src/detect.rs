@@ -135,6 +135,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
+    crate::config_test_setup::check(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -147,6 +148,16 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
+    if config.helper.is_some()
+        && !helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least((0, 1, 81)))
+    {
+        return Err(DetectError::invalid(
+            &LOCK_PATH,
+            Reason::HelperSourceRelease,
+        ));
+    }
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let policy = policy_tools(view, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
@@ -211,10 +222,6 @@ fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
         None => Err(DetectError::invalid(
             &CONFIG_PATH,
             Reason::HelperBox(path.clone()),
-        )),
-        Some(root) if root.sets_build_target => Err(DetectError::invalid(
-            &CONFIG_PATH,
-            Reason::HelperTarget(path.clone()),
         )),
         Some(_) => Ok(()),
     }

@@ -21,7 +21,8 @@ use velnor_rust::{
     parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::units::{UnitFile, Workspace, apart, platforms, profile, unit_files, workspace};
+use super::unit_platforms::platforms;
+use super::units::{UnitFile, Workspace, apart, profile, unit_files, workspace};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 use crate::platform::Platforms;
@@ -42,7 +43,8 @@ pub(super) struct Audit<'a> {
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
-    target_bytes: u64,
+    /// Bytes read from each Cargo root's target directory, bounded per root.
+    target_bytes: Vec<u64>,
     stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,
@@ -86,7 +88,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
             })
             .collect(),
         found: CompileInputs::new(),
-        target_bytes: 0,
+        target_bytes: vec![0; workspaces.len()],
         stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
@@ -260,7 +262,7 @@ impl Audit<'_> {
                     return Ok(());
                 }
                 let package = identity.as_ref().map(|(package, _)| package.as_str());
-                let Some((source, _)) = self.dep_info(workspace, file, package)? else {
+                let Some((source, _)) = self.dep_info(workspace, index, file, package)? else {
                     return Ok(());
                 };
                 if let (Some(configuration), Some((package, fingerprint))) =
@@ -299,7 +301,7 @@ impl Audit<'_> {
         configuration: &str,
         package: &str,
     ) -> Result<bool, CiError> {
-        let text = self.build_output_text(file)?;
+        let text = self.build_output_text(index, file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
         let mut current = false;

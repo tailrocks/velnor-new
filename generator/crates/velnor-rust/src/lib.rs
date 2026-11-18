@@ -11,7 +11,9 @@ mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_helper;
 mod config_mirror;
+mod config_test_setup;
 mod credentials;
 mod detect;
 mod doc_steps;
@@ -44,6 +46,7 @@ mod sha256;
 mod shape;
 mod sibling_features;
 mod target_dir;
+mod test_setup;
 mod timings;
 mod toml_file;
 mod toolchain;
@@ -85,7 +88,10 @@ pub use sha256::sha256_hex;
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
-pub use verdict::{JobResult, Need, PlanOutput, TestCounts, Verdict, decide, verdict};
+pub use verdict::{
+    JobResult, Need, PackageCounts, PlanOutput, TestCounts, Verdict, decide, encode_package_counts,
+    package_token, verdict,
+};
 pub use weaken::introduced;
 
 pub use private_sources::{cacheable_config, cacheable_lock};

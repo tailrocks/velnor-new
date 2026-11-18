@@ -15,11 +15,11 @@ use crate::pipeline::{view, workflow};
 
 const DEBUG_LOG: &str = "CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'";
 
-fn steps(text: &str) -> Vec<&str> {
+pub(crate) fn steps(text: &str) -> Vec<&str> {
     text.split("\n      - ").skip(1).collect()
 }
 
-fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
+pub(crate) fn named<'t>(text: &'t str, name: &str) -> Vec<&'t str> {
     steps(text)
         .into_iter()
         .filter(|step| {
@@ -55,7 +55,10 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
         let end = rest
             .find("\n  rust-")
             .or_else(|| rest.find("\n  required:"));
-        let order = names_of(end.map_or(rest, |end| &rest[..end]));
+        let order: Vec<&str> = names_of(end.map_or(rest, |end| &rest[..end]))
+            .into_iter()
+            .filter(|name| *name != "Verify the released helper")
+            .collect();
         let restored = order
             .iter()
             .position(|name| *name == "velnor-ci restored")
@@ -92,101 +95,22 @@ fn a_helper_older_than_0_1_81_gets_no_inputs_restore_and_a_newer_one_gets_it() -
 }
 
 #[test]
-fn custom_target_cache_and_inputs_restore_use_the_configured_directory() -> TestResult {
-    let mut repo = locked("0.1.81")?;
-    let path = RepoPath::new(".cargo/config.toml")?;
-    repo.tracked_paths.insert(path.clone());
-    repo.files
-        .insert(path, b"[build]\ntarget-dir = \"custom-target\"\n".to_vec());
-    let text = workflow(&repo)?;
-    let caches = named(&text, "Restore the target cache");
-    let restores = named(&text, "velnor-ci inputs restore");
-    assert_ne!(caches.len(), 0);
-    assert_ne!(restores.len(), 0);
-    assert!(
-        caches
-            .iter()
-            .all(|step| step.contains("path: custom-target\n"))
-    );
-    for step in restores {
-        let command = step
-            .lines()
-            .find_map(|line| line.trim().strip_prefix("run: "))
-            .ok_or("no command")?;
-        let yaml = crate::yaml_tree::parse(&format!("run: {command}"))?;
-        assert_eq!(
-            yaml.get("run").and_then(crate::yaml_tree::Node::text),
-            Some(
-                "velnor-ci inputs restore-all --root-target \"${GITHUB_WORKSPACE}\"/. \"${GITHUB_WORKSPACE}\"/custom-target --scope-cache \"${RUNNER_TEMP}/velnor-input-scopes-${GITHUB_JOB}.json\""
-            )
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn inputs_restore_uses_each_cached_target_directory_from_any_working_directory() -> TestResult {
-    let mut repo = locked("0.1.81")?;
-    let more = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
-    repo.rust_metadata = more.rust_metadata;
-    repo.tracked_paths.extend(more.tracked_paths);
-    for (path, text) in [
-        (
-            ".cargo/config.toml",
-            "[build]\ntarget-dir = \"cache dir\"\n",
-        ),
-        (
-            "lab/.cargo/config.toml",
-            "[build]\ntarget-dir = \"../lab's target\"\n",
-        ),
-    ] {
-        let path = RepoPath::new(path)?;
-        repo.tracked_paths.insert(path.clone());
-        repo.files.insert(path, text.as_bytes().to_vec());
-    }
-    let text = workflow(&repo)?;
-    let restores = named(&text, "velnor-ci inputs restore");
-    assert_eq!(restores.len(), 3, "{text}");
-    for target in ["'cache dir'", "'lab'\\''s target'"] {
-        let matching: Vec<_> = restores
-            .iter()
-            .filter(|step| {
-                step.contains("--root-target")
-                    && step.contains(if target == "'cache dir'" {
-                        "cache dir"
-                    } else {
-                        "lab"
-                    })
-            })
-            .collect();
-        assert_eq!(matching.len(), 2, "{text}");
-        let step = matching[0];
-        let command = step
-            .lines()
-            .find_map(|line| line.trim().strip_prefix("run: "))
-            .ok_or("no command")?;
-        let yaml = crate::yaml_tree::parse(&format!("run: {command}"))?;
-        let command = yaml
-            .get("run")
-            .and_then(crate::yaml_tree::Node::text)
-            .ok_or("invalid scalar")?;
-        assert_eq!(
-            command,
-            format!(
-                "velnor-ci inputs restore-all --root-target \"${{GITHUB_WORKSPACE}}\"/{} \"${{GITHUB_WORKSPACE}}\"/{target} --scope-cache \"${{RUNNER_TEMP}}/velnor-input-scopes-${{GITHUB_JOB}}.json\"",
-                if target == "'cache dir'" { "." } else { "lab" }
-            )
-        );
-    }
+fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() -> TestResult {
+    let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert!(!text.contains("vars."), "{text}");
+    assert!(!text.contains("CARGO_LOG"), "{text}");
+    assert_eq!(named(&text, "Upload the cargo fingerprint log").len(), 0);
+    let off = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = false\n"))?)?;
+    assert_eq!(off, text);
     Ok(())
 }
 
 #[test]
 fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
-    let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    let text = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = true\n"))?)?;
     let cargo: Vec<&str> = steps(&text)
         .into_iter()
-        .filter(|step| step.contains("run: velnor-ci run -- cargo"))
+        .filter(|step| step.contains(r#""$VELNOR_EXEC" run -- cargo"#))
         .collect();
     assert_ne!(cargo.len(), 0);
     for step in cargo {
@@ -368,7 +292,7 @@ fn compile_steps_build_the_whole_workspace_because_a_narrower_package_set_unifie
             .lines()
             .filter_map(|line| line.trim().strip_prefix("run: "))
             .map(|run| run.trim_matches('\''))
-            .filter(|run| run.starts_with("velnor-ci run"))
+            .filter(|run| run.contains("\"$VELNOR_EXEC\" run"))
             .filter(|run| {
                 run.contains("clippy")
                     || run.contains("nextest")
@@ -377,7 +301,11 @@ fn compile_steps_build_the_whole_workspace_because_a_narrower_package_set_unifie
             })
         {
             assert!(run.contains("--workspace"), "{run}");
-            assert!(!run.contains(" -p "), "{run}");
+            let arguments = run
+                .split_once("\"$VELNOR_EXEC\" ")
+                .ok_or("no invocation")?
+                .1;
+            assert!(!arguments.contains(" -p "), "{run}");
         }
     }
     Ok(())

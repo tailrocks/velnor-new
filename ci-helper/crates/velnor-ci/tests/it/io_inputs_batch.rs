@@ -9,11 +9,11 @@ use std::time::{Duration, UNIX_EPOCH};
 use crate::io::Repo;
 
 fn command(repo: &Repo, directory: &Path, run: &str, trace: &Path) -> String {
-    let run = run.replacen(
-        "velnor-ci",
-        &format!("'{}'", env!("CARGO_BIN_EXE_velnor-ci")),
-        1,
-    );
+    let binary = format!("'{}'", env!("CARGO_BIN_EXE_velnor-ci"));
+    let run = match run.strip_prefix(". \"$VELNOR_EXEC\"") {
+        Some(rest) => format!("{binary}{rest}"),
+        None => run.replacen("velnor-ci", &binary, 1),
+    };
     let output = Command::new("sh")
         .args(["-c", &run])
         .current_dir(directory)

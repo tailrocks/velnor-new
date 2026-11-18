@@ -101,6 +101,7 @@ async fn proof_digest(
         "docker_root_digest": claim.docker_root_digest,
         "phases": phases,
         "network": network,
+        "creation_targets": creation_targets(connection, claim.reservation_id).await?,
     }))
     .map_err(|_| HostError::Identity)?;
     Ok(Sha256::digest(bytes)
@@ -108,6 +109,24 @@ async fn proof_digest(
         .flat_map(|byte| [byte >> 4, byte & 0x0f])
         .map(|nibble| char::from(b"0123456789abcdef"[usize::from(nibble)]))
         .collect::<String>())
+}
+
+async fn creation_targets(
+    connection: &turso::Connection,
+    reservation_id: i64,
+) -> Result<Vec<serde_json::Value>, HostError> {
+    let mut rows = connection.query("SELECT resource_kind,role,docker_name,docker_id,observation_sha256 FROM capacity_reservation_unbound_creation_targets WHERE reservation_id=?1 ORDER BY resource_kind,role", [reservation_id]).await.map_err(|_|HostError::Journal)?;
+    let mut targets = Vec::new();
+    while let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? {
+        targets.push(serde_json::json!([
+            row.get::<String>(0).map_err(|_| HostError::Journal)?,
+            row.get::<String>(1).map_err(|_| HostError::Journal)?,
+            row.get::<String>(2).map_err(|_| HostError::Journal)?,
+            row.get::<String>(3).map_err(|_| HostError::Journal)?,
+            row.get::<String>(4).map_err(|_| HostError::Journal)?,
+        ]));
+    }
+    Ok(targets)
 }
 
 async fn expect_one(

@@ -4,9 +4,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, Triggers, When, WorkflowPlan,
+    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
+    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
+    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -49,16 +49,13 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .zip(decisions)
         .flat_map(|(root, decision)| {
-            let lane = Lane::root(RootSlug::of(&root.manifest), single, helper_root.is_some());
+            let lane = Lane::root(RootSlug::of(&root.manifest), single);
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
-    jobs.extend(audit_job(facts, &jobs, helper_root.is_some()));
+    jobs.extend(audit_job(facts, &jobs));
     if facts.policy.any() {
-        jobs.push(policy_job(
-            facts,
-            &Lane::policy(single, helper_root.is_some()),
-        ));
+        jobs.push(policy_job(facts, &Lane::policy(single)));
     }
     let draft_guard = facts
         .config
@@ -79,7 +76,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
-    upload_cargo_logs(&mut jobs);
+    if facts.config.cache_debug == CacheDebug::On {
+        upload_cargo_logs(&mut jobs);
+    }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -108,19 +107,18 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
-        from_source: false,
     };
     let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
         directory: root.manifest.parent(),
-        ..step(StepKind::Cargo(CargoCommand::Build {
+        ..step(StepKind::Cargo(CargoCommand::BuildBinary {
             package: PackageName::from_static(HELPER_PACKAGE),
+            binary: TargetName::from_static(HELPER_PACKAGE),
         }))
     });
-    steps.push(step(StepKind::PublishHelper {
-        binary: root.target_dir.child("debug/velnor-ci"),
-    }));
     Job {
+        needs: vec![PLAN_JOB],
+        gate: lane.job(),
         steps,
         ..job(facts, HELPER_JOB)
     }
@@ -145,18 +143,14 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-pub(crate) fn head(facts: &RepoFacts, depth: u32, from_source: bool) -> Vec<Step> {
+pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
     let mut steps = vec![step(StepKind::Checkout { depth })];
-    if from_source {
-        steps.push(step(StepKind::HelperFromArtifact));
-    } else {
-        steps.extend(
-            facts
-                .helper
-                .iter()
-                .map(|release| step(StepKind::InstallHelper(release.clone()))),
-        );
-    }
+    steps.extend(
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
+    );
     steps
 }
 
@@ -211,7 +205,6 @@ pub(crate) fn setup_roots(
         } else {
             CHECKOUT_DEPTH
         },
-        lane.from_source,
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
@@ -273,7 +266,7 @@ pub(crate) fn setup_roots(
             })),
         ]);
     }
-    toolchain.extend(restore_steps(facts, roots, lane));
+    toolchain.extend(restore_steps(facts, roots));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
         ..step
@@ -281,9 +274,9 @@ pub(crate) fn setup_roots(
     steps
 }
 
-fn restore_steps(facts: &RepoFacts, roots: &[RustRoot], lane: &Lane) -> Vec<Step> {
+fn restore_steps(facts: &RepoFacts, roots: &[RustRoot]) -> Vec<Step> {
     let mut steps = Vec::new();
-    if lane.from_source || breaks_ties(facts) {
+    if breaks_ties(facts) {
         steps.push(step(StepKind::InputsRestore(
             roots
                 .iter()
@@ -292,7 +285,7 @@ fn restore_steps(facts: &RepoFacts, roots: &[RustRoot], lane: &Lane) -> Vec<Step
         )));
     }
     let mut restored = crate::base_cache::restored(facts);
-    if lane.from_source || breaks_ties(facts) {
+    if breaks_ties(facts) {
         for step in &mut restored {
             if let StepKind::Helper(HelperCommand::Restored(expiry)) = step.kind {
                 step.kind = StepKind::RestoredTargets {

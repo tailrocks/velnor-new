@@ -36,6 +36,7 @@ mod run;
 mod scope_cache;
 mod setup;
 mod timings;
+mod unit_platforms;
 mod units;
 
 use std::fs::{self, OpenOptions};

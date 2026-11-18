@@ -45,7 +45,10 @@ fn block(text: &str, id: &str) -> Option<String> {
 #[test]
 fn a_source_built_helper_never_runs_in_the_job_that_holds_actions_write() -> TestResult {
     let text = text_of(&source_helper("0.1.81")?)?;
-    assert!(text.contains("Download velnor-ci"), "lanes use the build");
+    assert!(
+        !text.contains("Download velnor-ci"),
+        "no lane downloads a build"
+    );
     let trim = block(&text, "rust-trim").ok_or("no trim job")?;
     assert!(!trim.contains("Download velnor-ci"), "{trim}");
     assert!(!trim.contains("download-artifact"), "{trim}");
@@ -54,29 +57,6 @@ fn a_source_built_helper_never_runs_in_the_job_that_holds_actions_write() -> Tes
         "{trim}"
     );
     assert!(trim.contains("0.1.81"), "{trim}");
-    Ok(())
-}
-
-#[test]
-fn a_source_helper_repository_without_a_safe_released_trimmer_saves_no_base() -> TestResult {
-    let mut older = source_helper("0.1.79")?;
-    older.files.insert(
-        CONFIG_PATH,
-        b"helper = { path = \"ci-helper\" }\nfull_run = \"off\"\n".to_vec(),
-    );
-    let text = text_of(&older)?;
-    assert!(!text.contains("rust-trim"), "{text}");
-    assert!(!text.contains("cache trim"), "{text}");
-    assert!(
-        !text.contains("Save the target cache"),
-        "unbounded target writes"
-    );
-    assert!(
-        !text.contains("Save the sources cache"),
-        "unbounded Sources writes"
-    );
-    assert!(!text.contains("Build the tests"), "unused prebuild");
-    assert!(!text.contains("actions: write"), "{text}");
     Ok(())
 }
 
@@ -369,6 +349,10 @@ fn input_timestamps_save_and_restore_in_the_configured_target_directory() -> Tes
             .filter_map(|job| job["steps"].as_array())
             .flatten()
             .filter_map(|step| step["run"].as_str())
+            .map(|run| match run.strip_prefix(". \"$VELNOR_EXEC\" ") {
+                Some(rest) => format!("velnor-ci {rest}"),
+                None => run.to_owned(),
+            })
             .collect();
         for command in [
             format!(
@@ -378,10 +362,7 @@ fn input_timestamps_save_and_restore_in_the_configured_target_directory() -> Tes
                 "velnor-ci inputs restore-all --root-target \"${{GITHUB_WORKSPACE}}\"/{root} \"${{GITHUB_WORKSPACE}}\"/{restored} --scope-cache \"${{RUNNER_TEMP}}/velnor-input-scopes-${{GITHUB_JOB}}.json\""
             ),
         ] {
-            assert!(
-                runs.contains(&command.as_str()),
-                "{command} missing in {runs:?}"
-            );
+            assert!(runs.contains(&command), "{command} missing in {runs:?}");
         }
     }
     Ok(())
