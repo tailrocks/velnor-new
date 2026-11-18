@@ -4,6 +4,7 @@
 mod check;
 mod error;
 mod expression;
+mod helper_call;
 mod plan;
 mod raw;
 

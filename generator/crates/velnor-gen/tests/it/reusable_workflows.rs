@@ -229,3 +229,53 @@ fn a_velnor_ci_run_step_needs_helper_on_its_job() -> TestResult {
     assert!(message.contains("helper = true"), "{message}");
     Ok(())
 }
+
+/// The `check` job without `helper = true`, whose second step runs `command`.
+fn check_job_running(command: &str) -> String {
+    CONFIG
+        .replace(
+            "needs = [\"plan\"]\nhelper = true\n",
+            "needs = [\"plan\"]\n",
+        )
+        .replace("run = \"velnor-ci warm\"", "run = \"echo warm\"")
+        .replace(
+            "run = \"velnor-ci check\"",
+            &format!("run = '''{command}'''"),
+        )
+}
+
+#[test]
+fn a_velnor_ci_command_is_refused_without_helper_however_it_is_written() -> TestResult {
+    for command in [
+        "velnor-ci check",
+        "./velnor-ci check",
+        "target/release/velnor-ci check",
+        "/usr/local/bin/velnor-ci check",
+        "env velnor-ci check",
+        "env FOO=1 velnor-ci check",
+        "VAR=1 velnor-ci check",
+        "A=1 B=2 velnor-ci check",
+        "'velnor-ci' check",
+        "\"./velnor-ci\" check",
+        "A=\"x y\" velnor-ci check",
+    ] {
+        let message = refusal(&check_job_running(command))
+            .map_err(|error| format!("{command:?}: {error}"))?;
+        assert!(message.contains("helper = true"), "{command:?}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_command_that_only_mentions_velnor_ci_needs_no_helper() -> TestResult {
+    for command in [
+        "echo velnor-ci-notes",
+        "echo velnor-ci",
+        "cargo run -p velnor-ci -- check",
+        "velnor-cix check",
+        "./velnor-ci-extra check",
+    ] {
+        rendered(&check_job_running(command)).map_err(|error| format!("{command:?}: {error}"))?;
+    }
+    Ok(())
+}

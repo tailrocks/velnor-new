@@ -3,6 +3,7 @@
 
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Scope, check, check_condition, is_identifier, whole_expression};
+use crate::helper_call::calls_velnor_ci;
 use crate::plan::{
     Action, Body, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Env, Input, Job, Matrix, Step, Workflow,
 };
@@ -258,7 +259,7 @@ fn step(
             {
                 return refuse(format!("a run step of job {job} needs a name and a run"));
             }
-            if !helper_installed && run.split_whitespace().next() == Some("velnor-ci") {
+            if !helper_installed && calls_velnor_ci(&run) {
                 return refuse(format!(
                     "job {job} runs velnor-ci, so it needs helper = true"
                 ));
