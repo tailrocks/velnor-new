@@ -88,6 +88,7 @@ fn qualification_accepts_advanced_base_and_rejects_unrelated_event_shas()
         .is_err()
     );
     check_results(&checkout, &runner, &merge, &stale_base, &base, &head)?;
+    fetches_base_history_without_trees(&checkout, &runner, &origin, &merge, &stale_base, &head)?;
     rejects_first_parent_outside_base_branch(&root, &source, &origin, &stale_base, &base, &head)
 }
 
@@ -137,12 +138,64 @@ fn rejects_first_parent_outside_base_branch(
     Ok(())
 }
 
+fn fetches_base_history_without_trees(
+    checkout: &Path,
+    runner: &Path,
+    origin: &Path,
+    merge: &str,
+    stale_base: &str,
+    head: &str,
+) -> Result<(), Box<dyn Error>> {
+    fs::remove_file(checkout.join("untracked"))?;
+    git(origin, &["config", "uploadpack.allowFilter", "true"])?;
+    let shallow_before = fs::read(checkout.join(".git/shallow")).ok();
+    let traced = run_script_with(
+        checkout,
+        runner,
+        merge,
+        stale_base,
+        head,
+        &[("GIT_TRACE_PACKET", "1")],
+    )?;
+    assert!(
+        traced.status.success(),
+        "{}",
+        String::from_utf8_lossy(&traced.stderr)
+    );
+    assert!(
+        String::from_utf8_lossy(&traced.stderr).contains("filter tree:0"),
+        "the base history fetch must request a treeless filter"
+    );
+    assert_eq!(
+        shallow_before,
+        fs::read(checkout.join(".git/shallow")).ok(),
+        "the checkout's own history must not be rewritten"
+    );
+    assert!(!runner.join("base-branch-history.git").exists());
+    let evidence =
+        fs::read_to_string(runner.join("source-qualification-artifacts/source-identity.txt"))?;
+    assert!(evidence.contains(&format!("pr_base_sha={stale_base}\n")));
+    git(origin, &["config", "uploadpack.allowFilter", "false"])?;
+    Ok(())
+}
+
 fn run_script(
     checkout: &Path,
     runner: &Path,
     merge: &str,
     event_base: &str,
     event_head: &str,
+) -> Result<std::process::Output, Box<dyn Error>> {
+    run_script_with(checkout, runner, merge, event_base, event_head, &[])
+}
+
+fn run_script_with(
+    checkout: &Path,
+    runner: &Path,
+    merge: &str,
+    event_base: &str,
+    event_head: &str,
+    extra_env: &[(&str, &str)],
 ) -> Result<std::process::Output, Box<dyn Error>> {
     let script = concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -169,6 +222,7 @@ fn run_script(
         .env("PR_BASE_SHA", event_base)
         .env("PR_BASE_REF", "main")
         .env("PR_HEAD_SHA", event_head)
+        .envs(extra_env.iter().copied())
         .output()?)
 }
 

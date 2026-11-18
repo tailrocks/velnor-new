@@ -332,22 +332,34 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
     echo 'FATAL: pull_request event lacks a valid base branch name' >&2
     exit 1
   fi
-  base_tip_ref=refs/velnor/pr-base-tip
-  if [ "$(GIT_OPTIONAL_LOCKS=0 git rev-parse --is-shallow-repository)" = true ]; then
-    GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --unshallow origin "+refs/heads/$PR_BASE_REF:$base_tip_ref" "$GITHUB_SHA"
-  else
-    GIT_OPTIONAL_LOCKS=0 git fetch --no-tags origin "+refs/heads/$PR_BASE_REF:$base_tip_ref"
-  fi
-  if ! GIT_OPTIONAL_LOCKS=0 git merge-base --is-ancestor "$merge_parent_base" "$base_tip_ref"; then
+  # The ancestry checks read commit objects only, so they run in a scratch
+  # bare repository that gets a treeless (--filter=tree:0) fetch of the base
+  # branch: the whole commit graph, no trees or blobs. Fetching into the
+  # shallow checkout instead would cross its shallow boundary and download
+  # the boundary commits' trees and blobs a second time. A server that
+  # ignores the filter just sends more objects; a failed fetch is fatal.
+  # A merge first parent that is absent from the base branch history is not
+  # an ancestor either, so the check below rejects it.
+  base_history="$RUNNER_TEMP/base-branch-history.git"
+  rm -rf "$base_history"
+  GIT_OPTIONAL_LOCKS=0 git init --quiet --bare "$base_history"
+  # GIT_NO_LAZY_FETCH keeps any later read of a filtered-out object from
+  # silently downloading it; such a read fails instead.
+  base_history_git() {
+    GIT_OPTIONAL_LOCKS=0 GIT_NO_LAZY_FETCH=1 git --git-dir="$base_history" "$@"
+  }
+  base_history_git fetch --quiet --no-tags --filter=tree:0 \
+    "$(GIT_OPTIONAL_LOCKS=0 git remote get-url origin)" '+refs/heads/'"$PR_BASE_REF"':refs/velnor/pr-base-tip'
+  if ! base_history_git merge-base --is-ancestor "${merge_parent_base}^{commit}" refs/velnor/pr-base-tip 2>/dev/null; then
     echo 'FATAL: pull request merge first parent is not on the base branch; trigger a new pull request event for the current merge' >&2
     exit 1
   fi
   if [ "$merge_parent_base" != "$PR_BASE_SHA" ] \
-    && ! GIT_OPTIONAL_LOCKS=0 git merge-base --is-ancestor "${PR_BASE_SHA}^{commit}" "$merge_parent_base" 2>/dev/null; then
+    && ! base_history_git merge-base --is-ancestor "${PR_BASE_SHA}^{commit}" "${merge_parent_base}^{commit}" 2>/dev/null; then
     echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
     exit 1
   fi
-  for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}" "${PR_BASE_SHA}^{commit}"; do
+  for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}"; do
     if ! GIT_OPTIONAL_LOCKS=0 git cat-file -e "$rev" 2>/dev/null; then
       GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
       break
@@ -355,8 +367,9 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
   done
   pr_head_commit="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_HEAD_SHA}^{commit}")"
   pr_head_tree="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_HEAD_SHA}^{tree}")"
-  pr_base_commit="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_BASE_SHA}^{commit}")"
-  pr_base_tree="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_BASE_SHA}^{tree}")"
+  pr_base_commit="$(base_history_git rev-parse "${PR_BASE_SHA}^{commit}")"
+  pr_base_tree="$(base_history_git log -1 --format=%T "${PR_BASE_SHA}^{commit}")"
+  rm -rf "$base_history"
   merge_parent_1="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^1')"
   merge_parent_2="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^2')"
   test "$pr_head_commit" = "$PR_HEAD_SHA"
