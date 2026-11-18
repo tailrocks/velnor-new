@@ -38,7 +38,7 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
     for (runner, mirror_runner, enabled) in [
         ("mirror-box", "mirror-box", true),
         ("ubuntu-26.04-scale-set", "ubuntu-26.04-scale-set", true),
-        ("ubuntu-slim", "ubuntu-slim", true),
+        ("ubuntu-999.99", "ubuntu-999.99", true),
         ("xcode-27", "xcode-27", true),
         ("ubuntu-future", "ubuntu-future", true),
         ("ubuntu-latest", "mirror-box", false),
