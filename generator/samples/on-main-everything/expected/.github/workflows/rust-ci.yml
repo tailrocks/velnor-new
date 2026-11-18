@@ -41,7 +41,7 @@ jobs:
       base_prefix: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-'
       base_save: '${{ steps.base.outputs.save }}'
       target_key: '${{ steps.target_key.outputs.key }}'
-      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       sources_saved: '${{ steps.sources_save_root.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_root_key.outputs.key }}'
     runs-on: ubuntu-latest
@@ -106,6 +106,12 @@ jobs:
       - name: velnor-ci check-metadata
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -115,8 +121,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_root
         name: Restore the target cache
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -198,12 +204,12 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
       - id: sources_root_key
         name: Record the sources cache key
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.sources == ''true'' && steps.sources_root.outputs.cache-hit != ''true'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
         env:
-          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
+          CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: report_cache_metrics
         name: Report cache telemetry

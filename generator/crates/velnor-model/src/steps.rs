@@ -21,6 +21,7 @@ pub enum StepKind {
         expiry: BaseExpiry,
         targets: Vec<RepoPath>,
     },
+    SourcesLocks(Vec<RepoPath>),
     CacheDecide {
         manifests: Vec<RepoPath>,
         target: RepoPath,

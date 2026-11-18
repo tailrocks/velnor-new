@@ -7,13 +7,16 @@ use velnor_model::{
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
-use crate::base_steps::{cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane};
+use crate::base_steps::{
+    cache_budget, cache_decide, cache_trim, lane_outputs, sources_locks, trimmed_lane,
+};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
     sources_step, verdict_step,
 };
+use crate::helper_steps::restored_step;
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
@@ -199,9 +202,9 @@ fn rendered_steps(
 
 fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
-        StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
+        StepKind::CacheSave(CacheKey::Sources { lane, .. }) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
-            sources_step(root.slug())
+            sources_step(lane.slug())
         )],
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         _ => Vec::new(),
@@ -250,9 +253,8 @@ fn step_body(
             archive,
             manifests,
         } => cache_decide(target, archive.as_ref(), manifests),
-        StepKind::RestoredTargets { expiry, targets } => {
-            crate::helper_steps::restored_step(*expiry, targets)
-        }
+        StepKind::RestoredTargets { expiry, targets } => restored_step(*expiry, targets),
+        StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),

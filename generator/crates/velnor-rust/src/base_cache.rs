@@ -47,6 +47,17 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
     std::iter::once(step(restore)).chain(replan).collect()
 }
 
+pub(crate) fn sources_locks(facts: &RepoFacts) -> Step {
+    let mut locks: Vec<RepoPath> = facts
+        .rust_roots
+        .iter()
+        .map(|root| root.manifest.sibling(&RepoPath::from_static("Cargo.lock")))
+        .collect();
+    locks.sort();
+    locks.dedup();
+    step(StepKind::SourcesLocks(locks))
+}
+
 pub(crate) fn saving_run(run: Step) -> Step {
     Step {
         when: When::SavingRun,
@@ -106,7 +117,7 @@ pub(crate) fn save_steps(
             when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
-                root: cache_root,
+                lane: cache_root,
             }))
         });
     }

@@ -9,8 +9,8 @@ use velnor_model::{
 
 use crate::cache::render_key;
 use crate::cache_upload::{SOURCES_KEY_OUTPUT, key_id};
-use crate::gate::BASE_STEP;
 use crate::gate::sources_save_step;
+use crate::gate::{BASE_STEP, SOURCES_LOCKS_STEP};
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 
@@ -49,6 +49,19 @@ pub(crate) fn cache_decide(
     }
 }
 
+pub(crate) fn sources_locks(locks: &[RepoPath]) -> RenderedStep {
+    RenderedStep {
+        id: Some(SOURCES_LOCKS_STEP.to_owned()),
+        name: "Hash the sources lockfiles".to_owned(),
+        env: vec![(
+            "SOURCES_LOCKS".to_owned(),
+            Value::Expr(crate::cache::hash_files(locks)),
+        )],
+        run: Some("echo \"hash=$SOURCES_LOCKS\" >> \"$GITHUB_OUTPUT\"".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
     cache_lane_outputs(steps)
         .into_iter()
@@ -58,9 +71,9 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
                     render_key(key).restore_keys.pop()?
                 }
                 CacheLaneOutput::BaseSave => format!("${{{{ steps.{BASE_STEP}.outputs.save }}}}"),
-                CacheLaneOutput::SourcesSaved(CacheKey::Sources { root, .. }) => format!(
+                CacheLaneOutput::SourcesSaved(CacheKey::Sources { lane, .. }) => format!(
                     "${{{{ steps.{}.outcome == 'success' }}}}",
-                    sources_save_step(root.slug())
+                    sources_save_step(lane.slug())
                 ),
                 CacheLaneOutput::SourcesSaved(_) => return None,
                 CacheLaneOutput::SavedKey(key) => {
