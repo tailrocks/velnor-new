@@ -216,9 +216,9 @@ fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> 
         .collect();
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let mut view = view(&roots, None)?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    let lock = "version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/shared-lib?branch=main#0123456789abcdef\"\n";
     view.files
-        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
+        .insert(RepoPath::new("Cargo.lock")?, lock.as_bytes().to_vec());
     let result = expected_files(&view);
     let Err(velnor_gen::GenerateError::Rules(violations)) = result else {
         return Err("oversized main workflow was not rejected by YAML rules".into());

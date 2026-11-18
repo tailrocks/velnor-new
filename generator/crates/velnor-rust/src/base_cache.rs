@@ -19,6 +19,14 @@ pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
 }
 
+pub const MAX_SOURCE_ROOTS: usize = 16;
+
+#[must_use]
+pub fn source_roots_over_limit(facts: &RepoFacts) -> Option<usize> {
+    (writes_base(facts) && facts.rust_roots.len() > MAX_SOURCE_ROOTS)
+        .then_some(facts.rust_roots.len())
+}
+
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
     facts
         .helper
