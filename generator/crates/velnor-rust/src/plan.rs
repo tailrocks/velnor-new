@@ -6,7 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
     PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, TargetName, Timings, Triggers, When, WorkflowPlan,
+    Shape, ShapeDecision, Step, StepKind, TargetName, Timings, Toolchain, Triggers, When,
+    WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -192,6 +193,36 @@ pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
     (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools { only: None }))
 }
 
+fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
+    let mut steps = Vec::new();
+    if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
+        let mut components: Vec<String> = declared
+            .map(|toolchain| toolchain.components.clone())
+            .unwrap_or_default();
+        if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("default")) {
+            components.push("rust-docs".to_owned());
+        }
+        components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
+        components.sort();
+        components.dedup();
+        let targets = declared
+            .map(|toolchain| toolchain.targets.clone())
+            .unwrap_or_default();
+        for (kind, names) in [
+            (StepKind::RustComponents(components.clone()), &components),
+            (StepKind::RustTargets(targets.clone()), &targets),
+        ] {
+            if !names.is_empty() {
+                steps.push(Step {
+                    directory: root.manifest.parent(),
+                    ..step(kind)
+                });
+            }
+        }
+    }
+    steps
+}
+
 pub(crate) fn setup_units(
     facts: &RepoFacts,
     units: &[Unit],
@@ -222,33 +253,15 @@ pub(crate) fn setup_units(
         toolchain.extend(mirror_step(facts));
     }
     let declared = facts.toolchain.as_ref();
-    if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
-        let mut components: Vec<String> = declared
-            .map(|toolchain| toolchain.components.clone())
-            .unwrap_or_default();
-        if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("default")) {
-            components.push("rust-docs".to_owned());
-        }
-        components.extend(["rustfmt".to_owned(), "clippy".to_owned()]);
-        components.sort();
-        components.dedup();
-        let targets = declared
-            .map(|toolchain| toolchain.targets.clone())
-            .unwrap_or_default();
-        for (kind, names) in [
-            (StepKind::RustComponents(components.clone()), &components),
-            (StepKind::RustTargets(targets.clone()), &targets),
-        ] {
-            if !names.is_empty() {
-                toolchain.push(Step {
-                    directory: root.manifest.parent(),
-                    ..step(kind)
-                });
-            }
-        }
+    toolchain.extend(rust_additions(declared, root));
+    let prepare = step(StepKind::Helper(HelperCommand::Prepare));
+    if declared.is_some_and(|toolchain| toolchain.profile.as_deref() == Some("complete")) {
+        toolchain.push(prepare);
+        toolchain.extend(tools_save(facts));
+    } else {
+        toolchain.extend(tools_save(facts));
+        toolchain.push(prepare);
     }
-    toolchain.extend(tools_save(facts));
-    toolchain.push(step(StepKind::Helper(HelperCommand::Prepare)));
     for (unit, family) in units.iter().zip(families) {
         for member in &unit.roots {
             toolchain.push(Step {

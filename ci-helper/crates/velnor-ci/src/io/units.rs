@@ -328,7 +328,8 @@ impl Audit<'_> {
         profile: &str,
         package: &str,
     ) -> Result<(), CiError> {
-        let Some((source, built)) = self.dep_info(workspace, file, Some(package))? else {
+        let Some((source, built)) = self.dep_info(workspace, indices[0], file, Some(package))?
+        else {
             return Ok(());
         };
         for index in indices {

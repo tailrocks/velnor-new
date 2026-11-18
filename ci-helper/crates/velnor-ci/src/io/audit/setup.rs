@@ -63,7 +63,7 @@ pub(super) fn begin<'a>(
             .collect(),
         members,
         found: CompileInputs::new(),
-        target_bytes: 0,
+        target_bytes: vec![0; workspaces.len()],
         stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),

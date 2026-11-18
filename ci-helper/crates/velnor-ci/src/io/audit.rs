@@ -46,7 +46,8 @@ pub(super) struct Audit<'a> {
     roots: Vec<PathBuf>,
     members: BTreeMap<String, Vec<usize>>,
     found: CompileInputs,
-    target_bytes: u64,
+    /// Bytes read from each Cargo root's target directory, bounded per root.
+    target_bytes: Vec<u64>,
     stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,
@@ -263,12 +264,10 @@ impl Audit<'_> {
         if hash.is_none() && hits.is_empty() {
             return Ok(());
         }
-        let base = hits.first().map_or_else(
-            || self.roots[indices[0]].clone(),
-            |(index, _)| self.roots[*index].clone(),
-        );
+        let budget = hits.first().map_or(indices[0], |(index, _)| *index);
+        let base = self.roots[budget].clone();
         let package = hits.first().map(|(_, (package, _))| package.as_str());
-        let Some((source, _)) = self.dep_info(&base, file, package)? else {
+        let Some((source, _)) = self.dep_info(&base, budget, file, package)? else {
             return Ok(());
         };
         if let Some(configuration) = configuration {
@@ -304,7 +303,7 @@ impl Audit<'_> {
         package: &str,
         hash: &str,
     ) -> Result<(), CiError> {
-        let text = self.build_output_text(file)?;
+        let text = self.build_output_text(indices[0], file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
         let mut seen = BTreeSet::new();
