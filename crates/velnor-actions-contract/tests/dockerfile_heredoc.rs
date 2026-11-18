@@ -37,6 +37,10 @@ fn a_real_heredoc_hides_its_body_and_the_stage_after_it_is_still_checked() {
     for text in [
         "FROM scratch\nRUN cat <<EOF\nbody\nEOF\nFROM ubuntu:latest\n",
         "FROM scratch\nRUN cat <<\"EOF\"\nbody\nEOF\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN cat <<\"\\#\"\nFROM alpine:latest\n\\#\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN cat <<\"\\#\"\nbody\nFROM ubuntu:latest\n#\n",
+        "FROM scratch\nRUN cat <<\"\\#\"\nbody\n\\#\nFROM ubuntu:latest\n#\n",
+        "FROM scratch\nRUN cat <<\"\\EOF\"\nbody\n\\EOF\nFROM ubuntu:latest\n",
         "FROM scratch\nCOPY <<EOF /dest\nbody\nEOF\nFROM ubuntu:latest\n",
     ] {
         assert_eq!(
