@@ -7,8 +7,11 @@ use std::fs;
 
 use sha2::{Digest, Sha256};
 use tempfile::TempDir;
-use velnor_actions_orchestrator::{prepare, render_staged_tree};
+use velnor_actions_contract::WorkflowPolicy;
+use velnor_actions_orchestrator::{finalized_jobs, plan_internal, prepare, render_staged_tree};
 
+use super::non_inputs_checkout_support::rust_repo;
+use super::one_job_per_crate::mbx_repo_for;
 use super::workflow_configuration_fixture::{git, make_repo};
 
 const CI: &str = ".github/workflows/ci.yml";
@@ -100,7 +103,7 @@ fn ci_false_drops_every_rust_job_and_keeps_everything_else_byte_identical()
         !ids.iter().any(|id| id.starts_with("rust-")),
         "Rust jobs left in ci.yml: {ids:?}"
     );
-    for id in ["cargo-deny", "cargo-machete", "ledger-cli"] {
+    for id in ["cargo-deny", "ledger-cli"] {
         assert!(!ids.iter().any(|have| have == id), "{id} left in ci.yml");
     }
     let parsed: serde_json::Value = serde_saphyr::from_str(&off[CI])?;
@@ -148,5 +151,96 @@ fn ci_false_keeps_source_qualification_and_runs_it_for_every_pull_request()
         .get(SOURCE_QUALIFICATION)
         .ok_or("source qualification workflow missing")?;
     assert!(workflow.contains("CLI_ROUTES: '[]'") || workflow.contains("CLI_ROUTES: \"[]\""));
+    Ok(())
+}
+
+fn ci_false_rust_repo(policy: WorkflowPolicy) -> Result<TempDir, Box<dyn Error>> {
+    let repo = rust_repo(policy, None)?;
+    let path = repo.path().join(".velnor/config.toml");
+    let config = fs::read_to_string(&path)?;
+    fs::write(
+        &path,
+        config.replacen("[stacks.rust]\n", "[stacks.rust]\nci = false\n", 1),
+    )?;
+    Ok(repo)
+}
+
+#[test]
+fn ci_false_with_declared_suites_still_builds_and_drops_suite_jobs() -> Result<(), Box<dyn Error>> {
+    {
+        let policy = WorkflowPolicy::ConsumerV1;
+        let repo = ci_false_rust_repo(policy)?;
+        let jobs = finalized_jobs(&prepare(repo.path())?)?;
+        let ids: Vec<&String> = jobs.keys().collect();
+        assert!(
+            !ids.iter()
+                .any(|id| id.starts_with("suite-") || id.starts_with("rust-")),
+            "{policy:?}: {ids:?}"
+        );
+        assert!(jobs.contains_key("required"), "{policy:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn ci_false_keeps_cargo_machete_in_the_repository_workflow() -> Result<(), Box<dyn Error>> {
+    let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
+    let path = repo.path().join(".velnor/config.toml");
+    let mut config = fs::read_to_string(&path)?;
+    config.push_str("\n[stacks.rust]\nci = false\n");
+    fs::write(&path, config)?;
+    let jobs = finalized_jobs(&prepare(repo.path())?)?;
+    assert!(jobs.contains_key("cargo-machete"), "{:?}", jobs.keys());
+    let required = serde_json::to_string(&jobs["required"])?;
+    assert!(required.contains("cargo-machete"), "{required}");
+    Ok(())
+}
+
+#[test]
+fn ci_false_plan_lists_no_rust_jobs() -> Result<(), Box<dyn Error>> {
+    let mut seen = Vec::new();
+    for ci in [true, false] {
+        let repo = mbx_repo_for(false, WorkflowPolicy::ConsumerV1)?;
+        if !ci {
+            let path = repo.path().join(".velnor/config.toml");
+            let mut config = fs::read_to_string(&path)?;
+            config.push_str("\n[stacks.rust]\nci = false\n");
+            fs::write(&path, config)?;
+        }
+        let root = repo.path();
+        let head = String::from_utf8(
+            std::process::Command::new("git")
+                .args(["rev-parse", "HEAD"])
+                .current_dir(root)
+                .output()?
+                .stdout,
+        )?;
+        let request = serde_json::json!({
+            "schema": 1, "op": "plan-v1", "run_key": "r260001-a1", "base": null,
+            "head": head.trim(), "event": "local", "root": root.to_string_lossy(),
+        });
+        let response: serde_json::Value =
+            serde_json::from_str(&plan_internal(&request.to_string())?)?;
+        let ids: Vec<String> = response["plan"]["jobs"]
+            .as_array()
+            .ok_or("plan jobs")?
+            .iter()
+            .filter_map(|job| job["job_id"].as_str().map(str::to_owned))
+            .collect();
+        let rust = ids
+            .iter()
+            .any(|id| id.starts_with("rust-") || id.starts_with("suite-"));
+        seen.push((ci, rust, ids));
+    }
+    assert!(
+        seen[0].1,
+        "control: default plan must carry Rust jobs: {:?}",
+        seen[0].2
+    );
+    assert!(
+        !seen[1].1,
+        "ci = false plan carries Rust jobs: {:?}",
+        seen[1].2
+    );
     Ok(())
 }

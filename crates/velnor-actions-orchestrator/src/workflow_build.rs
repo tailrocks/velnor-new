@@ -208,7 +208,7 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     let (report_helper_version, acquire) = controller_acquisition(input, policy)?;
     let generator_version = env!("CARGO_PKG_VERSION");
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, input.discovery, &verify, input.config.stacks.rust_ci_enabled());
+    let support = support_workflow(policy, input.discovery, &verify);
     let private =
         crate::config::private_wiring::PrivateWiring::load(input.root, input.config, catalog)?;
     let workflow_tasks = lane_workflow_tasks(input, acquire.as_ref(), private.as_ref())?;

@@ -61,10 +61,6 @@ pub struct Discovery {
 }
 
 impl Discovery {
-    /// The view of discovery that `ci.yml` is built from when
-    /// `[stacks.rust] ci = false`: every Rust project, workspace, proposal and
-    /// the Rust-only derived plans are dropped. Release and image workflows
-    /// keep reading the full discovery.
     pub(crate) fn without_rust_ci(&self) -> Self {
         let is_rust = |stack_id: &str| {
             velnor_actions_contract::Stack::from_id(stack_id)

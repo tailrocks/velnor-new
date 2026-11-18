@@ -123,8 +123,6 @@ fn source_qualification_plan(
         }
         routes
     } else {
-        // Rust CI lives in the generated rust-ci.yml, so ci.yml has no CLI
-        // job to route on. No routes means "always run" (fail closed).
         Vec::new()
     };
     let crate::yaml::Yaml::Map(root) = document else {

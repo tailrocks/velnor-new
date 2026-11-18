@@ -33,6 +33,7 @@ pub struct GenerationPreparation {
     pub runner_label: String,
     pub runner_selection: RunnerSelection,
     pub discovery: Discovery,
+    pub(crate) ci_discovery: Discovery,
     pub workflow: WorkflowPlan,
     pub runner_image: RunnerImageEvidence,
     pub lock_audit_blocking: Vec<String>,
@@ -86,6 +87,14 @@ pub(crate) fn prepare_for_controller_with_phase_timings(
     prepare_inner(root, AdmissionLeg::Controller, Some(phases), None, None)
 }
 
+fn ci_view(config: &VelnorConfig, discovery: &Discovery) -> Discovery {
+    if config.stacks.rust_ci_enabled() {
+        discovery.clone()
+    } else {
+        discovery.without_rust_ci()
+    }
+}
+
 fn prepare_inner(
     root: &Path,
     leg: AdmissionLeg,
@@ -112,11 +121,7 @@ fn prepare_inner(
     let default_branch = resolve_default_branch(&canonical, &config)?;
     validate_branch_authority(&config, &default_branch)?;
     let mut discovery = discover_with_options(&canonical, &config, &catalog, phases, guard)?;
-    let ci_discovery = if config.stacks.rust_ci_enabled() {
-        discovery.clone()
-    } else {
-        discovery.without_rust_ci()
-    };
+    let mut ci_discovery = ci_view(&config, &discovery);
     let fetch_roots = lockful_roots(&canonical, &ci_discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let emission = catalog.for_emission();
@@ -160,6 +165,7 @@ fn prepare_inner(
         .extend(audit.blocking.iter().cloned());
     discovery.recommendations.sort();
     discovery.recommendations.dedup();
+    ci_discovery.recommendations.clone_from(&discovery.recommendations);
     Ok(GenerationPreparation {
         root: canonical,
         config,
@@ -167,6 +173,7 @@ fn prepare_inner(
         runner_label,
         runner_selection,
         discovery,
+        ci_discovery,
         workflow,
         runner_image,
         lock_audit_blocking: audit.blocking,

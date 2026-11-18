@@ -211,7 +211,13 @@ impl RegisteredSources {
             return Err(invalid("native_generated_inventory_incomplete"));
         }
         let mut suites = BTreeSet::new();
-        if let Some(rust) = &input.config.stacks.rust {
+        if let Some(rust) = input
+            .config
+            .stacks
+            .rust
+            .as_ref()
+            .filter(|_| input.config.stacks.rust_ci_enabled())
+        {
             for suite in rust
                 .suites
                 .iter()

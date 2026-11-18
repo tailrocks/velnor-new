@@ -86,8 +86,6 @@ def select():
             "plan controller identity mismatch")
     routes = json.loads(os.environ["CLI_ROUTES"])
     if routes == []:
-        # Rust CI is generated elsewhere (stacks.rust ci = false): no CLI route
-        # exists in this plan, so every pull request runs the qualification.
         return "run"
     require(isinstance(routes, list) and routes and len(routes) == len(set(routes))
             and all(isinstance(route, str) and route in (CLI, CLI + "__hosted", CLI + "__local")

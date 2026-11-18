@@ -95,15 +95,13 @@ fn validator_commands(
                 prepare_argv: Vec::new(),
             });
         }
-        if input.config.stacks.rust_ci_enabled() {
-            let machete_install = machete_install_argv()?;
-            validator_commands.push(ValidatorCommand {
-                validator: ValidatorKind::CargoMachete,
-                name: MACHETE_STEP_NAME.to_owned(),
-                argv: machete_argv()?,
-                prepare_argv: machete_install,
-            });
-        }
+        let machete_install = machete_install_argv()?;
+        validator_commands.push(ValidatorCommand {
+            validator: ValidatorKind::CargoMachete,
+            name: MACHETE_STEP_NAME.to_owned(),
+            argv: machete_argv()?,
+            prepare_argv: machete_install,
+        });
     }
     crate::verify::push_verify_commands(
         &mut validator_commands,
