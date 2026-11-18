@@ -155,6 +155,9 @@ impl OwnedResources {
                             Recovery::Unresolved { owned_observed }
                         };
                     }
+                    return Recovery::Unresolved {
+                        owned_observed: true,
+                    };
                 }
                 Ok(Observation::Missing) | Err(HostError::DockerTimeout | HostError::Docker) => {}
                 Err(_) => return Recovery::Unresolved { owned_observed },
