@@ -5,7 +5,6 @@ use crate::base_save::{jobs, steps};
 use crate::facts::TestResult;
 use crate::pipeline::workflow;
 use velnor_model::RepoPath;
-use velnor_rust::CONFIG_PATH;
 
 const TOKENS: [&str; 3] = ["GITHUB_TOKEN", "github.token", "secrets."];
 
@@ -33,7 +32,7 @@ fn no_step_holds_a_token_after_cargo_ran_repository_code_in_the_same_job() -> Te
 
 #[test]
 fn report_api_tokens_are_confined_to_a_released_helper_without_repository_code() -> TestResult {
-    for version in ["0.1.80", "0.1.81"] {
+    for version in ["0.1.81"] {
         let mut view = crate::golden::load(&crate::golden::samples().join("helper-source"))?;
         let lock = view
             .files
@@ -42,11 +41,8 @@ fn report_api_tokens_are_confined_to_a_released_helper_without_repository_code()
         *lock = String::from_utf8(lock.clone())?
             .replace("0.1.81", version)
             .into_bytes();
-        if version == "0.1.80" {
-            let config = view.files.get_mut(&CONFIG_PATH).ok_or("config")?;
-            config.extend_from_slice(b"full_run = \"off\"\n");
-        }
-        let parsed: serde_json::Value = serde_saphyr::from_str(&workflow(&view)?)?;
+        let parsed: serde_json::Value =
+            serde_saphyr::from_str(&crate::archive::plain_invocations(&workflow(&view)?))?;
         let jobs = parsed["jobs"].as_object().ok_or("jobs")?;
         let cache = &jobs["cache"];
         let cache_steps = cache["steps"].as_array().ok_or("cache steps")?;

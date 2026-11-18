@@ -6,10 +6,13 @@ use std::path::Path;
 
 use velnor_model::{PolicyTools, RepoPath, RepoView, RustRoot};
 
+use crate::error::{DetectError, Reason};
 use crate::mise::MISE_CONFIGS;
+use crate::os_pins::pinned_for_runner;
 use crate::roots::is_cargo_config;
 
 const DEPENDENCY_FILES: [&str; 2] = ["Cargo.toml", "Cargo.lock"];
+const DENY_TOOL: &str = "cargo-deny";
 
 const DENY_CONFIG_NAMES: [&str; 4] = [
     "deny.toml",
@@ -52,6 +55,28 @@ pub(crate) fn is_deny_config(path: &RepoPath) -> bool {
         Some("deny.toml" | ".deny.toml")
     )
 }
+
+pub(crate) fn policy_tools(
+    view: &RepoView,
+    deny_configs: &BTreeMap<RepoPath, RepoPath>,
+    runner: &str,
+) -> Result<PolicyTools, DetectError> {
+    let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
+    if let Some(path) = deny_configs.values().next()
+        && !pinned(DENY_TOOL)
+    {
+        return Err(DetectError::invalid(path, Reason::UnpinnedTool(DENY_TOOL)));
+    }
+    Ok(PolicyTools {
+        deny: !deny_configs.is_empty(),
+        machete: pinned("cargo-machete"),
+    })
+}
+
+fn is_tool(name: &str, tool: &str) -> bool {
+    name.rsplit(['/', ':']).next() == Some(tool)
+}
+
 const DENY_EXCEPTION_FILES: [&str; 2] = ["deny.exceptions.toml", ".deny.exceptions.toml"];
 const IGNORE_FILES: [&str; 2] = [".gitignore", ".ignore"];
 

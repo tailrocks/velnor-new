@@ -50,7 +50,10 @@ pub(crate) use reservation::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
     PreJitNetworkIdentity, PreJitStorageObject,
 };
-pub(crate) use reservation::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use reservation::{
+    UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
+    UnboundRetirementPhase,
+};
 
 pub(in crate::journal) async fn validate_resources_bound(
     connection: &turso::Connection,
@@ -95,12 +98,12 @@ pub(crate) use reservation::{
     RecordedStorageNetwork, RequestPhysicalReservationResult, ReservationRequest,
     StorageAdmissionSample, StorageCleanupIdentity, StorageCleanupObserverWitness,
     StorageFilesystemKind, StorageInitializationClaim, StorageInodePolicy, StorageMedium,
-    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
-    StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
-    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
-    StorageProvisioningMemoryObservation, StorageProvisioningPlan, StorageProvisioningRole,
-    StorageRole, StorageRoleLimit, StorageSampleIdentity, VerifiedMetadataInitialization,
-    VerifiedMetadataInitializationHandoff,
+    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRecoveryIdentity,
+    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageObserver, StoragePoolLimit,
+    StoragePoolObservation, StoragePoolObservationInput, StorageProfile,
+    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageProvisioningPlan,
+    StorageProvisioningRole, StorageRole, StorageRoleLimit, StorageSampleIdentity,
+    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 
 pub(crate) use runtime::{EngineContext, SourceAuthorizationBinding};

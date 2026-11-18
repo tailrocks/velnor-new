@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
     RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain,
 };
 
@@ -13,8 +13,7 @@ use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
-use crate::os_pins::pinned_for_runner;
-use crate::policy::deny_configs;
+use crate::policy::{deny_configs, policy_tools};
 use crate::private_sources::private_sources;
 use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
 use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
@@ -135,6 +134,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
+    crate::config_test_setup::check(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = tool_pins(&view.files)?;
     check_setup_files(view, &rust_roots)?;
@@ -147,18 +147,22 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
+    if config.helper.is_some()
+        && !helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least((0, 1, 81)))
+    {
+        return Err(DetectError::invalid(
+            &LOCK_PATH,
+            Reason::HelperSourceRelease,
+        ));
+    }
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let deny_configs = deny_configs(view, &rust_roots);
     let policy = policy_tools(view, &deny_configs, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = private_sources(view, &rust_roots);
-    let repository = match &view.repository {
-        RepositoryIdentity::Named(name) if config.full_run.is_hashed() => name.clone(),
-        RepositoryIdentity::Unhosted if config.full_run.is_hashed() => {
-            return Err(DetectError::UnhostedOrigin);
-        }
-        _ => String::new(),
-    };
+    let repository = repository_identity(view, &config)?;
     Ok(RepoFacts {
         policy,
         deny_configs,
@@ -177,27 +181,13 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     })
 }
 
-const DENY_TOOL: &str = "cargo-deny";
-
-fn policy_tools(
-    view: &RepoView,
-    deny_configs: &BTreeMap<RepoPath, RepoPath>,
-    runner: &str,
-) -> Result<PolicyTools, DetectError> {
-    let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
-    if let Some(path) = deny_configs.values().next()
-        && !pinned(DENY_TOOL)
-    {
-        return Err(DetectError::invalid(path, Reason::UnpinnedTool(DENY_TOOL)));
+fn repository_identity(view: &RepoView, config: &RustCiConfig) -> Result<String, DetectError> {
+    let hashed = config.full_run.is_hashed();
+    match &view.repository {
+        RepositoryIdentity::Named(name) if hashed => Ok(name.clone()),
+        RepositoryIdentity::Unhosted if hashed => Err(DetectError::UnhostedOrigin),
+        _ => Ok(String::new()),
     }
-    Ok(PolicyTools {
-        deny: !deny_configs.is_empty(),
-        machete: pinned("cargo-machete"),
-    })
-}
-
-fn is_tool(name: &str, tool: &str) -> bool {
-    name.rsplit(['/', ':']).next() == Some(tool)
 }
 
 fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
@@ -215,10 +205,6 @@ fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
         None => Err(DetectError::invalid(
             &CONFIG_PATH,
             Reason::HelperBox(path.clone()),
-        )),
-        Some(root) if root.sets_build_target => Err(DetectError::invalid(
-            &CONFIG_PATH,
-            Reason::HelperTarget(path.clone()),
         )),
         Some(_) => Ok(()),
     }

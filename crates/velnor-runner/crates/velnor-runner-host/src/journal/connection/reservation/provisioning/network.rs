@@ -78,6 +78,27 @@ pub(crate) struct StorageNetworkRecoveryIdentity {
 }
 
 impl StorageNetworkRecoveryIdentity {
+    pub(crate) const fn reservation_id(&self) -> i64 {
+        self.reservation_id
+    }
+    pub(crate) const fn operation_id(&self) -> i64 {
+        self.operation_id
+    }
+    pub(crate) fn engine_id(&self) -> &str {
+        &self.engine_id
+    }
+    pub(crate) fn docker_root_digest(&self) -> &str {
+        &self.docker_root_digest
+    }
+    pub(crate) fn network_name(&self) -> &str {
+        &self.network_name
+    }
+    pub(crate) fn network_id(&self) -> Option<&str> {
+        self.network_id.as_deref()
+    }
+    pub(crate) fn labels(&self) -> &BTreeMap<String, String> {
+        &self.labels
+    }
     pub(crate) fn remove_state(&self) -> &str {
         &self.remove_state
     }
@@ -127,7 +148,7 @@ impl ConnectionJournal {
             return Err(HostError::Identity);
         }
         let connection_id = self.connection_id().as_str().to_owned();
-        in_transaction(self.journal_ref(), async |connection| {
+        let claim=in_transaction(self.journal_ref(), async |connection| {
             self.validate_scope(connection).await?;
             let Some(context) = super::hold_context(connection, &connection_id, reservation_id).await? else {
                 return Ok(None);
@@ -155,7 +176,16 @@ impl ConnectionJournal {
                 operation_id: context.operation_id, engine_id: context.engine_id,
                 docker_root_digest: context.docker_root_digest, network_name, labels,
             }))
-        }).await
+        }).await?;
+        if claim.is_some() {
+            self.anchor_bootstrap_create_clock(
+                reservation_id,
+                crate::journal::UnboundResourceKind::Network,
+                "private",
+            )
+            .await?;
+        }
+        Ok(claim)
     }
 
     pub(crate) async fn record_storage_network_created(

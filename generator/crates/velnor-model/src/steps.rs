@@ -50,12 +50,12 @@ pub enum StepKind {
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
+    TestSetup {
+        name: String,
+        run: String,
+    },
     GeneratorCheck,
     InstallHelper(HelperRelease),
-    HelperFromArtifact,
-    PublishHelper {
-        binary: RepoPath,
-    },
     FailWhenANeedFailed,
     FailOnDraftRun,
     Verdict {
