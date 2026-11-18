@@ -12,10 +12,11 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 20] = [
+const KEYS: [&str; 21] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
+    "fork_runner",
     "crates_mirror",
     "timeout_minutes",
     "exclude",
@@ -41,6 +42,7 @@ struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     runner: Option<String>,
+    fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
@@ -114,6 +116,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
+    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
@@ -139,7 +143,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
+        runner,
+        fork_runner,
         timeout_minutes,
         exclude: excludes(raw.exclude).map_err(invalid)?,
     })
@@ -193,6 +198,7 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
     RunnerLabel::new(label.clone())
         .ok()
         .filter(|runner| !without_helper_build(runner.as_str()))
+        .filter(crate::config_fork::expression_safe)
         .ok_or(Reason::InvalidValue {
             key: "runner",
             value: label,
