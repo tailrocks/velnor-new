@@ -25,6 +25,7 @@ env = { SDK_VERSION = "${{ inputs.sdk_version }}", GH_TOKEN = "${{ github.token 
 [[workflow.job]]
 id = "check"
 needs = ["plan"]
+helper = true
 timeout_minutes = 30
 
 [workflow.job.matrix]

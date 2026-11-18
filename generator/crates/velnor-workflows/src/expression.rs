@@ -6,6 +6,7 @@ use crate::error::{WorkflowsError, refuse};
 pub(crate) struct Scope<'a> {
     pub(crate) inputs: &'a [&'a str],
     pub(crate) has_matrix: bool,
+    pub(crate) job_level: bool,
     pub(crate) needs: &'a [String],
     pub(crate) needed_outputs: &'a [(&'a str, &'a str)],
     pub(crate) steps: Vec<String>,
@@ -73,6 +74,7 @@ fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
                     _ => false,
                 }
         }
+        "steps" if scope.job_level => false,
         "steps" => {
             scope.steps.iter().any(|step| step == part(1))
                 && match parts.as_slice() {
@@ -82,8 +84,10 @@ fn allowed(reference: &str, scope: &Scope<'_>, condition: bool) -> bool {
                 }
         }
         "inputs" => parts.len() == 2 && scope.inputs.contains(&part(1)),
-        "matrix" => scope.has_matrix && parts.len() == 2 && is_identifier(part(1), true),
-        "job" => parts.len() == 2,
+        "matrix" => {
+            !scope.job_level && scope.has_matrix && parts.len() == 2 && is_identifier(part(1), true)
+        }
+        "job" => !scope.job_level && parts.len() == 2,
         "github" => {
             parts.len() >= 2
                 && (condition
@@ -115,6 +119,11 @@ pub(crate) fn check(value: &str, scope: &Scope<'_>) -> Result<(), WorkflowsError
 }
 
 pub(crate) fn check_condition(value: &str, scope: &Scope<'_>) -> Result<String, WorkflowsError> {
+    if value.contains(char::is_control) {
+        return refuse(format!(
+            "the condition {value:?} must be one line; a line break or control character is refused"
+        ));
+    }
     let inner = bare(value);
     if inner.is_empty() || inner.contains("${{") || inner.contains("}}") {
         return refuse(format!(

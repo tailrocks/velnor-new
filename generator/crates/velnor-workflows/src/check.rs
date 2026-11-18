@@ -123,12 +123,18 @@ fn job(
     let mut scope = Scope {
         inputs: &input_names,
         has_matrix: matrix.is_some(),
+        job_level: false,
         needs: &raw.needs,
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
     };
     if let Some(condition) = workflow_condition {
-        check_condition(condition, &scope)?;
+        let job_scope = Scope {
+            job_level: true,
+            steps: Vec::new(),
+            ..scope
+        };
+        check_condition(condition, &job_scope)?;
     }
     let mut steps: Vec<Step> = Vec::new();
     for step in raw.step {
@@ -251,6 +257,11 @@ fn step(
                 || run.trim().is_empty()
             {
                 return refuse(format!("a run step of job {job} needs a name and a run"));
+            }
+            if !helper_installed && run.split_whitespace().next() == Some("velnor-ci") {
+                return refuse(format!(
+                    "job {job} runs velnor-ci, so it needs helper = true"
+                ));
             }
             (String::new(), Body::Run(run))
         }

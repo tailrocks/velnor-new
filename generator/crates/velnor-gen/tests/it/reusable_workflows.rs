@@ -41,6 +41,7 @@ env = { SDK_VERSION = "${{ inputs.sdk_version }}", GH_TOKEN = "${{ github.token 
 [[workflow.job]]
 id = "check"
 needs = ["plan"]
+helper = true
 timeout_minutes = 30
 
 [workflow.job.matrix]
@@ -142,6 +143,7 @@ fn a_step_can_continue_on_error_and_only_that_step() -> TestResult {
         .1;
     let flags: Vec<Option<&str>> = steps(check)
         .iter()
+        .skip(1)
         .map(|step| step.get("continue-on-error").and_then(Node::text))
         .collect();
     assert_eq!(flags, [Some("true"), None]);
@@ -166,5 +168,64 @@ fn an_expression_over_an_undeclared_input_is_refused() -> TestResult {
 fn a_matrix_value_outside_a_matrix_job_is_refused() -> TestResult {
     let config = CONFIG.replace("\"${{ github.token }}\"", "\"${{ matrix.target }}\"");
     assert!(refusal(&config)?.contains("matrix.target"));
+    Ok(())
+}
+
+fn with_workflow_if(condition: &str) -> String {
+    CONFIG.replace(
+        "name = \"Native checks\"\n",
+        &format!("name = \"Native checks\"\nif = {condition}\n"),
+    )
+}
+
+fn with_step_if(condition: &str) -> String {
+    CONFIG.replace(
+        "name = \"Run the check\"\n",
+        &format!("name = \"Run the check\"\nif = {condition}\n"),
+    )
+}
+
+#[test]
+fn a_condition_with_a_newline_is_refused_everywhere() -> TestResult {
+    for config in [
+        with_workflow_if("\"inputs.sdk_version != ''\\n&& true\""),
+        with_step_if("\"github.event_name == 'push'\\n&& true\""),
+        with_workflow_if("\"inputs.sdk_version != ''\\r\""),
+    ] {
+        let message = refusal(&config)?;
+        assert!(message.contains("line break"), "{message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_workflow_if_cannot_read_matrix_steps_or_job() -> TestResult {
+    for reference in ["matrix.target", "steps.plan.outcome", "job.status"] {
+        let message = refusal(&with_workflow_if(&format!("\"{reference} == 'x'\"")))?;
+        assert!(message.contains(reference), "{message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_workflow_if_can_read_inputs_needs_and_github() -> TestResult {
+    let tree = rendered(&with_workflow_if(
+        "\"inputs.sdk_version != '' && github.event_name == 'push'\"",
+    ))?;
+    let all = jobs(&tree)?;
+    for (_, job) in &all {
+        assert!(job.get("if").and_then(Node::text).is_some());
+    }
+    Ok(())
+}
+
+#[test]
+fn a_velnor_ci_run_step_needs_helper_on_its_job() -> TestResult {
+    let config = CONFIG.replace(
+        "needs = [\"plan\"]\nhelper = true\n",
+        "needs = [\"plan\"]\n",
+    );
+    let message = refusal(&config)?;
+    assert!(message.contains("helper = true"), "{message}");
     Ok(())
 }
