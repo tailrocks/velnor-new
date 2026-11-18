@@ -1,19 +1,19 @@
 name: Set up velnor-ci
-description: Installs a released velnor-ci after checking its SHA-256, and adds it to PATH.
+description: Installs velnor-ci from a released archive after checking the archive's SHA-256, and adds it to PATH.
 inputs:
   version:
     description: The velnor-ci version to install, as MAJOR.MINOR.PATCH.
     required: true
   sha256-linux-x64:
-    description: The SHA-256 of the linux-x64 binary. Required on Linux X64 runners.
+    description: The SHA-256 of the linux-x64 archive (velnor-ci-x86_64-unknown-linux-musl.tar.gz). Required on Linux X64 runners.
     required: false
     default: ''
   sha256-linux-arm64:
-    description: The SHA-256 of the linux-arm64 binary. Required on Linux ARM64 runners.
+    description: The SHA-256 of the linux-arm64 archive (velnor-ci-aarch64-unknown-linux-musl.tar.gz). Required on Linux ARM64 runners.
     required: false
     default: ''
   sha256-macos-arm64:
-    description: The SHA-256 of the macos-arm64 binary. Required on macOS ARM64 runners.
+    description: The SHA-256 of the macos-arm64 archive (velnor-ci-aarch64-apple-darwin.tar.gz). Required on macOS ARM64 runners.
     required: false
     default: ''
 runs:
@@ -35,13 +35,14 @@ runs:
         }
         [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || fail "version '$VERSION' must be MAJOR.MINOR.PATCH, digits only"
         case "$RUNNER_OS-$RUNNER_ARCH" in
-          Linux-X64) platform=linux-x64; expected="$SHA256_LINUX_X64" ;;
-          Linux-ARM64) platform=linux-arm64; expected="$SHA256_LINUX_ARM64" ;;
-          macOS-ARM64) platform=macos-arm64; expected="$SHA256_MACOS_ARM64" ;;
+          Linux-X64) platform=linux-x64; triple=x86_64-unknown-linux-musl; expected="$SHA256_LINUX_X64" ;;
+          Linux-ARM64) platform=linux-arm64; triple=aarch64-unknown-linux-musl; expected="$SHA256_LINUX_ARM64" ;;
+          macOS-ARM64) platform=macos-arm64; triple=aarch64-apple-darwin; expected="$SHA256_MACOS_ARM64" ;;
           *) fail "velnor-ci has no build for $RUNNER_OS $RUNNER_ARCH" ;;
         esac
         [ -n "$expected" ] || fail "no SHA-256 was given for $platform"
         [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || fail "the SHA-256 for $platform is not 64 lowercase hex digits"
+        archive="velnor-ci-$triple.tar.gz"
         MAX_BYTES=268435456
         bounded_copy() {
           head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null &
@@ -68,33 +69,37 @@ runs:
         trap 'rm -rf "$staging"' EXIT
         verified=
         for source in cache download; do
-          rm -f "$staging/velnor-ci"
+          rm -f "$staging/$archive"
           if [ "$source" = cache ]; then
-            [ -n "$dir" ] && [ -f "$dir/velnor-ci" ] && [ ! -L "$dir/velnor-ci" ] && [ -x "$dir/velnor-ci" ] || continue
-            bounded_copy "$dir/velnor-ci" "$staging/velnor-ci" || continue
+            [ -n "$dir" ] && [ -f "$dir/$archive" ] && [ ! -L "$dir/$archive" ] || continue
+            bounded_copy "$dir/$archive" "$staging/$archive" || continue
           else
-            echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
-            curl --fail --silent --show-error --location --retry 3 --max-filesize "$MAX_BYTES" --output "$staging/velnor-ci" "$RELEASES/rust-ci-v$VERSION/velnor-ci-$platform" || fail "downloading velnor-ci $VERSION $platform failed, or the file is larger than $MAX_BYTES bytes"
-            [ "$(wc -c < "$staging/velnor-ci")" -le "$MAX_BYTES" ] || fail "the velnor-ci $VERSION $platform download is larger than $MAX_BYTES bytes"
+            echo "Downloading $RELEASES/rust-ci-v$VERSION/$archive"
+            curl --fail --silent --show-error --location --retry 3 --max-filesize "$MAX_BYTES" --output "$staging/$archive" "$RELEASES/rust-ci-v$VERSION/$archive" || fail "downloading $archive for velnor-ci $VERSION failed, or the file is larger than $MAX_BYTES bytes"
+            [ "$(wc -c < "$staging/$archive")" -le "$MAX_BYTES" ] || fail "the $archive download for velnor-ci $VERSION is larger than $MAX_BYTES bytes"
           fi
-          if [ "$(digest "$staging/velnor-ci")" = "$expected" ]; then
+          if [ "$(digest "$staging/$archive")" = "$expected" ]; then
             verified="$source"
             break
           fi
-          echo "::warning title=setup-velnor::the $source copy of velnor-ci $VERSION does not match the SHA-256 $expected"
+          echo "::warning title=setup-velnor::the $source copy of $archive for velnor-ci $VERSION does not match the SHA-256 $expected"
         done
-        [ -n "$verified" ] || fail "SHA-256 mismatch for velnor-ci $VERSION $platform: expected $expected, downloaded $(digest "$staging/velnor-ci"). velnor-ci was not installed"
+        [ -n "$verified" ] || fail "SHA-256 mismatch for velnor-ci $VERSION $platform: expected $expected, downloaded $(digest "$staging/$archive"). velnor-ci was not installed"
+        extract="$staging/extract"
+        mkdir "$extract"
+        (ulimit -f "$((MAX_BYTES / 1024 + 1))"; tar --extract --gzip --no-same-owner --file "$staging/$archive" --directory "$extract" velnor-ci) || fail "extracting velnor-ci from $archive failed. velnor-ci was not installed"
+        [ -f "$extract/velnor-ci" ] && [ ! -L "$extract/velnor-ci" ] || fail "$archive does not hold velnor-ci as a regular file. velnor-ci was not installed"
+        bounded_copy "$extract/velnor-ci" "$staging/velnor-ci" || fail "velnor-ci in $archive is larger than $MAX_BYTES bytes. velnor-ci was not installed"
         bin="$RUNNER_TEMP/velnor-ci-bin"
         rm -rf "$bin"
         mkdir -p "$bin"
         cp "$staging/velnor-ci" "$bin/velnor-ci"
         chmod +x "$bin/velnor-ci"
         if [ "$verified" = cache ]; then
-          echo "velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
+          echo "$archive for velnor-ci $VERSION is in the tool cache at $dir, so the download is skipped"
         else
-          chmod +x "$staging/velnor-ci"
           entry=
-          if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$staging/velnor-ci" "$entry" 2> /dev/null && chmod +x "$entry" && mv -f "$entry" "$dir/velnor-ci" 2> /dev/null; then
+          if [ -n "$dir" ] && entry="$(mktemp "$dir/.velnor-ci.XXXXXX" 2> /dev/null)" && cp "$staging/$archive" "$entry" 2> /dev/null && mv -f "$entry" "$dir/$archive" 2> /dev/null; then
             echo "Verified SHA-256 $expected and installed velnor-ci $VERSION in $dir"
           else
             [ -z "$entry" ] || rm -f "$entry"
