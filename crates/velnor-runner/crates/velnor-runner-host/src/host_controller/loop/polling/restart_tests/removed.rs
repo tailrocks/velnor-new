@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::future::Future;
 use std::os::unix::fs::PermissionsExt;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use bollard::Docker;
 
@@ -110,6 +111,52 @@ impl Controller {
             deadline: tokio::time::Instant::now() + budget,
         })
         .await;
+    }
+}
+
+/// Freezes the clock the production deadlines read. A paused tokio clock jumps to the next timer
+/// whenever the runtime goes idle, which a loopback socket round trip does, so a task that stays
+/// runnable keeps it still. A frozen clock moves only through `advance`, so machine load cannot
+/// expire a deadline or let one pass.
+struct Frozen(tokio::task::JoinHandle<()>);
+
+fn freeze() -> Frozen {
+    tokio::time::pause();
+    Frozen(tokio::spawn(async {
+        loop {
+            tokio::task::yield_now().await;
+        }
+    }))
+}
+
+impl Frozen {
+    async fn advance(&self, by: Duration) {
+        tokio::time::advance(by).await;
+    }
+}
+
+impl Drop for Frozen {
+    fn drop(&mut self) {
+        self.0.abort();
+        tokio::time::resume();
+    }
+}
+
+/// Resolves once the fixture holds the stalled request. A recovery that returns first never
+/// reached the stall.
+async fn stalled<T, E>(
+    fixture: &FixtureDocker,
+    recovery: &mut (impl Future<Output = Result<T, E>> + Unpin),
+) -> TestResult<()>
+where
+    E: Into<Box<dyn std::error::Error>>,
+{
+    tokio::select! {
+        result = recovery => {
+            result.map_err(Into::into)?;
+            Err("recovery returned before it reached the stalled request".into())
+        }
+        () = fixture.hung() => Ok(()),
     }
 }
 
@@ -248,29 +295,30 @@ async fn the_startup_sequence_retires_the_unbound_pair_of_a_removed_connection()
     assert_retired(&restarted).await
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn a_stalled_docker_cannot_hold_the_startup_reconcile_past_its_deadline() -> TestResult<()> {
     let (restarted, controller) = restarted_with_a_removed_connection().await?;
     restarted.fixture.hang_after(format!(
         "DELETE /containers/{}",
         FAILED.container_id("runner")
     ));
-    let started = Instant::now();
-    tokio::time::timeout(
-        Duration::from_secs(60),
-        controller.clean_up_at_startup(
-            &restarted.journal,
-            &restarted.docker,
-            &restarted.engine,
-            Duration::from_millis(500),
-        ),
-    )
-    .await?;
-    assert!(
-        started.elapsed() < Duration::from_secs(5),
-        "{:?}",
-        started.elapsed()
-    );
+    let clock = freeze();
+    let recovery = async {
+        controller
+            .clean_up_at_startup(
+                &restarted.journal,
+                &restarted.docker,
+                &restarted.engine,
+                Duration::from_millis(500),
+            )
+            .await;
+        TestResult::Ok(())
+    };
+    tokio::pin!(recovery);
+    stalled(&restarted.fixture, &mut recovery).await?;
+    clock.advance(Duration::from_secs(1)).await;
+    recovery.await?;
+    drop(clock);
     assert_eq!(
         seed::text(&restarted.journal, seed::RESERVATION, FAILED.reservation).await?,
         UNCERTAIN
