@@ -81,7 +81,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if facts.config.cache_debug == CacheDebug::On {
         upload_cargo_logs(&mut jobs);
     }
-    if facts.config.mbx_remote == MbxRemote::GithubActions {
+    if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
         add_mbx_remote(&mut jobs);
     }
     crate::report::finish(facts, &mut jobs, single, draft_guard);

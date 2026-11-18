@@ -117,3 +117,40 @@ fn an_unknown_backend_or_key_under_cache_is_refused() -> TestResult {
     }
     Ok(())
 }
+
+const GIT_LOCK: &[u8] = b"version = 4\n\n[[package]]\nname = \"shared-lib\"\nversion = \"0.1.0\"\nsource = \"git+https://github.com/example/shared-lib?branch=main#0123456789abcdef\"\n";
+const REGISTRY_CONFIG: &[u8] =
+    b"[registries.private]\nindex = \"sparse+https://registry.example.invalid/\"\n";
+
+fn private_view(config: &[u8]) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
+    let mut view = view(&["Cargo.toml"], Some(config))?;
+    let lock = velnor_model::RepoPath::new("Cargo.lock")?;
+    view.files.insert(lock, GIT_LOCK.to_vec());
+    Ok(view)
+}
+
+#[test]
+fn a_private_dependency_refuses_the_remote_cache_a_fork_pull_request_could_restore() -> TestResult {
+    let error = workflow(&private_view(ON)?).expect_err("private sources and the mbx cache");
+    let text = error.to_string();
+    assert!(text.contains("cache.mbx_remote"), "{text}");
+    assert!(text.contains("private dependencies"), "{text}");
+    assert!(text.contains("shared-lib"), "{text}");
+
+    let mut configured = view(&["Cargo.toml"], Some(ON))?;
+    configured.files.insert(
+        velnor_model::RepoPath::new(".cargo/config.toml")?,
+        REGISTRY_CONFIG.to_vec(),
+    );
+    let error = workflow(&configured).expect_err("a private registry and the mbx cache");
+    assert!(error.to_string().contains("cache.mbx_remote"), "{error}");
+    Ok(())
+}
+
+#[test]
+fn a_private_dependency_without_the_opt_in_still_generates_and_never_restores_remotely()
+-> TestResult {
+    let text = workflow(&private_view(b"")?)?;
+    assert!(!text.contains("mr-boxington"));
+    Ok(())
+}
