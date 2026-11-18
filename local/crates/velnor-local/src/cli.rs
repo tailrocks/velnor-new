@@ -176,6 +176,11 @@ pub struct EnvironmentArgs {
         help = "velnor-host built with local mode, which pair mode runs; `velnor-local build` builds it. Default: the one built in the checkout that holds this executable, never one from the working directory"
     )]
     pub velnor_host: Option<PathBuf>,
+    #[arg(
+        long,
+        help = "linux-arm64 velnor-ci that setup-velnor installs instead of the pinned release, with a warning that names its SHA-256. Mounted read-only into the trusted plain runners only; needs --runner plain, because velnor-host owns the pair containers. The workflow stays unmodified and still pins the release"
+    )]
+    pub velnor_ci_binary: Option<PathBuf>,
 }
 
 impl EnvironmentArgs {

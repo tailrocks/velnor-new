@@ -20,6 +20,7 @@ fn plain(dir: &std::path::Path, runners: u16, fork_runners: u16) -> EnvironmentA
         runner: RunnerMode::Plain,
         velnor_host: Some("velnor-host".into()),
         policy: None,
+        velnor_ci_binary: None,
     }
 }
 

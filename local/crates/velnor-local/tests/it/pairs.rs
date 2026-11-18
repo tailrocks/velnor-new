@@ -220,6 +220,7 @@ async fn pair_mode_starts_no_runner_container_and_down_removes_labelled_volumes(
         runner: RunnerMode::Pair,
         velnor_host: Some(HOST_BINARY.into()),
         policy: None,
+        velnor_ci_binary: None,
     };
     assert!(env.up(&dir, &args).await.is_err());
     let started = docker.started();

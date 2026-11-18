@@ -52,6 +52,18 @@ velnor-local down --dir "$STATE"
 
 `status` prints the environment's name and age, the runner mode, the authority's address, the number of events in the ledger, each pair as `busy (run <id>, job <name>)` or `idle`, and the last refusal of the job-start check, or `none`. It reads the state directory only and changes nothing; when the authority is not running it exits 1 and says so. `down` removes the environment.
 
+## Run an unreleased velnor-ci
+
+`setup-velnor` downloads the pinned release of `velnor-ci` and installs it only when its SHA-256 matches the workflow's pin, so a helper built from a working tree can never match. `--velnor-ci-binary <path>` on `up` and `run` (not `--velnor-ci`, the host program that writes the metrics file, which on a Mac is not a Linux executable) hands the runners a linux-arm64 ELF build of `velnor-ci` instead, and the workflow stays as generated, pins and all:
+
+```sh
+velnor-local run warm --repo "$REPO" --dir "$STATE" --runner plain --velnor-ci-binary "$VELNOR_CI_LINUX_ARM64"
+```
+
+`up` refuses a path that is not an executable regular file of at most 256 MiB, is not a linux-arm64 ELF, or has a `:`, `,` or newline in it, and refuses the flag with `--runner pair`, because velnor-host builds the pair containers and mounts nothing from the host into them. It mounts the file read-only at `/opt/velnor/local/velnor-ci`, a marker file from the state directory at `/opt/velnor/local/.local-mode`, and sets `VELNOR_LOCAL_MODE=1`, in the trusted runners only; the untrusted side gets none of the three.
+
+The action takes the local binary only when `VELNOR_LOCAL_MODE` is `1` and `/proc/self/mountinfo` lists both paths as read-only mount points; a directory a job created, a writable mount or a step's `env:` cannot satisfy that. Otherwise it warns and verifies the pinned release exactly as on GitHub. The SHA-256 inputs stay required. The binary is never written to the tool cache, and every use prints a warning and a step-summary line that name the local SHA-256, so a local result is not mistaken for a release result. The binary is unverified by design: this is for a developer's own machine, and the check proves nothing about the helper that was mounted.
+
 ## The three modes
 
 | | GitHub-hosted | Self-hosted scale set | Local (this tool) |

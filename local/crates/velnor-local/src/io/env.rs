@@ -162,15 +162,21 @@ impl<E: Engine> Environment<E> {
     }
 
     pub async fn up(&self, repo: &Path, args: &EnvironmentArgs) -> io::Result<Addresses> {
+        let local = super::local_ci::flags(args, &self.dir).await?;
         self.down().await?;
-        let started = self.start_all(repo, args).await;
+        let started = self.start_all(repo, args, &local).await;
         if started.is_err() {
             let _ = self.down().await;
         }
         started
     }
 
-    async fn start_all(&self, repo: &Path, args: &EnvironmentArgs) -> io::Result<Addresses> {
+    async fn start_all(
+        &self,
+        repo: &Path,
+        args: &EnvironmentArgs,
+        local: &[String],
+    ) -> io::Result<Addresses> {
         super::pair::private_folder(&self.dir.join("keys")).await?;
         for directory in ["cache", "api"] {
             fs::create_dir_all(self.dir.join(directory)).await?;
@@ -186,7 +192,7 @@ impl<E: Engine> Environment<E> {
         let state = mount("api", "/api");
         let control = mount("keys/control", "/keys/control:ro");
         let data = mount("cache", "/data");
-        self.side("", args.containers(args.runners)).await?;
+        self.side("", args.containers(args.runners), local).await?;
         let stub = words(
             "api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data --standin runner-server:80 \
              --control-listen 0.0.0.0:81 --control-token /keys/control",
@@ -211,13 +217,13 @@ impl<E: Engine> Environment<E> {
         )
         .await?;
         if args.fork_runners > 0 {
-            self.side("fork-", args.containers(args.fork_runners))
+            self.side("fork-", args.containers(args.fork_runners), &[])
                 .await?;
         }
         self.ready(args).await
     }
 
-    async fn side(&self, prefix: &str, runners: u16) -> io::Result<()> {
+    async fn side(&self, prefix: &str, runners: u16, local: &[String]) -> io::Result<()> {
         let label = format!("velnor-local={}", self.name);
         let network = self.network(Side::of_role(prefix));
         self.docker("network create", &["--label", &label, &network])
@@ -275,7 +281,11 @@ impl<E: Engine> Environment<E> {
             self.start(
                 &format!("{prefix}runner-{number}"),
                 "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1",
-                &[RUNNER_IMAGE, "sh", "-c", &register],
+                &[
+                    &local.iter().map(String::as_str).collect::<Vec<_>>()[..],
+                    &[RUNNER_IMAGE, "sh", "-c", &register],
+                ]
+                .concat(),
             )
             .await?;
         }
