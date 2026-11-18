@@ -68,7 +68,7 @@ pub enum ReleaseError {
     Sha256FilesNeedsArchive {
         package: String,
     },
-    MuslNeedsRawLinux {
+    MuslNeedsLinux {
         package: String,
     },
     InvalidBundle {

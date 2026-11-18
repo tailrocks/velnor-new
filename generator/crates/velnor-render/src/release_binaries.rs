@@ -6,8 +6,8 @@ use velnor_release::{BinaryFormat, BinaryPlan, Libc, RELEASE_APP_SLUG, ReleasePl
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_assets::{
-    COMMIT_FILE, STAGE, asset, assets, pack, quoted, read_version, selection, uploaded, versioned,
-    word,
+    COMMIT_FILE, STAGE, asset, assets, pack, quoted, read_version, selection, sidecar_step,
+    uploaded, versioned, word,
 };
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
@@ -97,10 +97,14 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
     ));
     let linux = triple.ends_with("linux-musl");
     let packaging = match binary.format {
-        BinaryFormat::Archive => vec![command(
-            format!("Pack {file}"),
-            pack(binary, &file, &release_dir),
-        )],
+        BinaryFormat::Archive => {
+            let mut steps = vec![command(
+                format!("Pack {file}"),
+                pack(binary, &file, &release_dir),
+            )];
+            steps.extend(sidecar_step(binary, platform, &file));
+            steps
+        }
         BinaryFormat::Raw => {
             let mut steps = raw_packaging(binary, platform, triple, &release_dir);
             steps.extend(smoke_steps(binary, platform));

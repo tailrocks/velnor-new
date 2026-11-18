@@ -25,7 +25,10 @@ fn a_binary_without_an_asset_name_keeps_the_platform_suffixed_asset() -> TestRes
     assert!(!text.contains("VERSION"));
     assert!(!text.contains("stage"));
     let publish = runs(job(&tree, "publish-app")?).join("\n");
-    assert!(publish.contains("app-linux-x64.tar.gz"), "{publish}");
+    assert!(
+        publish.contains("app-x86_64-unknown-linux-musl.tar.gz"),
+        "{publish}"
+    );
     Ok(())
 }
 

@@ -167,14 +167,14 @@ fn musl_raw_builds_the_musl_triple_and_installs_musl_tools() -> TestResult {
 }
 
 #[test]
-fn musl_needs_a_raw_binary_with_a_linux_platform() {
+fn musl_needs_a_linux_platform() {
     for config in [
-        "[[binaries]]\npackage = \"app\"\ntarget = \"musl\"\n",
+        "[[binaries]]\npackage = \"app\"\ntarget = \"musl\"\nplatforms = [\"macos-arm64\"]\n",
         "[[binaries]]\npackage = \"app\"\nformat = \"raw\"\ntarget = \"musl\"\nplatforms = [\"macos-arm64\"]\n",
     ] {
         assert!(matches!(
             refused(config),
-            Some(ReleaseError::MuslNeedsRawLinux { .. })
+            Some(ReleaseError::MuslNeedsLinux { .. })
         ));
     }
 }

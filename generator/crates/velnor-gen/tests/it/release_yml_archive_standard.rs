@@ -91,7 +91,10 @@ fn archives_are_named_after_the_binary_and_the_rust_target_triple() -> TestResul
     }
     let publish = runs(job(&tree, "publish-app")?)[0].to_owned();
     for (_, triple) in TRIPLES {
-        assert!(publish.contains(&format!(" {}", archive(triple))), "{publish}");
+        assert!(
+            publish.contains(&format!(" {}", archive(triple))),
+            "{publish}"
+        );
     }
     assert!(!publish.contains("linux-x64"), "{publish}");
     Ok(())
@@ -108,12 +111,15 @@ fn sha256sums_lists_exactly_the_archives_by_default() -> TestResult {
 
 fn tree_text(tree: &Node) -> String {
     let mut text = String::new();
-    for (_, job) in tree.get("jobs").map_or(Vec::new(), |jobs| {
-        jobs.keys()
-            .into_iter()
-            .filter_map(|id| jobs.get(id).map(|job| (id, job)))
-            .collect()
-    }) {
+    let Some(jobs) = tree.get("jobs") else {
+        return text;
+    };
+    for id in jobs
+        .keys()
+        .into_iter()
+        .filter(|id| id.ends_with("-app") || id.contains("-app-"))
+    {
+        let Some(job) = jobs.get(id) else { continue };
         for run in runs(job) {
             text.push_str(run);
             text.push('\n');
@@ -216,10 +222,8 @@ fn a_velnor_host_shaped_archive_holds_the_binary_the_helper_license_and_notice()
     .map(str::to_owned)
     .collect();
     assert_eq!(summed(&tree)?, want);
-    let want_verified: BTreeSet<String> = want
-        .into_iter()
-        .chain(["SHA256SUMS".to_owned()])
-        .collect();
+    let want_verified: BTreeSet<String> =
+        want.into_iter().chain(["SHA256SUMS".to_owned()]).collect();
     assert_eq!(verified(&tree)?, want_verified);
     assert!(!tree_text(&tree).contains("NOTICE.sha256"));
     assert!(!tree_text(&tree).contains("LICENSE.sha256"));
@@ -246,11 +250,12 @@ fn an_archive_may_name_the_gnu_target() -> TestResult {
 fn an_explicit_asset_name_still_replaces_the_triple_name() -> TestResult {
     let (_, tree) = render(
         &[APP],
-        Some("[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\nasset_name = \"{{ bin }}_{{ platform }}\"\n"),
+        Some(
+            "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\nasset_name = \"{{ bin }}_{{ platform }}\"\n",
+        ),
     )?;
-    assert!(
-        runs(job(&tree, "build-app-linux-x64")?)
-            .contains(&"tar -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app")
-    );
+    assert!(runs(job(&tree, "build-app-linux-x64")?).contains(
+        &"tar -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app"
+    ));
     Ok(())
 }

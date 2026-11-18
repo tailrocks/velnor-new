@@ -21,7 +21,10 @@ pub(crate) fn versioned(binary: &BinaryPlan) -> bool {
 
 pub(crate) fn stem(binary: &BinaryPlan, bin: &str, platform: Platform) -> String {
     match &binary.asset_name {
-        None => format!("{bin}-{}", platform.file_suffix()),
+        None => match binary.format {
+            BinaryFormat::Archive => format!("{bin}-{}", target(platform, binary).1),
+            BinaryFormat::Raw => format!("{bin}-{}", platform.file_suffix()),
+        },
         Some(template) => expand_asset_name(
             template,
             bin,
@@ -42,7 +45,15 @@ pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
 
 pub(crate) fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<String> {
     match binary.format {
-        BinaryFormat::Archive => vec![asset(binary, platform)],
+        BinaryFormat::Archive => {
+            let archive = asset(binary, platform);
+            let sidecar = format!("{archive}.sha256");
+            if binary.sha256_files {
+                vec![archive, sidecar]
+            } else {
+                vec![archive]
+            }
+        }
         BinaryFormat::Raw => bin_names(binary)
             .flat_map(|bin| {
                 let name = stem(binary, bin, platform);
@@ -91,6 +102,29 @@ pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String
     } else {
         format!("tar -czf {} -C {release_dir}{members}", shell_word(file))
     }
+}
+
+pub(crate) fn sidecar_step(
+    binary: &BinaryPlan,
+    platform: Platform,
+    file: &str,
+) -> Option<RenderedStep> {
+    binary.sha256_files.then(|| {
+        let checksum = if platform == Platform::MacosArm64 {
+            "shasum -a 256"
+        } else {
+            "sha256sum"
+        };
+        let name = word(binary, file);
+        let sidecar = word(binary, &format!("{file}.sha256"));
+        RenderedStep {
+            working_directory: versioned(binary).then(|| STAGE.to_owned()),
+            ..command(
+                format!("Checksum {file}"),
+                format!("{checksum} {name} > {sidecar}"),
+            )
+        }
+    })
 }
 
 pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {

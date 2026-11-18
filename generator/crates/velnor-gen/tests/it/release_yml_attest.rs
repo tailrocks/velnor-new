@@ -104,7 +104,10 @@ fn attest_true_verifies_every_asset_with_a_pinned_gh_before_publish_and_fails_cl
         .collect();
     assert_eq!(verifying.len(), 4);
     let commands: Vec<String> = verifying.iter().filter_map(|i| run_of(&all[*i])).collect();
-    for subject in ["dist/app-linux-x64.tar.gz", "dist/SHA256SUMS"] {
+    for subject in [
+        "dist/app-x86_64-unknown-linux-musl.tar.gz",
+        "dist/SHA256SUMS",
+    ] {
         assert!(
             commands.iter().any(|c| c.contains(subject)),
             "{subject} is not verified"

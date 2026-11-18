@@ -64,6 +64,7 @@ pub struct BinaryPlan {
     pub attest: bool,
     pub smoke: bool,
     pub commit_file: bool,
+    pub sha256_files: bool,
     pub tag_pattern: TagPattern,
     pub asset_name: Option<String>,
 }
@@ -269,6 +270,7 @@ fn plan_binaries(
             attest: binary.attest,
             smoke: binary.smoke,
             commit_file: binary.commit_file,
+            sha256_files: binary.sha256_files,
             tag_pattern,
         });
     }

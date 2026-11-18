@@ -37,6 +37,7 @@ pub(crate) struct Binary {
     pub(crate) attest: bool,
     pub(crate) smoke: bool,
     pub(crate) commit_file: bool,
+    pub(crate) sha256_files: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -67,6 +68,8 @@ struct RawBinary {
     smoke: bool,
     #[serde(default)]
     commit_file: bool,
+    #[serde(default)]
+    sha256_files: bool,
 }
 
 #[derive(Deserialize)]
@@ -202,14 +205,17 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         BinaryFormat::Archive => Libc::Musl,
         BinaryFormat::Raw => Libc::Gnu,
     });
-    if format == BinaryFormat::Archive && raw.target.is_some()
-        || libc == Libc::Musl
-            && format == BinaryFormat::Raw
-            && platforms
-                .iter()
-                .all(|platform| *platform == Platform::MacosArm64)
+    if raw.target == Some(Libc::Musl)
+        && platforms
+            .iter()
+            .all(|platform| *platform == Platform::MacosArm64)
     {
-        return Err(ReleaseError::MuslNeedsRawLinux {
+        return Err(ReleaseError::MuslNeedsLinux {
+            package: raw.package,
+        });
+    }
+    if format == BinaryFormat::Raw && raw.sha256_files {
+        return Err(ReleaseError::Sha256FilesNeedsArchive {
             package: raw.package,
         });
     }
@@ -240,5 +246,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         attest: raw.attest,
         smoke: raw.smoke,
         commit_file: raw.commit_file,
+        sha256_files: raw.sha256_files,
     })
 }
