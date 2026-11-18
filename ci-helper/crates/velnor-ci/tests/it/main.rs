@@ -40,6 +40,7 @@ mod io_restore;
 mod io_restore_symlinks;
 mod io_stderr;
 mod lane_guard;
+mod lane_guard_generated;
 mod logscan;
 mod plan;
 mod plan_api;

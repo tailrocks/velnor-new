@@ -23,6 +23,7 @@ pub enum GenerateError {
     MirrorHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
+    LaneGuardHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
@@ -62,6 +63,10 @@ impl fmt::Display for GenerateError {
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+            ),
+            Self::LaneGuardHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot run lane-guard; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {

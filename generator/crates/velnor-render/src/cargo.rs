@@ -80,16 +80,13 @@ fn cargo_command(
             nextest_run(&format!("--workspace --locked{nextest}"), filter)
         }
         CargoCommand::NextestFeatures { features, filter } => {
-            let (_, run, env) = nextest_run(
-                &format!("--workspace --locked{nextest}{}", feature_flag(features)),
-                filter,
-            );
-            (
-                format!("{TEST_STEP} (features: {})", features.join(",")),
-                run,
-                env,
-            )
+            nextest_features(nextest, features, filter)
         }
+        CargoCommand::LaneGuard {
+            features,
+            filter,
+            except,
+        } => lane_guard(features, filter, except),
         CargoCommand::NextestRunArchive { file, filter } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
@@ -157,6 +154,7 @@ fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
                 | CargoCommand::Deny { .. }
                 | CargoCommand::Machete
                 | CargoCommand::NextestRunArchive { .. }
+                | CargoCommand::LaneGuard { .. }
         )
     {
         "velnor-ci inputs build -- "
@@ -228,6 +226,46 @@ fn nextest_filter(filter: &FilterRef) -> String {
             }
         }
     }
+}
+
+fn nextest_features(
+    nextest: &str,
+    features: &[String],
+    filter: &FilterRef,
+) -> (String, String, Vec<(String, Value)>) {
+    let (_, run, env) = nextest_run(
+        &format!("--workspace --locked{nextest}{}", feature_flag(features)),
+        filter,
+    );
+    (
+        format!("{TEST_STEP} (features: {})", features.join(",")),
+        run,
+        env,
+    )
+}
+
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+fn lane_guard(
+    features: &[String],
+    filter: &str,
+    except: &[String],
+) -> (String, String, Vec<(String, Value)>) {
+    let run = except.iter().fold(
+        format!(
+            "velnor-ci lane-guard --features {} --filter {}",
+            quoted(&features.join(",")),
+            quoted(filter)
+        ),
+        |text, id| format!("{text} --except-binary {}", quoted(id)),
+    );
+    (
+        format!("Test lane guard (features: {})", features.join(",")),
+        run,
+        vec![],
+    )
 }
 
 fn feature_flag(features: &[String]) -> String {

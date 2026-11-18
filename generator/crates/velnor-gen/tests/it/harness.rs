@@ -229,10 +229,12 @@ fn a_recorded_sample_keeps_the_member_manifests_detection_reads() -> TestResult 
 #[test]
 fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> TestResult {
     let lane = "[[test_lane]]\nroot = '.'\nfeatures = ['x']\nfilter = 'test(~a)'\n";
-    let text = workflow(&view(Some(lane))?)?;
+    let mut repo = view(Some(lane))?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.82")?;
+    let text = workflow(&repo)?;
     let step = text
         .lines()
-        .find(|line| line.contains("--features ''x''"))
+        .find(|line| line.contains("--features ''x''") && line.contains("nextest"))
         .ok_or("no feature lane step")?;
     for excluded in ["a::custom", "a::defaulted", "a::bin/tool"] {
         assert!(
@@ -243,6 +245,25 @@ fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> Tes
     assert!(
         step.contains("-E \"(($TEST_FILTER) and (test(~a)))"),
         "{step}"
+    );
+    Ok(())
+}
+
+#[test]
+fn direct_harness_binaries_become_except_binary_arguments_of_the_guard() -> TestResult {
+    let lane = "[[test_lane]]\nroot = '.'\nfeatures = ['x']\nfilter = 'test(~a)'\n";
+    let mut repo = view(Some(lane))?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.82")?;
+    let text = workflow(&repo)?;
+    let guard = text
+        .lines()
+        .find(|line| line.contains("lane-guard"))
+        .ok_or("no guard step")?;
+    assert!(
+        guard.contains(
+            "velnor-ci lane-guard --features ''x'' --filter ''test(~a)'' --except-binary ''a::bin/tool'' --except-binary ''a::defaulted'' --except-binary ''a::custom'''"
+        ),
+        "{guard}"
     );
     Ok(())
 }

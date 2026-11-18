@@ -86,16 +86,24 @@ pub(crate) fn commands(
         .test_lanes
         .iter()
         .filter(|lane| lane.root == root.manifest.parent())
-        .map(|lane| CargoCommand::NextestFeatures {
-            features: lane.features.clone(),
-            filter: match &lane.filter {
-                Some(expr) => FilterRef::Expr {
-                    expr: expr.clone(),
-                    except: direct.to_vec(),
+        .flat_map(|lane| {
+            let run = CargoCommand::NextestFeatures {
+                features: lane.features.clone(),
+                filter: match &lane.filter {
+                    Some(expr) => FilterRef::Expr {
+                        expr: expr.clone(),
+                        except: direct.to_vec(),
+                    },
+                    None if direct.is_empty() => FilterRef::All,
+                    None => FilterRef::AllExcept(direct.to_vec()),
                 },
-                None if direct.is_empty() => FilterRef::All,
-                None => FilterRef::AllExcept(direct.to_vec()),
-            },
+            };
+            let guard = lane.filter.as_ref().map(|expr| CargoCommand::LaneGuard {
+                features: lane.features.clone(),
+                filter: expr.clone(),
+                except: direct.to_vec(),
+            });
+            std::iter::once(run).chain(guard)
         })
         .collect()
 }

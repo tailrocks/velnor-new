@@ -68,6 +68,16 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     Ok(view)
 }
 
+pub(crate) fn pin_helper(view: &mut RepoView, version: &str) -> Result<(), Box<dyn Error>> {
+    view.files.insert(
+        velnor_rust::LOCK_PATH,
+        String::from_utf8(HELPER_LOCK.to_vec())?
+            .replace("0.1.79", version)
+            .into_bytes(),
+    );
+    Ok(())
+}
+
 pub(crate) fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
     let mut locked = view.clone();
     crate::facts::lock_pinned_tools(&mut locked)?;

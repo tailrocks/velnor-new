@@ -228,6 +228,11 @@ pub enum CargoCommand {
         features: Vec<String>,
         filter: FilterRef,
     },
+    LaneGuard {
+        features: Vec<String>,
+        filter: String,
+        except: Vec<String>,
+    },
     NextestArchive {
         file: RepoPath,
     },
