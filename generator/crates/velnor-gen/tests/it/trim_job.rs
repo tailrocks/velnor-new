@@ -222,7 +222,7 @@ fn target_publication_follows_its_test_build_and_input_audit() -> TestResult {
                 "{order:?}"
             );
         } else {
-            assert!(save < run, "{order:?}");
+            assert!(run < save, "{order:?}");
         }
     }
     let order = names(&lane("", "rust")?);
