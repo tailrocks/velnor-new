@@ -92,7 +92,16 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
 fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
     let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
     let unknown = parsed.keys().find(|key| {
-        !["tools", "settings", "min_version", "tasks", "vars", "wrappers"].contains(&key.as_str())
+        ![
+            "tools",
+            "settings",
+            "min_version",
+            "tasks",
+            "task_templates",
+            "vars",
+            "wrappers",
+        ]
+        .contains(&key.as_str())
     });
     let settings = parsed.get("settings").and_then(Value::as_table);
     let unknown_setting = settings.and_then(|settings| {
@@ -110,7 +119,7 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
         .is_some_and(|tools| tools.values().any(runs_a_command));
     let templates = parsed
         .iter()
-        .filter(|(key, _)| key.as_str() != "tasks")
+        .filter(|(key, _)| !matches!(key.as_str(), "tasks" | "task_templates"))
         .any(|(_, value)| has_template(value));
     if let Some(name) = unknown
         .or(unknown_setting)

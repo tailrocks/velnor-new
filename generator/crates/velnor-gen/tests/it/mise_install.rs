@@ -51,6 +51,16 @@ fn plan_accepts_a_task_template_because_mise_renders_it_when_the_task_runs() -> 
 }
 
 #[test]
+fn plan_accepts_a_task_template_definition_because_mise_renders_it_when_a_task_extends_it()
+-> TestResult {
+    let facts = detect(&locked_mise_view(
+        "[tools]\nrust = \"1.99.1\"\n[task_templates.\"python:build\"]\nrun = \"uv build --out-dir {{ config_root }}/dist\"\n",
+    )?)?;
+    assert_eq!(facts.tools.tools["rust"].requested, ["1.99.1"]);
+    Ok(())
+}
+
+#[test]
 fn plan_accepts_a_plain_tool_version_with_its_matching_lock() -> TestResult {
     let facts = detect(&locked_mise_view("[tools]\nrust = \"1.99.1\"\n")?)?;
     assert_eq!(facts.tools.tools["rust"].requested, ["1.99.1"]);
