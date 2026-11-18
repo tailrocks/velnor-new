@@ -56,11 +56,13 @@ jobs:
       rust_deny: '${{ steps.plan.outputs.rust_deny }}'
       rust_machete: '${{ steps.plan.outputs.rust_machete }}'
       rust_root_mode: '${{ steps.plan.outputs.rust_root_mode }}'
+      rust_root_doctests: '${{ steps.plan.outputs.rust_root_doctests }}'
+      rust_root_doctests_known: '${{ steps.plan.outputs.rust_root_doctests_known }}'
       rust_root_docs: '${{ steps.plan.outputs.rust_root_docs }}'
       rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
       rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
       rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -72,18 +74,18 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: &velnor_1 'directory="$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB" && "$VELNOR_HELPER_MKDIR" -m 700 "$directory" && "$VELNOR_HELPER_CP" "$RUNNER_TEMP/velnor-ci-bin/velnor-ci" "$directory/velnor-ci" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci" && printf ''%s\n'' "$VELNOR_HELPER_LAUNCHER" > "$directory/velnor-ci-exec" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci-exec" && printf ''%s=%s\n'' VELNOR_HELPER "$directory/velnor-ci" VELNOR_EXEC "$directory/velnor-ci-exec" VELNOR_HELPER_SHA256 "$VELNOR_HELPER_SHA256" >> "$GITHUB_ENV"'
           VELNOR_HELPER_LAUNCHER: &velnor_2 'directory=$("$VELNOR_HELPER_MKTEMP" -d "$RUNNER_TEMP/velnor-helper.XXXXXXXXXX") && copy=$("$VELNOR_HELPER_MKTEMP" "$directory/velnor-ci.XXXXXXXXXX") && "$VELNOR_HELPER_CP" "$VELNOR_HELPER" "$copy" && "$VELNOR_HELPER_CHMOD" 500 "$copy" && { "$VELNOR_HELPER_ENV" -i PATH=/usr/bin:/bin "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $copy" || { printf ''%s\n'' ''velnor-ci integrity check failed'' >&2; exit 1; }; } && exec "$copy" "$@"'
-          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f'' || '''' }}'
+          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'' || '''' }}'
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - id: plan
         name: velnor-ci plan
@@ -95,7 +97,7 @@ jobs:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
       contents: read
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -107,13 +109,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -242,7 +244,7 @@ jobs:
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
       sources_saved: '${{ steps.sources_save_root.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_root_key.outputs.key }}'
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -254,13 +256,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -403,6 +405,11 @@ jobs:
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || needs.rust-plan.outputs.rust_root_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
+      - name: Doctests
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
+        env:
+          DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
+        run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: '. "$VELNOR_EXEC" inputs save --target-dir target'
@@ -491,7 +498,7 @@ jobs:
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
       sources_saved: '${{ steps.sources_save_ci_helper.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_ci_helper_key.outputs.key }}'
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -503,13 +510,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -709,7 +716,7 @@ jobs:
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
       sources_saved: '${{ steps.sources_save_crates_velnor_runner.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_crates_velnor_runner_key.outputs.key }}'
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -721,13 +728,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -955,7 +962,7 @@ jobs:
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
       sources_saved: '${{ steps.sources_save_generator.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_generator_key.outputs.key }}'
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -967,13 +974,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1189,7 +1196,7 @@ jobs:
       sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
       sources_saved: '${{ steps.sources_save_local.outcome == ''success'' }}'
       sources_key: '${{ steps.sources_local_key.outputs.key }}'
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -1201,13 +1208,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1395,7 +1402,7 @@ jobs:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && ((github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
     permissions:
       contents: read
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -1407,13 +1414,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1640,7 +1647,7 @@ jobs:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && ((needs.rust-plan.outputs.rust_deny == ''run'' || needs.rust-plan.outputs.rust_machete == ''run'')) }}'
     permissions:
       contents: read
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -1652,13 +1659,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1746,20 +1753,20 @@ jobs:
     permissions:
       pull-requests: read
       actions: write
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Resolve released helper tools
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1930,20 +1937,20 @@ jobs:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'
     permissions:
       contents: read
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Resolve released helper tools
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1972,20 +1979,20 @@ jobs:
     permissions:
       actions: read
       contents: read
-    runs-on: ubuntu-26.04-scale-set
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
       - name: Resolve released helper tools
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
+      - name: Install velnor-ci 0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
-          version: '0.1.81'
-          sha256-linux-x64: '3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113'
-          sha256-linux-arm64: '70db242c5aaa73d276d281f7943d93a07cd27020bc8386b446b13663202b5245'
-          sha256-macos-arm64: e5defe5d41d4f83802792ba724f660c85ad7c705d174381997f30026fe27e93f
+          version: '0.1.83'
+          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
+          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
+          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
