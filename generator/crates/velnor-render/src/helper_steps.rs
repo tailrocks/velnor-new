@@ -6,7 +6,7 @@ use velnor_model::{CratesMirror, HelperCommand, RepoPath};
 use crate::base_steps::base_age;
 use crate::gate::{PLAN_STEP, REPLAN_STEP};
 use crate::release_steps::shell_word;
-use crate::rules::RenderedStep;
+use crate::rules::{MBX_ACTION, RenderedStep};
 use crate::steps::PREPARE_STEP;
 
 pub(crate) fn inputs_step(
@@ -79,4 +79,28 @@ pub(crate) fn restored_step(
         ),
     ));
     step
+}
+
+const MBX_ACTION_SHA: &str = "88acf2bb50552c7c508cbac13e5f8c576b95b1de";
+
+pub(crate) fn mbx_remote_step() -> RenderedStep {
+    use crate::rules::Value;
+    let text = |key: &str, value: &str| (key.to_owned(), Value::Text(value.to_owned()));
+    RenderedStep {
+        name: "Set up the mbx cache".to_owned(),
+        uses: Some(format!("{MBX_ACTION}@{MBX_ACTION_SHA}")),
+        uses_comment: Some("v1.7.3".to_owned()),
+        with: vec![
+            text("backend", "github"),
+            text("github-cache-mode", "objects"),
+            (
+                "cache-key-suffix".to_owned(),
+                Value::Expr("${{ github.job }}".to_owned()),
+            ),
+            text("save-on-pull-request", "false"),
+            text("save-on-protected-branch", "false"),
+            text("save-on-workflow-dispatch", "false"),
+        ],
+        ..RenderedStep::default()
+    }
 }

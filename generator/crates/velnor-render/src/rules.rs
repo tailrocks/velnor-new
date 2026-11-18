@@ -9,7 +9,7 @@ pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 8] = [
+pub const ALLOWED_ACTIONS: [&str; 9] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
@@ -18,8 +18,10 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
     "actions/download-artifact",
     MISE_ACTION,
     SETUP_VELNOR_ACTION,
+    MBX_ACTION,
 ];
 
+pub(crate) const MBX_ACTION: &str = "jdx/mr-boxington-action";
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;

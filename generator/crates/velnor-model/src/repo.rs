@@ -260,6 +260,7 @@ pub struct RustCiConfig {
     pub ci_debuginfo: CiDebugInfo,
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
+    pub mbx_remote: MbxRemote,
     pub test_setup: Vec<TestSetup>,
 }
 
@@ -283,6 +284,12 @@ pub enum FullRun {
     Nightly,
     Weekly,
     Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MbxRemote {
+    Off,
+    GithubActions,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -331,6 +338,7 @@ impl Default for RustCiConfig {
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
+            mbx_remote: MbxRemote::Off,
             test_setup: Vec::new(),
         }
     }

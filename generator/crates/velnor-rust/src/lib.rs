@@ -11,6 +11,7 @@ mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_cache;
 mod config_helper;
 mod config_mirror;
 mod config_test_setup;
