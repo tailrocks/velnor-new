@@ -156,6 +156,9 @@ fn rendered_steps(
         lane,
     ));
     for body in &mut rendered {
+        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+            body.env.push(crate::cargo::target_dir_env(target));
+        }
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
         {
