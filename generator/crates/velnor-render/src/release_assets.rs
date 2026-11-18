@@ -124,12 +124,17 @@ pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String
     }
 }
 
-pub(crate) fn sidecar_step(
+pub(crate) fn archive_packaging(
     binary: &BinaryPlan,
     platform: Platform,
     file: &str,
-) -> Option<RenderedStep> {
-    binary.checksum_files.map(|Checksum::Sha256| {
+    release_dir: &str,
+) -> Vec<RenderedStep> {
+    let mut steps = vec![command(
+        format!("Pack {file}"),
+        pack(binary, file, release_dir),
+    )];
+    steps.extend(binary.checksum_files.map(|Checksum::Sha256| {
         let checksum = if platform == Platform::MacosArm64 {
             "shasum -a 256"
         } else {
@@ -144,7 +149,8 @@ pub(crate) fn sidecar_step(
                 format!("{checksum} {name} > {sidecar}"),
             )
         }
-    })
+    }));
+    steps
 }
 
 pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {
