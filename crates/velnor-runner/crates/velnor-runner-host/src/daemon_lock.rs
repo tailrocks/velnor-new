@@ -116,7 +116,8 @@ pub(crate) struct EngineLineageGuard {
 
 #[derive(Debug)]
 struct GuardInner {
-    _lock_file: File,
+    lock_file: File,
+    lock_path: PathBuf,
     engine_id: String,
     anchor_path: PathBuf,
     state: Mutex<Option<Anchor>>,
@@ -167,7 +168,8 @@ impl EngineLineageGuard {
         lock_file.try_lock().map_err(|_| HostError::Lock)?;
         Ok(Self {
             inner: Arc::new(GuardInner {
-                _lock_file: lock_file,
+                lock_file,
+                lock_path,
                 engine_id: engine_id.to_owned(),
                 anchor_path,
                 state: Mutex::new(None),
@@ -181,6 +183,7 @@ impl EngineLineageGuard {
         instance_id: &str,
         revision: u64,
     ) -> Result<(), HostError> {
+        self.ensure_lock_current()?;
         let path = canonical_journal_path(canonical_path)?;
         let path_text = path.to_str().ok_or(HostError::Path)?.to_owned();
         if !instance_id_valid(instance_id) {
@@ -226,6 +229,17 @@ impl EngineLineageGuard {
         Ok(())
     }
 
+    /// The held descriptor must still be the file linked at the lock path. A
+    /// replaced or unlinked lock lets another process lock a new file for the
+    /// same engine, so every anchor access fails closed.
+    fn ensure_lock_current(&self) -> Result<(), HostError> {
+        if lock_file_is_linked_at(&self.inner.lock_file, &self.inner.lock_path) {
+            Ok(())
+        } else {
+            Err(HostError::Lock)
+        }
+    }
+
     pub(crate) fn engine_id(&self) -> &str {
         &self.inner.engine_id
     }
@@ -235,6 +249,7 @@ impl EngineLineageGuard {
     }
 
     pub(crate) fn advance_revision(&self, revision: u64) -> Result<(), HostError> {
+        self.ensure_lock_current()?;
         let mut state = self.inner.state.lock().map_err(|_| HostError::Journal)?;
         let current = state.as_ref().ok_or(HostError::Journal)?;
         if current.revision == revision {
@@ -254,6 +269,30 @@ impl EngineLineageGuard {
         write_anchor(&self.inner.anchor_path, &next)?;
         *state = Some(next);
         Ok(())
+    }
+}
+
+fn lock_file_is_linked_at(file: &File, path: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+
+        let Ok(held) = file.metadata() else {
+            return false;
+        };
+        let Ok(linked) = fs::symlink_metadata(path) else {
+            return false;
+        };
+        !linked.file_type().is_symlink()
+            && linked.is_file()
+            && held.nlink() > 0
+            && linked.dev() == held.dev()
+            && linked.ino() == held.ino()
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (file, path);
+        false
     }
 }
 
