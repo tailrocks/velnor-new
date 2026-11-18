@@ -11,7 +11,8 @@ use tokio::fs;
 use tokio::sync::Mutex;
 
 use super::git::Git;
-use super::reply::{Reply, response, text_response};
+use super::local_setup;
+use super::reply::{Reply, gzip_response, redirect, response, text_response};
 use super::{
     Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
 };
@@ -35,6 +36,7 @@ pub struct ApiStubConfig {
     pub default_branch: String,
     pub diff_limit_bytes: usize,
     pub standin: Option<std::sync::Arc<dyn StandIn>>,
+    pub local_setup: bool,
 }
 
 #[derive(Debug)]
@@ -106,6 +108,9 @@ impl ApiStub {
             eprintln!("{method} {path} {}", if log.is_some() { 200 } else { 404 });
             return log.map_or_else(|| response(Reply::missing()), text_response);
         }
+        if let Api::Tarball { repository } = &route {
+            return self.tarball(&method, &path, repository);
+        }
         let reply = match route {
             Api::PullFiles { number } => self.pull_files(&call, number).await,
             Api::PullList => self.pull_list(&call).await,
@@ -115,12 +120,29 @@ impl ApiStub {
             Api::CacheDelete { id } => self.cache_delete(&call, id).await,
             Api::Run { id } => self.run(id).await,
             Api::RunJobs { id, attempt } => self.run_jobs(&call, id, attempt).await,
-            Api::JobLog { .. } | Api::NotImplemented => {
+            Api::JobLog { .. } | Api::Tarball { .. } | Api::NotImplemented => {
                 Reply::with(501, rest::not_implemented(&method, &path), None)
             }
         };
         eprintln!("{method} {path} {}", reply.status);
         response(reply)
+    }
+
+    /// The download of an action. Only `tailrocks/velnor-new` in local mode gets the local
+    /// variant of setup-velnor; every other request goes to the same GitHub URL that
+    /// runner.server hands out by default.
+    fn tarball(&self, method: &str, path: &str, repository: &str) -> Response<Body> {
+        let local =
+            self.config.local_setup && repository.eq_ignore_ascii_case(local_setup::REPOSITORY);
+        eprintln!(
+            "{method} {path} {}",
+            if local { "200 local" } else { "302" }
+        );
+        if local {
+            gzip_response(local_setup::tarball())
+        } else {
+            redirect(&format!("https://api.github.com{path}"))
+        }
     }
 
     async fn pulls(&self) -> Option<Vec<Value>> {

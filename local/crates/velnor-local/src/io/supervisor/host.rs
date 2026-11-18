@@ -23,7 +23,7 @@ pub(super) const LOG: &str = "velnor-host.log";
 pub(super) const PID: &str = "pid";
 pub(super) const PLAN: &str = "plan.json";
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Pairs {
     pub host: PathBuf,
     pub trusted: u16,
