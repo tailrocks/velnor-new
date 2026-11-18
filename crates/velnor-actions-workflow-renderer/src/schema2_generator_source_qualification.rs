@@ -34,7 +34,6 @@ const SOURCE_QUALIFICATION_JOBS: [&str; 6] = [
     "generation-checks",
     "source-qualification",
 ];
-const SOURCES_FETCH_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
 const SOURCES_CARGO_HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
 
 pub(super) fn render(
@@ -131,7 +130,7 @@ fn producer_job(
         crate::non_input_checkout::restrict_checkout_yaml(checkout_step(), &plan.non_inputs);
     steps.push(prepare_step());
     steps.extend(phase_steps(&[VERIFY_CHECKOUT_PHASE]));
-    steps.extend(sources_restore_steps(producer.id, runner_label)?);
+    steps.extend(sources_restore_steps(pins, producer.id, runner_label)?);
     steps.push(mise_step(pins)?);
     steps.extend(phase_steps(PRELUDE_AFTER_MISE_BEFORE_PREFETCH));
     steps.push(prefetch_step());
@@ -157,10 +156,11 @@ fn producer_job(
 }
 
 pub(super) fn sources_restore_steps(
+    pins: &ProductReleasePins,
     job_id: &str,
     runner_label: &str,
 ) -> Result<Vec<Yaml>, RenderError> {
-    let roots = SOURCES_FETCH_ROOTS.map(str::to_owned);
+    let roots = pins.runner_workspace.fetch_roots();
     let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[], &[])
         .map_err(sources_restore_error)?;
     steps

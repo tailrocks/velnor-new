@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use super::product_release_binary_hash_fixture::{install_shasum_double, sha256};
 use serde_json::from_str;
 use tempfile::TempDir;
 use velnor_actions_contract::{RoutingWorkflow, Step, StepKind};
@@ -17,8 +18,6 @@ use velnor_actions_workflow_renderer::schema2::{
     ProductReleasePins, Schema2WorkflowRequest, render_schema2_workflows,
 };
 use velnor_actions_workflow_renderer::setup::MiseSetup;
-
-use super::product_release_binary_hash_fixture::{install_shasum_double, sha256};
 
 pub(crate) const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
 pub(crate) const HELPER_SUFFIX: &[u8] = b"helper payload\n";
@@ -334,6 +333,7 @@ fn pins() -> ProductReleasePins {
         mr_boxington_version: "1.29.2".to_owned(),
         gh_version: "2.83.1".to_owned(),
         bun_version: "1.4.4".to_owned(),
+        runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig::default(),
     }
 }
 
