@@ -46,6 +46,10 @@ impl Harness {
         Self::open(dir, limit_bytes).await
     }
 
+    pub(crate) async fn at(dir: PathBuf, limit_bytes: u64) -> Self {
+        Self::open(dir, limit_bytes).await
+    }
+
     async fn open(dir: PathBuf, limit_bytes: u64) -> Self {
         let config = Config {
             dir: dir.clone(),
@@ -147,11 +151,13 @@ impl Harness {
     }
 
     pub(crate) async fn register(&self, number: u64) {
+        assert_eq!(self.register_base(number, "main").await, 200);
+    }
+
+    pub(crate) async fn register_base(&self, number: u64, base: &str) -> u16 {
         let url = format!("http://github.localhost/_velnor/pull-requests/{number}");
-        let reply = self
-            .send("PUT", &url, &[], Bytes::from(r#"{"base_branch":"main"}"#))
-            .await;
-        assert_eq!(reply.status, 200);
+        let body = json!({"base_branch": base}).to_string();
+        self.send("PUT", &url, &[], Bytes::from(body)).await.status
     }
 
     pub(crate) async fn save(&self, git_ref: &str, key: &str, archive: &[u8]) -> Value {

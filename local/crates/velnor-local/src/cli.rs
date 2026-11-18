@@ -205,4 +205,9 @@ pub struct RunArgs {
         help = "Leave the environment up after the verdict, for status and curl; `down` removes it"
     )]
     pub keep: bool,
+    #[arg(
+        long,
+        help = "Start from an empty cache instead of the one that an earlier run on the same --dir left"
+    )]
+    pub fresh_cache: bool,
 }
