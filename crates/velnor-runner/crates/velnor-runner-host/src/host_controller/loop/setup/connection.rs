@@ -60,10 +60,7 @@ async fn prepare_connection_authority(
         request.selected_engine,
     )
     .await?;
-    let credential = crate::keychain::load_secret(
-        request.binding.credential_ref.service(),
-        request.binding.credential_ref.account(),
-    )?;
+    let credential = request.binding.credential_ref.load()?;
     let pat = connection_pat(&credential)?;
     let github_pat = crate::listen::Secret::new(pat);
     let setup = ensure_connection_scale_set(pat, request.binding, request.journal).await?;

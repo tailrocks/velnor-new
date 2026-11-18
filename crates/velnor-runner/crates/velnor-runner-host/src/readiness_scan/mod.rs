@@ -12,7 +12,6 @@ use crate::config::{HostConfig, KeychainReference};
 use crate::docker_client::{connect_unix, docker_deadline_after};
 use crate::error::HostError;
 use crate::journal::IntentState;
-use crate::keychain::load_secret;
 use crate::readiness::{Readiness, readiness_for_empty};
 use crate::reconcile::{IntentRow, occupies};
 
@@ -191,7 +190,7 @@ pub(crate) fn controller_config(state: &Path) -> Option<(HostConfig, String)> {
 }
 
 fn credential_present(reference: &KeychainReference) -> bool {
-    let Ok(secret) = load_secret(reference.service(), reference.account()) else {
+    let Ok(secret) = reference.load() else {
         return false;
     };
     let Ok(text) = std::str::from_utf8(secret.as_slice()) else {

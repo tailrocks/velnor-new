@@ -43,10 +43,7 @@ pub(super) fn audit_remote_runner(
     if expected.runner_scale_set_id != scale_set_id {
         return Err(HostError::Ownership);
     }
-    let credential = crate::keychain::load_secret(
-        binding.credential_ref.service(),
-        binding.credential_ref.account(),
-    )?;
+    let credential = binding.credential_ref.load()?;
     let pat = crate::host_controller::connection_pat(&credential)?;
     let deadline = Instant::now()
         .checked_add(Duration::from_secs(15))

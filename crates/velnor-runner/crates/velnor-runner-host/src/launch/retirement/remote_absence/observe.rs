@@ -8,7 +8,6 @@ use crate::{
     host_controller::connection_pat,
     https::HttpsTransport,
     journal::{ConnectionJournal, PostJitRetirementClaim, PreparedRetirementRemoteAbsence},
-    keychain,
     launch::retirement::remote_absence::model::{
         AuthenticatedRetirementAbsence, RemoteAbsenceEvidence, RetirementRemoteAbsenceError,
         binding_digest, deadline_before_lease, unix_ms,
@@ -34,11 +33,10 @@ pub(crate) async fn observe_retirement_runner_absence(
         .map_err(RetirementRemoteAbsenceError::Remote)?;
     let deadline = deadline_before_lease(deadline, claim.lease_until())
         .map_err(RetirementRemoteAbsenceError::Host)?;
-    let credential = keychain::load_secret(
-        binding.credential_ref.service(),
-        binding.credential_ref.account(),
-    )
-    .map_err(RetirementRemoteAbsenceError::Host)?;
+    let credential = binding
+        .credential_ref
+        .load()
+        .map_err(RetirementRemoteAbsenceError::Host)?;
     let pat = connection_pat(&credential).map_err(RetirementRemoteAbsenceError::Host)?;
     let pat = Secret::new(pat);
     drop(credential);
