@@ -131,6 +131,7 @@ impl RootJobs<'_> {
                 file: ARCHIVE_FILE,
                 filter,
                 threads: group.and_then(|group| group.test_threads),
+                ci_profile: self.root.nextest_ci_profile,
             }])
             .map(|step| Step {
                 when: When::Success,
