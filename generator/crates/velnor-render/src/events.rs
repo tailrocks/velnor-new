@@ -39,6 +39,7 @@ pub(crate) fn triggers(triggers: &Triggers) -> Yaml {
                 PullRequestType::ReadyForReview => "ready_for_review",
                 PullRequestType::Edited => "edited",
                 PullRequestType::ConvertedToDraft => "converted_to_draft",
+                PullRequestType::Labeled => "labeled",
             })
         });
         items.push(entry(

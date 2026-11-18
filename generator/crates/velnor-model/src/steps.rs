@@ -59,6 +59,8 @@ pub enum StepKind {
     InstallHelper(HelperRelease),
     FailWhenANeedFailed,
     FailOnDraftRun,
+    DraftNotice,
+    ClearRunLabel,
     Verdict {
         spec: VerdictSpec,
         needs_max_bytes: usize,

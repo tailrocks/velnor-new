@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers, When,
-    WorkflowPlan,
+    JobId, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType, RepoFacts,
+    RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
+    When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -59,10 +59,13 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if facts.policy.any() {
         jobs.push(policy_job(facts, &Lane::policy(single)));
     }
-    let draft_guard = facts
-        .config
-        .skip_draft_pull_requests
-        .then(|| step(StepKind::FailOnDraftRun));
+    let draft_guard = match facts.config.pr_ci {
+        PrCi::Label => Some(step(StepKind::DraftNotice)),
+        PrCi::Always => facts
+            .config
+            .skip_draft_pull_requests
+            .then(|| step(StepKind::FailOnDraftRun)),
+    };
     let gate = has_gate(facts);
     if !single {
         let mut used = used_outputs(&jobs);
@@ -93,6 +96,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
                         .skip_draft_pull_requests
                         .then_some(PullRequestType::ConvertedToDraft),
                 )
+                .chain((facts.config.pr_ci == PrCi::Label).then_some(PullRequestType::Labeled))
                 .collect(),
             push_branch: Some(facts.config.default_branch.clone()),
             merge_group: true,
@@ -332,6 +336,21 @@ fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
     })
 }
 
+pub(crate) fn quick(facts: &RepoFacts) -> PrRun {
+    match facts.config.pr_ci {
+        PrCi::Label => PrRun::Ready,
+        PrCi::Always => PrRun::Always,
+    }
+}
+
+pub(crate) fn full(facts: &RepoFacts) -> PrRun {
+    match facts.config.pr_ci {
+        PrCi::Label => PrRun::Requested,
+        PrCi::Always if facts.config.skip_draft_pull_requests => PrRun::Ready,
+        PrCi::Always => PrRun::Always,
+    }
+}
+
 pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
     Job {
         id,
@@ -339,7 +358,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         comment: None,
         needs: Vec::new(),
         when: When::Success,
-        skip_on_draft: facts.config.skip_draft_pull_requests,
+        pr: full(facts),
         runs_on: facts.config.runner.clone(),
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
@@ -354,7 +373,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
         kind,
         directory: None,
         when: When::Success,
-        skip_on_draft: false,
+        pr: PrRun::Always,
         gate: None,
         reads: None,
     }

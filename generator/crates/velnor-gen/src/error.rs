@@ -23,6 +23,7 @@ pub enum GenerateError {
     MirrorHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
+    PrCiHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
@@ -58,6 +59,10 @@ impl fmt::Display for GenerateError {
             Self::InputsBuildHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot record pre-build directory inventories for inputs audit; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
+            ),
+            Self::PrCiHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} does not know the pr_ci key of .velnor/rust-ci.toml; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,

@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, JobCondition, JobId, RepoFacts, RootSlug, RustRoot, RustSelection,
-    Step, StepKind, VerdictJob, VerdictSpec, When,
+    CargoCommand, GateNeed, Job, JobCondition, JobId, PrCi, PrRun, RepoFacts, RootSlug, RustRoot,
+    RustSelection, Step, StepKind, VerdictJob, VerdictSpec, When,
 };
 
 use crate::harness::uses_nextest;
@@ -13,7 +13,7 @@ use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, job, step};
 use crate::required_size::needs_max_bytes;
 
-const VERDICT_JOB: JobId = JobId::from_static("required");
+pub(crate) const VERDICT_JOB: JobId = JobId::from_static("required");
 
 pub(crate) const VERDICT_HELPER: (u64, u64, u64) = (0, 1, 81);
 
@@ -54,6 +54,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::SavingRun
         | When::Always
         | When::CacheDebug
+        | When::ClearRunLabel
         | When::SaveToolsOnDefaultBranch => None,
     };
     gate.into_iter().chain(when).collect()
@@ -96,24 +97,37 @@ pub(crate) fn verdict_job(
 ) -> Job {
     let gate = has_gate(facts);
     let steps: Vec<Step> = if gate {
-        let install = facts
-            .helper
-            .as_ref()
-            .map(|release| step(StepKind::InstallHelper(release.clone())));
+        let on_label = facts.config.pr_ci == PrCi::Label;
+        let strict = if on_label {
+            PrRun::Requested
+        } else {
+            PrRun::Always
+        };
+        let install = facts.helper.as_ref().map(|release| Step {
+            pr: strict,
+            ..step(StepKind::InstallHelper(release.clone()))
+        });
         let plan = if single { RUST_JOB } else { PLAN_JOB };
         install
             .into_iter()
-            .chain([step(StepKind::Verdict {
-                spec: spec(plan, jobs),
-                needs_max_bytes: needs_max_bytes(facts, jobs),
-            })])
+            .chain([Step {
+                pr: strict,
+                ..step(StepKind::Verdict {
+                    spec: spec(plan, jobs),
+                    needs_max_bytes: needs_max_bytes(facts, jobs),
+                })
+            }])
+            .chain(on_label.then(|| Step {
+                pr: PrRun::Unrequested,
+                ..step(StepKind::FailWhenANeedFailed)
+            }))
             .collect()
     } else {
         vec![step(StepKind::FailWhenANeedFailed)]
     };
     Job {
         name: Some(facts.config.required_check.clone()),
-        skip_on_draft: false,
+        pr: PrRun::Always,
         needs: jobs.iter().map(|job| job.id.clone()).collect(),
         when: When::Always,
         steps: draft_guard.into_iter().chain(steps).collect(),

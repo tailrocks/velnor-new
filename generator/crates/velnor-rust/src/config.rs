@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 20] = [
+const KEYS: [&str; 21] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
@@ -27,6 +27,7 @@ const KEYS: [&str; 20] = [
     "nextest_harnesses",
     "default_branch",
     "skip_draft_pull_requests",
+    "pr_ci",
     "on_main",
     "full_run",
     "helper",
@@ -56,6 +57,7 @@ struct RawConfig {
     nextest_harnesses: Vec<String>,
     default_branch: Option<String>,
     skip_draft_pull_requests: Option<bool>,
+    pr_ci: Option<String>,
     on_main: Option<String>,
     full_run: Option<String>,
     helper: Option<crate::config_helper::RawHelper>,
@@ -103,6 +105,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             }));
         }
     };
+    let skip_draft_pull_requests = raw
+        .skip_draft_pull_requests
+        .unwrap_or(defaults.skip_draft_pull_requests);
+    let pr_ci = crate::config_pr_ci::parse(raw.pr_ci.as_deref(), skip_draft_pull_requests)
+        .map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
@@ -127,9 +134,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map_err(invalid)?,
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
-        skip_draft_pull_requests: raw
-            .skip_draft_pull_requests
-            .unwrap_or(defaults.skip_draft_pull_requests),
+        skip_draft_pull_requests,
+        pr_ci,
         on_main,
         full_run,
         helper,

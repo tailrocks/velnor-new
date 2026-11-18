@@ -202,18 +202,21 @@ impl RootJobs<'_> {
     }
 
     fn single(&self) -> Job {
-        let draft = self.facts.config.skip_draft_pull_requests;
-        let skip_on_draft = |step: Step| Step {
-            skip_on_draft: draft
-                && matches!(
-                    step.kind,
-                    StepKind::Cargo(
-                        CargoCommand::NextestBuild
-                            | CargoCommand::NextestRun { .. }
-                            | CargoCommand::TestTarget { .. }
-                            | CargoCommand::Doctest
-                    )
-                ),
+        let full = crate::plan::full(self.facts);
+        let heavy = |step: Step| Step {
+            pr: if matches!(
+                step.kind,
+                StepKind::Cargo(
+                    CargoCommand::NextestBuild
+                        | CargoCommand::NextestRun { .. }
+                        | CargoCommand::TestTarget { .. }
+                        | CargoCommand::Doctest
+                )
+            ) {
+                full
+            } else {
+                step.pr
+            },
             ..step
         };
         let job_id = self.id(RUST_JOB);
@@ -232,14 +235,14 @@ impl RootJobs<'_> {
             steps.extend(checks());
             steps.extend(
                 self.cargo(vec![CargoCommand::NextestBuild])
-                    .map(skip_on_draft)
+                    .map(heavy)
                     .map(saving_run),
             );
-            steps.extend(self.cargo(self.tests()).map(skip_on_draft));
+            steps.extend(self.cargo(self.tests()).map(heavy));
             steps.extend(self.audit());
             steps.extend(saves.iter().cloned());
         } else if saves.is_empty() {
-            steps.extend(self.cargo(self.tests()).map(skip_on_draft));
+            steps.extend(self.cargo(self.tests()).map(heavy));
             steps.extend(self.audit());
             steps.extend(checks());
         } else {
@@ -251,13 +254,13 @@ impl RootJobs<'_> {
                     other => after.push(other),
                 }
             }
-            steps.extend(self.cargo(workspace).map(skip_on_draft));
-            steps.extend(self.cargo(after).map(skip_on_draft));
+            steps.extend(self.cargo(workspace).map(heavy));
+            steps.extend(self.cargo(after).map(heavy));
             steps.extend(self.audit());
             steps.extend(saves);
         }
         Job {
-            skip_on_draft: false,
+            pr: crate::plan::quick(self.facts),
             ..self.lane_job(job_id, steps)
         }
     }
@@ -274,7 +277,7 @@ impl RootJobs<'_> {
         steps.extend(self.cargo(check_alone(self.root)));
         let mut jobs = vec![Job {
             comment,
-            skip_on_draft: false,
+            pr: crate::plan::quick(self.facts),
             ..self.lane_job(lint_id, steps)
         }];
         if archive && self.nextest {

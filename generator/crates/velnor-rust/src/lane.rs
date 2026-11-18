@@ -4,8 +4,8 @@
 use std::collections::BTreeSet;
 
 use velnor_model::{
-    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef,
-    RepoFacts, RootSlug, Step, StepKind, When,
+    CargoCommand, Gate, GateNeed, HelperCommand, Job, JobId, PackageName, PlanFrom, PlanRef, PrCi,
+    PrRun, RepoFacts, RootSlug, Step, StepKind, When,
 };
 
 use crate::plan::{
@@ -87,7 +87,7 @@ impl Lane {
             kind: StepKind::Cargo(command),
             directory,
             when: When::NotCancelled,
-            skip_on_draft: false,
+            pr: PrRun::Always,
         }
     }
 }
@@ -120,7 +120,7 @@ pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) ->
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         steps,
         ..job(facts, PLAN_JOB)
     }
@@ -175,6 +175,11 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     Job {
         needs: lane.plan.clone().into_iter().collect(),
         gate: lane.plan.is_some().then(|| lane.gate(GateNeed::Policy)),
+        pr: if facts.config.pr_ci == PrCi::Label {
+            PrRun::Ready
+        } else {
+            crate::plan::full(facts)
+        },
         steps,
         ..job(facts, POLICY_JOB)
     }
