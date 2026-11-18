@@ -3,6 +3,7 @@
 
 mod audit;
 mod base_expiry;
+mod bench_compare;
 mod cache;
 mod cache_flow;
 mod cache_retention_flow;
