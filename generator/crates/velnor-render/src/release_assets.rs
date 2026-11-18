@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::Platform;
-use velnor_release::{BinaryPlan, asset_name_uses_version, expand_asset_name};
+use velnor_release::{BinaryFormat, BinaryPlan, asset_name_uses_version, expand_asset_name};
 
 use crate::release_binaries::{command, target};
+use crate::release_raw::bin_names;
 use crate::release_steps::{shell_word, variables};
 use crate::rules::RenderedStep;
 
@@ -18,19 +19,40 @@ pub(crate) fn versioned(binary: &BinaryPlan) -> bool {
         .is_some_and(asset_name_uses_version)
 }
 
-pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
+pub(crate) fn stem(binary: &BinaryPlan, bin: &str, platform: Platform) -> String {
     match &binary.asset_name {
-        None => format!("{}-{}.tar.gz", binary.bin, platform.file_suffix()),
-        Some(template) => format!(
-            "{}.tar.gz",
-            expand_asset_name(
-                template,
-                &binary.bin,
-                platform.file_suffix(),
-                target(platform).1,
-                VERSION_REFERENCE,
-            )
+        None => format!("{bin}-{}", platform.file_suffix()),
+        Some(template) => expand_asset_name(
+            template,
+            bin,
+            platform.file_suffix(),
+            target(platform, binary.format).1,
+            VERSION_REFERENCE,
         ),
+    }
+}
+
+pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
+    let stem = stem(binary, &binary.bin, platform);
+    match binary.format {
+        BinaryFormat::Archive => format!("{stem}.tar.gz"),
+        BinaryFormat::Raw => stem,
+    }
+}
+
+pub(crate) fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<String> {
+    match binary.format {
+        BinaryFormat::Archive => vec![asset(binary, platform)],
+        BinaryFormat::Raw => bin_names(binary)
+            .flat_map(|bin| {
+                let name = stem(binary, bin, platform);
+                [
+                    name.clone(),
+                    format!("{name}.sha256"),
+                    format!("{name}.provenance.json"),
+                ]
+            })
+            .collect(),
     }
 }
 
@@ -63,25 +85,21 @@ pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
 }
 
 pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
+    let members = contents(binary);
     if versioned(binary) {
-        format!(
-            "tar -czf \"{STAGE}/{file}\" -C {release_dir} {}",
-            binary.bin
-        )
+        format!("tar -czf \"{STAGE}/{file}\" -C {release_dir}{members}")
     } else {
-        format!(
-            "tar -czf {} -C {release_dir} {}",
-            shell_word(file),
-            binary.bin
-        )
+        format!("tar -czf {} -C {release_dir}{members}", shell_word(file))
     }
 }
 
-pub(crate) fn uploaded(binary: &BinaryPlan, file: &str) -> String {
-    if versioned(binary) {
+pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {
+    if versioned(binary) && binary.format == BinaryFormat::Raw {
+        format!("{STAGE}/*\n!{STAGE}/*.rustc")
+    } else if versioned(binary) {
         format!("{STAGE}/*")
     } else {
-        file.to_owned()
+        published_files(binary, platform).join("\n")
     }
 }
 
@@ -89,10 +107,43 @@ pub(crate) fn assets(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
-        .map(|platform| asset(binary, *platform))
+        .flat_map(|platform| published_files(binary, *platform))
         .collect()
 }
 
 pub(crate) fn quoted(binary: &BinaryPlan, names: &[String]) -> Vec<String> {
     names.iter().map(|name| word(binary, name)).collect()
+}
+
+pub(crate) fn selection(binary: &BinaryPlan) -> String {
+    let mut words = vec![
+        "--package".to_owned(),
+        binary.package.clone(),
+        "--bin".to_owned(),
+        binary.bin.clone(),
+    ];
+    let mut packages = vec![binary.package.as_str()];
+    for extra in &binary.extra_bins {
+        if !packages.contains(&extra.package.as_str()) {
+            packages.push(&extra.package);
+            words.extend(["--package".to_owned(), extra.package.clone()]);
+        }
+        words.extend(["--bin".to_owned(), extra.bin.clone()]);
+    }
+    format!(" {}", words.join(" "))
+}
+
+pub(crate) fn contents(binary: &BinaryPlan) -> String {
+    let mut words = vec![binary.bin.clone()];
+    words.extend(binary.extra_bins.iter().map(|extra| extra.bin.clone()));
+    for path in &binary.include {
+        let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
+        let base = if dir.is_empty() {
+            "$GITHUB_WORKSPACE".to_owned()
+        } else {
+            format!("$GITHUB_WORKSPACE/{dir}")
+        };
+        words.extend(["-C".to_owned(), format!("\"{base}\""), name.to_owned()]);
+    }
+    format!(" {}", words.join(" "))
 }

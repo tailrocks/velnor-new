@@ -1,0 +1,7 @@
+after = ["CI", "Rust CI"]
+
+[[binaries]]
+package = "host"
+platforms = ["linux-x64", "macos-arm64"]
+format = "raw"
+bins = [{ package = "helper", bin = "helper" }]

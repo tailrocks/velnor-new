@@ -58,8 +58,14 @@ pub enum ReleaseError {
         root: String,
     },
     VersionEndsInLock(String, String),
+    InvalidCheck(String, crate::check::CheckProblem),
     DuplicateBinary {
         package: String,
+    },
+    InvalidBundle {
+        package: String,
+        entry: String,
+        reason: &'static str,
     },
     DuplicatePackage {
         root: String,

@@ -7,6 +7,7 @@ use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
 use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
+use crate::release_checks::{publish_stage, tag_needs, tag_stage};
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
@@ -47,8 +48,11 @@ pub fn render_release(
     if !collisions.is_empty() {
         return Err(collisions);
     }
-    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper), tag_job];
+    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper)];
+    jobs.extend(tag_stage(plan));
+    jobs.push(tag_job);
     jobs.extend(binary_jobs(plan, helper));
+    jobs.extend(publish_stage(plan));
     jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
@@ -265,6 +269,10 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
                 (package, output)
             })
             .chain(commit_outputs(plan, helper))
+            .collect(),
+        needs: [String::from("gate")]
+            .into_iter()
+            .chain(tag_needs(plan))
             .collect(),
         timeout_minutes: u16::try_from(
             u64::from(TAG_JOB_BASE_MINUTES).saturating_add(publish_budget_minutes(&plan.roots)),
