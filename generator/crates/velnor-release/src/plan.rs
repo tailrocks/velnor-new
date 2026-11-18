@@ -5,6 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{Platform, RepoPath, RustMetadata};
 
+use crate::bundle::{ExtraBin, check_targets};
 use crate::error::ReleaseError;
 use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
@@ -55,6 +56,8 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub extra_bins: Vec<ExtraBin>,
+    pub include: Vec<String>,
     pub format: BinaryFormat,
     pub tag_pattern: TagPattern,
 }
@@ -245,23 +248,14 @@ fn plan_binaries(
             .ok_or_else(|| ReleaseError::BinaryNotReleased {
                 package: binary.package.clone(),
             })?;
-        if let Some(targets) = &files.bin_targets
-            && !targets.contains(&(
-                manifest_of(&root),
-                binary.package.clone(),
-                binary.bin.clone(),
-            ))
-        {
-            return Err(ReleaseError::BinaryTargetMissing {
-                package: binary.package.clone(),
-                bin: binary.bin.clone(),
-            });
-        }
+        check_targets(binary, &manifest_of(&root), files)?;
         binaries.push(BinaryPlan {
             package: binary.package.clone(),
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            extra_bins: binary.bins.clone(),
+            include: binary.include.clone(),
             format: binary.format,
             tag_pattern,
         });

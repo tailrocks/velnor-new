@@ -1,9 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod bundle;
 mod cargo_allowlist;
 mod collisions;
 mod error;
+mod error_binary;
 mod error_cargo;
 mod git_ref;
 mod hazards;
@@ -20,6 +22,7 @@ mod timeout;
 mod velnor_config;
 mod versions;
 
+pub use bundle::ExtraBin;
 pub use error::ReleaseError;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,

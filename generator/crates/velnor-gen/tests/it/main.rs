@@ -84,6 +84,7 @@ mod release_yml_finalize;
 mod release_yml_isolation;
 mod release_yml_keys;
 mod release_yml_limits;
+mod release_yml_multibin;
 mod release_yml_quoting;
 mod release_yml_raw;
 mod release_yml_security;

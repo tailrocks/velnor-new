@@ -108,7 +108,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
     let packaging = match binary.format {
         BinaryFormat::Archive => vec![command(
             format!("Pack {file}"),
-            format!("tar -czf {file} -C {release_dir} {}", binary.bin),
+            format!("tar -czf {file} -C {release_dir}{}", contents(binary)),
         )],
         BinaryFormat::Raw => raw_packaging(binary, platform, triple, &release_dir),
     };
@@ -141,8 +141,8 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
             ..command(
                 format!("Build {} for {suffix}", binary.package),
                 format!(
-                    "cargo build --release --locked --manifest-path Cargo.toml --package {} --bin {} --target {triple} --target-dir target",
-                    binary.package, binary.bin
+                    "cargo build --release --locked --manifest-path Cargo.toml{} --target {triple} --target-dir target",
+                    selection(binary)
                 ),
             )
         },
@@ -215,6 +215,39 @@ fn raw_packaging(
             ..command(format!("Record provenance of {name}"), record)
         },
     ]
+}
+
+fn selection(binary: &BinaryPlan) -> String {
+    let mut words = vec![
+        "--package".to_owned(),
+        binary.package.clone(),
+        "--bin".to_owned(),
+        binary.bin.clone(),
+    ];
+    let mut packages = vec![binary.package.as_str()];
+    for extra in &binary.extra_bins {
+        if !packages.contains(&extra.package.as_str()) {
+            packages.push(&extra.package);
+            words.extend(["--package".to_owned(), extra.package.clone()]);
+        }
+        words.extend(["--bin".to_owned(), extra.bin.clone()]);
+    }
+    format!(" {}", words.join(" "))
+}
+
+fn contents(binary: &BinaryPlan) -> String {
+    let mut words = vec![binary.bin.clone()];
+    words.extend(binary.extra_bins.iter().map(|extra| extra.bin.clone()));
+    for path in &binary.include {
+        let (dir, name) = path.rsplit_once('/').unwrap_or(("", path));
+        let base = if dir.is_empty() {
+            "$GITHUB_WORKSPACE".to_owned()
+        } else {
+            format!("$GITHUB_WORKSPACE/{dir}")
+        };
+        words.extend(["-C".to_owned(), format!("\"{base}\""), name.to_owned()]);
+    }
+    format!(" {}", words.join(" "))
 }
 
 fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {

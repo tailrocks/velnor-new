@@ -4,6 +4,7 @@
 use serde::Deserialize;
 use velnor_model::Platform;
 
+use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
 use crate::error::ReleaseError;
 use crate::release_plz::valid_package_name;
 
@@ -19,6 +20,8 @@ pub(crate) struct Binary {
     pub(crate) package: String,
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
+    pub(crate) bins: Vec<ExtraBin>,
+    pub(crate) include: Vec<String>,
     pub(crate) format: BinaryFormat,
 }
 
@@ -36,6 +39,10 @@ struct RawBinary {
     package: String,
     bin: Option<String>,
     platforms: Option<Vec<String>>,
+    #[serde(default)]
+    bins: Vec<RawExtraBin>,
+    #[serde(default)]
+    include: Vec<String>,
     format: Option<BinaryFormat>,
 }
 
@@ -50,7 +57,7 @@ struct Raw {
     binaries: Vec<RawBinary>,
 }
 
-fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
+pub(crate) fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
     match values.iter().find(|value| value.contains("${{")) {
         Some(value) => Err(ReleaseError::ExpressionInValue {
             key: key.to_owned(),
@@ -153,10 +160,26 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             platforms
         }
     };
+    let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;
+    let format = raw.format.unwrap_or(BinaryFormat::Archive);
+    if format == BinaryFormat::Raw
+        && let Some(entry) = bins
+            .first()
+            .map(|extra| extra.bin.clone())
+            .or_else(|| include.first().cloned())
+    {
+        return Err(ReleaseError::InvalidBundle {
+            package: raw.package,
+            entry,
+            reason: "cannot be bundled into a raw binary, which publishes only the main executable",
+        });
+    }
     Ok(Binary {
         package: raw.package,
         bin,
         platforms,
-        format: raw.format.unwrap_or(BinaryFormat::Archive),
+        bins,
+        include,
+        format,
     })
 }

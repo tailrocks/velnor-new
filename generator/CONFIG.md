@@ -44,6 +44,24 @@ run = "bash scripts/ci-fixtures.sh"
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
 
+## Optional extra binaries and files in a release asset
+
+A `[[binaries]]` entry in `.velnor/release.toml` packs one binary per platform by default: `<bin>-<platform>.tar.gz` holds only the file `<bin>`. Two opt-in keys put more in the same asset.
+
+```toml
+[[binaries]]
+package = "velnor-runner-cli"
+bin = "velnor-host"
+bins = [{ package = "velnor-runner-attestation", bin = "velnor-runner-attestation-helper" }]
+include = ["LICENSE", "NOTICE"]
+```
+
+`bins` lists further binaries of the same release root. Each entry names a `bin` and optionally its `package`, which defaults to the entry's package. They are built by the same `cargo build` command as the main binary. `include` lists tracked files, as paths relative to the repository root, that are copied into the asset.
+
+Every entry lands at the top level of the asset, flat and by its file name: the main binary, then `bins` in the order written, then `include` in the order written. This is the layout of the old engine's `velnor-host` release. A `bin` or file name that appears twice, an `include` path that is absolute, starts with `-`, contains `..` or a character other than letters, digits, `.`, `_`, `-` and `/`, a `bin` that no package of the root builds, and an expression in any value are refused at generation. A listed file that is missing from the checkout fails the build job, not generation.
+
+Both keys are absent by default, and then the generated workflow is byte-identical to one generated without this feature. The `SHA256SUMS` file still covers the archives, not their members.
+
 ## Release binary asset format
 
 `format` in a `[[binaries]]` table of `.velnor/release.toml` selects what the release job uploads for that binary. It is `"archive"` by default, and then the output is unchanged: one musl `<bin>-<platform>.tar.gz` for each platform plus the `SHA256SUMS` file.
@@ -61,3 +79,5 @@ The release also carries `SHA256SUMS`, which lists all of these files, because `
 package = "velnor-ci"
 format = "raw"
 ```
+
+`bins` and `include` have no meaning for a raw binary, which publishes only the main executable, so `format = "raw"` with either is refused at generation.
