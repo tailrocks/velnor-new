@@ -95,6 +95,7 @@ mod release_yml_quoting;
 mod release_yml_raw;
 mod release_yml_raw_bundle;
 mod release_yml_security;
+mod release_yml_smoke;
 mod render_empty_key;
 mod repo_profile_include;
 mod repo_sample;

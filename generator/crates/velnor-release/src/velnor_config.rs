@@ -17,6 +17,13 @@ pub enum BinaryFormat {
     Raw,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Libc {
+    Gnu,
+    Musl,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Binary {
     pub(crate) package: String,
@@ -25,8 +32,11 @@ pub(crate) struct Binary {
     pub(crate) bins: Vec<ExtraBin>,
     pub(crate) include: Vec<String>,
     pub(crate) format: BinaryFormat,
+    pub(crate) libc: Libc,
     pub(crate) asset_name: Option<String>,
     pub(crate) attest: bool,
+    pub(crate) smoke: bool,
+    pub(crate) commit_file: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -50,8 +60,13 @@ struct RawBinary {
     #[serde(default)]
     include: Vec<String>,
     format: Option<BinaryFormat>,
+    target: Option<Libc>,
     #[serde(default)]
     attest: bool,
+    #[serde(default)]
+    smoke: bool,
+    #[serde(default)]
+    commit_file: bool,
 }
 
 #[derive(Deserialize)]
@@ -138,6 +153,31 @@ fn text_refs(values: &[String]) -> Vec<&str> {
     values.iter().map(String::as_str).collect()
 }
 
+fn platforms(package: &str, names: Option<Vec<String>>) -> Result<Vec<Platform>, ReleaseError> {
+    match names {
+        None => Ok(Platform::ALL.to_vec()),
+        Some(names) if names.is_empty() => Err(ReleaseError::EmptyPlatforms {
+            package: package.to_owned(),
+        }),
+        Some(names) => {
+            let mut platforms = Vec::new();
+            for name in names {
+                let platform = Platform::ALL
+                    .into_iter()
+                    .find(|platform| platform.file_suffix() == name)
+                    .ok_or_else(|| ReleaseError::UnknownPlatform {
+                        package: package.to_owned(),
+                        platform: name,
+                    })?;
+                if !platforms.contains(&platform) {
+                    platforms.push(platform);
+                }
+            }
+            Ok(platforms)
+        }
+    }
+}
+
 fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
     refuse_expressions("binaries.package", &[&raw.package])?;
     let bin = raw.bin.unwrap_or_else(|| raw.package.clone());
@@ -156,32 +196,29 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             template: template.clone(),
         });
     }
-    let platforms = match raw.platforms {
-        None => Platform::ALL.to_vec(),
-        Some(names) if names.is_empty() => {
-            return Err(ReleaseError::EmptyPlatforms {
-                package: raw.package,
-            });
-        }
-        Some(names) => {
-            let mut platforms = Vec::new();
-            for name in names {
-                let platform = Platform::ALL
-                    .into_iter()
-                    .find(|platform| platform.file_suffix() == name)
-                    .ok_or_else(|| ReleaseError::UnknownPlatform {
-                        package: raw.package.clone(),
-                        platform: name,
-                    })?;
-                if !platforms.contains(&platform) {
-                    platforms.push(platform);
-                }
-            }
-            platforms
-        }
-    };
-    let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;
+    let platforms = platforms(&raw.package, raw.platforms)?;
     let format = raw.format.unwrap_or(BinaryFormat::Archive);
+    let libc = raw.target.unwrap_or(match format {
+        BinaryFormat::Archive => Libc::Musl,
+        BinaryFormat::Raw => Libc::Gnu,
+    });
+    if format == BinaryFormat::Archive && raw.target.is_some()
+        || libc == Libc::Musl
+            && format == BinaryFormat::Raw
+            && platforms
+                .iter()
+                .all(|platform| *platform == Platform::MacosArm64)
+    {
+        return Err(ReleaseError::MuslNeedsRawLinux {
+            package: raw.package,
+        });
+    }
+    if format == BinaryFormat::Archive && raw.smoke {
+        return Err(ReleaseError::SmokeNeedsRaw {
+            package: raw.package,
+        });
+    }
+    let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;
     if format == BinaryFormat::Raw
         && let Some(path) = include.first()
     {
@@ -198,7 +235,10 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         bins,
         include,
         format,
+        libc,
         asset_name: raw.asset_name,
         attest: raw.attest,
+        smoke: raw.smoke,
+        commit_file: raw.commit_file,
     })
 }

@@ -26,7 +26,7 @@ pub(crate) fn stem(binary: &BinaryPlan, bin: &str, platform: Platform) -> String
             template,
             bin,
             platform.file_suffix(),
-            target(platform, binary.format).1,
+            target(platform, binary).1,
             VERSION_REFERENCE,
         ),
     }
@@ -103,11 +103,14 @@ pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {
     }
 }
 
+pub(crate) const COMMIT_FILE: &str = "COMMIT";
+
 pub(crate) fn assets(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
         .flat_map(|platform| published_files(binary, *platform))
+        .chain(binary.commit_file.then(|| COMMIT_FILE.to_owned()))
         .collect()
 }
 

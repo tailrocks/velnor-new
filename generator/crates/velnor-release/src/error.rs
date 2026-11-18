@@ -62,6 +62,12 @@ pub enum ReleaseError {
     DuplicateBinary {
         package: String,
     },
+    SmokeNeedsRaw {
+        package: String,
+    },
+    MuslNeedsRawLinux {
+        package: String,
+    },
     InvalidBundle {
         package: String,
         entry: String,

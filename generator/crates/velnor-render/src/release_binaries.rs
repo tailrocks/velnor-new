@@ -2,15 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{HelperRelease, Platform};
-use velnor_release::{BinaryFormat, BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
+use velnor_release::{BinaryFormat, BinaryPlan, Libc, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
 use crate::release_assets::{
-    STAGE, asset, assets, pack, quoted, read_version, selection, uploaded, versioned, word,
+    COMMIT_FILE, STAGE, asset, assets, pack, quoted, read_version, selection, uploaded, versioned,
+    word,
 };
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
-use crate::release_raw::raw_packaging;
+use crate::release_raw::{raw_packaging, smoke_steps};
 use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,
@@ -40,7 +41,7 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
                 .iter()
                 .map(|platform| build(binary, *platform, helper))
                 .collect();
-            jobs.push(sums(binary));
+            jobs.push(sums(binary, helper));
             if binary.attest {
                 jobs.push(verify(binary));
             }
@@ -50,18 +51,12 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
         .collect()
 }
 
-pub(crate) fn target(platform: Platform, format: BinaryFormat) -> (&'static str, &'static str) {
-    match (platform, format) {
-        (Platform::LinuxX64, BinaryFormat::Archive) => {
-            ("ubuntu-24.04", "x86_64-unknown-linux-musl")
-        }
-        (Platform::LinuxX64, BinaryFormat::Raw) => ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
-        (Platform::LinuxArm64, BinaryFormat::Archive) => {
-            ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl")
-        }
-        (Platform::LinuxArm64, BinaryFormat::Raw) => {
-            ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")
-        }
+pub(crate) fn target(platform: Platform, binary: &BinaryPlan) -> (&'static str, &'static str) {
+    match (platform, binary.libc) {
+        (Platform::LinuxX64, Libc::Musl) => ("ubuntu-24.04", "x86_64-unknown-linux-musl"),
+        (Platform::LinuxX64, Libc::Gnu) => ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
+        (Platform::LinuxArm64, Libc::Musl) => ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl"),
+        (Platform::LinuxArm64, Libc::Gnu) => ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu"),
         (Platform::MacosArm64, _) => ("macos-15", "aarch64-apple-darwin"),
     }
 }
@@ -93,7 +88,7 @@ fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> Rende
 }
 
 fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> RenderedJob {
-    let (runner, triple) = target(platform, binary.format);
+    let (runner, triple) = target(platform, binary);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
     let release_dir = shell_word(&format!(
@@ -106,7 +101,11 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
             format!("Pack {file}"),
             pack(binary, &file, &release_dir),
         )],
-        BinaryFormat::Raw => raw_packaging(binary, platform, triple, &release_dir),
+        BinaryFormat::Raw => {
+            let mut steps = raw_packaging(binary, platform, triple, &release_dir);
+            steps.extend(smoke_steps(binary, platform));
+            steps
+        }
     };
     let mut steps = vec![
         RenderedStep {
@@ -164,20 +163,27 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
     }
 }
 
+fn tag_commit(binary: &BinaryPlan, helper: &HelperRelease) -> String {
+    if helper.version().at_least(TAGGED_COMMIT_HELPER) {
+        format!(
+            "${{{{ needs.tag.outputs.{} }}}}",
+            commit_output(&binary.package)
+        )
+    } else {
+        VERIFIED_COMMIT.to_owned()
+    }
+}
+
 fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
-    let (name, expected, test) = if helper.version().at_least(TAGGED_COMMIT_HELPER) {
+    let expected = tag_commit(binary, helper);
+    let (name, test) = if helper.version().at_least(TAGGED_COMMIT_HELPER) {
         (
             "Check that the tag is on the verified commit itself",
-            format!(
-                "${{{{ needs.tag.outputs.{} }}}}",
-                commit_output(&binary.package)
-            ),
             "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
         )
     } else {
         (
             "Check that the tag is the commit the gate verified",
-            VERIFIED_COMMIT.to_owned(),
             "test \"$CHECKED_OUT\" = \"$COMMIT\"",
         )
     };
@@ -194,13 +200,23 @@ fn tagged_source(binary: &BinaryPlan) -> String {
     format!("refs/tags/${{{{ needs.tag.outputs.{} }}}}", binary.package)
 }
 
-fn sums(binary: &BinaryPlan) -> RenderedJob {
+fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps: Vec<RenderedStep> = binary
         .platforms
         .iter()
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
     steps.extend(read_version(binary));
+    if binary.commit_file {
+        steps.push(RenderedStep {
+            working_directory: Some(DIST.to_owned()),
+            env: variables(&[("COMMIT", &tag_commit(binary, helper))]),
+            ..command(
+                "Record the commit of the release".to_owned(),
+                format!("echo \"$COMMIT\" > {COMMIT_FILE}"),
+            )
+        });
+    }
     let names = quoted(binary, &assets(binary)).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
@@ -216,10 +232,12 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
     if binary.attest {
         steps.push(attest(binary));
     }
-    steps.push(upload(
-        format!("{}-sums", binary.package),
-        format!("{DIST}/{SUMS_FILE}"),
-    ));
+    let sums_files = if binary.commit_file {
+        format!("{DIST}/{SUMS_FILE}\n{DIST}/{COMMIT_FILE}")
+    } else {
+        format!("{DIST}/{SUMS_FILE}")
+    };
+    steps.push(upload(format!("{}-sums", binary.package), sums_files));
     RenderedJob {
         no_permissions: !binary.attest,
         permissions: if binary.attest {

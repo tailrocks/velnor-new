@@ -24,6 +24,14 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: package {package} has more than one [[binaries]] entry"
             ),
+            Self::SmokeNeedsRaw { package } => write!(
+                f,
+                ".velnor/release.toml: binary {package} sets smoke, which needs format = \"raw\", because an archive holds no executable to run"
+            ),
+            Self::MuslNeedsRawLinux { package } => write!(
+                f,
+                ".velnor/release.toml: binary {package} sets target = \"musl\", which needs format = \"raw\" and a linux platform"
+            ),
             Self::InvalidBundle {
                 package,
                 entry,
