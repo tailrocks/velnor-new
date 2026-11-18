@@ -55,6 +55,7 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub attest: bool,
     pub tag_pattern: TagPattern,
     pub asset_name: Option<String>,
 }
@@ -263,6 +264,7 @@ fn plan_binaries(
             root,
             platforms: binary.platforms.clone(),
             asset_name: crate::asset_name::checked(binary, &tag_pattern)?,
+            attest: binary.attest,
             tag_pattern,
         });
     }

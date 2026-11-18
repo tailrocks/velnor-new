@@ -9,16 +9,19 @@ pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 8] = [
+pub const ALLOWED_ACTIONS: [&str; 9] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
     "actions/cache/save",
     "actions/upload-artifact",
     "actions/download-artifact",
+    ATTEST_ACTION,
     MISE_ACTION,
     SETUP_VELNOR_ACTION,
 ];
+
+pub(crate) const ATTEST_ACTION: &str = "actions/attest-build-provenance";
 
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 

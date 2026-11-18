@@ -14,6 +14,7 @@ pub(crate) struct Binary {
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
     pub(crate) asset_name: Option<String>,
+    pub(crate) attest: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +32,8 @@ struct RawBinary {
     bin: Option<String>,
     platforms: Option<Vec<String>>,
     asset_name: Option<String>,
+    #[serde(default)]
+    attest: bool,
 }
 
 #[derive(Deserialize)]
@@ -160,5 +163,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         bin,
         platforms,
         asset_name: raw.asset_name,
+        attest: raw.attest,
     })
 }
