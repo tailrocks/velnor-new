@@ -37,4 +37,4 @@
 - 20adfde90e8c27cba5bcd66ac3f905f9084bea08db17728fcc19d024e0dc1e0b  ./.github/workflows/source-preview-publication.yml
 - 342302f17a56dd151ebf615f44218afef84edacfb572b7eb8e778ecbf9b40e77  ./.github/workflows/source-preview-runtime.yml
 - 2ff1278feb24f67838a468534fa82c1fa467b69a0a2a9707854f0c11da22a32e  ./.github/workflows/source-qualification.yml
-- b3a5f11589d6dbe96c85803e548b11b6d73be6bb9eeab2c6c1a8f1adc31f73c4  ./.github/workflows/state-seal.yml
+- e42d92e5502a8682fdaf7fec687d09812482b59e6444a1d361e7e7a77f2f139c  ./.github/workflows/state-seal.yml

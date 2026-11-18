@@ -14,4 +14,4 @@
 - bf729abd236a6c667c2657eabb56277422c01306f2a82864a6291165d0e16de7  ./.github/velnor/task-execution-manifest-v1.json
 - 8159f6da4e8dacf040c336704550a0c6e56f7091b60e9913b887cf8aeb301a64  ./.github/workflows/cache-prune.yml
 - 45127386c2d4bc84e7e3040f3cfe387ef45a5826b7814633c0e41f1856ffa65f  ./.github/workflows/ci.yml
-- f693c22d5a8f18cd3c09a2fa1aa264ad2a49b7d573a034367857dee8c1b60fcf  ./.github/workflows/state-seal.yml
+- f6e0cd88dd89496c4d9780c603cb305acb56a6b7b42bc166ca9ca2bba37290cd  ./.github/workflows/state-seal.yml
