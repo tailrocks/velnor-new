@@ -348,7 +348,7 @@ jobs:
     if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.app != '''' }}'
     permissions:
       contents: read
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - id: source
@@ -521,7 +521,7 @@ jobs:
     if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.tools != '''' }}'
     permissions:
       contents: read
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - id: source

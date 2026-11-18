@@ -48,7 +48,7 @@ jobs:
         run: "set -euo pipefail\n[[ \"$GITHUB_REPOSITORY\" == 'tailrocks/velnor-new' ]]\n[[ \"$GITHUB_REF\" == 'refs/heads/main' ]]\n[[ \"$GITHUB_WORKFLOW_REF\" == 'tailrocks/velnor-new/.github/workflows/product-release.yml@refs/heads/main' ]]\n[[ \"$GITHUB_EVENT_NAME\" == 'workflow_dispatch' ]]\n[[ \"$GITHUB_SHA\" == \"$VELNOR_SOURCE_SHA\" && \"$GITHUB_WORKFLOW_SHA\" == \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" ]]\n[[ \"$GITHUB_RUN_ID\" == \"$VELNOR_CALLER_RUN_ID\" && \"$GITHUB_RUN_ATTEMPT\" == \"$VELNOR_CALLER_ATTEMPT\" ]]\n[[ \"$VELNOR_SOURCE_SHA\" =~ ^[0-9a-f]{40}$ && \"$VELNOR_WORKFLOW_AUTHORITY_SHA\" =~ ^[0-9a-f]{40}$ ]]\n[[ \"$VELNOR_CI_RUN_ID\" =~ ^[0-9]+$ && \"$VELNOR_CI_ATTEMPT\" =~ ^[0-9]+$ ]]\n[[ \"$VELNOR_RELEASE_ACTION\" == build || \"$VELNOR_RELEASE_ACTION\" == complete ]]"
   build-binary:
     name: Build velnor-host
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 10
     permissions:
       contents: read
@@ -123,7 +123,7 @@ jobs:
           retention-days: 1
   attest-binary:
     name: Attest velnor-host
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 5
     permissions:
       actions: read
@@ -156,7 +156,7 @@ jobs:
           subject-path: "assets/velnor-host\nassets/velnor-runner-attestation-helper\nassets/LICENSE\nassets/NOTICE\nassets/SHA256SUMS"
   publish-binary:
     name: Publish velnor-host
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 5
     permissions:
       actions: read

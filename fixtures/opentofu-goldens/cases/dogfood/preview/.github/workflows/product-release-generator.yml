@@ -270,7 +270,7 @@ jobs:
           path: "release-attestations/velnor-actions-0.1.80-x86_64-unknown-linux-gnu.intoto.jsonl\nrelease-attestations/velnor-actions-0.1.80-x86_64-unknown-linux-gnu.sha256.intoto.jsonl\nrelease-attestations/velnor-actions-0.1.80-x86_64-unknown-linux-gnu.provenance.json.intoto.jsonl"
           retention-days: 1
   build-macos:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       contents: read
@@ -308,7 +308,7 @@ jobs:
           path: "velnor-actions-0.1.80-aarch64-apple-darwin\nvelnor-actions-0.1.80-aarch64-apple-darwin.sha256\nvelnor-actions-0.1.80-aarch64-apple-darwin.provenance.json"
           retention-days: 1
   qualify-macos:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     permissions:
       actions: read
@@ -337,7 +337,7 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   qualify-homebrew-macos:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       actions: read
@@ -373,7 +373,7 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 5
     permissions:
       actions: write
@@ -448,7 +448,7 @@ jobs:
           path: "release-attestations/velnor-actions-0.1.80-aarch64-apple-darwin.intoto.jsonl\nrelease-attestations/velnor-actions-0.1.80-aarch64-apple-darwin.sha256.intoto.jsonl\nrelease-attestations/velnor-actions-0.1.80-aarch64-apple-darwin.provenance.json.intoto.jsonl"
           retention-days: 1
   build-macos-intel:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       contents: read
@@ -486,7 +486,7 @@ jobs:
           path: "velnor-actions-0.1.80-x86_64-apple-darwin\nvelnor-actions-0.1.80-x86_64-apple-darwin.sha256\nvelnor-actions-0.1.80-x86_64-apple-darwin.provenance.json"
           retention-days: 1
   qualify-macos-intel:
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 20
     permissions:
       actions: read
@@ -515,7 +515,7 @@ jobs:
           manifest_artifact_id: ${{ needs.candidate-manifest.outputs.artifact_id }}
           manifest_sha256: ${{ needs.candidate-manifest.outputs.manifest_sha256 }}
   attest-macos-intel:
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 5
     permissions:
       actions: write
@@ -1169,7 +1169,7 @@ jobs:
         run: "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\nCARGO_HOME=\"$RUNNER_TEMP/velnor/cargo\"\nexport CARGO_HOME\ntest -d \"$CARGO_HOME\"\ntest ! -L \"$CARGO_HOME\"\ntest \"$(cd \"$CARGO_HOME\" && pwd -P)\" = \"$CARGO_HOME\"\nmkdir -p \"$RUNNER_TEMP/source-qualification-artifacts/logs\"\nexport VELNOR_RUST_VERSION=''\"${VELNOR_TOOL_RUST}\"'' VELNOR_PREFETCH_RUST_ONLY=1\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces\nfor manifest in Cargo.toml crates/velnor-runner/Cargo.toml; do\n  mise --no-config --no-env --no-hooks exec 'rust@'\"${VELNOR_TOOL_RUST}\"'' -- cargo metadata --locked --offline --all-features --format-version=1 --manifest-path \"$GITHUB_WORKSPACE/$manifest\" > /dev/null\ndone\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\ntest -f source-preview/velnor-actions-x86_64-unknown-linux-gnu\ntest ! -L source-preview/velnor-actions-x86_64-unknown-linux-gnu\nchmod 0500 source-preview/velnor-actions-x86_64-unknown-linux-gnu\ntest \"$(env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR source-preview/velnor-actions-x86_64-unknown-linux-gnu --version)\" = 'velnor-actions 0.1.80'\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(sha256sum \"$guard\" | cut -d ' ' -f 1)\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR scripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check \"$GITHUB_WORKSPACE/source-preview/velnor-actions-x86_64-unknown-linux-gnu\""
   source-preview-build-darwin:
     name: Build source preview Darwin
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       contents: read
@@ -1258,7 +1258,7 @@ jobs:
           retention-days: 1
   source-preview-qualify-darwin:
     name: Qualify source preview Darwin
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 20
     permissions:
       contents: read

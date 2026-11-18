@@ -1047,7 +1047,7 @@ jobs:
   mise-pin-macos-x64:
     name: Mise pin / hosted / macOS x64
     if: inputs.mode == 'mise-pin'
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 5
     permissions:
       contents: read
@@ -1352,7 +1352,7 @@ jobs:
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR env CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\""
   stable-sources-producer-macos:
     name: Stable sources / macos / producer
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     if: inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
@@ -1439,7 +1439,7 @@ jobs:
           retention-days: "1"
   stable-sources-macos-warm:
     name: Stable sources / macos / warm
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     if: inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
@@ -1555,7 +1555,7 @@ jobs:
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR env CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\""
   stable-sources-macos-cold:
     name: Stable sources / macos / cold
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     if: inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
@@ -1630,7 +1630,7 @@ jobs:
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR env CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\""
   stable-sources-producer-intel:
     name: Stable sources / intel / producer
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     if: inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
@@ -1717,7 +1717,7 @@ jobs:
           retention-days: "1"
   stable-sources-intel-warm:
     name: Stable sources / intel / warm
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 30
     if: inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
@@ -1833,7 +1833,7 @@ jobs:
         run: "env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR env CARGO_NET_OFFLINE=true bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\""
   stable-sources-intel-cold:
     name: Stable sources / intel / cold
-    runs-on: macos-15-intel
+    runs-on: macos-26-intel
     timeout-minutes: 30
     if: inputs.mode == 'stable-sources' && github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch)
     permissions:
