@@ -150,7 +150,14 @@ const fn retries_auth(status: u16) -> bool {
 fn decode_admin(body: &[u8]) -> Result<AdminConnection, SessionError> {
     let parsed: AdminFields = serde_json::from_slice(body).map_err(|_| WireError::Malformed)?;
     match (secret_text(parsed.url), secret_text(parsed.token)) {
-        (Some(url), Some(token)) => Ok(AdminConnection::new(url, token)),
+        (Some(url), Some(token))
+            if url
+                .split('/')
+                .nth(2)
+                .is_some_and(|authority| !authority.is_empty() && !authority.contains('@')) =>
+        {
+            Ok(AdminConnection::new(url, token))
+        }
         (url, token) => {
             wipe(url);
             wipe(token);
@@ -201,6 +208,7 @@ mod tests {
             "https://user@pipelines.example/org/repo",
             "https://@pipelines.example/org/repo",
             "https://:password@pipelines.example/org/repo",
+            "https:///user:admin-token@pipelines.example/org/repo",
         ] {
             let body = serde_json::to_vec(&serde_json::json!({"url": url, "token": "jwt"}))?;
             let result = decode_admin(&body);

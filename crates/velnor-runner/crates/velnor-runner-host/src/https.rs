@@ -220,6 +220,10 @@ fn checked_base(base: &str) -> Result<String, HostError> {
     let trimmed = base.trim_end_matches('/');
     if trimmed.starts_with("https://")
         && trimmed.len() > "https://".len()
+        && trimmed
+            .split('/')
+            .nth(2)
+            .is_some_and(|authority| !authority.is_empty() && !authority.contains('@'))
         && !trimmed
             .chars()
             .any(|ch| ch.is_whitespace() || matches!(ch, '"' | '\n' | '\r' | '\0' | '?' | '#'))
@@ -281,6 +285,7 @@ mod tests {
             "https://user@pipelines.example/org/repo",
             "https://@pipelines.example/org/repo",
             "https://:password@pipelines.example/org/repo",
+            "https:///user:admin-token@pipelines.example/org/repo",
         ] {
             assert!(matches!(checked_base(url), Err(HostError::Endpoint)));
         }
