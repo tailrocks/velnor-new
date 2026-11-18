@@ -188,6 +188,7 @@ pub struct CheckTagArgs {
 
 pub use crate::cli_release::{
     CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand, ReleaseGateArgs,
+    RootTagsArgs,
 };
 
 #[derive(Debug, Args)]

@@ -49,7 +49,11 @@ pub fn tagged_commits(
     Ok(lines)
 }
 
-fn tagged_commit(github: &dyn GitHub, repo: &Repo, tag: &PlainName) -> Result<String, CiError> {
+pub(crate) fn tagged_commit(
+    github: &dyn GitHub,
+    repo: &Repo,
+    tag: &PlainName,
+) -> Result<String, CiError> {
     let target: ApiTarget = parse(&github.get(&tag_ref_path(repo, tag.as_str()))?, "tag")?;
     let ApiObject { kind, sha } = target.object;
     match kind.as_str() {

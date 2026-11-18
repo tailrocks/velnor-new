@@ -10,9 +10,9 @@ use crate::release_binaries::binary_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
-    APP_TOKEN_OUTPUT, TAGGED_COMMIT_HELPER, app_token, checkout, expression, install_release_plz,
-    label, permissions, refuse_commands, release_plz_arguments, release_plz_step, shell_word,
-    variables,
+    APP_TOKEN_OUTPUT, ROOT_TAGS_HELPER, TAGGED_COMMIT_HELPER, app_token, checkout, expression,
+    install_release_plz, label, permissions, refuse_commands, release_plz_arguments,
+    release_plz_step, root_tags_id, root_tags_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -231,6 +231,19 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let files: Vec<String> = (0..plan.roots.len())
         .map(|index| format!("\"$RUNNER_TEMP/release-{index}.json\""))
         .collect();
+    let retryable = helper.version().at_least(ROOT_TAGS_HELPER);
+    let mut inputs = files.clone();
+    if retryable {
+        let lookups = plan.roots.iter().zip(&files).enumerate();
+        let lookups: Vec<RenderedStep> = lookups
+            .map(|(index, (root, file))| root_tags_step(root, index, file))
+            .collect();
+        let at = steps.len() - 1;
+        steps.splice(at..at, lookups);
+        inputs
+            .extend((0..files.len()).map(|index| format!("\"$RUNNER_TEMP/tagged-{index}.json\"")));
+    }
+    let tagging = plan.roots.len();
     steps.extend(plan.roots.iter().zip(&files).map(|(root, file)| {
         release_plz_step(
             format!("Tag the releases of {}", label(root)),
@@ -240,8 +253,17 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             ),
         )
     }));
-    steps.push(record(helper, &files));
+    steps.push(record(helper, &inputs));
     only_while_newest(&mut steps);
+    if retryable {
+        let first = steps.len() - 1 - tagging;
+        for (index, step) in steps[first..first + tagging].iter_mut().enumerate() {
+            step.condition = Some(expression(&format!(
+                "{NEWEST_OUTPUT} && steps.{}.outputs.done != 'true'",
+                root_tags_id(index)
+            )));
+        }
+    }
     let mut scopes = vec![("contents", "read")];
     if helper.version().at_least(TAGGED_COMMIT_HELPER) {
         scopes.push(("pull-requests", "read"));

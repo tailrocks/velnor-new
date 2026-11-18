@@ -10,6 +10,8 @@ use velnor_model::{RepoPath, RustMetadata};
 use velnor_release::is_tag_name;
 
 use crate::error::CiError;
+use crate::github::{GitHub, Repo, compare_path, parse};
+use crate::release_commit::tagged_commit;
 
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PlainName(String);
@@ -233,4 +235,72 @@ pub fn check_manifests(
         }
         None => Ok(()),
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiCompare {
+    status: String,
+}
+
+/// What the tags a Cargo root would release say about the verified commit.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct RootTags {
+    pub at_commit: Vec<(String, String)>,
+    pub missing: usize,
+}
+
+impl RootTags {
+    /// Every tag exists and at least one is at the verified commit: an earlier run
+    /// of this tag job finished the root.
+    #[must_use]
+    pub fn done(&self) -> bool {
+        self.missing == 0 && !self.at_commit.is_empty()
+    }
+
+    /// The tags at the verified commit as `release-plz release -o json` prints them.
+    #[must_use]
+    pub fn json(&self) -> String {
+        let releases: Vec<serde_json::Value> = self
+            .at_commit
+            .iter()
+            .map(|(package, tag)| serde_json::json!({ "package_name": package, "tag": tag }))
+            .collect();
+        serde_json::json!({ "releases": releases }).to_string()
+    }
+}
+
+/// Sort the `(package, tag)` pairs of one root against the verified commit.
+/// A missing tag is pending, a tag at the commit is done, and a tag at an
+/// ancestor is an earlier release this run does not touch. A tag on a commit
+/// that is neither fails closed, because the release cannot be resumed there.
+pub fn root_tags(
+    github: &dyn GitHub,
+    repo: &Repo,
+    commit: &str,
+    expected: &[(String, String)],
+) -> Result<RootTags, CiError> {
+    let mut found = RootTags::default();
+    for (package, tag) in expected {
+        let name = PlainName::tag(tag)?;
+        let sha = match tagged_commit(github, repo, &name) {
+            Ok(sha) => sha,
+            Err(error) if error.is_missing() => {
+                found.missing += 1;
+                continue;
+            }
+            Err(error) => return Err(error),
+        };
+        if sha == commit {
+            found.at_commit.push((package.clone(), tag.clone()));
+            continue;
+        }
+        let body = github.get(&compare_path(repo, &sha, commit))?;
+        let status = parse::<ApiCompare>(&body, "compare")?.status;
+        if !matches!(status.as_str(), "ahead" | "identical") {
+            return Err(CiError::new(format!(
+                "tag {tag} of package {package} points at {sha}, which is {status} of the verified commit {commit}; refusing to release over it. Delete or move the tag deliberately, then rerun"
+            )));
+        }
+    }
+    Ok(found)
 }

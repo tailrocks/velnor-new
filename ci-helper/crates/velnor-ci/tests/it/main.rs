@@ -64,6 +64,7 @@ mod release_publish;
 mod release_publish_assetless;
 mod release_publish_guards;
 mod release_record;
+mod release_root_tags;
 mod release_tag_patterns;
 mod report;
 mod report_accounting;

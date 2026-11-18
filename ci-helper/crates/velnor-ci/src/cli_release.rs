@@ -40,6 +40,36 @@ pub enum ReleaseCommand {
         about = "Parse each release-plz.toml and exit 1 when any table holds a replace_command or changelog_config key, however the key is written in TOML, or when a file is not valid TOML, or, with --tag-pattern and --repo, when a file's release tag patterns differ from the ones listed for it or the live tag rulesets of the repository do not cover them, or, with --branch-prefix, when a file's pr_branch_prefix differs from the one listed for it, or when a symbolic link or a cargo config that runs a program or holds a credential provider, proxy or CA override sits on the cargo config path of the folder of any file up to the working folder"
     )]
     CheckConfig(CheckConfigArgs),
+    #[command(
+        about = "Make one release root retryable: read the versions the root's release-plz.toml would tag, look each tag up in the repository, write to --output the JSON of the releases already tagged at --commit in release-plz release -o json shape, and write done=true to $GITHUB_OUTPUT when every tag exists and one is at --commit, so the root needs no release-plz run. A tag on an earlier ancestor of --commit is an earlier release and is ignored. Exit 1 when a tag is on a commit that is not an ancestor of --commit. Reads GITHUB_TOKEN and RUSTUP_TOOLCHAIN"
+    )]
+    RootTags(RootTagsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct RootTagsArgs {
+    #[arg(help = "release-plz.toml of the root")]
+    pub file: PathBuf,
+    #[arg(
+        allow_hyphen_values = true,
+        long,
+        value_name = "OWNER/NAME",
+        help = "Repository"
+    )]
+    pub repo: String,
+    #[arg(
+        allow_hyphen_values = true,
+        long,
+        help = "Full SHA of the verified commit"
+    )]
+    pub commit: String,
+    #[arg(long, help = "File to write the releases at the commit to")]
+    pub output: PathBuf,
+    #[arg(
+        long,
+        help = "File to write an empty release-plz release -o json to, which the release-plz step overwrites when it runs"
+    )]
+    pub empty_output: PathBuf,
 }
 
 #[derive(Debug, Args)]

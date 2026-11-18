@@ -7,13 +7,13 @@ use std::io::ErrorKind;
 use std::path::{Component, Path};
 
 use super::http::{DEFAULT_TIMEOUT, HttpGitHub};
-use crate::cli::{CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs};
+use crate::cli::{CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs, RootTagsArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
     CargoPathEntry, PlainName, check_branch_prefixes, check_cargo_discovery, check_config,
-    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
+    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, root_tags, tag_lines,
 };
 use crate::release_commit::tagged_commits;
 use crate::release_preflight::check_release_source;
@@ -112,6 +112,28 @@ pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError
         )?;
     }
     Ok(output)
+}
+
+const EMPTY_RELEASE: &str = "{\"releases\":[]}";
+
+pub(super) fn run_root_tags(args: &RootTagsArgs) -> Result<String, CiError> {
+    let top = std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
+    let text = fs::read_to_string(&args.file)
+        .map_err(|e| CiError::new(format!("cannot read {}: {e}", args.file.display())))?;
+    let file = relative_to(&top, &args.file);
+    let known = super::manifests::read(&top, &[root_of(&top, &args.file)])?;
+    let expected = velnor_release::release_tags(&[(file, text)], &known.metadata, &known.versions)
+        .map_err(CiError::new)?;
+    let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+    let found = root_tags(&github, &Repo::parse(&args.repo)?, &args.commit, &expected)?;
+    fs::write(&args.empty_output, EMPTY_RELEASE)
+        .map_err(|e| CiError::new(format!("cannot write {}: {e}", args.empty_output.display())))?;
+    fs::write(&args.output, found.json())
+        .map_err(|e| CiError::new(format!("cannot write {}: {e}", args.output.display())))?;
+    let line = format!("done={}\n", found.done());
+    super::append_outputs(&line)?;
+    Ok(line)
 }
 
 fn relative_to(top: &Path, file: &Path) -> String {

@@ -9,6 +9,7 @@ use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 
 pub(crate) const TAG_PATTERN_HELPER: (u64, u64, u64) = (0, 1, 80);
 pub(crate) const RELEASED_VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
+pub(crate) const ROOT_TAGS_HELPER: (u64, u64, u64) = (0, 1, 82);
 pub(crate) const TAGGED_COMMIT_HELPER: (u64, u64, u64) = (0, 1, 81);
 pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
 const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
@@ -223,6 +224,40 @@ pub(crate) fn refuse_commands(
             .collect::<Vec<_>>()
             .join(" "),
         ),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn root_tags_id(index: usize) -> String {
+    format!("tags-{index}")
+}
+
+/// Look up the tags of one root before any token exists, so that a rerun after a
+/// partial failure skips a root that is already tagged at the verified commit,
+/// and refuses one tagged on a commit that is not an ancestor of it.
+pub(crate) fn root_tags_step(root: &RootPlan, index: usize, release_file: &str) -> RenderedStep {
+    let mut env = variables(&[
+        ("GITHUB_TOKEN", "${{ github.token }}"),
+        ("REPOSITORY", "${{ github.repository }}"),
+        ("COMMIT", "${{ github.event.workflow_run.head_sha }}"),
+    ]);
+    env.push((
+        "RUSTUP_TOOLCHAIN".to_owned(),
+        Value::Text(TOOLCHAIN.to_owned()),
+    ));
+    env.extend(
+        NO_PROGRAM_VARIABLES
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
+    );
+    RenderedStep {
+        id: Some(root_tags_id(index)),
+        name: format!("Check which tags of {} already exist", label(root)),
+        env,
+        run: Some(format!(
+            "velnor-ci release root-tags {} --repo=\"$REPOSITORY\" --commit=\"$COMMIT\" --output=\"$RUNNER_TEMP/tagged-{index}.json\" --empty-output={release_file}",
+            shell_word(&join(&root.root, RELEASE_PLZ_FILE))
+        )),
         ..RenderedStep::default()
     }
 }

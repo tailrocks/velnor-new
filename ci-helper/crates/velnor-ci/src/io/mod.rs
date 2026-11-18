@@ -174,6 +174,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Preflight(args)) => release::run_preflight(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
+        Command::Release(ReleaseCommand::RootTags(args)) => release::run_root_tags(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),

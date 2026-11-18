@@ -17,6 +17,16 @@ pub fn check_release_versions(
     metadata: &BTreeMap<RepoPath, RustMetadata>,
     versions: &Versions,
 ) -> Result<(), String> {
+    release_tags(files, metadata, versions).map(|_| ())
+}
+
+/// The `(package, tag)` pairs the configs would release at the versions now committed.
+pub fn release_tags(
+    files: &[(String, String)],
+    metadata: &BTreeMap<RepoPath, RustMetadata>,
+    versions: &Versions,
+) -> Result<Vec<(String, String)>, String> {
+    let mut tags = Vec::new();
     for config in read_all(files)? {
         let Some((workspace, known)) = owner(&config.root, metadata) else {
             continue;
@@ -43,7 +53,8 @@ pub fn check_release_versions(
                     config.root
                 ));
             }
+            tags.push((name, tag));
         }
     }
-    Ok(())
+    Ok(tags)
 }
