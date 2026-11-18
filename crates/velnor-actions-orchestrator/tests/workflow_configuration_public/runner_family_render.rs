@@ -11,7 +11,6 @@ fn enable_family(config: &mut String) {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn runner_family_job_is_plan_gated_and_in_required_fanin() -> Result<(), Box<dyn Error>> {
     let repo = super::maintenance_features::owner_feature_repo(
         WorkflowPolicy::VelnorRepositoryV1,

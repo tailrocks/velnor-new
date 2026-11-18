@@ -286,7 +286,6 @@ fn reverify_discards_a_tampered_install_despite_env_hooks() -> Result<(), Box<dy
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn catalog_pins_match_every_installed_http_validator() -> Result<(), Box<dyn Error>> {
     let specs = rendered_http_specs()?;
     let step = step_in(RESTORE_ACTION, REVERIFY_STEP)?;

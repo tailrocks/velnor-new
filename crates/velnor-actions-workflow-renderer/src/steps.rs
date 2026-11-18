@@ -79,6 +79,7 @@ pub const ACQUIRE_TIMEOUT_MINUTES: i64 =
 pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
 pub const MATRIX_REPORT_UPLOAD_NAME: &str = "Upload matrix report";
 pub const CRATE_REPORT_UPLOAD_NAME: &str = "Upload crate reports";
+pub const MACHETE_STEP_NAME: &str = "Run cargo-machete";
 pub const DENY_STEP_NAME: &str = "Run cargo-deny";
 
 pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {
