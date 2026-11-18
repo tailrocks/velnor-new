@@ -22,8 +22,20 @@ pub(super) fn validate_host_config(
     {
         return Err(HostError::Ownership);
     }
+    if has_extra_privileges(host) {
+        return Err(HostError::Ownership);
+    }
     if role == "resource-probe" {
         return validate_probe_host_config(inspect, host, volumes);
+    }
+    if host
+        .pid_mode
+        .as_deref()
+        .is_some_and(|mode| !mode.is_empty())
+        || host.cap_drop.as_ref().is_some_and(|v| !v.is_empty())
+        || host.security_opt.as_ref().is_some_and(|v| !v.is_empty())
+    {
+        return Err(HostError::Ownership);
     }
     let expected_targets = match (role, volumes.len()) {
         ("dind", 2) => &["/run", "/var/lib/docker"][..],
@@ -47,6 +59,16 @@ pub(super) fn validate_host_config(
     Ok(())
 }
 
+fn has_extra_privileges(host: &bollard::models::HostConfig) -> bool {
+    host.devices.as_ref().is_some_and(|v| !v.is_empty())
+        || host
+            .device_cgroup_rules
+            .as_ref()
+            .is_some_and(|v| !v.is_empty())
+        || host.device_requests.as_ref().is_some_and(|v| !v.is_empty())
+        || host.cap_add.as_ref().is_some_and(|v| !v.is_empty())
+}
+
 fn validate_probe_host_config(
     inspect: &ContainerInspectResponse,
     host: &bollard::models::HostConfig,
@@ -65,13 +87,6 @@ fn validate_probe_host_config(
         || config.entrypoint.as_deref() != Some(&["/velnor/resource-probe".to_owned()][..])
         || host.binds.as_ref().is_some_and(|v| !v.is_empty())
         || host.volumes_from.as_ref().is_some_and(|v| !v.is_empty())
-        || host.devices.as_ref().is_some_and(|v| !v.is_empty())
-        || host
-            .device_cgroup_rules
-            .as_ref()
-            .is_some_and(|v| !v.is_empty())
-        || host.device_requests.as_ref().is_some_and(|v| !v.is_empty())
-        || host.cap_add.as_ref().is_some_and(|v| !v.is_empty())
         || host.tmpfs.as_ref().is_some_and(|v| !v.is_empty())
         || host.group_add.as_ref().is_some_and(|v| !v.is_empty())
         || host.links.as_ref().is_some_and(|v| !v.is_empty())
