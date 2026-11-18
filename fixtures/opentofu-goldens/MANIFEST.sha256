@@ -35,7 +35,7 @@
 - e44ba03e764b32a2ea978b772959d84cedd69a981b04824c4e73f3e247bb4779  ./dogfood/preview/.github/workflows/freshness.yml
 - 8294d36587b2e8ecf1265b26d3bc94b92f2baf842764ead8e0c90aa4f1751e8c  ./dogfood/preview/.github/workflows/homebrew-adoption.yml
 - b07b589f5b00733d465a3e7c55e737e8c327563c7ff213b35ebee753fe07b812  ./dogfood/preview/.github/workflows/job-image-candidate.yml
-- 560c44924afd0247e2da27049469e5f9d45458f46f029897b026f189d3f04712  ./dogfood/preview/.github/workflows/product-release-binary.yml
+- 912a613ae2f06e3833a5b109406ebff0cc3093d207de81e2c41f3ab8fa3fad67  ./dogfood/preview/.github/workflows/product-release-binary.yml
 - 0c1bb914949e8746b9ae5559a57a7302913ec292b17b311a794c451fe532fde8  ./dogfood/preview/.github/workflows/product-release-generator.yml
 - a9eae142354d71f8b8e9498b7f268bd90b3fdbab02f6de516976ae728dc7822d  ./dogfood/preview/.github/workflows/product-release-images.yml
 - 77951f54750aea443e8f170466669ee6f013df7acd08f73980378f158b4fb781  ./dogfood/preview/.github/workflows/product-release.yml
