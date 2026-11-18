@@ -6,6 +6,7 @@ mod archive_witness;
 mod audit;
 mod build_inputs;
 mod cache;
+pub mod cache_api;
 mod cache_paths;
 mod cache_sources;
 mod cache_upload;
@@ -185,6 +186,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
+        Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
         Command::Restored(args) => {
             let root = current_dir()?;
             let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
