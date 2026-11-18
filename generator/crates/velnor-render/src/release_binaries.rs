@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{HelperRelease, Platform};
-use velnor_release::{
-    BinaryPlan, RELEASE_APP_SLUG, ReleasePlan, asset_name_uses_version, expand_asset_name,
-};
+use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release_assets::{
+    STAGE, asset, assets, pack, quoted, read_version, uploaded, versioned, word,
+};
 use crate::release_outputs::commit_output;
 use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
@@ -44,7 +45,7 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
         .collect()
 }
 
-fn target(platform: Platform) -> (&'static str, &'static str) {
+pub(crate) fn target(platform: Platform) -> (&'static str, &'static str) {
     match platform {
         Platform::LinuxX64 => ("ubuntu-24.04", "x86_64-unknown-linux-musl"),
         Platform::LinuxArm64 => ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl"),
@@ -52,85 +53,8 @@ fn target(platform: Platform) -> (&'static str, &'static str) {
     }
 }
 
-const VERSION_REFERENCE: &str = "${VERSION}";
-const STAGE: &str = "stage";
-
-fn versioned(binary: &BinaryPlan) -> bool {
-    binary
-        .asset_name
-        .as_deref()
-        .is_some_and(asset_name_uses_version)
-}
-
-fn asset(binary: &BinaryPlan, platform: Platform) -> String {
-    match &binary.asset_name {
-        None => format!("{}-{}.tar.gz", binary.bin, platform.file_suffix()),
-        Some(template) => format!(
-            "{}.tar.gz",
-            expand_asset_name(
-                template,
-                &binary.bin,
-                platform.file_suffix(),
-                target(platform).1,
-                VERSION_REFERENCE,
-            )
-        ),
-    }
-}
-
-fn word(binary: &BinaryPlan, name: &str) -> String {
-    if versioned(binary) {
-        format!("\"{name}\"")
-    } else {
-        shell_word(name)
-    }
-}
-
 fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
     format!("{}-{}", binary.package, platform.file_suffix())
-}
-
-fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
-    versioned(binary).then(|| {
-        let pattern = binary
-            .tag_pattern
-            .as_str()
-            .replace("{{ package }}", &binary.package);
-        let prefix = pattern.split("{{ version }}").next().unwrap_or_default();
-        RenderedStep {
-            env: variables(&[(
-                "TAG",
-                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
-            )]),
-            ..command(
-                "Read the version of the tag".to_owned(),
-                format!("echo \"VERSION=${{TAG#{prefix}}}\" >> \"$GITHUB_ENV\""),
-            )
-        }
-    })
-}
-
-fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
-    if versioned(binary) {
-        format!(
-            "tar -czf \"{STAGE}/{file}\" -C {release_dir} {}",
-            binary.bin
-        )
-    } else {
-        format!(
-            "tar -czf {} -C {release_dir} {}",
-            shell_word(file),
-            binary.bin
-        )
-    }
-}
-
-fn uploaded(binary: &BinaryPlan, file: &str) -> String {
-    if versioned(binary) {
-        format!("{STAGE}/*")
-    } else {
-        file.to_owned()
-    }
 }
 
 fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
@@ -366,19 +290,7 @@ fn builds(binary: &BinaryPlan) -> Vec<String> {
         .collect()
 }
 
-fn assets(binary: &BinaryPlan) -> Vec<String> {
-    binary
-        .platforms
-        .iter()
-        .map(|platform| asset(binary, *platform))
-        .collect()
-}
-
-fn quoted(binary: &BinaryPlan, names: &[String]) -> Vec<String> {
-    names.iter().map(|name| word(binary, name)).collect()
-}
-
-fn command(name: String, run: String) -> RenderedStep {
+pub(crate) fn command(name: String, run: String) -> RenderedStep {
     RenderedStep {
         name,
         run: Some(run),
