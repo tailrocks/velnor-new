@@ -164,12 +164,12 @@ async fn a_previous_guard_journal_migrates_to_the_current_guard_on_open() -> Tes
     {
         let journal = Journal::open(&path).await?;
         let connection = journal.connection().await?;
-        connection.execute("PRAGMA user_version = 52", ()).await?;
+        connection.execute("PRAGMA user_version = 53", ()).await?;
         connection
             .execute("DROP TRIGGER pre_jit_cleanup_progress_update_guard", ())
             .await?;
         connection
-            .execute(super::PROGRESS_UPDATE_GUARD_V52, ())
+            .execute(super::PROGRESS_UPDATE_GUARD_V53, ())
             .await?;
     }
     let migrated = Journal::open(&path).await?;
@@ -203,7 +203,7 @@ async fn a_current_journal_with_the_previous_guard_is_refused_at_open() -> TestR
             .execute("DROP TRIGGER pre_jit_cleanup_progress_update_guard", ())
             .await?;
         connection
-            .execute(super::PROGRESS_UPDATE_GUARD_V52, ())
+            .execute(super::PROGRESS_UPDATE_GUARD_V53, ())
             .await?;
     }
     assert!(Journal::open(&path).await.is_err());

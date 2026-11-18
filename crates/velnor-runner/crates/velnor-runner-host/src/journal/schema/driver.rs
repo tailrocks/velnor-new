@@ -77,7 +77,8 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
         49 => Box::pin(super::jit_tombstone_completion::migrate(conn)),
         50 => Box::pin(super::unbound_retirement::migrate_v50_to_v51(conn)),
         51 => Box::pin(super::unbound_retirement::migrate_v51_to_v52(conn)),
-        52 => Box::pin(super::pre_jit_cleanup::migrate_v52_to_v53(conn)),
+        52 => Box::pin(super::execution_authorization::migrate_v52_to_v53(conn)),
+        53 => Box::pin(super::pre_jit_cleanup::migrate_v53_to_v54(conn)),
         _ => return Err(HostError::Journal),
     };
     Ok(step)
@@ -85,7 +86,7 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
 
 pub(super) const fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=52 => Some(version + 1),
+        0..=8 | 10..=53 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }

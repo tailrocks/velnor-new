@@ -169,8 +169,7 @@ pub(super) fn read_bounded(
     Ok(output)
 }
 
-pub(super) fn namespace_link(path: &Path) -> Option<u64> {
-    let target = fs::read_link(path).ok()?;
+pub(super) fn namespace_link(target: &Path) -> Option<u64> {
     let value = target.to_str()?.strip_prefix("mnt:[")?.strip_suffix(']')?;
     value.parse().ok()
 }
