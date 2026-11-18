@@ -6,6 +6,7 @@ use crate::error::HostError;
 use crate::journal::Journal;
 
 use super::ConnectionJournal;
+use super::scale_set_delete::has_pending_scale_set_delete;
 use super::storage::{
     connection_record, digest, has_ambiguous_legacy_work, has_connection_work, in_transaction,
     read_transaction,
@@ -184,7 +185,9 @@ impl Journal {
             if stored_identity != identity {
                 return Err(HostError::Journal);
             }
-            if has_connection_work(connection, connection_id).await? {
+            if has_connection_work(connection, connection_id).await?
+                || has_pending_scale_set_delete(connection, connection_id).await?
+            {
                 return Ok(false);
             }
             if !retired {

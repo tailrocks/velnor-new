@@ -73,6 +73,9 @@ pub(super) async fn handle(
             )
             .await
         }
+        request @ (Request::ScaleSetDeleteStart { .. } | Request::ScaleSetDeleteStatus { .. }) => {
+            super::scale_set_delete::handle(journal, state, state_path, request).await
+        }
         request @ (Request::SessionObservationStart { .. }
         | Request::SessionObservationStatus { .. }
         | Request::ConnectionSetupStatus { .. }
@@ -314,11 +317,7 @@ async fn current_readiness(
 fn boolean_response(value: bool) -> Response {
     Response {
         value: Some(value),
-        doctor_probe: None,
-        readiness: None,
-        session_observation: None,
-        setup_receipt: None,
-        connection_census: None,
+        ..Response::default()
     }
 }
 
@@ -327,12 +326,9 @@ fn probe_response(
     readiness: Option<crate::readiness::Readiness>,
 ) -> Response {
     Response {
-        value: None,
         doctor_probe: Some(reply),
         readiness,
-        session_observation: None,
-        setup_receipt: None,
-        connection_census: None,
+        ..Response::default()
     }
 }
 
@@ -382,11 +378,7 @@ async fn controller_readiness(
 
 fn readiness_response(readiness: crate::readiness::Readiness) -> Response {
     Response {
-        value: None,
-        doctor_probe: None,
         readiness: Some(readiness),
-        session_observation: None,
-        setup_receipt: None,
-        connection_census: None,
+        ..Response::default()
     }
 }

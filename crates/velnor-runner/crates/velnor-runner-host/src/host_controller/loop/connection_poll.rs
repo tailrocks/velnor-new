@@ -19,6 +19,8 @@ use super::state::PreparedConnection;
 mod credentials;
 #[path = "connection_poll/fairness.rs"]
 pub(super) mod fairness;
+#[path = "connection_poll/scale_set_delete.rs"]
+mod scale_set_delete;
 #[path = "connection_poll/turn.rs"]
 mod turn;
 
@@ -46,6 +48,7 @@ pub(super) async fn poll_active_connections(
     let mut positive_poll_settled = false;
     let mut index = 0;
     while index < connections.len() {
+        scale_set_delete::service(&mut connections[index], &context).await?;
         let result = turn::poll_connection(
             &mut connections[index],
             &context,
