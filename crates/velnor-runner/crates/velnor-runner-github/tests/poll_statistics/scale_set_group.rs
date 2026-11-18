@@ -59,10 +59,13 @@ fn find(body: &Value) -> Result<ScaleSetFound, SessionError> {
 }
 
 fn assert_rejected<T: std::fmt::Debug>(result: Result<T, SessionError>) {
-    match result {
-        Err(SessionError::Wire(WireError::RegistrationRejected)) => {}
-        other => panic!("a foreign runner group must be rejected, got {other:?}"),
-    }
+    assert!(
+        matches!(
+            result,
+            Err(SessionError::Wire(WireError::RegistrationRejected))
+        ),
+        "a foreign runner group must be rejected, got {result:?}"
+    );
 }
 
 #[test]
