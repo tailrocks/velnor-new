@@ -16,6 +16,7 @@ use crate::steps::install_helper;
 const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 const ATTEST_COMMIT: &str = "4d101475d8b20a2381f78447822ac1eab6504dd8";
 const ATTEST_VERSION: &str = "v4.2.2";
+const GH_VERSION: &str = "2.103.3";
 const UPLOAD_VERSION: &str = "v7.0.2";
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
@@ -212,6 +213,22 @@ fn attest(binary: &BinaryPlan) -> RenderedStep {
     }
 }
 
+fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
+    assets(binary)
+        .into_iter()
+        .chain([SUMS_FILE.to_owned()])
+        .map(|name| RenderedStep {
+            name: format!("Verify the build provenance of {name}"),
+            env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
+            run: Some(format!(
+                "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\"",
+                shell_word(&format!("{DIST}/{name}"))
+            )),
+            ..RenderedStep::default()
+        })
+        .collect()
+}
+
 fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![install_helper(helper)];
     steps.extend(
@@ -221,6 +238,10 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             .map(|platform| download(artifact(binary, *platform))),
     );
     steps.push(download(format!("{}-sums", binary.package)));
+    if binary.attest {
+        steps.push(install_tool(&format!("gh@{GH_VERSION}")));
+        steps.extend(verifications(binary));
+    }
     steps.push(RenderedStep {
         name: format!("Publish the release of {}", binary.package),
         env: variables(&[
@@ -238,7 +259,11 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
         ..RenderedStep::default()
     });
     RenderedJob {
-        permissions: permissions(&[("contents", "write")]),
+        permissions: if binary.attest {
+            permissions(&[("attestations", "read"), ("contents", "write")])
+        } else {
+            permissions(&[("contents", "write")])
+        },
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,

@@ -410,6 +410,7 @@ jobs:
       - sums-app
     if: '${{ needs.gate.outputs.ready == ''true'' && github.event.workflow_run.event == ''push'' && github.event.workflow_run.conclusion == ''success'' && github.event.workflow_run.head_branch == github.event.repository.default_branch && needs.tag.outputs.app != '''' }}'
     permissions:
+      attestations: read
       contents: write
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -441,6 +442,28 @@ jobs:
         with:
           name: app-sums
           path: dist
+      - name: Install gh@2.103.3
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        with:
+          version: '2026.11.1'
+          install_args: gh@2.103.3
+          cache: false
+      - name: Verify the build provenance of app-linux-x64.tar.gz
+        env:
+          GH_TOKEN: '${{ github.token }}'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-linux-x64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
+      - name: Verify the build provenance of app-linux-arm64.tar.gz
+        env:
+          GH_TOKEN: '${{ github.token }}'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-linux-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
+      - name: Verify the build provenance of app-macos-arm64.tar.gz
+        env:
+          GH_TOKEN: '${{ github.token }}'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-macos-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
+      - name: Verify the build provenance of SHA256SUMS
+        env:
+          GH_TOKEN: '${{ github.token }}'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
       - name: Publish the release of app
         env:
           GITHUB_TOKEN: '${{ github.token }}'
