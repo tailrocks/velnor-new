@@ -35,6 +35,9 @@ pub fn group_runs(
     if matches!(selection, RustSelection::None) {
         return decided(false, "no package is selected, so no archive is built");
     }
+    if event == EventKind::Push {
+        return decided(true, "a push to the default branch runs every group");
+    }
     if group.paths.is_empty() && group.events.is_empty() {
         return decided(
             true,
@@ -43,6 +46,9 @@ pub fn group_runs(
     }
     if group.events.iter().any(|listed| listed.kind() == event) {
         return decided(true, format!("event {} is listed in events", event.name()));
+    }
+    if event == EventKind::MergeGroup && group.paths.is_empty() {
+        return decided(true, "events never skip a group on merge_group");
     }
     let matched = changed.iter().find_map(|path| {
         group

@@ -13,7 +13,7 @@ const NOTHING: &str = "Cargo.toml: none\ntools/Cargo.toml: none\n";
 const APP: &str = "Cargo.toml: some\n  b changed:b/src/lib.rs\ntools/Cargo.toml: none\n";
 const ZEROS: &str = "0000000000000000000000000000000000000000";
 
-fn rev(repo: &Repo, name: &str) -> String {
+pub(crate) fn rev(repo: &Repo, name: &str) -> String {
     let output = Command::new("git")
         .arg("-C")
         .arg(repo.root())
@@ -23,7 +23,7 @@ fn rev(repo: &Repo, name: &str) -> String {
     String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
-fn two_commits(name: &str, config: &str, edit: impl FnOnce(&Repo)) -> Repo {
+pub(crate) fn two_commits(name: &str, config: &str, edit: impl FnOnce(&Repo)) -> Repo {
     let repo = plan_repo(name);
     repo.write(".velnor/rust-ci.toml", config);
     repo.commit();
@@ -64,7 +64,7 @@ fn docs(repo: &Repo) {
     repo.write("docs/guide.md", "guide\n");
 }
 
-fn app(repo: &Repo) {
+pub(crate) fn app(repo: &Repo) {
     repo.write("b/src/lib.rs", "pub fn changed() {}\n");
 }
 

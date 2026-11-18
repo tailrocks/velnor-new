@@ -132,3 +132,73 @@ fn group_runs_for_a_listed_event_a_matching_path_or_a_full_selection_and_skips_o
         );
     }
 }
+
+#[test]
+fn events_never_skip_a_group_on_a_merge_group_or_a_push_and_paths_skip_only_untouched_code() {
+    let events_only = group(&[], &[GroupEvent::Schedule]);
+    let keyed = group(&["app/migrations/**"], &[GroupEvent::Schedule]);
+    let rows = [
+        (
+            "merge group, events only, event not listed",
+            &events_only,
+            EventKind::MergeGroup,
+            changed(&["app/src/lib.rs"]),
+            some(),
+            true,
+            "events never skip a group on merge_group",
+        ),
+        (
+            "merge group, paths untouched",
+            &keyed,
+            EventKind::MergeGroup,
+            changed(&["app/src/lib.rs"]),
+            some(),
+            false,
+            "event merge_group is not listed in events and no changed path matches paths",
+        ),
+        (
+            "merge group, paths touched",
+            &keyed,
+            EventKind::MergeGroup,
+            changed(&["app/migrations/0001_init.sql"]),
+            some(),
+            true,
+            "changed path app/migrations/0001_init.sql matches paths app/migrations/**",
+        ),
+        (
+            "merge group, diff unknown",
+            &keyed,
+            EventKind::MergeGroup,
+            changed(&[]),
+            RustSelection::All(AllTrigger::BaseUnavailable),
+            true,
+            "every package is selected",
+        ),
+        (
+            "push to main, paths untouched and event not listed",
+            &keyed,
+            EventKind::Push,
+            changed(&["app/src/lib.rs"]),
+            some(),
+            true,
+            "a push to the default branch runs every group",
+        ),
+        (
+            "push to main, events only, event not listed",
+            &group(&[], &[GroupEvent::Schedule]),
+            EventKind::Push,
+            changed(&["app/src/lib.rs"]),
+            some(),
+            true,
+            "a push to the default branch runs every group",
+        ),
+    ];
+    for (row, group, event, paths, selection, run, reason) in rows {
+        let decision = group_runs(group, event, &paths, &selection);
+        assert_eq!(
+            (decision.run, decision.reason.as_str()),
+            (run, reason),
+            "{row}"
+        );
+    }
+}
