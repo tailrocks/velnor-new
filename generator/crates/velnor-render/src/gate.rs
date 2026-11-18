@@ -30,6 +30,8 @@ pub(crate) fn sources_fetch_step(position: usize) -> String {
     format!("sources_fetch_{position}")
 }
 
+pub(crate) const SOURCES_FETCH_ALL_STEP: &str = "sources_fetch_all";
+
 pub(crate) fn sources_save_step(lane: &RootSlug) -> String {
     format!("sources_save_{lane}")
 }

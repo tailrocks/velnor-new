@@ -111,6 +111,7 @@ mod setup_action_owner;
 mod setup_action_swap;
 mod setup_action_tool_cache;
 mod shared_sources;
+mod single_fetch;
 mod source_roots_limit;
 mod test_setup;
 mod tool_pins;
