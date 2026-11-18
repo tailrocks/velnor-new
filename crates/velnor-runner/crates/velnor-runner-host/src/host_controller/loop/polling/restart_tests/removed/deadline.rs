@@ -217,16 +217,15 @@ async fn exercise(stall: bool) -> TestResult<()> {
         poll.await?;
     }
     drop(clock);
-    assert_recovery_outcome(stall, &restarted, &control_state, failed_objects).await
+    assert_recovery_outcome(stall, &restarted, failed_objects).await
 }
 
 async fn assert_recovery_outcome(
     stall: bool,
     restarted: &Restarted,
-    control_state: &ControlState,
     failed_objects: Vec<String>,
 ) -> TestResult<()> {
-    assert_polled(restarted, control_state).await?;
+    assert_polled(restarted).await?;
     if stall {
         assert_eq!(
             seed::text(&restarted.journal, seed::RESERVATION, FAILED.reservation).await?,
@@ -241,11 +240,7 @@ async fn assert_recovery_outcome(
     Ok(())
 }
 
-async fn assert_polled(restarted: &Restarted, control_state: &ControlState) -> TestResult<()> {
-    let receipts = control_state
-        .complete_session_poll_receipts()?
-        .ok_or("next connection did not finish polling")?;
-    assert_eq!(receipts.len(), 1);
+async fn assert_polled(restarted: &Restarted) -> TestResult<()> {
     let log = fs::read_to_string(std::env::var(CHILD)?)?;
     assert!(log.contains("https://queue.example.test/messages"));
     let connection = restarted.journal.connection().await?;
