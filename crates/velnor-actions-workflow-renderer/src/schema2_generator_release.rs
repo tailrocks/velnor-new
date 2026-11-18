@@ -47,7 +47,6 @@ pub(super) fn source_preview_jobs(
     }
     Ok(jobs)
 }
-
 pub(super) fn source_preview_authority(
     pins: &ProductReleasePins,
 ) -> Result<(String, Yaml), RenderError> {

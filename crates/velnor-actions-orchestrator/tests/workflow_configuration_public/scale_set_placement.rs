@@ -25,12 +25,13 @@ fn config() -> String {
 }
 
 fn rendered(ids: &[&str]) -> Result<BTreeMap<String, String>, Box<dyn Error>> {
-    let overrides: String = ids
+    let overrides = ids
         .iter()
         .map(|id| {
             format!("\n[execution.overrides.{id}]\nprofile = \"local\"\nrole = \"control\"\n")
         })
-        .collect();
+        .collect::<Vec<_>>()
+        .concat();
     let repo = workflow_configuration_fixture::make_repo(&format!("{}{overrides}", config()))?;
     fs::write(
         repo.path().join("Cargo.toml"),
