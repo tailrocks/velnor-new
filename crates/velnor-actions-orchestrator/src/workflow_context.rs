@@ -71,6 +71,12 @@ pub(super) fn render_context(
             .as_ref()
             .map(|rust| rust.non_inputs.clone())
             .unwrap_or_default(),
+        pr_ci: input
+            .config
+            .execution
+            .as_ref()
+            .map(|execution| execution.pr_ci)
+            .unwrap_or_default(),
     })
 }
 

@@ -104,7 +104,7 @@ pub use dockerfile::{
 };
 pub use execution::{
     ExecutionConfig, ExecutionMode, ExecutionOverride, ExecutionParity, ExecutionProfile,
-    ExecutionRole, HOSTED_PROFILE_ID, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
+    ExecutionRole, HOSTED_PROFILE_ID, PrCiMode, ProfileKind, RoutingWorkflow, SCALE_SET_PROFILE_ID,
 };
 pub use github::{GithubConfig, UnmanagedPolicy};
 pub use github_evidence_snapshot::{

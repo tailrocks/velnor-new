@@ -61,7 +61,7 @@ pub(super) fn render(
         GATHER_JOB_ID.to_owned(),
         routing::gather_job(&runner, plan)?,
     ));
-    Ok(Yaml::Map(vec![
+    let mut document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
         (
             "on".to_owned(),
@@ -93,7 +93,16 @@ pub(super) fn render(
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
-    ]))
+    ]);
+    crate::pr_ci::apply(
+        &mut document,
+        request.pr_ci,
+        crate::pr_ci::PrCiShape {
+            quick: &[],
+            claim: false,
+        },
+    )?;
+    Ok(document)
 }
 
 fn read_permissions() -> Yaml {
