@@ -47,7 +47,7 @@ pub(super) fn scale_set_support_jobs_of(execution: &ExecutionConfig) -> BTreeSet
 }
 
 /// The fork fence for a control job moved to the scale set: the job runs only
-/// for push, merge_group and same-repository pull requests, exactly like the
+/// for push, `merge_group` and same-repository pull requests, exactly like the
 /// ephemeral `check-*` jobs. A fork pull request skips it.
 #[must_use]
 pub fn fork_fenced_condition(original: Option<&str>) -> String {

@@ -80,23 +80,16 @@ pub(in crate::workflow) fn placement_for(
             ExecutionMode::Both => Placement::Both,
         });
     }
-    let key = execution
-        .overrides
-        .get(job_id)
-        .map_or(execution.default_profile.as_str(), |over| {
-            over.profile.as_str()
-        });
-    if key == execution.hosted_profile {
-        Ok(Placement::HostedOnly)
-    } else if key == execution.scale_set_profile {
-        Ok(Placement::ScaleSetOnly)
-    } else {
-        Err(ContractError::config(
-            "config.toml",
-            format!("execution.overrides.{job_id}.profile"),
-            format!("unknown_profile:{key}"),
-        ))
-    }
+    profile_placement(
+        execution,
+        job_id,
+        execution
+            .overrides
+            .get(job_id)
+            .map_or(execution.default_profile.as_str(), |over| {
+                over.profile.as_str()
+            }),
+    )
 }
 
 fn control_placement(
@@ -106,7 +99,14 @@ fn control_placement(
     let Some(over) = execution.overrides.get(job_id) else {
         return Ok(Placement::HostedOnly);
     };
-    let key = over.profile.as_str();
+    profile_placement(execution, job_id, &over.profile)
+}
+
+fn profile_placement(
+    execution: &ExecutionConfig,
+    job_id: &str,
+    key: &str,
+) -> Result<Placement, ContractError> {
     if key == execution.hosted_profile {
         Ok(Placement::HostedOnly)
     } else if key == execution.scale_set_profile {
