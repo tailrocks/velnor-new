@@ -62,6 +62,21 @@ pub(super) async fn migrate_v54_to_v55(conn: &turso::Connection) -> Result<(), H
     super::validate_persisted_schema(conn).await
 }
 
+#[cfg(test)]
+pub(super) async fn downgrade_fences_to_v36(conn: &turso::Connection) -> Result<(), HostError> {
+    for name in ["post_jit_jit_claim_fence", "post_jit_runner_start_fence"] {
+        conn.execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    for sql in JIT_FENCES_V36 {
+        conn.execute(sql, ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+    }
+    Ok(())
+}
+
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {
     let fences = if super::journal_version(conn).await? >= VERSION {
         &JIT_FENCES
