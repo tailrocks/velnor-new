@@ -33,6 +33,8 @@ use sql::{intent_row, one_row, same_ids, token_rejected};
 
 #[path = "journal/file_backed.rs"]
 mod file_backed;
+#[cfg(test)]
+mod historical_template;
 use file_backed::live_id;
 pub use file_backed::{IntentState, Journal, Outcome};
 

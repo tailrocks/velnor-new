@@ -240,15 +240,20 @@ pub(crate) async fn unguarded(journal: &Journal, statements: &[String]) -> TestR
     while let Some(row) = rows.next().await? {
         saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
     }
+    drop(rows);
+    connection.execute("BEGIN IMMEDIATE", ()).await?;
     for (name, _) in &saved {
-        execute(journal, &format!("DROP TRIGGER {name}")).await?;
+        connection
+            .execute(&format!("DROP TRIGGER {name}"), ())
+            .await?;
     }
     for sql in statements {
-        execute(journal, sql).await?;
+        connection.execute(sql, ()).await?;
     }
     for (_, sql) in saved {
-        execute(journal, &sql).await?;
+        connection.execute(&sql, ()).await?;
     }
+    connection.execute("COMMIT", ()).await?;
     Ok(())
 }
 

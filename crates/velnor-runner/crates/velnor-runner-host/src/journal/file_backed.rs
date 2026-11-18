@@ -60,43 +60,60 @@ impl Journal {
     }
 
     #[cfg(test)]
-    pub(crate) async fn open_historical_v48_for_test(path: &Path) -> Result<Self, HostError> {
+    async fn open_historical_for_test(
+        version: u32,
+        path: &Path,
+        bootstrap: impl AsyncFn(&turso::Connection) -> Result<(), HostError>,
+    ) -> Result<Self, HostError> {
+        let build = async |path: &Path| {
+            let journal = Self {
+                file: JournalFile::open(path).await?,
+            };
+            bootstrap(&journal.connection().await?).await?;
+            journal.file.reset_after_bootstrap()?;
+            Ok(journal)
+        };
+        if super::historical_template::has_content(path) {
+            return build(path).await;
+        }
+        super::historical_template::seed(version, path, build).await?;
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        schema::bootstrap_historical_v48(&journal.connection().await?).await?;
         journal.file.reset_after_bootstrap()?;
         Ok(journal)
+    }
+
+    #[cfg(test)]
+    pub(crate) async fn open_historical_v48_for_test(path: &Path) -> Result<Self, HostError> {
+        Self::open_historical_for_test(48, path, async |conn| {
+            schema::bootstrap_historical_v48(conn).await
+        })
+        .await
     }
 
     #[cfg(test)]
     pub(crate) async fn open_historical_v47_for_test(path: &Path) -> Result<Self, HostError> {
-        let journal = Self {
-            file: JournalFile::open(path).await?,
-        };
-        schema::bootstrap_historical_v47(&journal.connection().await?).await?;
-        journal.file.reset_after_bootstrap()?;
-        Ok(journal)
+        Self::open_historical_for_test(47, path, async |conn| {
+            schema::bootstrap_historical_v47(conn).await
+        })
+        .await
     }
 
     #[cfg(test)]
     pub(crate) async fn open_historical_v46_for_test(path: &Path) -> Result<Self, HostError> {
-        let journal = Self {
-            file: JournalFile::open(path).await?,
-        };
-        schema::bootstrap_historical_v46(&journal.connection().await?).await?;
-        journal.file.reset_after_bootstrap()?;
-        Ok(journal)
+        Self::open_historical_for_test(46, path, async |conn| {
+            schema::bootstrap_historical_v46(conn).await
+        })
+        .await
     }
 
     #[cfg(test)]
     pub(crate) async fn open_historical_v45_for_test(path: &Path) -> Result<Self, HostError> {
-        let journal = Self {
-            file: JournalFile::open(path).await?,
-        };
-        schema::bootstrap_historical_v45(&journal.connection().await?).await?;
-        journal.file.reset_after_bootstrap()?;
-        Ok(journal)
+        Self::open_historical_for_test(45, path, async |conn| {
+            schema::bootstrap_historical_v45(conn).await
+        })
+        .await
     }
 
     pub async fn open(path: &Path) -> Result<Self, HostError> {
