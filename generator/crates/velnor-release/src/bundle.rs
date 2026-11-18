@@ -22,8 +22,6 @@ pub(crate) struct RawExtraBin {
     bin: String,
 }
 
-const RESERVED: [&str; 2] = ["SHA256SUMS", "COMMIT"];
-
 fn invalid(package: &str, entry: &str, reason: &'static str) -> ReleaseError {
     ReleaseError::InvalidBundle {
         package: package.to_owned(),
@@ -82,7 +80,7 @@ pub(crate) fn parse(
                 "must be a relative path of letters, digits, \".\", \"_\" and \"-\" without \"..\"",
             ));
         }
-        if RESERVED.contains(&file_name(path)) || names.iter().any(|name| name == file_name(path)) {
+        if names.iter().any(|name| name == file_name(path)) {
             return Err(invalid(
                 package,
                 path,

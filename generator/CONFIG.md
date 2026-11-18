@@ -80,23 +80,7 @@ package = "velnor-ci"
 format = "raw"
 ```
 
-With `bins`, each extra binary is published the same way, as its own `<bin>-<platform>` asset with its own `.sha256` and `.provenance.json`, and `SHA256SUMS` lists them all. `include` has no meaning for a raw binary, because the release holds no archive to put a file in, so `format = "raw"` with `include` is refused at generation. `files` is the raw counterpart, described next.
-
-### Raw binary files
-
-`files` lists tracked files, as paths relative to the repository root, that a raw release publishes as flat assets next to the executables. This is the shape of the old engine's `velnor-host` release: the binaries, `LICENSE` and `NOTICE` as separate assets, each its own attestation subject.
-
-```toml
-[[binaries]]
-package = "velnor-host"
-format = "raw"
-platforms = ["macos-arm64"]
-attest = true
-bins = [{ package = "velnor-runner-attestation", bin = "velnor-runner-attestation-helper" }]
-files = ["LICENSE", "NOTICE"]
-```
-
-Each file is published once, by its file name, from the build job of the first platform, and `SHA256SUMS` lists it after the executables. With `attest = true` it is attested with the other assets and verified before publish. A file has no `.sha256` or `.provenance.json` sidecar. `files` follows the path rules of `include`, and it is refused with the archive format, where `include` applies. A file named `SHA256SUMS` or `COMMIT`, or like a binary of the entry, is refused. A listed file that is missing from the checkout fails the build job, not generation.
+With `bins`, each extra binary is published the same way, as its own `<bin>-<platform>` asset with its own `.sha256` and `.provenance.json`, and `SHA256SUMS` lists them all. `include` has no meaning for a raw binary, because the release holds no archive to put a file in, so `format = "raw"` with `include` is refused at generation.
 
 ### Raw binary keys
 

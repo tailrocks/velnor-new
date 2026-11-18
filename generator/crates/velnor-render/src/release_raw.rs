@@ -4,7 +4,7 @@
 use velnor_model::Platform;
 use velnor_release::BinaryPlan;
 
-use crate::release_assets::{STAGE, carries_files, file_name, stem, versioned, word};
+use crate::release_assets::{STAGE, stem, versioned, word};
 use crate::release_binaries::command;
 use crate::release_steps::variables;
 use crate::rules::RenderedStep;
@@ -123,25 +123,4 @@ pub(crate) fn smoke_steps(binary: &BinaryPlan, platform: Platform) -> Vec<Render
             ))
         },
     ]
-}
-
-pub(crate) fn file_steps(binary: &BinaryPlan, platform: Platform) -> Vec<RenderedStep> {
-    if !carries_files(binary, platform) {
-        return Vec::new();
-    }
-    let staged = versioned(binary);
-    binary
-        .files
-        .iter()
-        .filter(|path| staged || path.contains('/'))
-        .map(|path| {
-            let name = file_name(path);
-            let destination = if staged {
-                format!("{STAGE}/{name}")
-            } else {
-                name.to_owned()
-            };
-            command(format!("Copy {name}"), format!("cp {path} {destination}"))
-        })
-        .collect()
 }
