@@ -4,7 +4,7 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 #[path = "state/plan.rs"]
 mod plan;
@@ -31,6 +31,29 @@ pub(crate) enum Probe {
 pub(crate) enum ContainerRole {
     RunnerListener,
     Dind,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ExtraPrivilege {
+    CapAdd,
+    HostPid,
+    Device,
+}
+
+impl ExtraPrivilege {
+    pub(crate) fn apply(self, host_config: &mut Value) {
+        match self {
+            Self::CapAdd => host_config["CapAdd"] = json!(["SYS_ADMIN"]),
+            Self::HostPid => host_config["PidMode"] = json!("host"),
+            Self::Device => {
+                host_config["Devices"] = json!([{
+                    "PathOnHost": "/dev/sda",
+                    "PathInContainer": "/dev/sda",
+                    "CgroupPermissions": "rwm"
+                }]);
+            }
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -92,6 +115,7 @@ pub(crate) enum ApiFault {
     VolumeCleanupStall,
     VolumeCleanupStillPresent,
     WrongOwnedConfig(ContainerRole),
+    ExtraPrivilege(&'static str, ExtraPrivilege),
     ForeignOwnerAtTrackedName,
     ReplacedContainerId,
     WrongRunnerSocketDaemon,
