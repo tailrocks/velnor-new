@@ -17,10 +17,10 @@ const WRITER: &str = "release";
 const TAG_PUSH: &str =
     "    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-ci-v')";
 const PINNED: (&str, &str) = (
-    "0.1.80",
-    "659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c",
+    "0.1.81",
+    "3d348312a7fe47668b5ee54a33683f1cc257479b44198a39d286fd3543836113",
 );
-const ACTION_COMMIT: &str = "46f7a043952f82ef1a78d8ebb63143faca8f268c";
+const ACTION_COMMIT: &str = "a87c35aed5b68dd3e82b36df3e8d7364311abba8";
 
 fn read() -> Result<String, Box<dyn Error>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
