@@ -21,6 +21,10 @@ mod cleanup_observer_projection;
 mod cleanup_observer_scan;
 
 #[cfg(target_os = "linux")]
+#[path = "job_hook_public/cleanup_observation_recheck.rs"]
+mod cleanup_observation_recheck;
+
+#[cfg(target_os = "linux")]
 #[path = "job_hook_public/job_facts_guest_image.rs"]
 mod job_facts_guest_image;
 
