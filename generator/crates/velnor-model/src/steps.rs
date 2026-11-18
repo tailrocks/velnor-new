@@ -48,6 +48,7 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    TestGroupsCheck(Vec<GroupFilter>),
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
@@ -74,6 +75,12 @@ pub enum StepKind {
         needs_max_bytes: usize,
         trusted_api: bool,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupFilter {
+    pub name: String,
+    pub filter: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

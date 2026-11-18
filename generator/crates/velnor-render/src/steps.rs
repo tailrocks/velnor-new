@@ -269,6 +269,7 @@ fn step_body(
         },
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
         StepKind::InputsRestore(target) => {
             crate::helper_steps::inputs_step("restore", target, directory)
@@ -279,11 +280,7 @@ fn step_body(
             run: Some(run.clone()),
             ..RenderedStep::default()
         },
-        StepKind::GeneratorCheck => RenderedStep {
-            name: "Check the generated workflow".to_owned(),
-            run: Some("velnor-gen check".to_owned()),
-            ..RenderedStep::default()
-        },
+        StepKind::GeneratorCheck => crate::helper_steps::generator_check_step(),
         StepKind::InstallHelper(release) => install_helper(release),
         StepKind::FailOnDraftRun => RenderedStep {
             name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),

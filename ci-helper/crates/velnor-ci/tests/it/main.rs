@@ -86,6 +86,7 @@ mod run_summary;
 mod setup_pure;
 mod support;
 mod telemetry;
+mod test_groups;
 mod ties;
 mod time;
 mod timings;
