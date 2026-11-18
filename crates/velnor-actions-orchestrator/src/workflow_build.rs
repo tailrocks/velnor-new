@@ -195,17 +195,19 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
     wire_w1::vet_step_syntax(StepSyntax::CacheMode)?;
-    crate::rust_suites_emit::validate_suites_against_repo(
-        input.root,
-        input.config,
-        input.discovery,
-    )?;
+    if input.config.stacks.rust_ci_enabled() {
+        crate::rust_suites_emit::validate_suites_against_repo(
+            input.root,
+            input.config,
+            input.discovery,
+        )?;
+    }
     let catalog = input.catalog;
     let policy = input.config.workflow.policy;
     let (report_helper_version, acquire) = controller_acquisition(input, policy)?;
     let generator_version = env!("CARGO_PKG_VERSION");
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, input.discovery, &verify);
+    let support = support_workflow(policy, input.discovery, &verify, input.config.stacks.rust_ci_enabled());
     let private =
         crate::config::private_wiring::PrivateWiring::load(input.root, input.config, catalog)?;
     let workflow_tasks = lane_workflow_tasks(input, acquire.as_ref(), private.as_ref())?;

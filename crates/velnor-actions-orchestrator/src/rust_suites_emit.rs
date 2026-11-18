@@ -121,6 +121,13 @@ pub(crate) fn build_ci_jobs(
     discovery: &Discovery,
     catalog: &ToolCatalog,
 ) -> Result<OrchestratorCiSuiteBuild, OrchestratorError> {
+    if !config.stacks.rust_ci_enabled() {
+        return Ok(OrchestratorCiSuiteBuild {
+            jobs: BTreeMap::new(),
+            required_ids: Vec::new(),
+            drivers: BTreeMap::new(),
+        });
+    }
     validate_suites_against_repo(root, config, discovery)?;
     let Some(spec) = build_render_spec(config, label, discovery, catalog)? else {
         return Ok(OrchestratorCiSuiteBuild {
@@ -157,6 +164,9 @@ pub(crate) fn standalone_suite_tools_donors(
     discovery: &Discovery,
     catalog: &ToolCatalog,
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
+    if !config.stacks.rust_ci_enabled() {
+        return Ok(BTreeMap::new());
+    }
     let Some(spec) = build_render_spec(config, label, discovery, catalog)? else {
         return Ok(BTreeMap::new());
     };

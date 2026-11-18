@@ -98,6 +98,7 @@ fn support_workflow(
     policy: WorkflowPolicy,
     discovery: &Discovery,
     verify: &[ValidatorKind],
+    rust_ci: bool,
 ) -> Option<VelnorSupportWorkflow> {
     let mut support = match policy {
         WorkflowPolicy::ConsumerV1 => {
@@ -114,6 +115,11 @@ fn support_workflow(
         support
             .validators
             .retain(|validator| *validator != ValidatorKind::CargoDeny);
+    }
+    if !rust_ci {
+        support
+            .validators
+            .retain(|validator| *validator != ValidatorKind::CargoMachete);
     }
     if policy == WorkflowPolicy::VelnorRepositoryV1 {
         for kind in verify {

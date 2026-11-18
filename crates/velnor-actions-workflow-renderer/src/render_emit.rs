@@ -107,19 +107,26 @@ fn source_qualification_plan(
     ctx: &RenderContext,
 ) -> Result<Option<crate::source_qualification_plan::SourceQualificationPlan>, RenderError> {
     const CLI: &str = "rust-velnor-actions-cli";
-    let routes = match &ctx.lane_plan {
-        Some(plan) => match plan.output_ids(CLI) {
-            Ok(routes) => routes,
-            Err(_) => return Ok(None),
-        },
-        None if jobs.contains_key(CLI) => vec![CLI.to_owned()],
-        None => return Ok(None),
+    let routes = if ctx.rust_ci {
+        let routes = match &ctx.lane_plan {
+            Some(plan) => match plan.output_ids(CLI) {
+                Ok(routes) => routes,
+                Err(_) => return Ok(None),
+            },
+            None if jobs.contains_key(CLI) => vec![CLI.to_owned()],
+            None => return Ok(None),
+        };
+        if routes.is_empty() || routes.iter().any(|id| !jobs.contains_key(id)) {
+            return Err(RenderError::InvalidWorkflow(
+                "source_qualification_cli_route".to_owned(),
+            ));
+        }
+        routes
+    } else {
+        // Rust CI lives in the generated rust-ci.yml, so ci.yml has no CLI
+        // job to route on. No routes means "always run" (fail closed).
+        Vec::new()
     };
-    if routes.is_empty() || routes.iter().any(|id| !jobs.contains_key(id)) {
-        return Err(RenderError::InvalidWorkflow(
-            "source_qualification_cli_route".to_owned(),
-        ));
-    }
     let crate::yaml::Yaml::Map(root) = document else {
         return Err(RenderError::InvalidWorkflow(
             "source_qualification_plan_document".to_owned(),

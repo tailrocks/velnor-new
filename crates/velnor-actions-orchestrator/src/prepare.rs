@@ -112,7 +112,12 @@ fn prepare_inner(
     let default_branch = resolve_default_branch(&canonical, &config)?;
     validate_branch_authority(&config, &default_branch)?;
     let mut discovery = discover_with_options(&canonical, &config, &catalog, phases, guard)?;
-    let fetch_roots = lockful_roots(&canonical, &discovery.workspaces);
+    let ci_discovery = if config.stacks.rust_ci_enabled() {
+        discovery.clone()
+    } else {
+        discovery.without_rust_ci()
+    };
+    let fetch_roots = lockful_roots(&canonical, &ci_discovery.workspaces);
     let (runner_label, runner_selection) = runner_label_for(&config);
     let emission = catalog.for_emission();
     let workflow = crate::workflow::build_workflow_for_consumer_release(
@@ -121,7 +126,7 @@ fn prepare_inner(
             config: &config,
             branch: &default_branch,
             label: &runner_label,
-            discovery: &discovery,
+            discovery: &ci_discovery,
             fetch_roots: &fetch_roots,
             consumer_release_version: env!("CARGO_PKG_VERSION"),
             published_generator_lock: published_generator_lock.as_ref(),

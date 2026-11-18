@@ -59,6 +59,30 @@ pub struct Discovery {
     pub(crate) ansible: crate::workflow_task_jobs::ansible_inventory::AnsibleInventory,
 }
 
+impl Discovery {
+    /// The view of discovery that `ci.yml` is built from when
+    /// `[stacks.rust] ci = false`: every Rust project, workspace, proposal and
+    /// the Rust-only derived plans are dropped. Release and image workflows
+    /// keep reading the full discovery.
+    pub(crate) fn without_rust_ci(&self) -> Self {
+        let is_rust = |stack_id: &str| {
+            velnor_actions_contract::Stack::from_id(stack_id)
+                == Some(velnor_actions_contract::Stack::Rust)
+        };
+        let mut view = self.clone();
+        view.workspaces.clear();
+        view.proposals.retain(|task| !is_rust(&task.stack_id));
+        view.statuses.retain(|status| {
+            let (DetectionStatus::Selected(project) | DetectionStatus::Ignored { project, .. }) =
+                status;
+            !is_rust(&project.stack_id)
+        });
+        view.feature_fallbacks.clear();
+        view.clippy_memory = ClippyMemoryPlan::default();
+        view
+    }
+}
+
 #[path = "discovery_inventories.rs"]
 mod task_inventory;
 use task_inventory::task_inventories;
