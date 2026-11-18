@@ -94,8 +94,19 @@ fn every_accepted_helper_gets_the_inputs_restore() -> TestResult {
 }
 
 #[test]
-fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
+fn the_workflow_reads_no_repository_variable_unless_cache_debug_is_opted_in() -> TestResult {
     let text = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert!(!text.contains("vars."), "{text}");
+    assert!(!text.contains("CARGO_LOG"), "{text}");
+    assert_eq!(named(&text, "Upload the cargo fingerprint log").len(), 0);
+    let off = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = false\n"))?)?;
+    assert_eq!(off, text);
+    Ok(())
+}
+
+#[test]
+fn cargo_logs_fingerprints_only_when_the_repository_variable_is_one() -> TestResult {
+    let text = workflow(&view(&["Cargo.toml"], Some(b"cache_debug = true\n"))?)?;
     let cargo: Vec<&str> = steps(&text)
         .into_iter()
         .filter(|step| step.contains(r#""$VELNOR_EXEC" run -- cargo"#))
