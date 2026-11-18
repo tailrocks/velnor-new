@@ -43,7 +43,12 @@ lexically confined: no absolute, empty, `.` or `..` segments, no expressions.
 ## Dockerfile rules
 
 `analyze_dockerfile` is a static parse (continuations, heredocs, and resolvable
-global and stage `ARG` defaults are understood). It rejects:
+global and stage `ARG` defaults are understood). A heredoc is read where
+BuildKit reads one: in `ADD`, `COPY` and `RUN`, including an `ONBUILD` of
+those, with a word in the BuildKit heredoc form. A `<<` token anywhere else,
+or a word BuildKit does not read as a heredoc, is ordinary text, so the lines
+after it stay instructions. A heredoc whose terminator is missing hides
+nothing. It rejects:
 
 - `image_base_unpinned`: any external `FROM`, `COPY --from` or `RUN --mount=from`
   image without `@sha256:<64 hex>`. Earlier stage names, stage indexes and
