@@ -94,7 +94,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.stub_log.unlink(missing_ok=True)
         self.github_path.write_text("")
 
-    def install(self, expected_digest, path=None, extra_env=None, script=None):
+    def install(self, expected_digest, path=None, extra_env=None):
         env = {
             **(extra_env or {}),
             "PATH": path or f"{self.stub_bin}{os.pathsep}{os.environ['PATH']}",
@@ -112,7 +112,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "STUB_LOG": str(self.stub_log),
         }
         result = subprocess.run(
-            ["bash", "-c", script or install_script()],
+            ["bash", "-c", install_script()],
             env=env,
             capture_output=True,
             text=True,
@@ -210,108 +210,6 @@ class SetupVelnorInstallTests(unittest.TestCase):
         )
         bin_path = Path(self.github_path.read_text().strip())
         self.assertEqual((bin_path / "velnor-ci").read_bytes(), PAYLOAD)
-
-    LOCAL_PAYLOAD = b"a velnor-ci built from the working tree\n"
-
-    def local_setup(self, binary=LOCAL_PAYLOAD, mounts=("velnor-ci", ".local-mode"), options="ro,relatime"):
-        local_dir = self.root / "opt-velnor-local"
-        shutil.rmtree(local_dir, ignore_errors=True)
-        local_dir.mkdir()
-        if binary is not None:
-            (local_dir / "velnor-ci").write_bytes(binary)
-            (local_dir / "velnor-ci").chmod(0o755)
-        (local_dir / ".local-mode").write_text("velnor-local\n")
-        mountinfo = self.root / "mountinfo"
-        mountinfo.write_text(
-            "".join(f"36 35 98:0 / {local_dir}/{name} {options} - virtiofs host rw\n" for name in mounts)
-        )
-        script = install_script()
-        for literal in ("local_dir=/opt/velnor/local", "local_mounts=/proc/self/mountinfo"):
-            self.assertEqual(script.count(literal), 1, literal)
-        script = script.replace("/opt/velnor/local", str(local_dir)).replace(
-            "/proc/self/mountinfo", str(mountinfo)
-        )
-        return local_dir, mountinfo, script
-
-    def local_install(self, expected_digest, script, extra_env=None):
-        env = {"VELNOR_LOCAL_MODE": "1", "GITHUB_STEP_SUMMARY": str(self.root / "summary"), **(extra_env or {})}
-        return self.install(expected_digest, script=script, extra_env=env)
-
-    def assert_release_installed(self, result):
-        self.assertEqual(result.returncode, 0, result.output)
-        self.assertEqual(len(self.curl_calls()), 1, result.output)
-        bin_dir = Path(self.github_path.read_text().strip())
-        self.assertEqual((bin_dir / "velnor-ci").read_bytes(), PAYLOAD)
-
-    def test_local_mode_installs_the_mounted_binary_loudly_without_download_or_tool_cache(self):
-        _, _, script = self.local_setup()
-        pinned = hashlib.sha256(PAYLOAD).hexdigest()
-        result = self.local_install(pinned, script)
-        self.assertEqual(result.returncode, 0, result.output)
-        self.assertEqual(self.curl_calls(), [])
-        bin_dir = Path(self.github_path.read_text().strip())
-        self.assertEqual((bin_dir / "velnor-ci").read_bytes(), self.LOCAL_PAYLOAD)
-        local_digest = hashlib.sha256(self.LOCAL_PAYLOAD).hexdigest()
-        self.assertIn("::warning title=setup-velnor::using the local velnor-ci " + local_digest, result.output)
-        self.assertIn(local_digest, (self.root / "summary").read_text())
-        self.assertEqual(installed_files(self.tool_cache), [])
-
-    def test_local_mode_without_both_read_only_mounts_verifies_the_release_as_before(self):
-        pinned = hashlib.sha256(PAYLOAD).hexdigest()
-        cases = {
-            "no mounts": dict(mounts=()),
-            "only the binary": dict(mounts=("velnor-ci",)),
-            "only the marker": dict(mounts=(".local-mode",)),
-            "writable mounts": dict(options="rw,relatime"),
-        }
-        for name, kwargs in cases.items():
-            with self.subTest(name):
-                self.reset()
-                _, _, script = self.local_setup(**kwargs)
-                forged = {"VELNOR_LOCAL_CI_BINARY": str(self.root / "opt-velnor-local" / "velnor-ci")}
-                self.assert_release_installed(self.local_install(pinned, script, forged))
-                self.reset()
-                wrong = self.local_install(hashlib.sha256(b"x").hexdigest(), script)
-                self.assertEqual(wrong.returncode, 1, wrong.output)
-                self.assertIn("SHA-256 mismatch", wrong.output)
-                self.assertEqual(self.github_path.read_text(), "")
-
-    def test_the_last_mount_at_a_path_decides_whether_it_is_read_only(self):
-        _, mountinfo, script = self.local_setup()
-        local_dir = self.root / "opt-velnor-local"
-        with mountinfo.open("a") as handle:
-            handle.write(f"37 35 98:0 / {local_dir}/velnor-ci rw,relatime - virtiofs host rw\n")
-        self.assert_release_installed(self.local_install(hashlib.sha256(PAYLOAD).hexdigest(), script))
-
-    def test_a_mounted_file_that_is_not_a_plain_executable_within_the_limit_is_not_installed(self):
-        pinned = hashlib.sha256(PAYLOAD).hexdigest()
-        for name in ("symlink", "directory", "not executable", "oversize"):
-            with self.subTest(name):
-                self.reset()
-                local_dir, _, script = self.local_setup(binary=None)
-                target = local_dir / "velnor-ci"
-                if name == "symlink":
-                    real = self.root / "real"
-                    real.write_bytes(self.LOCAL_PAYLOAD)
-                    real.chmod(0o755)
-                    target.symlink_to(real)
-                elif name == "directory":
-                    target.mkdir()
-                else:
-                    target.write_bytes(self.LOCAL_PAYLOAD)
-                    target.chmod(0o644 if name == "not executable" else 0o755)
-                    if name == "oversize":
-                        with target.open("r+b") as handle:
-                            handle.truncate(268435457)
-                self.assert_release_installed(self.local_install(pinned, script))
-
-    def test_local_mode_still_requires_the_pinned_sha256_input(self):
-        _, _, script = self.local_setup()
-        result = self.local_install("", script)
-        self.assertEqual(result.returncode, 1, result.output)
-        self.assertIn("no SHA-256 was given for linux-x64", result.output)
-        self.assertEqual(self.github_path.read_text(), "")
-        self.assertEqual(self.curl_calls(), [])
 
 
 if __name__ == "__main__":

@@ -58,40 +58,6 @@ runs:
           wait "$reader" || return 1
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
         }
-        local_dir=/opt/velnor/local
-        local_mounts=/proc/self/mountinfo
-        read_only_mount() {
-          [ -r "$local_mounts" ] || return 1
-          local point options found=1
-          while read -r _ _ _ _ point options _; do
-            if [ "$point" = "$1" ]; then
-              found=1
-              case ",$options," in *,ro,*) found=0 ;; esac
-            fi
-          done < "$local_mounts"
-          return "$found"
-        }
-        install_local() {
-          local binary="$local_dir/velnor-ci" stage copied=1 sum
-          read_only_mount "$binary" && read_only_mount "$local_dir/.local-mode" || return 1
-          [ -f "$binary" ] && [ ! -L "$binary" ] && [ -x "$binary" ] || return 1
-          stage="$(mktemp -d "$RUNNER_TEMP/velnor-ci-local.XXXXXX")" || return 1
-          if bounded_copy "$binary" "$stage/velnor-ci"; then
-            sum="$(digest "$stage/velnor-ci")"
-            rm -rf "$bin_local"
-            mkdir -p "$bin_local" && cp "$stage/velnor-ci" "$bin_local/velnor-ci" && chmod +x "$bin_local/velnor-ci" && copied=0
-          fi
-          rm -rf "$stage"
-          [ "$copied" = 0 ] || return 1
-          echo "::warning title=setup-velnor::using the local velnor-ci $sum (local mode), not the pinned release $VERSION with SHA-256 $expected"
-          [ -z "${GITHUB_STEP_SUMMARY:-}" ] || echo "velnor-ci is the local build with SHA-256 $sum, not the pinned release $VERSION ($expected)" >> "$GITHUB_STEP_SUMMARY"
-          echo "$bin_local" >> "$GITHUB_PATH"
-        }
-        bin_local="$RUNNER_TEMP/velnor-ci-bin"
-        if [ "${VELNOR_LOCAL_MODE:-}" = 1 ]; then
-          install_local && exit 0
-          echo "::warning title=setup-velnor::VELNOR_LOCAL_MODE is set but no read-only local velnor-ci is mounted at $local_dir, so the pinned release is verified instead"
-        fi
         arch="$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
         dir=
         if [ -n "${RUNNER_TOOL_CACHE:-}" ]; then
