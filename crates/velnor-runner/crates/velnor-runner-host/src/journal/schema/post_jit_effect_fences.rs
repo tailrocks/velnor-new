@@ -6,7 +6,7 @@ use crate::error::HostError;
 #[cfg(test)]
 mod tests;
 
-const VERSION: i64 = 53;
+const VERSION: i64 = 55;
 
 const JIT_CLAIM_FENCE_V36: &str = "CREATE TRIGGER post_jit_jit_claim_fence BEFORE INSERT ON connection_runner_jits WHEN NEW.state='claimed' AND EXISTS(SELECT 1 FROM physical_attempt_current cur JOIN physical_attempts a ON a.lineage_id=cur.lineage_id AND a.generation=cur.generation AND a.reservation_id=cur.reservation_id AND a.intent_id=cur.intent_id JOIN physical_attempt_post_jit_retirement_claims c ON c.lineage_id=a.lineage_id AND c.generation=a.generation AND c.reservation_id=a.reservation_id WHERE a.intent_id=NEW.intent_id AND a.connection_id=NEW.connection_id AND a.scale_set_id=NEW.scale_set_id) BEGIN SELECT RAISE(ABORT,'A retirement claim prevents this operation.'); END";
 const RUNNER_START_FENCE_V36: &str = "CREATE TRIGGER post_jit_runner_start_fence BEFORE UPDATE OF state ON connection_runner_jits WHEN NEW.state='start_requested' AND EXISTS(SELECT 1 FROM physical_attempts a JOIN physical_attempt_post_jit_retirement_claims c ON c.lineage_id=a.lineage_id AND c.generation=a.generation AND c.reservation_id=a.reservation_id WHERE a.intent_id=NEW.intent_id AND a.connection_id=NEW.connection_id AND a.scale_set_id=NEW.scale_set_id) BEGIN SELECT RAISE(ABORT,'A retirement claim prevents this operation.'); END";
@@ -44,7 +44,7 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
     Ok(())
 }
 
-pub(super) async fn migrate_v52_to_v53(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn migrate_v54_to_v55(conn: &turso::Connection) -> Result<(), HostError> {
     super::validate_persisted_schema(conn).await?;
     for name in ["post_jit_jit_claim_fence", "post_jit_runner_start_fence"] {
         conn.execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
@@ -56,7 +56,7 @@ pub(super) async fn migrate_v52_to_v53(conn: &turso::Connection) -> Result<(), H
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    conn.execute("PRAGMA user_version = 53", ())
+    conn.execute("PRAGMA user_version = 55", ())
         .await
         .map_err(|_| HostError::Journal)?;
     super::validate_persisted_schema(conn).await
