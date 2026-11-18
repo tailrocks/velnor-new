@@ -79,11 +79,13 @@ rejected, however much time it saves.
 5. **C5. Uncomparable work always runs, and the sandbox hides what a key does not hold.**
    Obligations that read the network, the event payload, the clock in an assertion, randomness
    without a fixed seed, Docker images not pinned by digest, or the commit's identity, or that
-   publish anything, run fresh every time. Build and test sandboxes have no `.git` directory and a
-   scrubbed environment (no `GITHUB_*` variables, a fixed `HOME`, `PATH` and locale), and the CPU
-   count of each sandbox class is fixed and part of the definition digest. An obligation that reads
-   Git objects, as `velnor-runner-host`'s build script does with `.velnor/runner.lock`
-   (`build.rs:69-80`), stays in this clause until it reads a declared file instead.
+   publish anything, run fresh every time. For tests C5 is enforced, not trusted: sandboxes get a
+   loopback-only network namespace and no event file. Build and test sandboxes have no `.git`
+   directory and a scrubbed environment (no `GITHUB_*` variables, a fixed `HOME`, `PATH` and
+   locale), and the CPU count of each sandbox class is fixed and part of the definition digest. An
+   obligation that reads Git objects, as `velnor-runner-host`'s build script does with
+   `.velnor/runner.lock` (`build.rs:69-80`), stays in this clause until it reads a declared file
+   instead.
 6. **C6. Reuse is audited, compile reuse included.** A random sample of reused results is executed
    again (2% of reuse by key in its first month). The nightly and every-20th-merge full runs build
    from an empty target in a fresh pod and compare their results and test-binary digests with the
@@ -215,9 +217,10 @@ a review (decision log I012).
    (join it) or nothing (schedule it).
 4. **Execute.** The node agent that placement picks (section 3.4) runs each scheduled obligation in
    a sandbox it creates: a pre-created single-use pod of the obligation's class, with no `.git`, a
-   scrubbed environment, no GitHub token and the target view from the cache engine (section 5). The
-   agent starts the processes, observes their results itself, and writes a receipt per obligation as
-   it finishes.
+   scrubbed environment, no GitHub token, and the target view from the cache engine (section 5),
+   which the agent creates after it has written the sandbox's sparse checkout, so nothing a checkout
+   cleans can wipe it. The agent starts the processes, observes their results itself, and writes a
+   receipt per obligation as it finishes.
 5. **Witness.** The workflow has one job, named `Required`, which GitHub schedules as usual on a
    small gate-class runner. Its single step, `velnor-ci witness`, calls the same `ensure`, joins the
    work already in flight or starts it if the webhook was lost, streams the obligations' logs into
@@ -270,15 +273,23 @@ prints its logs:
   the previous one ends, 3 s at p90 [M, `fable-5.2` design review F4], so owning acquisition buys at
   most a few seconds per run. The dispatcher that holds runner identities, the hot Worker, podless
   completion of jobs from receipts, and a Worker replacement for arbitrary jobs are each built only
-  if the witness design leaves more than 5 s per run that they remove (decision log I003, N05, N06,
-  I005). If built, the dispatcher persists the request identity and acquisition intent before
-  `acquirejob` and the sealed response before any hand-off, and keeps the official Listener's
-  first-renewal rule and force-fail path (`Runner.Listener/JobDispatcher.cs:393-405,1208-1219`), and
-  the Worker reads only `.runner` and the job message (`Runner.Worker/JobRunner.cs:47`). It
-  advertises the scale set's total capacity, as the reference listener does, and keeps no idle
-  pre-registered identities under backlog, so queued jobs arrive as offers it can order; a lab test
-  with capacity 2 and five queued jobs logs offers and assignments first. It renews each lease at
-  half the time left before `lockedUntil` and journals what a standby needs to reopen sessions.
+  if the witness design leaves more than 5 s per run that they remove. A hot Worker, if built, gets
+  `.runner` and a public-only `.credentials` at pod creation, because the Worker builds its host
+  context before it waits on its pipe (`Runner.Worker/Program.cs:14`), and is frozen in its cgroup
+  rather than recycled; first, a Worker started on arrival is timed. A dispatcher's lease record
+  holds the plan id, job id, run-service URL, job token and pod UID, and its renewal loop is written
+  fresh: the upstream run-service overload leaves its request null and dereferences it when renewal
+  fails (`JobDispatcher.cs:748-852`). Podless completion starts with a one-day lab test: acquire a
+  job that declares `outputs:`, complete it without the Worker, and check that a downstream job
+  reads them (decision log I003, N05, N06, I005). If built, the dispatcher persists the request
+  identity and acquisition intent before `acquirejob` and the sealed response before any hand-off,
+  and keeps the official Listener's first-renewal rule and force-fail path
+  (`Runner.Listener/JobDispatcher.cs:393-405,1208-1219`), and the Worker reads only `.runner` and
+  the job message (`Runner.Worker/JobRunner.cs:47`). It advertises the scale set's total capacity,
+  as the reference listener does, and keeps no idle pre-registered identities under backlog, so
+  queued jobs arrive as offers it can order; a lab test with capacity 2 and five queued jobs logs
+  offers and assignments first. It renews each lease at half the time left before `lockedUntil` and
+  journals what a standby needs to reopen sessions.
 
 ### 3.6 Isolation and trust
 
@@ -420,8 +431,9 @@ with exact-tree receipts and 125 with per-root keys [E, `opus-5.5` design review
 **Enforcement for finer closures.** Below the package level a test binary is eligible only when it
 passes inside a mount namespace that contains its binary, its declared inputs, the toolchain runtime
 and a private `/tmp`, with no network. Landlock is not used, because it cannot restrict `stat` or
-`access`. The agent's executor starts each test inside that namespace, and C4 wants the agent to
-observe the result anyway.
+`access`. The trusted helper creates the namespace, one per test binary, and runs any repository
+wrapper inside it; the candidate's nextest configuration never decides the sandbox. C4 wants the
+agent to observe the result anyway.
 
 ### 4.4 Trust root and audit
 
@@ -561,9 +573,13 @@ seeds in the background.
 
 - Phase 2: `velnor-gen` writes the workflow (decision log I056): one plan job, one job per Cargo
   root, and one per configuration where it differs (`velnor-runner-host` with `local-mode`). Inside
-  a root job: build test binaries once per configuration, then run format, lint, documentation, the
-  "check alone" steps and tests as parallel lanes. The generated workflow runs these steps one after
-  another today; the Worker already supports background steps.
+  a root's request the agent builds test binaries once per configuration, then runs format, lint,
+  documentation, one combined "check alone" step and tests as parallel lanes. Lanes need one target
+  lane per check kind, because cargo holds an exclusive lock per target directory
+  (`docs/hard-decisions.md:56-62`); clippy and doc metadata pre-built by the `main` builder; and one
+  CPU budget across lanes: a jobserver shared by the sandbox's lanes, or mbx's scheduler if
+  candidate (a) wins (measured in work item 1). The generated workflow runs these steps one after
+  another today.
 - Phase 3: the workflow is one witness job named `Required` plus the non-blocking `Cache` check;
   every obligation runs through `ensure` (section 3.3).
 - Until the owner changes the ruleset, the workflow emits both required names.
@@ -610,11 +626,12 @@ seeds in the background.
 - **A test-time budget** check enforces that list: non-blocking in phase 1, blocking for new tests
   from phase 2.
 - **The compile floor.** `velnor-runner-host` splits into five or six crates along its module
-  boundaries, with one test binary per package instead of one per file, so a leaf edit recompiles
-  one part instead of 157k lines; a one-file edit cost 61 s and 159 CPU-s on a Mac [M, `opus-5.5`
-  design review]. Keeping incremental state in the cache is an experiment: 10.9 s instead of 61 s on
-  a Mac [M, `fable-5.2` design review], at the price of non-identical binaries, which input keys
-  tolerate.
+  boundaries, with one test binary per package instead of one per file and `velnor-runner-local`
+  extracted, so the default and `local-mode` configurations both still run but stop compiling the
+  large crate twice, so a leaf edit recompiles one part instead of 157k lines; a one-file edit cost
+  61 s and 159 CPU-s on a Mac [M, `opus-5.5` design review]. Keeping incremental state in the cache
+  is an experiment: 10.9 s instead of 61 s on a Mac [M, `fable-5.2` design review], at the price of
+  non-identical binaries, which input keys tolerate.
 - **Changed tests run three times** in parallel (section 1.2).
 - **Shard only by arithmetic.** A suite is split only when its summed test time divided by the
   slot's threads exceeds its longest test plus the cost of moving binaries (I067).
@@ -630,6 +647,13 @@ seeds in the background.
 | Merge group | everything | everything | every obligation listed; roots with a receipted key satisfied by lookup | `ensure` on the group; packages satisfied by lookup; queue-tip candidates pre-verified (M5) |
 | Push to `main` | everything again | one real `Required` job: it skips each obligation the merge group verified on the same tree, never on the group run's conclusion alone, then does release duties | the same, by key lookup | the same |
 | Direct push to `main` (no queue) | everything | everything | everything | everything |
+
+The release gate fixes the push run's shape. `velnor-ci release-gate` keeps only `push` runs on the
+exact SHA and accepts a required check only from GitHub Actions, integration 15368
+(`ci-helper/crates/velnor-ci/src/gate.rs:15,127-159,277-288`), and `product-release.yml:86` asserts
+exactly one job named `Required` in the push run of `.github/workflows/ci.yml`, whose file name is
+pinned too. The push run therefore keeps exactly that job. A verdict posted by an App instead would
+change `gate.rs`, the release workflows and the publisher in one cutover.
 
 ### 6.5 Merge queue
 
@@ -869,7 +893,7 @@ not the calendar, choose what phases 2 and 3 build. The targets are those of sec
 |---|---|---|---|
 | 0, week 1 | Gate jobs on the cluster: the generator release that moves them is merged, but the workflow was never regenerated, so they still run hosted; regenerating it is the first measured gain. Narrow the image-candidate trigger; Source qualification on the cluster or only in the queue; auto-merge; no catch-up merges; depth 4; fixed cache paths; `event.json` race fix; push-to-merge, admission and flake instrumentation; the queue-tip shadow; the week-1 experiments | PR verdict P50 ≤ 12 min, P90 ≤ 20; push-to-merge P50 ≤ 25 min, P90 ≤ 60; hosted gate queue on the critical path p90 ≤ 1 min; admission span p90 ≤ 5 s | 5.8–57 min of gate queue per run; the cancelled-run stall shrinks from up to 2,203 s to one warm job; 7.5 min median enqueue delay; twice the queue throughput |
 | 1, weeks 2–3 | Selection fixed in the engine; the test-floor programme; `-j` caps removed; gate, build and docker classes under ARC with warm pools and honest sizes; node tools and action archives; crates mirror; push run reduced to release duties; flake budget machinery; tested-tree recording | PR verdict P50 ≤ 5 min, P90 ≤ 10; push-to-merge P50 ≤ 12, P90 ≤ 30; runner-min per merged PR ≤ 150; false failures ≤ 3%; `Journal::open` ≤ 1 s | About 62 runner-min per merge from the push run; a generator or helper PR falls from 10.9 to about 3.5 min and from 52.9 to about 8 runner-min [E] |
-| 2, weeks 3–6 | `velnor-gen` cutover with parity; the root jobs call `ensure`, so the agent executes and observes every obligation; the ledger with per-root keys; the compile-cache engine the head-to-head chose; kubelet on XFS; the `main` builder; the crate split; state seal retired; test-time budget | PR verdict P50 ≤ 2 min, P90 ≤ 6; push-to-merge P50 ≤ 5, P90 ≤ 15; ≥ 65% of merge groups execute nothing; CPU per merged PR ≤ 60; no test over 60 s | Cold compiles of 196–497 crates per job become deltas; a merge group re-runs only roots whose key changed: 125 root-jobs per 100 merges instead of 500 [E] |
+| 2, weeks 3–6 | `velnor-gen` cutover with parity; the root jobs call `ensure`, so the agent executes and observes every obligation; the ledger with per-root keys; the compile-cache engine the head-to-head chose; kubelet on XFS; the `main` builder; the crate split; the state seal and `cache-prune.yml` retired; test-time budget | PR verdict P50 ≤ 2 min, P90 ≤ 6; push-to-merge P50 ≤ 5, P90 ≤ 15; ≥ 65% of merge groups execute nothing; CPU per merged PR ≤ 60; no test over 60 s | Cold compiles of 196–497 crates per job become deltas; a merge group re-runs only roots whose key changed: 125 root-jobs per 100 merges instead of 500 [E] |
 | 3, weeks 6–10 | Before the cutover: control-plane and site loss qualified, and the rollback drilled. Then `ensure` on the push and merge-group webhooks; the witness job; per-package keys; queue-tip speculation; `velnor verify` as a stretch; depth 8 | PR verdict P50 ≤ 90 s, P90 ≤ 4 min; push-to-merge P50 ≤ 3, P90 ≤ 8; ≥ 85% of merge groups execute nothing; first cargo ≤ 5 s after the push; false failures ≤ 1%; CPU per merged PR ≤ 35 | Two of three job hops and the plan job disappear; most merges take the verdict plus about 1 min |
 | 4, weeks 10–18 | Moonshot M6, finer test-binary closures, the Velnor merge train if approved; the gated dispatcher, hot Worker or podless completion if the witness left a residual over 5 s | stretch: PR verdict P50 ≤ 30 s, P90 ≤ 100 s; push-to-merge P50 ≤ 100 s, P90 ≤ 4 min | GitHub's 45 s of queue latency per merge, if Velnor lands merges |
 | 5, after week 18 | Agent workspaces on the cluster; microVM fork and docker classes; other organisations on Velnor | stretch: push-to-merge P50 ≤ 75 s | Verification overlaps the agent's own work |
@@ -925,13 +949,16 @@ passed a four-week soak, and the hosted break-glass workflow always.
    release gate reads; that job lists every obligation, skips each one the merge group verified on
    the same tree, never on the group run's conclusion alone, and then does release and publication
    duties; without that evidence it runs everything. Acceptance: ≤ 2 runner-min per matching push;
-   the release gate on `main` still passes. Depends on: 4.
+   `velnor-ci release-gate` and `product-release.yml` still pass on `main`, finding exactly one
+   Actions job named `Required` in the push run of `ci.yml`. Depends on: 4.
 9. **`velnor-gen` cutover with parity.** Scope: one job per root with parallel lanes, whose steps
    call `ensure` on the node's agent; the local-mode configuration, the maintenance checks, both
-   required names, the Velnor classes in `runs-on`; no `edited` trigger once the ledger re-plans a
-   base retarget without restarting identical work; one week of shadow runs beside the engine
-   comparing obligation inventories. Acceptance: empty inventory difference over 100 runs; PR
-   verdict P50 ≤ 2 min. Depends on: 1, 5, 10.
+   required names, the Velnor classes in `runs-on`; the fixture builds of the three example binaries
+   as test set-up in `.velnor/rust-ci.toml`, with examples in the warm cache; the mise pin the two
+   suites expect (2026.11.1; the golden workflow carries 2026.11.9); no `edited` trigger once the
+   ledger re-plans a base retarget without restarting identical work; one week of shadow runs beside
+   the engine comparing obligation inventories. Acceptance: empty inventory difference over 100
+   runs; PR verdict P50 ≤ 2 min. Depends on: 1, 5, 10.
 10. **The ledger and `ensure` on velnor-lab.** Scope: `velnor-hooks`, the ledger with per-root keys,
     per-obligation receipts and in-flight join, the signer and the append-only log, the agent's
     executor in pre-created sandboxes, and a one-job workflow whose witness calls `ensure`; the
@@ -998,8 +1025,9 @@ passed a four-week soak, and the hosted break-glass workflow always.
    pushing.
 6. **Ruleset changes.** Bind `Required verdict` and `Required` to one integration now (anything can
    post them today); move `max_entries_to_build` to 4 now and 8 in phase 3; accept a single
-   `Required` name at the `velnor-gen` cutover; the grouping as question 3 decides. Recommendation:
-   yes to the first three.
+   `Required` name at the `velnor-gen` cutover, keeping the push run's one Actions job named
+   `Required` that the release gate reads; the grouping as question 3 decides. Recommendation: yes
+   to the first three.
 7. **The Kubernetes runtime inside `velnor-runner-host`.** The proposal under review puts the
    cluster runtime behind a trait in `velnor-runner-host`. This design builds the cluster's executor
    as new crates instead: that crate is 157k lines with about 60 open correctness issues and sets
