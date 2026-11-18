@@ -34,6 +34,10 @@ doctest = false
 name = "velnor_runner_cli"
 path = "src/lib.rs"
 
+[[test]]
+name = "daemon_lock_process"
+path = "tests/daemon_lock_process.rs"
+
 [[bin]]
 name = "velnor-host"
 path = "src/main.rs"
