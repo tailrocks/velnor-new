@@ -198,3 +198,70 @@ fn the_fetch_runs_in_the_root_directory_and_the_working_directory_is_unchanged()
     assert_eq!(fixture.calls(), ["one|fetch --locked"]);
     assert!(Path::new(&fixture.work).is_dir());
 }
+
+fn shim(dir: &Path, name: &str, body: &str) {
+    let path = dir.join(name);
+    fs::write(&path, format!("#!/bin/sh\n{body}")).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&path, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn only_cargo_is_started_and_nothing_else_reaches_the_network() {
+    let temp = scratch("sources-fetch-offline");
+    let work = temp.join("work");
+    let bin = temp.join("bin");
+    for root in ["one", "two"] {
+        fs::create_dir_all(work.join(root)).unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    fs::create_dir_all(&bin).unwrap_or_else(|e| unreachable!("{e}"));
+    let programs = temp.join("programs");
+    let marker = temp.join("FAIL");
+    shim(
+        &bin,
+        "cargo",
+        "echo \"cargo $*\" >> \"$FAKE_PROGRAMS\"\necho \"fetched $PWD\"\n",
+    );
+    for name in ["curl", "wget", "gh", "git"] {
+        shim(
+            &bin,
+            name,
+            &format!(
+                "echo \"{name} $*\" >> \"$FAKE_PROGRAMS\"\necho \"{name} $*\" >> \"$FAKE_FAIL\"\nexit 97\n"
+            ),
+        );
+    }
+    let proxy = "http://127.0.0.1:9";
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .args(["sources", "fetch", "--roots", "one", "two"])
+        .current_dir(&work)
+        .env_clear()
+        .env("PATH", &bin)
+        .env("RUNNER_TEMP", &temp)
+        .env("FAKE_PROGRAMS", &programs)
+        .env("FAKE_FAIL", &marker);
+    for key in [
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "http_proxy",
+        "https_proxy",
+        "all_proxy",
+    ] {
+        command.env(key, proxy);
+    }
+    let output = command.output().unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(output.status.code(), Some(0), "{output:?}");
+    assert!(
+        !marker.exists(),
+        "a network tool was started: {}",
+        fs::read_to_string(&marker).unwrap_or_default()
+    );
+    let started: Vec<String> = fs::read_to_string(&programs)
+        .unwrap_or_default()
+        .lines()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(started, ["cargo fetch --locked", "cargo fetch --locked"]);
+}
