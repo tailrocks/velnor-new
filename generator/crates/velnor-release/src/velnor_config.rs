@@ -66,6 +66,19 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
     refuse_expressions("pr_only_checks", &text_refs(&raw.pr_only_checks))?;
+    for (index, name) in raw.pr_only_checks.iter().enumerate() {
+        let problem = if name.trim().is_empty() {
+            "is blank; name a required check or remove the entry"
+        } else if raw.pr_only_checks[..index].contains(name) {
+            "repeats an earlier entry; remove the duplicate"
+        } else {
+            continue;
+        };
+        return Err(ReleaseError::InvalidToml {
+            file: ".velnor/release.toml".to_owned(),
+            message: format!("pr_only_checks[{index}] {problem}"),
+        });
+    }
     refuse_expressions("after", &text_refs(&after))?;
     if after.is_empty() || after.iter().any(|name| name.trim().is_empty()) {
         return Err(ReleaseError::EmptyAfter);

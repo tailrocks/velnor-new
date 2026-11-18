@@ -217,6 +217,26 @@ fn empty_roots_and_blank_workflow_names_are_refused() {
 }
 
 #[test]
+fn blank_or_repeated_pr_only_checks_are_refused_by_index() {
+    let mut files = files();
+    for (text, index, why) in [
+        ("pr_only_checks = [\"\"]\n", 0, "is blank"),
+        ("pr_only_checks = [\"DCO\", \" \"]\n", 1, "is blank"),
+        ("pr_only_checks = [\"DCO\", \"DCO\"]\n", 1, "repeats"),
+    ] {
+        files.release_toml = Some(text.to_owned());
+        let message = refusal(&files).map(|e| e.to_string()).unwrap_or_default();
+        assert!(message.contains(".velnor/release.toml"), "{message}");
+        assert!(
+            message.contains(&format!("pr_only_checks[{index}] {why}")),
+            "{message}"
+        );
+    }
+    files.release_toml = Some("pr_only_checks = [\"DCO\"]\n".to_owned());
+    assert_eq!(refusal(&files), None);
+}
+
+#[test]
 fn unusable_roots_and_empty_platform_lists_are_refused() {
     for root in ["/etc", "../outside", "a/../b"] {
         let mut files = files();
