@@ -120,8 +120,10 @@ rerun or a merge-queue ejection, and every queued entry behind an ejection is re
   or quarantined with the owner's sign-off. A quarantined test still runs in a visible non-blocking
   lane, so no verification disappears silently.
 - **Known causes to remove first:** CPU starvation of tests with tight timeouts, such as the 2 s
-  kill in `ci-helper/.config/nextest.toml`, which runs under pods that request 2 CPU and burst to 84
-  cores (§B.2.2); and the `event.json` rewrite race between steps (decision log I023).
+  kill in `ci-helper/.config/nextest.toml`'s default profile, which the generated workflow would
+  inherit after the cutover because its nextest commands pass no profile (the generated workflow
+  therefore names the profile), under pods that request 2 CPU and burst to 84 cores (§B.2.2); and
+  the `event.json` rewrite race between steps (decision log I023).
 
 ### 1.4 Targets
 
@@ -245,8 +247,11 @@ prints its logs:
   other obligations and artifacts are in the other site. An idle cold node beats a busy warm one.
 - **Request stickiness.** All obligations of one request stay in one site; DE to FI is 35 ms over
   WireGuard (§B.5).
-- **Class routing** for workflow jobs works through labels: `velnor-gate`, `velnor-build`,
-  `velnor-docker`, each its own ARC scale set with warm pods.
+- **Class routing** for workflow jobs works through labels from phase 0: one ARC scale set per event
+  class and capability, `velnor-merge` (chosen in `runs-on` from `github.event_name`),
+  `velnor-gate`, `velnor-build` and `velnor-docker`, each with warm pods. A pod's priority is fixed
+  before GitHub assigns it a job, so merge-first admission needs its own scale set, not a priority
+  class.
 
 ### 3.5 Executors
 
@@ -258,8 +263,9 @@ prints its logs:
   every job of other repositories and organisations. It keeps every workflow construct working and
   is the oracle the executor is compared against.
 - **Synthetic completion** is limited to a versioned generated job whose whole contract (outputs,
-  step results, logs, post steps, dependents) is proven in the lab; no other job is completed
-  without the Worker.
+  step results, logs, post steps, dependents) is proven in the lab; it uploads and seals a log
+  through Results and sends one synthetic step result, because `completejob` carries no log body. No
+  other job is completed without the Worker.
 - **Experiment-gated behind the witness.** An idle ARC runner already starts the next job 2 s after
   the previous one ends, 3 s at p90 [M, `fable-5.2` design review F4], so owning acquisition buys at
   most a few seconds per run. The dispatcher that holds runner identities, the hot Worker, podless
@@ -268,7 +274,11 @@ prints its logs:
   I005). If built, the dispatcher persists the request identity and acquisition intent before
   `acquirejob` and the sealed response before any hand-off, and keeps the official Listener's
   first-renewal rule and force-fail path (`Runner.Listener/JobDispatcher.cs:393-405,1208-1219`), and
-  the Worker reads only `.runner` and the job message (`Runner.Worker/JobRunner.cs:47`).
+  the Worker reads only `.runner` and the job message (`Runner.Worker/JobRunner.cs:47`). It
+  advertises the scale set's total capacity, as the reference listener does, and keeps no idle
+  pre-registered identities under backlog, so queued jobs arrive as offers it can order; a lab test
+  with capacity 2 and five queued jobs logs offers and assignments first. It renews each lease at
+  half the time left before `lockedUntil` and journals what a standby needs to reopen sessions.
 
 ### 3.6 Isolation and trust
 
@@ -352,7 +362,10 @@ The ledger is the mechanism that removes duplicate work while keeping C1–C7.
   until an enforced run shows otherwise.
 - **The exact tree is the degenerate key**, used when no narrower key is proven. Test-binary digests
   are recorded with every receipt and audit the key; they are not part of it, so no bit-identical
-  build is needed.
+  build is needed. Where a digest ever joins a key (the phase-4 refinement), it covers every
+  executable the test can spawn, as listed by `cargo test --no-run --message-format=json`: 102 test
+  files use `CARGO_BIN_EXE_*` 171 times, and `velnor-actions-cli` has no library, so an edit can
+  change a spawned binary while the test binary stays byte-identical.
 - **Package keys exist before the root workspaces merge.** The planned move to one root workspace
   removes the root boundaries that phase-2 keys use.
 
@@ -446,7 +459,7 @@ Three candidates compete for the compile cache. **mbx stays unless it measurably
 |---|---|---|---|
 | (a) mbx | A node-persistent mbx store on each worker plus an `mbx-cache` server (jdx/mr-boxington-cache) per site. OIDC rules let pull requests read and only `main` pushes write; the anonymous read-only namespace is the fallback where build jobs have no `id-token` permission | Per-invocation reuse across checkouts, paths and nodes; hard-linked outputs where no reflink exists; the site server shares `main`'s outputs natively | Units it does not consult; growth of never-reused entries |
 | (b) cargo + reflinks | Plain cargo over a frozen target snapshot cloned per job with reflinks on XFS, plus `velnor-ci inputs restore` | Cargo's own fingerprints decide freshness; no wrapper | Per-file clone time on 6–9 GB targets; the page cache is not shared between clones |
-| (c) cargo + overlayfs | Plain cargo over an overlayfs mount whose read-only lower layers are frozen generations | Constant-time set-up; the lower layers' page cache is shared; the upper layer is the job's delta | Overlay copy-up of large files; kernel and container-runtime limits |
+| (c) cargo + overlayfs | Plain cargo over an overlayfs mount whose read-only lower layers are frozen generations | Constant-time set-up; the lower layers' page cache is shared; the upper layer is the job's delta. Set-up and teardown 6–15 s → under 20 ms, page cache for four concurrent jobs 36 GiB → 9 GiB [E, `gemini-4-carbon` design review] | Overlay copy-up of large files; kernel and container-runtime limits |
 
 Every candidate keeps the same rules: one fixed checkout path for every job (the Mac measurement
 below rebuilt the workspace crates whenever the path changed); pull requests never write the shared
@@ -554,6 +567,13 @@ seeds in the background.
 - Phase 3: the workflow is one witness job named `Required` plus the non-blocking `Cache` check;
   every obligation runs through `ensure` (section 3.3).
 - Until the owner changes the ruleset, the workflow emits both required names.
+- `runs-on` is fork-conditional, for example `${{ github.event.pull_request.head.repo.fork &&
+  'ubuntu-26.04' || 'velnor-gate' }}`, so a fork's jobs run on hosted runners; today `velnor-gen`
+  writes a fixed string (`generator/crates/velnor-render/src/workflow.rs:65`), which would send a
+  fork to Velnor, where it is refused.
+- `cargo-deny` reads the RustSec advisory database pinned by commit in the repository and advanced
+  by an automated pull request, so it is an ordinary obligation with a key instead of a network read
+  that ejects every queued entry when an advisory appears.
 
 ### 6.2 Change-aware selection that keeps confidence
 
@@ -622,10 +642,13 @@ seeds in the background.
 | Auto-merge | 0 of 40 PRs | agents enable it when they open a PR | same |
 | Catch-up merges of `main` into PR branches | common | stopped | stopped |
 
-HEADGREEN lands every entry of a group on the strength of the group tip's checks. In the 15 days of
-evidence one failed queue entry landed that way: its own merge-group run failed and the next entry's
-passed. C1 is stated for tips; the earlier commits of a group are recorded in a list that bisection
-and release tooling read, and a release is never cut from one of them.
+At depth 8 one failure at the first slot invalidates up to seven candidates behind it, and GitHub
+starts their replacements at once; depth 8 therefore waits for queue-tip speculation to keep the
+single-ejection bypass trees verified. HEADGREEN lands every entry of a group on the strength of the
+group tip's checks. In the 15 days of evidence one failed queue entry landed that way: its own
+merge-group run failed and the next entry's passed. C1 is stated for tips; the earlier commits of a
+group are recorded in a list that bisection and release tooling read, and a release is never cut
+from one of them.
 
 ### 6.6 Minimum honest time to verdict
 
@@ -692,10 +715,18 @@ obligations whose keys changed.
   32 GiB would fit only three. Docker: 8 CPU plus 4 for dind, 24 GiB, for Docker-needing test
   binaries only; the runner root itself builds in the build class, although it is touched by 55 of
   100 merges and its Docker tests would otherwise pull it into the smallest class. Gate: 1 CPU, 2
-  GiB. Cargo and nextest parallelism follow the sandbox's CPUs, not a constant.
+  GiB. `CARGO_BUILD_JOBS` and nextest's test threads are set explicitly to the sandbox's CPUs,
+  because a pod without a CPU limit sees all 96. Elastic slots, cgroup slots the agent carves
+  instead of pods (5–6 build slots per worker instead of 4 [E]), are an experiment beside cache
+  candidate (c).
 - **Node settings.** Kube and system reservations (3 CPU, 6 GiB), a `memory.available` eviction
-  threshold of 2 GiB, `podPidsLimit` 16384, the kubelet root directory on the XFS data volume (today
-  `emptyDir` lands on the ext4 OS disk, `velnor-runners/PLAN.md:45`), topology labels for site.
+  threshold of 2 GiB, `podPidsLimit` 16384, the kubelet root directory on the XFS data volume after
+  its real mount is inspected (today `emptyDir` lands on the ext4 OS disk,
+  `velnor-runners/PLAN.md:45`), with fixed-size eviction thresholds (`nodefs.available: 100Gi`,
+  since 5% of a 50 TB volume locks out 2.5 TB) and XFS project quotas per sandbox, topology labels
+  for site. The toolchain is mounted read-only only together with the workflow that expects it:
+  today's workflow fails on a read-only `RUSTUP_HOME` (`rust_installed_manifest_unwritable`,
+  `ci.yml:427,438`).
 - **Reserved merge path.** Each site keeps one 16-CPU build slot and 2 gate CPUs free for
   merge-group and gate work, about 7.7% of allocatable CPU, instead of relying on preemption: at 95%
   utilisation waiting grows to about 19 times the service time. The wait is measured from the moment
@@ -723,7 +754,7 @@ the stall they fix.
 | 3 | Remove `build.jobs=2` and `--jobs 2`; parallelism from the pod | `maintenance-helpers` 8.5 → about 5 min | [M] `mise.toml:90-193`; [E] `proposals/opus-5.5.md` | None | Revert lines |
 | 4 | Toolchain, tools and action archives as read-only node stores | 14–18 s per job | [M] 10 s tools (§A T9b) + 4.4 s actions | Stale tool (keys are versions) | Remove the mounts |
 | 5 | Docker only in the docker class | 3–4 s per job, fewer privileged pods | [M] 57 dind probe failures per hour (§B.6) | A misrouted Docker job fails fast | Label back |
-| 6 | Kubelet root directory on the XFS volume, `reflink=1` confirmed | Enables every L1 store | [M] root is ext4 on the OS disk; data LV is XFS (`velnor-runners/PLAN.md:45,72-80`) | Node rebuild mistakes | Revert the kubelet argument |
+| 6 | Kubelet root directory on the XFS volume, `reflink=1` confirmed, fixed-size eviction thresholds and project quotas | Enables every L1 store | [M] root is ext4 on the OS disk; data LV is XFS (`velnor-runners/PLAN.md:45,72-80`) | Node rebuild mistakes | Revert the kubelet argument |
 | 7 | Node-persistent compile cache, engine per section 5.3 | From 46–278 compiled crates per job to the PR's own delta | [M] §A T9a; Mac measurement (section 5.2) | A stale view means a slow build, not a wrong one (C6) | Disable the mount |
 | 8 | Crates mirror through environment variables | 1–3 s per job, no internet dependency | [M] §B.4.2 | Mirror outage | Unset the variables |
 | 9 | Site labels and request stickiness | Avoids 35 ms round trips for artifacts | [M] §B.5 | Unbalanced sites | Remove the preference |
@@ -876,10 +907,12 @@ passed a four-week soak, and the hosted break-glass workflow always.
 5. **The test floor.** Scope: a pre-migrated journal template for `Journal::open`; one test per case
    for the two looped tests; valid prefixes built once and cloned per case for the receipt-integrity
    and publication-recheck tests; the 20 slowest tests ranked by CPU-seconds alone after each
-   change; the per-test CPU budget and its list; `ci-helper` tests in parallel with timeouts sized
-   to the pod; the `event.json` snapshot before parallel steps. Acceptance: `Journal::open` on the
-   template ≤ 1 s measured on a worker; the list shrinks; no new false failures in 100 paired
-   reruns. Depends on: nothing.
+   change; the 12 serialised archive-guard goldens and the `crates_mirror` tests with private temp
+   directories and ports so `threads-required` can go; the 12-case `blob_faults` loop split; the 89
+   s image-publication fixture folded into the warm `--all-targets` build; the per-test CPU budget
+   and its list; `ci-helper` tests in parallel with timeouts sized to the pod; the `event.json`
+   snapshot before parallel steps. Acceptance: `Journal::open` on the template ≤ 1 s measured on a
+   worker; the list shrinks; no new false failures in 100 paired reruns. Depends on: nothing.
 6. **Selection in the engine.** Scope: declare the inputs of the crate-root build scripts and the
    test reads the plan names; replay the last 200 PRs through the fixed planner in shadow.
    Acceptance: the replay selects every job that failed in those PRs; a generator or helper PR runs
