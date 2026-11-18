@@ -132,15 +132,18 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 
 pub const VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-fn records_versions(view: &RepoView) -> bool {
+const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 82);
+
+fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
     view.files
         .get(&LOCK_PATH)
         .and_then(|bytes| parse_lock(bytes).ok())
-        .is_some_and(|helper| helper.version().at_least(VERSIONS_HELPER))
+        .is_some_and(|helper| helper.version().at_least(minimum))
 }
 
 pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
-    let versions = records_versions(view);
+    let versions = pin_at_least(view, VERSIONS_HELPER);
+    let records_target_dir = pin_at_least(view, TARGET_DIR_HELPER);
     let mut manifests = BTreeMap::new();
     let mut roots = BTreeMap::new();
     for (workspace, metadata) in &view.rust_metadata {
@@ -151,12 +154,17 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
                 .ok_or_else(|| MetadataFileError::Changed(path.clone()))?;
             manifests.insert(path.to_string(), sha256_hex(bytes));
         }
-        let target_dir = crate::target_dir::target_dir(view, workspace)
-            .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+        let target_dir = if records_target_dir {
+            let dir = crate::target_dir::target_dir(view, workspace)
+                .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+            Some(dir.to_string())
+        } else {
+            None
+        };
         roots.insert(
             workspace.to_string(),
             Root {
-                target_dir: versions.then(|| target_dir.to_string()),
+                target_dir,
                 members: metadata
                     .members
                     .iter()
@@ -236,7 +244,7 @@ pub fn recorded_metadata(
     recorded: Option<&[u8]>,
 ) -> Result<BTreeMap<RepoPath, RustMetadata>, MetadataFileError> {
     let bytes = recorded.ok_or(MetadataFileError::Missing)?;
-    let versions = records_versions(view);
+    let versions = pin_at_least(view, VERSIONS_HELPER);
     let file: File = serde_json::from_slice(bytes)
         .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
     for (path, digest) in &file.manifests {
