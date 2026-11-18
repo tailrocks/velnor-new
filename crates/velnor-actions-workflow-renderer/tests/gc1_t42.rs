@@ -159,8 +159,7 @@ fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
 }
 
 fn rendered() -> Result<Vec<RenderedFile>, Box<dyn Error>> {
-    let request = request()?;
-    Ok(render_schema2_product_release_workflows(&request)?)
+    Ok(render_schema2_product_release_workflows(&request()?)?)
 }
 
 fn rendered_with(pins: ProductReleasePins) -> Result<Vec<RenderedFile>, Box<dyn Error>> {

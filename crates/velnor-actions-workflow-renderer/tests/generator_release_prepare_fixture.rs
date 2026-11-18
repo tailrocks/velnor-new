@@ -22,11 +22,10 @@ use velnor_actions_workflow_renderer::setup::MiseSetup;
 #[path = "generator_release_prepare_fixture/fixture_pins.rs"]
 mod fixture_pins;
 
-#[path = "generator_release_prepare_fixture/interpreter.rs"]
-mod interpreter;
-
 #[path = "generator_release_prepare_fixture/extract.rs"]
 mod extract;
+#[path = "generator_release_prepare_fixture/interpreter.rs"]
+mod interpreter;
 use extract::extract_prepare_script;
 
 const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
