@@ -51,9 +51,13 @@ pub enum StepKind {
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
-    PrivateToken(crate::repo::PrivateSources),
+    PrivateToken {
+        sources: crate::repo::PrivateSources,
+        cached: Vec<crate::ids::RootSlug>,
+    },
     PrivateFetch {
         manifests: Vec<RepoPath>,
+        cached: Vec<crate::ids::RootSlug>,
     },
     TestSetup {
         name: String,

@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CargoCommand, Job, PrivateSources, RepoPath, Step, StepKind};
+use velnor_model::{
+    CacheKey, CargoCommand, Job, PrivateSources, RepoPath, RootSlug, Step, StepKind,
+};
 
 use crate::plan::step;
 
@@ -20,10 +22,20 @@ pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
                 manifests.push(manifest);
             }
         }
+        let cached: Vec<RootSlug> = job.steps[..first]
+            .iter()
+            .filter_map(|step| match &step.kind {
+                StepKind::CacheRestore(CacheKey::Sources { root, .. }) => Some(root.slug().clone()),
+                _ => None,
+            })
+            .collect();
         let gate = job.steps[first].gate.clone();
         let phase = [
-            StepKind::PrivateToken(sources.clone()),
-            StepKind::PrivateFetch { manifests },
+            StepKind::PrivateToken {
+                sources: sources.clone(),
+                cached: cached.clone(),
+            },
+            StepKind::PrivateFetch { manifests, cached },
         ]
         .map(|kind| Step {
             gate: gate.clone(),

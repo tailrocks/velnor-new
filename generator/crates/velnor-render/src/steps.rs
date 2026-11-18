@@ -209,6 +209,15 @@ fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
             sources_step(root.slug())
         )],
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
+        StepKind::PrivateToken { cached, .. } | StepKind::PrivateFetch { cached, .. }
+            if !cached.is_empty() =>
+        {
+            let misses: Vec<String> = cached
+                .iter()
+                .map(|slug| format!("steps.{}.outputs.cache-hit != 'true'", sources_step(slug)))
+                .collect();
+            vec![format!("({})", misses.join(" || "))]
+        }
         _ => Vec::new(),
     }
 }
@@ -270,9 +279,9 @@ fn step_body(
         StepKind::InputsRestore(target) => {
             crate::helper_steps::inputs_step("restore", target, directory)
         }
-        StepKind::CratesMirror(_) | StepKind::PrivateToken(_) | StepKind::PrivateFetch { .. } => {
-            private_step(kind)
-        }
+        StepKind::CratesMirror(_)
+        | StepKind::PrivateToken { .. }
+        | StepKind::PrivateFetch { .. } => private_step(kind),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),

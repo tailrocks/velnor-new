@@ -187,3 +187,57 @@ fn a_misconfigured_section_or_an_old_helper_is_refused() -> TestResult {
     assert!(workflow(&old).is_err_and(|error| error.to_string().contains("0.1.82")));
     Ok(())
 }
+
+fn misses(condition: &str, hits: &[&str]) -> Result<bool, Box<dyn std::error::Error>> {
+    let start = condition
+        .find("(steps.sources_")
+        .ok_or("no sources guard")?;
+    let group = &condition[start + 1..];
+    let group = &group[..group.find(')').ok_or("unclosed guard")?];
+    Ok(group.split(" || ").any(|term| {
+        let id = term
+            .trim_start_matches("steps.")
+            .trim_end_matches(".outputs.cache-hit != 'true'");
+        !hits.contains(&id)
+    }))
+}
+
+#[test]
+fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches() -> TestResult {
+    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.82")?;
+    let text = workflow(&repo)?;
+    let mut checked = 0;
+    for job in jobs(&text)? {
+        let steps = job["steps"].as_array().ok_or("steps missing")?;
+        let Some(token) = steps.iter().position(|s| s["id"] == "private-token") else {
+            continue;
+        };
+        let restores: Vec<&str> = steps[..token]
+            .iter()
+            .filter_map(|s| s["id"].as_str())
+            .filter(|id| id.starts_with("sources_"))
+            .collect();
+        let guards = [&steps[token], &steps[token + 1]]
+            .map(|step| step["if"].as_str().unwrap_or_default().to_owned());
+        if restores.is_empty() {
+            assert!(guards.iter().all(|g| !g.contains("cache-hit")), "{job}");
+            continue;
+        }
+        checked += 1;
+        for guard in &guards {
+            assert!(!misses(guard, &restores)?, "{guard}");
+            for skipped in &restores {
+                let partial: Vec<&str> = restores
+                    .iter()
+                    .copied()
+                    .filter(|id| id != skipped)
+                    .collect();
+                assert!(misses(guard, &partial)?, "{guard}");
+            }
+            assert!(misses(guard, &[])?, "{guard}");
+        }
+        assert!(guards[0].contains("head.repo.full_name == github.repository"));
+    }
+    assert!(checked > 0, "{text}");
+    Ok(())
+}
