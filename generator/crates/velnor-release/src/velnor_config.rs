@@ -24,6 +24,7 @@ pub(crate) struct Binary {
     pub(crate) bins: Vec<ExtraBin>,
     pub(crate) include: Vec<String>,
     pub(crate) format: BinaryFormat,
+    pub(crate) attest: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -46,6 +47,8 @@ struct RawBinary {
     #[serde(default)]
     include: Vec<String>,
     format: Option<BinaryFormat>,
+    #[serde(default)]
+    attest: bool,
 }
 
 #[derive(Deserialize)]
@@ -184,5 +187,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         bins,
         include,
         format,
+        attest: raw.attest,
     })
 }

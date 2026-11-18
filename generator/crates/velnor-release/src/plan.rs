@@ -60,6 +60,7 @@ pub struct BinaryPlan {
     pub extra_bins: Vec<ExtraBin>,
     pub include: Vec<String>,
     pub format: BinaryFormat,
+    pub attest: bool,
     pub tag_pattern: TagPattern,
 }
 
@@ -259,6 +260,7 @@ fn plan_binaries(
             extra_bins: binary.bins.clone(),
             include: binary.include.clone(),
             format: binary.format,
+            attest: binary.attest,
             tag_pattern,
         });
     }

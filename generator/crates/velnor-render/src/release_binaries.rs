@@ -12,10 +12,12 @@ use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,
 };
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{ATTEST_ACTION, RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 
 const UPLOAD_ARTIFACT: &str = "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
+const ATTEST_COMMIT: &str = "4d101475d8b20a2381f78447822ac1eab6504dd8";
+const ATTEST_VERSION: &str = "v4.2.2";
 const UPLOAD_VERSION: &str = "v7.0.2";
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
@@ -252,16 +254,34 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
             )
         });
     }
+    if binary.attest {
+        steps.push(attest(binary));
+    }
     steps.push(upload(
         format!("{}-sums", binary.package),
         format!("{DIST}/{SUMS_FILE}"),
     ));
     RenderedJob {
-        no_permissions: true,
+        no_permissions: !binary.attest,
+        permissions: if binary.attest {
+            permissions(&[("attestations", "write"), ("id-token", "write")])
+        } else {
+            Vec::new()
+        },
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
         ..behind_the_gate(format!("sums-{}", binary.package), binary, builds(binary))
+    }
+}
+
+fn attest(binary: &BinaryPlan) -> RenderedStep {
+    RenderedStep {
+        name: format!("Attest the build provenance of {}", binary.package),
+        uses: Some(format!("{ATTEST_ACTION}@{ATTEST_COMMIT}")),
+        uses_comment: Some(ATTEST_VERSION.to_owned()),
+        with: vec![("subject-path".to_owned(), Value::Text(format!("{DIST}/*")))],
+        ..RenderedStep::default()
     }
 }
 

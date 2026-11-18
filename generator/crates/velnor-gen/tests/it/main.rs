@@ -79,6 +79,7 @@ mod release_tag_binding;
 mod release_tagged_commit;
 mod release_workflow;
 mod release_yml;
+mod release_yml_attest;
 mod release_yml_binaries;
 mod release_yml_cargo;
 mod release_yml_finalize;
