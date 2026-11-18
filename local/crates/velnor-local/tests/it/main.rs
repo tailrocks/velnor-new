@@ -20,6 +20,7 @@ mod pairs_host;
 mod policy;
 mod removal_audit;
 mod report;
+mod reset;
 mod restore;
 mod runners;
 mod side;
