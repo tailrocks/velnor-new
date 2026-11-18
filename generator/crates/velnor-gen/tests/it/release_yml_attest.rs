@@ -187,6 +187,34 @@ fn attest_with_a_versioned_asset_name_verifies_the_expanded_names_after_reading_
     Ok(())
 }
 
+#[test]
+fn attest_with_a_versioned_asset_name_hands_the_read_version_to_every_verification() -> TestResult {
+    let toml = "[[binaries]]\npackage = \"app\"\nattest = true\nasset_name = \"{{ bin }}-{{ version }}-{{ platform }}\"\n";
+    let (_, tree) = render(&[APP], Some(toml))?;
+    let verify = job(&tree, "verify-app")?;
+    let reader = steps(verify)
+        .iter()
+        .find(|step| {
+            step.get("run")
+                .and_then(Node::text)
+                .is_some_and(|run| run.contains("version="))
+        })
+        .ok_or("no version step")?;
+    let id = reader.get("id").and_then(Node::text).ok_or("no step id")?;
+    let expected = format!("${{{{ steps.{id}.outputs.version }}}}");
+    let mut checked = 0;
+    for step in steps(verify) {
+        let run = step.get("run").and_then(Node::text).unwrap_or_default();
+        if run.contains("gh attestation verify") && run.contains("${VERSION}") {
+            let bound = step.at(&["env", "VERSION"]).and_then(Node::text);
+            assert_eq!(bound, Some(expected.as_str()), "{run}");
+            checked += 1;
+        }
+    }
+    assert_eq!(checked, 3);
+    Ok(())
+}
+
 fn runs_of(job: &Node) -> Vec<String> {
     steps(job)
         .iter()
