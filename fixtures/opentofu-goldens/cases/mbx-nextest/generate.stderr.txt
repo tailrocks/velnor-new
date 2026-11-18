@@ -2,7 +2,6 @@ Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
-.github/actions/declared-task-0/action.yml
 .github/actions/u26/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/actions/velnor-tools-cache-restore/action.yml
@@ -13,11 +12,7 @@ Repository: <repo>
 .github/actions/velnor-verify-rust-manifest/action.yml
 .github/jactionlint.yaml
 .github/scripts/velnor-tools-cache-identity.sh
-.github/velnor/producer-executions-v1.json
-.github/velnor/task-execution-manifest-v1.json
-.github/workflows/cache-prune.yml
 .github/workflows/ci.yml
-.github/workflows/state-seal.yml
 mise.lock not found; Velnor will not create or refresh it
 mise.toml is read-only input; Velnor never modifies it
 rust-toolchain.toml not found; Velnor will not create it

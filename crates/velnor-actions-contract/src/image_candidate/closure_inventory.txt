@@ -655,7 +655,6 @@ crates/velnor-actions-orchestrator/src/crate_jobs.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_build_jobs.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_gates.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_inputs.rs
-crates/velnor-actions-orchestrator/src/crate_jobs_lanes.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_ledger_cli.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_obligations.rs
 crates/velnor-actions-orchestrator/src/crate_jobs_stage.rs
@@ -667,7 +666,6 @@ crates/velnor-actions-orchestrator/src/dbt_tasks.rs
 crates/velnor-actions-orchestrator/src/decisions.rs
 crates/velnor-actions-orchestrator/src/deps_layout.rs
 crates/velnor-actions-orchestrator/src/deps_lock.rs
-crates/velnor-actions-orchestrator/src/derive_groups.rs
 crates/velnor-actions-orchestrator/src/discover.rs
 crates/velnor-actions-orchestrator/src/discover_index.rs
 crates/velnor-actions-orchestrator/src/discover_tofu.rs
@@ -1121,8 +1119,6 @@ crates/velnor-actions-orchestrator/src/stable_tag_origin_selector.rs
 crates/velnor-actions-orchestrator/src/stable_tag_origin_tag.rs
 crates/velnor-actions-orchestrator/src/stack_family_cache.rs
 crates/velnor-actions-orchestrator/src/stack_support.rs
-crates/velnor-actions-orchestrator/src/state_producer.rs
-crates/velnor-actions-orchestrator/src/state_roots.rs
 crates/velnor-actions-orchestrator/src/tap_history_relevance.rs
 crates/velnor-actions-orchestrator/src/tap_merge.rs
 crates/velnor-actions-orchestrator/src/tap_merge_candidate.rs
@@ -1398,7 +1394,6 @@ crates/velnor-actions-workflow-renderer/src/native_authority/inputs.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/inputs/generated.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/inputs/graph.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/inputs/registered.rs
-crates/velnor-actions-workflow-renderer/src/native_authority/inputs/seeds.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/inputs/task_ids.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/inputs/tool_needs.rs
 crates/velnor-actions-workflow-renderer/src/native_authority/plan.rs
@@ -1435,7 +1430,6 @@ crates/velnor-actions-workflow-renderer/src/plan_sources.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/cache_keys.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/cargo_fetch.rs
 crates/velnor-actions-workflow-renderer/src/plan_sources/source_cache.rs
-crates/velnor-actions-workflow-renderer/src/plan_sources/state_select.rs
 crates/velnor-actions-workflow-renderer/src/playwright_install_step.rs
 crates/velnor-actions-workflow-renderer/src/premerge_event_probe.py
 crates/velnor-actions-workflow-renderer/src/premerge_event_proof.rs
@@ -1478,7 +1472,6 @@ crates/velnor-actions-workflow-renderer/src/render_emit.rs
 crates/velnor-actions-workflow-renderer/src/render_execution_boundaries.rs
 crates/velnor-actions-workflow-renderer/src/render_fallback.rs
 crates/velnor-actions-workflow-renderer/src/render_required_verdict_step.rs
-crates/velnor-actions-workflow-renderer/src/render_state_seal.rs
 crates/velnor-actions-workflow-renderer/src/required_gate.rs
 crates/velnor-actions-workflow-renderer/src/review_completion.rs
 crates/velnor-actions-workflow-renderer/src/review_completion_steps.rs
@@ -1582,13 +1575,9 @@ crates/velnor-actions-workflow-renderer/src/source_qualification_plan.rs
 crates/velnor-actions-workflow-renderer/src/sources_producer.rs
 crates/velnor-actions-workflow-renderer/src/stack_jobs.rs
 crates/velnor-actions-workflow-renderer/src/state_fragments.rs
-crates/velnor-actions-workflow-renderer/src/state_producer_steps.rs
 crates/velnor-actions-workflow-renderer/src/state_script.rs
 crates/velnor-actions-workflow-renderer/src/state_seal.rs
-crates/velnor-actions-workflow-renderer/src/state_seal_artifact_guard.rs
-crates/velnor-actions-workflow-renderer/src/state_seal_save.rs
 crates/velnor-actions-workflow-renderer/src/state_seal_tip.rs
-crates/velnor-actions-workflow-renderer/src/state_skeleton.rs
 crates/velnor-actions-workflow-renderer/src/step_ids.rs
 crates/velnor-actions-workflow-renderer/src/steps.rs
 crates/velnor-actions-workflow-renderer/src/steps_artifact.rs
