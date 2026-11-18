@@ -67,10 +67,7 @@ pub(super) fn forward() -> Result<ExitStatus, CiError> {
     cargo.executable = std::fs::canonicalize(cargo.executable).map_err(|error| failed(&error))?;
     let directory = linked_toolchain(&cargo.executable, &wrapper)?;
     let path = std::env::join_paths(
-        wrapper
-            .parent()
-            .into_iter()
-            .chain(paths.iter().map(PathBuf::as_path)),
+        std::iter::once(directory.as_path()).chain(paths.iter().map(PathBuf::as_path)),
     )
     .map_err(|error| CiError::new(format!("cannot configure Cargo PATH: {error}")))?;
     let mut command = Command::new(directory.join(SAVED));
@@ -134,7 +131,6 @@ fn linked_toolchain(cargo: &Path, wrapper: &Path) -> Result<PathBuf, CiError> {
         .parent()
         .ok_or_else(|| CiError::new("invalid Cargo toolchain path"))?;
     stage_view(bin, &directory)?;
-    stage_view(bin, parent)?;
     stage_view_entry(&directory.join(SAVED), &parent.join(SAVED))?;
     Ok(directory)
 }
