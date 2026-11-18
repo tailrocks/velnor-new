@@ -231,15 +231,7 @@ fn step_body(
             needs_max_bytes,
             trusted_api,
         } => crate::report::check(*needs_max_bytes, *trusted_api),
-        StepKind::Checkout { depth } => RenderedStep {
-            name: "Check out".to_owned(),
-            uses: Some(CHECKOUT.to_owned()),
-            with: vec![
-                ("fetch-depth".to_owned(), Value::Int(u64::from(*depth))),
-                ("persist-credentials".to_owned(), Value::Bool(false)),
-            ],
-            ..RenderedStep::default()
-        },
+        StepKind::Checkout { depth, sparse } => checkout_step(*depth, sparse.as_deref()),
         StepKind::InstallTools { only } => install_tools(only.as_deref()),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
@@ -357,6 +349,26 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
         name: format!("Install velnor-ci {version}"),
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
         uses_comment: Some(format!("rust-ci-v{version}")),
+        with,
+        ..RenderedStep::default()
+    }
+}
+
+fn checkout_step(depth: u32, sparse: Option<&[String]>) -> RenderedStep {
+    let mut with = vec![
+        ("fetch-depth".to_owned(), Value::Int(u64::from(depth))),
+        ("persist-credentials".to_owned(), Value::Bool(false)),
+    ];
+    if let Some(paths) = sparse {
+        with.push((
+            "sparse-checkout".to_owned(),
+            Value::Text(format!("{}\n", paths.join("\n"))),
+        ));
+        with.push(("sparse-checkout-cone-mode".to_owned(), Value::Bool(false)));
+    }
+    RenderedStep {
+        name: "Check out".to_owned(),
+        uses: Some(CHECKOUT.to_owned()),
         with,
         ..RenderedStep::default()
     }

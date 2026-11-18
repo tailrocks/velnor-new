@@ -262,6 +262,7 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub test_setup: Vec<TestSetup>,
+    pub checkout: CheckoutScope,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -284,6 +285,12 @@ pub enum FullRun {
     Nightly,
     Weekly,
     Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckoutScope {
+    Full,
+    Sparse,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -334,6 +341,7 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             test_setup: Vec::new(),
+            checkout: CheckoutScope::Full,
         }
     }
 }

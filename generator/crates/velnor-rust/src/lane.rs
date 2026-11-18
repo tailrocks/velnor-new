@@ -116,7 +116,7 @@ pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
 }
 
 pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) -> Job {
-    let mut steps = head(facts, PLAN_DEPTH);
+    let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
@@ -134,6 +134,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         } else {
             CHECKOUT_DEPTH
         },
+        None,
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));

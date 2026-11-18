@@ -324,7 +324,11 @@ impl RootJobs<'_> {
             Some(self.root.manifest.sibling(&ARCHIVE_FILE)),
             true,
         ));
-        let mut group = head(self.facts, CHECKOUT_DEPTH);
+        let mut group = head(
+            self.facts,
+            CHECKOUT_DEPTH,
+            crate::sparse::paths(self.facts, std::slice::from_ref(self.root)),
+        );
         group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.extend(tools_restore(self.facts).map(|restore| Step {
             gate: self.lane.steps(),

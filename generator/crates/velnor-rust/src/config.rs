@@ -3,8 +3,8 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName,
+    CheckoutScope, CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob,
+    RepoPath, RunnerLabel, RustCiConfig, Shape, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,7 +12,8 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 20] = [
+const KEYS: [&str; 21] = [
+    "sparse_checkout",
     "cache_check_blocks",
     "cache_debug",
     "runner",
@@ -38,6 +39,7 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 struct RawConfig {
+    sparse_checkout: Option<bool>,
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     runner: Option<String>,
@@ -118,6 +120,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
+        checkout: if raw.sparse_checkout.unwrap_or(false) {
+            CheckoutScope::Sparse
+        } else {
+            CheckoutScope::Full
+        },
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         crates_mirror: raw
