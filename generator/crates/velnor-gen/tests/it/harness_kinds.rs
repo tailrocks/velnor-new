@@ -104,11 +104,15 @@ fn members_sharing_a_harness_target_name_each_get_a_direct_step() -> TestResult 
         vec![a, b],
     )?)?;
     assert!(
-        text.contains("cargo test -p a --locked --test=custom"),
+        text.contains(
+            "cargo test -p a --locked --message-format=json-render-diagnostics --test=custom"
+        ),
         "{text}"
     );
     assert!(
-        text.contains("cargo test -p b --locked --test=custom"),
+        text.contains(
+            "cargo test -p b --locked --message-format=json-render-diagnostics --test=custom"
+        ),
         "{text}"
     );
     Ok(())
@@ -124,7 +128,10 @@ fn a_proc_macro_library_with_a_custom_harness_runs_with_cargo_test_lib() -> Test
         &[("a", TargetKind::ProcMacro, true)],
     )?;
     let text = workflow(&view(&[("a/Cargo.toml", manifest)], vec![a])?)?;
-    assert!(text.contains("cargo test -p a --locked --lib"), "{text}");
+    assert!(
+        text.contains("cargo test -p a --locked --message-format=json-render-diagnostics --lib"),
+        "{text}"
+    );
     assert!(!text.contains("nextest"), "{text}");
     Ok(())
 }
@@ -282,7 +289,7 @@ fn a_package_scoped_harness_carries_the_features_it_requires() -> TestResult {
     )?;
     let text = workflow(&forwarding)?;
     assert!(
-        text.contains("cargo test -p a --locked --test=gated --features ''x''"),
+        text.contains("cargo test -p a --locked --message-format=json-render-diagnostics --test=gated --features ''x''"),
         "{text}"
     );
     Ok(())

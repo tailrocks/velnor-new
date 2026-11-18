@@ -97,7 +97,8 @@ fn two_cargo_roots_render_a_job_each_and_a_verdict_job_that_needs_both() -> Test
             "  rust-lab:",
             "  rust-inputs-audit:",
             "  rust-trim:",
-            "  required:"
+            "  required:",
+            "  cache:"
         ]
     );
     assert!(text.contains(
@@ -114,9 +115,9 @@ fn the_config_file_sets_runner_time_limit_and_excluded_roots() -> TestResult {
     let config = b"runner = \"self-hosted\"\ntimeout_minutes = 12\nexclude = [\"lab/\"]\n";
     let text = workflow(&view(&["Cargo.toml", "lab/Cargo.toml"], Some(config))?)?;
     assert!(text.contains("    runs-on: self-hosted\n    timeout-minutes: 12\n"));
-    assert!(text.contains(
-        "      - name: Format\n        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'\n        env:\n          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'\n        run: velnor-ci run -- cargo-fmt --all --check\n"
-    ));
+    let format = step_named(&text, "Format");
+    assert!(format.contains("!cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none''"));
+    assert!(format.contains(r#""$VELNOR_EXEC" run -- cargo-fmt --all --check'"#));
     assert!(!text.contains("lab"));
     Ok(())
 }
@@ -130,17 +131,23 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
     ];
     let text = workflow(&view(&roots, Some(b"runner = \"on\"\n"))?)?;
     assert!(text.contains("    runs-on: 'on'\n"));
-    assert!(text.contains(
-        "        working-directory: '-bad'\n        env:\n          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'\n        run: velnor-ci run -- cargo-fmt --all --check\n"
-    ));
-    assert!(text.contains(
-        "        working-directory: 'it''s crates'\n        env:\n          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'\n        run: velnor-ci run -- cargo-fmt --all --check\n"
-    ));
-    assert!(text.contains(
-        "        working-directory: \"odd\\uffff\"\n        env:\n          CARGO_LOG: '${{ vars.VELNOR_CACHE_DEBUG == ''1'' && ''cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info'' || '''' }}'\n        run: velnor-ci run -- cargo-fmt --all --check\n"
-    ));
+    let formats: Vec<&str> = text
+        .split("\n      - ")
+        .filter(|step| step.lines().any(|line| line.trim() == "name: Format"))
+        .collect();
+    assert_eq!(formats.len(), 3, "{formats:?}");
+    let format_command = r#""$VELNOR_EXEC" run -- cargo-fmt --all --check'"#;
+    for directory in ["'-bad'", "'it''s crates'", "\"odd\\uffff\""] {
+        let rendered = format!("working-directory: {directory}");
+        assert!(
+            formats
+                .iter()
+                .any(|step| step.contains(&rendered) && step.contains(format_command)),
+            "{directory} must be in its Format step: {formats:?}"
+        );
+    }
     assert_eq!(
-        text.matches("run: velnor-ci run -- cargo-fmt --all --check\n")
+        text.matches(r#""$VELNOR_EXEC" run -- cargo-fmt --all --check'"#)
             .count(),
         3
     );
@@ -157,6 +164,16 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
         );
     }
     Ok(())
+}
+
+fn step_named(text: &str, name: &str) -> String {
+    text.split("\n      - ")
+        .find(|step| {
+            step.lines()
+                .any(|line| line.trim() == format!("name: {name}"))
+        })
+        .unwrap_or_default()
+        .to_owned()
 }
 
 #[test]

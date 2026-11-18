@@ -40,7 +40,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release-gate --repo "$REPOSITORY" --sha "$COMMIT"'
+        run: 'velnor-ci release-gate --repo="$REPOSITORY" --sha="$COMMIT"'
   release-pr:
     needs:
       - gate
@@ -102,7 +102,7 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests'
+        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo="$REPOSITORY" --manifests'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -145,12 +145,15 @@ jobs:
     environment: release
     permissions:
       contents: read
+      pull-requests: read
     concurrency:
       group: release-tag
       cancel-in-progress: false
     outputs:
       app: '${{ steps.record.outputs.app }}'
       tools: '${{ steps.record.outputs.tools }}'
+      app_commit: '${{ steps.record.outputs.app_commit }}'
+      tools_commit: '${{ steps.record.outputs.tools_commit }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -185,7 +188,7 @@ jobs:
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
           BRANCH: '${{ github.event.repository.default_branch }}'
         run: 'gh api "repos/$REPOSITORY/git/ref/heads/$BRANCH" --jq ''"newest=\(.object.sha == env.COMMIT)"'' >> "$GITHUB_OUTPUT"'
-      - name: 'Refuse a release-plz config that runs commands, changes the tag patterns or names another registry'
+      - name: 'Refuse a release-plz config that runs commands, changes the tag patterns or the branch prefixes or names another registry'
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
         env:
           GITHUB_TOKEN: '${{ github.token }}'
@@ -197,7 +200,14 @@ jobs:
           CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: ''
           CARGO_BUILD_RUSTC: rustc
           RUSTC: rustc
-        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --repo "$REPOSITORY" --manifests --released-versions'
+        run: 'velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml ''app-v{{ version }}'' --tag-pattern release-plz.toml ''{{ package }}-v{{ version }}'' --tag-pattern tools/release-plz.toml ''tools-v{{ version }}'' --tag-pattern tools/release-plz.toml ''{{ package }}-v{{ version }}'' --branch-prefix release-plz.toml release-plz-app- --branch-prefix tools/release-plz.toml release-plz-tools- --repo="$REPOSITORY" --manifests --released-versions'
+      - name: Check that release-plz would tag the verified commit
+        if: '${{ steps.newest.outputs.newest == ''true'' }}'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          REPOSITORY: '${{ github.repository }}'
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+        run: 'velnor-ci release preflight --repo="$REPOSITORY" --verified-commit="$COMMIT" --branch-prefix=release-plz-app- --branch-prefix=release-plz-tools-'
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
@@ -234,9 +244,13 @@ jobs:
           RUSTC: rustc
         run: '"$RUNNER_TEMP/release-plz" release --forge github --git-token "$GITHUB_TOKEN" --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > "$RUNNER_TEMP/release-1.json"'
       - id: record
-        name: Record the released packages
+        name: Record the released packages and the commits their tags are on
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        run: 'velnor-ci release record "$RUNNER_TEMP/release-0.json" "$RUNNER_TEMP/release-1.json"'
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+          REPOSITORY: '${{ github.repository }}'
+          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+        run: 'velnor-ci release record --repo="$REPOSITORY" --verified-commit="$COMMIT" "$RUNNER_TEMP/release-0.json" "$RUNNER_TEMP/release-1.json"'
   build-app-linux-x64:
     needs:
       - gate
@@ -254,11 +268,11 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -299,11 +313,11 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -344,11 +358,11 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.app }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.app_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -453,7 +467,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'velnor-ci release publish --repo "$REPOSITORY" --tag "$TAG" --app velnor-release --dir dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'
+        run: 'velnor-ci release publish --repo="$REPOSITORY" --tag="$TAG" --app=velnor-release --dir=dist app-linux-x64.tar.gz app-linux-arm64.tar.gz app-macos-arm64.tar.gz'
   build-tools-linux-x64:
     needs:
       - gate
@@ -471,11 +485,11 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.tools }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.tools_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install the musl C compiler
         run: sudo apt-get install --yes musl-tools
       - name: Install rust
@@ -517,11 +531,11 @@ jobs:
           ref: 'refs/tags/${{ needs.tag.outputs.tools }}'
           fetch-depth: 1
           persist-credentials: false
-      - name: Check that the tag is the commit the gate verified
+      - name: Check that the tag is on the verified commit itself
         env:
-          COMMIT: '${{ github.event.workflow_run.head_sha }}'
+          COMMIT: '${{ needs.tag.outputs.tools_commit }}'
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
-        run: 'test "$CHECKED_OUT" = "$COMMIT"'
+        run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
@@ -616,4 +630,4 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           TAG: '${{ needs.tag.outputs.tools }}'
-        run: 'velnor-ci release publish --repo "$REPOSITORY" --tag "$TAG" --app velnor-release --dir dist tools-linux-x64.tar.gz tools-macos-arm64.tar.gz'
+        run: 'velnor-ci release publish --repo="$REPOSITORY" --tag="$TAG" --app=velnor-release --dir=dist tools-linux-x64.tar.gz tools-macos-arm64.tar.gz'

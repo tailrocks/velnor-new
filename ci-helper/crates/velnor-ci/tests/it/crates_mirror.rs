@@ -226,6 +226,7 @@ fn child_fetches_with_path(
 ) -> TestResult {
     child_projects(repo);
     let root = repo.root();
+    let native_toolchain = std::path::PathBuf::from(active_toolchain()?);
     let paths = [
         proxy.to_path_buf(),
         wrapper.parent().ok_or("wrapper parent")?.to_path_buf(),
@@ -252,7 +253,7 @@ fn child_fetches_with_path(
         command
             .env_remove("RUSTUP_TOOLCHAIN")
             .env("MIRROR_EXPECTED_NO_TOOLCHAIN", "1")
-            .env("MIRROR_EXPLICIT_TOOLCHAIN", active_toolchain()?);
+            .env("MIRROR_EXPLICIT_TOOLCHAIN", &native_toolchain);
     }
     let output = command
         .args(["build", "--manifest-path"])
@@ -260,6 +261,7 @@ fn child_fetches_with_path(
         .arg(root.join("outer/Cargo.toml"))
         .env_remove("RUSTC_WRAPPER")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
+        .env("RUSTC", native_toolchain.join("bin/rustc"))
         .env("MIRROR_FIXTURE_ROOT", root)
         .env(
             "MIRROR_RUSTUP",

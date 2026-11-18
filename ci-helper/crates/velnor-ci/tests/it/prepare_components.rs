@@ -222,3 +222,32 @@ fn prepare_names_a_base_component_missing_under_a_minimal_or_default_profile() {
         );
     }
 }
+
+#[test]
+fn prepare_names_the_tool_that_is_not_at_its_pinned_version_and_writes_nothing() {
+    for (name, json, tool) in [
+        (
+            "wrong",
+            reported("1.98.0", Some("0.9.151")),
+            "rust: pinned 1.99.1, mise reports 1.98.0",
+        ),
+        (
+            "absent",
+            reported("1.99.1", None),
+            "aqua:nextest-rs/nextest/cargo-nextest: pinned 0.9.151, mise reports nothing installed",
+        ),
+    ] {
+        let run = prepare(name, &Setup::new(json));
+        assert_eq!(run.output.status.code(), Some(1), "{name}");
+        assert!(
+            String::from_utf8_lossy(&run.output.stderr).contains(tool),
+            "{name}: {:?}",
+            run.output
+        );
+        assert_eq!(
+            (run.env_file.as_str(), run.outputs.as_str()),
+            ("", ""),
+            "{name}"
+        );
+    }
+}

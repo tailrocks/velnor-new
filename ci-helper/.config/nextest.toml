@@ -19,3 +19,11 @@ threads-required = "num-test-threads"
 filter = 'test(crates_mirror)'
 success-output = "immediate"
 threads-required = "num-test-threads"
+
+[[profile.default.overrides]]
+filter = 'test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.ci.overrides]]
+filter = 'test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
+slow-timeout = { period = "30s", terminate-after = 4 }

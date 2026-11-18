@@ -20,6 +20,7 @@ mod check;
 mod error;
 mod identity;
 mod pin;
+pub use identity::repository_name;
 mod recorded;
 mod ruleset;
 mod sample;

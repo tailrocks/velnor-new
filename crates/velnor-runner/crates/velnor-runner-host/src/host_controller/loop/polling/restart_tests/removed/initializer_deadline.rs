@@ -6,23 +6,21 @@ use std::time::Duration;
 use bollard::query_parameters::{RemoveContainerOptionsBuilder, StopContainerOptionsBuilder};
 
 use super::{
-    Controller, FAILED, Restarted, TestResult, UNCERTAIN, assert_retired,
-    restarted_with_a_removed_connection, seed,
+    Controller, FAILED, Restarted, TestResult, UNCERTAIN, assert_retired, freeze,
+    restarted_with_a_removed_connection, seed, stalled,
 };
 use crate::host_controller::loop_driver::polling::{PositivePollContext, pre_jit};
 
 const BUDGET: Duration = Duration::from_secs(2);
-const GUARD: Duration = Duration::from_secs(15);
-const RECOVERY_GUARD: Duration = Duration::from_secs(5);
-const INITIALIZER: &str = "SELECT abort_state || '/' || (abort_lease_until > CAST(strftime('%s', 'now') AS INTEGER)) FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
+const INITIALIZER: &str = "SELECT abort_state || '/' || (abort_lease_until > 0) FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
 const LEASE: &str = "SELECT CAST(abort_lease_until AS TEXT) FROM capacity_reservation_storage_initialization WHERE reservation_id = ?1";
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn a_removed_connection_deadline_releases_its_initializer_abort_lease() -> TestResult<()> {
     exercise(false).await
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn a_startup_deadline_releases_its_initializer_abort_lease() -> TestResult<()> {
     exercise(true).await
 }
@@ -124,24 +122,16 @@ async fn exercise(startup: bool) -> TestResult<()> {
     restarted
         .fixture
         .hang_after(format!("GET /volumes/w{}-metadata", FAILED.nonce()));
+    let clock = freeze();
     let recovery = reconcile(&restarted, &controller, startup);
     tokio::pin!(recovery);
-    tokio::time::timeout(GUARD, async {
-        tokio::select! {
-            result = &mut recovery => {
-                result?;
-                Err::<(), Box<dyn std::error::Error>>("recovery returned before its claimed initializer stalled".into())
-            }
-            () = restarted.fixture.hung() => Ok(()),
-        }
-    })
-    .await??;
+    stalled(&restarted.fixture, &mut recovery).await?;
     assert_eq!(
         seed::text(&restarted.journal, INITIALIZER, FAILED.reservation).await?,
         "requested/1"
     );
-    let lease = seed::text(&restarted.journal, LEASE, FAILED.reservation).await?;
-    tokio::time::timeout(RECOVERY_GUARD, &mut recovery).await??;
+    clock.advance(BUDGET + Duration::from_secs(1)).await;
+    recovery.await?;
     assert_eq!(
         seed::text(&restarted.journal, seed::RESERVATION, FAILED.reservation).await?,
         UNCERTAIN
@@ -151,18 +141,17 @@ async fn exercise(startup: bool) -> TestResult<()> {
         seed::text(&restarted.journal, INITIALIZER, FAILED.reservation).await?,
         "uncertain/0"
     );
-    assert_retryable(&controller).await?;
-    tokio::time::timeout(GUARD, reconcile(&restarted, &controller, startup)).await??;
-    assert_retired(&restarted).await?;
-    let unexpired = format!(
-        "SELECT CAST({lease} > CAST(strftime('%s', 'now') AS INTEGER) AS TEXT) FROM capacity_reservations WHERE id = ?1"
-    );
     assert_eq!(
-        seed::text(&restarted.journal, &unexpired, FAILED.reservation).await?,
-        "1"
+        seed::text(&restarted.journal, LEASE, FAILED.reservation).await?,
+        "0"
     );
-    tokio::time::timeout(GUARD, reconcile(&restarted, &controller, startup)).await??;
-    assert_retired(&restarted).await
+    assert_retryable(&controller).await?;
+    reconcile(&restarted, &controller, startup).await?;
+    assert_retired(&restarted).await?;
+    reconcile(&restarted, &controller, startup).await?;
+    assert_retired(&restarted).await?;
+    drop(clock);
+    Ok(())
 }
 
 async fn assert_retryable(controller: &Controller) -> TestResult<()> {

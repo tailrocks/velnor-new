@@ -93,14 +93,27 @@ pub(super) fn read_json_at<T: for<'de> Deserialize<'de> + Serialize>(
     limit: usize,
     readonly: bool,
 ) -> Result<T, ProbeError> {
-    let file = openat(
+    read_optional_json_at(directory, name, owner, limit, readonly)?
+        .ok_or(ProbeError::Invalid("job_hook_file"))
+}
+
+fn read_optional_json_at<T: for<'de> Deserialize<'de> + Serialize>(
+    directory: &File,
+    name: &str,
+    owner: u32,
+    limit: usize,
+    readonly: bool,
+) -> Result<Option<T>, ProbeError> {
+    let file = match openat(
         directory,
         name,
         OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
         Mode::empty(),
-    )
-    .map_err(|_| ProbeError::Invalid("job_hook_file"))?;
-    let file = File::from(file);
+    ) {
+        Ok(file) => File::from(file),
+        Err(rustix::io::Errno::NOENT) => return Ok(None),
+        Err(_) => return Err(ProbeError::Invalid("job_hook_file")),
+    };
     let metadata = file
         .metadata()
         .map_err(|_| ProbeError::Invalid("job_hook_file"))?;
@@ -127,7 +140,7 @@ pub(super) fn read_json_at<T: for<'de> Deserialize<'de> + Serialize>(
     if canonical != bytes {
         return Err(ProbeError::Invalid("job_hook_json_canonical"));
     }
-    Ok(value)
+    Ok(Some(value))
 }
 
 pub(super) fn write_request_at(
@@ -160,20 +173,14 @@ pub(super) fn write_request_at(
     Ok(())
 }
 
-pub(super) fn wait_for_decision(
-    control: &File,
-    control_path: &Path,
-    deadline: Instant,
-) -> Result<Decision, ProbeError> {
+pub(super) fn wait_for_decision(control: &File, deadline: Instant) -> Result<Decision, ProbeError> {
     loop {
         if Instant::now() >= deadline {
             return Err(ProbeError::Invalid("job_hook_decision_timeout"));
         }
-        match read_json_at::<Decision>(control, DECISION_FILE, 0, DECISION_LIMIT, true) {
-            Ok(decision) => return Ok(decision),
-            Err(ProbeError::Invalid("job_hook_file"))
-                if !control_path.join(DECISION_FILE).exists() =>
-            {
+        match read_optional_json_at::<Decision>(control, DECISION_FILE, 0, DECISION_LIMIT, true) {
+            Ok(Some(decision)) => return Ok(decision),
+            Ok(None) => {
                 let remaining = deadline.saturating_duration_since(Instant::now());
                 std::thread::sleep(remaining.min(DECISION_POLL_INTERVAL));
             }

@@ -3,10 +3,11 @@
 
 "use strict";
 
-import { appendFileSync } from "node:fs";
+import { appendFileSync, existsSync, writeFileSync } from "node:fs";
 
 const config: string = await Bun.stdin.text();
 const log: string | undefined = process.env.VELNOR_RETIREMENT_CURL_LOG;
+const gate: string | undefined = process.env.VELNOR_RETIREMENT_CURL_GATE;
 if (!log) throw new Error("missing request log");
 appendFileSync(log, config + "\n---\n");
 if (config.includes("/repos/owner/repo")) {
@@ -19,7 +20,10 @@ if (config.includes("/repos/owner/repo")) {
 } else if (config.includes('request = "POST"') && config.includes("/sessions")) {
   process.stdout.write('{"sessionId":"session-other","messageQueueUrl":"https://queue.example.test/messages","messageQueueAccessToken":"queue-token"}200');
 } else if (config.includes('request = "GET"') && config.includes("/messages")) {
-  await Bun.sleep(Number(process.env.VELNOR_RETIREMENT_CURL_DELAY_MS ?? "0"));
+  if (gate) {
+    writeFileSync(`${gate}.waiting`, "");
+    while (!existsSync(`${gate}.released`)) await Bun.sleep(5);
+  }
   process.stdout.write("202");
 } else {
   throw new Error("unexpected request " + config);

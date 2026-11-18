@@ -316,7 +316,7 @@ fn the_test_prebuild_ignores_a_nextest_default_filter() -> TestResult {
     let run = run_command(build).ok_or("no prebuild command")?;
     assert_eq!(
         run,
-        "velnor-ci run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --ignore-default-filter --no-run"
+        "velnor-ci run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run"
     );
     Ok(())
 }
