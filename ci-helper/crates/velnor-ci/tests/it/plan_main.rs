@@ -60,7 +60,7 @@ fn merge_group(repo: &Repo, base: &str, head: &str) -> Output {
     run(repo, "merge_group", &payload, &rev(repo, "HEAD"))
 }
 
-fn docs(repo: &Repo) {
+pub(crate) fn docs(repo: &Repo) {
     repo.write("docs/guide.md", "guide\n");
 }
 

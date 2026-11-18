@@ -6,7 +6,7 @@ use std::process::Command;
 
 use crate::io::Repo;
 use crate::io_plan::plan_command;
-use crate::plan_main::{app, rev, two_commits};
+use crate::plan_main::{app, docs, rev, two_commits};
 use crate::support::fresh_dir;
 
 const CONFIG: &str = "[[test_groups]]
@@ -42,6 +42,14 @@ impl Planned {
         self.outputs
             .lines()
             .find_map(|line| line.strip_prefix(&key))
+            .unwrap_or("missing")
+    }
+
+    fn value(&self, key: &str) -> &str {
+        let prefix = format!("{key}=");
+        self.outputs
+            .lines()
+            .find_map(|line| line.strip_prefix(&prefix))
             .unwrap_or("missing")
     }
 
@@ -183,4 +191,36 @@ fn a_merge_group_whose_diff_cannot_be_computed_runs_every_group() {
 fn a_push_to_main_runs_every_group_whatever_its_paths_or_events() {
     let repo = two_commits("groups-push", CONFIG, app);
     expect(&push(&repo), ["run", "run", "run"]);
+}
+
+#[test]
+fn on_a_push_to_main_the_groups_follow_the_selection_of_the_default_lanes() {
+    let affected = two_commits(
+        "groups-push-docs-affected",
+        &format!("on_main = \"affected\"\n{CONFIG}"),
+        docs,
+    );
+    let planned = push(&affected);
+    assert_eq!(
+        planned.value("rust_root_mode"),
+        "none",
+        "{}",
+        planned.outputs
+    );
+    assert_eq!(planned.value("rust_root_tests"), "skip");
+    expect(&planned, ["skip", "skip", "skip"]);
+    let everything = two_commits(
+        "groups-push-docs-everything",
+        &format!("on_main = \"everything\"\n{CONFIG}"),
+        docs,
+    );
+    let planned = push(&everything);
+    assert_eq!(
+        planned.value("rust_root_mode"),
+        "all",
+        "{}",
+        planned.outputs
+    );
+    assert_eq!(planned.value("rust_root_tests"), "run");
+    expect(&planned, ["run", "run", "run"]);
 }
