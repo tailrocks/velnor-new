@@ -31,8 +31,8 @@ fn a_confirmed_deregistration_writes_the_removal_proof() -> TestResult {
     let binding = fixture_config("conn-test-1")?.connections()[0].clone();
     removed_fixture(state.path(), &binding);
     let mut prover = Scripted(BTreeMap::from([((10, 77), Ok(true))]));
-    let proven = prove_and_record(state.path(), &binding, &targets(&[(10, 77)]), &mut prover)?;
-    assert_eq!(proven, 1);
+    let count = prove_and_record(state.path(), &binding, &targets(&[(10, 77)]), &mut prover)?;
+    assert_eq!(count, 1);
     let proofs = read_absence_proofs(state.path(), &fixture_config("conn-other-1")?);
     assert!(proofs.contains(10, 77));
     Ok(())
@@ -49,8 +49,8 @@ fn a_failing_deletion_writes_no_proof() -> TestResult {
         EnsureError::Unauthorized,
     ] {
         let mut prover = Scripted(BTreeMap::from([((10, 77), Err(failure))]));
-        let proven = prove_and_record(state.path(), &binding, &targets(&[(10, 77)]), &mut prover)?;
-        assert_eq!(proven, 0);
+        let count = prove_and_record(state.path(), &binding, &targets(&[(10, 77)]), &mut prover)?;
+        assert_eq!(count, 0);
         let record = state
             .path()
             .join("connection-drain/conn-test-1~github-absent");

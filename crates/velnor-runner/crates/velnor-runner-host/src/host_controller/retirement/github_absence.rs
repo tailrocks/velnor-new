@@ -163,7 +163,12 @@ pub(crate) fn record_absence(
     }
     let mut record = format!("{token}\n");
     for (set, runner) in &pairs {
-        record.push_str(&format!("{set}:{runner}\n"));
+        record.extend([
+            set.to_string(),
+            ":".to_owned(),
+            runner.to_string(),
+            "\n".to_owned(),
+        ]);
     }
     let target = directory.join(format!("{id}{SUFFIX}"));
     let scratch = directory.join(format!("{id}{SUFFIX}.tmp"));

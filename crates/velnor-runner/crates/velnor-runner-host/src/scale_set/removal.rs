@@ -24,7 +24,7 @@ pub(crate) fn deregister_and_confirm<T: Transport + ?Sized>(
     scale_set_id: i64,
     runner_id: i64,
 ) -> Result<(), EnsureError> {
-    let _ = remove_runner(transport, runner_id, admin_token);
+    remove_runner(transport, runner_id, admin_token).ok();
     let listed = list_runner_ids(transport, admin_token, scale_set_id)?;
     if listed.contains(&runner_id.to_string()) {
         return Err(EnsureError::Uncertain);

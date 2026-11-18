@@ -83,11 +83,11 @@ pub(super) fn prove_and_record(
     targets: &BTreeSet<(i64, i64)>,
     prover: &mut impl RunnerProver,
 ) -> Result<usize, HostError> {
-    let mut proven = BTreeSet::new();
+    let mut confirmed = BTreeSet::new();
     for &(set, runner) in targets {
         match prover.prove_absent(set, runner) {
             Ok(true) => {
-                proven.insert((set, runner));
+                confirmed.insert((set, runner));
             }
             Ok(false) => {}
             Err(error) => eprintln!(
@@ -96,8 +96,8 @@ pub(super) fn prove_and_record(
             ),
         }
     }
-    record_absence(state, binding, &proven)?;
-    Ok(proven.len())
+    record_absence(state, binding, &confirmed)?;
+    Ok(confirmed.len())
 }
 
 fn held(binding: &RepositoryConnection, error: HostError) {

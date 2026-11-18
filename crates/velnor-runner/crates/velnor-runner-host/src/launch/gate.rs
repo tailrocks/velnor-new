@@ -150,10 +150,12 @@ fn prove_removed(rows: &[IntentRow], pending: &mut BTreeSet<i64>, proofs: &Absen
     });
 }
 
+type ListRunners = fn(&str, &RepositoryConnection, i64) -> Result<Option<Vec<String>>, EnsureError>;
+
 /// Where the gate's GitHub half gets credentials and listings. Tests swap in stubs.
 struct GithubSources {
     credential: fn(&RepositoryConnection) -> Result<Zeroizing<Vec<u8>>, HostError>,
-    list: fn(&str, &RepositoryConnection, i64) -> Result<Option<Vec<String>>, EnsureError>,
+    list: ListRunners,
 }
 
 const LIVE: GithubSources = GithubSources {
