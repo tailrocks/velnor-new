@@ -64,6 +64,7 @@ mod patch;
 mod pipeline;
 mod plan_job;
 mod policy_exceptions;
+mod policy_plan;
 mod release_branch_prefix;
 mod release_cargo_include;
 mod release_fixture;

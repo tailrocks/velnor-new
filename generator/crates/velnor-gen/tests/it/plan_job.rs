@@ -336,7 +336,7 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
 }
 
 #[test]
-fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestResult {
+fn the_single_job_policy_lane_reads_the_rust_jobs_plan_and_checks_out_one_commit() -> TestResult {
     let mut files = view(&["Cargo.toml"], None)?;
     let deny = RepoPath::new("deny.toml")?;
     files.tracked_paths.insert(deny.clone());
@@ -348,10 +348,10 @@ fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestRe
     let text = workflow(&files)?;
     assert!(!text.contains("rust-plan"), "{text}");
     assert!(
-        steps_of(&text, "policy").contains(&"velnor-ci plan"),
+        !steps_of(&text, "policy").contains(&"velnor-ci plan"),
         "{text}"
     );
-    assert_eq!(checkout_depths(&text, "policy"), ["2"], "{text}");
+    assert_eq!(checkout_depths(&text, "policy"), ["1"], "{text}");
     assert_eq!(
         job_permissions(&text, "policy"),
         ["contents: read"],

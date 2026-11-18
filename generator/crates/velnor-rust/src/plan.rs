@@ -14,7 +14,7 @@ use crate::base_cache::restored;
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
-use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
+use crate::lane::{Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_outputs};
 use crate::required_job::{expose_in_single, gate_outputs, has_gate};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
@@ -63,7 +63,12 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .skip_draft_pull_requests
         .then(|| step(StepKind::FailOnDraftRun));
     let gate = has_gate(facts);
-    if !single {
+    if single {
+        if gate {
+            expose_in_single(&mut jobs);
+        }
+        expose_read_outputs(&mut jobs, &RUST_JOB);
+    } else {
         let mut used = used_outputs(&jobs);
         if gate {
             used.extend(gate_outputs(&jobs));
@@ -71,8 +76,6 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             used.dedup();
         }
         jobs.insert(0, plan_job(facts, used));
-    } else if gate {
-        expose_in_single(&mut jobs);
     }
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
