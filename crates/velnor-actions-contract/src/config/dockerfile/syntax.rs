@@ -41,7 +41,7 @@ pub(super) fn instructions(text: &str) -> Vec<(String, String)> {
         if logical.is_empty() || logical.starts_with('#') {
             continue;
         }
-        while logical.ends_with('\\') {
+        while line_continues(&logical) {
             logical.pop();
             let Some(next) = lines.get(index) else { break };
             index += 1;
@@ -60,6 +60,18 @@ pub(super) fn instructions(text: &str) -> Vec<(String, String)> {
         out.push((keyword, args.trim().to_owned()));
     }
     out
+}
+
+fn line_continues(line: &str) -> bool {
+    if !line.ends_with('\\') {
+        return false;
+    }
+    if line.len() == 1 {
+        return true;
+    }
+    let mut chars = line.chars();
+    chars.next_back();
+    chars.next_back() != Some('\\')
 }
 
 fn heredoc_end(lines: &[&str], start: usize, logical: &str) -> usize {
@@ -105,7 +117,7 @@ fn heredoc_name(word: &str) -> Option<String> {
         return None;
     }
     let mut names = shell_words(rest, false)?;
-    if names.len() != 1 {
+    if names.len() != 1 || names[0].is_empty() {
         return None;
     }
     Some(names.swap_remove(0))
