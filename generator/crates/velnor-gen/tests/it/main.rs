@@ -54,6 +54,7 @@ mod io_record_boundaries;
 mod job_setup;
 mod mise_safety;
 
+mod detect_private;
 mod job_shape;
 mod lock;
 mod lock_affected;

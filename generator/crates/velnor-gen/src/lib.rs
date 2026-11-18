@@ -72,6 +72,7 @@ pub fn expected_with_notes(
     files.extend(release);
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
+    notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     Ok((files, notes))
 }

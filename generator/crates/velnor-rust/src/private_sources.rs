@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{RepoPath, RepoView, RustRoot};
+use velnor_model::{RepoPath, RepoView, RepositoryIdentity, RustCiConfig, RustRoot};
 
 use crate::roots::{CARGO_LOCK, is_cargo_config};
 use crate::toml_file::table;
@@ -96,4 +96,62 @@ pub fn cacheable_config(text: &str) -> Result<bool, crate::lock::LockError> {
     ]
     .iter()
     .any(|key| document.contains_key(*key)))
+}
+
+const PUBLIC_GIT_HOSTS: [&str; 4] = ["github.com", "gitlab.com", "codeberg.org", "bitbucket.org"];
+
+pub(crate) fn private_suggestion(
+    view: &RepoView,
+    config: &RustCiConfig,
+    roots: &[RustRoot],
+) -> Option<String> {
+    if config.private_sources.is_some() {
+        return None;
+    }
+    let owner = match &view.repository {
+        RepositoryIdentity::Named(name) => name.split('/').next().filter(|_| name.contains('/')),
+        RepositoryIdentity::Unhosted => None,
+    };
+    let found = roots.iter().find_map(|root| {
+        let lock = root.manifest.sibling(&CARGO_LOCK);
+        let bytes = view.files.get(&lock)?;
+        let document = table(bytes).ok()?;
+        document
+            .get("package")
+            .and_then(toml::Value::as_array)?
+            .iter()
+            .filter_map(toml::Value::as_table)
+            .find_map(|package| {
+                let source = package.get("source").and_then(toml::Value::as_str)?;
+                let name = package.get("name").and_then(toml::Value::as_str)?;
+                private_looking(source, owner).then(|| format!("{lock} locks {name}"))
+            })
+    })?;
+    Some(format!(
+        "{found} from a source that looks private; to build it, add a [private_sources] table to .velnor/rust-ci.toml with app_id = 'vars.<NAME>', private_key = 'secrets.<NAME>' and repositories = ['owner/name'] (see CONFIG.md)"
+    ))
+}
+
+fn private_looking(source: &str, owner: Option<&str>) -> bool {
+    if PUBLIC_SOURCES.contains(&source) {
+        return false;
+    }
+    let Some(rest) = source.strip_prefix("git+") else {
+        return source.starts_with("registry+") || source.starts_with("sparse+");
+    };
+    let Some((scheme, tail)) = rest.split_once("://") else {
+        return true;
+    };
+    let authority = tail.split('/').next().unwrap_or("");
+    let credentialed = scheme == "ssh" || authority.contains('@');
+    let host = authority.rsplit('@').next().unwrap_or("");
+    credentialed || !PUBLIC_GIT_HOSTS.contains(&host) || same_owner(tail, owner)
+}
+
+fn same_owner(tail: &str, owner: Option<&str>) -> bool {
+    owner.is_some_and(|owner| {
+        tail.split('/')
+            .nth(1)
+            .is_some_and(|first| first.eq_ignore_ascii_case(owner))
+    })
 }

@@ -42,6 +42,8 @@ private_key = "secrets.DEPS_APP_PRIVATE_KEY"
 repositories = ["owner/shared-lib"]
 ```
 
+`velnor-gen generate` prints a note that suggests this table when `Cargo.lock` locks a dependency from a registry other than crates.io, from a git host that is not github.com, gitlab.com, codeberg.org or bitbucket.org, over ssh or with credentials in the URL, or from a github.com owner that is the owner of this repository. It writes no secret, and it stays silent for crates.io and for public git dependencies of other owners.
+
 `app_id` must be a `vars.` name and `private_key` a `secrets.` name. `repositories` is a non-empty list of `owner/name` entries with one owner. Anything else is refused. The key needs a helper release of `0.1.82` or later.
 
 Each job that compiles gets two steps after `jdx/mise-action` and before its first compiling cargo command. The first creates a read-only token for the listed repositories with `actions/create-github-app-token`. It does not run for pull requests from forks. The second runs `velnor-ci fetch` with the token in its step environment only. `velnor-ci fetch` runs `cargo fetch --locked` for each Cargo root, gives the token to git through `GIT_CONFIG_*` variables of that command alone, and then revokes it with `DELETE /installation/token`. It starts `cargo` and `git` by absolute path from the tool directories the runner installed, with an environment it builds itself, so a changed `mise.toml` cannot redirect the token. It refuses a `CARGO_HOME` outside those directories. Without a token it runs `cargo fetch --locked --offline` and fails with a message that names the fork case when the caches lack a dependency.
