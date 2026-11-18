@@ -76,13 +76,16 @@ fn cargo_command(
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
         CargoCommand::NextestBuild => nextest_build(nextest),
-        CargoCommand::NextestRun { filter } => {
-            nextest_run(&format!("--workspace --locked{nextest}"), filter)
-        }
+        CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
+            &format!("--workspace --locked{nextest}"),
+            filter,
+            *ci_profile,
+        ),
         CargoCommand::NextestRunArchive {
             file,
             filter,
             threads,
+            ci_profile,
         } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .{}",
@@ -90,6 +93,7 @@ fn cargo_command(
                 threads.map_or_else(String::new, |count| format!(" --test-threads {count}"))
             ),
             filter,
+            *ci_profile,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
@@ -188,11 +192,16 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
+fn nextest_run(
+    scope: &str,
+    filter: &FilterRef,
+    ci_profile: bool,
+) -> (String, String, Vec<(String, Value)>) {
+    let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
             nextest_filter(filter)
         ),
         vec![],
