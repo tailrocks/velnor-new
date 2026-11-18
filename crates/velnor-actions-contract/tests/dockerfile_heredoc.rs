@@ -21,6 +21,10 @@ fn a_shift_token_that_starts_no_heredoc_never_hides_a_stage() {
         "FROM scratch\nRUN echo $((1 << 3))\nFROM ubuntu:latest\n",
         "FROM scratch\nRUN echo $((1 << 3))\nFROM ubuntu:latest\n3))\n",
         "FROM scratch\nRUN echo $(cat <<EOF)\nFROM ubuntu:latest\n",
+        "FROM scratch\nRUN : <<''\nFROM ubuntu:latest\n\n",
+        "FROM scratch\nRUN : <<\"\"\nFROM ubuntu:latest\n\n",
+        "FROM scratch\nRUN echo \\\\\nUSER 2<<#\nFROM ubuntu:latest\n#\n",
+        "FROM scratch\nRUN echo \\\\\nFROM ubuntu:latest\n",
     ] {
         assert_eq!(
             problem_code(text).as_deref(),
