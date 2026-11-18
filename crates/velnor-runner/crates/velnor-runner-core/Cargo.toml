@@ -13,6 +13,10 @@ autotests = false
 doctest = false
 test = false
 
+[[test]]
+name = "cleanup_proof_public"
+path = "tests/cleanup_proof_public.rs"
+
 [lints]
 workspace = true
 
