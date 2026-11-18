@@ -50,13 +50,17 @@ fn encode(kind: &str, side: &str, name: &str) -> String {
 }
 
 fn record(text: &str) -> Option<(&str, Entry)> {
-    let (body, sum) = text.rsplit_once(' ')?;
-    if sum.len() != 8 || u32::from_str_radix(sum, 16).ok() != Some(checksum(body)) {
-        return None;
-    }
-    let fields: Vec<&str> = body.split(' ').collect();
-    let [kind, side, name] = fields.as_slice() else {
-        return None;
+    let fields: Vec<&str> = text.split(' ').collect();
+    let [kind, side, name] = match fields.as_slice() {
+        [kind, side, name] => [kind, side, name],
+        [kind, side, name, sum] => {
+            let body = &text[..text.len() - sum.len() - 1];
+            if sum.len() != 8 || u32::from_str_radix(sum, 16).ok() != Some(checksum(body)) {
+                return None;
+            }
+            [kind, side, name]
+        }
+        _ => return None,
     };
     if !matches!(*kind, INTENT | RETIRED) || Side::parse(side).is_none() || !valid_name(name) {
         return None;

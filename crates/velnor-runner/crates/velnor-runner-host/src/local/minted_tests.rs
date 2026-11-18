@@ -3,7 +3,15 @@
 
 use std::os::unix::fs::PermissionsExt;
 
-use super::{COMPACT_SLACK, MINTED_FILE, MintedAgents, encode};
+use super::{COMPACT_SLACK, MINTED_FILE, MintedAgents};
+
+fn encode(kind: &str, side: &str, name: &str) -> String {
+    let body = format!("{kind} {side} {name}");
+    let sum = body.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    });
+    format!("{body} {sum:08x}\n")
+}
 
 fn lines(state: &std::path::Path) -> usize {
     std::fs::read_to_string(state.join(MINTED_FILE)).map_or(0, |text| {
@@ -98,4 +106,82 @@ async fn a_record_whose_name_was_cut_but_whose_line_ended_is_not_a_record() {
     std::fs::write(state.path().join(MINTED_FILE), cut).expect("seed");
     let open = MintedAgents::new(state.path()).load().await.expect("load");
     assert!(open.is_empty(), "{open:?}");
+}
+
+fn seed(state: &std::path::Path, text: &str) {
+    std::fs::write(state.join(MINTED_FILE), text).expect("seed");
+}
+
+async fn open(state: &std::path::Path) -> Vec<(String, String)> {
+    MintedAgents::new(state).load().await.expect("load")
+}
+
+fn entry(side: &str, name: &str) -> (String, String) {
+    (side.to_owned(), name.to_owned())
+}
+
+#[tokio::test]
+async fn a_journal_written_without_checksums_still_reads_after_an_upgrade() {
+    let state = tempfile::tempdir().expect("state");
+    seed(state.path(), "+ trusted a\n+ untrusted b\n- trusted a\n");
+    assert_eq!(open(state.path()).await, [entry("untrusted", "b")]);
+    let text = std::fs::read_to_string(state.path().join(MINTED_FILE)).expect("read");
+    assert_eq!(
+        text,
+        encode("+", "untrusted", "b"),
+        "rewritten with checksums"
+    );
+}
+
+#[tokio::test]
+async fn a_mixed_legacy_then_checksummed_journal_reads() {
+    let state = tempfile::tempdir().expect("state");
+    let new = format!(
+        "{}{}",
+        encode("+", "trusted", "c"),
+        encode("-", "trusted", "a")
+    );
+    seed(state.path(), &format!("+ trusted a\n+ trusted b\n{new}"));
+    assert_eq!(
+        open(state.path()).await,
+        [entry("trusted", "b"), entry("trusted", "c")]
+    );
+}
+
+#[tokio::test]
+async fn a_torn_legacy_tail_is_ignored() {
+    let state = tempfile::tempdir().expect("state");
+    seed(state.path(), "+ trusted a\n+ trusted cut");
+    assert_eq!(open(state.path()).await, [entry("trusted", "a")]);
+    let journal = MintedAgents::new(state.path());
+    journal.intent("trusted", "b").await.expect("intent");
+    assert_eq!(
+        open(state.path()).await,
+        [entry("trusted", "a"), entry("trusted", "b")]
+    );
+}
+
+#[tokio::test]
+async fn a_torn_checksummed_tail_is_ignored() {
+    let state = tempfile::tempdir().expect("state");
+    let whole = encode("+", "trusted", "a");
+    let torn = encode("+", "trusted", "long-name");
+    seed(
+        state.path(),
+        &format!("+ trusted old\n{whole}{}", &torn[..torn.len() - 1]),
+    );
+    assert_eq!(
+        open(state.path()).await,
+        [entry("trusted", "a"), entry("trusted", "old")]
+    );
+}
+
+#[tokio::test]
+async fn a_record_with_a_wrong_checksum_is_rejected() {
+    let state = tempfile::tempdir().expect("state");
+    seed(
+        state.path(),
+        "+ trusted a 00000000\n+ trusted b zzzzzzzz\n+ trusted c\n",
+    );
+    assert_eq!(open(state.path()).await, [entry("trusted", "c")]);
 }
