@@ -262,3 +262,36 @@ fn an_explicit_asset_name_still_replaces_the_triple_name() -> TestResult {
     ));
     Ok(())
 }
+
+#[test]
+fn a_versioned_name_gets_its_sidecar_in_the_stage_folder_with_the_version_bound() -> TestResult {
+    let (_, tree) = render(
+        &[APP],
+        Some(
+            "[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\nchecksum_files = \"sha256\"\nasset_name = \"{{ bin }}-{{ version }}-{{ target }}\"\n",
+        ),
+    )?;
+    let step = steps(job(&tree, "build-app-linux-x64")?)
+        .iter()
+        .find(|step| {
+            step.get("name")
+                .and_then(Node::text)
+                .is_some_and(|name| name.starts_with("Checksum "))
+        })
+        .ok_or("no checksum step")?;
+    assert_eq!(
+        step.get("run").and_then(Node::text),
+        Some(
+            "sha256sum \"app-${VERSION}-x86_64-unknown-linux-musl.tar.gz\" > \"app-${VERSION}-x86_64-unknown-linux-musl.tar.gz.sha256\""
+        )
+    );
+    assert_eq!(
+        step.get("working-directory").and_then(Node::text),
+        Some("stage")
+    );
+    assert_eq!(
+        step.at(&["env", "VERSION"]).and_then(Node::text),
+        Some("${{ steps.version.outputs.version }}")
+    );
+    Ok(())
+}
