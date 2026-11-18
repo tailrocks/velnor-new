@@ -15,7 +15,7 @@ use crate::base_cache::restored;
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
-use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
+use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_group_outputs, used_outputs};
 use crate::required_job::{expose_in_single, gate_outputs, has_gate};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
@@ -77,7 +77,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             used.sort();
             used.dedup();
         }
-        jobs.insert(0, plan_job(facts, used));
+        jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
     } else if gate {
         expose_in_single(&mut jobs);
     }
@@ -355,6 +355,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
         plan_outputs: Vec::new(),
+        group_outputs: Vec::new(),
         steps: Vec::new(),
     }
 }

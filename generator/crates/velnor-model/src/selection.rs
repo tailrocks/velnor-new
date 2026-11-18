@@ -27,6 +27,19 @@ pub enum EventKind {
     WorkflowDispatch,
 }
 
+impl EventKind {
+    #[must_use]
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::PullRequest => "pull_request",
+            Self::Push => "push",
+            Self::MergeGroup => "merge_group",
+            Self::Schedule => "schedule",
+            Self::WorkflowDispatch => "workflow_dispatch",
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RustSelection {
     None,

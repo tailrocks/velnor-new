@@ -3,7 +3,7 @@
 
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -83,6 +83,11 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             })
+            .chain(job.group_outputs.iter().map(|(slug, name)| {
+                let key = group_output_name(slug, name);
+                let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
+                (key, value)
+            }))
             .chain(
                 job.steps
                     .iter()

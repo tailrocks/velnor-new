@@ -92,6 +92,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             timeout_minutes: 10,
             gate: None,
             plan_outputs: Vec::new(),
+            group_outputs: Vec::new(),
             steps: kinds
                 .into_iter()
                 .map(|kind| Step {

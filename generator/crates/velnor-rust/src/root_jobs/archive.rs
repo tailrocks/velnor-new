@@ -138,6 +138,9 @@ impl RootJobs<'_> {
             }),
         );
         let mut job = self.lane_job(id, steps);
+        if let Some(group) = group.filter(|group| group.selects()) {
+            job.gate = self.lane.group_job(group.name.clone()).or(job.gate);
+        }
         job.needs.push(build_id.clone());
         job.runs_on = runner;
         if let Some(minutes) = group.and_then(|group| group.timeout_minutes) {

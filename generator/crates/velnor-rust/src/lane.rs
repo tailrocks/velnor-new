@@ -43,7 +43,15 @@ impl Lane {
             need,
             from: self.from(),
             package: None,
+            group: None,
         }
+    }
+
+    pub(crate) fn group_job(&self, group: JobId) -> Option<Gate> {
+        self.plan.is_some().then(|| Gate {
+            group: Some(group),
+            ..self.gate(GateNeed::Group)
+        })
     }
 
     fn package_gate(&self, package: PackageName) -> Gate {
@@ -92,6 +100,15 @@ impl Lane {
     }
 }
 
+pub(crate) fn used_group_outputs(jobs: &[Job]) -> Vec<(RootSlug, JobId)> {
+    let used: BTreeSet<(RootSlug, JobId)> = jobs
+        .iter()
+        .filter_map(|job| job.gate.as_ref())
+        .filter_map(|gate| Some((gate.slug.clone(), gate.group.clone()?)))
+        .collect();
+    used.into_iter().collect()
+}
+
 pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
     let used: BTreeSet<(RootSlug, GateNeed)> = jobs
         .iter()
@@ -115,11 +132,16 @@ pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
     used.into_iter().collect()
 }
 
-pub(crate) fn plan_job(facts: &RepoFacts, outputs: Vec<(RootSlug, GateNeed)>) -> Job {
+pub(crate) fn plan_job(
+    facts: &RepoFacts,
+    outputs: Vec<(RootSlug, GateNeed)>,
+    group_outputs: Vec<(RootSlug, JobId)>,
+) -> Job {
     let mut steps = head(facts, PLAN_DEPTH);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
+        group_outputs,
         skip_on_draft: false,
         steps,
         ..job(facts, PLAN_JOB)

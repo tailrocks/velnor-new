@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, VerdictSpec,
+    TESTS_RUN_OUTPUT, VerdictSpec, group_output_name,
 };
 
 const SCHEDULE: &str = "schedule";
@@ -163,6 +163,9 @@ impl PlanOutput {
                                 ));
                             }
                         }
+                    }
+                    JobCondition::Group(slug, name) => {
+                        flag(group_output_name(slug, name), "run", "skip")?
                     }
                     JobCondition::Policy => {
                         let slug = RootSlug::from_static("policy");

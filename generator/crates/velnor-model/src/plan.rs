@@ -88,6 +88,7 @@ pub struct Job {
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
+    pub group_outputs: Vec<(RootSlug, JobId)>,
     pub steps: Vec<Step>,
 }
 
@@ -113,6 +114,7 @@ pub struct Gate {
     pub need: GateNeed,
     pub from: PlanFrom,
     pub package: Option<PackageName>,
+    pub group: Option<JobId>,
 }
 
 impl Gate {
@@ -120,7 +122,7 @@ impl Gate {
     pub fn outputs(&self) -> Vec<(RootSlug, GateNeed)> {
         let own = |need| (self.slug.clone(), need);
         match self.need {
-            GateNeed::Selected => vec![own(GateNeed::Selected)],
+            GateNeed::Selected | GateNeed::Group => vec![own(GateNeed::Selected)],
             GateNeed::Doctests | GateNeed::Docs => vec![
                 own(GateNeed::Selected),
                 own(self.need),
@@ -151,6 +153,7 @@ pub enum GateNeed {
     Machete,
     Policy,
     TestsExpected,
+    Group,
 }
 
 impl GateNeed {
@@ -172,6 +175,7 @@ impl GateNeed {
             Self::Machete => "machete",
             Self::Policy => "policy",
             Self::TestsExpected => "tests",
+            Self::Group => "group",
         };
         if self.is_global() {
             format!("rust_{name}")
@@ -179,6 +183,11 @@ impl GateNeed {
             format!("rust_{slug}_{name}")
         }
     }
+}
+
+#[must_use]
+pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
+    format!("rust_{slug}_group_{group}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
