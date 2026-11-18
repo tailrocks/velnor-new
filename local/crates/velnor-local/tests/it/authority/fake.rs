@@ -28,6 +28,8 @@ pub(super) struct FakeRunners {
     pub(super) agents: Mutex<Vec<(Side, u64, String)>>,
     pub(super) down: Mutex<Vec<Side>>,
     pub(super) stubborn: bool,
+    pub(super) listing_after_delete: Option<&'static [u8]>,
+    pub(super) deleted: std::sync::atomic::AtomicBool,
     pub(super) mint_fails: bool,
     pub(super) mint_stalls: bool,
     pub(super) stalled_mint_calls: u32,
@@ -84,6 +86,11 @@ impl FakeRunners {
                 .collect();
             json!(all)
         } else if path == AGENTS_PATH {
+            if let Some(garbled) = self.listing_after_delete
+                && self.deleted.load(std::sync::atomic::Ordering::SeqCst)
+            {
+                return Ok(Some(garbled.to_vec()));
+            }
             let agents = self.agents.lock().unwrap_or_else(|e| unreachable!("{e}"));
             let listed: Vec<Value> = agents
                 .iter()
@@ -117,6 +124,8 @@ impl Backend for &FakeRunners {
             .next()
             .and_then(|id| id.parse().ok())
             .unwrap_or(0);
+        self.deleted
+            .store(true, std::sync::atomic::Ordering::SeqCst);
         if !self.stubborn {
             let mut agents = self.agents.lock().unwrap_or_else(|e| unreachable!("{e}"));
             agents.retain(|(owner, agent, _)| !(*owner == side && *agent == id));
