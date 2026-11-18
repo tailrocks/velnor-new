@@ -314,3 +314,26 @@ fn an_after_list_that_misses_a_workflow_that_runs_on_push_is_refused() {
     files.push_workflows = pushed(&["Rust CI", "Lint"]);
     assert_eq!(refusal(&files), None);
 }
+
+#[test]
+fn a_profile_must_be_a_plain_cargo_profile_name() {
+    for profile in [
+        "dev", "test", "bench", "debug", "", "-x", "1x", "a b", "a;b", "a.b", "build",
+    ] {
+        let mut files = files();
+        files.release_toml = Some(format!(
+            "[[binaries]]\npackage = \"app\"\nprofile = {profile:?}\n"
+        ));
+        assert!(
+            matches!(refusal(&files), Some(ReleaseError::InvalidProfile(..))),
+            "{profile:?}"
+        );
+    }
+    for profile in ["release", "release-tools", "size_tuned", "_x", "R2"] {
+        let mut files = files();
+        files.release_toml = Some(format!(
+            "[[binaries]]\npackage = \"app\"\nprofile = {profile:?}\n"
+        ));
+        assert_eq!(refusal(&files), None, "{profile:?}");
+    }
+}

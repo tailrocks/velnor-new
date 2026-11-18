@@ -45,6 +45,7 @@ pub enum ReleaseError {
         package: String,
         bin: String,
     },
+    InvalidProfile(String, String),
     EmptyAfter,
     EmptyRoots,
     EmptyPlatforms {

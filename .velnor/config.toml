@@ -975,6 +975,8 @@ inputs = [
   "generator/samples/release-bin/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/release.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/release-bin-profile/expected/.github/workflows/release.yml",
+  "generator/samples/release-bin-profile/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/release.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/rust-ci.yml",
   "generator/samples/policy-lane/expected/.github/workflows/rust-ci.yml",
