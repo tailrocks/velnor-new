@@ -5,7 +5,7 @@ use velnor_model::Platform;
 use velnor_release::{BinaryFormat, BinaryPlan, asset_name_uses_version, expand_asset_name};
 
 use crate::release_binaries::{command, target};
-use crate::release_raw::{bin_names, raw_name};
+use crate::release_raw::bin_names;
 use crate::release_steps::{shell_word, variables};
 use crate::rules::RenderedStep;
 
@@ -19,20 +19,24 @@ pub(crate) fn versioned(binary: &BinaryPlan) -> bool {
         .is_some_and(asset_name_uses_version)
 }
 
-pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
-    match (binary.format, &binary.asset_name) {
-        (BinaryFormat::Raw, _) => raw_name(&binary.bin, platform),
-        (BinaryFormat::Archive, None) => format!("{}.tar.gz", raw_name(&binary.bin, platform)),
-        (BinaryFormat::Archive, Some(template)) => format!(
-            "{}.tar.gz",
-            expand_asset_name(
-                template,
-                &binary.bin,
-                platform.file_suffix(),
-                target(platform, binary.format).1,
-                VERSION_REFERENCE,
-            )
+pub(crate) fn stem(binary: &BinaryPlan, bin: &str, platform: Platform) -> String {
+    match &binary.asset_name {
+        None => format!("{bin}-{}", platform.file_suffix()),
+        Some(template) => expand_asset_name(
+            template,
+            bin,
+            platform.file_suffix(),
+            target(platform, binary.format).1,
+            VERSION_REFERENCE,
         ),
+    }
+}
+
+pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
+    let stem = stem(binary, &binary.bin, platform);
+    match binary.format {
+        BinaryFormat::Archive => format!("{stem}.tar.gz"),
+        BinaryFormat::Raw => stem,
     }
 }
 
@@ -41,7 +45,7 @@ pub(crate) fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<St
         BinaryFormat::Archive => vec![asset(binary, platform)],
         BinaryFormat::Raw => bin_names(binary)
             .flat_map(|bin| {
-                let name = raw_name(bin, platform);
+                let name = stem(binary, bin, platform);
                 [
                     name.clone(),
                     format!("{name}.sha256"),
@@ -90,7 +94,9 @@ pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String
 }
 
 pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {
-    if versioned(binary) {
+    if versioned(binary) && binary.format == BinaryFormat::Raw {
+        format!("{STAGE}/*\n!{STAGE}/*.rustc")
+    } else if versioned(binary) {
         format!("{STAGE}/*")
     } else {
         published_files(binary, platform).join("\n")

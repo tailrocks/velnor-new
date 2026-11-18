@@ -43,7 +43,11 @@ pub fn expand_asset_name(
 
 pub(crate) fn checked(binary: &Binary, tag: &TagPattern) -> Result<Option<String>, ReleaseError> {
     match &binary.asset_name {
-        Some(template) if binary.format == BinaryFormat::Raw => {
+        Some(template)
+            if binary.format == BinaryFormat::Raw
+                && !binary.bins.is_empty()
+                && !template.contains(BIN) =>
+        {
             Err(ReleaseError::InvalidAssetName {
                 package: binary.package.clone(),
                 template: template.clone(),

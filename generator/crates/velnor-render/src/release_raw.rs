@@ -4,17 +4,22 @@
 use velnor_model::Platform;
 use velnor_release::BinaryPlan;
 
+use crate::release_assets::{STAGE, stem, versioned, word};
 use crate::release_binaries::command;
 use crate::release_steps::variables;
 use crate::rules::RenderedStep;
 
-pub(crate) fn raw_name(bin: &str, platform: Platform) -> String {
-    format!("{bin}-{}", platform.file_suffix())
-}
-
 pub(crate) fn bin_names(binary: &BinaryPlan) -> impl Iterator<Item = &str> {
     std::iter::once(binary.bin.as_str())
         .chain(binary.extra_bins.iter().map(|extra| extra.bin.as_str()))
+}
+
+fn sidecar_pattern(name: &str, staged: bool) -> String {
+    if staged {
+        "\"\\\\A(?<sha256>[0-9a-f]{64})  \" + $asset + \"\\\\n\\\\z\"".to_owned()
+    } else {
+        format!("\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\"")
+    }
 }
 
 pub(crate) fn raw_packaging(
@@ -28,6 +33,8 @@ pub(crate) fn raw_packaging(
     } else {
         "sha256sum"
     };
+    let staged = versioned(binary);
+    let folder = staged.then(|| STAGE.to_owned());
     let (before, after) = binary
         .tag_pattern
         .as_str()
@@ -40,23 +47,40 @@ pub(crate) fn raw_packaging(
     };
     bin_names(binary)
         .flat_map(|bin| {
-            let name = raw_name(bin, platform);
-            let record = format!(
-                "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {name} --rawfile rust {name}.rustc '{{schema: 1}} + capture(\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\") + {{tag: $tag, version: {version}, repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {name}.sha256 > {name}.provenance.json"
+            let name = stem(binary, bin, platform);
+            let file = word(binary, &name);
+            let sum = word(binary, &format!("{name}.sha256"));
+            let rustc = word(binary, &format!("{name}.rustc"));
+            let provenance = word(binary, &format!("{name}.provenance.json"));
+            let copy_to = word(
+                binary,
+                &if staged {
+                    format!("{STAGE}/{name}")
+                } else {
+                    name.clone()
+                },
             );
+            let pattern = sidecar_pattern(&name, staged);
+            let record = format!(
+                "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {triple} --arg asset {file} --rawfile rust {rustc} '{{schema: 1}} + capture({pattern}) + {{tag: $tag, version: {version}, repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {sum} > {provenance}"
+            );
+            let in_folder = |step: RenderedStep| RenderedStep {
+                working_directory: folder.clone(),
+                ..step
+            };
             [
                 command(
                     format!("Name {bin} for {}", platform.file_suffix()),
-                    format!("cp {release_dir}/{bin} {name}"),
+                    format!("cp {release_dir}/{bin} {copy_to}"),
                 ),
-                command(
+                in_folder(command(
                     format!("Checksum {name}"),
-                    format!("{checksum} {name} > {name}.sha256"),
-                ),
-                command(
+                    format!("{checksum} {file} > {sum}"),
+                )),
+                in_folder(command(
                     format!("Record the rustc version for {name}"),
-                    format!("rustc --version > {name}.rustc"),
-                ),
+                    format!("rustc --version > {rustc}"),
+                )),
                 RenderedStep {
                     env: variables(&[
                         ("REPOSITORY", "${{ github.repository }}"),
@@ -66,7 +90,7 @@ pub(crate) fn raw_packaging(
                             &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
                         ),
                     ]),
-                    ..command(format!("Record provenance of {name}"), record)
+                    ..in_folder(command(format!("Record provenance of {name}"), record))
                 },
             ]
         })

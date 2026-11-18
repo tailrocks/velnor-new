@@ -137,4 +137,5 @@ The `sums-<package>` job, which already downloads every platform archive and wri
 
 With `attest = true` the `publish-<package>` job also verifies every archive and `SHA256SUMS` before it publishes. One step per file runs `gh attestation verify` with a pinned `gh` (installed through mise, the same version the product release workflows use), and checks `--repo`, `--source-digest`, `--source-ref`, `--signer-workflow` (this `release.yml`) and `--signer-digest`. A failed verification fails the job and nothing is published. The job gains only `attestations: read`.
 
-`asset_name` and `format = "raw"` cannot be combined yet: a raw binary is named `<bin>-<platform>`.
+
+`asset_name` applies to `format = "raw"` too: the template names the executable, and the `.sha256` and `.provenance.json` files take the same name. With `bins` on a raw binary, each extra binary is named by the same template with its own `{{ bin }}`, so the template must contain `{{ bin }}` or the assets would collide, and a template without it is refused. In an archive, `{{ bin }}` is the main binary.
