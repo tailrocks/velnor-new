@@ -91,7 +91,11 @@ fn validator_commands(
             validator_commands.push(ValidatorCommand {
                 validator: ValidatorKind::CargoDeny,
                 name: DENY_STEP_NAME.to_owned(),
-                argv: deny_argv(&workspaces)?,
+                argv: deny_argv(
+                    &workspaces,
+                    velnor_actions_contract::workflow::scale_set_support_jobs(input.config)
+                        .contains(ValidatorKind::CargoDeny.job_id()),
+                )?,
                 prepare_argv: Vec::new(),
             });
         }

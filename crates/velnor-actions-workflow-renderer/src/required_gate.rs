@@ -271,3 +271,7 @@ mod tests {
         check_required_gate(&jobs)
     }
 }
+
+#[cfg(test)]
+#[path = "required_gate_fork_tests.rs"]
+mod fork_tests;
