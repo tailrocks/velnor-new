@@ -15,6 +15,8 @@ use crate::{
     scale_set::EnsureError,
 };
 
+mod refusal;
+
 const CONFIG: &str = r#"schema = 2
 [[connections]]
 connection_id = "conn-test-1"
@@ -267,36 +269,6 @@ async fn a_conflict_whose_set_is_gone_can_be_posted_again() -> TestResult<()> {
     .await?;
     assert_eq!(outcome, Ok(10));
     assert_eq!(methods(&transport), [Method::Post, Method::Get]);
-    Ok(())
-}
-
-#[tokio::test]
-async fn only_a_response_that_proves_a_refusal_releases_the_row() -> TestResult<()> {
-    let released = [400, 401, 403, 404, 422];
-    let held = [
-        201, 202, 204, 299, 301, 302, 308, 408, 429, 500, 502, 503, 504,
-    ];
-    for status in released.into_iter().chain(held) {
-        let dir = tempfile::tempdir()?;
-        let (outcome, transport, journal) = run(&dir, vec![(status, String::new())]).await?;
-        let expected = if released.contains(&status) {
-            "prepared"
-        } else {
-            "uncertain"
-        };
-        assert_eq!(
-            intent_states(&journal).await?,
-            [expected],
-            "status {status}: {outcome:?}"
-        );
-        assert_eq!(methods(&transport), [Method::Post], "status {status}");
-        let (again, transport) = attempt(&journal, vec![(200, scale_set_json(true))]).await?;
-        assert_eq!(
-            transport.seen.is_empty(),
-            expected == "uncertain",
-            "status {status}: {again:?}"
-        );
-    }
     Ok(())
 }
 
