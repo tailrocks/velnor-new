@@ -31,7 +31,7 @@ Detected stacks
     - velnor-render (generator/crates/velnor-render/Cargo.toml) [lib; depends on velnor-model, velnor-release]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib, test]
     - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin]
-    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib; depends on velnor-runner-core, velnor-runner-host]
+    - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib, test; depends on velnor-runner-core, velnor-runner-host]
     - velnor-runner-core (crates/velnor-runner/crates/velnor-runner-core/Cargo.toml) [lib]
     - velnor-runner-github (crates/velnor-runner/crates/velnor-runner-github/Cargo.toml) [lib, test; depends on velnor-runner-core]
     - velnor-runner-host (crates/velnor-runner/crates/velnor-runner-host/Cargo.toml) [bin, example, lib, test; depends on velnor-resource-probe, velnor-runner-core, velnor-runner-github, velnor-runner-image-manifest, velnor-runner-qualification]

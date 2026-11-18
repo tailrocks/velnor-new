@@ -23,7 +23,7 @@
 - 7fad48cdf09d58769f8ff0764b34562299ed97b8f98b642f08ab69266e81be07  ./.github/velnor/producer-executions-v1.json
 - e130bc3ecc6c05bd7cadbd66fd2a92e40e540f3c13ac920ccfbbe14de0c2f576  ./.github/velnor/task-execution-manifest-v1.json
 - 8159f6da4e8dacf040c336704550a0c6e56f7091b60e9913b887cf8aeb301a64  ./.github/workflows/cache-prune.yml
-- b6137f96e3917e09e629fb7cc5aadce67131741d210fcaaf39c338a8d77464e8  ./.github/workflows/ci.yml
+- 36816623aab2716bb0b62ecfb56c4ab4d161e92b50bc3863e7affb525c5a0a87  ./.github/workflows/ci.yml
 - 169affc84d343f4e5e6f06933614f312afa200e08ac72af09063ddaa4cf5df3a  ./.github/workflows/freshness.yml
 - a02d900b282d0bba32469f1e0d6d72bfbe22958c1740e71aab2fe7f8846aba2a  ./.github/workflows/homebrew-adoption.yml
 - 673a052fb9c8e74fbcb57194bb3e116569c17082e2ac2ceb329defee581817fa  ./.github/workflows/job-image-candidate.yml
@@ -36,5 +36,5 @@
 - a4bd0eed062eda89a30d33dd7619800786b98392de6b8c59764dcf699e4fc26e  ./.github/workflows/source-preview-mac-proof.yml
 - 20adfde90e8c27cba5bcd66ac3f905f9084bea08db17728fcc19d024e0dc1e0b  ./.github/workflows/source-preview-publication.yml
 - 342302f17a56dd151ebf615f44218afef84edacfb572b7eb8e778ecbf9b40e77  ./.github/workflows/source-preview-runtime.yml
-- 2ff1278feb24f67838a468534fa82c1fa467b69a0a2a9707854f0c11da22a32e  ./.github/workflows/source-qualification.yml
-- b3a5f11589d6dbe96c85803e548b11b6d73be6bb9eeab2c6c1a8f1adc31f73c4  ./.github/workflows/state-seal.yml
+- f5019c8f73847d53455a294c39ec5ceb6b35ef2a03325f002d8fb582f25bff89  ./.github/workflows/source-qualification.yml
+- a7a34d770d2ac04faea677a4317b2cee220373e9c7bcae1c426e9c4b00b86442  ./.github/workflows/state-seal.yml
