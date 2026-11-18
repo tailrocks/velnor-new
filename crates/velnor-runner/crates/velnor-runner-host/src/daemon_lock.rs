@@ -33,7 +33,7 @@ const ANCHOR_DIR: &str = "runner-lineage";
 #[derive(Debug)]
 pub struct DaemonLock {
     file: File,
-    _state_directory: Option<File>,
+    state_directory: Option<File>,
     device: u64,
     inode: u64,
     controller_running: AtomicBool,
@@ -58,7 +58,7 @@ impl DaemonLock {
             use std::os::unix::fs::MetadataExt;
             Ok(Self {
                 file,
-                _state_directory: state_directory,
+                state_directory,
                 device: metadata.dev(),
                 inode: metadata.ino(),
                 controller_running: AtomicBool::new(false),
@@ -71,14 +71,19 @@ impl DaemonLock {
         }
     }
 
+    /// A daemon lock stays held for as long as this value lives, because the
+    /// state-directory flock outlives an unlinked `daemon.lock`. A plain lock
+    /// is held only while its file is still linked.
     #[must_use]
     pub fn is_held(&self) -> bool {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            self.file
-                .metadata()
-                .is_ok_and(|metadata| metadata.nlink() > 0)
+            self.state_directory.is_some()
+                || self
+                    .file
+                    .metadata()
+                    .is_ok_and(|metadata| metadata.nlink() > 0)
         }
         #[cfg(not(unix))]
         {
