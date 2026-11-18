@@ -37,5 +37,5 @@ x509-cert = { version = "=0.2.5" }
 
 [dev-dependencies]
 aws-lc-rs = { version = "=1.18.2" }
-jiff = { version = "=0.2.38", features = ["serde"] }
+jiff = { version = "=1.0.1", features = ["serde"] }
 tempfile = { version = "=3.27.0" }
