@@ -17,10 +17,9 @@ mod task_sources;
 mod tools;
 
 pub(crate) use graph::AuthorityBinding;
-pub use inputs::state_producer_job_ids;
 pub use inputs::{
     CargoWorkspaceFact, GeneratedSourceFact, GeneratedWorkflowKind, GradleRootFact, LogicalJobFact,
-    LogicalJobSource, NativeTaskFact, RustTaskFact, SuitePhase, TofuTaskFact, WorkspaceFormatFact,
+    LogicalJobSource, NativeTaskFact, RustTaskFact, TofuTaskFact, WorkspaceFormatFact,
     WorkspacePackageFact,
 };
 pub use task_sources::WorkflowSourceFact;

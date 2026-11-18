@@ -22,8 +22,14 @@ pub const MAX_SUITE_RETENTION_DAYS: u16 = 90;
 
 pub const DEFAULT_SUITE_WORKFLOW_SLUG: &str = "suites";
 
-pub const RESERVED_SUITE_IDS: &[&str] =
-    &["plan", "required", "required-gate", "jactionlint", "rust"];
+pub const RESERVED_SUITE_IDS: &[&str] = &[
+    "plan",
+    "required",
+    "required-gate",
+    "required-infra-gate",
+    "jactionlint",
+    "rust",
+];
 
 pub const RESERVED_SUITE_WORKFLOW_SLUGS: &[&str] = &[
     "ci",

@@ -67,20 +67,6 @@ const VALIDATOR_TOOL_SPECS: [&str; 5] = [
     LYCHEE_TOOL_SPEC,
 ];
 
-const MACHETE_SCAN_CRATES: [&str; 11] = [
-    "crates/velnor-actions-contract",
-    "crates/velnor-actions-rust",
-    "crates/velnor-actions-tofu",
-    "crates/velnor-actions-ansible",
-    "crates/velnor-actions-dbt",
-    "crates/velnor-actions-gradle",
-    "crates/velnor-actions-mise",
-    "crates/velnor-actions-actionlint",
-    "crates/velnor-actions-workflow-renderer",
-    "crates/velnor-actions-orchestrator",
-    "crates/velnor-actions-cli",
-];
-
 pub fn deny_argv(workspace_roots: &[String]) -> Result<Vec<String>, SupportCommandError> {
     let mut roots = workspace_roots.to_vec();
     roots.sort();
@@ -137,25 +123,6 @@ fn join_quoted_argv(argv: &[String]) -> Result<String, SupportCommandError> {
         .collect::<Result<Vec<_>, _>>()
         .map(|words| words.join(" "))
         .map_err(SupportCommandError::from)
-}
-
-pub fn machete_argv() -> Result<Vec<String>, SupportCommandError> {
-    validator_argv(
-        CARGO_MACHETE_TOOL_SPEC,
-        CARGO_MACHETE_VERSION,
-        "cargo-machete",
-        &MACHETE_SCAN_CRATES,
-    )
-}
-
-pub fn machete_install_argv() -> Result<Vec<String>, SupportCommandError> {
-    let install = IsolatedCommand::mise_install(&[format!(
-        "{CARGO_MACHETE_TOOL_SPEC}@{CARGO_MACHETE_VERSION}"
-    )])
-    .map_err(|err| SupportCommandError::Contract {
-        problem: err.to_string(),
-    })?;
-    strings_of(install.argv()).map_err(|problem| SupportCommandError::Contract { problem })
 }
 
 pub fn validator_argv(

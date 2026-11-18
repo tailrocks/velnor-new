@@ -78,7 +78,6 @@ pub(crate) fn build_workflow_for_consumer_release(
         label: input.label,
         generator_version: prepared.generator_version,
         catalog: &prepared.catalog,
-        discovery: input.discovery,
         workflow_tasks: prepared.workflow_tasks,
         verify: &prepared.verify,
     })?;
@@ -195,19 +194,12 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
     wire_w1::vet_step_syntax(StepSyntax::JobMatrix)?;
     wire_w1::vet_step_syntax(StepSyntax::NativeParallelism)?;
     wire_w1::vet_step_syntax(StepSyntax::CacheMode)?;
-    if input.config.stacks.rust_ci_enabled() {
-        crate::rust_suites_emit::validate_suites_against_repo(
-            input.root,
-            input.config,
-            input.discovery,
-        )?;
-    }
     let catalog = input.catalog;
     let policy = input.config.workflow.policy;
     let (report_helper_version, acquire) = controller_acquisition(input, policy)?;
     let generator_version = env!("CARGO_PKG_VERSION");
     let verify = crate::verify::verify_kinds(&input.config.workflow.verify.jobs)?;
-    let support = support_workflow(policy, input.discovery, &verify, input.config.stacks.rust_ci_enabled());
+    let support = support_workflow(policy, &verify);
     let private =
         crate::config::private_wiring::PrivateWiring::load(input.root, input.config, catalog)?;
     let workflow_tasks = lane_workflow_tasks(input, acquire.as_ref(), private.as_ref())?;
@@ -311,14 +303,20 @@ fn build_workflow_jobs(
 ) -> Result<BTreeMap<String, Job>, OrchestratorError> {
     let mut jobs = BTreeMap::new();
     jobs.insert(PLAN_JOB_ID.to_owned(), plan);
-    let built = crate::crate_jobs::build_for_workflow(
-        input.config,
-        input.label,
-        input.discovery,
-        &prepared.catalog,
-        input.fetch_roots,
-        prepared.acquire.as_ref(),
-        &prepared.report_helper_version,
+    let built = crate::crate_jobs::build_crate_jobs(
+        crate::crate_jobs::CrateJobInputs {
+            label: input.label,
+            policy: input.config.workflow.policy,
+            discovery: input.discovery,
+            catalog: &prepared.catalog,
+            fetch_roots: input.fetch_roots,
+            acquire: prepared.acquire.as_ref(),
+            max_parallel_jobs: input.config.workflow.max_parallel_jobs,
+            timeout: velnor_actions_contract::JobTimeout::new(
+                input.config.workflow.crate_timeout_minutes,
+            )?,
+            helper_version: &prepared.report_helper_version,
+        },
         prepared.private.as_ref(),
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
@@ -347,17 +345,6 @@ fn build_workflow_jobs(
         required_ids.push(id.clone());
         jobs.insert(id, job);
     }
-    let suite_build = crate::rust_suites_emit::build_ci_jobs(
-        input.root,
-        input.config,
-        input.label,
-        input.discovery,
-        &prepared.catalog,
-    )?;
-    for (id, job) in suite_build.jobs {
-        jobs.insert(id, job);
-    }
-    required_ids.extend(suite_build.required_ids);
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
     let (required_catalog, required_acquire) = required_controller(input, prepared)?;
     insert_gate_jobs(
@@ -369,9 +356,7 @@ fn build_workflow_jobs(
         &required_catalog,
         input.config.required_checkout_history(),
     )?;
-    let mut drivers = built.drivers;
-    drivers.extend(suite_build.drivers);
-    wire_w1::check_crate_mbx_gating(&jobs, &drivers, &prepared.catalog)?;
+    wire_w1::check_crate_mbx_gating(&jobs, &built.drivers, &prepared.catalog)?;
     Ok(jobs)
 }
 

@@ -181,14 +181,9 @@ pub fn finalize_jobs(
         cache_p08::check_mbx_before_fetch(id, job)?;
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
-    crate::tools_producer::add_tools_producers(
-        &mut jobs,
-        ctx.pull_request_cache_policy,
-        &ctx.standalone_tools_donors,
-    )?;
+    crate::tools_producer::add_tools_producers(&mut jobs, ctx.pull_request_cache_policy)?;
     crate::sources_producer::add_sources_producer(&mut jobs)?;
     crate::tofu_producer::add_tofu_providers_producers(&mut jobs)?;
-    crate::state_seal::add_state_seal_jobs(&mut jobs)?;
     crate::tofu_stage::stage_tofu_jobs(&mut jobs, ctx.max_parallel_jobs);
     closure::check_plan_anchor(&jobs)?;
     preseed_closure::check_preseed_closure(&jobs, ctx.preseed)?;
@@ -325,8 +320,6 @@ fn render_merged(
     let mut shared = crate::lane_share::share_lanes(&jobs, ctx)?;
     shared.files.extend(task_files);
     let all_jobs = jobs.clone();
-    let mut jobs = jobs;
-    let state_seal = crate::render_state_seal::split_state_seal(ir, &mut shared, &mut jobs)?;
     execution_boundaries::validate_required_verdict(&shared.jobs, phase, &ctx.authority_steps)?;
     execution_boundaries::validate_trusted_plan(&shared.jobs, policy, phase, &ctx.authority_steps)?;
     match emit::emit_shared(
@@ -335,7 +328,6 @@ fn render_merged(
         &emit::EmitScope {
             jobs: &jobs,
             all_jobs: &all_jobs,
-            state_seal: state_seal.as_ref(),
         },
         ctx,
         matrix.as_ref(),
@@ -372,7 +364,6 @@ fn render_merged(
                 &emit::EmitScope {
                     jobs: &jobs,
                     all_jobs: &all_jobs,
-                    state_seal: state_seal.as_ref(),
                 },
                 ctx,
                 matrix.as_ref(),

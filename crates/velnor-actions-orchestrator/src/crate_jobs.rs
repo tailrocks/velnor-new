@@ -5,16 +5,15 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::ledger_cli::{LEDGER_CLI_JOB_ID, LedgerCliSource};
 use velnor_actions_contract::{
-    CacheAccess, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step, VelnorConfig,
+    CacheAccess, CrateJob, Job, JobTimeout, ProposedTask, Stack, Step,
     crate_display_name, tofu_display_name,
 };
-use velnor_actions_mise::{TaskCacheMode, ToolCatalog};
+use velnor_actions_mise::TaskCacheMode;
 use velnor_actions_workflow_renderer::steps::CompileDriver as RenderDriver;
 
 use crate::OrchestratorError;
 use crate::crate_job_ids::{CrateGroupKey, JobOwners, group_is_tofu, group_runnable};
 use crate::config::private_wiring::PrivateWiring;
-use crate::discover::Discovery;
 use crate::internal::internal;
 
 #[path = "crate_jobs_inputs.rs"]
@@ -49,31 +48,7 @@ pub(crate) struct CrateBuild {
     pub(crate) drivers: BTreeMap<String, RenderDriver>,
 }
 
-pub(crate) fn build_for_workflow(
-    config: &VelnorConfig,
-    label: &str,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    acquire: Option<&Step>,
-    helper_version: &str,
-    private: Option<&PrivateWiring>,
-) -> Result<CrateBuild, OrchestratorError> {
-    build_crate_jobs(
-        CrateJobInputs {
-        label,
-        policy: config.workflow.policy,
-        discovery,
-        catalog,
-        fetch_roots,
-        acquire,
-        max_parallel_jobs: config.workflow.max_parallel_jobs,
-        timeout: JobTimeout::new(config.workflow.crate_timeout_minutes)?,
-        helper_version,
-    }, private)
-}
-
-fn build_crate_jobs(
+pub(crate) fn build_crate_jobs(
     input: CrateJobInputs<'_>,
     private: Option<&PrivateWiring>,
 ) -> Result<CrateBuild, OrchestratorError> {

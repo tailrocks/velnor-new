@@ -76,17 +76,6 @@ fn tofu_task_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-pub(crate) fn deny_argv(roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
-    velnor_actions_workflow_renderer::native_authority::support_commands::vectors::deny_argv(roots)
-        .map_err(crate::verify::map_error)
-}
-pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {
-    velnor_actions_workflow_renderer::native_authority::support_commands::vectors::machete_argv()
-        .map_err(crate::verify::map_error)
-}
-pub(crate) fn machete_install_argv() -> Result<Vec<String>, OrchestratorError> {
-    velnor_actions_workflow_renderer::native_authority::support_commands::vectors::machete_install_argv().map_err(crate::verify::map_error)
-}
 fn strings_of(argv: Vec<OsString>) -> Result<Vec<String>, String> {
     argv.into_iter()
         .map(|arg| arg.into_string().map_err(|_| "non_utf8_argv".to_owned()))

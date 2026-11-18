@@ -7,7 +7,7 @@ use std::collections::BTreeMap;
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
 use velnor_actions_contract::{Job, Stack};
 use velnor_actions_workflow_renderer::native_authority::{
-    GeneratedWorkflowKind, LogicalJobFact, LogicalJobSource, NativeTaskFact, SuitePhase,
+    GeneratedWorkflowKind, LogicalJobFact, LogicalJobSource, NativeTaskFact,
     TofuTaskFact,
 };
 
@@ -31,7 +31,6 @@ pub(super) fn graph(
     }
     insert_named_checks(input, &mut sources, &mut ordered);
     insert_gradle(input, &mut sources, &mut ordered);
-    insert_suites(input, jobs, &mut sources, &mut ordered);
     insert_workflow_tasks(prepared, jobs, &mut sources);
     if jobs.contains_key(LEDGER_CLI_JOB_ID) {
         sources.insert(LEDGER_CLI_JOB_ID.to_owned(), LogicalJobSource::LedgerCli);
@@ -173,33 +172,6 @@ fn insert_gradle(input: &WorkflowBuildInput<'_>, sources: &mut Sources, ordered:
                     project: project.clone(),
                 },
             );
-        }
-    }
-}
-
-fn insert_suites(
-    input: &WorkflowBuildInput<'_>,
-    jobs: &BTreeMap<String, Job>,
-    sources: &mut Sources,
-    ordered: &mut Vec<String>,
-) {
-    if let Some(rust) = &input.config.stacks.rust {
-        for suite in &rust.suites {
-            for (id, phase) in [
-                (format!("suite-build-{}", suite.id), SuitePhase::Build),
-                (format!("suite-{}", suite.id), SuitePhase::Run),
-            ] {
-                if jobs.contains_key(&id) {
-                    ordered.push(id.clone());
-                    sources.insert(
-                        id,
-                        LogicalJobSource::Suite {
-                            id: suite.id.clone(),
-                            phase,
-                        },
-                    );
-                }
-            }
         }
     }
 }

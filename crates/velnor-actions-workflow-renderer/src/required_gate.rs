@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_actions_contract::{
     Job, JobTimeout, REQUIRED_CONDITION, REQUIRED_DISPLAY_NAME, REQUIRED_GATE_CONDITION,
-    REQUIRED_GATE_FAIL_CONDITION, REQUIRED_GATE_JOB_ID, REQUIRED_VERDICT_DISPLAY_NAME,
+    REQUIRED_GATE_FAIL_CONDITION, REQUIRED_GATE_JOB_ID, REQUIRED_INFRA_DISPLAY_NAME,
+    REQUIRED_INFRA_GATE_JOB_ID, REQUIRED_VERDICT_DISPLAY_NAME,
 };
 
 use crate::RenderError;
@@ -18,18 +19,20 @@ pub(crate) fn insert_required_gate(jobs: &mut BTreeMap<String, Job>) -> Result<(
     let Some(verdict) = jobs.get(FINAL_JOB_ID) else {
         return Ok(());
     };
-    let gate = required_gate_job(&verdict.runs_on)?;
-    crate::support::insert_support_job(jobs, REQUIRED_GATE_JOB_ID, gate, "required-gate")
+    let gate = required_gate_job(&verdict.runs_on, REQUIRED_DISPLAY_NAME)?;
+    let infra = required_gate_job(&verdict.runs_on, REQUIRED_INFRA_DISPLAY_NAME)?;
+    crate::support::insert_support_job(jobs, REQUIRED_GATE_JOB_ID, gate, "required-gate")?;
+    crate::support::insert_support_job(jobs, REQUIRED_INFRA_GATE_JOB_ID, infra, "required-gate")
 }
 
-fn required_gate_job(runs_on: &str) -> Result<Job, RenderError> {
+fn required_gate_job(runs_on: &str, display_name: &str) -> Result<Job, RenderError> {
     let mut step =
         crate::steps::shell_step(GATE_STEP_NAME, vec!["false".to_owned()], BTreeMap::new())?;
     step.condition = Some(REQUIRED_GATE_FAIL_CONDITION.to_owned());
     Ok(Job {
         services: Vec::new(),
         outputs: BTreeMap::new(),
-        display_name: REQUIRED_DISPLAY_NAME.to_owned(),
+        display_name: display_name.to_owned(),
         runs_on: runs_on.to_owned(),
         check_runner: None,
         timeout_minutes: JobTimeout::REQUIRED,
@@ -44,7 +47,7 @@ fn required_gate_job(runs_on: &str) -> Result<Job, RenderError> {
 }
 
 pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), RenderError> {
-    let job = required_gate_job(runs_on)?;
+    let job = required_gate_job(runs_on, REQUIRED_DISPLAY_NAME)?;
     let verdict = Job {
         services: Vec::new(),
         outputs: BTreeMap::new(),
@@ -109,7 +112,7 @@ pub(crate) fn required_gate_job_yaml(runs_on: &str) -> Result<(String, Yaml), Re
 }
 
 fn gate_step() -> Result<velnor_actions_contract::Step, RenderError> {
-    required_gate_job("ubuntu-26.04")?
+    required_gate_job("ubuntu-26.04", REQUIRED_DISPLAY_NAME)?
         .steps
         .into_iter()
         .next()
@@ -131,18 +134,31 @@ pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     {
         return bad("bad_required_gate");
     }
-    if gate.check_runner.is_some()
-        || gate.permissions.is_some()
-        || !gate.cache_access.is_read()
-        || gate.environment.is_some()
-        || !gate.services.is_empty()
+    if let Some(infra) = jobs.get(REQUIRED_INFRA_GATE_JOB_ID)
+        && (infra.display_name != REQUIRED_INFRA_DISPLAY_NAME
+            || infra.condition.as_deref() != Some(REQUIRED_GATE_CONDITION)
+            || infra.needs != [FINAL_JOB_ID]
+            || infra.steps != [gate_step()?])
     {
-        return bad("required_gate_carries_payload");
+        return bad("bad_required_infra_gate");
     }
-    if jobs
-        .iter()
-        .any(|(id, job)| id != REQUIRED_GATE_JOB_ID && job.display_name == REQUIRED_DISPLAY_NAME)
+    for job in [Some(gate), jobs.get(REQUIRED_INFRA_GATE_JOB_ID)]
+        .into_iter()
+        .flatten()
     {
+        if job.check_runner.is_some()
+            || job.permissions.is_some()
+            || !job.cache_access.is_read()
+            || job.environment.is_some()
+            || !job.services.is_empty()
+        {
+            return bad("required_gate_carries_payload");
+        }
+    }
+    if jobs.iter().any(|(id, job)| {
+        (id != REQUIRED_GATE_JOB_ID && job.display_name == REQUIRED_DISPLAY_NAME)
+            || (id != REQUIRED_INFRA_GATE_JOB_ID && job.display_name == REQUIRED_INFRA_DISPLAY_NAME)
+    }) {
         return bad("duplicate_required_check_name");
     }
     Ok(())

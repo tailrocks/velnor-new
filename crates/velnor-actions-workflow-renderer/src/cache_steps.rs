@@ -32,7 +32,7 @@ pub use mbx_gate::check_mbx_gating;
 pub(crate) use mbx_gate::is_mbx_action;
 pub(crate) use mbx_preflight::{
     ACTION_MBX_BIN, MBX_COMPILE_ENV, MBX_GC_AUTO_ENV, MBX_GC_AUTO_VALUE, RESOLVE_ACTION_MBX_BIN,
-    mbx_version_check_step, mbx_workspace_clean_step_for_action, validate_rust_toolchain,
+    mbx_version_check_step, mbx_workspace_clean_step_for_action,
 };
 pub use mbx_preflight::{
     MBX_PREFLIGHT_NAME, MBX_RESTORE_NAME, MBX_VERSION_CHECK_NAME, MbxTransport,

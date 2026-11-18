@@ -31,9 +31,13 @@ pub const REQUIRED_JOB_ID: &str = "required";
 
 pub const REQUIRED_GATE_JOB_ID: &str = "required-gate";
 
+pub const REQUIRED_INFRA_GATE_JOB_ID: &str = "required-infra-gate";
+
 pub const PLAN_DISPLAY_NAME: &str = "Plan";
 
 pub const REQUIRED_DISPLAY_NAME: &str = "Required";
+
+pub const REQUIRED_INFRA_DISPLAY_NAME: &str = "Required (infra)";
 
 pub const REQUIRED_VERDICT_DISPLAY_NAME: &str = "Required verdict";
 
@@ -115,8 +119,8 @@ impl ValidatorKind {
     }
 
     #[must_use]
-    pub fn repository_validators() -> [Self; 3] {
-        [Self::Alint, Self::CargoDeny, Self::CargoMachete]
+    pub fn repository_validators() -> [Self; 1] {
+        [Self::Alint]
     }
 }
 

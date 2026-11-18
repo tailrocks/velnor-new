@@ -1,16 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::path::Path;
 
 use velnor_actions_actionlint::PinnedActionRef;
 use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_ACTION_VERSION};
-use velnor_actions_contract::{Job, RustSuiteConfig, StepRole, VelnorConfig};
+use velnor_actions_contract::{RustSuiteConfig, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::CompileDriver as RustCompileDriver;
 use velnor_actions_workflow_renderer::rust_suites::{
-    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows, standalone_tools_donors,
+    RustSuitesRenderSpec, render_suites_workflows,
 };
 use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile};
 
@@ -20,12 +19,6 @@ use crate::discover::{Discovery, PlannedWorkspace, workspace_manifest};
 use crate::pins::resolve_mise_setup;
 use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
-
-pub(crate) struct OrchestratorCiSuiteBuild {
-    pub(crate) jobs: BTreeMap<String, Job>,
-    pub(crate) required_ids: Vec<String>,
-    pub(crate) drivers: BTreeMap<String, CompileDriver>,
-}
 
 pub(crate) fn validate_suites_against_repo(
     root: &Path,
@@ -109,97 +102,6 @@ fn validate_single_suite(
                 format!("stacks.rust.suites[{idx}].profile"),
                 format!("unknown_nextest_profile:{}", suite.profile),
             ));
-        }
-    }
-    Ok(())
-}
-
-pub(crate) fn build_ci_jobs(
-    root: &Path,
-    config: &VelnorConfig,
-    label: &str,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-) -> Result<OrchestratorCiSuiteBuild, OrchestratorError> {
-    if !config.stacks.rust_ci_enabled() {
-        return Ok(OrchestratorCiSuiteBuild {
-            jobs: BTreeMap::new(),
-            required_ids: Vec::new(),
-            drivers: BTreeMap::new(),
-        });
-    }
-    validate_suites_against_repo(root, config, discovery)?;
-    let Some(spec) = build_render_spec(config, label, discovery, catalog)? else {
-        return Ok(OrchestratorCiSuiteBuild {
-            jobs: BTreeMap::new(),
-            required_ids: Vec::new(),
-            drivers: BTreeMap::new(),
-        });
-    };
-    let mut suite_jobs = build_ci_suite_jobs(&spec)?;
-    replace_ci_suite_verifiers(&mut suite_jobs.jobs, catalog)?;
-    let mut required_ids = Vec::new();
-    for suite in &spec.suites {
-        if suite.has_pr_or_push_trigger() && suite.required {
-            let build_id = format!("suite-build-{}", suite.id);
-            if suite_jobs.jobs.contains_key(&build_id) {
-                required_ids.push(build_id);
-            }
-            let run_id = format!("suite-{}", suite.id);
-            if suite_jobs.jobs.contains_key(&run_id) {
-                required_ids.push(run_id);
-            }
-        }
-    }
-    Ok(OrchestratorCiSuiteBuild {
-        jobs: suite_jobs.jobs,
-        required_ids,
-        drivers: suite_jobs.drivers,
-    })
-}
-
-pub(crate) fn standalone_suite_tools_donors(
-    config: &VelnorConfig,
-    label: &str,
-    discovery: &Discovery,
-    catalog: &ToolCatalog,
-) -> Result<BTreeMap<String, Job>, OrchestratorError> {
-    if !config.stacks.rust_ci_enabled() {
-        return Ok(BTreeMap::new());
-    }
-    let Some(spec) = build_render_spec(config, label, discovery, catalog)? else {
-        return Ok(BTreeMap::new());
-    };
-    Ok(standalone_tools_donors(&spec)?)
-}
-
-fn replace_ci_suite_verifiers(
-    jobs: &mut BTreeMap<String, Job>,
-    catalog: &ToolCatalog,
-) -> Result<(), OrchestratorError> {
-    let restored_shell = crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
-        catalog,
-        crate::workflow::ToolchainPhase::Restored,
-    )?;
-    let installed_shell =
-        crate::workflow::workflow_policy::rust_manifest_step::verifier_shell_step(
-            catalog,
-            crate::workflow::ToolchainPhase::Installed,
-        )?;
-    let restored_action = crate::workflow::verify_restored_rust_step(catalog);
-    let installed_action = crate::workflow::verify_rust_manifest_step(catalog);
-
-    for (job_id, job) in jobs {
-        for step in &mut job.steps {
-            if *step == restored_shell {
-                *step = restored_action.clone();
-            } else if *step == installed_shell {
-                *step = installed_action.clone();
-            } else if step.role == Some(StepRole::VerifyRustManifest) {
-                return Err(OrchestratorError::Contract {
-                    problem: format!("rust_suite_verifier_not_canonical:{job_id}:{}", step.name),
-                });
-            }
         }
     }
     Ok(())

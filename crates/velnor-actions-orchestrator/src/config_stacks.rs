@@ -29,7 +29,6 @@ pub(crate) struct PartialStacks {
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct PartialRustStack {
-    ci: Option<bool>,
     configurations: Option<Vec<RustConfiguration>>,
     compile_driver: Option<DeclaredCompileDriver>,
     test_runner: Option<DeclaredTestRunner>,
@@ -65,7 +64,6 @@ impl PartialStacks {
         let rust = self.rust.map(|stack| {
             let defaults = RustStackConfig::default_config();
             RustStackConfig {
-                ci: stack.ci.unwrap_or(true),
                 configurations: stack.configurations.unwrap_or(defaults.configurations),
                 compile_driver: stack.compile_driver,
                 test_runner: stack.test_runner,
