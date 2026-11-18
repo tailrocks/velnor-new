@@ -29,6 +29,7 @@ pub mod publish;
 pub mod release;
 pub mod release_commit;
 pub mod release_preflight;
+pub mod release_published;
 pub mod report;
 mod report_caches;
 pub mod required;

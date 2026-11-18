@@ -131,6 +131,14 @@ pub struct RecordArgs {
         help = "Full SHA of the commit the release gate verified; also write <package>_commit=<sha> for each released package, the commit its tag is on, and exit 1 before writing anything when a tag is not on that commit itself. Reads GITHUB_TOKEN, which needs contents: read"
     )]
     pub verified_commit: Option<String>,
+    #[arg(
+        allow_hyphen_values = true,
+        long = "release-config",
+        value_name = "FILE",
+        requires = "verified_commit",
+        help = "A release-plz.toml, one per output file; exit 1 when a package it releases to crates.io is already published at its current version, has no git tag in the repository, and is absent from the outputs; needs RUSTUP_TOOLCHAIN and GITHUB_TOKEN"
+    )]
+    pub release_configs: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

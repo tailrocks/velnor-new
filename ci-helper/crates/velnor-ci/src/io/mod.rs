@@ -22,6 +22,7 @@ mod manifests;
 mod plan;
 pub mod pump;
 mod recording;
+mod registry;
 mod release;
 mod report;
 mod report_checkout;
