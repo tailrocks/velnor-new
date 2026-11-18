@@ -260,13 +260,16 @@ jobs:
         env:
           TARGET_CC: musl-gcc
         run: cargo build --release --locked --manifest-path Cargo.toml --package app --bin app --target x86_64-unknown-linux-musl --target-dir target
-      - name: Read the version of the tag
+      - id: version
+        name: Read the version of the tag
         env:
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'echo "VERSION=${TAG#app-v}" >> "$GITHUB_ENV"'
+        run: 'echo "version=${TAG#app-v}" >> "$GITHUB_OUTPUT"'
       - name: Create the stage folder
         run: mkdir stage
       - name: 'Pack app-${VERSION}-x86_64-unknown-linux-musl.tar.gz'
+        env:
+          VERSION: '${{ steps.version.outputs.version }}'
         run: 'tar -czf "stage/app-${VERSION}-x86_64-unknown-linux-musl.tar.gz" -C target/x86_64-unknown-linux-musl/release app'
       - name: Upload app-linux-x64
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
@@ -307,13 +310,16 @@ jobs:
         run: rustup target add aarch64-apple-darwin
       - name: Build app for macos-arm64
         run: cargo build --release --locked --manifest-path Cargo.toml --package app --bin app --target aarch64-apple-darwin --target-dir target
-      - name: Read the version of the tag
+      - id: version
+        name: Read the version of the tag
         env:
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'echo "VERSION=${TAG#app-v}" >> "$GITHUB_ENV"'
+        run: 'echo "version=${TAG#app-v}" >> "$GITHUB_OUTPUT"'
       - name: Create the stage folder
         run: mkdir stage
       - name: 'Pack app-${VERSION}-aarch64-apple-darwin.tar.gz'
+        env:
+          VERSION: '${{ steps.version.outputs.version }}'
         run: 'tar -czf "stage/app-${VERSION}-aarch64-apple-darwin.tar.gz" -C target/aarch64-apple-darwin/release app'
       - name: Upload app-macos-arm64
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
@@ -343,17 +349,22 @@ jobs:
         with:
           name: app-macos-arm64
           path: dist
-      - name: Read the version of the tag
+      - id: version
+        name: Read the version of the tag
         env:
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'echo "VERSION=${TAG#app-v}" >> "$GITHUB_ENV"'
+        run: 'echo "version=${TAG#app-v}" >> "$GITHUB_OUTPUT"'
       - name: Write SHA256SUMS
         if: '${{ runner.os != ''macOS'' }}'
         working-directory: dist
+        env:
+          VERSION: '${{ steps.version.outputs.version }}'
         run: 'sha256sum "app-${VERSION}-x86_64-unknown-linux-musl.tar.gz" "app-${VERSION}-aarch64-apple-darwin.tar.gz" > SHA256SUMS'
       - name: Write SHA256SUMS
         if: '${{ runner.os == ''macOS'' }}'
         working-directory: dist
+        env:
+          VERSION: '${{ steps.version.outputs.version }}'
         run: 'shasum -a 256 "app-${VERSION}-x86_64-unknown-linux-musl.tar.gz" "app-${VERSION}-aarch64-apple-darwin.tar.gz" > SHA256SUMS'
       - name: Upload app-sums
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9  # v7.0.2
@@ -395,13 +406,15 @@ jobs:
         with:
           name: app-sums
           path: dist
-      - name: Read the version of the tag
+      - id: version
+        name: Read the version of the tag
         env:
           TAG: '${{ needs.tag.outputs.app }}'
-        run: 'echo "VERSION=${TAG#app-v}" >> "$GITHUB_ENV"'
+        run: 'echo "version=${TAG#app-v}" >> "$GITHUB_OUTPUT"'
       - name: Publish the release of app
         env:
           GITHUB_TOKEN: '${{ github.token }}'
           REPOSITORY: '${{ github.repository }}'
           TAG: '${{ needs.tag.outputs.app }}'
+          VERSION: '${{ steps.version.outputs.version }}'
         run: 'velnor-ci release publish --repo="$REPOSITORY" --tag="$TAG" --app=velnor-release --dir=dist "app-${VERSION}-x86_64-unknown-linux-musl.tar.gz" "app-${VERSION}-aarch64-apple-darwin.tar.gz"'
