@@ -24,6 +24,7 @@ mod needs;
 pub mod observed_units;
 pub mod plan;
 pub mod platform;
+pub mod preview;
 pub mod progress_evidence;
 pub mod publish;
 pub mod release;

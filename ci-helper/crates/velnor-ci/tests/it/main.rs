@@ -51,6 +51,7 @@ mod prepare_components;
 mod prepare_configs;
 mod prepare_inputs;
 mod prepare_install;
+mod preview_helpers;
 mod release_branch_prefix;
 mod release_cargo_discovery;
 mod release_check_config;

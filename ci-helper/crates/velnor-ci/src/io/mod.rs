@@ -201,8 +201,33 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
             Ok(expiry.report + &ties)
         }
+        Command::ValidateArtifactId => {
+            crate::preview::validate_artifact_id(
+                &std::env::var(crate::preview::ARTIFACT_ID_VARIABLE).unwrap_or_default(),
+            )?;
+            Ok(String::new())
+        }
+        Command::InstallGh(args) => {
+            crate::preview::install_gh(
+                &args.version,
+                std::env::var(TOKEN_VARIABLE).ok().as_deref(),
+            )?;
+            Ok(String::new())
+        }
+        Command::StageBundle => {
+            let bundle = env_path("BUNDLE_PATH")?;
+            crate::preview::stage_bundle(&bundle, &env_path("RUNNER_TEMP")?)?;
+            Ok(String::new())
+        }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
     }
+}
+
+fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
+    std::env::var_os(variable)
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| CiError::new(format!("{variable} is not set")))
 }
 
 fn now_seconds() -> i64 {
