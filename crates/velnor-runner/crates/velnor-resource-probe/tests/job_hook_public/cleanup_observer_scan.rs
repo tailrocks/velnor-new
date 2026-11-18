@@ -31,6 +31,11 @@ struct PairNamespace {
 
 impl PairNamespace {
     fn start(name: &str) -> TestResult<Self> {
+        Self::launch(name, 1)
+    }
+
+    fn launch(name: &str, mounts: usize) -> TestResult<Self> {
+        let mounts = vec!["mount -t tmpfs tmpfs \"$1\""; mounts].join(" && ");
         let directory = std::env::temp_dir().join(format!("velnor-scan-{name}"));
         fs::create_dir_all(&directory)?;
         let mut command = Command::new("unshare");
@@ -43,7 +48,7 @@ impl PairNamespace {
             .args([
                 "sh",
                 "-c",
-                "mount -t tmpfs tmpfs \"$1\" && echo ready && exec sleep 300",
+                &format!("{mounts} && echo ready && exec sleep 300"),
                 "sh",
             ])
             .arg(&directory)
@@ -76,6 +81,16 @@ impl PairNamespace {
             mount_device,
             mount_inode: inside.ino(),
         })
+    }
+
+    fn volume(&self) -> CleanupVolume {
+        CleanupVolume {
+            role: "runner-home".to_owned(),
+            mountpoint: self.directory.display().to_string(),
+            mount_device: self.mount_device,
+            statx_device: self.mount_device,
+            inode: self.mount_inode,
+        }
     }
 
     fn pid(&self) -> u32 {
@@ -263,13 +278,18 @@ fn a_pair_volume_mounted_in_another_namespace_is_an_owned_reference() -> TestRes
     let pair = PairNamespace::start("volume-mount")?;
     let record = scan(Scenario {
         runner_namespace: untouched_namespace(),
-        volume_override: Some(CleanupVolume {
-            role: "runner-home".to_owned(),
-            mountpoint: pair.directory.display().to_string(),
-            mount_device: pair.mount_device,
-            statx_device: pair.mount_device,
-            inode: pair.mount_inode,
-        }),
+        volume_override: Some(pair.volume()),
+    })?;
+    assert_eq!(record.owned_reference_count, 1, "{record:?}");
+    Ok(())
+}
+
+#[test]
+fn a_pair_volume_covered_by_another_mount_is_an_owned_reference() -> TestResult<()> {
+    let pair = PairNamespace::launch("covered-volume", 2)?;
+    let record = scan(Scenario {
+        runner_namespace: untouched_namespace(),
+        volume_override: Some(pair.volume()),
     })?;
     assert_eq!(record.owned_reference_count, 1, "{record:?}");
     Ok(())
