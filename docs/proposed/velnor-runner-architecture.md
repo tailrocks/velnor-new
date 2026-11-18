@@ -24,7 +24,9 @@ The single metric is **push-to-merge**: the time from the final commit's accepte
 request's head until the pull request is merged, measured from the pull request timeline. We report
 P50 and P90 per week over every merged pull request, next to PR verdict time (push to the `Required`
 check), the admission span (run created → first job), runner-minutes per merged pull request, the
-compile-cache hit rate and the false-failure rate.
+compile-cache hit rate and the false-failure rate. Every PR class (generator and helper, runner,
+engine, local, no Rust, mixed) is reported, and superseded pushes, time-outs and open pull requests
+stay visible beside the merged cohort.
 
 | Measure | Today | Basis |
 |---|---|---|
@@ -63,10 +65,12 @@ rejected, however much time it saves.
    under test (`docs/goals.md` rule 12). A file the plan cannot place selects everything. Nothing is
    skipped relative to a merge group's predecessor in the queue; an obligation is skipped only when
    a receipt with its exact key exists.
-4. **C4. Reusable results are observed by Velnor.** A result that a run of a *different* tree may
-   reuse is recorded by the node agent from test processes it started itself. A job's own report may
-   back an exact-tree receipt only, because only runs of that identical tree reuse it, and that code
-   can already report its own result today. A job never signs a receipt.
+4. **C4. Only what Velnor observed is evidence for another run.** A receipt is minted only from
+   processes the node agent started in a sandbox it created, running the released plan's command
+   graph on the inputs it mounted, with every process exit and the expected test inventory observed.
+   A missing, skipped, cancelled, masked or zero-test result fails its obligation. A job's own
+   report is never evidence for another run; a lab test checks that a forged passing report yields
+   zero reusable receipts.
 5. **C5. Uncomparable work always runs, and the sandbox hides what a key does not hold.**
    Obligations that read the network, the event payload, the clock in an assertion, randomness
    without a fixed seed, Docker images not pinned by digest, or the commit's identity, or that
@@ -245,14 +249,18 @@ prints its logs:
 - **GitHub's `Runner.Worker` runs every workflow job**, unmodified: the witness, release jobs, and
   every job of other repositories and organisations. It keeps every workflow construct working and
   is the oracle the executor is compared against.
+- **Synthetic completion** is limited to a versioned generated job whose whole contract (outputs,
+  step results, logs, post steps, dependents) is proven in the lab; no other job is completed
+  without the Worker.
 - **Experiment-gated behind the witness.** An idle ARC runner already starts the next job 2 s after
   the previous one ends, 3 s at p90 [M, `fable-5.2` design review F4], so owning acquisition buys at
   most a few seconds per run. The dispatcher that holds runner identities, the hot Worker, podless
   completion of jobs from receipts, and a Worker replacement for arbitrary jobs are each built only
   if the witness design leaves more than 5 s per run that they remove (decision log I003, N05, N06,
-  I005). If built, the dispatcher keeps the official Listener's first-renewal rule and force-fail
-  path (`Runner.Listener/JobDispatcher.cs:393-405,1208-1219`), and the Worker reads only `.runner`
-  and the job message (`Runner.Worker/JobRunner.cs:47`).
+  I005). If built, the dispatcher persists the request identity and acquisition intent before
+  `acquirejob` and the sealed response before any hand-off, and keeps the official Listener's
+  first-renewal rule and force-fail path (`Runner.Listener/JobDispatcher.cs:393-405,1208-1219`), and
+  the Worker reads only `.runner` and the job message (`Runner.Worker/JobRunner.cs:47`).
 
 ### 3.6 Isolation and trust
 
@@ -277,7 +285,13 @@ Rules:
 ### 3.7 Failure handling and recovery
 
 - **Journal discipline:** persist the intent, make the call, record the outcome. Unknown is never
-  treated as absent. This is velnor-new's rule; the code is new and small.
+  treated as absent. The ledger persists an execution's intent (key, node, epoch) before the agent
+  starts a sandbox, and the agent records the result with a compare-and-swap on that epoch, so a
+  node that lost its epoch to a restart or a partition can report nothing into it; its sandbox is
+  killed and the exit of its process tree proven.
+- **Fault injection,** in the lab before each cutover: a crash before and after every remote call
+  and journal write, a response dropped after success, duplicate and reordered webhooks, a ledger
+  partition, a node lost mid-execution, and the loss of the control plane and of a whole site.
 - **`ensure` is idempotent.** A repeated request returns the same receipts or joins the same
   executions. A request that finds the ledger unreachable runs its obligations fresh.
 - **Node agent restart.** It reconciles sandboxes by UID; an execution whose sandbox is gone is
@@ -286,7 +300,11 @@ Rules:
   minute; the witness's own `ensure` covers whatever remains.
 - **Break-glass.** The hosted workflow stays as a permanent fallback, exercised weekly, and the
   cluster runs only released agent versions. Moving velnor-new back is a label change in the
-  generator config.
+  generator config, drilled weekly together with the per-job route.
+- **Control plane.** k3s has one server today (§B.1.5). Losing it stalls pod creation and cleanup in
+  both sites. The phase-3 cutover therefore waits until the loss of the control plane and of either
+  site has been qualified: three servers across failure domains, or independent admission per site
+  with durable fencing.
 
 ### 3.8 What is taken, and what is not copied
 
@@ -317,6 +335,13 @@ The ledger is the mechanism that removes duplicate work while keeping C1–C7.
   not on disk, so reading it fails instead of passing on stale data, negative lookups included.
   Every failure in a closure-only checkout names an undeclared input; it is declared or the key
   widens.
+- **The execution manifest joins every key.** The agent hashes what an obligation can observe
+  besides files: the event class (none for a pure build or test; an obligation that reads event, ref
+  or commit values is in C5 and runs fresh), the allowed environment and its values, the toolchain
+  and image digests, the sandbox class and its CPU count, the path prefix, and the modes and symlink
+  targets of the materialised files. The receipt names the bytes the agent mounted; a URL, a version
+  string or a checkout hash reported by a job is not enough. An obligation counts as event-sensitive
+  until an enforced run shows otherwise.
 - **The exact tree is the degenerate key**, used when no narrower key is proven. Test-binary digests
   are recorded with every receipt and audit the key; they are not part of it, so no bit-identical
   build is needed.
@@ -376,9 +401,21 @@ observe the result anyway.
 
 ### 4.4 Trust root and audit
 
-- **Keys.** Each node's signing key lives outside every pod, in a signer the agent calls; no sandbox
-  can read it. Receipts go to an append-only log per site. The witness verifies each receipt's
-  signature and its log entry before it passes.
+- **Keys.** Each node has one signing key per sandbox class, held by a signer process outside every
+  pod and outside the agent's general service; no sandbox can read it. A docker node's key signs
+  docker-class obligations only and never a `trusted` receipt. Receipts go to an append-only log per
+  site. The witness verifies each receipt's signature, class and log entry before it passes, and
+  audits re-execute on a different node.
+- **The agent socket** mounted into a sandbox exposes only operations scoped to that sandbox's own
+  execution, authenticated by its identity.
+- **Revocation.** Every published verdict carries the policy epoch it was computed under. Revoking a
+  signer or a reuse class raises the epoch: verdicts under an older epoch are re-checked, queue
+  entries carrying them are paused until re-verified, and landed commits that relied on them are
+  listed. The 7-day receipt expiry is a backstop, not the mechanism.
+- **Changing the verifier.** The released verifier stays authoritative while a new planner, ledger
+  or executor is qualified on the same graphs, including controlled cases of a missing test, a wrong
+  configuration and a wrong candidate; a new receipt schema or policy epoch rolls out only after the
+  current authority qualifies it (`docs/goals.md` rules 12 and 13).
 - **Degraded mode.** If the ledger cannot be reached, nothing is satisfied by lookup: obligations
   run fresh, or, if the executor is down too, the per-job workflow takes over by a configuration
   switch. A missing receipt is slow, never wrong.
@@ -637,6 +674,10 @@ obligations whose keys changed.
 - **Node settings.** Kube and system reservations (3 CPU, 6 GiB), a `memory.available` eviction
   threshold of 2 GiB, `podPidsLimit` 16384, the kubelet root directory on the XFS data volume (today
   `emptyDir` lands on the ext4 OS disk, `velnor-runners/PLAN.md:45`), topology labels for site.
+- **Reserved merge path.** Each site keeps one 16-CPU build slot and 2 gate CPUs free for
+  merge-group and gate work, about 7.7% of allocatable CPU, instead of relying on preemption: at 95%
+  utilisation waiting grows to about 19 times the service time. The wait is measured from the moment
+  work is eligible, not from GitHub's offer.
 - **Priorities.** `velnor-merge` > `velnor-gate` > `velnor-pr` = other organisations' CI >
   `velnor-batch` (the builder, speculation, scheduled full runs). Only `velnor-batch` is preempted.
 - **Untrusted pull requests.** Fork pull requests run on GitHub-hosted runners, and `ensure` never
@@ -691,7 +732,7 @@ velnor-lab or a drained worker, and none touches the required path.
 | M6 | Test-granularity scheduling over all 480 threads | 4 | stretch |
 | M7 | Break the single-test floor | 1–2 | committed: `Journal::open` ≤ 1 s; stretch ≤ 15 s per test |
 | M8 | Verification that begins before the push | 3 | stretch |
-| M9 | Zero queue wait | 0–3 | committed ≤ 5 s p90; stretch ≤ 1 s |
+| M9 | Zero queue wait, from eligibility | 3 | committed p90 ≤ 2 s; stretch ≤ 1 s |
 
 **M1. PR verdict under 60 s.** Must be true: the push webhook reaches Velnor in ≤ 8 s, the time
 GitHub needs to create the first job; the median PR's delta build takes ≤ 15 s and its lanes ≤ 10 s;
@@ -756,21 +797,23 @@ Mac is another platform, and its key belongs to the agent. Cheapest experiment: 
 that records commit time and tree, plus the duration of the agents' local test runs. Killed if
 agents rarely test before pushing.
 
-**M9. Zero queue wait.** Must be true: capacity covers peak demand for merge and gate work. Attacked
-by: merge-group-first admission and preempting batch work. Cheapest experiment: replay the busiest
-measured hour's arrivals against the capacities in section 7.
+**M9. Zero queue wait.** Must be true: capacity reserved for merge and gate work covers its peak.
+Attacked by: the reserved merge path per site (section 7) and preempting batch work. The clock
+starts when work is eligible, before any offer: committed p90 ≤ 2 s and p99 ≤ 10 s in phase 3,
+stretch p90 ≤ 1 s. Cheapest experiment: replay the busiest measured hour's arrivals plus a site loss
+against the reserved capacities.
 
 ## 10. Phases
 
 Every moonshot experiment and the cache head-to-head run in week 1, beside phase 0; their results,
 not the calendar, choose what phases 2 and 3 build. The targets are those of section 1.4.
 
-| Phase | Scope | Exit gate (measured on velnor-new over at least 50 merges) | Expected saving |
+| Phase | Scope | Exit gate (at least 50 merges for regressions; at least 200 matched heads over peak and quiet periods for any P90, with intervals; every PR class) | Expected saving |
 |---|---|---|---|
 | 0, week 1 | Gate jobs on the cluster: the generator release that moves them is merged, but the workflow was never regenerated, so they still run hosted; regenerating it is the first measured gain. Narrow the image-candidate trigger; Source qualification on the cluster or only in the queue; auto-merge; no catch-up merges; depth 4; fixed cache paths; `event.json` race fix; push-to-merge, admission and flake instrumentation; the queue-tip shadow; the week-1 experiments | PR verdict P50 ≤ 12 min, P90 ≤ 20; push-to-merge P50 ≤ 25 min, P90 ≤ 60; hosted gate queue on the critical path p90 ≤ 1 min; admission span p90 ≤ 5 s | 5.8–57 min of gate queue per run; the cancelled-run stall shrinks from up to 2,203 s to one warm job; 7.5 min median enqueue delay; twice the queue throughput |
 | 1, weeks 2–3 | Selection fixed in the engine; the test-floor programme; `-j` caps removed; gate, build and docker classes under ARC with warm pools and honest sizes; node tools and action archives; crates mirror; push run reduced to release duties; flake budget machinery; tested-tree recording | PR verdict P50 ≤ 5 min, P90 ≤ 10; push-to-merge P50 ≤ 12, P90 ≤ 30; runner-min per merged PR ≤ 150; false failures ≤ 3%; `Journal::open` ≤ 1 s | About 62 runner-min per merge from the push run; a generator or helper PR falls from 10.9 to about 3.5 min and from 52.9 to about 8 runner-min [E] |
 | 2, weeks 3–6 | `velnor-gen` cutover with parity; the root jobs call `ensure`, so the agent executes and observes every obligation; the ledger with per-root keys; the compile-cache engine the head-to-head chose; kubelet on XFS; the `main` builder; the crate split; state seal retired; test-time budget | PR verdict P50 ≤ 2 min, P90 ≤ 6; push-to-merge P50 ≤ 5, P90 ≤ 15; ≥ 65% of merge groups execute nothing; CPU per merged PR ≤ 60; no test over 60 s | Cold compiles of 196–497 crates per job become deltas; a merge group re-runs only roots whose key changed: 125 root-jobs per 100 merges instead of 500 [E] |
-| 3, weeks 6–10 | `ensure` on the push and merge-group webhooks; the witness job; per-package keys; queue-tip speculation; `velnor verify` as a stretch; depth 8 | PR verdict P50 ≤ 90 s, P90 ≤ 4 min; push-to-merge P50 ≤ 3, P90 ≤ 8; ≥ 85% of merge groups execute nothing; first cargo ≤ 5 s after the push; false failures ≤ 1%; CPU per merged PR ≤ 35 | Two of three job hops and the plan job disappear; most merges take the verdict plus about 1 min |
+| 3, weeks 6–10 | Before the cutover: control-plane and site loss qualified, and the rollback drilled. Then `ensure` on the push and merge-group webhooks; the witness job; per-package keys; queue-tip speculation; `velnor verify` as a stretch; depth 8 | PR verdict P50 ≤ 90 s, P90 ≤ 4 min; push-to-merge P50 ≤ 3, P90 ≤ 8; ≥ 85% of merge groups execute nothing; first cargo ≤ 5 s after the push; false failures ≤ 1%; CPU per merged PR ≤ 35 | Two of three job hops and the plan job disappear; most merges take the verdict plus about 1 min |
 | 4, weeks 10–18 | Moonshot M6, finer test-binary closures, the Velnor merge train if approved; the gated dispatcher, hot Worker or podless completion if the witness left a residual over 5 s | stretch: PR verdict P50 ≤ 30 s, P90 ≤ 100 s; push-to-merge P50 ≤ 100 s, P90 ≤ 4 min | GitHub's 45 s of queue latency per merge, if Velnor lands merges |
 | 5, after week 18 | Agent workspaces on the cluster; microVM fork and docker classes; other organisations on Velnor | stretch: push-to-merge P50 ≤ 75 s | Verification overlaps the agent's own work |
 
@@ -845,6 +888,7 @@ passed a four-week soak, and the hosted break-glass workflow always.
 | The ingress or the ledger is down | Webhook replay backlog; ledger health | Witnesses run their obligations fresh; slower, never wrong |
 | False failures rise as work packs denser | Paired-rerun sampler; nextest flaky counts per test | Lower the per-node build cap; queue depth back to 4; quarantine with sign-off |
 | A PR poisons a cache another request trusts | Receipts record producer and scope; promotion only by the builder | Delete the generation; requests build cold, slowly and correctly |
+| A revoked signer's or policy's green checks are already in the queue | Every verdict carries its policy epoch; the witness re-checks it | Raise the epoch; pause and re-verify affected entries; list landed commits that relied on them |
 | A signing key leaks, or a forged receipt reaches a verdict | The witness verifies each receipt's signature and its entry in the append-only log; audits re-execute a sample | Revoke that node's key and every receipt it signed; affected obligations run fresh |
 | FI workers run out of disk | Store budgets and alerts at 70% | Least-recently-used eviction, per-org caps |
 | Other organisations starve, or starve velnor-new | Wait per organisation | Quotas and priorities; preempt only batch work |
@@ -930,6 +974,6 @@ passed a four-week soak, and the hosted break-glass workflow always.
 |---|---|---|
 | One high-clock node (desktop-class cores at 5.5 GHz or more) | 1.3–1.5× on the serial path: rebuilding `velnor-runner-host` and the longest tests [E] | After phase 2, rented for a month first |
 | 10 Gbit/s between same-site workers | Moonshot M6 and site replication; 1.48 GB of test binaries in about 1.2 s instead of 12 s [E] | When M6's experiment shows a suite that needs it |
-| Two more k3s server nodes | A control plane that survives one node; no speed | Phase 4 |
+| Two more k3s server nodes, across failure domains | A control plane that survives one node or site; no speed | Before phase 3's cutover |
 | More NVMe on the FI workers | Cache headroom on the 3.5 TB data disks | When eviction starts dropping live generations |
 | More EPYC workers | +96 threads each, about +20% capacity | Only if the wait for merge and gate work exceeds 15 s p90 after phase 3 |
