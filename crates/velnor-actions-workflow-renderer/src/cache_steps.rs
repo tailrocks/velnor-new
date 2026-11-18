@@ -22,7 +22,6 @@ pub use family::{
     FAMILY_KEYS_NAME, FamilyCachePlan, FamilySnapshot, family_keys_step,
     family_keys_step_single_writer, family_restore_step, family_save_step, family_size_step,
 };
-pub(crate) use mbx_bundle::compat_head_lines;
 pub use mbx_bundle::{
     MBX_BUNDLE_EXPORT_NAME, MBX_BUNDLE_IMPORT_NAME, MBX_BUNDLE_KEY_NAME, MBX_BUNDLE_RESTORE_NAME,
     MBX_EXPORT_GROUP_ENV, MBX_EXPORT_GROUP_VALUE, MBX_PRODUCER_MARK_NAME, StateCeilings,

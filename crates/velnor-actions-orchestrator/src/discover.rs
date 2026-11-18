@@ -5,7 +5,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 
 use velnor_actions_contract::{
-    DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, RustStackConfig, VelnorConfig,
+    DETECTION_SCHEMA, DetectionStatus, FileIndex, ProposedTask, VelnorConfig,
     WorkflowTask, apply_stack_ignores, check_candidate_outcomes, check_duplicates,
     selected_projects,
 };
@@ -14,9 +14,9 @@ mod registry;
 pub(crate) use registry::detector_entries;
 use registry::{DETECTORS, detected_projects};
 
-use velnor_actions_mise::{ArchivePlan, OperatorToolchainGuard, ToolCatalog};
+use velnor_actions_mise::{OperatorToolchainGuard, ToolCatalog};
 use velnor_actions_rust::{
-    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces, propose_task,
+    Recommendation, RustExecutionProfile, WorkspaceRecord, dedupe_workspaces,
 };
 
 use crate::OrchestratorError;
@@ -46,7 +46,6 @@ pub struct Discovery {
     pub statuses: Vec<DetectionStatus>,
     pub workspaces: Vec<PlannedWorkspace>,
     pub proposals: Vec<ProposedTask>,
-    pub feature_fallbacks: Vec<crate::derive_groups::FeatureFallback>,
     pub tool_checks: Vec<ToolInputCheck>,
     pub clippy_memory: ClippyMemoryPlan,
     pub recommendations: Vec<String>,
@@ -114,7 +113,7 @@ pub(crate) fn discover_with_options(
     let resolves = crate::inventory::qualify_workspaces_with_guard(root, &workspaces, catalog, guard)?;
     let rules =
         crate::affected_inputs::resolve_input_rules(config.stacks.rust.as_ref(), &workspaces)?;
-    let (mut proposals, fallbacks) = derive_all(config, &index, &workspaces, &statuses)?;
+    let mut proposals = derive_all(&statuses, &index)?;
     let mise_checks =
         velnor_actions_mise::discover_checks(root, &config.checks, &config.qualified_tools)
             .map_err(|err| OrchestratorError::Contract {
@@ -143,7 +142,6 @@ pub(crate) fn discover_with_options(
         statuses,
         workspaces,
         proposals,
-        feature_fallbacks: fallbacks,
         tool_checks,
         clippy_memory,
         recommendations,
@@ -249,65 +247,12 @@ fn plan_workspaces(
 }
 
 fn derive_all(
-    config: &VelnorConfig,
-    index: &FileIndex,
-    workspaces: &[PlannedWorkspace],
     statuses: &[DetectionStatus],
-) -> Result<
-    (
-        Vec<ProposedTask>,
-        Vec<crate::derive_groups::FeatureFallback>,
-    ),
-    OrchestratorError,
-> {
-    let rust = config
-        .stacks
-        .rust
-        .clone()
-        .unwrap_or_else(RustStackConfig::default_config);
-    let explicit_fmt = true;
-    if !config.stacks.ignore.iter().any(|id| id == "rust") {
-        crate::derive_groups::check_scoped_packages(&rust.configurations, workspaces)?;
-    }
-    let mut groups = Vec::new();
-    let mut fallbacks = Vec::new();
-    let mut archives = ArchivePlan::new();
-    let unions: Vec<_> = rust
-        .configurations
-        .iter()
-        .map(|configuration| {
-            crate::derive_groups::declared_union(
-                workspaces,
-                index,
-                config.workflow.policy,
-                configuration,
-            )
-        })
-        .collect();
-    for workspace in workspaces {
-        for (config_name, union) in rust.configurations.iter().zip(&unions) {
-            let (derived, narrowed) = crate::derive_groups::derive_for_config(
-                config,
-                index,
-                workspace,
-                config_name,
-                explicit_fmt,
-                &mut archives,
-                union,
-            )?;
-            groups.extend(derived);
-            fallbacks.extend(narrowed);
-        }
-    }
-    let mut proposals = Vec::with_capacity(groups.len());
-    for group in &groups {
-        let task = propose_task(group)?;
-        task.validate()?;
-        proposals.push(task);
-    }
-    proposals.extend(crate::select_tofu::derive_tofu(statuses, index.files())?);
+    index: &FileIndex,
+) -> Result<Vec<ProposedTask>, OrchestratorError> {
+    let mut proposals = crate::select_tofu::derive_tofu(statuses, index.files())?;
     proposals.sort_by(|left, right| left.task_id.cmp(&right.task_id));
-    Ok((proposals, fallbacks))
+    Ok(proposals)
 }
 
 pub(crate) fn workspace_manifest(workspace_root: &str) -> String {

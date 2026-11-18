@@ -141,7 +141,7 @@ pub(super) fn sources_restore_steps(
     runner_label: &str,
 ) -> Result<Vec<Yaml>, RenderError> {
     let roots = pins.runner_workspace.fetch_roots();
-    let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[], &[])
+    let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[])
         .map_err(sources_restore_error)?;
     steps
         .into_iter()

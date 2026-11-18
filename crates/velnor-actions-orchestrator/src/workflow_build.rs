@@ -55,7 +55,6 @@ struct PreparedWorkflow {
     acquire: Option<Step>,
     format: Option<Step>,
     needs: PlanJobToolNeeds,
-    state_recipes: BTreeMap<String, velnor_actions_contract::workflow::cache_family::S256>,
 }
 
 pub(crate) fn build_workflow_for_consumer_release(
@@ -238,7 +237,6 @@ fn prepare_workflow(input: &WorkflowBuildInput<'_>) -> Result<PreparedWorkflow, 
         acquire,
         format,
         needs,
-        state_recipes: BTreeMap::new(),
     })
 }
 
@@ -319,18 +317,13 @@ fn build_workflow_jobs(
         input.fetch_roots,
         prepared.acquire.as_ref(),
         &prepared.report_helper_version,
-        prepared.generator_version,
-        input
-            .published_generator_lock
-            .and_then(|lock| lock.source_preview.as_ref()),
         prepared.private.as_ref(),
     )?;
     let mut required_ids: Vec<String> = built.jobs.iter().map(|(id, _)| id.clone()).collect();
     for (id, job) in built.jobs {
         jobs.insert(id, job);
     }
-    prepared.state_recipes = built.state_recipes;
-    for (id, job) in built.producers.into_iter().chain(built.ledger_cli) {
+    if let Some((id, job)) = built.ledger_cli {
         jobs.insert(id, job);
     }
     for (id, job) in check_jobs::build_check_jobs(
@@ -363,7 +356,6 @@ fn build_workflow_jobs(
         jobs.insert(id, job);
     }
     required_ids.extend(suite_build.required_ids);
-    attach_state_roots(input, prepared, &mut jobs)?;
     crate::workflow_task_jobs::insert_jobs(&mut jobs, &prepared.workflow_tasks)?;
     let (required_catalog, required_acquire) = required_controller(input, prepared)?;
     insert_gate_jobs(
@@ -383,4 +375,4 @@ fn build_workflow_jobs(
 
 #[path = "workflow_build_authority.rs"]
 mod authority;
-use authority::{attach_state_roots, helper_catalog, required_controller};
+use authority::{helper_catalog, required_controller};

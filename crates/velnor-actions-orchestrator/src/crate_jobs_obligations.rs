@@ -17,25 +17,11 @@ pub(super) fn obligations_for(
     catalog: &ToolCatalog,
 ) -> Result<Vec<CrateObligation>, OrchestratorError> {
     let executed: BTreeSet<&str> = tasks.iter().map(|task| task.task_id.as_str()).collect();
-    let producers: BTreeSet<&str> = if tasks.iter().any(|task| super::is_opentofu(task)) {
-        BTreeSet::new()
-    } else {
-        tasks
-            .iter()
-            .filter(|task| velnor_actions_rust::runs_before_parallel_checks(&task.task_kind))
-            .map(|task| task.task_id.as_str())
-            .collect()
-    };
     let mut ordered = tasks.to_vec();
     ordered.sort_by(|left, right| {
-        (
-            !producers.contains(left.task_id.as_str()),
-            obligation_order_key(&left.stack_id, &left.task_kind, &left.task_id),
+        obligation_order_key(&left.stack_id, &left.task_kind, &left.task_id).cmp(
+            &obligation_order_key(&right.stack_id, &right.task_kind, &right.task_id),
         )
-            .cmp(&(
-                !producers.contains(right.task_id.as_str()),
-                obligation_order_key(&right.stack_id, &right.task_kind, &right.task_id),
-            ))
     });
     let mut obligations = Vec::with_capacity(ordered.len());
     for task in ordered {

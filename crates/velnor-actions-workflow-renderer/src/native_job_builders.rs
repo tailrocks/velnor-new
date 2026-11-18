@@ -65,63 +65,6 @@ pub enum NativeJobBuilderError {
 
 pub const LINT_JOB_ID: &str = "jactionlint";
 
-pub fn plan_state_roots(
-    plan: &mut Job,
-    catalog: &ToolCatalog,
-    fetch_roots: &[String],
-    tofu_roots: &[String],
-    state_roots: &[plan_sources::cache_keys::StateRootPlan],
-    seal: &plan_sources::state_select::StateSealPlan,
-) -> Result<(), NativeJobBuilderError> {
-    let selecting = !seal.roots.is_empty();
-    let rebuilt =
-        plan_sources::cache_keys::cache_keys_step(catalog, fetch_roots, tofu_roots, state_roots)
-            .map_err(NativeJobBuilderError::PlanSources)?;
-    let Some(rebuilt) = rebuilt else {
-        if state_roots.is_empty() {
-            return Ok(());
-        }
-        return Err(NativeJobBuilderError::Render(
-            crate::RenderError::InvalidWorkflow("state_roots_without_cache_keys_step".to_owned()),
-        ));
-    };
-    if state_roots.is_empty() && !selecting {
-        return Ok(());
-    }
-    let existing = plan
-        .steps
-        .iter()
-        .position(|step| step.id == Some(velnor_actions_contract::StepId::CacheKeys));
-    let at = match existing {
-        Some(at) => {
-            plan.steps.remove(at);
-            at
-        }
-        None => plan
-            .steps
-            .iter()
-            .position(|step| {
-                matches!(&step.kind, velnor_actions_contract::StepKind::Internal { operation, .. } if operation == PLAN_OPERATION)
-            })
-            .ok_or(NativeJobBuilderError::Render(
-                crate::RenderError::InvalidWorkflow("plan_job_lost_plan_step".to_owned()),
-            ))?,
-    };
-    plan.steps.insert(at, rebuilt);
-    if selecting {
-        let select = plan_sources::state_select::state_select_step(&seal.roots)
-            .map_err(NativeJobBuilderError::Render)?;
-        plan.steps.insert(at + 1, select);
-        let mut permissions = plan
-            .permissions
-            .take()
-            .unwrap_or_else(read_actions_permissions);
-        permissions.attest = PermissionLevel::Read;
-        plan.permissions = Some(permissions);
-    }
-    Ok(())
-}
-
 pub fn plan_job(
     label: &str,
     acquire: Option<Step>,
@@ -167,7 +110,7 @@ pub fn plan_job(
             verifier_builders::verify_rust_manifest_step()
         });
     }
-    let cached = plan_sources::cache_steps_for_plan(catalog, fetch_roots, tofu_roots, &[])
+    let cached = plan_sources::cache_steps_for_plan(catalog, fetch_roots, tofu_roots)
         .map_err(NativeJobBuilderError::PlanSources)?;
     steps.extend(cached);
     let env = plan_fetch_env(catalog)?;

@@ -18,10 +18,6 @@ pub(crate) fn is_rust(task: &ProposedTask) -> bool {
     !is_opentofu(task)
 }
 
-pub(crate) fn is_mbx(task: &ProposedTask) -> bool {
-    needs(task).mbx
-}
-
 pub(crate) fn is_nextest(task: &ProposedTask) -> bool {
     needs(task).nextest
 }
