@@ -41,10 +41,11 @@ pub(super) fn run_budget(args: &BudgetArgs) -> Result<String, CiError> {
     let histories = gather(&github, &repo, &default_branch, args.last)?;
     let evaluation = budget::evaluate(&budget, &histories);
     let report = budget::report(&budget, &evaluation);
+    print!("{report}");
     write_summary(&report)?;
     write_current(&budget, &github, &repo)?;
     if evaluation.passed() {
-        Ok(report)
+        Ok(String::new())
     } else {
         Err(CiError::new(reason(&evaluation)))
     }
@@ -114,7 +115,7 @@ fn gather(
         let runs: ApiPage<ApiListedRun> = parse(&body, "workflow runs")?;
         let last_page = runs.items.len() < PAGE_SIZE;
         for run in runs.items {
-            if run.run_attempt != 1 {
+            if run.run_attempt != 1 || !run.succeeded() {
                 continue;
             }
             if let Some(population) = classify(&run, default_branch) {

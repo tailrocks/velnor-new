@@ -51,7 +51,12 @@ fn the_budget_job_runs_on_the_default_branch_when_no_full_run_is_scheduled() -> 
         .split("  rust-budget:")
         .nth(1)
         .ok_or("the budget job is missing")?;
-    assert!(job.contains("github.event_name == ''push''"), "{job}");
+    assert!(
+        job.contains(
+            "(github.event_name == ''push'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch))"
+        ),
+        "the job runs on a push to the default branch and on nothing else\n{job}"
+    );
     Ok(())
 }
 
@@ -66,7 +71,10 @@ fn the_budget_job_runs_on_the_schedule_when_a_full_run_is_scheduled() -> TestRes
         .split("  rust-budget:")
         .nth(1)
         .ok_or("the budget job is missing")?;
-    assert!(job.contains("github.event_name == ''schedule''"), "{job}");
+    assert!(
+        job.contains("(github.event_name == ''schedule'')"),
+        "the job runs on the schedule and on nothing else\n{job}"
+    );
     Ok(())
 }
 
@@ -91,6 +99,24 @@ fn the_budget_job_is_advisory_in_the_required_check() -> TestResult {
         .ok_or("the required job is missing")?;
     assert!(
         required.contains("--job rust-budget=schedule+advisory"),
+        "a breach must not fail the required check\n{required}"
+    );
+    Ok(())
+}
+
+#[test]
+fn the_budget_job_is_advisory_on_a_default_branch_run_too() -> TestResult {
+    let files = budgeted(
+        "0.1.82",
+        "full_run = \"off\"\n[budget]\nmain_wall_seconds = 600\n",
+    )?;
+    let text = workflow(&files)?;
+    let required = text
+        .split("  required:")
+        .nth(1)
+        .ok_or("the required job is missing")?;
+    assert!(
+        required.contains("--job rust-budget=default-branch-push+advisory"),
         "a breach must not fail the required check\n{required}"
     );
     Ok(())

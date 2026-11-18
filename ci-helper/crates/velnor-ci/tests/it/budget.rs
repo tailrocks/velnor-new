@@ -110,6 +110,23 @@ fn an_enabled_measurement_the_runs_do_not_have_is_missing_and_not_a_green_zero()
 }
 
 #[test]
+fn a_budget_for_a_kind_of_run_there_is_none_of_is_missing() {
+    let histories = vec![history(
+        Population::MainPush,
+        vec![sample(1, 100, 100, None)],
+    )];
+    let evaluation = evaluate(&budget(300, 0, 0, 0), &histories);
+    assert!(evaluation.breaches.is_empty(), "{:?}", evaluation.breaches);
+    assert_eq!(evaluation.missing.len(), 1, "{:?}", evaluation.missing);
+    assert!(
+        evaluation.missing[0].contains("pull request runs are not measured"),
+        "{:?}",
+        evaluation.missing
+    );
+    assert!(!evaluation.passed());
+}
+
+#[test]
 fn the_three_jobs_furthest_above_their_median_are_named() {
     let jobs = |name: &str, seconds: u64| (name.to_owned(), seconds);
     let mut latest = sample(4, 100, 100, None);
@@ -150,4 +167,120 @@ fn a_budget_without_any_run_to_measure_is_missing_and_not_a_green_zero() {
         evaluation.missing
     );
     assert!(!evaluation.passed());
+}
+
+fn listing() -> String {
+    serde_json::json!({
+        "total_count": 4,
+        "workflow_runs": [
+            {"id": 2, "event": "pull_request", "run_attempt": 1, "head_branch": "feature",
+             "status": "completed", "conclusion": "success", "pull_requests": []},
+            {"id": 4, "event": "pull_request", "run_attempt": 1, "head_branch": "feature",
+             "status": "completed", "conclusion": "success", "pull_requests": []},
+            {"id": 1, "event": "pull_request", "run_attempt": 1, "head_branch": "feature",
+             "status": "completed", "conclusion": "failure", "pull_requests": []},
+            {"id": 3, "event": "pull_request", "run_attempt": 2, "head_branch": "feature",
+             "status": "completed", "conclusion": "success", "pull_requests": []}
+        ]
+    })
+    .to_string()
+}
+
+fn run(started: &str, ended: &str) -> String {
+    serde_json::json!({
+        "name": "Rust CI", "status": "completed", "conclusion": "success", "run_attempt": 1,
+        "event": "pull_request", "head_sha": "abc",
+        "created_at": "2026-11-01T00:00:00Z", "run_started_at": started, "updated_at": ended
+    })
+    .to_string()
+}
+
+fn jobs(started: &str, ended: &str, restored: &str) -> String {
+    serde_json::json!({
+        "total_count": 1,
+        "jobs": [{
+            "id": 10, "name": "rust-root", "conclusion": "success",
+            "created_at": started, "started_at": started, "completed_at": ended,
+            "steps": [{
+                "name": "velnor-ci restored", "conclusion": "success",
+                "started_at": restored, "completed_at": restored
+            }]
+        }]
+    })
+    .to_string()
+}
+
+fn budget_command(dir: &std::path::Path, api: &str) -> std::process::Output {
+    std::fs::create_dir_all(dir.join(".velnor")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::write(
+        dir.join(".velnor/rust-ci.toml"),
+        "[budget]\npr_wall_seconds = 500\n",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    let mut command = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .args(["bench", "budget", "--repo", "tailrocks/velnor-new"])
+        .current_dir(dir)
+        .env("GITHUB_API_URL", api)
+        .env("GITHUB_TOKEN", "recorded")
+        .env_remove("GITHUB_RUN_ID")
+        .env_remove("GITHUB_STEP_SUMMARY");
+    command.output().unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn the_command_measures_the_successful_first_attempts_and_names_the_slow_job() {
+    let mut responses = std::collections::BTreeMap::new();
+    responses.insert(
+        "/repos/tailrocks/velnor-new".to_owned(),
+        serde_json::json!({"id": 1, "default_branch": "main"}).to_string(),
+    );
+    responses.insert(
+        "/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&per_page=100&page=1".to_owned(),
+        listing(),
+    );
+    responses.insert(
+        "/repos/tailrocks/velnor-new/actions/runs/2".to_owned(),
+        run("2026-11-01T00:00:10Z", "2026-11-01T00:10:10Z"),
+    );
+    responses.insert(
+        "/repos/tailrocks/velnor-new/actions/runs/2/attempts/1/jobs?per_page=100&page=1".to_owned(),
+        jobs(
+            "2026-11-01T00:00:20Z",
+            "2026-11-01T00:05:20Z",
+            "2026-11-01T00:01:30Z",
+        ),
+    );
+    responses.insert(
+        "/repos/tailrocks/velnor-new/actions/runs/4".to_owned(),
+        run("2026-11-01T00:00:10Z", "2026-11-01T00:06:50Z"),
+    );
+    responses.insert(
+        "/repos/tailrocks/velnor-new/actions/runs/4/attempts/1/jobs?per_page=100&page=1".to_owned(),
+        jobs(
+            "2026-11-01T00:00:20Z",
+            "2026-11-01T00:01:40Z",
+            "2026-11-01T00:01:00Z",
+        ),
+    );
+    let api = crate::io::serve(responses);
+    let dir = crate::support::fresh_dir("velnor-ci-budget", "collect");
+    let output = budget_command(&dir, &api);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stdout}{stderr}");
+    assert!(
+        stdout.contains("pull request: 2 runs, median wall 500s, runner 190s, setup 55s"),
+        "{stdout}{stderr}"
+    );
+    assert!(
+        stdout.contains("rust-root (pull request): 300s, median 80s, +220s"),
+        "{stdout}"
+    );
+    assert!(
+        stderr.contains(
+            "the pull request wall seconds of the latest run is 600s, above the budget 500s"
+        ),
+        "{stderr}"
+    );
 }

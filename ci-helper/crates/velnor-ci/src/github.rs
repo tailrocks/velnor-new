@@ -172,7 +172,18 @@ pub struct ApiListedRun {
     pub run_attempt: u32,
     pub head_branch: Option<String>,
     #[serde(default)]
+    pub status: Option<String>,
+    #[serde(default)]
+    pub conclusion: Option<String>,
+    #[serde(default)]
     pub pull_requests: Vec<ApiListedPullRequest>,
+}
+
+impl ApiListedRun {
+    #[must_use]
+    pub fn succeeded(&self) -> bool {
+        self.status.as_deref() == Some("completed") && self.conclusion.as_deref() == Some("success")
+    }
 }
 
 #[derive(Debug, Deserialize)]

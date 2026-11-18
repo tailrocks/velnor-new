@@ -121,85 +121,106 @@ impl Evaluation {
 
 #[must_use]
 pub fn evaluate(budget: &SpeedBudget, histories: &[History]) -> Evaluation {
-    let mut breaches = Vec::new();
-    let mut missing = Vec::new();
-    let mut medians = Vec::new();
-    let mut slowest_jobs = Vec::new();
-    if budget.enabled() && histories.iter().all(|history| history.samples.is_empty()) {
-        missing.push("the generated workflow has no successful run to measure".to_owned());
-    }
+    let mut evaluation = Evaluation {
+        breaches: Vec::new(),
+        missing: Vec::new(),
+        medians: Vec::new(),
+        slowest_jobs: Vec::new(),
+    };
+    measure_kinds(budget, histories, &mut evaluation);
     for history in histories {
-        let Some(latest) = history.samples.first() else {
-            continue;
-        };
-        let window = history.samples.len();
-        let wall = median(history.samples.iter().map(|sample| sample.wall_seconds));
-        let runner = median(history.samples.iter().map(|sample| sample.runner_seconds));
-        let setup = median(
-            history
-                .samples
-                .iter()
-                .filter_map(|sample| sample.setup_seconds),
-        );
-        medians.push(Medians {
-            population: history.population,
-            samples: history.samples.len(),
-            wall_seconds: wall.unwrap_or_default(),
-            runner_seconds: runner.unwrap_or_default(),
-            setup_seconds: setup,
-        });
-        let wall_budget = budget.wall_seconds(history.population.is_pull_request());
-        let mut evaluation = Evaluation {
-            breaches: Vec::new(),
-            missing: Vec::new(),
-            medians: Vec::new(),
-            slowest_jobs: Vec::new(),
-        };
-        compare(
-            &mut evaluation,
-            history.population,
-            Measure::Wall,
-            wall_budget,
-            Some(latest.wall_seconds),
-            wall,
-            window > 1,
-        );
-        compare(
-            &mut evaluation,
-            history.population,
-            Measure::Runner,
-            budget.runner_seconds,
-            Some(latest.runner_seconds),
-            runner,
-            window > 1,
-        );
-        compare(
-            &mut evaluation,
-            history.population,
-            Measure::Setup,
-            budget.setup_seconds,
-            latest.setup_seconds,
-            setup,
-            window > 1,
-        );
-        breaches.append(&mut evaluation.breaches);
-        missing.append(&mut evaluation.missing);
-        slowest_jobs.extend(job_deltas(history));
+        measure_population(budget, history, &mut evaluation);
     }
-    slowest_jobs.sort_by(|left, right| {
+    evaluation.slowest_jobs.sort_by(|left, right| {
         right
             .seconds
             .abs_diff(right.median)
             .cmp(&left.seconds.abs_diff(left.median))
             .then_with(|| left.name.cmp(&right.name))
     });
-    slowest_jobs.truncate(SLOWEST_JOBS);
-    Evaluation {
-        breaches,
-        missing,
-        medians,
-        slowest_jobs,
+    evaluation.slowest_jobs.truncate(SLOWEST_JOBS);
+    evaluation
+}
+
+fn measure_kinds(budget: &SpeedBudget, histories: &[History], evaluation: &mut Evaluation) {
+    let measured: usize = histories.iter().map(|history| history.samples.len()).sum();
+    let pull_requests: usize = histories
+        .iter()
+        .filter(|history| history.population.is_pull_request())
+        .map(|history| history.samples.len())
+        .sum();
+    let default_branch: usize = histories
+        .iter()
+        .filter(|history| !history.population.is_pull_request())
+        .map(|history| history.samples.len())
+        .sum();
+    if budget.enabled() && measured == 0 {
+        evaluation
+            .missing
+            .push("the generated workflow has no successful run to measure".to_owned());
+        return;
     }
+    if budget.pr_wall_seconds > 0 && pull_requests == 0 {
+        evaluation
+            .missing
+            .push("the pull request runs are not measured".to_owned());
+    }
+    if budget.main_wall_seconds > 0 && default_branch == 0 {
+        evaluation
+            .missing
+            .push("the default branch runs are not measured".to_owned());
+    }
+}
+
+fn measure_population(budget: &SpeedBudget, history: &History, evaluation: &mut Evaluation) {
+    let Some(latest) = history.samples.first() else {
+        return;
+    };
+    let window = history.samples.len();
+    let wall = median(history.samples.iter().map(|sample| sample.wall_seconds));
+    let runner = median(history.samples.iter().map(|sample| sample.runner_seconds));
+    let setup = median(
+        history
+            .samples
+            .iter()
+            .filter_map(|sample| sample.setup_seconds),
+    );
+    evaluation.medians.push(Medians {
+        population: history.population,
+        samples: window,
+        wall_seconds: wall.unwrap_or_default(),
+        runner_seconds: runner.unwrap_or_default(),
+        setup_seconds: setup,
+    });
+    let wall_budget = budget.wall_seconds(history.population.is_pull_request());
+    compare(
+        evaluation,
+        history.population,
+        Measure::Wall,
+        wall_budget,
+        Some(latest.wall_seconds),
+        wall,
+        window > 1,
+    );
+    compare(
+        evaluation,
+        history.population,
+        Measure::Runner,
+        budget.runner_seconds,
+        Some(latest.runner_seconds),
+        runner,
+        window > 1,
+    );
+    compare(
+        evaluation,
+        history.population,
+        Measure::Setup,
+        budget.setup_seconds,
+        latest.setup_seconds,
+        setup,
+        window > 1,
+    );
+    evaluation.slowest_jobs.extend(job_deltas(history));
 }
 
 fn compare(

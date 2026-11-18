@@ -169,7 +169,12 @@ fn the_gate_prints_the_budget_next_to_the_current_run() {
 
 #[test]
 fn the_gate_prints_no_budget_when_the_budget_job_did_not_run() {
-    let (output, summary) = gate("no-budget", Some(&needs("success", "success", "7", "7")));
+    let skipped = needs("success", "success", "7", "7")
+        .replace(
+            "\"rust-test\":{\"result\":\"success\"",
+            "\"rust-budget\":{\"result\":\"skipped\",\"outputs\":{}},\"rust-test\":{\"result\":\"success\"",
+        );
+    let (output, summary) = gate_with("no-budget", BUDGET_SPEC, Some(&skipped));
     assert!(output.status.success(), "{output:?}");
     assert!(!summary.contains("Speed budget"), "{summary}");
 }
