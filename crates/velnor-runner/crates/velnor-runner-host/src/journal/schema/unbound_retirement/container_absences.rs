@@ -61,7 +61,7 @@ pub(super) async fn migrate(conn: &turso::Connection) -> Result<(), HostError> {
             .await
             .map_err(|_| HostError::Journal)?;
     }
-    conn.execute("PRAGMA user_version = 53", ())
+    conn.execute("PRAGMA user_version = 56", ())
         .await
         .map_err(|_| HostError::Journal)?;
     super::validate(conn).await

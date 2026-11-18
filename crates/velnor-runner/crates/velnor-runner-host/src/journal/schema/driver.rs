@@ -77,7 +77,11 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
         49 => Box::pin(super::jit_tombstone_completion::migrate(conn)),
         50 => Box::pin(super::unbound_retirement::migrate_v50_to_v51(conn)),
         51 => Box::pin(super::unbound_retirement::migrate_v51_to_v52(conn)),
-        52 => Box::pin(super::unbound_retirement::migrate_v52_to_v53(conn)),
+        // TEMPORARY BRIDGE for #1075: schema 53-55 (#1277, #1280, #1283) are not on main yet,
+        // so main's v52 jumps straight to 56. Before merging #1075, rebase onto #1283's chain:
+        // replace this arm with `55 => ...migrate_v55_to_v56` and make expected_next_version
+        // treat 52..=54 as version+1 again.
+        52 => Box::pin(super::unbound_retirement::migrate_v55_to_v56(conn)),
         _ => return Err(HostError::Journal),
     };
     Ok(step)
@@ -85,8 +89,10 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
 
 pub(super) const fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=52 => Some(version + 1),
+        0..=8 | 10..=51 => Some(version + 1),
         9 => Some(11),
+        // TEMPORARY BRIDGE for #1075: see migration_step arm 52.
+        52 => Some(56),
         _ => None,
     }
 }

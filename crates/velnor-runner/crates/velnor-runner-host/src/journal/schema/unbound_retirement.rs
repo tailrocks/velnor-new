@@ -26,7 +26,7 @@ pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> 
     if super::journal_version(conn).await? >= 52 {
         dispatch_deadlines::validate(conn).await?;
     }
-    if super::journal_version(conn).await? >= 53 {
+    if super::journal_version(conn).await? >= 56 {
         container_absences::validate(conn).await?;
     }
     Ok(())
@@ -41,7 +41,7 @@ pub(super) async fn migrate_v51_to_v52(conn: &turso::Connection) -> Result<(), H
     validate(conn).await
 }
 
-pub(super) async fn migrate_v52_to_v53(conn: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn migrate_v55_to_v56(conn: &turso::Connection) -> Result<(), HostError> {
     container_absences::migrate(conn).await
 }
 
