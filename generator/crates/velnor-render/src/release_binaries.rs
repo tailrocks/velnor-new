@@ -252,7 +252,7 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
     steps.extend(read_version(binary));
-    let names = quoted(binary, assets(binary)).join(" ");
+    let names = quoted(binary, &assets(binary)).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
         steps.push(RenderedStep {
@@ -337,7 +337,7 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
         ]),
         run: Some(format!(
             "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
-            quoted(binary, assets(binary)).join(" ")
+            quoted(binary, &assets(binary)).join(" ")
         )),
         ..RenderedStep::default()
     });
@@ -374,7 +374,7 @@ fn assets(binary: &BinaryPlan) -> Vec<String> {
         .collect()
 }
 
-fn quoted(binary: &BinaryPlan, names: Vec<String>) -> Vec<String> {
+fn quoted(binary: &BinaryPlan, names: &[String]) -> Vec<String> {
     names.iter().map(|name| word(binary, name)).collect()
 }
 
