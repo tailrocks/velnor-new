@@ -176,6 +176,14 @@ pub(crate) struct Stub {
 
 impl Stub {
     pub(crate) fn new(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
+        Self::build(repo, dir, cache_dir, false)
+    }
+
+    pub(crate) fn local_setup(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
+        Self::build(repo, dir, cache_dir, true)
+    }
+
+    fn build(repo: &Path, dir: &Path, cache_dir: &Path, local_setup: bool) -> Self {
         Self {
             control: false,
             stub: ApiStub::new(ApiStubConfig {
@@ -185,6 +193,7 @@ impl Stub {
                 default_branch: "main".to_owned(),
                 diff_limit_bytes: 1 << 20,
                 standin: None,
+                local_setup,
             }),
         }
     }
@@ -200,6 +209,7 @@ impl Stub {
                 default_branch: "main".to_owned(),
                 diff_limit_bytes: 1 << 20,
                 standin: Some(standin),
+                local_setup: false,
             }),
         }
     }

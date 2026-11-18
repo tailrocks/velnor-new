@@ -178,6 +178,7 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
         cache_dir: args.cache_dir,
         default_branch: args.default_branch,
         diff_limit_bytes: args.diff_limit_bytes,
+        local_setup: args.local_setup_velnor,
         standin: args.standin.map(|address| {
             Arc::new(api_stub::HttpStandIn::new(&address)) as Arc<dyn api_stub::StandIn>
         }),

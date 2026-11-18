@@ -132,6 +132,7 @@ async fn run_one(
     }
     let repo = env.dir.join("repo");
     copy_checkout(&args.repo, &repo, &args.environment.default_branch, tag).await?;
+    super::local_ci::pin_workflows(&args.environment, &repo, tag).await?;
     for directory in ["cache", "api", "events", "logs", "metrics"] {
         match fs::remove_dir_all(env.dir.join(directory)).await {
             Err(error) if error.kind() != io::ErrorKind::NotFound => return Err(error),

@@ -11,6 +11,8 @@ pub mod env;
 mod git;
 mod index_file;
 mod keys;
+pub mod local_ci;
+pub mod local_setup;
 pub mod pair;
 mod probe;
 mod proxy;
