@@ -23,6 +23,7 @@ pub enum GenerateError {
     MirrorHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
+    BudgetHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
@@ -58,6 +59,10 @@ impl fmt::Display for GenerateError {
             Self::InputsBuildHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot record pre-build directory inventories for inputs audit; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
+            ),
+            Self::BudgetHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot check the speed budget; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
             ),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,

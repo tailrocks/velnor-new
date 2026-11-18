@@ -195,6 +195,7 @@ pub enum When {
     Always,
     Scheduled,
     ScheduledOrPush,
+    DefaultBranchPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
     SaveBase,

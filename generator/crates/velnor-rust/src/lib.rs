@@ -11,6 +11,7 @@ mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_budget;
 mod config_helper;
 mod config_mirror;
 mod config_test_setup;
@@ -52,6 +53,7 @@ mod toml_file;
 mod toolchain;
 mod unowned;
 mod verdict;
+mod verdict_plan;
 mod weaken;
 mod weaken_nextest;
 mod weaken_scope;
@@ -60,7 +62,7 @@ mod weaken_targets;
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
-pub use config::{CONFIG_PATH, ci_debuginfo};
+pub use config::{CONFIG_PATH, budget, ci_debuginfo};
 pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{member_sources, optional_steps, root_sources};
@@ -89,9 +91,10 @@ pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use verdict::{
-    JobResult, Need, PackageCounts, PlanOutput, TestCounts, Verdict, decide, encode_package_counts,
-    package_token, verdict,
+    JobResult, PackageCounts, TestCounts, Verdict, decide, encode_package_counts, package_token,
+    verdict,
 };
+pub use verdict_plan::{Need, PlanOutput};
 pub use weaken::introduced;
 
 pub use private_sources::{cacheable_config, cacheable_lock};

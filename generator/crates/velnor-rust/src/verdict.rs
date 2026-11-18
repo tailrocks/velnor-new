@@ -4,12 +4,10 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, VerdictSpec,
+    JobId, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
-const SCHEDULE: &str = "schedule";
-const PUSH: &str = "push";
+use crate::verdict_plan::{Need, PlanOutput};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobResult {
@@ -110,100 +108,6 @@ pub fn package_token(name: &str) -> bool {
     chars.all(|ch| ch.is_alphanumeric() || ch == '_' || ch == '-')
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Need {
-    pub result: Option<String>,
-    pub outputs: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlanOutput {
-    pub planned: BTreeMap<JobId, bool>,
-    pub test_lanes: BTreeMap<RootSlug, Vec<JobId>>,
-}
-
-impl PlanOutput {
-    pub fn resolve(
-        spec: &VerdictSpec,
-        outputs: &BTreeMap<String, String>,
-        event: Option<&str>,
-    ) -> Result<Self, String> {
-        let read = |key: String| -> Result<&str, String> {
-            outputs
-                .get(&key)
-                .map(String::as_str)
-                .ok_or_else(|| format!("the plan output {key} is missing"))
-        };
-        let flag = |key: String, on: &str, off: &str| -> Result<bool, String> {
-            let value = read(key.clone())?;
-            if value == on {
-                Ok(true)
-            } else if value == off {
-                Ok(false)
-            } else {
-                Err(format!(
-                    "the plan output {key} is `{value}`, not {on} or {off}"
-                ))
-            }
-        };
-        let mut planned = BTreeMap::new();
-        let mut test_lanes: BTreeMap<RootSlug, Vec<JobId>> = BTreeMap::new();
-        for job in &spec.jobs {
-            let mut holds = true;
-            for condition in &job.when {
-                holds &= match condition {
-                    JobCondition::Lane(slug) => {
-                        let key = GateNeed::Selected.output_name(slug);
-                        match read(key.clone())? {
-                            "none" => false,
-                            "some" | "all" => true,
-                            other => {
-                                return Err(format!(
-                                    "the plan output {key} is `{other}`, not none, some or all"
-                                ));
-                            }
-                        }
-                    }
-                    JobCondition::Policy => {
-                        let slug = RootSlug::from_static("policy");
-                        let deny = flag(GateNeed::Deny.output_name(&slug), "run", "skip")?;
-                        let machete = flag(GateNeed::Machete.output_name(&slug), "run", "skip")?;
-                        deny || machete
-                    }
-                    JobCondition::Schedule => event_is(event, &[SCHEDULE])?,
-                    JobCondition::ScheduleOrDispatch => {
-                        event_is(event, &[SCHEDULE, "workflow_dispatch"])?
-                    }
-                    JobCondition::ScheduleOrPushOrDispatch => {
-                        event_is(event, &[SCHEDULE, PUSH, "workflow_dispatch"])?
-                    }
-                    JobCondition::ScheduleOrPush => event_is(event, &[SCHEDULE, PUSH])?,
-                };
-            }
-            planned.insert(job.id.clone(), holds);
-            if let Some(slug) = &job.tests {
-                let expected = flag(GateNeed::TestsExpected.output_name(slug), "run", "skip")?;
-                let jobs = test_lanes.entry(slug.clone()).or_default();
-                if expected {
-                    jobs.push(job.id.clone());
-                }
-            }
-        }
-        test_lanes.retain(|_, jobs| !jobs.is_empty());
-        Ok(Self {
-            planned,
-            test_lanes,
-        })
-    }
-}
-
-fn event_is(event: Option<&str>, names: &[&str]) -> Result<bool, String> {
-    event
-        .filter(|name| !name.is_empty())
-        .map(|name| names.contains(&name))
-        .ok_or_else(|| "GITHUB_EVENT_NAME is not set".to_owned())
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     pub passed: bool,
@@ -250,6 +154,14 @@ impl Verdict {
     }
 }
 
+fn record(out: &mut Verdict, plan: &PlanOutput, job: &JobId, message: String) {
+    if plan.advisory.contains(job) {
+        out.warnings.push(message);
+    } else {
+        out.problems.push(message);
+    }
+}
+
 #[must_use]
 pub fn verdict(
     plan: &PlanOutput,
@@ -278,17 +190,23 @@ pub fn verdict(
         match (scheduled, result) {
             (_, None) => out.problems.push(format!("{job} has no result in needs")),
             (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
-            (true, Some(other)) => out.problems.push(format!(
-                "{job} was scheduled by the plan and its result is {}",
-                other.name()
-            )),
+            (true, Some(other)) => {
+                let message = format!(
+                    "{job} was scheduled by the plan and its result is {}",
+                    other.name()
+                );
+                record(&mut out, plan, job, message);
+            }
             (false, Some(JobResult::Success)) => out
                 .warnings
                 .push(format!("{job} ran although the plan did not schedule it")),
-            (false, Some(other)) => out.problems.push(format!(
-                "{job} was not scheduled by the plan and its result is {}",
-                other.name()
-            )),
+            (false, Some(other)) => {
+                let message = format!(
+                    "{job} was not scheduled by the plan and its result is {}",
+                    other.name()
+                );
+                record(&mut out, plan, job, message);
+            }
         }
     }
     for (slug, jobs) in &plan.test_lanes {

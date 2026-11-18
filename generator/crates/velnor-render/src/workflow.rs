@@ -3,7 +3,9 @@
 
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
-use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_model::{
+    BUDGET_OUTPUTS, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+};
 
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     let mut items = Vec::new();
@@ -52,6 +54,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
                             if name == TESTS_RUN_OUTPUT
                                 || name == TESTS_LISTED_OUTPUT
                                 || name == TESTS_BY_PACKAGE_OUTPUT
+                                || BUDGET_OUTPUTS.contains(&name.as_str())
                             {
                                 Yaml::Unread(value)
                             } else {

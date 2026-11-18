@@ -4,6 +4,7 @@
 mod activity;
 mod archive_witness;
 mod audit;
+mod budget;
 mod build_inputs;
 mod cache;
 mod cache_paths;
@@ -149,6 +150,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
+        Command::Bench(BenchCommand::Budget(args)) => budget::run_budget(&args),
         Command::Inputs(InputsCommand::Save(args)) => {
             save_inputs(&current_dir()?, &args.target_dir)
         }

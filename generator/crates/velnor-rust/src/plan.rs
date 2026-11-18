@@ -4,9 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Triggers, When, WorkflowPlan,
+    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, FullRun, HelperCommand,
+    Host, Job, JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts,
+    RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Triggers, When,
+    WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -25,9 +26,12 @@ pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
+pub(crate) const BUDGET_JOB: JobId = JobId::from_static(velnor_model::BUDGET_JOB);
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
 const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
+const BUDGET_RUNS: usize = 10;
+const BUDGET_TIMEOUT_MINUTES: u16 = 10;
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
@@ -80,6 +84,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if facts.config.cache_debug == CacheDebug::On {
         upload_cargo_logs(&mut jobs);
     }
+    if facts.config.budget.is_some_and(|budget| budget.enabled()) {
+        jobs.push(budget_job(facts));
+    }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -101,6 +108,34 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         jobs,
+    }
+}
+
+fn budget_job(facts: &RepoFacts) -> Job {
+    let mut steps = vec![step(StepKind::Checkout {
+        depth: CHECKOUT_DEPTH,
+    })];
+    steps.extend(
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
+    );
+    steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
+    Job {
+        name: Some("Speed budget".to_owned()),
+        when: if facts.config.full_run == FullRun::Off {
+            When::DefaultBranchPush
+        } else {
+            When::Scheduled
+        },
+        permissions: Permissions(BTreeMap::from([
+            (PermissionScope::Actions, Access::Read),
+            (PermissionScope::Contents, Access::Read),
+        ])),
+        timeout_minutes: BUDGET_TIMEOUT_MINUTES,
+        steps,
+        ..job(facts, BUDGET_JOB)
     }
 }
 

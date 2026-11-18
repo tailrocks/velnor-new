@@ -261,6 +261,34 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub test_setup: Vec<TestSetup>,
+    pub budget: Option<SpeedBudget>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SpeedBudget {
+    pub pr_wall_seconds: u64,
+    pub main_wall_seconds: u64,
+    pub runner_seconds: u64,
+    pub setup_seconds: u64,
+}
+
+impl SpeedBudget {
+    #[must_use]
+    pub fn enabled(&self) -> bool {
+        self.pr_wall_seconds > 0
+            || self.main_wall_seconds > 0
+            || self.runner_seconds > 0
+            || self.setup_seconds > 0
+    }
+
+    #[must_use]
+    pub fn wall_seconds(&self, pull_request: bool) -> u64 {
+        if pull_request {
+            self.pr_wall_seconds
+        } else {
+            self.main_wall_seconds
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -332,6 +360,7 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             test_setup: Vec::new(),
+            budget: None,
         }
     }
 }

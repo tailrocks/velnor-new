@@ -115,6 +115,9 @@ pub(crate) fn condition(
         When::ScheduledOrPush => parts.push(format!(
             "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
         )),
+        When::DefaultBranchPush => parts.push(format!(
+            "(github.event_name == '{PUSH}' && {ON_DEFAULT_BRANCH})"
+        )),
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {

@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use velnor_model::{
     CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName,
+    RunnerLabel, RustCiConfig, Shape, SpeedBudget, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 19] = [
+const KEYS: [&str; 20] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
@@ -32,6 +32,7 @@ const KEYS: [&str; 19] = [
     "helper",
     "ci_debuginfo",
     "test_setup",
+    "budget",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -113,6 +114,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     Ok(RustCiConfig {
+        budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         test_setup,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
@@ -384,4 +386,8 @@ pub fn ci_debuginfo(
         || Ok(RustCiConfig::default().ci_debuginfo),
         |bytes| parse(bytes).map(|config| config.ci_debuginfo),
     )
+}
+
+pub fn budget(bytes: &[u8]) -> Result<Option<SpeedBudget>, DetectError> {
+    crate::config_budget::parse(bytes).map_err(|reason| DetectError::invalid(&CONFIG_PATH, reason))
 }

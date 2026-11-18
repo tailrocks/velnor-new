@@ -37,8 +37,8 @@ pub use plan::{
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
     InputRule, MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
-    TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
+    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget,
+    Target, TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
     Weakening,
 };
 pub use selection::{
@@ -47,4 +47,7 @@ pub use selection::{
 };
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
-pub use steps::{BaseExpiry, HelperCommand, StepKind, TrimFamily};
+pub use steps::{
+    BUDGET_JOB, BUDGET_MAIN_WALL, BUDGET_OUTPUTS, BUDGET_PR_WALL, BUDGET_RUNNER, BUDGET_SETUP,
+    BUDGET_STEP, BaseExpiry, HelperCommand, RUN_RUNNER, RUN_WALL, StepKind, TrimFamily,
+};
