@@ -285,6 +285,7 @@ async fn scan_rows(path: &Path, deadline: tokio::time::Instant) -> Result<bool, 
         .await
         .map_err(|_| HostError::Journal)?;
     let mut row_count = 0_usize;
+    let mut occupied = false;
     loop {
         if tokio::time::Instant::now() >= deadline {
             return Err(HostError::Journal);
@@ -300,11 +301,9 @@ async fn scan_rows(path: &Path, deadline: tokio::time::Instant) -> Result<bool, 
             return Err(HostError::Journal);
         }
         row_count += 1;
-        if occupies(&marker_row(&row)?) {
-            return Ok(true);
-        }
+        occupied |= occupies(&marker_row(&row)?);
     }
-    Ok(false)
+    Ok(occupied)
 }
 
 fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
@@ -347,3 +346,6 @@ fn marker_row(row: &turso::Row) -> Result<IntentRow, HostError> {
         runner_completed: false,
     })
 }
+
+#[cfg(test)]
+mod tests;

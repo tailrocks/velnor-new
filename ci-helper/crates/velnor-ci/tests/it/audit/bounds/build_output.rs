@@ -28,7 +28,7 @@ fn large_build_output_keeps_the_trailing_rerun_directive() {
 }
 
 #[test]
-fn build_output_counts_toward_the_shared_target_data_budget() {
+fn build_output_counts_toward_the_root_target_data_budget() {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
     unit(
@@ -53,7 +53,7 @@ fn build_output_counts_toward_the_shared_target_data_budget() {
     assert_eq!(over_limit.status.code(), Some(1), "{over_limit:?}");
     let error = String::from_utf8_lossy(&over_limit.stderr);
     assert!(
-        error.contains("aggregate target data exceeds 8388608 bytes"),
+        error.contains("target data of one Cargo root exceeds 8388608 bytes"),
         "{error}"
     );
     assert!(error.contains(output_path), "{error}");
