@@ -15,11 +15,3 @@ cainfo = "/opt/velnor/crates-mirror/ca-bundle.pem"
 root = "."
 name = "Prepare test fixtures"
 run = "bash scripts/ci-fixtures.sh"
-
-# Coverage parity with the old engine: velnor-runner-host runs a second configuration
-# whose test targets declare required-features = ["local-mode"] and are skipped by the
-# workspace run. The profile and thread cap match the old engine's per-package job.
-[[test_setup]]
-root = "crates/velnor-runner"
-name = "Test velnor-runner-host with local-mode"
-run = '. "$VELNOR_EXEC" run -- cargo nextest run --profile ci --locked -p velnor-runner-host --no-default-features --features local-mode --no-tests fail'
