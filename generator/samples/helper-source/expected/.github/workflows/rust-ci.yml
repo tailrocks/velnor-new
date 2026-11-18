@@ -1574,13 +1574,16 @@ jobs:
   rust-trim:
     name: Cache maintenance
     needs:
+      - rust-helper
       - rust-root
       - rust-ci_helper
       - rust-crates_velnor_runner
       - rust-generator
       - rust-local
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (needs.rust-root.outputs.base_save == ''true'' || (needs.rust-root.outputs.sources_saved == ''true'' || needs.rust-root.outputs.sources_key != '''') || needs.rust-ci_helper.outputs.base_save == ''true'' || (needs.rust-ci_helper.outputs.sources_saved == ''true'' || needs.rust-ci_helper.outputs.sources_key != '''') || needs.rust-crates_velnor_runner.outputs.base_save == ''true'' || (needs.rust-crates_velnor_runner.outputs.sources_saved == ''true'' || needs.rust-crates_velnor_runner.outputs.sources_key != '''') || needs.rust-generator.outputs.base_save == ''true'' || (needs.rust-generator.outputs.sources_saved == ''true'' || needs.rust-generator.outputs.sources_key != '''') || needs.rust-local.outputs.base_save == ''true'' || (needs.rust-local.outputs.sources_saved == ''true'' || needs.rust-local.outputs.sources_key != '''')) }}'
+      - rust-inputs-audit
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
     permissions:
+      pull-requests: read
       actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1609,7 +1612,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-root sources entries
-        if: '${{ needs.rust-root.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-root.outputs.sources_prefix != '''' && (needs.rust-root.outputs.sources_saved == ''true'' || needs.rust-root.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-root.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1621,7 +1624,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-ci_helper sources entries
-        if: '${{ needs.rust-ci_helper.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-ci_helper.outputs.sources_prefix != '''' && (needs.rust-ci_helper.outputs.sources_saved == ''true'' || needs.rust-ci_helper.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-ci_helper.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1633,7 +1636,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-crates_velnor_runner sources entries
-        if: '${{ needs.rust-crates_velnor_runner.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-crates_velnor_runner.outputs.sources_prefix != '''' && (needs.rust-crates_velnor_runner.outputs.sources_saved == ''true'' || needs.rust-crates_velnor_runner.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-crates_velnor_runner.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1645,7 +1648,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-generator sources entries
-        if: '${{ needs.rust-generator.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-generator.outputs.sources_prefix != '''' && (needs.rust-generator.outputs.sources_saved == ''true'' || needs.rust-generator.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-generator.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1657,7 +1660,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-local sources entries
-        if: '${{ needs.rust-local.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-local.outputs.sources_prefix != '''' && (needs.rust-local.outputs.sources_saved == ''true'' || needs.rust-local.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-local.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1746,6 +1749,10 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-root-target_key.outcome != ''failure'' && steps.verify-rust-root-sources_key.outcome != ''failure'' && steps.verify-rust-ci_helper-target_key.outcome != ''failure'' && steps.verify-rust-ci_helper-sources_key.outcome != ''failure'' && steps.verify-rust-crates_velnor_runner-target_key.outcome != ''failure'' && steps.verify-rust-crates_velnor_runner-sources_key.outcome != ''failure'' && steps.verify-rust-generator-target_key.outcome != ''failure'' && steps.verify-rust-generator-sources_key.outcome != ''failure'' && steps.verify-rust-local-target_key.outcome != ''failure'' && steps.verify-rust-local-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+      - name: Enforce the repository cache budget
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
   required:
     name: Required
     needs:
