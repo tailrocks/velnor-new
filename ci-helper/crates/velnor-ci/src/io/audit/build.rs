@@ -17,7 +17,8 @@ use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
 use super::super::units::{
-    UnitFile, Workspace, apart, scan_dirs, shared_groups, unit_files, workspace,
+    UnitFile, Workspace, apart, scan_dirs, shared_groups, standalone_workspace, unit_files,
+    workspace,
 };
 use super::inventory::{self, Evidence};
 use crate::cli::InputsBuildArgs;
@@ -41,15 +42,34 @@ type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
+    let standalone: Vec<bool> = facts
+        .rust_roots
+        .iter()
+        .map(|root| {
+            !facts
+                .config
+                .workspace_groups
+                .iter()
+                .any(|group| group.roots.contains(&root.manifest))
+        })
+        .collect();
     let workspaces = facts
         .rust_roots
         .iter()
-        .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
+        .zip(&standalone)
+        .map(|(root, alone)| {
+            let manifest = checkout.root.join(root.manifest.as_str());
+            if *alone {
+                standalone_workspace(&manifest, None)
+            } else {
+                workspace(&manifest, None)
+            }
+        })
         .collect::<Result<Vec<_>, _>>()?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
     let invocation = Invocation::new(&args.command);
-    invocation.validate_targets(directory, &workspaces)?;
+    invocation.validate_targets(directory, &workspaces, &standalone)?;
     let mut roots = BTreeSet::from([checkout.root.clone()]);
     roots.extend(args.directory.iter().map(|root| directory.join(root)));
     let mut builder = Builder {

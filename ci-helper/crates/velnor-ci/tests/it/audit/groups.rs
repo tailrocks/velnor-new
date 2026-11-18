@@ -214,3 +214,26 @@ fn a_real_grouped_build_passes_the_audit() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("lists every read"), "{stdout}");
 }
+
+#[test]
+fn a_grouped_build_does_not_pull_an_ungrouped_root_into_the_shared_directory() {
+    let repo = grouped_tools();
+    unit(
+        &repo,
+        "web/Cargo.toml",
+        "[package]\nname = \"w\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
+    );
+    unit(
+        &repo,
+        "web/Cargo.lock",
+        "version = 4\n\n[[package]]\nname = \"w\"\nversion = \"0.1.0\"\n",
+    );
+    unit(&repo, "web/src/lib.rs", "");
+    repo.git(&["add", "--all"]);
+    let built = build_grouped(repo.root(), "tools/a/Cargo.toml");
+    assert!(
+        built.status.success(),
+        "{}",
+        String::from_utf8_lossy(&built.stderr)
+    );
+}

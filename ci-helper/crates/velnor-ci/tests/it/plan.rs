@@ -308,5 +308,13 @@ fn a_group_runs_when_any_of_its_roots_is_selected() {
             SelectionReason::Changed(path("a/src/lib.rs")),
         )])),
     )]);
-    assert_eq!(group_outputs(&groups, &some), "rust_group_tools_mode=run\n");
+    assert_eq!(
+        group_outputs(&groups, &some),
+        "rust_group_tools_mode=some\n"
+    );
+    let all = BTreeMap::from([(
+        path("tools/a/Cargo.toml"),
+        RustSelection::All(AllTrigger::UnknownPath(path("docs/goals.md"))),
+    )]);
+    assert_eq!(group_outputs(&groups, &all), "rust_group_tools_mode=all\n");
 }

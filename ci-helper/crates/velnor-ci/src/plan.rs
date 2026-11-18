@@ -70,15 +70,19 @@ pub fn group_outputs(
     groups
         .iter()
         .map(|group| {
-            let run = group
-                .roots
-                .iter()
-                .any(|root| !matches!(selections.get(root), None | Some(RustSelection::None)));
-            format!(
-                "rust_{}_mode={}\n",
-                group.gate,
-                if run { "run" } else { "none" }
-            )
+            let chosen = group.roots.iter().filter_map(|root| selections.get(root));
+            let mode = chosen
+                .clone()
+                .find(|selection| matches!(selection, RustSelection::All(_)))
+                .map(|_| "all")
+                .or_else(|| {
+                    chosen
+                        .clone()
+                        .any(|selection| matches!(selection, RustSelection::Some(_)))
+                        .then_some("some")
+                })
+                .unwrap_or("none");
+            format!("rust_{}_mode={mode}\n", group.gate)
         })
         .collect::<Vec<String>>()
         .concat()

@@ -249,6 +249,21 @@ pub(super) fn workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
 ) -> Result<Workspace, CiError> {
+    metadata(manifest, invocation, false)
+}
+
+pub(super) fn standalone_workspace(
+    manifest: &Path,
+    invocation: Option<&MetadataInvocation<'_>>,
+) -> Result<Workspace, CiError> {
+    metadata(manifest, invocation, true)
+}
+
+fn metadata(
+    manifest: &Path,
+    invocation: Option<&MetadataInvocation<'_>>,
+    own_target: bool,
+) -> Result<Workspace, CiError> {
     let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
     if let Some(invocation) = invocation {
         command
@@ -256,6 +271,9 @@ pub(super) fn workspace(
             .current_dir(invocation.directory);
     } else {
         command.current_dir(manifest.parent().unwrap_or(manifest));
+    }
+    if own_target {
+        command.env_remove("CARGO_TARGET_DIR");
     }
     let output = command
         .args([
