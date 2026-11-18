@@ -179,9 +179,12 @@ fn inspect_container(path: &str, state: &mut State) -> Reply {
             host_config["NetworkMode"] = Value::String("bridge".to_owned());
             state.fault_reached = true;
         }
+        Some(ApiFault::ExtraPrivilege(role, privilege)) if container.role == role => {
+            privilege.apply(&mut host_config);
+            state.fault_reached = true;
+        }
         _ => {}
     }
-    let state_value = json!({"Running": container.running, "ExitCode": container.exit_code});
     let reply = Reply::json(
         200,
         &json!({
@@ -190,7 +193,7 @@ fn inspect_container(path: &str, state: &mut State) -> Reply {
             "Image": container.image_id,
             "Config": {"Labels": container.labels},
             "HostConfig": host_config,
-            "State": state_value
+            "State": {"Running": container.running, "ExitCode": container.exit_code}
         }),
     );
     if delayed {
