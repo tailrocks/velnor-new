@@ -24,6 +24,50 @@ umount -R /sys/fs/cgroup 2>/dev/null || true
 mount -t cgroup2 -o ro none /sys/fs/cgroup
 VELNOR_DAEMON_BINDING_CHILD=1 exec "$@""#;
 
+const ROOTLESS_SETUP: &str = r#"set -eu
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+base=$1
+exe=$2
+shift 2
+newroot=$base/newroot
+mkdir -p "$newroot"
+mount -t tmpfs tmpfs "$newroot"
+mkdir -p "$newroot/proc" "$newroot/dev" "$newroot/tmp" "$newroot/usr" "$newroot/etc" \
+    "$newroot/velnor/docker-root" "$newroot/var/lib/docker" "$newroot/put_old"
+mount --bind /proc "$newroot/proc"
+mount --bind /dev "$newroot/dev"
+mount --bind /usr "$newroot/usr"
+mount --bind /etc "$newroot/etc"
+mount -t tmpfs tmpfs "$newroot/sys"
+mkdir -p "$newroot/sys/fs/cgroup"
+mount -t cgroup2 -o ro none "$newroot/sys/fs/cgroup"
+exedir=$(dirname "$exe")
+mkdir -p "$newroot$exedir"
+mount --bind "$exedir" "$newroot$exedir"
+for entry in bin lib lib64 sbin; do
+    if [ -L "/$entry" ]; then
+        target=$(readlink "/$entry")
+        rmdir "$newroot/$entry" 2>/dev/null || true
+        mkdir -p "$newroot/$(dirname "$target")"
+        ln -s "$target" "$newroot/$entry"
+    else
+        mkdir -p "$newroot/$entry"
+        mount --bind "/$entry" "$newroot/$entry"
+    fi
+done
+mount -t tmpfs -o ro tmpfs "$newroot/velnor/docker-root"
+mount --bind "$newroot/velnor/docker-root" "$newroot/var/lib/docker"
+cd "$newroot"
+pivot_root . put_old
+cd /
+TMPDIR=/tmp
+export TMPDIR
+HOME=/tmp
+export HOME
+VELNOR_DAEMON_BINDING_CHILD=1
+export VELNOR_DAEMON_BINDING_CHILD
+exec "$exe" "$@""#;
+
 #[test]
 fn owned_cgroup_observation_refuses_a_substituted_dockerd_while_the_real_binary_is_unlinked()
 -> TestResult<()> {
@@ -33,20 +77,52 @@ fn owned_cgroup_observation_refuses_a_substituted_dockerd_while_the_real_binary_
     let name = module_path!()
         .split_once("::")
         .map_or(module_path!(), |(_, rest)| rest);
-    let created_velnor = !Path::new("/velnor").exists();
-    let status = Command::new("unshare")
-        .args(["--mount", "--propagation", "private", "sh", "-c", SETUP, "sh"])
-        .arg(std::env::current_exe()?)
-        .args([
-            "--exact",
-            &format!("{name}::owned_cgroup_observation_refuses_a_substituted_dockerd_while_the_real_binary_is_unlinked"),
-            "--nocapture",
-        ])
-        .status()?;
-    drop(fs::remove_dir("/velnor/docker-root"));
-    if created_velnor {
-        drop(fs::remove_dir("/velnor"));
+    let exact = format!(
+        "{name}::owned_cgroup_observation_refuses_a_substituted_dockerd_while_the_real_binary_is_unlinked"
+    );
+    let current_exe = std::env::current_exe()?;
+    if rustix::process::geteuid().is_root() {
+        let created_velnor = !Path::new("/velnor").exists();
+        let status = Command::new("unshare")
+            .args([
+                "--mount",
+                "--propagation",
+                "private",
+                "sh",
+                "-c",
+                SETUP,
+                "sh",
+            ])
+            .arg(&current_exe)
+            .args(["--exact", &exact, "--nocapture"])
+            .status()?;
+        drop(fs::remove_dir("/velnor/docker-root"));
+        if created_velnor {
+            drop(fs::remove_dir("/velnor"));
+        }
+        if !status.success() {
+            return Err("the observation in the private mount namespace failed".into());
+        }
+        return Ok(());
     }
+    let base = ScopedTempDir::new("daemon-binding-rootless")?;
+    let status = Command::new("unshare")
+        .args([
+            "--user",
+            "--map-root-user",
+            "--mount",
+            "--propagation",
+            "private",
+            "--cgroup",
+            "sh",
+            "-c",
+            ROOTLESS_SETUP,
+            "sh",
+        ])
+        .arg(base.path())
+        .arg(&current_exe)
+        .args(["--exact", &exact, "--nocapture"])
+        .status()?;
     if !status.success() {
         return Err("the observation in the private mount namespace failed".into());
     }
@@ -101,7 +177,11 @@ fn observe_with_unlinked_real_dockerd() -> TestResult<()> {
     let (substitute, _substitute_binary) = spawn_dockerd(directory.path(), "substitute")?;
     fs::remove_file(&real_binary)?;
     let link = fs::read_link(format!("/proc/{}/exe", real.0.id()))?;
-    assert!(link.to_string_lossy().ends_with(" (deleted)"), "{link:?}");
+    assert!(
+        link.to_string_lossy().ends_with(" (deleted)"),
+        "{}",
+        link.display()
+    );
 
     let both = observe_owned_cgroups(&request(real.0.id()));
     match &both {
