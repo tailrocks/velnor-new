@@ -260,6 +260,15 @@ pub struct RustCiConfig {
     pub ci_debuginfo: CiDebugInfo,
     pub cache_budget_bytes: u64,
     pub cache_check_blocks: bool,
+    pub cache_debug: CacheDebug,
+    pub test_setup: Vec<TestSetup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestSetup {
+    pub root: Option<RepoPath>,
+    pub name: String,
+    pub run: String,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -275,6 +284,18 @@ pub enum FullRun {
     Nightly,
     Weekly,
     Cron(CronExpr),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CacheDebug {
+    Off,
+    On,
+}
+
+impl From<bool> for CacheDebug {
+    fn from(on: bool) -> Self {
+        if on { Self::On } else { Self::Off }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -311,6 +332,8 @@ impl Default for RustCiConfig {
             ci_debuginfo: CiDebugInfo::LineTablesOnly,
             cache_budget_bytes: 8_000_000_000,
             cache_check_blocks: false,
+            cache_debug: CacheDebug::Off,
+            test_setup: Vec::new(),
         }
     }
 }

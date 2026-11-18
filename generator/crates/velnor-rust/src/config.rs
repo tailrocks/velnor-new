@@ -12,8 +12,9 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 18] = [
+const KEYS: [&str; 20] = [
     "cache_check_blocks",
+    "cache_debug",
     "runner",
     "crates_mirror",
     "timeout_minutes",
@@ -31,12 +32,14 @@ const KEYS: [&str; 18] = [
     "helper",
     "ci_debuginfo",
     "cache_budget_bytes",
+    "test_setup",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
 struct RawConfig {
     cache_check_blocks: Option<bool>,
+    cache_debug: Option<bool>,
     runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
@@ -55,15 +58,11 @@ struct RawConfig {
     skip_draft_pull_requests: Option<bool>,
     on_main: Option<String>,
     full_run: Option<String>,
-    helper: Option<RawHelper>,
+    helper: Option<crate::config_helper::RawHelper>,
     ci_debuginfo: Option<String>,
     cache_budget_bytes: Option<u64>,
-}
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct RawHelper {
-    path: String,
+    #[serde(default)]
+    test_setup: Vec<crate::config_test_setup::RawTestSetup>,
 }
 
 #[derive(Deserialize)]
@@ -111,17 +110,16 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         None => defaults.full_run,
         Some(value) => full_run(value).map_err(invalid)?,
     };
-    let helper = raw
-        .helper
-        .map(|helper| helper_path(helper.path))
-        .transpose()
-        .map_err(invalid)?;
+    let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
+    let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
+        test_setup,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
+        cache_debug: raw.cache_debug.unwrap_or(false).into(),
         crates_mirror: raw
             .crates_mirror
             .map(crate::config_mirror::mirror)
@@ -199,13 +197,6 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
             key: "runner",
             value: label,
         })
-}
-
-fn helper_path(path: String) -> Result<RepoPath, Reason> {
-    RepoPath::new(path.trim_end_matches('/')).map_err(|_| Reason::InvalidValue {
-        key: "helper.path",
-        value: path,
-    })
 }
 
 fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {

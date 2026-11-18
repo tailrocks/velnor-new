@@ -28,6 +28,7 @@ mod inputs;
 mod io;
 mod io_cold;
 mod io_plan;
+mod io_plan_docs;
 mod io_plan_forged;
 mod io_plan_helper_pin;
 mod io_plan_policy;
