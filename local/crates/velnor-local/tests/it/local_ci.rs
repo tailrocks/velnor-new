@@ -58,6 +58,9 @@ async fn started(dir: &Path, args: &EnvironmentArgs) -> (Vec<Vec<String>>, std::
     (docker.started(), result)
 }
 
+const TARBALLS: &str =
+    "Runner.Server__ActionDownloadUrls__0__TarballUrl=http://api-stub/repos/{0}/tarball/{1}";
+
 #[tokio::test]
 async fn a_local_velnor_ci_is_mounted_read_only_into_trusted_plain_runners_only() {
     let dir = temp_dir("local-ci-mounts");
@@ -65,28 +68,23 @@ async fn a_local_velnor_ci_is_mounted_read_only_into_trusted_plain_runners_only(
     let flag = file.display().to_string();
     let args = parsed(&dir, "plain", &["--velnor-ci-binary", &flag]);
     let (calls, _) = started(&dir, &args).await;
-    let state = std::fs::canonicalize(&dir).unwrap_or_else(|e| unreachable!("{e}"));
-    let marker = state.join("local-mode");
-    assert!(marker.is_file(), "no marker file at {}", marker.display());
     let canonical = std::fs::canonicalize(&file).unwrap_or_else(|e| unreachable!("{e}"));
-    let wanted = [
-        format!("{}:{LOCAL_DIR}/velnor-ci:ro", canonical.display()),
-        format!("{}:{LOCAL_DIR}/.local-mode:ro", marker.display()),
-    ];
+    let wanted = format!("{}:{LOCAL_DIR}/velnor-ci:ro", canonical.display());
     let mut local_runners = 0;
     for call in &calls {
         let name = after(call, "--name")[0];
         let mounts = after(call, "-v");
-        let local = call.iter().any(|arg| arg == "VELNOR_LOCAL_MODE=1");
         if name.ends_with("-runner-1") && !name.contains("-fork-") {
             local_runners += 1;
-            assert!(local, "{name}");
-            assert!(
-                wanted.iter().all(|w| mounts.contains(&w.as_str())),
-                "{mounts:?}"
+            assert_eq!(
+                mounts
+                    .iter()
+                    .filter(|m| m.contains(LOCAL_DIR))
+                    .collect::<Vec<_>>(),
+                [&wanted.as_str()],
+                "{name}"
             );
         } else {
-            assert!(!local, "{name}");
             assert!(
                 mounts.iter().all(|m| !m.contains(LOCAL_DIR)),
                 "{name} {mounts:?}"
@@ -94,18 +92,59 @@ async fn a_local_velnor_ci_is_mounted_read_only_into_trusted_plain_runners_only(
         }
     }
     assert_eq!(local_runners, 1);
+    assert!(
+        !dir.join("local-mode").exists(),
+        "a marker a job could forge is no longer written"
+    );
+    for call in &calls {
+        assert!(
+            call.iter().all(|arg| !arg.contains("VELNOR_LOCAL")),
+            "no job-visible mode variable: {call:?}"
+        );
+    }
 }
 
 #[tokio::test]
-async fn without_the_flag_no_container_gets_the_local_binary_or_the_mode() {
+async fn local_mode_points_only_the_trusted_standin_and_the_api_stub_at_the_local_action() {
+    let dir = temp_dir("local-ci-standin");
+    let file = binary(&dir, &ELF_ARM64);
+    let flag = file.display().to_string();
+    let args = parsed(&dir, "plain", &["--velnor-ci-binary", &flag]);
+    let (calls, _) = started(&dir, &args).await;
+    let mut standins = 0;
+    let mut stubs = 0;
+    for call in &calls {
+        let name = after(call, "--name")[0];
+        let tarballs = after(call, "-e").contains(&TARBALLS);
+        if name.ends_with("-standin") && !name.contains("-fork-") {
+            standins += 1;
+            assert!(tarballs, "{call:?}");
+        } else {
+            assert!(!tarballs, "{name}");
+        }
+        let serves = call.iter().any(|arg| arg == "--local-setup-velnor");
+        if name.ends_with("-api") {
+            stubs += 1;
+            assert!(serves, "{call:?}");
+        } else {
+            assert!(!serves, "{name}");
+        }
+    }
+    assert_eq!((standins, stubs), (1, 1));
+}
+
+#[tokio::test]
+async fn without_the_flag_no_container_gets_the_local_binary_or_serves_the_local_action() {
     let dir = temp_dir("local-ci-absent");
     let args = parsed(&dir, "plain", &[]);
     let (calls, _) = started(&dir, &args).await;
     assert!(calls.len() > 3, "{calls:?}");
     for call in &calls {
         assert!(
-            call.iter()
-                .all(|arg| !arg.contains(LOCAL_DIR) && !arg.contains("VELNOR_LOCAL")),
+            call.iter().all(|arg| !arg.contains(LOCAL_DIR)
+                && !arg.contains("VELNOR_LOCAL")
+                && !arg.contains("ActionDownloadUrls")
+                && arg != "--local-setup-velnor"),
             "{call:?}"
         );
     }

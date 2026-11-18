@@ -14,6 +14,7 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
+use super::local_ci::LocalCi;
 use super::probe::wait_for;
 use super::proxy::Proxy;
 use crate::authority::AGENTS_PATH;
@@ -75,6 +76,10 @@ impl Addresses {
         side.pick(&self.cache, self.fork.as_ref())
             .map_err(io::Error::other)
     }
+}
+
+fn strs(values: &[String]) -> Vec<&str> {
+    values.iter().map(String::as_str).collect()
 }
 
 pub(super) fn words(text: &'static str) -> Vec<&'static str> {
@@ -162,7 +167,7 @@ impl<E: Engine> Environment<E> {
     }
 
     pub async fn up(&self, repo: &Path, args: &EnvironmentArgs) -> io::Result<Addresses> {
-        let local = super::local_ci::flags(args, &self.dir).await?;
+        let local = super::local_ci::flags(args).await?;
         self.down().await?;
         let started = self.start_all(repo, args, &local).await;
         if started.is_err() {
@@ -175,7 +180,7 @@ impl<E: Engine> Environment<E> {
         &self,
         repo: &Path,
         args: &EnvironmentArgs,
-        local: &[String],
+        local: &LocalCi,
     ) -> io::Result<Addresses> {
         super::pair::private_folder(&self.dir.join("keys")).await?;
         for directory in ["cache", "api"] {
@@ -213,17 +218,21 @@ impl<E: Engine> Environment<E> {
             "api",
             "run -d --network-alias api-stub -p 127.0.0.1::81 -e GIT_CONFIG_COUNT=1 \
              -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=*",
-            &[&mounts[..], &stub, &branch].concat(),
+            &[&mounts[..], &stub, &branch, &strs(&local.stub)[..]].concat(),
         )
         .await?;
         if args.fork_runners > 0 {
-            self.side("fork-", args.containers(args.fork_runners), &[])
-                .await?;
+            self.side(
+                "fork-",
+                args.containers(args.fork_runners),
+                &LocalCi::default(),
+            )
+            .await?;
         }
         self.ready(args).await
     }
 
-    async fn side(&self, prefix: &str, runners: u16, local: &[String]) -> io::Result<()> {
+    async fn side(&self, prefix: &str, runners: u16, local: &LocalCi) -> io::Result<()> {
         let label = format!("velnor-local={}", self.name);
         let network = self.network(Side::of_role(prefix));
         self.docker("network create", &["--label", &label, &network])
@@ -248,7 +257,7 @@ impl<E: Engine> Environment<E> {
             "run -d --network-alias runner-server -e Runner.Server__GitServerUrl=http://github.localhost \
              -e Runner.Server__GitApiServerUrl=http://api-stub \
              -e Runner.Server__RSASignatureKeyPath=/keys/token.pem",
-            &["-v", &pem, STANDIN_IMAGE],
+            &[&strs(&local.standin)[..], &["-v", &pem, STANDIN_IMAGE]].concat(),
         )
         .await?;
         let der = mount(&format!("{keys}/token.pub.der"), "/keys/token.pub.der:ro");
@@ -282,7 +291,7 @@ impl<E: Engine> Environment<E> {
                 &format!("{prefix}runner-{number}"),
                 "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1",
                 &[
-                    &local.iter().map(String::as_str).collect::<Vec<_>>()[..],
+                    &strs(&local.runner)[..],
                     &[RUNNER_IMAGE, "sh", "-c", &register],
                 ]
                 .concat(),

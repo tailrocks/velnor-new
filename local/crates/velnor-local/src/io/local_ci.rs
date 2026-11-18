@@ -17,7 +17,8 @@ const ELF_MAGIC: [u8; 4] = [0x7f, b'E', b'L', b'F'];
 const ELF_CLASS_64: u8 = 2;
 const ELF_LITTLE_ENDIAN: u8 = 1;
 const ELF_MACHINE_AARCH64: [u8; 2] = [0xb7, 0];
-const MARKER: &str = "local-mode";
+const TARBALLS: &str =
+    "Runner.Server__ActionDownloadUrls__0__TarballUrl=http://api-stub/repos/{0}/tarball/{1}";
 const MOUNT_DIR: &str = "/opt/velnor/local";
 
 fn refused(reason: impl std::fmt::Display) -> io::Error {
@@ -59,9 +60,20 @@ async fn checked(path: &Path) -> io::Result<PathBuf> {
     Ok(path)
 }
 
-pub(super) async fn flags(args: &EnvironmentArgs, state: &Path) -> io::Result<Vec<String>> {
+/// What `--velnor-ci-binary` adds to the containers, each as docker arguments. Empty without it.
+#[derive(Debug, Default)]
+pub(super) struct LocalCi {
+    /// For the trusted runners: the binary, read-only.
+    pub(super) runner: Vec<String>,
+    /// For the trusted runner.server: where it sends action downloads.
+    pub(super) standin: Vec<String>,
+    /// For the api-stub: serve the local variant of setup-velnor.
+    pub(super) stub: Vec<String>,
+}
+
+pub(super) async fn flags(args: &EnvironmentArgs) -> io::Result<LocalCi> {
     let Some(binary) = &args.velnor_ci_binary else {
-        return Ok(Vec::new());
+        return Ok(LocalCi::default());
     };
     if args.runner != RunnerMode::Plain {
         return Err(refused(
@@ -69,14 +81,12 @@ pub(super) async fn flags(args: &EnvironmentArgs, state: &Path) -> io::Result<Ve
         ));
     }
     let binary = checked(binary).await?;
-    let marker = state.join(MARKER);
-    fs::write(&marker, "velnor-local\n").await?;
-    Ok(vec![
-        "-v".to_owned(),
-        format!("{}:{MOUNT_DIR}/velnor-ci:ro", binary.display()),
-        "-v".to_owned(),
-        format!("{}:{MOUNT_DIR}/.local-mode:ro", marker.display()),
-        "-e".to_owned(),
-        "VELNOR_LOCAL_MODE=1".to_owned(),
-    ])
+    Ok(LocalCi {
+        runner: vec![
+            "-v".to_owned(),
+            format!("{}:{MOUNT_DIR}/velnor-ci:ro", binary.display()),
+        ],
+        standin: vec!["-e".to_owned(), TARBALLS.to_owned()],
+        stub: vec!["--local-setup-velnor".to_owned()],
+    })
 }

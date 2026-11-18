@@ -12,6 +12,7 @@ mod git;
 mod index_file;
 mod keys;
 mod local_ci;
+pub mod local_setup;
 pub mod pair;
 mod probe;
 mod proxy;

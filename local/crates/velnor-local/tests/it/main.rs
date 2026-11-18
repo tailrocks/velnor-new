@@ -13,6 +13,7 @@ mod fake_docker;
 mod io;
 mod io_edges;
 mod local_ci;
+mod local_setup;
 mod online;
 mod pair;
 mod pair_inputs;

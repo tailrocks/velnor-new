@@ -297,6 +297,11 @@ pub struct ApiStubArgs {
         help = "runner.server as host:port; it answers the workflow run, job and job log endpoints"
     )]
     pub standin: Option<String>,
+    #[arg(
+        long,
+        help = "Answer the download of tailrocks/velnor-new with the local variant of setup-velnor, which installs the velnor-ci that velnor-local mounted. `up` sets it with --velnor-ci-binary and nothing else does"
+    )]
+    pub local_setup_velnor: bool,
     #[command(flatten)]
     pub control: ControlArgs,
 }
