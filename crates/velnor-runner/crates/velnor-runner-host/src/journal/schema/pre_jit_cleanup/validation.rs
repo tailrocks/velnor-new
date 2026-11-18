@@ -6,9 +6,10 @@ use super::{
     CLAIM_INSERT_GUARD, CLAIM_NO_DELETE, CLAIM_UPDATE_GUARD, CLAIMS, CREATE_SPEC_INSERT_GUARD,
     CREATE_SPEC_NO_DELETE, CREATE_SPEC_NO_UPDATE, CREATE_SPECS, HostError, INSERT_GUARD, NO_DELETE,
     NO_UPDATE, PROBE_INSERT_GUARD, PROBE_NO_DELETE, PROBE_NO_UPDATE, PROBES, PROGRESS,
-    PROGRESS_INSERT_GUARD, PROGRESS_NO_DELETE, PROGRESS_UPDATE_GUARD, SETTLEMENT,
-    SETTLEMENT_INSERT_GUARD, SETTLEMENT_NO_DELETE, SETTLEMENT_NO_UPDATE, SETTLEMENT_POOL,
-    SETTLEMENT_POOL_INSERT_GUARD, SETTLEMENT_POOL_NO_DELETE, SETTLEMENT_POOL_NO_UPDATE, TABLE,
+    PROGRESS_INSERT_GUARD, PROGRESS_NO_DELETE, PROGRESS_UPDATE_GUARD, PROGRESS_UPDATE_GUARD_V52,
+    SETTLEMENT, SETTLEMENT_INSERT_GUARD, SETTLEMENT_NO_DELETE, SETTLEMENT_NO_UPDATE,
+    SETTLEMENT_POOL, SETTLEMENT_POOL_INSERT_GUARD, SETTLEMENT_POOL_NO_DELETE,
+    SETTLEMENT_POOL_NO_UPDATE, TABLE,
 };
 
 pub(in crate::journal::schema) async fn validate(
@@ -55,10 +56,6 @@ async fn validate_receipts_and_claims(connection: &turso::Connection) -> Result<
             "pre_jit_cleanup_progress_insert_guard",
             PROGRESS_INSERT_GUARD,
         ),
-        (
-            "pre_jit_cleanup_progress_update_guard",
-            PROGRESS_UPDATE_GUARD,
-        ),
         ("pre_jit_cleanup_progress_no_delete", PROGRESS_NO_DELETE),
     ] {
         let Some(actual) = object_sql(connection, "trigger", name).await? else {
@@ -68,6 +65,7 @@ async fn validate_receipts_and_claims(connection: &turso::Connection) -> Result<
             return Err(HostError::Journal);
         }
     }
+    validate_progress_update_guard(connection).await?;
     if object_sql(
         connection,
         "table",
@@ -162,6 +160,26 @@ async fn validate_probe_and_settlement(connection: &turso::Connection) -> Result
         if normalize(&actual) != normalize(expected) {
             return Err(HostError::Journal);
         }
+    }
+    Ok(())
+}
+
+async fn validate_progress_update_guard(connection: &turso::Connection) -> Result<(), HostError> {
+    let Some(actual) = object_sql(
+        connection,
+        "trigger",
+        "pre_jit_cleanup_progress_update_guard",
+    )
+    .await?
+    else {
+        return Err(HostError::Journal);
+    };
+    let normalized = normalize(&actual);
+    let version = super::super::journal_version(connection).await?;
+    let accepted = normalized == normalize(PROGRESS_UPDATE_GUARD)
+        || (version < 53 && normalized == normalize(PROGRESS_UPDATE_GUARD_V52));
+    if !accepted {
+        return Err(HostError::Journal);
     }
     Ok(())
 }
