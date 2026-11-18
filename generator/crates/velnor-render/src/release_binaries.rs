@@ -227,7 +227,7 @@ fn verifications(binary: &BinaryPlan) -> Vec<RenderedStep> {
             name: format!("Verify the build provenance of {name}"),
             env: variables(&[("GH_TOKEN", "${{ github.token }}")]),
             run: Some(format!(
-                "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\"",
+                "mise --no-config --no-env --no-hooks exec gh@{GH_VERSION} -- gh attestation verify {} --repo \"$GITHUB_REPOSITORY\" --source-digest \"$GITHUB_SHA\" --source-ref \"$GITHUB_REF\" --signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\" --signer-digest \"$GITHUB_SHA\" --deny-self-hosted-runners",
                 word(binary, &format!("{DIST}/{name}"))
             )),
             ..RenderedStep::default()

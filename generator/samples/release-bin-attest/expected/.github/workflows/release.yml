@@ -451,19 +451,19 @@ jobs:
       - name: Verify the build provenance of app-linux-x64.tar.gz
         env:
           GH_TOKEN: '${{ github.token }}'
-        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-linux-x64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-linux-x64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA" --deny-self-hosted-runners'
       - name: Verify the build provenance of app-linux-arm64.tar.gz
         env:
           GH_TOKEN: '${{ github.token }}'
-        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-linux-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-linux-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA" --deny-self-hosted-runners'
       - name: Verify the build provenance of app-macos-arm64.tar.gz
         env:
           GH_TOKEN: '${{ github.token }}'
-        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-macos-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/app-macos-arm64.tar.gz --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA" --deny-self-hosted-runners'
       - name: Verify the build provenance of SHA256SUMS
         env:
           GH_TOKEN: '${{ github.token }}'
-        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA"'
+        run: 'mise --no-config --no-env --no-hooks exec gh@2.103.3 -- gh attestation verify dist/SHA256SUMS --repo "$GITHUB_REPOSITORY" --source-digest "$GITHUB_SHA" --source-ref "$GITHUB_REF" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/release.yml" --signer-digest "$GITHUB_SHA" --deny-self-hosted-runners'
       - name: Publish the release of app
         env:
           GITHUB_TOKEN: '${{ github.token }}'

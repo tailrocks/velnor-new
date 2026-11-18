@@ -128,6 +128,7 @@ fn attest_true_verifies_every_asset_with_a_pinned_gh_before_publish_and_fails_cl
             "--source-ref \"$GITHUB_REF\"",
             "--signer-workflow \"$GITHUB_REPOSITORY/.github/workflows/release.yml\"",
             "--signer-digest \"$GITHUB_SHA\"",
+            "--deny-self-hosted-runners",
         ] {
             assert!(run.contains(flag), "{flag}");
         }
