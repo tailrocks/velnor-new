@@ -177,6 +177,74 @@ async fn the_flag_is_refused_for_pair_mode_and_for_a_file_that_is_not_a_linux_ar
     );
 }
 
+fn outside(name: &str) -> PathBuf {
+    let dir = temp_dir(name);
+    std::fs::write(dir.join("rust-ci.yml"), sample()).unwrap_or_else(|e| unreachable!("{e}"));
+    dir
+}
+
+async fn refusal(repo: &Path, name: &str) -> String {
+    let file = binary(&temp_dir(name), &ELF_ARM64);
+    let flag = file.display().to_string();
+    let args = parsed(repo, "plain", &["--velnor-ci-binary", &flag]);
+    match pin_workflows(&args, repo, "t").await {
+        Ok(()) => unreachable!("a symlinked workflow path was accepted"),
+        Err(error) => error.to_string(),
+    }
+}
+
+fn unchanged(victim: &Path) {
+    assert_eq!(
+        std::fs::read_to_string(victim).ok(),
+        Some(sample()),
+        "{} was written through a symlink",
+        victim.display()
+    );
+}
+
+fn link(target: &Path, at: &Path) {
+    std::os::unix::fs::symlink(target, at).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[tokio::test]
+async fn a_symlinked_workflow_file_is_refused_and_its_target_outside_the_copy_is_left_alone() {
+    let repo = checkout("dev-binary-link-file");
+    let elsewhere = outside("dev-binary-victim-file");
+    let victim = elsewhere.join("rust-ci.yml");
+    let at = repo.join(".github/workflows/linked.yml");
+    link(&victim, &at);
+    let message = refusal(&repo, "dev-binary-link-file-bin").await;
+    assert!(message.contains(&at.display().to_string()), "{message}");
+    unchanged(&victim);
+}
+
+#[tokio::test]
+async fn a_symlinked_workflows_directory_is_refused_and_its_target_is_left_alone() {
+    let repo = checkout("dev-binary-link-workflows");
+    let elsewhere = outside("dev-binary-victim-workflows");
+    let at = repo.join(".github/workflows");
+    std::fs::remove_dir_all(&at).unwrap_or_else(|e| unreachable!("{e}"));
+    link(&elsewhere, &at);
+    let message = refusal(&repo, "dev-binary-link-workflows-bin").await;
+    assert!(message.contains(&at.display().to_string()), "{message}");
+    unchanged(&elsewhere.join("rust-ci.yml"));
+}
+
+#[tokio::test]
+async fn a_symlinked_github_directory_is_refused_and_its_target_is_left_alone() {
+    let repo = checkout("dev-binary-link-github");
+    let elsewhere = temp_dir("dev-binary-victim-github");
+    std::fs::create_dir_all(elsewhere.join("workflows")).unwrap_or_else(|e| unreachable!("{e}"));
+    let victim = elsewhere.join("workflows/rust-ci.yml");
+    std::fs::write(&victim, sample()).unwrap_or_else(|e| unreachable!("{e}"));
+    let at = repo.join(".github");
+    std::fs::remove_dir_all(&at).unwrap_or_else(|e| unreachable!("{e}"));
+    link(&elsewhere, &at);
+    let message = refusal(&repo, "dev-binary-link-github-bin").await;
+    assert!(message.contains(&at.display().to_string()), "{message}");
+    unchanged(&victim);
+}
+
 fn sources(root: &Path, skip: &Path, found: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
         let path = entry.path();

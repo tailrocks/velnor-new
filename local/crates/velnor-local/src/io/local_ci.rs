@@ -6,7 +6,7 @@ use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use tokio::fs;
-use tokio::io::AsyncReadExt;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use super::checkout::git;
 use crate::cli::{EnvironmentArgs, RunnerMode};
@@ -21,7 +21,9 @@ const ELF_LITTLE_ENDIAN: u8 = 1;
 const ELF_MACHINE_AARCH64: [u8; 2] = [0xb7, 0];
 const TARBALLS: &str =
     "Runner.Server__ActionDownloadUrls__0__TarballUrl=http://api-stub/repos/{0}/tarball/{1}";
+const GITHUB: &str = ".github";
 const WORKFLOWS: &str = ".github/workflows";
+const NO_FOLLOW: i32 = nix::libc::O_NOFOLLOW;
 const COMMIT: &str = "velnor-local: pin the local velnor-ci";
 const MOUNT_DIR: &str = "/opt/velnor/local";
 
@@ -87,11 +89,26 @@ async fn binary(args: &EnvironmentArgs) -> io::Result<Option<PathBuf>> {
     checked(binary).await.map(Some)
 }
 
-async fn workflow_files(directory: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut entries = match fs::read_dir(directory).await {
-        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(Vec::new()),
-        listing => listing?,
-    };
+async fn real_directory(path: &Path) -> io::Result<bool> {
+    match fs::symlink_metadata(path).await {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(false),
+        Err(error) => Err(error),
+        Ok(meta) if meta.is_dir() => Ok(true),
+        Ok(_) => Err(refused(format!(
+            "{} is not a real directory (a symlink or a special file), so the workflows in this run's copy are not rewritten through it",
+            path.display()
+        ))),
+    }
+}
+
+async fn workflow_files(repo: &Path) -> io::Result<Vec<PathBuf>> {
+    let github = repo.join(GITHUB);
+    let directory = repo.join(WORKFLOWS);
+    if !real_directory(&github).await? || !real_directory(&directory).await? {
+        return Ok(Vec::new());
+    }
+    let root = fs::canonicalize(repo).await?;
+    let mut entries = fs::read_dir(&directory).await?;
     let mut files = Vec::new();
     while let Some(entry) = entries.next_entry().await? {
         let path = entry.path();
@@ -99,11 +116,51 @@ async fn workflow_files(directory: &Path) -> io::Result<Vec<PathBuf>> {
             path.extension().and_then(|ext| ext.to_str()),
             Some("yml" | "yaml")
         );
-        if workflow && fs::metadata(&path).await?.is_file() {
-            files.push(path);
+        if !workflow {
+            continue;
         }
+        let meta = fs::symlink_metadata(&path).await?;
+        if meta.is_dir() {
+            continue;
+        }
+        if !meta.is_file() {
+            return Err(refused(format!(
+                "{} is not a regular file (a symlink or a special file), so it is not rewritten",
+                path.display()
+            )));
+        }
+        if !fs::canonicalize(&path).await?.starts_with(&root) {
+            return Err(refused(format!(
+                "{} resolves outside this run's copy of the checkout",
+                path.display()
+            )));
+        }
+        files.push(path);
     }
     Ok(files)
+}
+
+async fn read_workflow(path: &Path) -> io::Result<String> {
+    let mut text = String::new();
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(NO_FOLLOW)
+        .open(path)
+        .await?
+        .read_to_string(&mut text)
+        .await?;
+    Ok(text)
+}
+
+async fn write_workflow(path: &Path, text: &str) -> io::Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .truncate(true)
+        .custom_flags(NO_FOLLOW)
+        .open(path)
+        .await?;
+    file.write_all(text.as_bytes()).await?;
+    file.flush().await
 }
 
 pub async fn pin_workflows(args: &EnvironmentArgs, repo: &Path, tag: &str) -> io::Result<()> {
@@ -112,10 +169,10 @@ pub async fn pin_workflows(args: &EnvironmentArgs, repo: &Path, tag: &str) -> io
     };
     let pin = Sha256::of(&fs::read(&binary).await?);
     let mut pinned = 0;
-    for path in workflow_files(&repo.join(WORKFLOWS)).await? {
-        let (text, count) = rewrite(&fs::read_to_string(&path).await?, &pin);
+    for path in workflow_files(repo).await? {
+        let (text, count) = rewrite(&read_workflow(&path).await?, &pin);
         if count > 0 {
-            fs::write(&path, text).await?;
+            write_workflow(&path, &text).await?;
             pinned += count;
         }
     }
