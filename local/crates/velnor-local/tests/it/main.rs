@@ -27,4 +27,5 @@ mod standin;
 mod status;
 mod store;
 mod supervisor;
+mod supervisor_down;
 mod support;
