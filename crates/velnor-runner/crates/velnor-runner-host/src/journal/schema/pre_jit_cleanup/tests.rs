@@ -164,6 +164,8 @@ async fn a_previous_guard_journal_migrates_to_the_current_guard_on_open() -> Tes
     {
         let journal = Journal::open(&path).await?;
         let connection = journal.connection().await?;
+        crate::journal::schema::post_jit_effect_fences::downgrade_fences_to_v36(&connection)
+            .await?;
         connection.execute("PRAGMA user_version = 53", ()).await?;
         connection
             .execute("DROP TRIGGER pre_jit_cleanup_progress_update_guard", ())
