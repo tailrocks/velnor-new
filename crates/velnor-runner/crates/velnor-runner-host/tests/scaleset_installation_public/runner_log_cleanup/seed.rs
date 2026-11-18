@@ -32,6 +32,14 @@ pub(super) async fn seed_completed_launch(
     journal_path: &Path,
     connection: &RepositoryConnection,
 ) -> TestResult<velnor_runner_host::Journal> {
+    seed_completed_launch_with(journal_path, connection, 1).await
+}
+
+pub(super) async fn seed_completed_launch_with(
+    journal_path: &Path,
+    connection: &RepositoryConnection,
+    topology: i64,
+) -> TestResult<velnor_runner_host::Journal> {
     let journal = velnor_runner_host::Journal::open(journal_path).await?;
     let canonical = std::fs::canonicalize(journal_path)?;
     let identity = String::from_utf8(connection.canonical_identity_bytes()?)?;
@@ -64,7 +72,7 @@ pub(super) async fn seed_completed_launch(
         (),
     )
     .await?;
-    seed_worker_images(&conn, &root_digest).await?;
+    super::seed_images::seed_worker_images(&conn, &root_digest).await?;
     conn.execute(
         "INSERT INTO connection_scopes (connection_id, identity) VALUES ('conn-test-1', ?1)",
         [identity.as_str()],
@@ -85,8 +93,8 @@ pub(super) async fn seed_completed_launch(
         [RUNNER_NAME],
     )
     .await?;
-    seed_connection_and_reservation(&conn, &root_digest).await?;
-    seed_storage_attachments_and_witness(&conn, &root_digest).await?;
+    seed_connection_and_reservation(&conn, &root_digest, topology).await?;
+    seed_storage_attachments_and_witness(&conn, &root_digest, topology).await?;
     for (_, sql) in &triggers {
         conn.execute(sql, ()).await?;
     }
@@ -96,71 +104,10 @@ pub(super) async fn seed_completed_launch(
     Ok(journal)
 }
 
-async fn seed_worker_images(conn: &turso::Connection, root_digest: &str) -> TestResult<()> {
-    for (role, sha_ch, arch_ch, idx_ch, man_ch, cfg_id, iidx_ch, lsha_ch, lidx_ch) in [
-        (
-            "velnor-runner",
-            "a",
-            "1",
-            "2",
-            "3",
-            RUNNER_IMAGE_ID,
-            "5",
-            "6",
-            "7",
-        ),
-        (
-            "velnor-dind",
-            "a",
-            "9",
-            "a",
-            "b",
-            DIND_IMAGE_ID,
-            "c",
-            "d",
-            "e",
-        ),
-        (
-            "velnor-runner",
-            "b",
-            "7",
-            "2",
-            "3",
-            RUNNER_IMAGE_ID,
-            "5",
-            "6",
-            "7",
-        ),
-    ] {
-        let (sha, arch_sha) = (sha_ch.repeat(40), arch_ch.repeat(64));
-        let image_ref = format!("{role}:v{sha}-{arch_sha}");
-        let receipt =
-            format!(r#"{{"store":"classic","image_id":"{cfg_id}","repo_tags":["{image_ref}"]}}"#);
-        conn.execute(
-            "INSERT INTO image_imports (engine_id, docker_root_digest, daemon_architecture, source_sha, archive_sha256, index_digest, platform, manifest_digest, config_digest, attempt, state, image_id, image_index_digest, image_index_size, manifest_size, load_archive_sha256, load_archive_index_digest, image_reference, receipt) VALUES ('engine-1', ?1, 'aarch64', ?2, ?3, ?4, 'linux/amd64', ?5, ?6, 1, 'completed', ?7, ?8, 256, 512, ?9, ?10, ?11, ?12)",
-            (
-                root_digest,
-                sha.as_str(),
-                arch_sha.as_str(),
-                idx_ch.repeat(64).as_str(),
-                format!("sha256:{}", man_ch.repeat(64)).as_str(),
-                cfg_id,
-                cfg_id,
-                format!("sha256:{}", iidx_ch.repeat(64)).as_str(),
-                lsha_ch.repeat(64).as_str(),
-                lidx_ch.repeat(64).as_str(),
-                image_ref.as_str(),
-                receipt.as_str(),
-            ),
-        )
-        .await?;
-    }
-    Ok(())
-}
-
 async fn seed_connection_and_reservation(
     conn: &turso::Connection,
     root_digest: &str,
+    topology: i64,
 ) -> TestResult<()> {
     let hex64 = "a".repeat(64);
     let hex32 = "b".repeat(32);
@@ -190,20 +137,24 @@ async fn seed_connection_and_reservation(
     )
     .await?;
     conn.execute(
-        "INSERT INTO capacity_reservation_provisioning_topology (reservation_id, topology_version) VALUES (2, 1)",
-        (),
+        "INSERT INTO capacity_reservation_provisioning_topology (reservation_id, topology_version) VALUES (2, ?1)",
+        [topology],
     )
     .await?;
-    for (role, suffix) in [
-        ("shared-run", ""),
-        ("runner-home", "-home"),
-        ("runner-work", "-work"),
-        ("dind-data", "-docker"),
-    ] {
+    let mut volumes = vec![
+        ("shared-run", "", None),
+        ("runner-home", "-home", None),
+        ("runner-work", "-work", None),
+        ("dind-data", "-docker", None),
+    ];
+    if topology == 2 {
+        volumes.push(("engine-metadata", "-metadata", Some(hex64.as_str())));
+    }
+    for (role, suffix, policy) in volumes {
         let name = format!("{PRIVATE_VOLUME}{suffix}");
         conn.execute(
-            "INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, docker_name, docker_id, publication_policy_digest, create_state) VALUES (2, ?1, ?2, ?2, NULL, 'created')",
-            (role, name.as_str()),
+            "INSERT INTO capacity_reservation_provisioning_objects (reservation_id, role, docker_name, docker_id, publication_policy_digest, create_state) VALUES (2, ?1, ?2, ?2, ?3, 'created')",
+            (role, name.as_str(), policy),
         )
         .await?;
     }
@@ -240,6 +191,7 @@ async fn insert_att(
 async fn seed_storage_attachments_and_witness(
     conn: &turso::Connection,
     root_digest: &str,
+    topology: i64,
 ) -> TestResult<()> {
     for (role, target, mid, min) in [
         ("shared-run", "/run", 1_i64, 101_i64),
@@ -305,7 +257,7 @@ async fn seed_storage_attachments_and_witness(
     }
     let hex64 = "a".repeat(64);
     seed_root_backings(conn, root_digest, &hex64).await?;
-    seed_cleanup_witness(conn, root_digest, &hex64).await
+    seed_cleanup_witness(conn, root_digest, &hex64, topology).await
 }
 
 async fn seed_root_backings(
@@ -332,7 +284,13 @@ async fn seed_cleanup_witness(
     conn: &turso::Connection,
     root_digest: &str,
     hex64: &str,
+    topology: i64,
 ) -> TestResult<()> {
+    let metadata = if topology == 2 {
+        r#",{"role":"engine-metadata","mountpoint":"/var/lib/docker/volumes/v5/_data","mount_device":[0,109],"statx_device":[0,109],"inode":5}"#
+    } else {
+        ""
+    };
     let binding_json = format!(
         concat!(
             r#"{{"expected_guest_boot_id":"{boot_id}","#,
@@ -346,9 +304,11 @@ async fn seed_cleanup_witness(
             r#"{{"role":"runner-home","mountpoint":"/var/lib/docker/volumes/v2/_data","mount_device":[0,102],"statx_device":[0,102],"inode":2}},"#,
             r#"{{"role":"runner-work","mountpoint":"/var/lib/docker/volumes/v3/_data","mount_device":[0,103],"statx_device":[0,103],"inode":3}},"#,
             r#"{{"role":"dind-data","mountpoint":"/var/lib/docker/volumes/v4/_data","mount_device":[0,106],"statx_device":[0,106],"inode":4}}"#,
+            "{metadata}",
             r#"],"owned_tmpfs_devices":[[0,101],[0,102],[0,103],[0,104],[0,105],[0,106],[0,107],[0,108]]}}"#
         ),
         boot_id = BOOT_ID,
+        metadata = metadata,
     );
     let binding_sha256 = hex_sha256(binding_json.as_bytes());
     conn.execute(

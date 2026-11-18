@@ -59,6 +59,30 @@ fn mac_receipt_requires_closed_identity_and_successful_cleanup() -> Result<(), B
 }
 
 #[test]
+fn mac_receipt_requires_canonical_absolute_nonroot_daemon_root() -> Result<(), Box<dyn Error>> {
+    for root in [
+        "/",
+        "/var/lib/docker/../../etc",
+        "/var/lib/docker/./lib",
+        "//var/lib/docker",
+        "/var/lib/docker/",
+        "var/lib/docker",
+    ] {
+        let mut changed = receipt();
+        *changed
+            .pointer_mut("/outer_daemon/root")
+            .ok_or("fixture path missing")? = json!(root);
+        assert!(
+            parse_mac_runner_qualification(&serde_json::to_vec(&changed)?).is_err(),
+            "outer daemon root {root} accepted"
+        );
+    }
+    parse_mac_runner_qualification(&serde_json::to_vec(&receipt())?)
+        .map_err(|_| "canonical daemon root rejected")?;
+    Ok(())
+}
+
+#[test]
 fn signed_envelope_binds_exact_native_receipt_and_both_authorities() -> Result<(), Box<dyn Error>> {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     use sha2::{Digest, Sha256};

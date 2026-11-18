@@ -202,7 +202,8 @@ fn scan_task(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &mut Inve
             scan_task_mounts(pid, tid, context, inventory);
         }
     }
-    scan_descriptors(pid, tid, is_observer_task, context, inventory);
+    let is_observer_process = is_observer_task && pid == std::process::id();
+    scan_descriptors(pid, tid, is_observer_process, context, inventory);
     match process_start_ticks(&stat_path, tid) {
         Ok(value) if value == start_before => {}
         Err(error) if vanished(&error) => {}
@@ -242,7 +243,7 @@ fn scan_task_mounts(pid: u32, tid: u32, context: &ScanContext<'_>, inventory: &m
 fn scan_descriptors(
     pid: u32,
     tid: u32,
-    is_observer_task: bool,
+    is_observer_process: bool,
     context: &ScanContext<'_>,
     inventory: &mut Inventory,
 ) {
@@ -273,13 +274,13 @@ fn scan_descriptors(
             add_issue(&mut inventory.issues, "descriptor_limit");
             break;
         }
-        observe_task_descriptor(&fd.path(), is_observer_task, context, inventory);
+        observe_task_descriptor(&fd.path(), is_observer_process, context, inventory);
     }
 }
 
 fn observe_task_descriptor(
     path: &std::path::Path,
-    is_observer_task: bool,
+    is_observer_process: bool,
     context: &ScanContext<'_>,
     inventory: &mut Inventory,
 ) {
@@ -291,7 +292,7 @@ fn observe_task_descriptor(
             return;
         }
     };
-    let namespace_reference = !is_observer_task
+    let namespace_reference = !is_observer_process
         && namespace_link(&observation.target).is_some_and(|inode| {
             observation.filesystem_magic == 0x6e73_6673
                 && context
