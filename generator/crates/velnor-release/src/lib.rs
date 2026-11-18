@@ -35,4 +35,5 @@ pub use ruleset::{
 };
 pub use tag::{TagPattern, is_tag_name};
 pub use timeout::TAG_JOB_BASE_MINUTES;
+pub use velnor_config::BinaryFormat;
 pub use versions::{Versions, check_release_versions};

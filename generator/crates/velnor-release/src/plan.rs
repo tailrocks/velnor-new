@@ -19,7 +19,7 @@ use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
-use crate::velnor_config::{VelnorConfig, parse};
+use crate::velnor_config::{BinaryFormat, VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
 pub struct ReleaseFiles {
@@ -55,6 +55,7 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub format: BinaryFormat,
     pub tag_pattern: TagPattern,
 }
 
@@ -261,6 +262,7 @@ fn plan_binaries(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            format: binary.format,
             tag_pattern,
         });
     }
