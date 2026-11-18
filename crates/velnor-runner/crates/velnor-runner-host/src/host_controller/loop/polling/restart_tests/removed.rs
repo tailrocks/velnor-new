@@ -252,9 +252,10 @@ async fn a_removed_connection_whose_poll_fails_has_its_unbound_pair_retired() ->
     assert_retired(&restarted).await
 }
 
-#[tokio::test(flavor = "multi_thread")]
+#[tokio::test(flavor = "current_thread")]
 async fn a_restart_retires_the_unbound_pair_of_a_removed_connection() -> TestResult<()> {
     let (restarted, controller) = restarted_with_a_removed_connection().await?;
+    let clock = freeze();
     controller
         .clean_up_at_startup(
             &restarted.journal,
@@ -263,6 +264,7 @@ async fn a_restart_retires_the_unbound_pair_of_a_removed_connection() -> TestRes
             Duration::from_secs(60),
         )
         .await;
+    drop(clock);
     assert_retired(&restarted).await
 }
 
