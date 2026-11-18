@@ -83,6 +83,8 @@ Set the repository variable `VELNOR_CACHE_DEBUG` to `1`, with `cache_debug = tru
 - `check`: exit 1 when a generated file differs from what `generate` writes.
 - `pin-helper <version>`: write `.velnor/rust-ci.lock` for a helper release.
 - `release ...`: generate and check the `release.yml` workflow and its tag rulesets.
+- `release ruleset`: print the two tag rulesets that let only the velnor-release App create release tags, one JSON object per line. Create each with `gh api` (the command's `--help` shows the loop).
+- `release ruleset-drift <live.json>`: compare a JSON array of the live tag rulesets with the generated ones, bypass actors included. Exit 1 on a difference.
 - `check-tag <tag>`: exit 1 unless the tag is `rust-ci-v` plus the program version.
 - `record-sample`: record a golden test sample (for work on the generator).
 
