@@ -1,10 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::base_cache::has_saving_helper;
 use crate::lane::Lane;
 use crate::plan::step;
 use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoFacts, RustRoot, Step, StepKind, When};
+
+const DELTA_HELPER: (u64, u64, u64) = (0, 1, 82);
 
 pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId, lane: &Lane) -> Vec<Step> {
     if !supported(facts, root, lane.deltas) {
@@ -69,7 +70,10 @@ pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId)
 fn supported(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> bool {
     deltas
         && facts.private_sources.is_none()
-        && has_saving_helper(facts)
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(DELTA_HELPER))
         && root.target_dir
             == root
                 .manifest

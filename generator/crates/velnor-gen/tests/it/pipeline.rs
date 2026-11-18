@@ -57,7 +57,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     view.files.insert(
         lock,
         String::from_utf8(HELPER_LOCK.to_vec())?
-            .replace("0.1.79", "0.1.81")
+            .replace("0.1.79", "0.1.82")
             .into_bytes(),
     );
     if let Some(bytes) = config {

@@ -17,7 +17,7 @@ fn pin(files: &mut RepoView, version: &str) {
 
 fn two_workspaces() -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut files = view(&["Cargo.toml", "tool/Cargo.toml"], None)?;
-    pin(&mut files, "0.1.81");
+    pin(&mut files, "0.1.82");
     let core = package(
         "core",
         "core/Cargo.toml",
@@ -330,7 +330,7 @@ fn a_pin_below_0_1_81_gets_a_file_its_helper_can_read() -> TestResult {
             .flat_map(|workspace| &workspace.members)
             .all(|member| member.version.is_none())
     );
-    pin(&mut files, "0.1.81");
+    pin(&mut files, "0.1.82");
     assert!(recorded(&files)?.contains("\"version\""));
     Ok(())
 }

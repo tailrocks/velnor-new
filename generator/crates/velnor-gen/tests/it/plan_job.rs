@@ -28,7 +28,7 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
 const LANE_SETUP: [&str; 18] = [
     "Check out",
     "Resolve released helper tools",
-    "Install velnor-ci 0.1.81",
+    "Install velnor-ci 0.1.82",
     "Install the released helper launcher",
     "Restore the tools cache",
     "Install tools",
@@ -57,7 +57,7 @@ fn a_single_job_plans_first_and_every_later_step_waits_for_a_successful_plan_tha
         [
             "Check out",
             "Resolve released helper tools",
-            "Install velnor-ci 0.1.81",
+            "Install velnor-ci 0.1.82",
             "Install the released helper launcher",
             "velnor-ci plan",
         ]
@@ -100,7 +100,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
         [
             "Check out",
             "Resolve released helper tools",
-            "Install velnor-ci 0.1.81"
+            "Install velnor-ci 0.1.82"
         ]
     );
     assert_eq!(plan_steps.last(), Some(&"velnor-ci plan"));

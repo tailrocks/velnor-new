@@ -50,7 +50,7 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
                 for (path, bytes) in &mut view.files {
                     if path.as_str() == ".velnor/rust-ci.lock" {
                         *bytes = String::from_utf8(bytes.clone())?
-                            .replace("0.1.81", helper)
+                            .replace("0.1.82", helper)
                             .into_bytes();
                     } else if path.as_str() == "mise.toml" {
                         *bytes = String::from_utf8(bytes.clone())?

@@ -98,14 +98,14 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
     let text = text_of(&view)?;
     assert!(job_ids(&text).contains(&"policy"));
     let jobs = job_ids(&text);
-    assert_eq!(text.matches("Install velnor-ci 0.1.81").count(), jobs.len());
+    assert_eq!(text.matches("Install velnor-ci 0.1.82").count(), jobs.len());
     for (index, job) in jobs.iter().enumerate() {
         let start = text.find(&format!("  {job}:\n")).ok_or("job missing")?;
         let end = jobs.get(index + 1).map_or(Ok(text.len()), |next| {
             text.find(&format!("  {next}:\n")).ok_or("next job missing")
         })?;
         let body = &text[start..end];
-        assert!(body.contains("Install velnor-ci 0.1.81"), "{job}");
+        assert!(body.contains("Install velnor-ci 0.1.82"), "{job}");
         if matches!(*job, "rust-root" | "rust-ci_helper" | "rust-inputs-audit") {
             let restore = body
                 .find("velnor-ci inputs restore")
@@ -134,7 +134,7 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
     }
     let verdict = &text[text.find("  required:").ok_or("no verdict")?
         ..text.find("\n  cache:\n").ok_or("no Cache")?];
-    assert!(verdict.contains("Install velnor-ci 0.1.81"));
+    assert!(verdict.contains("Install velnor-ci 0.1.82"));
     assert!(verdict.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC"));
     assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
     assert!(!verdict.contains("Check out"));
@@ -188,7 +188,7 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     view.files.insert(
         path(".velnor/rust-ci.lock")?,
         String::from_utf8(HELPER_LOCK.to_vec())?
-            .replace("0.1.79", "0.1.81")
+            .replace("0.1.79", "0.1.82")
             .into_bytes(),
     );
     view.tracked_paths.insert(CONFIG_PATH);
@@ -211,7 +211,7 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     assert_eq!(text.matches("Install velnor-ci").count(), 6);
     let verdict = &text[text.find("  required:").ok_or("no verdict")?..];
     let verdict = verdict.split("\n  cache:").next().unwrap_or(verdict);
-    assert!(verdict.contains("Install velnor-ci 0.1.81"));
+    assert!(verdict.contains("Install velnor-ci 0.1.82"));
     assert!(verdict.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC"));
     assert!(verdict.contains("--job rust-helper=lane:ci_helper"));
     assert!(!verdict.contains("Check out"));
@@ -288,7 +288,7 @@ fn helper_source_requires_a_released_helper_with_restoration_and_tie_breaking() 
     let mut view = sample(None)?;
     let lock = path(".velnor/rust-ci.lock")?;
     let released = String::from_utf8(view.files.get(&lock).ok_or("no lock")?.clone())?;
-    for candidate in [None, Some(released.replace("0.1.81", "0.1.80"))] {
+    for candidate in [None, Some(released.replace("0.1.82", "0.1.80"))] {
         view.files.remove(&lock);
         if let Some(candidate) = candidate {
             view.files.insert(lock.clone(), candidate.into_bytes());
@@ -310,7 +310,7 @@ fn helper_source_requires_a_released_helper_with_restoration_and_tie_breaking() 
     let lock = path(".velnor/rust-ci.lock")?;
     let released = String::from_utf8(view.files.get(&lock).ok_or("no lock")?.clone())?;
     view.files
-        .insert(lock, released.replace("0.1.81", "0.1.80").into_bytes());
+        .insert(lock, released.replace("0.1.82", "0.1.80").into_bytes());
     assert!(expected_files(&view).is_ok());
     Ok(())
 }

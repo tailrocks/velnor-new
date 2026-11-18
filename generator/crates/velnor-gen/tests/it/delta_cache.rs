@@ -73,7 +73,7 @@ fn pr_delta_keys_preserve_every_identity_dimension_in_every_restore_fallback() -
 #[test]
 fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -> TestResult {
     for shape in ["", "shape = \"lint-test\"", "shape = \"groups\""] {
-        for (id, lane) in jobs("0.1.81", shape)? {
+        for (id, lane) in jobs("0.1.82", shape)? {
             if !lane.contains("cache decide") {
                 continue;
             }
@@ -155,7 +155,7 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
 }
 
 fn custom_targets_omit_deltas() -> TestResult {
-    let mut custom = pinned("0.1.81", "")?;
+    let mut custom = pinned("0.1.82", "")?;
     let config = RepoPath::new(".cargo/config.toml")?;
     custom.tracked_paths.insert(config.clone());
     custom
@@ -187,7 +187,7 @@ fn assert_delta_saves_are_not_cancelled(lane: &str) -> TestResult {
 }
 
 fn private_sources_disable_deltas() -> TestResult {
-    let mut private_sources = pinned("0.1.81", "")?;
+    let mut private_sources = pinned("0.1.82", "")?;
     private_sources.files.insert(
         RepoPath::new("Cargo.lock")?,
         b"version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/private#0123456789abcdef\"\n".to_vec(),
@@ -209,7 +209,7 @@ fn private_sources_disable_deltas() -> TestResult {
 fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResult {
     for path in ["target.velnor-delta", "target.velnor-delta/owned"] {
         let path = RepoPath::new(path)?;
-        let mut repo = pinned("0.1.81", "")?;
+        let mut repo = pinned("0.1.82", "")?;
         repo.tracked_paths.insert(path.clone());
         repo.files.insert(path.clone(), b"project data".to_vec());
         let error = expected_files(&repo).expect_err("tracked staging must not be overwritten");
@@ -223,7 +223,7 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
         "target.velnor-delta-other/owned",
     ] {
         let path = RepoPath::new(path)?;
-        let mut repo = pinned("0.1.81", "")?;
+        let mut repo = pinned("0.1.82", "")?;
         repo.tracked_paths.insert(path.clone());
         repo.files.insert(path, b"project data".to_vec());
         assert!(workflow(&repo)?.contains("Restore the delta cache"));
@@ -232,7 +232,7 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
         let version = if unsupported == "old-helper" {
             "0.1.80"
         } else {
-            "0.1.81"
+            "0.1.82"
         };
         let mut repo = pinned(version, config_for(version))?;
         let path = RepoPath::new(if unsupported == "custom-target" {
@@ -264,7 +264,7 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
 
 #[test]
 fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags() -> TestResult {
-    for (version, source) in [("0.1.80", false), ("0.1.81", false), ("0.1.81", true)] {
+    for (version, source) in [("0.1.80", false), ("0.1.82", false), ("0.1.82", true)] {
         let repo = if source {
             source_repo(version)?
         } else {
@@ -308,7 +308,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             ),
             "{cleanup}"
         );
-        assert!(cleanup.contains("Install velnor-ci 0.1.81"), "{cleanup}");
+        assert!(cleanup.contains("Install velnor-ci 0.1.82"), "{cleanup}");
         assert!(
             cleanup.contains("velnor-ci cache trim-deltas --run-id \"$RUN_ID\""),
             "{cleanup}"
@@ -367,5 +367,16 @@ fn source_identity(lane: &str) -> Result<(), Box<dyn std::error::Error>> {
         stage.contains("${{ steps.delta_base_root.outputs.source_identity }}"),
         "{stage}"
     );
+    Ok(())
+}
+
+#[test]
+fn delta_steps_need_a_helper_that_has_the_delta_command() -> TestResult {
+    let old = workflow(&pinned("0.1.81", "")?)?;
+    assert!(!old.contains("velnor-ci delta"), "{old}");
+    assert!(!old.contains("velnor-dlt-"), "{old}");
+    let new = workflow(&pinned("0.1.82", "")?)?;
+    assert!(new.contains("velnor-ci delta prepare"), "{new}");
+    assert!(new.contains("Restore the delta cache"), "{new}");
     Ok(())
 }
