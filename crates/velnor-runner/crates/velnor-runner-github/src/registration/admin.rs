@@ -189,3 +189,40 @@ struct AdminFields {
     #[serde(default)]
     token: Option<String>,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn admin_service_url_rejects_userinfo() -> Result<(), serde_json::Error> {
+        for url in [
+            "https://user:admin-token@pipelines.example/org/repo",
+            "https://user@pipelines.example/org/repo",
+            "https://@pipelines.example/org/repo",
+            "https://:password@pipelines.example/org/repo",
+        ] {
+            let body = serde_json::to_vec(&serde_json::json!({"url": url, "token": "jwt"}))?;
+            let result = decode_admin(&body);
+            assert!(matches!(
+                result,
+                Err(SessionError::Wire(WireError::RegistrationRejected))
+            ));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn admin_service_url_preserves_path_and_token() -> Result<(), Box<dyn std::error::Error>> {
+        for url in [
+            "https://pipelines.example/org/repo",
+            "https://pipelines.example/org/@repo",
+        ] {
+            let body = serde_json::to_vec(&serde_json::json!({"url": url, "token": "jwt"}))?;
+            let admin = decode_admin(&body)?;
+            assert_eq!(admin.expose_url(), url);
+            assert_eq!(admin.expose_token(), "jwt");
+        }
+        Ok(())
+    }
+}
