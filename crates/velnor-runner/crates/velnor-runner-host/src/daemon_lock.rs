@@ -22,6 +22,10 @@ pub(crate) use filesystem::canonical_journal_path;
 use filesystem::{ensure_regular_or_missing, lock_directory, open_lock, private_directory};
 pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
+#[cfg(test)]
+#[path = "daemon_lock/tests.rs"]
+mod tests;
+
 const ANCHOR_VERSION: u8 = 1;
 const MAX_ANCHOR_BYTES: u64 = 16 * 1024;
 const ANCHOR_DIR: &str = "runner-lineage";
@@ -69,7 +73,17 @@ impl DaemonLock {
 
     #[must_use]
     pub fn is_held(&self) -> bool {
-        self.file.metadata().is_ok()
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            self.file
+                .metadata()
+                .is_ok_and(|metadata| metadata.nlink() > 0)
+        }
+        #[cfg(not(unix))]
+        {
+            false
+        }
     }
 
     #[must_use]
