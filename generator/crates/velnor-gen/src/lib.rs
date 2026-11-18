@@ -19,7 +19,7 @@ use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, Rep
 use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
-    silent_build_scripts,
+    silent_build_scripts, suggest_groups as suggested_groups,
 };
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
@@ -53,6 +53,11 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
                 .map(velnor_rust::SilentBuildScript::note),
         )
         .collect())
+}
+
+pub fn suggest_groups(view: &RepoView) -> Result<(String, Vec<String>), GenerateError> {
+    let facts = detect(view)?;
+    Ok((suggested_groups(&facts), facts.timings_notes))
 }
 
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {

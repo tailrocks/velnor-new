@@ -110,6 +110,7 @@ mod setup_action_cache;
 mod setup_action_owner;
 mod setup_action_swap;
 mod setup_action_tool_cache;
+mod suggest_groups;
 mod test_groups;
 mod test_groups_harness;
 mod test_groups_jobs;

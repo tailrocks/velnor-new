@@ -47,6 +47,7 @@ mod select_event;
 mod sha256;
 mod shape;
 mod sibling_features;
+mod suggest_groups;
 mod target_dir;
 mod test_setup;
 mod timings;
@@ -88,6 +89,7 @@ pub use select::{select, unknown_paths, unread_packages};
 pub use select_event::{select_event, selects_by_diff};
 pub use sha256::sha256_hex;
 pub use shape::{SECOND_JOB_COST_SECONDS, SHARD_THRESHOLD_SECONDS, decide_shape};
+pub use suggest_groups::suggest_groups;
 pub use timings::{TIMINGS_PATH, render_timings, root_job_ids};
 pub use toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 pub use verdict::{
