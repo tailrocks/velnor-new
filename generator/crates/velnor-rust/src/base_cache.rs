@@ -113,6 +113,21 @@ pub(crate) fn save_steps(
         },
     ];
     if sources {
+        let lane_slug = cache_root.slug().clone();
+        steps.extend(
+            facts
+                .rust_roots
+                .iter()
+                .enumerate()
+                .map(|(position, other)| Step {
+                    directory: other.manifest.parent(),
+                    when: When::FetchSources,
+                    ..step(StepKind::SourcesFetch {
+                        lane: lane_slug.clone(),
+                        position,
+                    })
+                }),
+        );
         steps.push(Step {
             when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {

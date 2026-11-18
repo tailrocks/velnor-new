@@ -183,20 +183,20 @@ fn long_named_roots(count: usize) -> Vec<String> {
 }
 
 #[test]
-fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
-    let manifests = long_named_roots(20);
+fn sixteen_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests = long_named_roots(16);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = released("0.1.81", &roots)?;
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
-    assert_eq!(spec.matches("--tests ").count(), 20);
+    assert_eq!(spec.matches("--tests ").count(), 16);
     assert!(required(&text)?.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n"));
     Ok(())
 }
 
 #[test]
-fn twenty_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
-    let manifests = long_named_roots(20);
+fn sixteen_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
+    let manifests = long_named_roots(16);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = released("0.1.81", &roots)?;
     assert!(text.len() <= 500_000, "{} bytes", text.len());

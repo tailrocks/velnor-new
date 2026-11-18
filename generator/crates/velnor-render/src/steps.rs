@@ -8,7 +8,8 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_decide, cache_trim, lane_outputs, sources_locks, trimmed_lane,
+    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_locks,
+    trimmed_lane,
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
@@ -206,6 +207,19 @@ fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
             "steps.{}.outputs.cache-hit != 'true'",
             sources_step(lane.slug())
         )],
+        StepKind::SourcesFetch { lane, position } => {
+            let mut terms = vec![format!(
+                "steps.{}.outputs.cache-hit != 'true'",
+                sources_step(lane)
+            )];
+            if let Some(previous) = position.checked_sub(1) {
+                terms.push(format!(
+                    "steps.{}.outcome == 'success'",
+                    crate::gate::sources_fetch_step(previous)
+                ));
+            }
+            terms
+        }
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         _ => Vec::new(),
     }
@@ -216,6 +230,14 @@ fn variable(need: GateNeed) -> &'static str {
         GateNeed::TestFilter => "TEST_FILTER",
         GateNeed::DoctestsKnown => "DOCTESTS_KNOWN",
         _ => "PACKAGE_ARGS",
+    }
+}
+
+fn rustup(name: &str, kind: &str, items: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: name.to_owned(),
+        run: Some(format!("rustup {kind} add {}", items.join(" "))),
+        ..RenderedStep::default()
     }
 }
 
@@ -259,16 +281,11 @@ fn step_body(
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
-        StepKind::RustComponents(components) => RenderedStep {
-            name: "Add Rust components".to_owned(),
-            run: Some(format!("rustup component add {}", components.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::RustTargets(targets) => RenderedStep {
-            name: "Add Rust targets".to_owned(),
-            run: Some(format!("rustup target add {}", targets.join(" "))),
-            ..RenderedStep::default()
-        },
+        StepKind::RustComponents(components) => {
+            rustup("Add Rust components", "component", components)
+        }
+        StepKind::RustTargets(targets) => rustup("Add Rust targets", "target", targets),
+        StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane.cache_debug),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),

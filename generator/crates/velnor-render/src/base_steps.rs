@@ -168,11 +168,47 @@ pub(crate) fn audited_save(
             step.kind,
             StepKind::CacheDecide { .. } | StepKind::CacheSave(CacheKey::Target { .. })
         );
-    let extra = audited.then(|| "${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned());
+    let extra = if audited {
+        Some("${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned())
+    } else if matches!(step.kind, StepKind::CacheSave(CacheKey::Sources { .. })) {
+        fetched(job)
+    } else {
+        None
+    };
     for body in &mut bodies {
         body.condition = crate::gate::all_conditions(body.condition.take(), extra.clone());
     }
     bodies
+}
+
+fn fetched(job: &velnor_model::Job) -> Option<String> {
+    job.steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::SourcesFetch { position, .. } => Some(*position),
+            _ => None,
+        })
+        .max()
+        .map(|last| {
+            format!(
+                "${{{{ steps.{}.outcome == 'success' }}}}",
+                crate::gate::sources_fetch_step(last)
+            )
+        })
+}
+
+pub(crate) fn sources_fetch(position: usize, cache_debug: bool) -> RenderedStep {
+    RenderedStep {
+        env: cache_debug
+            .then(crate::cargo::cache_debug_env)
+            .into_iter()
+            .collect(),
+        id: Some(crate::gate::sources_fetch_step(position)),
+        name: format!("Fetch the sources of root {position}"),
+        continue_on_error: true,
+        run: Some(format!("{} cargo fetch --locked", crate::steps::RUN)),
+        ..RenderedStep::default()
+    }
 }
 
 pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {

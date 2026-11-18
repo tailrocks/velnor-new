@@ -10,7 +10,7 @@ use velnor_model::{
 use velnor_render::render;
 
 use crate::archive::jobs_of;
-use crate::base_save::step;
+use crate::base_save::{names, step};
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
@@ -190,5 +190,103 @@ fn the_shared_sources_key_never_collides_with_or_prefixes_a_per_root_key() -> Te
             );
         }
     }
+    Ok(())
+}
+
+fn fetches(block: &str) -> Vec<String> {
+    names(block)
+        .into_iter()
+        .filter(|name| name.starts_with("Fetch the sources of "))
+        .collect()
+}
+
+#[test]
+fn the_saving_path_fetches_every_root_before_the_sources_save() -> TestResult {
+    let lanes = lanes(&["Cargo.toml", "xtask/Cargo.toml", "tools/Cargo.toml"])?;
+    let savers: Vec<_> = lanes
+        .iter()
+        .filter(|(_, block)| step(block, "Save the sources cache").is_some())
+        .collect();
+    assert!(savers.len() >= 3, "{}", savers.len());
+    for (id, block) in savers {
+        let all = names(block);
+        let save = all
+            .iter()
+            .position(|name| name == "Save the sources cache")
+            .ok_or("no save")?;
+        let fetched: Vec<_> = all[..save]
+            .iter()
+            .filter(|name| name.starts_with("Fetch the sources of "))
+            .cloned()
+            .collect();
+        let expected: Vec<String> = (0..3)
+            .map(|position| format!("Fetch the sources of root {position}"))
+            .collect();
+        assert_eq!(fetched, expected, "{id}");
+        let mut directories = BTreeSet::new();
+        for (position, name) in expected.iter().enumerate() {
+            let fetch = step(block, name).ok_or("no fetch")?;
+            assert!(
+                fetch.contains("velnor-ci run -- cargo fetch --locked"),
+                "{fetch}"
+            );
+            assert!(fetch.contains("continue-on-error: true"), "{fetch}");
+            assert!(fetch.contains("!cancelled() && "), "{fetch}");
+            assert!(
+                fetch.contains("steps.base.outputs.sources == ''true''"),
+                "{fetch}"
+            );
+            assert!(fetch.contains("cache-hit != ''true''"), "{fetch}");
+            directories.insert(
+                fetch
+                    .lines()
+                    .find_map(|line| line.trim().strip_prefix("working-directory: "))
+                    .unwrap_or_default()
+                    .to_owned(),
+            );
+            assert_eq!(
+                fetch.contains(&format!(
+                    "steps.sources_fetch_{}.outcome == ''success''",
+                    position.wrapping_sub(1)
+                )),
+                position > 0,
+                "{fetch}"
+            );
+        }
+        assert_eq!(
+            directories,
+            BTreeSet::from([String::new(), "tools".to_owned(), "xtask".to_owned()]),
+            "{id}"
+        );
+        let decide =
+            step(block, "Decide whether to save the build directory").ok_or("no decide")?;
+        assert!(decide.contains("default_branch"), "{decide}");
+    }
+    Ok(())
+}
+
+#[test]
+fn lanes_that_do_not_save_the_sources_run_no_fetch() -> TestResult {
+    let lanes = jobs_of(&workflow(&view(
+        &["Cargo.toml", "xtask/Cargo.toml"],
+        Some(b"shape = \"lint-test\"\n"),
+    )?)?);
+    for (id, block) in &lanes {
+        assert_eq!(
+            step(block, "Save the sources cache").is_some(),
+            !fetches(block).is_empty(),
+            "{id}"
+        );
+    }
+    assert!(
+        lanes
+            .iter()
+            .any(|(id, block)| id.starts_with("rust-lint") && fetches(block).is_empty())
+    );
+    let (_, audit) = lanes
+        .iter()
+        .find(|(id, _)| id == "rust-inputs-audit")
+        .ok_or("no audit")?;
+    assert_eq!(fetches(audit), Vec::<String>::new());
     Ok(())
 }

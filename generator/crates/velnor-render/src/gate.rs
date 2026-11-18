@@ -26,6 +26,10 @@ pub(crate) fn sources_step(lane: &RootSlug) -> String {
     format!("sources_{lane}")
 }
 
+pub(crate) fn sources_fetch_step(position: usize) -> String {
+    format!("sources_fetch_{position}")
+}
+
 pub(crate) fn sources_save_step(lane: &RootSlug) -> String {
     format!("sources_save_{lane}")
 }
@@ -133,6 +137,14 @@ pub(crate) fn condition(
             if when == When::SaveBaseDecided {
                 parts.push(format!("steps.{BASE_STEP}.outputs.save == 'true'"));
             }
+        }
+        When::FetchSources => {
+            parts.push(NOT_CANCELLED.to_owned());
+            if setup != Setup::Before {
+                parts.push(SETUP_DONE.to_owned());
+            }
+            parts.push("success()".to_owned());
+            parts.push(format!("steps.{BASE_STEP}.outputs.sources == 'true'"));
         }
         When::FullAudit => {
             let expired = if setup == Setup::Before { "" } else { " || steps.restored.outputs.expired == 'true'" };
