@@ -24,44 +24,7 @@ fn a_build_keeps_its_own_rustc_when_a_build_script_selects_another_toolchain() -
     repo.write_unstaged("ca.pem", "not used by this fixture");
     fake_toolchain(root)?;
     let home = private_home(root)?;
-    repo.write_unstaged(
-        "consumer/Cargo.toml",
-        "[package]\nname='consumer'\nversion='1.0.0'\nedition='2024'\nbuild='build.rs'\n",
-    );
-    repo.write_unstaged("consumer/src/lib.rs", "");
-    repo.write_unstaged(
-        "tiny/Cargo.toml",
-        "[package]\nname='tiny'\nversion='1.0.0'\nedition='2024'\n",
-    );
-    repo.write_unstaged("tiny/src/lib.rs", "");
-    repo.write_unstaged(
-        "consumer/build.rs",
-        r#"fn main() {
-    let root = std::env::var("MIRROR_FIXTURE_ROOT").unwrap();
-    let record = |name: &str| {
-        let rustc = std::process::Command::new("rustc").arg("-vV").output().unwrap();
-        assert!(rustc.status.success());
-        std::fs::write(format!("{root}/{name}"), &rustc.stdout).unwrap();
-    };
-    record("rustc-before.txt");
-    let nested = std::process::Command::new(std::env::var("CARGO").unwrap())
-        .args([
-            "+mirror-fake",
-            "metadata",
-            "--format-version",
-            "1",
-            "--no-deps",
-            "--offline",
-            "--manifest-path",
-        ])
-        .arg(format!("{root}/tiny/Cargo.toml"))
-        .env("CARGO_HOME", format!("{root}/nested-home"))
-        .output()
-        .unwrap();
-    assert!(nested.status.success(), "nested cargo failed: {nested:?}");
-    record("rustc-after.txt");
-}"#,
-    );
+    projects(&repo);
     let output = setup(root, REGISTRY);
     assert!(output.status.success(), "{output:?}");
     let wrapper = fs::canonicalize(root.join("velnor-cargo/cargo"))?;
@@ -106,6 +69,47 @@ fn a_build_keeps_its_own_rustc_when_a_build_script_selects_another_toolchain() -
     Ok(())
 }
 
+fn projects(repo: &Repo) {
+    repo.write_unstaged(
+        "consumer/Cargo.toml",
+        "[package]\nname='consumer'\nversion='1.0.0'\nedition='2024'\nbuild='build.rs'\n",
+    );
+    repo.write_unstaged("consumer/src/lib.rs", "");
+    repo.write_unstaged(
+        "tiny/Cargo.toml",
+        "[package]\nname='tiny'\nversion='1.0.0'\nedition='2024'\n",
+    );
+    repo.write_unstaged("tiny/src/lib.rs", "");
+    repo.write_unstaged(
+        "consumer/build.rs",
+        r#"fn main() {
+    let root = std::env::var("MIRROR_FIXTURE_ROOT").unwrap();
+    let record = |name: &str| {
+        let rustc = std::process::Command::new("rustc").arg("-vV").output().unwrap();
+        assert!(rustc.status.success());
+        std::fs::write(format!("{root}/{name}"), &rustc.stdout).unwrap();
+    };
+    record("rustc-before.txt");
+    let nested = std::process::Command::new(std::env::var("CARGO").unwrap())
+        .args([
+            "+mirror-fake",
+            "metadata",
+            "--format-version",
+            "1",
+            "--no-deps",
+            "--offline",
+            "--manifest-path",
+        ])
+        .arg(format!("{root}/tiny/Cargo.toml"))
+        .env("CARGO_HOME", format!("{root}/nested-home"))
+        .output()
+        .unwrap();
+    assert!(nested.status.success(), "nested cargo failed: {nested:?}");
+    record("rustc-after.txt");
+}"#,
+    );
+}
+
 fn fake_toolchain(root: &Path) -> Result<(), Box<dyn Error>> {
     let output = Command::new(rustup_binary().ok_or("rustup unavailable")?)
         .args(["which", "cargo"])
@@ -139,7 +143,9 @@ fn private_home(root: &Path) -> Result<PathBuf, Box<dyn Error>> {
             .output()?;
         assert!(output.status.success(), "{output:?}");
     }
-    let output = rustup(&bin, &home).args(["default", DEFAULT_ALIAS]).output()?;
+    let output = rustup(&bin, &home)
+        .args(["default", DEFAULT_ALIAS])
+        .output()?;
     assert!(output.status.success(), "{output:?}");
     Ok(home)
 }
