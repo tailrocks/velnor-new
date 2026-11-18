@@ -18,7 +18,7 @@ macro_rules! validate_v40_stage {
     }};
 }
 
-pub(super) async fn validate_persisted_schema_v39(
+pub(in crate::journal) async fn validate_persisted_schema_v39(
     conn: &turso::Connection,
 ) -> Result<(), HostError> {
     validate_persisted_schema_v38(conn).await?;
