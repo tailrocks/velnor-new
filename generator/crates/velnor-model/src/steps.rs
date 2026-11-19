@@ -4,6 +4,7 @@
 use crate::cache::CacheKey;
 use crate::helper::HelperRelease;
 use crate::ids::{JobId, RepoPath};
+use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
@@ -15,6 +16,8 @@ pub enum StepKind {
     InstallTools {
         only: Option<String>,
     },
+    InstallMise,
+    Lint(LintCommand),
     CacheRestore(CacheKey),
     CacheSave(CacheKey),
     RestoredTargets {

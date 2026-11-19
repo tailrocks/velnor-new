@@ -13,6 +13,7 @@ mod header;
 mod helper_integrity;
 mod helper_steps;
 mod key_length;
+mod lint_steps;
 mod release;
 mod release_binaries;
 mod release_finalize;

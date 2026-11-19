@@ -250,6 +250,8 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::InstallTools { only } => install_tools(only.as_deref()),
+        StepKind::InstallMise => install_mise(),
+        StepKind::Lint(command) => crate::lint_steps::lint_step(command),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
@@ -319,6 +321,19 @@ fn install_tools(only: Option<&str>) -> RenderedStep {
         name: "Install tools".to_owned(),
         uses: Some(MISE.to_owned()),
         with,
+        ..RenderedStep::default()
+    }
+}
+
+fn install_mise() -> RenderedStep {
+    RenderedStep {
+        name: "Install mise".to_owned(),
+        uses: Some(MISE.to_owned()),
+        with: vec![
+            ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+            ("install".to_owned(), Value::Bool(false)),
+            ("cache".to_owned(), Value::Bool(false)),
+        ],
         ..RenderedStep::default()
     }
 }

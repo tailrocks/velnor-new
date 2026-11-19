@@ -7,6 +7,7 @@ mod cache_outputs;
 mod cron;
 mod helper;
 mod ids;
+mod lint;
 mod plan;
 mod repo;
 mod selection;
@@ -28,6 +29,7 @@ pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
     RunnerLabel, Sha256, TargetName, github_hosted,
 };
+pub use lint::{LintCommand, LintJob, LintKind};
 pub use plan::{
     Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP,
     PermissionScope, Permissions, PlanFrom, PlanRef, PullRequestType, Shape, ShapeDecision, Step,

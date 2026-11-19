@@ -57,6 +57,12 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    LintToolUnpinned(String),
+    LintDuplicate(String),
+    LintKeyForeign {
+        kind: String,
+        key: &'static str,
+    },
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
@@ -200,10 +206,6 @@ impl fmt::Display for Reason {
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
             ),
-            Self::UnknownTestSetupRoot(root) => write!(
-                f,
-                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
-            ),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
@@ -228,6 +230,10 @@ impl fmt::Display for Reason {
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
+            Self::UnknownTestSetupRoot(_)
+            | Self::LintToolUnpinned(_)
+            | Self::LintDuplicate(_)
+            | Self::LintKeyForeign { .. } => self.fmt_config(f),
             Self::InvalidPatch(key) => {
                 write!(
                     f,

@@ -57,6 +57,8 @@ mod job_setup;
 mod mise_safety;
 
 mod job_shape;
+mod lint_gate;
+mod lint_lane;
 mod lock;
 mod lock_affected;
 mod lock_consistency;

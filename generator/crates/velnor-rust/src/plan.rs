@@ -59,6 +59,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if facts.policy.any() {
         jobs.push(policy_job(facts, &Lane::policy(single)));
     }
+    jobs.extend(crate::lint_jobs::lint_jobs(facts));
     let draft_guard = facts
         .config
         .skip_draft_pull_requests
