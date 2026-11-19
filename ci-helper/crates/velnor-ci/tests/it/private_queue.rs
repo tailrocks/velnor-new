@@ -37,11 +37,23 @@ fn pull(number: u32, repository: &str, sha: &str) -> (String, String) {
     )
 }
 
-fn compare(group: &str, status: &str) -> (String, String) {
+fn comparison(page: u32, total: usize, shas: &[&str]) -> (String, String) {
+    let commits: Vec<String> = shas
+        .iter()
+        .map(|sha| format!("{{\"sha\":\"{sha}\"}}"))
+        .collect();
     (
-        format!("/repos/{REPOSITORY}/compare/{group}...{OURS_GROUP}?per_page=1"),
-        format!("{{\"status\":\"{status}\"}}"),
+        format!("/repos/{REPOSITORY}/compare/main...{OURS_GROUP}?per_page=100&page={page}"),
+        format!(
+            "{{\"total_commits\":{total},\"commits\":[{}]}}",
+            commits.join(",")
+        ),
     )
+}
+
+/// The checkout holds the given queue groups beyond `main`.
+fn compare(holds: &[&str]) -> (String, String) {
+    comparison(1, holds.len(), holds)
 }
 
 fn queue(entries: &[(u32, &str, &str)], extra: Vec<(String, String)>) -> Fake {
@@ -73,7 +85,7 @@ fn a_queue_entry_stacked_on_a_fork_pull_request_is_refused() {
         vec![
             pull(42, REPOSITORY, OURS),
             pull(41, "mallory/app", AHEAD),
-            compare(AHEAD_GROUP, "ahead"),
+            compare(&[AHEAD_GROUP, OURS_GROUP]),
         ],
     );
     let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github));
@@ -87,7 +99,7 @@ fn a_queue_entry_stacked_only_on_same_repository_pull_requests_is_allowed() {
         vec![
             pull(42, REPOSITORY, OURS),
             pull(41, REPOSITORY, AHEAD),
-            compare(AHEAD_GROUP, "ahead"),
+            compare(&[AHEAD_GROUP, OURS_GROUP]),
         ],
     );
     assert_eq!(
@@ -105,7 +117,7 @@ fn a_fork_pull_request_queued_behind_this_entry_is_not_part_of_its_checkout() {
         vec![
             pull(42, REPOSITORY, OURS),
             pull(43, "mallory/app", BEHIND),
-            compare(BEHIND_GROUP, "behind"),
+            compare(&[OURS_GROUP]),
         ],
     );
     assert_eq!(
@@ -117,7 +129,7 @@ fn a_fork_pull_request_queued_behind_this_entry_is_not_part_of_its_checkout() {
 }
 
 #[test]
-fn an_unreadable_queue_listing_or_comparison_is_refused() {
+fn an_unreadable_queue_listing_or_a_truncated_comparison_is_refused() {
     let missing = queue(
         &[(41, AHEAD, AHEAD_GROUP)],
         vec![pull(42, REPOSITORY, OURS)],
@@ -129,7 +141,7 @@ fn an_unreadable_queue_listing_or_comparison_is_refused() {
         vec![
             pull(42, REPOSITORY, OURS),
             pull(41, REPOSITORY, AHEAD),
-            compare(AHEAD_GROUP, "teapot"),
+            comparison(1, 9, &[AHEAD_GROUP]),
         ],
     );
     assert!(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &unknown).is_err());
@@ -168,4 +180,62 @@ fn a_queue_ref_rebuilt_since_the_event_is_refused() {
     let github = queue(&[(42, OURS, OURS_GROUP)], vec![pull(42, REPOSITORY, OURS)]);
     let message = error(check(&head_ref(42, OURS), REPOSITORY, AHEAD_GROUP, &github));
     assert!(message.contains("rebuilt"), "{message}");
+}
+
+struct Counting {
+    inner: Fake,
+    calls: std::cell::RefCell<Vec<String>>,
+}
+
+impl GitHub for Counting {
+    fn get(&self, path: &str) -> Result<String, CiError> {
+        self.calls.borrow_mut().push(path.to_owned());
+        self.inner.get(path)
+    }
+}
+
+#[test]
+fn a_full_queue_is_authenticated_with_one_comparison_not_one_per_entry() {
+    let mut routes = vec![pull(42, REPOSITORY, OURS)];
+    let mut entries = vec![(42, OURS, OURS_GROUP)];
+    let shas: Vec<String> = (0..20).map(|n| format!("{n:040x}")).collect();
+    let groups: Vec<String> = (0..20).map(|n| format!("{:040x}", n + 100)).collect();
+    for (n, (sha, group)) in shas.iter().zip(&groups).enumerate() {
+        let number = 100 + n as u32;
+        routes.push(pull(number, REPOSITORY, sha));
+        entries.push((number, sha.as_str(), group.as_str()));
+    }
+    let held: Vec<&str> = groups.iter().map(String::as_str).collect();
+    routes.push(compare(&held));
+    let github = Counting {
+        inner: queue(&entries, routes),
+        calls: Default::default(),
+    };
+    assert_eq!(
+        check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github)
+            .err()
+            .map(|e| e.to_string()),
+        None
+    );
+    let calls = github.calls.borrow();
+    let compares = calls
+        .iter()
+        .filter(|path| path.contains("/compare/"))
+        .count();
+    assert_eq!(compares, 1, "{calls:?}");
+}
+
+#[test]
+fn a_comparison_spanning_pages_is_read_to_the_end() {
+    let github = queue(
+        &[(42, OURS, OURS_GROUP), (41, AHEAD, AHEAD_GROUP)],
+        vec![
+            pull(42, REPOSITORY, OURS),
+            pull(41, "mallory/app", AHEAD),
+            comparison(1, 2, &[OURS_GROUP]),
+            comparison(2, 2, &[AHEAD_GROUP]),
+        ],
+    );
+    let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github));
+    assert!(message.contains("mallory/app"), "{message}");
 }

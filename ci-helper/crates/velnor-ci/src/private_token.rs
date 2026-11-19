@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::HashSet;
+
 use serde::Deserialize;
 
 use crate::cache::encode;
@@ -11,6 +13,8 @@ const QUEUE_PREFIX: &str = "gh-readonly-queue/";
 const REFS_HEADS: &str = "refs/heads/";
 const SHA_LENGTH: usize = 40;
 const REFS_PAGE: usize = 100;
+const COMPARE_PAGE: usize = 100;
+const COMPARE_PAGES: usize = 3;
 
 #[derive(Debug, PartialEq, Eq)]
 pub struct QueueEntry {
@@ -48,7 +52,13 @@ struct RefObject {
 
 #[derive(Deserialize)]
 struct Comparison {
-    status: String,
+    total_commits: usize,
+    commits: Vec<CompareCommit>,
+}
+
+#[derive(Deserialize)]
+struct CompareCommit {
+    sha: String,
 }
 
 pub fn parse_queue_ref(head_ref: &str) -> Result<QueueEntry, CiError> {
@@ -166,21 +176,47 @@ fn entries_in_checkout(
             entry.number
         )));
     }
-    let mut earlier = Vec::new();
-    for (other, group) in others {
-        let path = format!("/repos/{repository}/compare/{group}...{checkout}?per_page=1");
+    if others.is_empty() {
+        return Ok(Vec::new());
+    }
+    let in_checkout = commits_since_base(&entry.base, &checkout, repository, github)?;
+    Ok(others
+        .into_iter()
+        .filter(|(_, group)| in_checkout.contains(&group.to_ascii_lowercase()))
+        .map(|(other, _)| other)
+        .collect())
+}
+
+/// The commits a queue checkout holds beyond its base branch, read with one
+/// comparison instead of one per queued entry.
+fn commits_since_base(
+    base: &str,
+    checkout: &str,
+    repository: &str,
+    github: &dyn GitHub,
+) -> Result<HashSet<String>, CiError> {
+    let base: Vec<String> = base.split('/').map(encode).collect();
+    let base = base.join("/");
+    let mut shas = HashSet::new();
+    for page in 1..=COMPARE_PAGES {
+        let path = format!(
+            "/repos/{repository}/compare/{base}...{checkout}?per_page={COMPARE_PAGE}&page={page}"
+        );
         let text = github.get(&path)?;
         let comparison: Comparison = serde_json::from_str(&text)
             .map_err(|e| CiError::new(format!("GET {path} is not readable: {e}")))?;
-        match comparison.status.as_str() {
-            "ahead" | "identical" => earlier.push(other),
-            "behind" | "diverged" => {}
-            status => {
-                return Err(CiError::new(format!(
-                    "GET {path} answered the unknown status `{status}`"
-                )));
-            }
+        shas.extend(
+            comparison
+                .commits
+                .into_iter()
+                .map(|c| c.sha.to_ascii_lowercase()),
+        );
+        if shas.len() >= comparison.total_commits {
+            return Ok(shas);
         }
     }
-    Ok(earlier)
+    Err(CiError::new(format!(
+        "the queue checkout {checkout} holds more than {} commits beyond {base}, too many to authenticate",
+        COMPARE_PAGES * COMPARE_PAGE
+    )))
 }
