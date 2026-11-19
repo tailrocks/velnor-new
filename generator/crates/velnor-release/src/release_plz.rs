@@ -37,6 +37,10 @@ impl RootConfig {
         !self.unreleased.contains(package)
     }
 
+    pub(crate) fn excludes(&self, package: &str) -> bool {
+        self.unreleased.contains(package)
+    }
+
     pub(crate) fn settle_publishing(&mut self, unlisted_member: bool) {
         self.publishes_to_crates_io = self.entries.values().any(|publishes| *publishes)
             || (self.unlisted_publish && unlisted_member);

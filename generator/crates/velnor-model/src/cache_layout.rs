@@ -6,6 +6,7 @@ use crate::{CacheKey, JobId, RepoPath, RootSlug};
 pub const CACHE_COMPAT_LENGTH: usize = 16;
 pub const RUNNER_OS_MAX_LENGTH: usize = "Windows".len();
 pub const RUNNER_ARCH_MAX_LENGTH: usize = "ARM64".len();
+pub const SHARED_SOURCES_OWNER: &str = "all.roots";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CacheKeySegment {
@@ -14,6 +15,7 @@ pub enum CacheKeySegment {
     TargetOwner { job: JobId, root: RootSlug },
     Compat,
     Lock(RepoPath),
+    SourcesLocks,
     Mise,
     Commit,
     RunId,
@@ -47,7 +49,7 @@ impl CacheKey {
     #[must_use]
     pub fn layout(&self) -> CacheKeyLayout {
         use CacheKeySegment::{
-            Commit, Compat, DeltaBase, Host, Lock, Mise, RunId, TargetOwner, Text,
+            Commit, Compat, DeltaBase, Host, Lock, Mise, RunId, SourcesLocks, TargetOwner, Text,
         };
         let (segments, fallback_lengths): (Vec<_>, &'static [usize]) = match self {
             Self::Tools { .. } => (
@@ -60,13 +62,13 @@ impl CacheKey {
                 ],
                 &[],
             ),
-            Self::Sources { root, .. } => (
+            Self::Sources { .. } => (
                 vec![
                     Text("velnor".into()),
                     Text("src".into()),
                     Host,
-                    Text(root.slug().to_string()),
-                    Lock(root.lock_file()),
+                    Text(SHARED_SOURCES_OWNER.into()),
+                    SourcesLocks,
                 ],
                 &[4],
             ),

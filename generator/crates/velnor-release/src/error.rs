@@ -45,6 +45,7 @@ pub enum ReleaseError {
         package: String,
         bin: String,
     },
+    InvalidProfile(String, String),
     EmptyAfter,
     EmptyRoots,
     EmptyPlatforms {
@@ -202,6 +203,7 @@ pub enum ReleaseError {
     RootWithoutCargoManifest {
         root: String,
     },
+    Family(crate::error_family::FamilyError),
     UnknownWorkflow {
         name: String,
     },

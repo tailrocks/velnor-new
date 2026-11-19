@@ -93,7 +93,8 @@ struct ExpectedSubject {
 fn validate_claims(
     bundle: &Bundle,
     expected: &ExpectedClaims,
-    expected_subject: &ExpectedSubject,
+    subject: &ExpectedSubject,
+    peer: &ExpectedSubject,
 ) -> Result<(), Box<dyn Error>> {
     let der = bundle
         .signing_certificate()
@@ -139,25 +140,43 @@ fn validate_claims(
     {
         return Err("unsupported provenance predicate".into());
     }
+    check_subjects(&statement, subject, peer)
+}
+
+fn check_subjects(
+    statement: &serde_json::Value,
+    subject: &ExpectedSubject,
+    peer: &ExpectedSubject,
+) -> Result<(), Box<dyn Error>> {
     let subjects = statement
         .get("subject")
         .and_then(serde_json::Value::as_array)
         .ok_or("provenance subject missing")?;
+    check_named_subject(subjects, subject, true)?;
+    check_named_subject(subjects, peer, false)
+}
+
+fn check_named_subject(
+    subjects: &[serde_json::Value],
+    expected: &ExpectedSubject,
+    required: bool,
+) -> Result<(), Box<dyn Error>> {
     let matching: Vec<&serde_json::Value> = subjects
         .iter()
         .filter(|subject| {
             subject.get("name").and_then(serde_json::Value::as_str)
-                == Some(expected_subject.name.as_str())
+                == Some(expected.name.as_str())
         })
         .collect();
-    if matching.len() != 1 {
+    if matching.len() > 1 || (required && matching.is_empty()) {
         return Err("expected provenance subject missing or duplicated".into());
     }
-    if matching[0]
-        .get("digest")
-        .and_then(|digest| digest.get("sha256"))
-        .and_then(serde_json::Value::as_str)
-        != Some(expected_subject.digest.as_str())
+    if let Some(found) = matching.first()
+        && found
+            .get("digest")
+            .and_then(|digest| digest.get("sha256"))
+            .and_then(serde_json::Value::as_str)
+            != Some(expected.digest.as_str())
     {
         return Err("provenance subject digest mismatch".into());
     }
