@@ -68,7 +68,7 @@ enum Shape {
     KeyedReferences,
 }
 
-const CREDENTIAL_INPUTS: [(&str, &str, Shape); 4] = [
+const CREDENTIAL_INPUTS: [(&str, &str, Shape); 5] = [
     (DOCKER_LOGIN.action, "password", Shape::Reference),
     (DOCKER_BUILD_PUSH.action, "github-token", Shape::Reference),
     (DOCKER_BUILD_PUSH.action, "secrets", Shape::KeyedReferences),
@@ -77,6 +77,7 @@ const CREDENTIAL_INPUTS: [(&str, &str, Shape); 4] = [
         "github-token",
         Shape::Reference,
     ),
+    (GITHUB_SCRIPT.action, "github-token", Shape::Reference),
 ];
 
 pub(crate) fn pin_rules(action: &str, reference: &str, rules: &mut Vec<Rule>) {

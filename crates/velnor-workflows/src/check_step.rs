@@ -83,6 +83,7 @@ pub(crate) fn step(
         return refuse(format!("a step of job {job} sets with without uses"));
     }
     declared_inputs(job, &body, &label, &raw.with)?;
+    plain_script(job, &body, &raw.with)?;
     let raw_with = locked_inputs(job, &body, &label, raw.with)?;
     let condition = raw
         .condition
@@ -96,6 +97,49 @@ pub(crate) fn step(
         with: values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?,
         continue_on_error: raw.continue_on_error,
         env: values(job, raw.env, scope, None, check_env)?,
+    })
+}
+
+fn plain_script(
+    job: &str,
+    body: &Body,
+    with: &BTreeMap<String, String>,
+) -> Result<(), WorkflowsError> {
+    if !matches!(body, Body::Uses(Action::GithubScript)) {
+        return Ok(());
+    }
+    let Some((_, script)) = with
+        .iter()
+        .find(|(key, _)| key.eq_ignore_ascii_case("script"))
+    else {
+        return Ok(());
+    };
+    if is_log_line(script) {
+        return Ok(());
+    }
+    refuse(format!(
+        "job {job} sets the github-script script {script:?}, which is not allowed; a script is exactly one console.log('<plain text>') statement, because decisions and loops live in the helper"
+    ))
+}
+
+fn is_log_line(script: &str) -> bool {
+    let script = script.trim();
+    let script = script.strip_suffix(';').unwrap_or(script);
+    let Some(argument) = script
+        .strip_prefix("console.log(")
+        .and_then(|rest| rest.strip_suffix(')'))
+    else {
+        return false;
+    };
+    ['\'', '"'].into_iter().any(|quote| {
+        argument
+            .strip_prefix(quote)
+            .and_then(|rest| rest.strip_suffix(quote))
+            .is_some_and(|text| {
+                !text.contains(|c: char| {
+                    c == quote || c.is_control() || matches!(c, '\\' | '`' | '$')
+                })
+            })
     })
 }
 
