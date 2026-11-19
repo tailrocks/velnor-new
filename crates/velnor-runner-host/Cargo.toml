@@ -95,7 +95,7 @@ workspace = true
 [dependencies]
 base64 = { workspace = true }
 bollard = { workspace = true }
-bytes = { version = "=1.12.1" }
+bytes = { version = "=1.12.2" }
 flate2 = { workspace = true }
 futures-util = { version = "=0.3.34" }
 getrandom = { workspace = true }
@@ -115,7 +115,7 @@ thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs"] }
 toml = { workspace = true }
 turso = { workspace = true }
-uuid = { version = "=1.28.0", features = ["v4"] }
+uuid = { version = "=1.29.3", features = ["v4"] }
 zeroize = { workspace = true }
 velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner-image-manifest" }
 velnor-runner-core = { version = "=0.1.0", path = "../velnor-runner-core" }
