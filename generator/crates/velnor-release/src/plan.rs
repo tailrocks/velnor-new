@@ -68,6 +68,7 @@ pub struct BinaryPlan {
     pub commit_file: bool,
     pub checksum_files: Option<Checksum>,
     pub member_digests: Option<Checksum>,
+    pub profile: Option<String>,
     pub tag_pattern: TagPattern,
     pub asset_name: Option<String>,
 }
@@ -250,6 +251,7 @@ pub(crate) fn plan_binaries(
             commit_file: binary.commit_file,
             checksum_files: binary.checksum_files,
             member_digests: binary.member_digests,
+            profile: binary.profile.clone(),
             tag_pattern,
         });
     }

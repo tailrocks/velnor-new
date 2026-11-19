@@ -114,10 +114,16 @@ pub(crate) fn build_steps(
     let (_, triple) = target(platform, binary);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
+    let profile = binary.profile.as_deref();
     let release_dir = shell_word(&format!(
-        "{}/{triple}/release",
-        join(&binary.root, "target")
+        "{}/{triple}/{}",
+        join(&binary.root, "target"),
+        profile.unwrap_or("release")
     ));
+    let profile_flag = profile.map_or_else(
+        || "--release".to_owned(),
+        |name| format!("--profile {name}"),
+    );
     let linux = triple.ends_with("linux-musl");
     let packaging = match binary.format {
         BinaryFormat::Archive => archive_packaging(binary, platform, &file, &release_dir),
@@ -156,7 +162,7 @@ pub(crate) fn build_steps(
             ..command(
                 format!("Build {} for {suffix}", binary.package),
                 format!(
-                    "cargo build --release --locked --manifest-path Cargo.toml{} --target {triple} --target-dir target",
+                    "cargo build {profile_flag} --locked --manifest-path Cargo.toml{} --target {triple} --target-dir target",
                     selection(binary)
                 ),
             )

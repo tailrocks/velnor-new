@@ -49,6 +49,7 @@ pub(crate) fn plan_family(
             commit_file: binary.commit_file,
             checksum_files: binary.checksum_files,
             member_digests: binary.member_digests,
+            profile: binary.profile.clone(),
             tag_pattern: tag_pattern.clone(),
         });
     }

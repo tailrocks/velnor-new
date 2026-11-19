@@ -45,6 +45,7 @@ pub(crate) struct Binary {
     pub(crate) commit_file: bool,
     pub(crate) checksum_files: Option<Checksum>,
     pub(crate) member_digests: Option<Checksum>,
+    pub(crate) profile: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -78,6 +79,7 @@ struct RawBinary {
     commit_file: bool,
     checksum_files: Option<Checksum>,
     member_digests: Option<Checksum>,
+    profile: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -212,6 +214,34 @@ fn platforms(package: &str, names: Option<Vec<String>>) -> Result<Vec<Platform>,
     }
 }
 
+/// Names Cargo reserves, or that would build into a directory another profile or
+/// Cargo itself owns. `dev`, `test` and `bench` land in `target/debug`; the rest are
+/// refused by Cargo or collide with its own `target` subdirectories.
+const RESERVED_PROFILES: [&str; 11] = [
+    "dev",
+    "test",
+    "bench",
+    "debug",
+    "doc",
+    "build-override",
+    "package",
+    "deps",
+    "examples",
+    "build",
+    "incremental",
+];
+
+fn profile(package: &str, name: Option<String>) -> Result<Option<String>, ReleaseError> {
+    let Some(name) = name else {
+        return Ok(None);
+    };
+    refuse_expressions("binaries.profile", &[&name])?;
+    if !valid_package_name(&name) || RESERVED_PROFILES.contains(&name.as_str()) {
+        return Err(ReleaseError::InvalidProfile(package.to_owned(), name));
+    }
+    Ok(Some(name))
+}
+
 fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
     refuse_expressions("binaries.package", &[&raw.package])?;
     let bin = raw.bin.unwrap_or_else(|| raw.package.clone());
@@ -222,6 +252,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             bin,
         });
     }
+    let profile = profile(&raw.package, raw.profile)?;
     if let Some(template) = &raw.asset_name
         && !asset_name::valid(template)
     {
@@ -290,5 +321,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         commit_file: raw.commit_file,
         checksum_files: raw.checksum_files,
         member_digests: raw.member_digests,
+        profile,
     })
 }

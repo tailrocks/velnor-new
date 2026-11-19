@@ -42,16 +42,59 @@
         }
       ],
       "version": "0.1.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/tools#0.2.0",
+      "keywords": [],
+      "license": null,
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/tools/Cargo.toml",
+      "metadata": null,
+      "name": "tools",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": null,
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "tools",
+          "src_path": "/repo/tools/src/main.rs",
+          "test": true
+        }
+      ],
+      "version": "0.2.0"
     }
   ],
   "resolve": null,
   "target_directory": "/repo/target",
   "version": 1,
   "workspace_default_members": [
-    "path+file:///repo/app#0.1.0"
+    "path+file:///repo/app#0.1.0",
+    "path+file:///repo/tools#0.2.0"
   ],
   "workspace_members": [
-    "path+file:///repo/app#0.1.0"
+    "path+file:///repo/app#0.1.0",
+    "path+file:///repo/tools#0.2.0"
   ],
   "workspace_root": "/repo"
 }
