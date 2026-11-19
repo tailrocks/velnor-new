@@ -68,13 +68,17 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
             items.push(entry("with", values(&job.with)));
         }
     } else {
-        items.extend([
-            entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
-            entry(
-                "steps",
-                Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
-            ),
-        ]);
+        items.push(entry(
+            "timeout-minutes",
+            Yaml::Int(u64::from(job.timeout_minutes)),
+        ));
+        if !job.env.is_empty() {
+            items.push(entry("env", values(&job.env)));
+        }
+        items.extend([entry(
+            "steps",
+            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+        )]);
     }
     match job_notes(job) {
         Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
@@ -254,7 +258,7 @@ fn values(items: &[(String, Value)]) -> Yaml {
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };
-                let yaml = if key.starts_with("VELNOR_HELPER") && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > 100 && !text.contains('\n')) {
+                let yaml = if (key.starts_with("VELNOR_HELPER") || key == "SOURCES_LOCKS") && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > 100 && !text.contains('\n')) {
                     Yaml::Shared(Box::new(yaml))
                 } else {
                     yaml

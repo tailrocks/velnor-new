@@ -8,10 +8,8 @@ use velnor_model::{
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
 use crate::mise::nextest_tool;
-use crate::plan::{
-    CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, mirror_step_on, rust_additions, setup,
-    tools_restore,
-};
+use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, rust_additions, setup};
+use crate::plan_tools::{mirror_step_on, tools_restore};
 
 impl RootJobs<'_> {
     pub(super) fn groups(&self) -> Vec<&TestGroup> {

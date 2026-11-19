@@ -78,6 +78,11 @@ pub(crate) fn expected_release_nested(
     {
         return Err(GenerateError::ReleaseHelperTooOld(helper.version().clone()));
     }
+    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
+        return Err(GenerateError::FamilyTagHelperTooOld(
+            helper.version().clone(),
+        ));
+    }
     let mut files = render_release(&plan, &helper, "main").map_err(GenerateError::Rules)?;
     files.retain(|path, _| *path == RELEASE_WORKFLOW_PATH);
     Ok(files)
