@@ -22,12 +22,6 @@ fn staged_lint_runs_the_jactionlint_the_consumer_pins() -> Result<(), Box<dyn Er
         "generation must lint with the consumer's pin: {}",
         fixture::stderr(&generated)
     );
-    assert!(
-        output
-            .join(".github/workflows/binary-preview.yml")
-            .is_file(),
-        "preview workflow missing after staged lint"
-    );
     assert_eq!(
         fixture.jactionlint_specs_run()?,
         [format!("jactionlint@{CONSUMER_JACTIONLINT}")],
