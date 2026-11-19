@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, FilterRef, HelperCommand, Job, JobId, Step, StepKind, TestGroup, TestNeed, When,
+    CargoCommand, FilterRef, GroupFilter, HelperCommand, Job, JobId, Step, StepKind, TestGroup,
+    TestNeed, When,
 };
 
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
@@ -39,6 +40,8 @@ impl RootJobs<'_> {
         let artifact = self.id(ARCHIVE_ID).to_string();
         let mut build = setup(self.facts, self.root, self.lane, &build_id);
         build.extend(self.cargo(vec![CargoCommand::NextestArchive { file: ARCHIVE_FILE }]));
+        let groups = self.groups();
+        build.extend(self.overlap_check(&groups));
         build.push(self.gated(StepKind::UploadArchive {
             name: artifact.clone(),
             file: self.root.manifest.sibling(&ARCHIVE_FILE),
@@ -50,7 +53,6 @@ impl RootJobs<'_> {
             Some(self.root.manifest.sibling(&ARCHIVE_FILE)),
             true,
         ));
-        let groups = self.groups();
         let mut jobs = vec![
             self.lane_job(build_id.clone(), build),
             self.archive_runner(
@@ -75,6 +77,21 @@ impl RootJobs<'_> {
             )
         }));
         jobs
+    }
+
+    fn overlap_check(&self, groups: &[&TestGroup]) -> Option<Step> {
+        (groups.len() > 1).then(|| Step {
+            directory: self.root.manifest.parent(),
+            ..self.gated(StepKind::TestGroupsCheck(
+                groups
+                    .iter()
+                    .map(|group| GroupFilter {
+                        name: group.name.to_string(),
+                        filter: group.filter.clone(),
+                    })
+                    .collect(),
+            ))
+        })
     }
 
     fn archive_runner(

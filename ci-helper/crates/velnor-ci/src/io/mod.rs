@@ -65,7 +65,7 @@ pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
     DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
-    ReleaseGateArgs, SourcesCommand,
+    ReleaseGateArgs, SourcesCommand, TestGroupsCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -75,6 +75,7 @@ use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
 use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
+use crate::test_groups;
 use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
@@ -129,6 +130,9 @@ pub fn main() -> ExitCode {
     }
     if let Command::LaneGuard(args) = &cli.command {
         return lane_guard::run(args);
+    }
+    if let Command::TestGroups(TestGroupsCommand::Check(args)) = &cli.command {
+        return test_groups::run(args);
     }
     match run(cli) {
         Ok(output) => {
@@ -269,6 +273,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             Err(CiError::new("run and sources are handled before commands"))
         }
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
+        Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),
     }
 }
 

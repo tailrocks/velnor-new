@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CratesMirror, HelperCommand, MERGE_GROUP_STEP, RepoPath};
+use velnor_model::{CratesMirror, GroupFilter, HelperCommand, MERGE_GROUP_STEP, RepoPath};
 
 use crate::base_steps::base_age;
 use crate::gate::{MERGE_GROUP_ASKED_ON, PLAN_STEP, REPLAN_STEP};
@@ -54,6 +54,27 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
             HelperCommand::Plan => format!("velnor-ci {arguments} --explain"),
             _ => format!("velnor-ci {arguments}"),
         }),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn test_groups_step(groups: &[GroupFilter]) -> RenderedStep {
+    let mut run = "velnor-ci test-groups check".to_owned();
+    for group in groups {
+        run.push_str(" --group ");
+        run.push_str(&shell_word(&format!("{}={}", group.name, group.filter)));
+    }
+    RenderedStep {
+        name: "velnor-ci test-groups check".to_owned(),
+        run: Some(run),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn generator_check_step() -> RenderedStep {
+    RenderedStep {
+        name: "Check the generated workflow".to_owned(),
+        run: Some("velnor-gen check".to_owned()),
         ..RenderedStep::default()
     }
 }
