@@ -23,8 +23,8 @@ use super::git::Git;
 use super::pair::{MintError, Minted, write_private};
 use super::{Body, json_response, read_small_body};
 use crate::authority::{
-    AGENTS_PATH, Call, Entry, JitRequest, Posted, RUNS_PATH, admit, agent_id, agent_name, answer,
-    call, claim, facts, run_ids,
+    AGENTS_PATH, Call, Entry, JitRequest, MalformedInventory, Posted, RUNS_PATH, admit, agent_id,
+    agent_name, answer, call, claim, facts, run_ids,
 };
 use crate::protocol::{Error, parse};
 use crate::side::Side;
@@ -265,7 +265,9 @@ impl<B: Backend> Authority<B> {
             .get(asked.side, AGENTS_PATH)
             .await
             .map_err(listing)?;
-        if existing.is_some_and(|bytes| agent_id(&bytes, &asked.name).is_some()) {
+        if let Some(bytes) = existing
+            && agent_id(&bytes, &asked.name).map_err(malformed)?.is_some()
+        {
             return Err(taken());
         }
         let minted = mint_or_retire(&self.backend, asked.side, Some(&asked.name))
@@ -309,13 +311,16 @@ pub async fn mint_or_retire<B: Backend>(
     }
 }
 
+fn malformed(_: MalformedInventory) -> Error {
+    Error::upstream("runner.server: the agent inventory is malformed".to_owned())
+}
+
 pub async fn retire<B: Backend>(backend: &B, side: Side, name: &str) -> Result<bool, Error> {
-    let listed = |bytes: Vec<u8>| agent_id(&bytes, name);
     let listing = |error: io::Error| Error::upstream(format!("runner.server: {error}"));
     let before = backend.get(side, AGENTS_PATH).await.map_err(listing)?;
     let before =
         before.ok_or_else(|| Error::not_found(format!("the {} side is not up", side.name())))?;
-    let Some(id) = listed(before) else {
+    let Some(id) = agent_id(&before, name).map_err(malformed)? else {
         return Ok(false);
     };
     backend
@@ -323,7 +328,11 @@ pub async fn retire<B: Backend>(backend: &B, side: Side, name: &str) -> Result<b
         .await
         .map_err(listing)?;
     let after = backend.get(side, AGENTS_PATH).await.map_err(listing)?;
-    if after.and_then(listed).is_some() {
+    let still_listed = match after {
+        Some(bytes) => agent_id(&bytes, name).map_err(malformed)?.is_some(),
+        None => false,
+    };
+    if still_listed {
         return Err(Error::upstream(format!(
             "{name} is still registered after its deletion"
         )));
