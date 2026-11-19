@@ -34,10 +34,19 @@ pub fn record_sample(
 
 pub fn recording_of(
     checkout: &Path,
-    view: RepoView,
+    mut view: RepoView,
     metadata: BTreeMap<RepoPath, Vec<u8>>,
     out: &mut dyn Write,
 ) -> Result<Recording, Error> {
+    // A sample folder the checkout tracks is recorded data, never an input of the next recording.
+    let outside = |path: &RepoPath| !path.as_str().starts_with(&format!("{SAMPLES}/"));
+    view.tracked_paths.retain(outside);
+    view.files.retain(|path, _| outside(path));
+    view.symlinks.retain(outside);
+    let metadata: BTreeMap<RepoPath, Vec<u8>> = metadata
+        .into_iter()
+        .filter(|(workspace, _)| outside(workspace))
+        .collect();
     let (_, notes) = expected_with_notes(&view).map_err(Error::Generate)?;
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();
