@@ -59,6 +59,7 @@ fn cargo_build(repo: &Repo, root: &str) -> String {
         .args(["build", "--offline", "-v"])
         .current_dir(repo.root().join(root))
         .env_remove("CARGO_TARGET_DIR")
+        .env("CARGO_TERM_COLOR", "never")
         .env_remove("RUSTC_WRAPPER")
         .env_remove("RUSTC_WORKSPACE_WRAPPER")
         .output()
@@ -113,7 +114,6 @@ pub(crate) fn fixture() -> Repo {
 }
 
 #[test]
-#[ignore = "fails on the CI cluster only, tracked in #1820"]
 fn generated_save_and_restore_share_custom_targets_and_detect_once_for_three_roots() {
     let repo = fixture();
     let checkout =
