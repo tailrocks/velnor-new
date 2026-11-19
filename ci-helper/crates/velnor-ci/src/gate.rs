@@ -159,12 +159,13 @@ fn push_evidence(
 }
 
 pub fn check_tag(version: &str, tag: &str) -> Result<String, CiError> {
-    let expected = format!("rust-ci-v{version}");
-    if tag == expected {
+    let legacy = format!("rust-ci-v{version}");
+    let current = format!("tools-v{version}");
+    if tag == legacy || tag == current {
         Ok(format!("tag {tag} names version {version}\n"))
     } else {
         Err(CiError::new(format!(
-            "tag {tag} must be {expected}, because this program is version {version}"
+            "tag {tag} must be {legacy} or {current}, because this program is version {version}"
         )))
     }
 }
