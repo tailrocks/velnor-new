@@ -46,6 +46,10 @@ pub(crate) fn plan_family(
             include: Vec::new(),
             asset_name: None,
             format: binary.format,
+            libc: binary.libc,
+            smoke: false,
+            commit_file: false,
+            checksum_files: None,
             attest: binary.attest,
             profile: binary.profile.clone(),
             tag_pattern: tag_pattern.clone(),
@@ -78,6 +82,12 @@ fn unsupported(binary: &Binary) -> Option<&'static str> {
         Some("asset_name")
     } else if binary.attest {
         Some("attest")
+    } else if binary.smoke {
+        Some("smoke")
+    } else if binary.commit_file {
+        Some("commit_file")
+    } else if binary.checksum_files.is_some() {
+        Some("checksum_files")
     } else {
         None
     }
