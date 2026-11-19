@@ -213,6 +213,8 @@ struct PartialConfig {
     publish: velnor_actions_contract::config::PublishConfig,
     #[serde(default)]
     tools: velnor_actions_contract::ToolsConfig,
+    #[serde(default)]
+    runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -272,6 +274,7 @@ impl PartialConfig {
             runner_image_family: self.runner_image_family,
             publish: self.publish,
             tools: self.tools,
+            runner_workspace: self.runner_workspace,
         })
     }
 }
