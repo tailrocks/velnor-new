@@ -10,7 +10,7 @@ use velnor_model::{
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
     cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
-    sources_locks, trimmed_lane,
+    sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
 use crate::budget_steps::budget_step;
 use crate::cache::{path_text, render_key};
@@ -165,6 +165,9 @@ fn rendered_steps(
         ));
     }
     rendered.push(step_body(step, audit, tests, lane));
+    if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
+        rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
+    }
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
             body.env.push(crate::cargo::target_dir_env(target));

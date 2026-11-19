@@ -72,7 +72,7 @@ fn helper_calls_go_through_the_per_invocation_launcher() -> TestResult {
 fn a_helper_call_that_is_not_the_plain_command_word_is_refused() -> TestResult {
     for run in [
         "env A=b velnor-ci plan",
-        "./velnor-ci plan",
+        "/usr/local/bin/velnor-ci plan",
         "A=b velnor-ci plan",
     ] {
         let job = HELPER_JOB.replace("velnor-ci plan", run);

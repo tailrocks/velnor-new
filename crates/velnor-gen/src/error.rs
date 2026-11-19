@@ -34,6 +34,11 @@ pub enum GenerateError {
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
     TestLaneHelperTooOld(HelperVersion),
+    HelperLockLacksMacos {
+        version: HelperVersion,
+        runner: String,
+    },
+    VersionGroupsHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
@@ -71,7 +76,7 @@ impl fmt::Display for GenerateError {
             Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::TooManySourceRoots(roots) => write!(
                 f,
-                "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`, whose `velnor-ci sources fetch --roots` replaces the per-root steps (tailrocks/velnor-new#1362)"
+                "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`, whose `velnor-ci sources fetch --roots` replaces the per-root steps (tailrocks/velnor-new#1362)"
             ),
             Self::MirrorHelperTooOld(version) => write!(
                 f,
@@ -110,9 +115,17 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
             ),
+            Self::HelperLockLacksMacos { version, runner } => write!(
+                f,
+                "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
+            ),
             Self::FamilyTagHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
+            ),
+            Self::VersionGroupsHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot record the members of a release-plz version_group as one release; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Workflows(error) => error.fmt(f),

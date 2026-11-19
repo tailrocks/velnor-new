@@ -170,7 +170,7 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
             RenderedMatrixSource::Output(from) => {
                 Yaml::Expr(format!("${{{{ fromJSON({from}) }}}}"))
             }
-            RenderedMatrixSource::Axes(axes) => Yaml::Map(
+            RenderedMatrixSource::Axes { axes, include } => Yaml::Map(
                 axes.iter()
                     .map(|(name, values)| {
                         entry(
@@ -178,6 +178,12 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
                             Yaml::Seq(values.iter().map(|value| text(value)).collect()),
                         )
                     })
+                    .chain((!include.is_empty()).then(|| {
+                        entry(
+                            "include",
+                            Yaml::Seq(include.iter().map(|item| pairs(item)).collect()),
+                        )
+                    }))
                     .collect(),
             ),
         },
