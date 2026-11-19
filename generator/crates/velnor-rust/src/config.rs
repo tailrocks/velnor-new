@@ -12,13 +12,14 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 22] = [
+const KEYS: [&str; 23] = [
     "private_sources",
     "cache_check_blocks",
     "cache_debug",
     "runner",
     "fork_runner",
     "crates_mirror",
+    "mbx_shared_store",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -46,6 +47,7 @@ struct RawConfig {
     fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     private_sources: Option<crate::config_private::RawPrivateSources>,
+    mbx_shared_store: Option<bool>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -116,7 +118,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     };
     let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
-        debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
+        crate::config_debuginfo::debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo)
+            .map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
@@ -131,7 +134,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
+        private_sources: crate::config_private::optional(raw.private_sources.as_ref())
+            .map_err(invalid)?,
+        mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
@@ -375,19 +380,6 @@ fn overlaps(left: &PathGlob, right: &PathGlob) -> bool {
             (false, true) => left.len() > right.len(),
             (false, false) => left.len() == right.len(),
         }
-}
-
-fn debuginfo(configured: Option<&str>, default: CiDebugInfo) -> Result<CiDebugInfo, Reason> {
-    match configured {
-        None => Ok(default),
-        Some("full") => Ok(CiDebugInfo::Full),
-        Some("line-tables-only") => Ok(CiDebugInfo::LineTablesOnly),
-        Some("none") => Ok(CiDebugInfo::None),
-        Some(other) => Err(Reason::InvalidValue {
-            key: "ci_debuginfo",
-            value: other.to_owned(),
-        }),
-    }
 }
 
 pub fn ci_debuginfo(

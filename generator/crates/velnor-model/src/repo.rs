@@ -248,6 +248,7 @@ pub struct RustCiConfig {
     pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
+    pub mbx_store: MbxStore,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -303,6 +304,18 @@ impl From<bool> for CacheDebug {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MbxStore {
+    Private,
+    Shared,
+}
+
+impl From<bool> for MbxStore {
+    fn from(shared: bool) -> Self {
+        if shared { Self::Shared } else { Self::Private }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CiDebugInfo {
     Full,
     LineTablesOnly,
@@ -322,6 +335,7 @@ impl Default for RustCiConfig {
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
             private_sources: None,
+            mbx_store: MbxStore::Private,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),

@@ -11,7 +11,6 @@ const FORK_FREE: &str = "${{ github.event_name != 'pull_request' || github.event
 
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
-        StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::PrivateToken { sources, .. } => token(sources),
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
         _ => RenderedStep::default(),

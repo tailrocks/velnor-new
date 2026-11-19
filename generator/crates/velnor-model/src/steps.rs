@@ -59,6 +59,7 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         cached: Vec<crate::ids::RootSlug>,
     },
+    MbxStore,
     TestSetup {
         name: String,
         run: String,

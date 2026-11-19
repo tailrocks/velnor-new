@@ -13,8 +13,8 @@ pub(crate) struct RawPrivateSources {
     repositories: Vec<String>,
 }
 
-pub(crate) fn optional(raw: Option<RawPrivateSources>) -> Result<Option<PrivateSources>, Reason> {
-    raw.as_ref().map(private_sources).transpose()
+pub(crate) fn optional(raw: Option<&RawPrivateSources>) -> Result<Option<PrivateSources>, Reason> {
+    raw.map(private_sources).transpose()
 }
 
 pub(crate) fn private_sources(raw: &RawPrivateSources) -> Result<PrivateSources, Reason> {

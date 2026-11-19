@@ -144,7 +144,7 @@ fn cargo_command(
             vec![],
         ),
         CargoCommand::Deny { manifest } => deny(manifest),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+        CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
 
