@@ -1,13 +1,51 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
+import { readFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
-export async function checkTagRulesets({ context, process, getOctokit }) {
+const RELEASE_ENVIRONMENT = "release";
+
+// The tag patterns of every tag_push family: the family tag prefix plus `*`.
+export function tagPushFamilyPatterns(releaseToml) {
+  const text = releaseToml.replace(/^\s*#.*$/gm, "");
+  const top = text.split(/^\s*\[/m)[0];
+  const value = key => new RegExp(`^\\s*${key}\\s*=\\s*"([^"]*)"`, "m").exec(top)?.[1];
+  const tag = value("family_tag");
+  if (value("family_trigger") !== "tag_push" || tag === undefined) return [];
+  const prefix = tag.split("{{")[0];
+  if (prefix === "") throw new Error("family_tag must start with a literal prefix to derive its tag pattern");
+  return [`${prefix}*`];
+}
+
+export async function checkReleaseEnvironmentTagPolicy({ context, admin, patterns }) {
+  if (patterns.length === 0) return;
+  const { owner, repo } = context.repo;
+  const parameters = { owner, repo, environment_name: RELEASE_ENVIRONMENT };
+  const { data: environment } = await admin.request('GET /repos/{owner}/{repo}/environments/{environment_name}', parameters);
+  const policy = environment?.deployment_branch_policy;
+  if (policy === null) return;
+  if (!policy?.custom_branch_policies) {
+    throw new Error(`the ${RELEASE_ENVIRONMENT} environment allows only protected branches, so a tag push of a tag_push family never starts the family job; select "Selected branches and tags" and allow ${patterns.join(', ')}`);
+  }
+  const listed = await admin.request('GET /repos/{owner}/{repo}/environments/{environment_name}/deployment-branch-policies', { ...parameters, per_page: 100 });
+  const policies = listed.data?.branch_policies ?? [];
+  if (listed.data?.total_count > policies.length) {
+    throw new Error(`the ${RELEASE_ENVIRONMENT} environment has more than ${policies.length} deployment policies; page through them before checking the tag policy`);
+  }
+  const allowedTags = policies.filter(entry => entry.type === 'tag').map(entry => entry.name);
+  const missing = patterns.filter(pattern => !allowedTags.includes(pattern));
+  if (missing.length > 0) {
+    throw new Error(`the ${RELEASE_ENVIRONMENT} environment deployment policies must allow the tag pattern ${missing.join(', ')} of a tag_push family in .velnor/release.toml, or the family job never starts; add a "tag" deployment policy (Settings > Environments > ${RELEASE_ENVIRONMENT} > Deployment branches and tags)`);
+  }
+}
+
+export async function checkTagRulesets({ context, process, getOctokit, releaseToml = "" }) {
   if (!process.env.TAG_RULESET_ADMIN_READ_TOKEN) {
     throw new Error('Provision TAG_RULESET_ADMIN_READ_TOKEN with Administration: read (#949)');
   }
   const admin = getOctokit(process.env.TAG_RULESET_ADMIN_READ_TOKEN);
   const { owner, repo } = context.repo;
+  await checkReleaseEnvironmentTagPolicy({ context, admin, patterns: tagPushFamilyPatterns(releaseToml) });
   const expectedBypassActors = new Map([
     ['protect-tags', []],
     ['release-tags', [{ actor_id: 5762496, actor_type: 'Integration', bypass_mode: 'always' }]]
@@ -84,12 +122,14 @@ function restClient(token) {
       return items;
     },
     async request(route, parameters) {
-      return { data: await (await fetchJson(expand(route, parameters))).json() };
+      const query = parameters.per_page === undefined ? "" : `?per_page=${parameters.per_page}`;
+      return { data: await (await fetchJson(`${expand(route, parameters)}${query}`)).json() };
     },
   };
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1]).href) {
   const [owner, repo] = (process.env.GITHUB_REPOSITORY ?? "").split("/");
-  await checkTagRulesets({ context: { repo: { owner, repo } }, process, getOctokit: restClient });
+  const releaseToml = await readFile(new URL("../.velnor/release.toml", import.meta.url), "utf8");
+  await checkTagRulesets({ context: { repo: { owner, repo } }, process, getOctokit: restClient, releaseToml });
 }

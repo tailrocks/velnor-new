@@ -40,7 +40,14 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
     if let Some(environment) = &job.environment {
-        items.push(entry("environment", text(environment)));
+        let value = text(environment);
+        items.push(entry(
+            "environment",
+            match &job.environment_note {
+                Some(note) => Yaml::Noted(note.clone(), Box::new(value)),
+                None => value,
+            },
+        ));
     }
     if job.no_permissions {
         items.push(entry("permissions", Yaml::Map(Vec::new())));
