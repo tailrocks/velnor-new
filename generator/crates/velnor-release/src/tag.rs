@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::error::ReleaseError;
+use crate::error_family::FamilyError;
 use crate::git_ref;
 
 pub(crate) const VERSION: &str = "{{ version }}";
@@ -123,6 +124,24 @@ pub(crate) fn checked(
         Err(ReleaseError::TagTemplateWithoutVersion {
             root: root.to_owned(),
             package: named.map(str::to_owned),
+        })
+    }
+}
+
+pub(crate) fn family(template: &str) -> Result<TagPattern, FamilyError> {
+    let pattern = render(template, PACKAGE_WILDCARD).ok_or_else(|| FamilyError::InvalidTag {
+        template: template.to_owned(),
+    })?;
+    if pattern.as_str().contains(PACKAGE_WILDCARD) {
+        return Err(FamilyError::TagWithPackage {
+            template: template.to_owned(),
+        });
+    }
+    if pattern.as_str().contains(VERSION) {
+        Ok(pattern)
+    } else {
+        Err(FamilyError::InvalidTag {
+            template: template.to_owned(),
         })
     }
 }

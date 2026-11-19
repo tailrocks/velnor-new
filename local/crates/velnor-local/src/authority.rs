@@ -303,14 +303,18 @@ pub fn answer(
     })
 }
 
-#[must_use]
-pub fn agent_id(listing: &[u8], name: &str) -> Option<u64> {
-    let listing: Value = serde_json::from_slice(listing).ok()?;
-    listing["value"]
-        .as_array()?
+/// The runner inventory was not a valid listing, so it proves nothing either way.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MalformedInventory;
+
+/// `Ok(None)` means the inventory is valid and does not list `name`.
+pub fn agent_id(listing: &[u8], name: &str) -> Result<Option<u64>, MalformedInventory> {
+    let listing: Value = serde_json::from_slice(listing).map_err(|_| MalformedInventory)?;
+    let agents = listing["value"].as_array().ok_or(MalformedInventory)?;
+    Ok(agents
         .iter()
         .find(|agent| agent["name"] == name)
-        .and_then(|agent| agent["id"].as_u64())
+        .and_then(|agent| agent["id"].as_u64()))
 }
 
 #[must_use]

@@ -33,10 +33,14 @@ pub(crate) fn release_workflow(
         return Err(GenerateError::ReleaseToolchainPath);
     }
     let reality = Reality { facts, generated };
-    let plan =
-        ReleasePlan::read(&release_files(view, Some(&reality))?).map_err(GenerateError::Release)?;
+    let plan = read_plan(&release_files(view, Some(&reality))?)?;
     if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 82)) {
         return Err(GenerateError::PrOnlyChecksHelperTooOld(
+            helper.version().clone(),
+        ));
+    }
+    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
+        return Err(GenerateError::FamilyTagHelperTooOld(
             helper.version().clone(),
         ));
     }
@@ -69,11 +73,18 @@ pub(crate) fn release_workflow(
     Ok((files, notes))
 }
 
+fn read_plan(files: &ReleaseFiles) -> Result<ReleasePlan, GenerateError> {
+    let plan = ReleasePlan::read(files).map_err(GenerateError::Release)?;
+    plan.refuse_roots_below_git_root()
+        .map_err(GenerateError::Release)?;
+    Ok(plan)
+}
+
 pub fn release_ruleset(view: &RepoView) -> Result<String, GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Err(GenerateError::NoReleaseConfig);
     }
-    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
+    let plan = read_plan(&release_files(view, None)?)?;
     Ok(ruleset_json(&plan))
 }
 
@@ -81,7 +92,7 @@ pub fn release_ruleset_drift(view: &RepoView, live: &str) -> Result<Vec<String>,
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Err(GenerateError::NoReleaseConfig);
     }
-    let plan = ReleasePlan::read(&release_files(view, None)?).map_err(GenerateError::Release)?;
+    let plan = read_plan(&release_files(view, None)?)?;
     Ok(ruleset_drift(&plan, live))
 }
 

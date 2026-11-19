@@ -1,137 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use velnor_actions_freshness::{BaseRef, CargoArtifactKind, Operation};
-
-const ACTION_ENV: &str = "VELNOR_REPO_POLICY_ACTION";
-const ROOT_ENV: &str = "VELNOR_REPO_POLICY_ROOT";
-const UPSTREAM_ENV: &str = "VELNOR_REPO_POLICY_CHECK_UPSTREAM";
-const ADVISORIES_ENV: &str = "VELNOR_REPO_POLICY_WITH_ADVISORIES";
-const MANIFEST_PATH_ENV: &str = "VELNOR_REPO_POLICY_MANIFEST_PATH";
-const BASE_REF_ENV: &str = "VELNOR_REPO_POLICY_BASE_REF";
-const ARTIFACT_KIND_ENV: &str = "VELNOR_REPO_POLICY_ARTIFACT_KIND";
-
 pub(crate) fn gate_root() -> Option<PathBuf> {
-    let action = env::var(ACTION_ENV).ok()?;
-    if !matches!(
-        action.as_str(),
-        "freshness"
-            | "toolchain-specs"
-            | "mise-version"
-            | "pin-mirror"
-            | "workspace-members"
-            | "library-members"
-            | "test-members"
-            | "artifact-executable"
-    ) {
-        return None;
-    }
-    let root = env::var_os(ROOT_ENV)
-        .filter(|value| !value.is_empty())
-        .map(PathBuf::from)?;
-    if !root.is_dir() {
-        return None;
-    }
-    Some(root)
+    velnor_freshness::request::gate_root()
 }
 
 pub(crate) fn run(root: &Path) -> ExitCode {
-    let operation = match operation_from_environment() {
-        Ok(operation) => operation,
-        Err(error) => return fail_internal(&error),
-    };
-    let code = velnor_actions_freshness::run(root, &operation).clamp(0, 255);
-    ExitCode::from(u8::try_from(code).unwrap_or(1))
-}
-
-fn operation_from_environment() -> Result<Operation, String> {
-    match env::var(ACTION_ENV).as_deref() {
-        Ok("freshness") => Ok(Operation::Freshness {
-            check_upstream: optional_flag(UPSTREAM_ENV)?,
-            with_advisories: optional_flag(ADVISORIES_ENV)?,
-        }),
-        Ok("toolchain-specs") => Ok(Operation::ToolchainSpecs),
-        Ok("mise-version") => Ok(Operation::MiseVersion),
-        Ok("pin-mirror") => Ok(Operation::PinMirror {
-            base: optional_base_ref(BASE_REF_ENV)?,
-        }),
-        Ok("workspace-members") => Ok(Operation::WorkspaceMembers {
-            libraries_only: false,
-        }),
-        Ok("library-members") => Ok(Operation::WorkspaceMembers {
-            libraries_only: true,
-        }),
-        Ok("test-members") => Ok(Operation::WorkspaceTestMembers {
-            manifest_path: optional_manifest_path(MANIFEST_PATH_ENV)?,
-        }),
-        Ok("artifact-executable") => Ok(Operation::CargoArtifactExecutable {
-            messages_path: required_path("VELNOR_REPO_POLICY_MESSAGES")?,
-            manifest_path: required_path("VELNOR_REPO_POLICY_MANIFEST")?,
-            target_name: required_text("VELNOR_REPO_POLICY_TARGET")?,
-            kind: optional_artifact_kind(ARTIFACT_KIND_ENV)?,
-        }),
-        _ => Err("invalid repository-policy action".to_owned()),
-    }
-}
-
-fn optional_manifest_path(name: &str) -> Result<Option<PathBuf>, String> {
-    match env::var(name) {
-        Err(env::VarError::NotPresent) => Ok(None),
-        Ok(value) if value.is_empty() => Ok(None),
-        Ok(value) if !value.chars().any(char::is_control) => Ok(Some(PathBuf::from(value))),
-        Ok(_) | Err(env::VarError::NotUnicode(_)) => Err(format!(
-            "{name} must be a repository-relative Cargo.toml path"
-        )),
-    }
-}
-
-fn optional_base_ref(name: &str) -> Result<Option<BaseRef>, String> {
-    match env::var(name) {
-        Err(env::VarError::NotPresent) => Ok(None),
-        Ok(value) if value.is_empty() => Ok(None),
-        Ok(value) => BaseRef::parse(&value)
-            .map(Some)
-            .map_err(|error| format!("{name}: {error}")),
-        Err(env::VarError::NotUnicode(_)) => Err(format!("{name} must be ASCII")),
-    }
-}
-
-fn required_text(name: &str) -> Result<String, String> {
-    env::var(name)
-        .ok()
-        .filter(|value| !value.is_empty() && !value.chars().any(char::is_control))
-        .ok_or_else(|| format!("{name} must contain nonempty text without control characters"))
-}
-
-fn required_path(name: &str) -> Result<PathBuf, String> {
-    required_text(name).map(PathBuf::from)
-}
-
-fn optional_artifact_kind(name: &str) -> Result<CargoArtifactKind, String> {
-    match env::var(name) {
-        Err(env::VarError::NotPresent) => Ok(CargoArtifactKind::Bin),
-        Ok(value) if value == "bin" => Ok(CargoArtifactKind::Bin),
-        Ok(value) if value == "example" => Ok(CargoArtifactKind::Example),
-        Ok(_) | Err(env::VarError::NotUnicode(_)) => {
-            Err(format!("{name} must be absent, bin, or example"))
-        }
-    }
-}
-
-fn optional_flag(name: &str) -> Result<bool, String> {
-    match env::var(name) {
-        Err(env::VarError::NotPresent) => Ok(false),
-        Ok(value) if value == "0" => Ok(false),
-        Ok(value) if value == "1" => Ok(true),
-        Ok(_) | Err(env::VarError::NotUnicode(_)) => Err(format!("{name} must be absent, 0, or 1")),
-    }
-}
-
-fn fail_internal(problem: &str) -> ExitCode {
-    eprintln!("velnor-actions: internal request failed: {problem}");
-    ExitCode::from(1)
+    velnor_freshness::request::run(root, "velnor-actions")
 }

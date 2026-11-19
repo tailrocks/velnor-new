@@ -3,7 +3,7 @@
 
 use super::{EnsureError, EnsuredSet, GITHUB_API, ensured_from_record, observed_scale_set};
 use crate::{
-    config::ScaleSetSelector,
+    config::{RepositoryConnection, ScaleSetSelector},
     error::HostError,
     https::HttpsTransport,
     journal::{
@@ -11,10 +11,10 @@ use crate::{
     },
 };
 use velnor_runner_github::{
-    AdminConnectionCall, CreateLabel, Exchange, RegistrationScope, RegistrationTokenCall,
-    RunnerGroup, ScaleSetByName, ScaleSetCreate, ScaleSetFound, ScaleSetView, SessionError,
-    SessionRequest, Transport, TransportFail, WireError, admin_connection, create_runner_scale_set,
-    get_runner_scale_set, registration_token,
+    AdminConnectionCall, CreateLabel, Exchange, RegistrationTokenCall, RunnerGroup, ScaleSetById,
+    ScaleSetByName, ScaleSetCreate, ScaleSetFound, ScaleSetView, SessionError, SessionRequest,
+    Transport, TransportFail, WireError, admin_connection, create_runner_scale_set,
+    get_runner_scale_set, get_runner_scale_set_by_id, registration_token,
     workflow_run::{
         RepositoryTarget, VerifiedRepositoryScope, WorkflowRunError, get_repository_scope,
     },
@@ -23,20 +23,22 @@ use velnor_runner_github::{
 pub(super) fn open_admin(
     pat: &str,
     scope: &VerifiedRepositoryScope,
+    binding: &RepositoryConnection,
 ) -> Result<(Recording, velnor_runner_github::AdminConnection), EnsureError> {
+    let target = binding.registration_target().map_err(map_host)?;
+    if !binding.matches_scope(scope) {
+        return Err(EnsureError::Rejected);
+    }
     let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
     let registration = registration_token(
         &mut transport,
         &RegistrationTokenCall {
-            scope: RegistrationScope::Repository {
-                owner: scope.owner(),
-                repo: scope.name(),
-            },
+            scope: target.scope(),
             pat,
         },
     )
     .map_err(|err| map_session(err, &transport))?;
-    let config_url = format!("https://github.com/{}/{}", scope.owner(), scope.name());
+    let config_url = target.config_url();
     let admin = admin_connection(
         &mut transport,
         &AdminConnectionCall {
@@ -104,7 +106,7 @@ pub(super) fn map_host(error: HostError) -> EnsureError {
     }
 }
 
-pub(super) fn map_session(error: SessionError, transport: &Recording) -> EnsureError {
+pub(super) fn map_session<T>(error: SessionError, transport: &Recording<T>) -> EnsureError {
     match error {
         SessionError::Uncertain => EnsureError::Uncertain,
         SessionError::Conflict => EnsureError::Conflict,
@@ -118,14 +120,14 @@ pub(super) fn map_session(error: SessionError, transport: &Recording) -> EnsureE
     }
 }
 
-pub(super) struct Recording {
-    pub(super) inner: HttpsTransport,
+pub(super) struct Recording<T = HttpsTransport> {
+    pub(super) inner: T,
     pub(super) status: u16,
     step: &'static str,
 }
 
-impl Recording {
-    const fn new(inner: HttpsTransport) -> Self {
+impl<T> Recording<T> {
+    const fn new(inner: T) -> Self {
         Self {
             inner,
             status: 0,
@@ -134,7 +136,7 @@ impl Recording {
     }
 }
 
-impl Transport for Recording {
+impl<T: Transport> Transport for Recording<T> {
     fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
         self.step = step_for(&request.path);
         let exchange = self.inner.exchange(request)?;
@@ -160,15 +162,31 @@ fn step_for(path: &str) -> &'static str {
 }
 
 pub(super) async fn create_connection_scale_set(
-    pat: &str,
-    scope: &VerifiedRepositoryScope,
+    ids: CreateIds<'_>,
     transport: &mut Recording,
     admin_token: &str,
     scoped: &ConnectionJournal,
     request: &ScaleSetCreateRequest,
     record: &crate::journal::ScaleSetCreateRecord,
 ) -> Result<EnsuredSet, EnsureError> {
-    revalidate_repository_scope(pat, scope)?;
+    revalidate_repository_scope(ids.pat, ids.scope)?;
+    create_and_verify(ids, transport, admin_token, scoped, request, record).await
+}
+
+pub(super) struct CreateIds<'a> {
+    pub(super) pat: &'a str,
+    pub(super) scope: &'a VerifiedRepositoryScope,
+    pub(super) adopt_on_conflict: bool,
+}
+
+async fn create_and_verify<T: Transport>(
+    ids: CreateIds<'_>,
+    transport: &mut Recording<T>,
+    admin_token: &str,
+    scoped: &ConnectionJournal,
+    request: &ScaleSetCreateRequest,
+    record: &crate::journal::ScaleSetCreateRecord,
+) -> Result<EnsuredSet, EnsureError> {
     let Some(claim) = scoped
         .claim_scale_set_create(record)
         .await
@@ -193,9 +211,12 @@ pub(super) async fn create_connection_scale_set(
                 .record_scale_set_create_no_effect(claim, no_effect)
                 .await
                 .map_err(map_host)?;
+            if !ids.adopt_on_conflict {
+                return Err(EnsureError::Uncertain);
+            }
             return adopt_scale_set_after_conflict(
-                pat,
-                scope,
+                ids.pat,
+                ids.scope,
                 transport,
                 admin_token,
                 scoped,
@@ -211,13 +232,23 @@ pub(super) async fn create_connection_scale_set(
             return Err(map_session(error, transport));
         }
     };
-    let label_names = scale_set_label_names(&view);
+    let reread = match reread_created_set(transport, admin_token, request, view.id) {
+        Ok(reread) => reread,
+        Err(error) => {
+            scoped
+                .mark_scale_set_create_uncertain(claim)
+                .await
+                .map_err(map_host)?;
+            return Err(error);
+        }
+    };
+    let label_names = scale_set_label_names(&reread);
     let response = match CreatedScaleSetResponse::verified(
         request,
-        view.id,
-        &view.name,
+        reread.id,
+        &reread.name,
         &label_names,
-        view.runner_setting.disable_update,
+        reread.runner_setting.disable_update,
     ) {
         Ok(response) => response,
         Err(error) => {
@@ -235,10 +266,33 @@ pub(super) async fn create_connection_scale_set(
     ensured_from_record(&created)
 }
 
-async fn adopt_scale_set_after_conflict(
+fn reread_created_set<T: Transport>(
+    transport: &mut Recording<T>,
+    admin_token: &str,
+    request: &ScaleSetCreateRequest,
+    created_id: i64,
+) -> Result<ScaleSetView, EnsureError> {
+    let reread = get_runner_scale_set_by_id(
+        transport,
+        &ScaleSetById {
+            scale_set_id: created_id,
+            name: request.selector_name(),
+            expected_labels: request.selector_labels(),
+            admin_token,
+        },
+    )
+    .map_err(|error| map_session(error, transport))?;
+    if reread.id == created_id {
+        Ok(reread)
+    } else {
+        Err(EnsureError::Rejected)
+    }
+}
+
+async fn adopt_scale_set_after_conflict<T: Transport>(
     pat: &str,
     scope: &VerifiedRepositoryScope,
-    transport: &mut Recording,
+    transport: &mut Recording<T>,
     admin_token: &str,
     scoped: &ConnectionJournal,
     request: &ScaleSetCreateRequest,
@@ -269,15 +323,13 @@ fn scale_set_label_names(view: &ScaleSetView) -> Vec<String> {
     view.labels.iter().map(|label| label.name.clone()).collect()
 }
 
-pub(super) fn default_group_id(groups: &[RunnerGroup]) -> Result<i64, EnsureError> {
-    let mut defaults = groups.iter().filter(|group| group.is_default);
-    let Some(group) = defaults.next() else {
-        return Err(EnsureError::Rejected);
-    };
-    if group.id <= 0 || defaults.next().is_some() {
-        return Err(EnsureError::Rejected);
-    }
-    Ok(group.id)
+pub(super) fn selected_group_id(
+    binding: &RepositoryConnection,
+    groups: &[RunnerGroup],
+) -> Result<i64, EnsureError> {
+    binding
+        .select_runner_group(groups)
+        .map_err(|_| EnsureError::Rejected)
 }
 
 pub(super) fn selector_valid(selector: &ScaleSetSelector) -> bool {
@@ -304,3 +356,6 @@ pub(super) fn create_labels(labels: &[String]) -> Vec<CreateLabel> {
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests;

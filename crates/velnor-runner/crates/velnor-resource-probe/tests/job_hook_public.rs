@@ -7,6 +7,9 @@ mod job_hook_decisions;
 #[path = "job_hook_public/mountinfo_busy_host.rs"]
 mod mountinfo_busy_host;
 
+#[path = "job_hook_public/docker_root_free_bytes.rs"]
+mod docker_root_free_bytes;
+
 #[path = "job_hook_public/cleanup_record.rs"]
 mod cleanup_record;
 
@@ -19,6 +22,14 @@ mod cleanup_observer_projection;
 #[cfg(target_os = "linux")]
 #[path = "job_hook_public/cleanup_observer_scan.rs"]
 mod cleanup_observer_scan;
+
+#[cfg(target_os = "linux")]
+#[path = "job_hook_public/cleanup_observation_recheck.rs"]
+mod cleanup_observation_recheck;
+
+#[cfg(target_os = "linux")]
+#[path = "job_hook_public/owned_cgroup_daemon_binding.rs"]
+mod owned_cgroup_daemon_binding;
 
 #[cfg(target_os = "linux")]
 #[path = "job_hook_public/job_facts_guest_image.rs"]
