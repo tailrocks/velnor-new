@@ -334,3 +334,17 @@ pub(crate) fn merge_group_step(required: &str) -> RenderedStep {
         ..RenderedStep::default()
     }
 }
+
+pub(crate) fn merge_queue_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci merge-queue-check".to_owned(),
+        condition: Some("${{ github.event_name == 'pull_request' }}".to_owned()),
+        continue_on_error: true,
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            crate::rules::Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some("velnor-ci merge-queue-check".to_owned()),
+        ..RenderedStep::default()
+    }
+}

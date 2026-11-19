@@ -133,6 +133,7 @@ mod policy_exceptions;
 mod policy_plan;
 mod pr_ci;
 mod pr_ci_labels;
+mod pr_ci_queue;
 mod pr_ci_sim;
 mod private_sources;
 mod private_sources_phase;
