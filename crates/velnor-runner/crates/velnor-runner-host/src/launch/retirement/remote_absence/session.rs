@@ -2,18 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_runner_github::{
-    AdminConnection, AdminConnectionCall, RegistrationScope, RegistrationTokenCall,
-    RunnerAbsenceReceipt, RunnerReference, ScaleSetByName, ScaleSetFound, SessionError,
-    SessionRequest, Transport, TransportFail, WireError, admin_connection, ensure_runner_absent,
-    get_runner_scale_set, registration_token,
+    AdminConnection, AdminConnectionCall, RegistrationTokenCall, RunnerAbsenceReceipt,
+    RunnerReference, ScaleSetByName, ScaleSetFound, SessionError, SessionRequest, Transport,
+    TransportFail, WireError, admin_connection, ensure_runner_absent, get_runner_scale_set,
+    registration_token,
 };
 
 use crate::{
     config::RepositoryConnection, https::HttpsTransport, journal::PreparedRetirementRemoteAbsence,
     scale_set::EnsureError,
 };
-
-use super::repository::RepositoryParts;
 
 pub(super) struct Recording<T = HttpsTransport> {
     inner: T,
@@ -61,21 +59,21 @@ impl<T: Transport> Transport for Recording<T> {
 
 pub(super) fn register_repository<T: Transport>(
     transport: &mut Recording<T>,
-    parts: &RepositoryParts<'_>,
+    binding: &RepositoryConnection,
     pat: &str,
 ) -> Result<AdminConnection, EnsureError> {
+    let target = binding
+        .registration_target()
+        .map_err(|_| EnsureError::Rejected)?;
     let token = registration_token(
         transport,
         &RegistrationTokenCall {
-            scope: RegistrationScope::Repository {
-                owner: parts.owner,
-                repo: parts.name,
-            },
+            scope: target.scope(),
             pat,
         },
     )
     .map_err(|error| map_session(error, transport))?;
-    let config_url = format!("https://github.com/{}/{}", parts.owner, parts.name);
+    let config_url = target.config_url();
     admin_connection(
         transport,
         &AdminConnectionCall {

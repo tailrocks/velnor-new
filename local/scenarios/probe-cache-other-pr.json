@@ -1,5 +1,6 @@
 {
   "description": "The cache-other-pr probe of the lab: two pull requests into the default branch, one after the other.",
+  "fresh_cache": true,
   "steps": [
     {
       "commit": {

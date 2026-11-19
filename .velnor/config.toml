@@ -128,7 +128,10 @@ globs = [
   ".velnor/mise.toml",
   ".velnor/qualification/**",
   ".velnor/runner.lock",
+  ".velnor/rust-ci.lock",
   ".velnor/rust-ci.toml",
+  ".velnor/rust-inputs.lock",
+  ".velnor/rust-metadata.json",
   ".velnor/rust-toolchain.toml",
   ".velnor/version-policy.toml",
   "crates/**",
@@ -266,7 +269,7 @@ exclude = ["fixtures/**", "crates/**/tests/fixtures/**"]
 default_profile = "local"
 hosted_profile = "hosted"
 scale_set_profile = "local"
-workflows = ["qualification", "image_release", "macos_binary_release", "generator_release"]
+workflows = ["qualification", "image_release", "generator_release"]
 
 [execution.profiles.hosted]
 kind = "github-hosted"
@@ -1005,8 +1008,12 @@ inputs = [
   "generator/samples/lab/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-bin/expected/.github/workflows/release.yml",
   "generator/samples/release-bin/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/release-bin-family/expected/.github/workflows/release.yml",
+  "generator/samples/release-bin-family/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/release.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/release-bin-profile/expected/.github/workflows/release.yml",
+  "generator/samples/release-bin-profile/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/release.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/rust-ci.yml",
   "generator/samples/policy-lane/expected/.github/workflows/rust-ci.yml",
