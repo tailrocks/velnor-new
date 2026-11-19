@@ -27,7 +27,7 @@ pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
-    RunnerLabel, Sha256, TargetName,
+    RunnerLabel, Sha256, TargetName, github_hosted,
 };
 pub use plan::{
     Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP,
