@@ -40,7 +40,7 @@ pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
     recording_of, relocate_metadata, write_sample,
 };
-use tracked::tracked;
+use tracked::{tracked, tracked_sizes};
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[must_use]
@@ -184,6 +184,11 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
             .map_err(Error::Generate)?;
     if cli.command == Command::Generate {
         for note in notes(&view).map_err(Error::Generate)? {
+            eprintln!("velnor-gen: note: {note}");
+        }
+        if let Some(note) =
+            crate::sparse_note(&view, &tracked_sizes(&root, &view)).map_err(Error::Generate)?
+        {
             eprintln!("velnor-gen: note: {note}");
         }
     }

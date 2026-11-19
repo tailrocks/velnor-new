@@ -60,6 +60,7 @@ pub mod resolve_qualification;
 pub mod rulesets;
 pub mod scope;
 pub mod setup;
+pub mod sparse_hint;
 pub mod stream;
 pub mod summary;
 pub mod telemetry;

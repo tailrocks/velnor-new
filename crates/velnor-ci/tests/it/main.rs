@@ -68,6 +68,7 @@ mod io_raw_paths;
 mod io_release;
 mod io_report;
 mod io_report_slowest;
+mod io_report_sparse;
 mod io_required;
 mod io_required_groups;
 mod io_restore;
