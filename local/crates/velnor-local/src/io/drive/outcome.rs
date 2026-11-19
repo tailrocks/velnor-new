@@ -9,12 +9,13 @@ use tokio::process::Command;
 
 use super::Driver;
 use crate::io::RESTORES;
+use crate::io::env::Engine;
 use crate::io::probe::request;
 use crate::scenario::{Outcome, restores};
 use crate::side::Side;
 use crate::standin;
 
-impl Driver<'_> {
+impl<E: Engine + Copy + Send> Driver<'_, E> {
     pub(super) async fn outcome(&self, run: standin::Run, side: Side) -> io::Result<Outcome> {
         let metrics = self.env.dir.join(format!("metrics/{}.json", run.id));
         let id = run.id.to_string();

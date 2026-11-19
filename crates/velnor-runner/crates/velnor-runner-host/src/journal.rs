@@ -26,6 +26,8 @@ mod schema;
 mod session_refresh;
 mod source_authorization;
 mod sql;
+#[cfg(test)]
+mod test_template;
 mod transaction;
 mod worker_volume;
 

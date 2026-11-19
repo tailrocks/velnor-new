@@ -14,6 +14,7 @@ mod cleanup_audit;
 mod decide;
 mod io;
 mod layout;
+mod local_ci;
 mod minted;
 mod pair;
 mod plan;

@@ -106,7 +106,7 @@ pub fn recorded(outputs: &[(String, String)]) -> Result<BTreeMap<PlainName, Plai
     Ok(tags)
 }
 
-fn output_name(package: &str) -> Result<PlainName, CiError> {
+pub(crate) fn output_name(package: &str) -> Result<PlainName, CiError> {
     let name = PlainName::new("package", package)?;
     if package.starts_with(|first: char| first.is_ascii_alphabetic() || first == '_')
         && !package.contains('.')

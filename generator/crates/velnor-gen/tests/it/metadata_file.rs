@@ -17,7 +17,7 @@ fn pin(files: &mut RepoView, version: &str) {
 
 fn two_workspaces() -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut files = view(&["Cargo.toml", "tool/Cargo.toml"], None)?;
-    pin(&mut files, "0.1.92");
+    pin(&mut files, "0.1.81");
     let core = package(
         "core",
         "core/Cargo.toml",
@@ -177,11 +177,7 @@ fn generate_writes_the_file_and_drift_reports_it_missing_changed_or_stale() -> T
     let generated = generated_files(&files)?;
     assert_eq!(
         generated.keys().cloned().collect::<Vec<_>>(),
-        [
-            velnor_render::DELTA_CLEANUP_PATH,
-            path(".github/workflows/rust-ci.yml")?,
-            METADATA_PATH,
-        ]
+        [path(".github/workflows/rust-ci.yml")?, METADATA_PATH]
     );
     let on_disk = generated
         .iter()
@@ -330,7 +326,7 @@ fn a_pin_below_0_1_81_gets_a_file_its_helper_can_read() -> TestResult {
             .flat_map(|workspace| &workspace.members)
             .all(|member| member.version.is_none())
     );
-    pin(&mut files, "0.1.92");
+    pin(&mut files, "0.1.81");
     assert!(recorded(&files)?.contains("\"version\""));
     Ok(())
 }

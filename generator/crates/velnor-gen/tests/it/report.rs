@@ -50,7 +50,7 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
                 for (path, bytes) in &mut view.files {
                     if path.as_str() == ".velnor/rust-ci.lock" {
                         *bytes = String::from_utf8(bytes.clone())?
-                            .replace("0.1.92", helper)
+                            .replace("0.1.81", helper)
                             .into_bytes();
                     } else if path.as_str() == "mise.toml" {
                         *bytes = String::from_utf8(bytes.clone())?
@@ -240,8 +240,7 @@ fn assert_unified_cache_verdict(workflow: &serde_json::Value) -> TestResult {
 #[test]
 fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() -> TestResult {
     for root in ["root${{ secrets.EXAMPLE }}", "root{\"quoted\"}"] {
-        let mut view =
-            crate::pipeline::before_deltas(view(&[&format!("{root}/Cargo.toml")], None)?)?;
+        let mut view = view(&[&format!("{root}/Cargo.toml")], None)?;
         let lock = RepoPath::new(".velnor/rust-ci.lock")?;
         let bytes = view.files.get_mut(&lock).ok_or("lock")?;
         *bytes = String::from_utf8(bytes.clone())?

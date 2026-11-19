@@ -12,12 +12,12 @@ use velnor_render::render;
 use crate::archive::jobs_of;
 use crate::base_save::{names, step};
 use crate::facts::TestResult;
-use crate::pipeline::{before_deltas, view, workflow};
+use crate::pipeline::{view, workflow};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 
 fn lanes(roots: &[&str]) -> Result<Vec<(String, String)>, Box<dyn std::error::Error>> {
-    Ok(jobs_of(&workflow(&before_deltas(view(roots, None)?)?)?))
+    Ok(jobs_of(&workflow(&view(roots, None)?)?))
 }
 
 fn value(block: &str, field: &str) -> Option<String> {

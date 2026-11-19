@@ -170,7 +170,7 @@ fn built_from_source() -> Result<String, Box<dyn std::error::Error>> {
 fn a_helper_built_from_source_never_runs_the_gate_from_the_pull_request_build() -> TestResult {
     let text = built_from_source()?;
     let job = required(&text)?;
-    assert!(job.contains("      - name: Install velnor-ci 0.1.92\n"));
+    assert!(job.contains("      - name: Install velnor-ci 0.1.81\n"));
     assert!(job.contains("      - name: velnor-ci gate\n"));
     assert!(!job.contains("Download velnor-ci"));
     assert!(!job.contains("download-artifact"));

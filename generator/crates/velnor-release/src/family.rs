@@ -50,6 +50,7 @@ pub(crate) fn plan_family(
             smoke: false,
             commit_file: false,
             checksum_files: None,
+            member_digests: None,
             attest: binary.attest,
             profile: binary.profile.clone(),
             tag_pattern: tag_pattern.clone(),
@@ -88,6 +89,8 @@ fn unsupported(binary: &Binary) -> Option<&'static str> {
         Some("commit_file")
     } else if binary.checksum_files.is_some() {
         Some("checksum_files")
+    } else if binary.member_digests.is_some() {
+        Some("member_digests")
     } else {
         None
     }

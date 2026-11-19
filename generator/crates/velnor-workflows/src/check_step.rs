@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 
 use crate::error::{WorkflowsError, refuse};
-use crate::expression::{Scope, check, check_condition, is_identifier, whole_expression};
+use crate::expression::{
+    Scope, check, check_condition, check_env, is_identifier, whole_expression,
+};
 use crate::helper_call::{HELPER_COMMANDS, calls_velnor_ci, subcommand};
 use crate::plan::{Action, Body, Env, LocalAction, Step};
 use crate::raw::RawStep;
@@ -90,9 +92,9 @@ pub(crate) fn step(
         name: raw.name.unwrap_or(label),
         condition,
         body,
-        with: values(job, raw_with, scope)?,
+        with: values(job, raw_with, scope, check)?,
         continue_on_error: raw.continue_on_error,
-        env: values(job, raw.env, scope)?,
+        env: values(job, raw.env, scope, check_env)?,
     })
 }
 
@@ -187,10 +189,12 @@ fn locked_inputs(
     Ok(with)
 }
 
+/// `checker` is `check` for `with` and `check_env` for `env`, the one place a secret may be read.
 fn values(
     job: &str,
     table: BTreeMap<String, String>,
     scope: &Scope<'_>,
+    checker: fn(&str, &Scope<'_>) -> Result<(), WorkflowsError>,
 ) -> Result<Vec<(String, Env)>, WorkflowsError> {
     let mut items = Vec::new();
     for (key, value) in table {
@@ -198,7 +202,7 @@ fn values(
             return refuse(format!("job {job} key {key:?} is not an identifier"));
         }
         if value.contains("${{") {
-            check(&value, scope)?;
+            checker(&value, scope)?;
             items.push((key, Env::Expression(whole_inner(&value))));
         } else {
             items.push((key, Env::Text(value)));

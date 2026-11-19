@@ -55,6 +55,7 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         target: RepoPath,
         archive: Option<RepoPath>,
+        budget_bytes: u64,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {

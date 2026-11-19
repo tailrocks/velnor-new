@@ -11,7 +11,7 @@ use crate::pipeline::{view, workflow};
 fn workflow_with_helper(helper: &str) -> Result<String, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
     let lock = repo.files.get(&LOCK_PATH).ok_or("no helper lock")?;
-    let pinned = String::from_utf8(lock.clone())?.replace("0.1.92", helper);
+    let pinned = String::from_utf8(lock.clone())?.replace("0.1.81", helper);
     repo.files.insert(LOCK_PATH, pinned.into_bytes());
     workflow(&repo)
 }

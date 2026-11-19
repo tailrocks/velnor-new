@@ -58,8 +58,8 @@ async fn down_does_not_stop_a_process_whose_command_only_looks_like_the_authorit
         .unwrap_or_else(|e| unreachable!("{e}"));
     let down = env.down().await;
     let alive = decoy.try_wait().ok().is_none_or(|status| status.is_none());
-    let _ = decoy.kill();
-    let _ = decoy.wait();
+    decoy.kill().ok();
+    decoy.wait().ok();
     assert!(down.is_ok(), "{down:?}");
     assert!(alive, "down stopped a process that is not the authority");
 }
@@ -82,7 +82,7 @@ async fn down_stops_the_authority_recorded_at_start_by_its_exact_command() {
     let (reaped, exited) = mpsc::channel();
     std::thread::spawn(move || {
         let mut child = child;
-        let _ = reaped.send(child.wait());
+        reaped.send(child.wait()).ok();
     });
     std::fs::create_dir_all(dir.join("authority")).unwrap_or_else(|e| unreachable!("{e}"));
     std::fs::write(dir.join("authority/pid"), pid.to_string())
@@ -94,9 +94,10 @@ async fn down_stops_the_authority_recorded_at_start_by_its_exact_command() {
     let down = env.down().await;
     let stopped = exited.recv_timeout(Duration::from_secs(5)).is_ok();
     if !stopped {
-        let _ = Command::new("kill")
+        Command::new("kill")
             .args(["-KILL", &pid.to_string()])
-            .status();
+            .status()
+            .ok();
     }
     assert!(down.is_ok(), "{down:?}");
     assert!(stopped, "down did not stop the recorded authority");
@@ -112,7 +113,7 @@ fn exited_pid() -> u32 {
     let mut child = Command::new("/usr/bin/true")
         .spawn()
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let _ = child.wait();
+    child.wait().ok();
     child.id()
 }
 
@@ -145,8 +146,8 @@ async fn down_refuses_a_live_pid_with_no_binary_record_and_says_what_to_do() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let down = env.down().await;
     let alive = live.try_wait().ok().is_none_or(|status| status.is_none());
-    let _ = live.kill();
-    let _ = live.wait();
+    live.kill().ok();
+    live.wait().ok();
     let message = down.err().map(|e| e.to_string()).unwrap_or_default();
     assert!(alive, "down stopped a process without a binary record");
     assert!(

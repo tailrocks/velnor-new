@@ -335,11 +335,21 @@ fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
             runs(GateNeed::Deny),
             runs(GateNeed::Machete)
         )),
-        GateNeed::PackageArgs if gate.package.is_some() => {
-            parts.extend(gate.package.iter().map(|package| {
-                let args = format!("format(' {{0}} ', {})", read(GateNeed::PackageArgs));
-                format!("(contains({args}, ' -p {package} ') || contains({args}, ' --workspace '))")
-            }));
+        GateNeed::PackageArgs if !gate.packages.is_empty() => {
+            let args = format!("format(' {{0}} ', {})", read(GateNeed::PackageArgs));
+            let selected = gate
+                .packages
+                .iter()
+                .map(|package| format!("contains({args}, ' -p {package} ')"))
+                .chain([format!("contains({args}, ' --workspace ')")])
+                .collect::<Vec<_>>()
+                .join(" || ");
+            if gate.unselected {
+                parts.push(format!("{} != 'none'", read(GateNeed::Selected)));
+                parts.push(format!("!({selected})"));
+            } else {
+                parts.push(format!("({selected})"));
+            }
         }
         GateNeed::TestFilter
         | GateNeed::PackageArgs

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::TestResult;
-use crate::pipeline::view;
+use crate::pipeline::{view, with_deltas};
 use velnor_gen::expected_with_notes;
 use velnor_model::RepoPath;
 
@@ -25,7 +25,7 @@ fn a_workflow_that_does_not_fit_keeps_its_checks_and_reports_the_delta_layer_it_
 -> TestResult {
     let manifests = long_named_roots(20);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let (files, notes) = expected_with_notes(&view(&roots, None)?)?;
+    let (files, notes) = expected_with_notes(&with_deltas(view(&roots, None)?)?)?;
     let text = files.get(&RepoPath::new(WORKFLOW)?).ok_or("no workflow")?;
     assert!(
         text.len() <= velnor_render::MAX_WORKFLOW_BYTES,
@@ -60,7 +60,10 @@ fn a_workflow_that_does_not_fit_keeps_its_checks_and_reports_the_delta_layer_it_
 
 #[test]
 fn a_workflow_that_fits_keeps_the_delta_layer_and_reports_nothing_about_it() -> TestResult {
-    let (files, notes) = expected_with_notes(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
+    let (files, notes) = expected_with_notes(&with_deltas(view(
+        &["Cargo.toml", "lab/Cargo.toml"],
+        None,
+    )?)?)?;
     let text = files.get(&RepoPath::new(WORKFLOW)?).ok_or("no workflow")?;
     assert!(text.contains("velnor-ci delta"), "{text}");
     assert!(text.contains("velnor-dlt-"), "{text}");

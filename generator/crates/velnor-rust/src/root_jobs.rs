@@ -81,9 +81,17 @@ impl RootJobs<'_> {
     ) -> impl Iterator<Item = Step> {
         let lane = self.lane;
         let root = self.root;
-        commands
-            .into_iter()
-            .map(move |command| lane.cargo(command, Some(root)))
+        commands.into_iter().flat_map(move |command| {
+            let skipped = match &command {
+                CargoCommand::NextestFeatures {
+                    features, packages, ..
+                } if !packages.is_empty() => Some(lane.skipped_lane(features, packages, root)),
+                _ => None,
+            };
+            [Some(lane.cargo(command, Some(root))), skipped]
+                .into_iter()
+                .flatten()
+        })
     }
 
     fn saves(&self, job: &JobId, archive: Option<RepoPath>, sources: bool) -> Vec<Step> {
@@ -176,6 +184,14 @@ impl RootJobs<'_> {
         }
     }
 
+    fn feature_lanes(&self) -> Vec<CargoCommand> {
+        let direct = match self.filter() {
+            FilterRef::AllExcept(binaries) => binaries,
+            _ => Vec::new(),
+        };
+        crate::config_test_lane::commands(&self.facts.config, self.root, &direct)
+    }
+
     fn tests(&self) -> Vec<CargoCommand> {
         self.nextest_run()
             .into_iter()
@@ -191,8 +207,9 @@ impl RootJobs<'_> {
     }
 
     fn built_without_nextest(&self) -> Vec<CargoCommand> {
-        self.direct_harnesses()
+        self.feature_lanes()
             .into_iter()
+            .chain(self.direct_harnesses())
             .chain(self.doctests())
             .collect()
     }
@@ -212,6 +229,7 @@ impl RootJobs<'_> {
                 StepKind::Cargo(
                     CargoCommand::NextestBuild
                         | CargoCommand::NextestRun { .. }
+                        | CargoCommand::NextestFeatures { .. }
                         | CargoCommand::TestTarget { .. }
                         | CargoCommand::Doctest
                 )

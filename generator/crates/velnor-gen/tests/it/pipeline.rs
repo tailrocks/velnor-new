@@ -57,7 +57,7 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     view.files.insert(
         lock,
         String::from_utf8(HELPER_LOCK.to_vec())?
-            .replace("0.1.79", "0.1.92")
+            .replace("0.1.79", "0.1.81")
             .into_bytes(),
     );
     if let Some(bytes) = config {
@@ -68,12 +68,12 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     Ok(view)
 }
 
-/// The same repository pinned to the helper release before the delta layer.
-pub(crate) fn before_deltas(mut view: RepoView) -> Result<RepoView, Box<dyn Error>> {
+/// The same repository pinned to the first helper release that has the delta commands.
+pub(crate) fn with_deltas(mut view: RepoView) -> Result<RepoView, Box<dyn Error>> {
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let text = String::from_utf8(view.files.remove(&lock).ok_or("no helper lock")?)?;
     view.files
-        .insert(lock, text.replace("0.1.92", "0.1.81").into_bytes());
+        .insert(lock, text.replace("0.1.81", "0.1.93").into_bytes());
     Ok(view)
 }
 
@@ -139,7 +139,7 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
         "it's crates/Cargo.toml",
         "odd\u{ffff}/Cargo.toml",
     ];
-    let text = workflow(&before_deltas(view(&roots, Some(b"runner = \"on\"\n"))?)?)?;
+    let text = workflow(&view(&roots, Some(b"runner = \"on\"\n"))?)?;
     assert!(text.contains("&& ''on'' || ''ubuntu-latest'' }}'\n"));
     let formats: Vec<&str> = text
         .split("\n      - ")

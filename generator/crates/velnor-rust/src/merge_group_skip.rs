@@ -16,6 +16,7 @@ fn is_check(kind: &StepKind) -> bool {
                     | CargoCommand::Doc
                     | CargoCommand::CheckAlone { .. }
                     | CargoCommand::NextestRun { .. }
+                    | CargoCommand::NextestFeatures { .. }
                     | CargoCommand::NextestRunArchive { .. }
                     | CargoCommand::TestTarget { .. }
                     | CargoCommand::Doctest

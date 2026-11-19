@@ -10,6 +10,7 @@ use crate::release_assets::{
     selection, uploaded, versioned,
 };
 use crate::release_attest::{attest, verify};
+use crate::release_binary_sums::{steps as binary_sums_steps, upload_paths};
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
 use crate::release_raw::{raw_packaging, smoke_steps};
@@ -234,6 +235,7 @@ fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             )
         });
     }
+    steps.extend(binary_sums_steps(binary));
     let names = quoted(binary, &assets(binary)).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
@@ -249,11 +251,14 @@ fn sums(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     if binary.attest {
         steps.push(attest(binary));
     }
-    let sums_files = if binary.commit_file {
-        format!("{DIST}/{SUMS_FILE}\n{DIST}/{COMMIT_FILE}")
-    } else {
-        format!("{DIST}/{SUMS_FILE}")
-    };
+    let sums_files = upload_paths(
+        binary,
+        if binary.commit_file {
+            &[COMMIT_FILE]
+        } else {
+            &[]
+        },
+    );
     steps.push(upload(format!("{}-sums", binary.package), sums_files));
     bind_version(&mut steps);
     RenderedJob {

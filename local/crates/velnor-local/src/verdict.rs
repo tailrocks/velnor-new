@@ -124,7 +124,7 @@ pub fn verdict(
     lines.extend(check.mode().map(str::to_owned));
     lines.push(warning.to_owned());
     lines.iter().fold(String::new(), |mut text, line| {
-        let _ = writeln!(text, "velnor-local {scenario}: {line}");
+        writeln!(text, "velnor-local {scenario}: {line}").ok();
         text
     })
 }

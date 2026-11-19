@@ -67,6 +67,78 @@ fn mirror_setup_refuses_unowned_job_configuration() -> TestResult {
     Ok(())
 }
 
+#[test]
+fn mirror_off_skips_the_ca_and_writes_nothing() -> TestResult {
+    let repo = Repo::empty("crates-mirror-off");
+    let output = setup_command(repo.root(), REGISTRY)
+        .env("VELNOR_CRATES_MIRROR", "off")
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("disabled by VELNOR_CRATES_MIRROR=off")
+    );
+    assert_nothing_configured(repo.root());
+    Ok(())
+}
+
+#[test]
+fn mirror_off_leaves_an_existing_job_configuration_alone() -> TestResult {
+    let repo = Repo::empty("crates-mirror-off-existing");
+    repo.write_unstaged("velnor-cargo/config.toml", EXISTING);
+    let output = setup_command(repo.root(), REGISTRY)
+        .env("VELNOR_CRATES_MIRROR", "off")
+        .output()?;
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join("velnor-cargo/config.toml"))?,
+        EXISTING
+    );
+    assert!(!repo.root().join("velnor-cargo/cargo").exists());
+    assert!(!repo.root().join("env").exists());
+    assert!(!repo.root().join("path").exists());
+    Ok(())
+}
+
+#[test]
+fn mirror_unset_or_empty_still_requires_the_ca() -> TestResult {
+    for value in [None, Some("")] {
+        let repo = Repo::empty("crates-mirror-on");
+        let mut command = setup_command(repo.root(), REGISTRY);
+        if let Some(value) = value {
+            command.env("VELNOR_CRATES_MIRROR", value);
+        }
+        let output = command.output()?;
+        assert!(!output.status.success(), "{output:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("cannot read crates mirror CA"));
+        assert_nothing_configured(repo.root());
+    }
+    Ok(())
+}
+
+#[test]
+fn mirror_rejects_any_value_but_off() -> TestResult {
+    let repo = Repo::empty("crates-mirror-typo");
+    repo.write_unstaged("ca.pem", "fixture");
+    for value in ["0", "OFF", "off ", "true"] {
+        let output = setup_command(repo.root(), REGISTRY)
+            .env("VELNOR_CRATES_MIRROR", value)
+            .output()?;
+        assert!(!output.status.success(), "{value:?}: {output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains("VELNOR_CRATES_MIRROR"),
+            "{value:?}: {output:?}"
+        );
+        assert_nothing_configured(repo.root());
+    }
+    Ok(())
+}
+
+fn assert_nothing_configured(root: &Path) {
+    assert!(!root.join("velnor-cargo").exists());
+    assert!(!root.join("env").exists());
+    assert!(!root.join("path").exists());
+}
+
 fn assert_job_config(root: &Path) -> TestResult {
     let env = fs::read_to_string(root.join("env"))?;
     for config in env
