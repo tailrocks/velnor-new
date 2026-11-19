@@ -67,6 +67,39 @@ id!(HelperVersion, version);
 id!(CommitSha, commit_sha);
 id!(Sha256, sha256);
 
+const GITHUB_HOSTED: &[&str] = &[
+    "ubuntu-latest",
+    "ubuntu-24.04",
+    "ubuntu-24.04-arm",
+    "ubuntu-22.04",
+    "ubuntu-22.04-arm",
+    "ubuntu-26.04",
+    "ubuntu-26.04-arm",
+    "ubuntu-slim",
+    "macos-latest",
+    "macos-latest-large",
+    "macos-26",
+    "macos-26-xlarge",
+    "macos-26-intel",
+    "macos-26-large",
+    "macos-15",
+    "macos-15-xlarge",
+    "macos-15-intel",
+    "macos-15-large",
+    "macos-14",
+    "windows-latest",
+    "windows-2025",
+    "windows-2025-vs2026",
+    "windows-2022",
+    "windows-11-arm",
+    "windows-11-vs2026-arm",
+];
+
+#[must_use]
+pub fn github_hosted(label: &str) -> bool {
+    GITHUB_HOSTED.contains(&label.to_ascii_lowercase().as_str())
+}
+
 impl RepoPath {
     #[must_use]
     pub fn parent(&self) -> Option<Self> {
@@ -179,11 +212,23 @@ fn wildcard(pattern: &str, text: &str) -> bool {
     rest.ends_with(last)
 }
 
+const FIRST_TOOLS_TAG: (u64, u64, u64) = (0, 1, 85);
+
 impl HelperVersion {
     #[must_use]
     pub fn series(&self) -> Option<(u64, u64)> {
         let mut parts = self.0.split('.');
         Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+    }
+
+    #[must_use]
+    pub fn release_tag(&self) -> String {
+        let prefix = if self.at_least(FIRST_TOOLS_TAG) {
+            "tools-v"
+        } else {
+            "rust-ci-v"
+        };
+        format!("{prefix}{}", self.0)
     }
 
     #[must_use]

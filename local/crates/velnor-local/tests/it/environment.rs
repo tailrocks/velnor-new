@@ -16,10 +16,9 @@ fn plain(dir: &std::path::Path, runners: u16, fork_runners: u16) -> EnvironmentA
         dir: dir.to_path_buf(),
         runners,
         fork_runners,
-        default_branch: "main".to_owned(),
         runner: RunnerMode::Plain,
         velnor_host: Some("velnor-host".into()),
-        policy: None,
+        ..EnvironmentArgs::default()
     }
 }
 
@@ -283,6 +282,8 @@ fn a_control_token_without_a_control_listener_is_refused() {
     assert!(!parse(&["--control-listen", "127.0.0.1:81"]));
 }
 
+mod plain_ready;
+
 struct Published(String);
 
 impl velnor_local::io::env::Engine for Published {
@@ -339,13 +340,13 @@ async fn service_up_after(delay: std::time::Duration) -> String {
 async fn up_waits_for_runner_server_and_the_cache_even_when_no_plain_runner_starts() {
     let dir = temp_dir("environment-pair-ready");
     let delay = std::time::Duration::from_millis(700);
+    let started = tokio::time::Instant::now();
     let address = service_up_after(delay).await;
     let env = Environment::at(&dir, Published(address))
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     let mut args = plain(&dir, 1, 0);
     args.runner = RunnerMode::Pair;
-    let started = tokio::time::Instant::now();
     let up = env.up(&dir, &args).await;
     assert!(up.is_ok(), "{:?}", up.err());
     assert!(

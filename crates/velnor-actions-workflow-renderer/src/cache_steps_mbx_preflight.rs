@@ -7,7 +7,9 @@ use super::{CompileDriver, MBX_ACTION_NAME};
 use crate::RenderError;
 use crate::steps::{action_owned_mbx_shell_step, action_step_with_env, shell_step, validate_uses};
 use velnor_actions_contract::workflow::MBX_WORKSPACE_CLEAN_CONDITION;
-use velnor_actions_contract::workflow::cache_family::{MBX_COMPILE_ENV as COMPILE_ENV, StateUnit};
+use velnor_actions_contract::workflow::cache_family::{
+    MBX_COMPILE_ENV as COMPILE_ENV, MBX_STORE_DIR, StateUnit,
+};
 use velnor_actions_contract::{Step, StepId, StepKind, StepRole};
 
 pub const MBX_PREFLIGHT_NAME: &str = "Verify Rust before MBX action";
@@ -105,7 +107,7 @@ pub(crate) const MBX_GC_AUTO_ENV: &str = "MBX_GC_AUTO";
 pub(crate) const MBX_GC_AUTO_VALUE: &str = "0";
 pub(crate) const MBX_COMPILE_ENV: [(&str, &str); 3] = COMPILE_ENV;
 pub(crate) const MBX_CACHE_DIR_ENV: &str = "MBX_CACHE_DIR";
-pub(crate) const MBX_CACHE_DIR_VALUE: &str = "${{ runner.temp }}/velnor/mbx";
+pub(crate) const MBX_CACHE_DIR_VALUE: &str = MBX_STORE_DIR;
 
 #[path = "cache_steps_mbx_rustc.rs"]
 mod rustc_identity;
@@ -147,11 +149,12 @@ fn rust_path_preflight_step(
         "[ -d \"$RUNNER_TEMP\" ] || { printf '%s\\n' 'RUNNER_TEMP must exist' >&2; exit 1; }".to_owned(),
         "check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }".to_owned(),
         "check_no_symlink \"$RUNNER_TEMP\" || { printf '%s\\n' 'RUNNER_TEMP path contains a symlink' >&2; exit 1; }".to_owned(),
-        "mbx_cache_dir=\"$RUNNER_TEMP/velnor/mbx\"".to_owned(),
+        "mbx_root=\"/home/runner/work/_temp/velnor\"; mbx_cache_dir=\"$mbx_root/mbx\"".to_owned(),
         "[ \"${MBX_CACHE_DIR:-}\" = \"$mbx_cache_dir\" ] || { printf '%s\\n' 'MBX_CACHE_DIR must use the stable runner-temp path' >&2; exit 1; }".to_owned(),
-        "[ ! -L \"$RUNNER_TEMP/velnor\" ] || { printf '%s\\n' 'Velnor temp root must not be a symlink' >&2; exit 1; }".to_owned(),
-        "if [ ! -e \"$RUNNER_TEMP/velnor\" ]; then (umask 077 && mkdir -m 700 \"$RUNNER_TEMP/velnor\"); fi".to_owned(),
-        "[ -d \"$RUNNER_TEMP/velnor\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" || { printf '%s\\n' 'Velnor temp root must be a real directory' >&2; exit 1; }".to_owned(),
+        "[ ! -L \"$mbx_root\" ] || { printf '%s\\n' 'Velnor temp root must not be a symlink' >&2; exit 1; }".to_owned(),
+        "if [ ! -e \"$mbx_root\" ]; then (umask 077 && mkdir -p -m 700 \"$mbx_root\"); fi".to_owned(),
+        "[ -d \"$mbx_root\" ] && check_no_symlink \"$mbx_root\" || { printf '%s\\n' 'Velnor temp root must be a real directory' >&2; exit 1; }".to_owned(),
+        "[ -L \"$mbx_cache_dir\" ] || rm -rf \"$mbx_cache_dir\"".to_owned(),
         "[ ! -e \"$mbx_cache_dir\" ] && [ ! -L \"$mbx_cache_dir\" ] || { printf '%s\\n' 'MBX store root already exists in this private runner namespace' >&2; exit 1; }".to_owned(),
         "(umask 077 && mkdir -m 700 \"$mbx_cache_dir\" && mkdir -m 700 \"$mbx_cache_dir/actions\") || { printf '%s\\n' 'could not reserve the MBX store root' >&2; exit 1; }".to_owned(),
         "[ -n \"${GITHUB_ENV:-}\" ] && [ -f \"$GITHUB_ENV\" ] && [ ! -L \"$GITHUB_ENV\" ] || { printf '%s\\n' 'GITHUB_ENV must be a regular runner file' >&2; exit 1; }".to_owned(),
@@ -206,9 +209,9 @@ pub(crate) fn mbx_version_check_step(
         "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac".to_owned(),
         "check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }".to_owned(),
         "[ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '%s\\n' 'RUNNER_TEMP must be a real directory' >&2; exit 1; }".to_owned(),
-        "[ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '%s\\n' 'MBX_CACHE_DIR changed from its stable runner-temp path' >&2; exit 1; }".to_owned(),
-        "[ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '%s\\n' 'MBX store directories are missing' >&2; exit 1; }".to_owned(),
-        "check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path contains a symlink' >&2; exit 1; }".to_owned(),
+        "[ \"${MBX_CACHE_DIR:-}\" = \"/home/runner/work/_temp/velnor/mbx\" ] || { printf '%s\\n' 'MBX_CACHE_DIR changed from its stable runner-temp path' >&2; exit 1; }".to_owned(),
+        "[ -d \"/home/runner/work/_temp/velnor\" ] && [ -d \"$MBX_CACHE_DIR\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] || { printf '%s\\n' 'MBX store directories are missing' >&2; exit 1; }".to_owned(),
+        "check_no_symlink \"/home/runner/work/_temp/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path contains a symlink' >&2; exit 1; }".to_owned(),
         "case \"$GITHUB_RUN_ID\" in ''|*[!0-9]*) printf '%s\\n' 'run id must be numeric' >&2; exit 1 ;; esac".to_owned(),
         "case \"$GITHUB_RUN_ATTEMPT\" in ''|*[!0-9]*) printf '%s\\n' 'run attempt must be numeric' >&2; exit 1 ;; esac".to_owned(),
         "probe_dir=\"$RUNNER_TEMP/velnor-mbx-verify-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT\"".to_owned(),
@@ -275,7 +278,7 @@ pub(crate) fn mbx_workspace_clean_step_for_action(action: &Step) -> Result<Step,
         "check_no_symlink() { path=$1; while [ \"$path\" != / ]; do [ ! -L \"$path\" ] || return 1; path=${path%/*}; [ -n \"$path\" ] || path=/; done; return 0; }".to_owned(),
         "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac".to_owned(),
         "[ -d \"$RUNNER_TEMP\" ] && check_no_symlink \"$RUNNER_TEMP\" || { printf '%s\\n' 'RUNNER_TEMP must be a real directory' >&2; exit 1; }".to_owned(),
-        "[ \"${MBX_CACHE_DIR:-}\" = \"$RUNNER_TEMP/velnor/mbx\" ] && [ -d \"$RUNNER_TEMP/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"$RUNNER_TEMP/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path changed before cleanup' >&2; exit 1; }".to_owned(),
+        "[ \"${MBX_CACHE_DIR:-}\" = \"/home/runner/work/_temp/velnor/mbx\" ] && [ -d \"/home/runner/work/_temp/velnor\" ] && [ -d \"$MBX_CACHE_DIR/actions\" ] && check_no_symlink \"/home/runner/work/_temp/velnor\" && check_no_symlink \"$MBX_CACHE_DIR/actions\" || { printf '%s\\n' 'MBX store path changed before cleanup' >&2; exit 1; }".to_owned(),
         mbx_disk_sample_function(),
         format!("target_dir=\"{target_dir}\""),
         "mbx_disk_sample before-final-clean".to_owned(),

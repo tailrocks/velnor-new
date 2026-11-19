@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use tempfile::TempDir;
+use velnor_actions_contract::workflow::cache_family::STATE_RUNNER_TEMP as MBX_RUNNER_TEMP;
 use velnor_actions_contract::{Step, StepKind};
 use velnor_actions_workflow_renderer::state_seal::skeleton::{
     state_skeleton_restore_step, state_skeleton_step,
@@ -155,8 +156,9 @@ impl Rig {
             std::env::var("PATH").unwrap_or_default()
         );
         let mut command = Command::new(program);
+        let temp = self.temp.path().to_string_lossy().into_owned();
         command
-            .args(args)
+            .args(args.iter().map(|arg| arg.replace(MBX_RUNNER_TEMP, &temp)))
             .current_dir(&self.workspace)
             .envs(env)
             .env("PATH", path)

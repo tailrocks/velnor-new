@@ -1,5 +1,6 @@
 {
   "description": "The cache-save-existing probe of the lab: one dispatch on the default branch.",
+  "fresh_cache": true,
   "steps": [
     {
       "workflow_dispatch": {

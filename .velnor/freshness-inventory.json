@@ -8,7 +8,7 @@
       "qualified_sha": "1e69f48acb82d1966a394da916b4c1698aa569d6",
       "latest": "v4.2.2",
       "source": "https://api.github.com/repos/actions/attest/releases/latest",
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "status": "current"
     },
     {
@@ -19,11 +19,11 @@
       "qualified_sha": "4d101475d8b20a2381f78447822ac1eab6504dd8",
       "latest": "v4.2.2",
       "source": "https://api.github.com/repos/actions/attest-build-provenance/releases/latest",
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "actions/cache/restore",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -34,7 +34,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "actions/cache/save",
       "latest": "v6.1.0",
       "pinned_sha": "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
@@ -45,7 +45,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "actions/checkout",
       "latest": "v7.0.1",
       "pinned_sha": "3d3c42e5aac5ba805825da76410c181273ba90b1",
@@ -61,13 +61,13 @@
       "pinned_sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
       "qualified_version": "v3.3.0",
       "qualified_sha": "64ab729a6294000f5aa4a4bc0b73d1f32bc45510",
-      "latest": "v3.3.0",
+      "latest": "v3.4.0",
       "source": "https://api.github.com/repos/actions/create-github-app-token/releases/latest",
-      "checked_at": "2026-11-16T02:03:18.000Z",
-      "status": "current"
+      "checked_at": "2026-11-18T22:23:01.000Z",
+      "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "actions/download-artifact",
       "latest": "v8.0.2",
       "pinned_sha": "9000827ccba6bdab643e8b6fd33ac0654aef8333",
@@ -78,7 +78,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "actions/github-script",
       "latest": "v9.0.0",
       "pinned_sha": "3a2844b7e9c422d3c10d287c895573f7108da1b3",
@@ -89,7 +89,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "actions/upload-artifact",
       "latest": "v7.0.2",
       "pinned_sha": "cf430e030ddbb5b0abf93d22962f4752f3646cd9",
@@ -100,7 +100,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "asamarts/alint",
       "latest": "v0.22.1",
       "pinned_sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0",
@@ -111,7 +111,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "aws-actions/configure-aws-credentials",
       "latest": "v6.3.0",
       "pinned_sha": "e1253824e5c10ff9df46874f81ed3ec929e19cfd",
@@ -122,7 +122,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "jdx/mise-action",
       "latest": "v5.2.9",
       "pinned_sha": "f5be966e4a917d54244728e6a5fdcd1d93a35e6c",
@@ -133,7 +133,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "jdx/mr-boxington-action",
       "latest": "v1.7.3",
       "pinned_sha": "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
@@ -146,7 +146,7 @@
     }
   ],
   "check_interval_hours": 24,
-  "checked_at": "2026-11-16T02:03:18.000Z",
+  "checked_at": "2026-11-18T22:23:01.000Z",
   "exceptions": [],
   "max_exception_days": 14,
   "runner": {
@@ -156,95 +156,104 @@
     "supported": [
       "ubuntu-26.04"
     ],
-    "checked_at": "2026-11-16T02:03:18.000Z"
+    "checked_at": "2026-11-18T22:23:01.000Z"
   },
   "schema": 1,
   "temporary_holds": [
+    {
+      "key": "RUSTSEC-2026-0543",
+      "held_version": "chrono (unmaintained; via turso 0.8.3)",
+      "owner": "Alexey Zhokhov",
+      "issue": "https://github.com/tailrocks/velnor-new/issues/1218",
+      "reason": "chrono is unmaintained but arrives only via turso 0.8.3 (velnor-runner-host); drop when turso does. Re-checked monthly in https://github.com/tailrocks/velnor-new/issues/1218.",
+      "granted": "2026-11-18",
+      "expires": "2026-12-02"
+    },
     {
       "key": "mise",
       "held_version": "2026.11.1",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v2026.11.8 published 2026-11-13T13:07:07Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-06",
-      "expires": "2026-11-20"
+      "reason": "v2026.11.8 published 2026-11-13T13:07:07Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): mise bootstraps the pinned toolchain, so a bump needs the bootstrap and controller pins re-qualified together.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "jactionlint",
       "held_version": "2.4.0",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v2.6.0 published 2026-11-12T18:02:50Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-06",
-      "expires": "2026-11-20"
+      "reason": "v2.6.0 published 2026-11-12T18:02:50Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "opentofu",
       "held_version": "1.13.8",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v1.13.9 published 2026-11-05T19:09:38Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-06",
-      "expires": "2026-11-20"
+      "reason": "v1.13.9 published 2026-11-05T19:09:38Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "asamarts/alint",
       "held_version": "v0.21.0",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v0.22.1 published 2026-11-11T20:16:13Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-06",
-      "expires": "2026-11-20"
+      "reason": "v0.22.1 published 2026-11-11T20:16:13Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "jdx/mise-action",
       "held_version": "v5.2.6",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v5.2.9 published 2026-11-15T16:43:58Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-07",
-      "expires": "2026-11-21"
+      "reason": "v5.2.9 published 2026-11-15T16:43:58Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-07..2026-11-21): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "mr-boxington",
       "held_version": "1.29.2",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v1.30.0 published 2026-11-09T20:42:25Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-12",
-      "expires": "2026-11-26"
+      "reason": "v1.30.0 published 2026-11-09T20:42:25Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-12..2026-11-26): mbx is the compiler cache and now fronts the live NVMe mbx store, so a bump needs coordination with that store.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "rust",
       "held_version": "1.99.1",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v1.100.0 (stable manifest dated 2026-11-12) has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-16",
-      "expires": "2026-11-30"
+      "reason": "v1.100.0 (stable manifest dated 2026-11-12) has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-16..2026-11-30): a toolchain bump invalidates every build cache and the mise lock closure, so it needs a coordinated cache-cold window.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "gh",
       "held_version": "2.103.3",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v2.104.0 published 2026-11-12T19:03:51Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-16",
-      "expires": "2026-11-30"
+      "reason": "v2.104.0 published 2026-11-12T19:03:51Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-16..2026-11-30): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     },
     {
       "key": "nextest",
       "held_version": "0.9.151",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v0.9.152 published 2026-11-13T22:33:23Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-16",
-      "expires": "2026-11-30"
+      "reason": "v0.9.152 published 2026-11-13T22:33:23Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-16..2026-11-30): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
     }
   ],
   "tools": [
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v2026.11.8",
       "name": "mise",
       "pinned": "2026.11.1",
@@ -253,7 +262,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "1.100.0",
       "name": "rust",
       "pinned": "1.99.1",
@@ -262,7 +271,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v1.30.0",
       "name": "mr-boxington",
       "pinned": "1.29.2",
@@ -272,7 +281,7 @@
       "latest_sha": "2299ea69519d142d85b5903cbd0e2690419b7bed"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v2.104.0",
       "name": "gh",
       "pinned": "2.103.3",
@@ -281,7 +290,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v2.6.0",
       "name": "jactionlint",
       "pinned": "2.4.0",
@@ -290,7 +299,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v0.11.0",
       "name": "shellcheck",
       "pinned": "0.11.0",
@@ -299,7 +308,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "0.9.152",
       "name": "nextest",
       "pinned": "0.9.151",
@@ -308,7 +317,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v1.13.9",
       "name": "opentofu",
       "pinned": "1.13.8",
@@ -317,7 +326,7 @@
       "status": "held"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "0.4.3",
       "name": "release-plz",
       "pinned": "0.4.3",
@@ -326,7 +335,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v0.22.1",
       "name": "crane",
       "pinned": "0.22.1",
@@ -335,7 +344,7 @@
       "status": "current"
     },
     {
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "bun-v1.4.4",
       "name": "bun",
       "pinned": "1.4.4",
@@ -367,7 +376,7 @@
         }
       },
       "source": "https://api.github.com/repos/sigstore/cosign/releases/latest",
-      "checked_at": "2026-11-16T02:03:18.000Z",
+      "checked_at": "2026-11-18T22:23:01.000Z",
       "status": "current"
     }
   ]

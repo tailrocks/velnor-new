@@ -12,6 +12,8 @@ use crate::pipeline::{view, workflow};
 const HELPER_LOCK: &[u8] =
     include_bytes!("../../../../samples/helper-source/view/.velnor/rust-ci.lock");
 
+const HELPER_CONFIG: &str = "exclude = [\"fixtures/**\"]\nhelper = { path = \"ci-helper\" }\n";
+
 fn sample(config: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
     let mut view = load(&samples().join("helper-source"))?;
     if let Some(config) = config {
@@ -51,7 +53,7 @@ fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() ->
     assert_eq!(
         helper.lines().find(|line| line.starts_with("    if:")),
         Some(
-            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
+            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
         )
     );
     let lanes: Vec<&&str> = jobs
@@ -142,7 +144,9 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
 
 #[test]
 fn the_job_that_builds_the_helper_uploads_the_fingerprint_log_too() -> TestResult {
-    let text = text_of(&sample(None)?)?;
+    let text = text_of(&sample(Some(&format!(
+        "{HELPER_CONFIG}cache_debug = true\n"
+    )))?)?;
     let start = text.find("  rust-helper:\n").ok_or("no helper job")?;
     let body = &text[start..];
     let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
@@ -223,7 +227,7 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     assert_eq!(
         helper.lines().find(|line| line.starts_with("    if:")),
         Some(
-            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
+            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
         )
     );
     assert!(!text.contains("Download velnor-ci"));
