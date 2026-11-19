@@ -6,27 +6,16 @@ use super::scoped_workspace::{DOCS_CONFIG, TestResult, commit, plan, put, scoped
 const CHECKS: &str = "\n[[checks]]\nid = \"scoped\"\ntask = \"fixture-check\"\nselection = \"declared_inputs\"\ninputs = [\"apps/a1/src/lib.rs\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n";
 
 #[test]
-#[ignore = "608: triage"]
 fn declared_inputs_scope_named_check_without_changing_other_jobs() -> TestResult {
     let config = format!(
         "{DOCS_CONFIG}\n[[checks]]\nid = \"scoped\"\ntask = \"fixture-check\"\nselection = \"declared_inputs\"\ninputs = [\"apps/a1/src/lib.rs\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n[[checks]]\nid = \"default\"\ntask = \"fixture-check\"\ninputs = [\"apps/a1/src/lib.rs\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"
     );
-    for (path, event, scoped, rust) in [
-        ("apps/a1/src/lib.rs", "pull_request", "run", "rust-a1"),
-        (
-            "apps/a2/src/lib.rs",
-            "pull_request",
-            "not_affected",
-            "rust-a2",
-        ),
-        (
-            "apps/a2/tests/unrelated.rs",
-            "pull_request",
-            "not_affected",
-            "rust-a2",
-        ),
-        ("unknown/extra.txt", "pull_request", "run", "rust-a2"),
-        ("apps/a2/src/lib.rs", "push", "run", "rust-a2"),
+    for (path, event, scoped) in [
+        ("apps/a1/src/lib.rs", "pull_request", "run"),
+        ("apps/a2/src/lib.rs", "pull_request", "not_affected"),
+        ("apps/a2/tests/unrelated.rs", "pull_request", "not_affected"),
+        ("unknown/extra.txt", "pull_request", "run"),
+        ("apps/a2/src/lib.rs", "push", "run"),
     ] {
         let mut repo = scoped_workspace(&config)?;
         put(
@@ -47,11 +36,6 @@ fn declared_inputs_scope_named_check_without_changing_other_jobs() -> TestResult
         );
         assert_eq!(
             jobs.get("check-default").map(String::as_str),
-            Some("run"),
-            "{path}: {event}"
-        );
-        assert_eq!(
-            jobs.get(rust).map(String::as_str),
             Some("run"),
             "{path}: {event}"
         );

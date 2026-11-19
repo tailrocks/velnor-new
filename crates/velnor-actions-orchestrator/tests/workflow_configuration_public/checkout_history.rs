@@ -137,7 +137,6 @@ fn step_names(workflow: &str, job: &str) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn only_the_promised_jobs_take_the_push_aware_checkout_depth() -> Result<(), Box<dyn Error>> {
     let workflow = rendered_workflow(&config("main", ""))?;
     let expected: BTreeMap<String, Option<String>> = [
@@ -147,7 +146,6 @@ fn only_the_promised_jobs_take_the_push_aware_checkout_depth() -> Result<(), Box
         ("jactionlint", None),
         ("plan", Some(PUSH_AWARE_DEPTH)),
         ("required", Some("\"0\"")),
-        ("rust-demo", None),
     ]
     .into_iter()
     .map(|(job, depth)| (job.to_owned(), depth.map(str::to_owned)))

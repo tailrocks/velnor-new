@@ -319,7 +319,6 @@ fn sources_mutations() -> Vec<(&'static str, Mutation)> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn ledger_cli_validator_rejects_each_mutation() -> Result<(), Box<dyn Error>> {
     for Rendered { name, jobs, .. } in velnor_fixtures()? {
         validate_ledger_cli_jobs(&jobs, LedgerCliSource::SameRunBuild)?;
@@ -338,7 +337,6 @@ fn ledger_cli_validator_rejects_each_mutation() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn consumer_policy_rejects_cross_job_artifacts() -> Result<(), Box<dyn Error>> {
     let fixture = group_fixtures()?
         .into_iter()

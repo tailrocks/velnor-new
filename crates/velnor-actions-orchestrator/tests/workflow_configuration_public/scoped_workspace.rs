@@ -66,18 +66,6 @@ impl PlanRun {
             .collect()
     }
 
-    pub(super) fn with_disposition(
-        &self,
-        disposition: &str,
-    ) -> Result<BTreeSet<String>, Box<dyn Error>> {
-        Ok(self
-            .jobs()?
-            .into_iter()
-            .filter(|(_, actual)| actual == disposition)
-            .filter_map(|(id, _)| id.strip_prefix("rust-").map(str::to_owned))
-            .collect())
-    }
-
     pub(super) fn warnings(&self) -> Vec<String> {
         self.value["plan"]["warnings"]
             .as_array()

@@ -158,7 +158,7 @@ fn scalar(value: &str) -> Result<String, Box<dyn Error>> {
 }
 
 fn rendered_verify() -> Result<RenderedVerify, Box<dyn Error>> {
-    let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
+    let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let workflow = tree.get(WORKFLOW_PATH).ok_or("no ci workflow")?;
     rendered_step(workflow, "Verify ledger CLI")
@@ -301,7 +301,6 @@ impl Checkout {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn planted_bash_cannot_verify_or_run() -> Result<(), Box<dyn Error>> {
     let step = rendered_verify()?;
     let planted = Planted::new(&[("bash", "exit 0"), ("sh", "exit 0")])?;
@@ -317,7 +316,6 @@ fn planted_bash_cannot_verify_or_run() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn planted_tools_cannot_forge_a_verified_binary() -> Result<(), Box<dyn Error>> {
     let step = rendered_verify()?;
     let checkout = Checkout::new(Some(TAMPERED))?;
@@ -340,7 +338,6 @@ fn planted_tools_cannot_forge_a_verified_binary() -> Result<(), Box<dyn Error>> 
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn hostile_failing_tools_do_not_break_a_genuine_binary() -> Result<(), Box<dyn Error>> {
     let step = rendered_verify()?;
     let planted = Planted::new(&[
@@ -361,7 +358,6 @@ fn hostile_failing_tools_do_not_break_a_genuine_binary() -> Result<(), Box<dyn E
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn env_hook_cannot_forge_verification() -> Result<(), Box<dyn Error>> {
     let step = rendered_verify()?;
     let planted = Planted::new(&[])?;

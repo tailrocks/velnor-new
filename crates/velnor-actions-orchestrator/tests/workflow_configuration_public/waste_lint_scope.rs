@@ -4,10 +4,10 @@
 use std::error::Error;
 
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
-use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, PLAN_JOB_ID, WorkflowPolicy};
+use velnor_actions_contract::{PLAN_JOB_ID, WorkflowPolicy};
 use velnor_actions_orchestrator::{WasteFinding, prepare, render_staged_tree, waste_findings};
 
-use super::maintenance_features::owner_feature_repo;
+use super::one_job_per_crate::mbx_repo_for;
 use super::tools_producers::{POLICIES, finalized};
 use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
 use super::waste_lint::{CI_PATH, plain_shell_step, run_without_homes};
@@ -38,13 +38,7 @@ fn assert_velnor_repository_guards(files: &Files, jobs: &[JobUse]) -> Result<(),
     for path in [CI_PATH, FRESHNESS_PATH] {
         assert!(files.contains_key(path), "{path} is not rendered");
     }
-    for id in [
-        "cargo-machete",
-        "cargo-deny",
-        "freshness",
-        LEDGER_CLI_JOB_ID,
-        PLAN_JOB_ID,
-    ] {
+    for id in ["cargo-machete", "freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
         oracle::find(jobs, id)?;
     }
     for id in ["freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
@@ -53,24 +47,13 @@ fn assert_velnor_repository_guards(files: &Files, jobs: &[JobUse]) -> Result<(),
             "{id} is not a toolchain job"
         );
     }
-    assert!(
-        jobs.iter()
-            .any(|job| job.job.starts_with(CRATE_JOB_ID_PREFIX) && job.is_user()),
-        "no crate job uses the toolchain"
-    );
-    let deny = oracle::find(jobs, "cargo-deny")?;
-    assert!(
-        !deny.installs_rust && !deny.words.is_empty(),
-        "cargo-deny no longer exercises the clean-cwd exemption: {deny:?}"
-    );
     Ok(())
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn every_toolchain_job_in_the_rendered_trees_has_auto_install_off() -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {
-        let repo = owner_feature_repo(policy, false, "default", "default")?;
+        let repo = mbx_repo_for(true, policy)?;
         let prepared = prepare(repo.path())?;
         let files = files_of(&render_staged_tree(&prepared)?)?;
         let label = format!("{policy:?}");

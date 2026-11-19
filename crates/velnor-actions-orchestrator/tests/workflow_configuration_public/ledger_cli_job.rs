@@ -121,9 +121,8 @@ fn velnor_repository_has_one_ledger_cli_job() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn ledger_cli_build_budget_ignores_a_one_minute_crate_timeout() -> Result<(), Box<dyn Error>> {
-    let repo = mbx_repo_with_crate_timeout(false, WorkflowPolicy::VelnorRepositoryV1, Some(1))?;
+    let repo = mbx_repo_with_crate_timeout(true, WorkflowPolicy::VelnorRepositoryV1, Some(1))?;
     let Rendered { jobs, .. } = render(
         "one-minute-crates",
         &repo,
@@ -143,7 +142,6 @@ fn ledger_cli_build_budget_ignores_a_one_minute_crate_timeout() -> Result<(), Bo
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn crate_and_tofu_jobs_fetch_verify_then_emit() -> Result<(), Box<dyn Error>> {
     for Rendered { name, jobs, .. } in velnor_fixtures()? {
         let required = jobs.get(REQUIRED_JOB_ID).ok_or("missing required job")?;
@@ -178,7 +176,7 @@ fn crate_and_tofu_jobs_fetch_verify_then_emit() -> Result<(), Box<dyn Error>> {
             let last_task = job
                 .steps
                 .iter()
-                .rposition(|step| matches!(step.kind, StepKind::TaskExecution { .. }))
+                .rposition(|step| step.role == Some(StepRole::TofuProviderUse))
                 .ok_or("no task step")?;
             let (download_at, download) = one(job, "Download ledger CLI")?;
             let (verify_at, verify) = one(job, "Verify ledger CLI")?;
@@ -307,10 +305,9 @@ fn ledger_cli_restores_sources_read_only_before_an_offline_build() -> Result<(),
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn velnor_repository_without_root_cargo_lock_cannot_build_the_ledger_cli()
 -> Result<(), Box<dyn Error>> {
-    let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
+    let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
     fs::remove_file(repo.path().join("Cargo.lock"))?;
     let error = prepare(repo.path())
         .err()

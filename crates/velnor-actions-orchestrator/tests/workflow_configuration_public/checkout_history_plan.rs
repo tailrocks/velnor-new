@@ -55,35 +55,36 @@ fn commit_all(root: &Path, message: &str) -> Result<String, Box<dyn Error>> {
     git_output(root, &["rev-parse", "HEAD"])
 }
 
+fn scoped_check(id: &str, input: &str) -> String {
+    format!(
+        "\n[[checks]]\nid = \"{id}\"\ntask = \"fixture-check\"\nselection = \"declared_inputs\"\ninputs = [\"{input}\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"
+    )
+}
+
+fn write_input(root: &Path, relative: &str, body: &str) -> Result<(), Box<dyn Error>> {
+    let file = root.join(relative);
+    fs::create_dir_all(file.parent().ok_or("input has no parent")?)?;
+    fs::write(file, body)?;
+    Ok(())
+}
+
 fn origin() -> Result<Origin, Box<dyn Error>> {
-    let config = workflow_configuration_fixture::config_with_verification_branch(None);
+    let mut config = workflow_configuration_fixture::config_with_verification_branch(None);
+    config.push_str(&scoped_check("a-b", "crates/a-b/input.txt"));
+    config.push_str(&scoped_check("c", "crates/a/c/input.txt"));
     let dir = workflow_configuration_fixture::make_repo(&config)?;
     let root = dir.path();
     fs::write(
         root.join("mise.toml"),
-        format!(
-            "[tools]\nrust = \"{}\"\n",
-            velnor_actions_mise::RUST_VERSION
-        ),
+        "[tasks.fixture-check]\nrun = \"true\"\n",
     )?;
-    for (relative_root, package_name) in [("crates/a-b", "a-b"), ("crates/a/c", "c")] {
-        workflow_configuration_fixture::add_independent_mbx_package(
-            root,
-            relative_root,
-            package_name,
-        )?;
-    }
+    write_input(root, "crates/a-b/input.txt", "0\n")?;
+    write_input(root, "crates/a/c/input.txt", "0\n")?;
     let first = commit_all(root, "base")?;
-    fs::write(
-        root.join("crates/a-b/src/lib.rs"),
-        "pub fn f() -> u8 { 1 }\n",
-    )?;
+    write_input(root, "crates/a-b/input.txt", "1\n")?;
     let second = commit_all(root, "change a-b")?;
     workflow_configuration_fixture::git(&["checkout", "-q", "-b", "pr", &first], root)?;
-    fs::write(
-        root.join("crates/a/c/src/lib.rs"),
-        "pub fn f() -> u8 { 2 }\n",
-    )?;
+    write_input(root, "crates/a/c/input.txt", "2\n")?;
     let pr_head = commit_all(root, "change c")?;
     workflow_configuration_fixture::git(&["checkout", "-q", "testmain"], root)?;
     workflow_configuration_fixture::git(&["merge", "-q", "--no-ff", "pr", "-m", "merge"], root)?;
@@ -183,7 +184,6 @@ fn warnings(plan: &Value) -> Vec<String> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn push_plan_runs_every_job_identically_on_a_depth_one_checkout() -> Result<(), Box<dyn Error>> {
     let origin = origin()?;
     let scratch = tempfile::tempdir()?;
@@ -232,7 +232,6 @@ fn has_commit(root: &Path, sha: &str) -> bool {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn pull_request_plan_on_a_shallow_merge_checkout_fails_instead_of_narrowing()
 -> Result<(), Box<dyn Error>> {
     let origin = origin()?;
@@ -281,7 +280,6 @@ fn pull_request_plan_on_a_shallow_merge_checkout_fails_instead_of_narrowing()
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn pull_request_plan_without_the_base_commit_runs_every_job() -> Result<(), Box<dyn Error>> {
     let origin = origin()?;
     let full_scratch = tempfile::tempdir()?;

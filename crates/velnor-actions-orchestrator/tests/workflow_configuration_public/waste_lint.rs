@@ -217,7 +217,6 @@ fn w3_flags_a_rust_job_without_auto_install_off_and_any_step_override() -> Resul
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn a_step_level_auto_install_override_fails_generation_and_names_the_job()
 -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {

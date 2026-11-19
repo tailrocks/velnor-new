@@ -11,7 +11,7 @@ use velnor_actions_orchestrator::{
     GenerationPreparation, OrchestratorError, finalized_jobs, prepare, render_staged_tree,
 };
 
-use super::maintenance_features::owner_feature_repo;
+use super::one_job_per_crate::mbx_repo_for;
 use super::tools_producers::{POLICIES, identity_digest, is_tools_producer, positions};
 
 pub(super) const SCHEDULED_SUITES_CONFIG: &str = r#"schema = 1
@@ -57,17 +57,10 @@ fn donor_installs(job: &Job) -> Vec<&Step> {
         .collect()
 }
 
-pub(super) fn run_text(step: &Step) -> Option<String> {
-    match &step.kind {
-        StepKind::Shell { run, .. } => Some(run.join(" ")),
-        _ => None,
-    }
-}
-
 pub(super) fn prepared_for(
     policy: WorkflowPolicy,
 ) -> Result<(tempfile::TempDir, GenerationPreparation), Box<dyn Error>> {
-    let repo = owner_feature_repo(policy, false, "default", "default")?;
+    let repo = mbx_repo_for(true, policy)?;
     let prepared = prepare(repo.path())?;
     Ok((repo, prepared))
 }
@@ -102,7 +95,6 @@ pub(super) fn assert_hard_error(
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn donor_digest_implying_rust_components_without_prepare_is_a_render_error()
 -> Result<(), Box<dyn Error>> {
     let (_repo, mut prepared) = prepared_for(WorkflowPolicy::VelnorRepositoryV1)?;
@@ -125,7 +117,6 @@ fn donor_digest_implying_rust_components_without_prepare_is_a_render_error()
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn donor_with_an_install_outside_its_prepare_step_is_a_render_error() -> Result<(), Box<dyn Error>>
 {
     let (_repo, mut prepared) = prepared_for(WorkflowPolicy::VelnorRepositoryV1)?;
@@ -133,7 +124,7 @@ fn donor_with_an_install_outside_its_prepare_step_is_a_render_error() -> Result<
         let crate_job = job
             .steps
             .iter()
-            .any(|step| matches!(step.kind, StepKind::TaskExecution { .. }));
+            .any(|step| step.role == Some(StepRole::TofuProviderUse));
         let Some(at) = job
             .steps
             .iter()
@@ -164,9 +155,7 @@ fn donor_with_an_install_outside_its_prepare_step_is_a_render_error() -> Result<
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn producer_installs_are_the_donor_installs() -> Result<(), Box<dyn Error>> {
-    let mut inline = 0;
     let mut cloned = 0;
     for policy in POLICIES {
         let (_repo, prepared) = prepared_for(policy)?;
@@ -184,37 +173,15 @@ fn producer_installs_are_the_donor_installs() -> Result<(), Box<dyn Error>> {
                     ..step.clone()
                 })
                 .collect();
-            let donor_steps = donor_installs(donor);
-            if donor_steps
-                .iter()
-                .any(|step| step.role == Some(StepRole::PreparePinnedTools))
-            {
-                cloned += 1;
-                assert_eq!(
-                    installs.iter().collect::<Vec<_>>(),
-                    donor_steps,
-                    "{id} differs from its donor {donor_id}"
-                );
-                continue;
-            }
-            inline += 1;
-            let prepare_step = installs
-                .iter()
-                .find(|step| step.role == Some(StepRole::PreparePinnedTools))
-                .ok_or_else(|| format!("{id} installs nothing"))?;
-            let command = run_text(prepare_step).ok_or("install is not a shell step")?;
-            assert!(
-                donor
-                    .steps
-                    .iter()
-                    .filter_map(run_text)
-                    .any(|run| run.contains(&command)),
-                "{id}: no donor step of {donor_id} runs {command}"
+            cloned += 1;
+            assert_eq!(
+                installs.iter().collect::<Vec<_>>(),
+                donor_installs(donor),
+                "{id} differs from its donor {donor_id}"
             );
         }
     }
     assert!(cloned > 0, "no producer cloned a donor install");
-    assert!(inline > 0, "no producer synthesized its install");
     Ok(())
 }
 

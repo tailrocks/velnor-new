@@ -5,10 +5,8 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 
-use velnor_actions_contract::workflow::ProducerKind;
-use velnor_actions_contract::{
-    CRATE_JOB_ID_PREFIX, Job, PLAN_JOB_ID, StepKind, StepRole, WorkflowPolicy,
-};
+use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
+use velnor_actions_contract::{Job, StepKind, StepRole, WorkflowPolicy};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_orchestrator::{WasteRule, finalized_jobs, prepare};
 use velnor_actions_workflow_renderer::steps::check_mbx_gating;
@@ -41,22 +39,9 @@ fn lane_jobs_with_catalog() -> Result<(BTreeMap<String, Job>, ToolCatalog), Box<
     Ok((finalized_jobs(&prepared)?, prepared.emission_catalog()))
 }
 
-fn is_lane_job(id: &str, job: &Job) -> bool {
-    id != PLAN_JOB_ID
-        && matches!(
-            job.producer_kind(),
-            None | Some(ProducerKind::StateProducer)
-        )
-        && job
-            .steps
-            .iter()
-            .any(|step| step.role == Some(StepRole::PrepareRustComponents))
-}
-
 #[test]
-#[ignore = "608: triage"]
 fn a_prebuilt_image_job_shares_the_lane_identity() -> Result<(), Box<dyn Error>> {
-    let repo = mbx_repo_for(false, WorkflowPolicy::ConsumerV1)?;
+    let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
     let root = repo.path();
     fs::write(root.join("src/main.rs"), "fn main() {}\n")?;
     workflow_configuration_fixture::write_root_cargo_lock(root, &["demo"])?;
@@ -76,10 +61,8 @@ fn a_prebuilt_image_job_shares_the_lane_identity() -> Result<(), Box<dyn Error>>
     let image = jobs.get("image-app-amd64").ok_or("no image job")?;
     let image_digest = identity_digest(image).ok_or("image job has no tools identity")?;
     let lane = jobs
-        .iter()
-        .find(|(id, job)| id.starts_with(CRATE_JOB_ID_PREFIX) && is_lane_job(id, job))
-        .ok_or("no rust crate job")?
-        .1;
+        .get(LEDGER_CLI_JOB_ID)
+        .ok_or("no ledger-cli lane job")?;
     assert_eq!(Some(image_digest), identity_digest(lane));
     assert_eq!(image.runs_on, lane.runs_on);
     Ok(())

@@ -106,7 +106,7 @@ fn step_text(text: &str, name: &str) -> Result<StepText, Box<dyn Error>> {
 }
 
 fn render_tree_text(policy: WorkflowPolicy) -> Result<Vec<(String, String)>, Box<dyn Error>> {
-    let repo = mbx_repo_for(false, policy)?;
+    let repo = mbx_repo_for(true, policy)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     Ok(tree
         .files
@@ -129,7 +129,6 @@ fn env_values<'a>(env: &'a [(String, String)], key: &str) -> Vec<&'a str> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn ledger_cli_build_uses_the_lean_dev_profile() -> Result<(), Box<dyn Error>> {
     let tree = render_tree_text(WorkflowPolicy::VelnorRepositoryV1)?;
     let workflow = tree
@@ -156,7 +155,6 @@ fn ledger_cli_build_uses_the_lean_dev_profile() -> Result<(), Box<dyn Error>> {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn lean_dev_profile_stays_on_the_ledger_cli_build() -> Result<(), Box<dyn Error>> {
     let velnor = render_tree_text(WorkflowPolicy::VelnorRepositoryV1)?;
     let workflow = velnor

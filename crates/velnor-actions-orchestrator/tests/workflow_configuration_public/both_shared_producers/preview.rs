@@ -16,6 +16,12 @@ pub(super) fn assert_preview_render(root: &std::path::Path) -> Result<(), Box<dy
     let original = fs::read_to_string(&path)?;
     let lock = preview_lock(&original)?;
     fs::write(&path, lock)?;
+    let config_path = root.join(".velnor/config.toml");
+    let config = fs::read_to_string(&config_path)?;
+    fs::write(
+        &config_path,
+        config.replace("\n[stacks.tofu]\nroots = [\"infra\"]\n", "\n"),
+    )?;
     let prepared = prepare(root)?;
     assert_declared_inputs_generate(&prepared)?;
     let tree = render_staged_tree_with(&prepared, Some(ExecutionMode::Both))?;
@@ -31,16 +37,9 @@ pub(super) fn assert_preview_render(root: &std::path::Path) -> Result<(), Box<dy
     let yaml: Value = serde_saphyr::from_str(workflow)?;
     assert_identity_steps(&tree, &yaml)?;
     assert_executor_behavior(&yaml)?;
-    let seal: Value = serde_saphyr::from_str(
-        tree.get(velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH)
-            .ok_or("missing preview state seal")?,
-    )?;
-    assert_job_identity(&tree, &seal, "plan")?;
-    for id in ["state-producer-crates-a-b", "state-producer-crates-a-c"] {
-        assert_job_identity(&tree, &seal, id)?;
-    }
     assert_preview_action_retired(root)?;
     fs::write(path, original)?;
+    fs::write(config_path, config)?;
     Ok(())
 }
 

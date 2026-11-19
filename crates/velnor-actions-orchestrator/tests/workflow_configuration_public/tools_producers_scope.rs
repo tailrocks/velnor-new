@@ -4,74 +4,63 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 use velnor_actions_contract::workflow::{DEPENDENCY_SEED_JOB_CONDITION, validate_tools_producer};
 use velnor_actions_contract::{CacheWriter, Job, WorkflowPolicy};
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
+use super::one_job_per_crate::mbx_repo_for;
 use super::support::rendered_job_block;
-use super::tools_producers::{finalized, is_tools_producer};
+use super::tools_producers::{POLICIES, finalized, is_tools_producer};
 use super::tools_producers_donors::{SCHEDULED_SUITES_CONFIG, producer_ids_and_digests};
 use super::workflow_configuration_fixture;
 
 const SUITES_PATH: &str = ".github/workflows/suites.yml";
 
-fn rendered_pair() -> Result<(String, String, String), Box<dyn Error>> {
+fn rendered_pair() -> Result<(String, String), Box<dyn Error>> {
     let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
     let prepared = prepare(repo.path())?;
     let tree = render_staged_tree(&prepared)?;
     let ci = tree.get(WORKFLOW_PATH).ok_or("CI workflow is missing")?;
     let suites = tree.get(SUITES_PATH).ok_or("suites workflow is missing")?;
-    let sealed = tree
-        .get(STATE_SEAL_WORKFLOW_PATH)
-        .ok_or("state-seal workflow is missing")?;
-    Ok((ci.to_owned(), suites.to_owned(), sealed.to_owned()))
+    Ok((ci.to_owned(), suites.to_owned()))
 }
 
 #[test]
-#[ignore = "608: triage"]
-fn state_seal_workflow_holds_one_push_only_producer_per_identity_of_every_workflow()
--> Result<(), Box<dyn Error>> {
-    let (ci, suites, sealed) = rendered_pair()?;
-    let (ci_produced, ci_consumed) = producer_ids_and_digests(&ci);
-    assert_eq!(
-        ci_produced,
-        BTreeSet::new(),
-        "ci.yml holds a tools producer"
-    );
-    assert!(!ci.contains("tools-producer-"));
-    let (produced, _) = producer_ids_and_digests(&sealed);
-    let (_, suite_consumed) = producer_ids_and_digests(&suites);
-    let suite_only: BTreeSet<_> = suite_consumed.difference(&ci_consumed).cloned().collect();
-    assert_ne!(
-        suite_only.len(),
-        0,
-        "the suite shares every identity with CI"
-    );
-    let expected: BTreeSet<_> = ci_consumed.union(&suite_consumed).cloned().collect();
-    assert_eq!(produced, expected);
-    for short in &produced {
-        let id = format!("tools-producer-{short}");
-        let block = rendered_job_block(&sealed, &id)?;
-        let condition = block
-            .lines()
-            .find_map(|line| line.strip_prefix("    if: "))
-            .ok_or_else(|| format!("{id} has no condition"))?;
-        assert_eq!(
-            condition.trim_matches('"'),
-            CacheWriter::ToolsProducer.condition(),
-            "{id}"
-        );
-        assert_eq!(block.matches("name: Save Mise tools").count(), 1, "{id}");
+fn ci_workflow_holds_one_push_only_producer_per_identity() -> Result<(), Box<dyn Error>> {
+    for policy in POLICIES {
+        let repo = mbx_repo_for(true, policy)?;
+        let prepared = prepare(repo.path())?;
+        let tree = render_staged_tree(&prepared)?;
+        let ci = tree.get(WORKFLOW_PATH).ok_or("CI workflow is missing")?;
+        let (produced, consumed) = producer_ids_and_digests(ci);
+        assert_ne!(consumed.len(), 0, "{policy:?}: ci.yml consumes no identity");
+        assert_eq!(produced, consumed, "{policy:?}");
+        for short in &produced {
+            let id = format!("tools-producer-{short}");
+            let block = rendered_job_block(ci, &id)?;
+            let condition = block
+                .lines()
+                .find_map(|line| line.strip_prefix("    if: "))
+                .ok_or_else(|| format!("{id} has no condition"))?;
+            assert_eq!(
+                condition.trim_matches('"'),
+                CacheWriter::ToolsProducer.condition(),
+                "{policy:?} {id}"
+            );
+            assert_eq!(
+                block.matches("name: Save Mise tools").count(),
+                1,
+                "{policy:?} {id}"
+            );
+        }
     }
     Ok(())
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn suites_workflow_has_no_tools_producer_or_tools_save() -> Result<(), Box<dyn Error>> {
-    let (_, suites, _) = rendered_pair()?;
+    let (_, suites) = rendered_pair()?;
     let (produced, consumed) = producer_ids_and_digests(&suites);
     assert_eq!(produced, BTreeSet::new());
     assert_ne!(consumed.len(), 0);

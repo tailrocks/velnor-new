@@ -2,16 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::error::Error;
-use std::fs;
 
 use tempfile::TempDir;
+use velnor_actions_contract::Job;
 use velnor_actions_contract::workflow::ProducerKind;
-use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
-use velnor_actions_contract::{Job, WorkflowPolicy};
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::render::WORKFLOW_PATH;
 
-use super::maintenance_features::owner_feature_repo;
 use super::support::rendered_job_block;
 use super::tofu_providers_producers::{Jobs, tofu_crate_jobs, tofu_repo_with};
 use super::tools_producers::is_tools_producer;
@@ -87,34 +84,21 @@ fn assert_tofu_producer_budgets(
     Ok(())
 }
 
-fn rendered(repo: &TempDir) -> Result<([String; 2], Jobs), Box<dyn Error>> {
+fn rendered(repo: &TempDir) -> Result<(String, Jobs), Box<dyn Error>> {
     let prepared = prepare(repo.path())?;
     let tree = render_staged_tree(&prepared)?;
     let ci = tree.get(WORKFLOW_PATH).ok_or("CI workflow is missing")?;
-    let sealed = tree
-        .get(STATE_SEAL_WORKFLOW_PATH)
-        .ok_or("state-seal workflow is missing")?;
-    Ok((
-        [ci.to_owned(), sealed.to_owned()],
-        finalized_jobs(&prepared)?,
-    ))
+    Ok((ci.to_owned(), finalized_jobs(&prepared)?))
 }
 
 fn producer_blocks(
-    texts: &[String; 2],
+    ci: &str,
     jobs: &Jobs,
     is_producer: fn(&Job) -> bool,
 ) -> Result<Vec<(String, String)>, Box<dyn Error>> {
     jobs.iter()
         .filter(|(_, job)| is_producer(job))
-        .map(|(id, _)| {
-            let marker = format!("\n  {id}:\n");
-            let text = texts
-                .iter()
-                .find(|text| text.contains(&marker))
-                .ok_or_else(|| format!("rendered job {id} is missing"))?;
-            Ok((id.clone(), rendered_job_block(text, id)?.to_owned()))
-        })
+        .map(|(id, _)| Ok((id.clone(), rendered_job_block(ci, id)?.to_owned())))
         .collect()
 }
 
@@ -123,7 +107,6 @@ fn is_tofu_producer(job: &Job) -> bool {
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn tofu_producer_timeout_admits_its_save_and_never_shrinks_the_crate_timeout()
 -> Result<(), Box<dyn Error>> {
     for crate_timeout in [1_u16, 15] {
@@ -134,7 +117,7 @@ fn tofu_producer_timeout_admits_its_save_and_never_shrinks_the_crate_timeout()
         let crates = tofu_crate_jobs(&jobs);
         assert!(!crates.is_empty());
         for (id, _) in crates {
-            let block = rendered_job_block(&ci[0], id)?;
+            let block = rendered_job_block(&ci, id)?;
             assert!(
                 block.contains(&format!("{JOB_TIMEOUT_PREFIX}{crate_timeout}\n")),
                 "{id}: {block}"
@@ -145,24 +128,10 @@ fn tofu_producer_timeout_admits_its_save_and_never_shrinks_the_crate_timeout()
 }
 
 fn tools_repo(crate_timeout: u16) -> Result<TempDir, Box<dyn Error>> {
-    let repo = owner_feature_repo(WorkflowPolicy::ConsumerV1, false, "default", "default")?;
-    let path = repo.path().join(".velnor/config.toml");
-    let config = fs::read_to_string(&path)?;
-    let marker = "default_branch = \"testmain\"\n";
-    assert!(config.contains(marker));
-    fs::write(
-        &path,
-        config.replacen(
-            marker,
-            &format!("{marker}crate_timeout_minutes = {crate_timeout}\n"),
-            1,
-        ),
-    )?;
-    Ok(repo)
+    tofu_repo_with(&["infra"], Some(crate_timeout))
 }
 
 #[test]
-#[ignore = "608: triage"]
 fn tools_producer_donated_a_one_minute_crate_timeout_still_admits_its_save()
 -> Result<(), Box<dyn Error>> {
     let (ci, jobs) = rendered(&tools_repo(1)?)?;
