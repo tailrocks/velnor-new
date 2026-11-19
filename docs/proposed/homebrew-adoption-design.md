@@ -28,7 +28,7 @@ This page proposes a `velnor-gen` feature that renders the `homebrew-adoption.ym
 
 ## Suggested split
 
-1. `ci-helper`: the `stage-sdk` command, with tests against recorded release data, then a helper release.
+1. `velnor-ci`: the `stage-sdk` command, with tests against recorded release data, then a helper release.
 2. `velnor-model` and `velnor-render`: the `workflow_call` trigger, matrix-from-output and `cache-mode` support, behind the new config only.
 3. `homebrew-adoption.toml` config, a sample `homebrew-adoption`, a `generator/CONFIG.md` entry, and a golden test that fails before the renderer exists.
 4. Proof: generate the workflow and diff it against the tracked baseline `fixtures/opentofu-goldens/cases/dogfood/preview/.github/workflows/homebrew-adoption.yml`. No copy exists under `.github/workflows/`, so the proof must name this fixture or add one. The expected diff is the header, the bootstrap step and `cache-mode`, plus any permission change proposed explicitly.

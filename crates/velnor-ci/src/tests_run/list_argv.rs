@@ -117,3 +117,65 @@ fn cargo_message_format_before_the_filter_keeps_the_filter() {
         ]))
     );
 }
+
+fn listed_without_message_format(prefix: &[&str], program: &[&str]) -> Option<Vec<String>> {
+    let mut run = argv(prefix);
+    run.extend(argv(program));
+    run.extend(argv(&[
+        "--workspace",
+        "--locked",
+        "--cargo-message-format=json-render-diagnostics",
+        "--profile",
+        "ci",
+        "--no-fail-fast",
+        "-E",
+        "all()",
+        "--no-tests=pass",
+    ]));
+    list_argv(&run)
+}
+
+#[test]
+fn every_wrapped_spelling_of_the_generated_test_step_lists_without_the_cargo_message_format() {
+    for prefix in [
+        &[][..],
+        &["velnor-ci", "inputs", "build", "--"][..],
+        &["/tmp/trusted/velnor-ci", "inputs", "build", "--"][..],
+        &[
+            "velnor-ci",
+            "inputs",
+            "build",
+            "--directory",
+            "../shared",
+            "--",
+        ][..],
+        &[
+            "velnor-ci",
+            "inputs",
+            "build",
+            "--directory=../shared",
+            "--",
+        ][..],
+    ] {
+        for program in [
+            &["cargo", "nextest", "run"][..],
+            &["cargo-nextest", "nextest", "run"][..],
+            &["/home/runner/.cargo/bin/cargo-nextest", "nextest", "run"][..],
+        ] {
+            let listed = listed_without_message_format(prefix, program);
+            let mut expected = argv(&program[..2]);
+            expected.extend(argv(&[
+                "list",
+                "--workspace",
+                "--locked",
+                "--profile",
+                "ci",
+                "-E",
+                "all()",
+                "--message-format",
+                "json",
+            ]));
+            assert_eq!(listed, Some(expected), "{prefix:?} {program:?}");
+        }
+    }
+}

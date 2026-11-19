@@ -103,7 +103,7 @@ Rules (`RustReleaseConfig::validate`, then generation):
 - `publishable_workspace` is forbidden (`git_tag_requires_packages`); the
   allowlist is explicit and `publish = false` and registry restrictions do
   not apply, because nothing is uploaded.
-- Generation emits `publish.yml` and `.github/release-plz.toml` and no
+- Generation emits `publish.yml` and `release-plz.toml` and no
   `release.yml` or bootstrap config. The release job holds `contents: write`
   and `pull-requests: read` only, runs in the `release` environment and needs the default-branch
   authority job. See the
