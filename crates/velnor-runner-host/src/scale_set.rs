@@ -15,7 +15,7 @@ use crate::journal::{
     ScaleSetCreateState,
 };
 use crate::listen::{Link, link_from_admin};
-use delete::recover_intended_delete;
+use delete::{finish_recovered_delete, recover_intended_delete};
 
 pub(crate) mod delete;
 mod support;
@@ -120,7 +120,10 @@ pub(crate) async fn ensure_connection_scale_set(
     let groups = list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|error| map_session(error, &transport))?;
     let group_id = selected_group_id(binding, &groups)?;
-    recover_intended_delete(&mut transport, admin.expose_token(), &scoped)
+    let recovered = recover_intended_delete(&mut transport, admin.expose_token(), &scoped)
+        .await
+        .map_err(map_host)?;
+    finish_recovered_delete(journal, binding, recovered)
         .await
         .map_err(map_host)?;
     let request = ScaleSetCreateRequest::new(binding, group_id).map_err(map_host)?;

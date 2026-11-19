@@ -7,7 +7,9 @@ use velnor_runner_github::{
     observe_runner_scale_set_by_id,
 };
 
+use crate::config::RepositoryConnection;
 use crate::error::HostError;
+use crate::journal::Journal;
 use crate::journal::{
     ConnectionJournal, ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode,
     ScaleSetDeleteRecord, ScaleSetDeleteTarget, ScaleSetDeleted,
@@ -62,6 +64,15 @@ pub(crate) async fn run_created_delete<T: Transport + ?Sized>(
             send(transport, admin_token, scoped, &claim, &target).await
         }
     }
+}
+
+pub(crate) async fn finish_recovered_delete(
+    journal: &Journal,
+    binding: &RepositoryConnection,
+    recovered: Option<ScaleSetDeleteOutcome>,
+) -> Result<(), HostError> {
+    let _ = (journal, binding, recovered);
+    Ok(())
 }
 
 pub(crate) async fn recover_intended_delete<T: Transport + ?Sized>(
