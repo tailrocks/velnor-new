@@ -46,7 +46,10 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
         .into_iter()
         .filter(|path| {
             !symlink_locks.contains(path)
-                && !(symlinks.contains(path) && path.as_str().ends_with(".rs"))
+                && (!symlinks.contains(path)
+                    || !std::path::Path::new(path.as_str())
+                        .extension()
+                        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs")))
         })
         .collect();
     let mut view = RepoView {

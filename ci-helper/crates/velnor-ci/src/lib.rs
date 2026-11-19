@@ -6,6 +6,7 @@ pub mod cache;
 pub mod cargo_artifacts;
 pub mod cargo_package;
 pub mod cli;
+mod cli_args;
 mod cli_cache;
 mod cli_release;
 pub mod collect;

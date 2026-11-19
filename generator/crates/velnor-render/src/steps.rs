@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_OUTPUTS, BUDGET_STEP, CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease,
-    Job, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, RepoPath, RunnerLabel, Step, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
-    github_hosted, group_output_name,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
+    MERGE_GROUP_STEP, RepoPath, RunnerLabel, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -13,6 +12,7 @@ use crate::base_steps::{
     cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
     sources_locks, trimmed_lane,
 };
+use crate::budget_steps::{budget_outputs, budget_step};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
@@ -296,38 +296,6 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::Budget { last } => budget_step(*last),
-    }
-}
-
-fn budget_outputs(job: &Job) -> Vec<(String, String)> {
-    if !job
-        .steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::Budget { .. }))
-    {
-        return Vec::new();
-    }
-    BUDGET_OUTPUTS
-        .iter()
-        .map(|name| {
-            (
-                name.to_string(),
-                format!("${{{{ steps.{BUDGET_STEP}.outputs.{name} }}}}"),
-            )
-        })
-        .collect()
-}
-
-fn budget_step(last: usize) -> RenderedStep {
-    RenderedStep {
-        name: "Check the speed budget".to_owned(),
-        id: Some(BUDGET_STEP.to_owned()),
-        env: vec![(
-            "GITHUB_TOKEN".to_owned(),
-            Value::Expr("${{ github.token }}".to_owned()),
-        )],
-        run: Some(format!("velnor-ci bench budget --last {last}")),
-        ..RenderedStep::default()
     }
 }
 
