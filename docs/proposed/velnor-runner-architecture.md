@@ -169,7 +169,9 @@ to merged. Today's figures are measured; v3's are committed targets, with the es
 | **Verdict / push-to-merge** | **26.7 / 92.3 min; 85 / 457 min** | **≤ 90 s / ≤ 4 min; ≤ 3 / ≤ 8 min (≈ 35 s; ≈ 85 s)** | |
 
 The floor while GitHub owns the merge is about 50 s: delivery 1–2 s, the merge queue's 19 s and 26
-s, a few API round trips, plus the longest changed test and one compile of the change.
+s, a few API round trips, plus the longest changed test and one compile of the change. With an
+Actions job as the required check it is about 58 s, because GitHub takes about 8 s to offer a job
+[E; pending ruling Q14]; with the App check, about 47 s.
 
 ## 4. The duplicate-work audit
 
@@ -401,9 +403,10 @@ cases.
 `velnor-conformance` runs each corpus case through both executors, on each platform backend, and
 compares; velnor-new's `qualification.yml` is its seed.
 
-- **Corpus.** velnor-new's full job set under every triggering event, replayed at pinned commits
-  with recorded failures, cancellations and re-runs; a semantics corpus (every expression function
-  and coercion pair, every context including secrets masking, status functions × job states,
+- **Corpus.** At least 240 semantics cases, 65 fault cases and 30 refusal cases beside the replayed
+  jobs: velnor-new's full job set under every triggering event, replayed at pinned commits with
+  recorded failures, cancellations and re-runs; a semantics corpus (every expression function and
+  coercion pair, every context including secrets masking, status functions × job states,
   `continue-on-error`, outputs and `needs`, env files, workflow commands, post steps, background
   steps, cancellation at every step boundary, timeouts); each native action across its inputs,
   including a cache or artifact saved by one executor and restored by the other; refusal cases; and
@@ -789,7 +792,13 @@ under user-mode qemu.
 - **The floor behind the loops** [M, 28 job logs]: the longest test is still 132 s in actions-cli,
   125 s in runner-host and 138 s in local-mode; one receipt-integrity test took 924.8 s.
 - **The compile floor:** `velnor-runner-host` (156,822 lines) splits into five or six crates, with
-  `velnor-runner-local` extracted, so both configurations run without compiling it twice.
+  `velnor-runner-local` extracted, so both configurations run without compiling it twice. The 356
+  separate integration-test binaries (177 in the workflow renderer, 109 in the orchestrator, 44 in
+  actions-cli, 26 in runner-host) become one `tests/it` binary per package, saving about 340 link
+  passes per cold build.
+- **A test that spawns about 45,000 `git` processes** (`non_inputs_differential.rs:198-264`, 6,425
+  globs × 7 subprocesses, a 679 s suite) matches globs in process with `gix` against one prebuilt
+  fixture repository, keeping a 32-case differential against real `git` [E: about 135 s → 2 s].
 - **Dependency `opt-level`** cut the slowest test class's CPU by 66% with assertions off in
   dependencies; with them on it is unmeasured (pending ruling Q7), so assertions stay on until a
   four-way matrix decides.

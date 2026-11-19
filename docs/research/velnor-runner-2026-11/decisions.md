@@ -310,6 +310,9 @@ in the design review. "Same as" marks a merged duplicate.
 | N89 | An Ed25519 signer daemon outside every sandbox and outside the agent's general process holds each node's receipt-signing keys. | Gemini 4 Argon (Rust-only round) | — | Adopted (v3) | A sandbox or a compromised agent path cannot mint receipts. |
 | N90 | Read the broker's `registration_deprecates_at` and `runtime_deprecates_at` fields and alert on them. | Gemini 4 Argon | — | Adopted (v3) | GitHub announces drift in the protocol itself; reading it costs nothing. |
 | N91 | Site-wide longest-first fan-out of a suite's test cases when summed time over one sandbox's threads exceeds the longest test plus the transfer cost. | Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Neon; earlier I067 and N04 | — | Adopted (v3) | Uses the cluster's idle threads only where the arithmetic pays. |
+| N92 | One `tests/it` integration binary per package instead of 356 separate test binaries. | Gemini 4 Carbon (Rust-only round) | — | Adopted (v3) | 177 in the workflow renderer, 109 in the orchestrator, 44 in actions-cli and 26 in runner-host today; about 340 link passes saved per cold build. |
+| N93 | Replace the subprocess loop of `non_inputs_differential.rs` (about 45,000 `git` processes) with in-process `gix` matching, keeping a 32-case differential against real `git`. | Gemini 4 Carbon | — | Adopted (v3) | A 679 s suite; estimated about 135 s → 2 s for the test, with the differential keeping its meaning. |
+| N94 | Corpus floor: at least 240 semantics, 65 fault and 30 refusal cases beside the replayed real jobs. | Gemini 4 Carbon | — | Adopted (v3) | Sizes the harness so a green means coverage, not only the jobs that happened to run. |
 
 
 ## Load-bearing decisions
@@ -686,6 +689,19 @@ default, marked "pending ruling" in the design.
 | Hard-linked immutable `deps/` base to share page cache | Recorded under pending ruling Q16 | Reflink with a page-cache budget is the safe default |
 | An always-run Actions `Required` job that fails closed | Recorded under pending ruling Q2 | The App check is the safe default |
 | Pre-registered JIT identities; placement before acquisition | Already in v3 (design §5.5) | — |
+
+### Group 17: what v3 takes from Gemini 4 Carbon
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| 356 integration-test binaries into one per package | Adopted (N92) | About 340 link passes per cold build |
+| `gix` in place of about 45,000 `git` subprocesses in one test | Adopted (N93) | A 679 s suite, with a differential kept |
+| Corpus of 420 cases: 85 replayed, 240 semantics, 65 fault, 30 refusal | Adopted as the corpus floor (N94) | — |
+| Latency floors: about 58 s with an Actions `Required` job (GitHub's job offer about 8 s), about 47 s with an App check | Adopted in the latency budget (design §3), pending ruling Q14 | The App check removes the offer from the verdict path |
+| Multi-lower overlayfs with zstd layer streaming | Recorded under pending ruling Q16 | Reflink is the measured safe default |
+| Firecracker microVMs for the Docker suites | Recorded under pending ruling Q19; the platform trait admits a microVM backend later | Privileged dind on tainted nodes is today's behaviour |
+| A pre-push git hook streaming a thin pack before `git push` ends | Not adopted | It saves under half a second against a 1–2 s delivery |
+| Every landed commit within 6 h; 5% re-execution | Superseded: A1 within 2 h at P90; 2% after about 3,000 clean | — |
 
 ## Design review
 
