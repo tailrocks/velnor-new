@@ -95,19 +95,22 @@ pub(super) fn root_workspace(
     Ok(found)
 }
 
-pub(super) fn workspaces(facts: &RepoFacts, repository: &Path) -> Result<Vec<Workspace>, CiError> {
+pub(super) fn workspaces(
+    facts: &RepoFacts,
+    repository: &Path,
+    inherit_target_dir: bool,
+) -> Result<Vec<Workspace>, CiError> {
     let groups = group_dirs(facts, repository);
     facts
         .rust_roots
         .iter()
         .zip(standalone(facts))
         .map(|(root, alone)| {
-            root_workspace(
-                &repository.join(root.manifest.as_str()),
-                None,
-                alone,
-                &groups,
-            )
+            let manifest = repository.join(root.manifest.as_str());
+            if !inherit_target_dir {
+                return own_workspace(&manifest, None);
+            }
+            root_workspace(&manifest, None, alone, &groups)
         })
         .collect()
 }

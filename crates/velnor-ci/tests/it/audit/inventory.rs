@@ -185,6 +185,7 @@ fn directly_named_files_do_not_consume_the_directory_walk_budget() {
             write: true,
             root: None,
             max_directory_entries: 8,
+            inherit_target_dir: false,
         },
     );
     assert!(written.is_ok(), "{written:?}");
