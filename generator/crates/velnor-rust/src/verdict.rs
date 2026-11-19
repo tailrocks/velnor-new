@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec, group_output_name,
 };
 
 #[path = "verdict_counts.rs"]
@@ -169,6 +169,9 @@ impl PlanOutput {
                                 ));
                             }
                         }
+                    }
+                    JobCondition::Group(slug, name) => {
+                        flag(group_output_name(slug, name), "run", "skip")?
                     }
                     JobCondition::Policy => {
                         let slug = RootSlug::from_static("policy");

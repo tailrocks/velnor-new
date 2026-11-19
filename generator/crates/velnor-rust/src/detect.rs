@@ -13,7 +13,7 @@ use crate::config::{CONFIG_PATH, excluded, parse};
 use crate::embedded::is_rust_source;
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
-use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
+use crate::mise::{MISE_CONFIGS, MISE_LOCK};
 use crate::policy::{deny_configs, policy_tools};
 use crate::private_sources::{private_suggestion, refuse_locked_credentials};
 use crate::reads::INPUTS_LOCK;
@@ -136,7 +136,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     check_helper_box(&config, &rust_roots)?;
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
-    let tools = tool_pins(&view.files)?;
+    let tools = crate::config_lint::pinned_tools(view, &config)?;
     check_setup_files(view, &rust_roots)?;
     check_build_targets(view, &rust_roots, toolchain.as_ref(), &tools)?;
     let helper = view

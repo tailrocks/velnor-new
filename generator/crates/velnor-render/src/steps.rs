@@ -4,7 +4,7 @@
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
     MERGE_GROUP_STEP, RepoPath, RunnerLabel, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -28,7 +28,7 @@ pub(crate) const RUN: &str = "velnor-ci run --";
 pub(crate) const RUN_DOCTESTS: &str = "velnor-ci run --require-doctests=$DOCTESTS_KNOWN --";
 
 pub(crate) const CHECKOUT: &str = "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1";
-pub(crate) const MISE: &str = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
+pub(crate) const MISE: &str = "jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d";
 pub(crate) const UPLOAD_ARTIFACT: &str =
     "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9";
 pub(crate) const DOWNLOAD_ARTIFACT: &str =
@@ -81,36 +81,41 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             })
-            .chain(
-                job.steps
-                    .iter()
-                    .any(|step| {
-                        matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
-                    })
-                    .then(|| {
-                        [
-                            Some(TESTS_RUN_OUTPUT),
-                            Some(TESTS_LISTED_OUTPUT),
-                            job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
-                            Some(TESTS_BY_PACKAGE_OUTPUT),
-                        ]
-                    })
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .map(|name| {
-                        (
-                            name.to_owned(),
-                            format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
-                        )
-                    }),
-            )
+            .chain(job.group_outputs.iter().map(|(slug, name)| {
+                let key = group_output_name(slug, name);
+                let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
+                (key, value)
+            }))
+            .chain(test_outputs(job))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
             .collect(),
         steps,
         ..RenderedJob::default()
     }
+}
+
+fn test_outputs(job: &Job) -> impl Iterator<Item = (String, String)> + '_ {
+    job.steps
+        .iter()
+        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)))
+        .then(|| {
+            [
+                Some(TESTS_RUN_OUTPUT),
+                Some(TESTS_LISTED_OUTPUT),
+                job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
+                Some(TESTS_BY_PACKAGE_OUTPUT),
+            ]
+        })
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|name| {
+            (
+                name.to_owned(),
+                format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
+            )
+        })
 }
 
 fn merge_group_output(job: &Job) -> Option<(String, String)> {
@@ -237,6 +242,8 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::InstallTools { only } => install_tools(only.as_deref()),
+        StepKind::InstallMise => install_mise(),
+        StepKind::Lint(command) => crate::lint_steps::lint_step(command),
         StepKind::UploadArchive { name, file } => upload_step(name, file),
         StepKind::DownloadArchive { name, into } => download_step(name, into.as_ref()),
         StepKind::CacheRestore(key) => cache_step(CACHE_RESTORE, "Restore", key, true),
@@ -311,6 +318,19 @@ fn install_tools(only: Option<&str>) -> RenderedStep {
         name: "Install tools".to_owned(),
         uses: Some(MISE.to_owned()),
         with,
+        ..RenderedStep::default()
+    }
+}
+
+fn install_mise() -> RenderedStep {
+    RenderedStep {
+        name: "Install mise".to_owned(),
+        uses: Some(MISE.to_owned()),
+        with: vec![
+            ("version".to_owned(), Value::Text(MISE_VERSION.to_owned())),
+            ("install".to_owned(), Value::Bool(false)),
+            ("cache".to_owned(), Value::Bool(false)),
+        ],
         ..RenderedStep::default()
     }
 }

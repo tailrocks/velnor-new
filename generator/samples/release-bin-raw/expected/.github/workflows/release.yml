@@ -247,7 +247,7 @@ jobs:
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
         run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
@@ -301,7 +301,7 @@ jobs:
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
         run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
@@ -355,7 +355,7 @@ jobs:
           CHECKED_OUT: '${{ steps.source.outputs.commit }}'
         run: 'test -n "$COMMIT" -a "$CHECKED_OUT" = "$COMMIT"'
       - name: Install rust
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           install_args: rust
