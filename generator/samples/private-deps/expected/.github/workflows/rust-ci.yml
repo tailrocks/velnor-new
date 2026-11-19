@@ -88,7 +88,7 @@ jobs:
   rust-helper:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -213,7 +213,7 @@ jobs:
   rust-root:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -396,7 +396,7 @@ jobs:
   rust-ci_helper:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -549,7 +549,7 @@ jobs:
   rust-crates_velnor_runner:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -730,7 +730,7 @@ jobs:
   rust-generator:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_generator_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_generator_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:
@@ -895,7 +895,7 @@ jobs:
   rust-local:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_local_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_local_mode != ''none'') }}'
     permissions:
       contents: read
     outputs:

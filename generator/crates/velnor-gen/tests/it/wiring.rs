@@ -171,7 +171,7 @@ fn the_policy_lane_runs_each_tool_only_when_its_output_says_run() -> TestResult 
     assert!(job.contains("needs:\n      - rust-plan"), "{job}");
     assert!(
         job.contains(
-            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run')) }}'"
+            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && (needs.rust-plan.result == 'success' && (needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run')) }}'"
         ),
         "{job}"
     );

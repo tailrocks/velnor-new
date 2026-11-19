@@ -15,7 +15,9 @@ pub use error::GenerateError;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts, RepoPath, RepoView};
+use velnor_model::{
+    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, RepoFacts, RepoPath, RepoView,
+};
 use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
@@ -108,6 +110,11 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
+    }
+    if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 84)) {
+        return Err(GenerateError::MbxStoreHelperTooOld(
+            release.version().clone(),
+        ));
     }
     Ok(release)
 }
