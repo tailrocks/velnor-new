@@ -7,10 +7,9 @@ use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::steps::install_helper;
 use crate::workflow::{ShellcheckMarks, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
-use velnor_model::{HelperRelease, RepoPath};
+use velnor_model::{CACHE_TRIM_WORKFLOW_PATH, HelperRelease, RepoPath};
 
-pub const DELTA_CLEANUP_PATH: RepoPath =
-    RepoPath::from_static(".github/workflows/rust-cache-trim.yml");
+pub const DELTA_CLEANUP_PATH: RepoPath = CACHE_TRIM_WORKFLOW_PATH;
 
 #[must_use]
 pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {

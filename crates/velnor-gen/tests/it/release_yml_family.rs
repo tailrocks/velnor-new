@@ -135,6 +135,30 @@ fn family_builds_check_out_the_family_tag_and_refuse_another_commit() -> TestRes
 }
 
 #[test]
+fn family_builds_stamp_the_verified_commit_into_the_binaries() -> TestResult {
+    let tree = family()?;
+    for (id, build) in jobs(&tree)?
+        .into_iter()
+        .filter(|(id, _)| id.starts_with("build-"))
+    {
+        let cargo = steps(build)
+            .iter()
+            .find(|step| {
+                step.get("run")
+                    .and_then(Node::text)
+                    .is_some_and(|run| run.starts_with("cargo build"))
+            })
+            .ok_or("no cargo build step")?;
+        assert_eq!(
+            cargo.at(&["env", "VELNOR_COMMIT"]).and_then(Node::text),
+            Some("${{ github.sha }}"),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn family_job_binds_the_tag_to_the_verified_commit_with_the_helper() -> TestResult {
     let tree = family()?;
     let family = job(&tree, "family")?;
@@ -278,7 +302,7 @@ fn a_family_binary_may_bundle_bins_files_and_name_its_assets() -> TestResult {
         run.starts_with("cargo build") && run.contains("--package app --bin app --bin rg --target")
     }));
     assert!(commands.iter().any(|run| run.starts_with(
-        "tar -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
+        "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
     )), "{commands:?}");
     let publish = runs(job(&tree, "publish-family")?)
         .last()

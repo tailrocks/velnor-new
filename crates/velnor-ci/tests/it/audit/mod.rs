@@ -14,6 +14,7 @@ mod links;
 mod lock_identity;
 mod managed_target;
 mod migration;
+mod nested_roots;
 mod optional;
 mod partial;
 mod per_root;
