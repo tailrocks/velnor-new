@@ -421,13 +421,14 @@ compares; velnor-new's `qualification.yml` is its seed.
 - **When.** On every change to an executor, a native action or the protocol code, as a blocking
   check; nightly; within hours of each official release (Velnor reports as its runner version the
   newest official release it has passed, so GitHub's 63-day version window becomes a conformance
-  deadline); and as sampled shadow runs of real velnor-new jobs. Each new official release also gets
-  a protocol surface diff, the source diff between two tags restricted to about 40 files (the
-  broker, run-service and Results clients, the job dispatcher, the step runner, the execution
-  context, command handling), and a canary runs every 10 min in each site through the production
-  path: checkout, a cache and an artifact round trip, an OIDC token, an attestation of a scratch
-  subject, a step summary, a background step and a cancel, each read back through the API; three
-  failures in a row page the owner. Every release binary is also scanned for the banned legacy
+  deadline); and as sampled shadow runs of real velnor-new jobs. The broker's own
+  `registration_deprecates_at` and `runtime_deprecates_at` fields are read and alerted on. Each new
+  official release also gets a protocol surface diff, the source diff between two tags restricted to
+  about 40 files (the broker, run-service and Results clients, the job dispatcher, the step runner,
+  the execution context, command handling), and a canary runs every 10 min in each site through the
+  production path: checkout, a cache and an artifact round trip, an OIDC token, an attestation of a
+  scratch subject, a step summary, a background step and a cancel, each read back through the API;
+  three failures in a row page the owner. Every release binary is also scanned for the banned legacy
   endpoint paths, so a legacy API cannot ship by accident.
 - **Per-job-type gate** (decision 16): a job type moves only after its cases pass at 100% on the
   Kubernetes backend, its replayed real-commit pairs show no unexplained difference, and every step
@@ -557,9 +558,9 @@ not, how that is detected, and the automatic fallback.
 
 ### 6.5 Trust root and audit
 
-- **Keys.** One signing key per node and sandbox class, held by a signer outside every sandbox;
-  receipts go to an append-only log per site; the ledger verifies signature, class and log entry
-  before it counts a receipt.
+- **Keys.** One Ed25519 signing key per node and sandbox class, held by a signer daemon outside
+  every sandbox and outside the agent's general process; receipts go to an append-only log per site;
+  the ledger verifies signature, class and log entry before it counts a receipt.
 - **Revocation.** Every verdict carries its policy epoch. Revoking a signer or a reuse class raises
   the epoch: older verdicts are re-checked, queue entries pause, and landed commits that relied on
   them are listed. The first reused pass whose cold run fails revokes its class at once and blocks
@@ -644,8 +645,9 @@ rebuilt the same 6 workspace crates at every new path, and without clones mbx us
   served from it, or while it saves at least 20 runner-minutes a day; otherwise it is retired
   (owner-approved, N54). The honest alternative: incremental warmers make nodes rarely cold, and
   copying a snapshot moves about the same 8.7 GiB.
-- **Reflink against overlayfs or shared inodes** is pending ruling Q16: clones do not share page
-  cache, so each build sandbox's cache counts inside its own memory limit; the head-to-head decides.
+- **Reflink against overlayfs, a hard-linked immutable `deps/` base, or other shared inodes** is
+  pending ruling Q16: clones do not share page cache, so each build sandbox's cache counts inside
+  its own memory limit; the head-to-head decides.
 - **Incremental compilation** is off in required builds until a worker measurement and a
   non-incremental audit show equal results (pending ruling Q17; cargo incremental edits took 1.5–2.8
   s against 9.2–12.2 s non-incremental [M, `experiments/blaze.md`]).
@@ -791,8 +793,10 @@ under user-mode qemu.
 - **Dependency `opt-level`** cut the slowest test class's CPU by 66% with assertions off in
   dependencies; with them on it is unmeasured (pending ruling Q7), so assertions stay on until a
   four-way matrix decides.
-- **Hedged shards.** A test shard still running past its P95 is raced by a restart on another node,
-  and the first result wins; a duplicate kept because it is faster, at batch cost.
+- **Fan-out and hedging.** A suite's cases spread longest-first across the site's free threads when
+  its summed time over one sandbox's threads exceeds its longest test plus the cost of moving
+  binaries by digest. A shard still running past its P95 is raced by a restart on another node, and
+  the first result wins: a duplicate kept because it is faster, at batch cost.
 
 ## 9. The cluster
 

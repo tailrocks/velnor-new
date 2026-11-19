@@ -307,6 +307,9 @@ in the design review. "Same as" marks a merged duplicate.
 | N86 | Idempotent publication with read-back; crates.io receives the exact packaged `.crate` bytes. | GPT-6.2-Astra, GPT-6.2-Sol | — | Adopted (v3) | A retried release cannot publish twice or publish bytes other than the verified ones. |
 | N87 | The candidate cannot weaken its own tests: the expected inventory, planned arguments and feature policy come from the trusted planner, and a plan that drops obligations or tests `main`'s plan has lists them as a reduction in the `Required` summary. | GPT-6.2-Sol (Rust-only round) | — | Adopted (v3) | Differential cases forge passing output and empty discovery; the controller rejects authority the candidate provides. Listing reductions makes a quietly deleted test visible to review. |
 | N88 | A third-site witness for any leader the two sites share (the ledger's), beside three k3s servers across failure domains. | GPT-6.2-Sol, GPT-6.2-Astra | — | Adopted (v3) | One k3s server cannot survive the loss of a node or site; two sites cannot elect a leader alone. |
+| N89 | An Ed25519 signer daemon outside every sandbox and outside the agent's general process holds each node's receipt-signing keys. | Gemini 4 Argon (Rust-only round) | — | Adopted (v3) | A sandbox or a compromised agent path cannot mint receipts. |
+| N90 | Read the broker's `registration_deprecates_at` and `runtime_deprecates_at` fields and alert on them. | Gemini 4 Argon | — | Adopted (v3) | GitHub announces drift in the protocol itself; reading it costs nothing. |
+| N91 | Site-wide longest-first fan-out of a suite's test cases when summed time over one sandbox's threads exceeds the longest test plus the transfer cost. | Gemini 4 Argon, Gemini 4 Carbon, Gemini 4 Neon; earlier I067 and N04 | — | Adopted (v3) | Uses the cluster's idle threads only where the arithmetic pays. |
 
 
 ## Load-bearing decisions
@@ -671,6 +674,18 @@ default, marked "pending ruling" in the design.
 | App-owned commit status instead of a check run; managed topic refs and a ref-writer gateway for same-SHA aliasing | Recorded under pending rulings Q2 and Q9 | The safe defaults (App check; pending while a peer lacks the label) hold until the ruling |
 | Optimised Linux bytes built once on landed `main` | Recorded under pending ruling Q6 | The merge group is the safe default |
 | Pure sealed work starts on admission, before the job offer | Already in v3: work starts on the label or labelled push | — |
+
+### Group 16: what v3 takes from Gemini 4 Argon
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| Found: `velnor-gen` hard-codes hosted runners for release jobs | Adopted: velnor-gen's review verdict (design §5.10) and the release types' migration | Decision 9 puts every job on Velnor |
+| Out-of-pod Ed25519 signer daemon | Adopted (N89) | Receipt keys out of every sandbox |
+| Read `registration_deprecates_at` and `runtime_deprecates_at` | Adopted (N90) | Drift announced by GitHub itself |
+| Site-wide longest-first fan-out | Adopted (N91) | Where the arithmetic pays |
+| Hard-linked immutable `deps/` base to share page cache | Recorded under pending ruling Q16 | Reflink with a page-cache budget is the safe default |
+| An always-run Actions `Required` job that fails closed | Recorded under pending ruling Q2 | The App check is the safe default |
+| Pre-registered JIT identities; placement before acquisition | Already in v3 (design §5.5) | — |
 
 ## Design review
 
