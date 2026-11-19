@@ -1,9 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeMap;
+
 use crate::plan::{job, step};
 use velnor_model::{
-    Access, HelperVersion, Job, JobId, PermissionScope, RepoFacts, Step, StepKind, When,
+    Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
+    RepoFacts, Step, StepKind, When,
 };
 
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Option<Job> {
@@ -59,7 +62,7 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Opt
         name: Some("Cache".to_owned()),
         needs,
         when: When::Finalizer,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         steps,
         ..job(facts, JobId::from_static("cache"))
     };
@@ -95,6 +98,20 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
     );
 }
 
+fn label_reset(facts: &RepoFacts) -> Option<Job> {
+    (facts.config.pr_ci == PrCi::Label).then(|| Job {
+        name: Some(format!("Remove the {CI_RUN_LABEL} label")),
+        when: When::ClearRunLabel,
+        pr: PrRun::Quick,
+        permissions: Permissions(BTreeMap::from([(
+            PermissionScope::PullRequests,
+            Access::Write,
+        )])),
+        steps: vec![step(StepKind::ClearRunLabel)],
+        ..job(facts, JobId::from_static("ci-run-label"))
+    })
+}
+
 pub(crate) fn finish(
     facts: &RepoFacts,
     jobs: &mut Vec<Job>,
@@ -109,6 +126,7 @@ pub(crate) fn finish(
     let required = crate::required_job::verdict_job(facts, jobs, single, draft_guard);
     jobs.extend(trim);
     jobs.push(required);
+    jobs.extend(label_reset(facts));
     if !facts.config.cache_check_blocks {
         jobs.extend(cache);
     }

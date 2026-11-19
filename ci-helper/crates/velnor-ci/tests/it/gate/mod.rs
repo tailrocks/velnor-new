@@ -14,6 +14,7 @@ mod external_checks;
 mod inputs;
 mod pr_only;
 mod pr_rules;
+mod skipped;
 mod status;
 
 pub(crate) const GATE: &str = include_str!("../data/gate.json");

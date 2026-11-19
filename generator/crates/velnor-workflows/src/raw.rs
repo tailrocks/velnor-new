@@ -19,6 +19,8 @@ pub(crate) struct RawWorkflow {
     pub(crate) name: String,
     pub(crate) runner: Option<String>,
     pub(crate) fork_runner: Option<String>,
+    pub(crate) hosted_runner: Option<String>,
+    pub(crate) scale_set_runner: Option<String>,
     #[serde(rename = "if")]
     pub(crate) condition: Option<String>,
     pub(crate) concurrency: Option<RawConcurrency>,
@@ -29,6 +31,24 @@ pub(crate) struct RawWorkflow {
     pub(crate) output: Vec<RawOutput>,
     #[serde(default)]
     pub(crate) job: Vec<RawJob>,
+    #[serde(default)]
+    pub(crate) case: Vec<RawCase>,
+}
+
+/// One qualification case: its steps run once on the hosted runner and once on
+/// the scale-set runner, in the modes it lists.
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawCase {
+    pub(crate) id: String,
+    pub(crate) title: Option<String>,
+    #[serde(default)]
+    pub(crate) modes: Vec<String>,
+    #[serde(rename = "if")]
+    pub(crate) condition: Option<String>,
+    pub(crate) timeout_minutes: Option<u16>,
+    #[serde(default)]
+    pub(crate) step: Vec<RawStep>,
 }
 
 /// The `[workflow.on]` table. An absent table means `workflow_call` alone.
@@ -122,6 +142,7 @@ pub(crate) struct RawOutput {
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawJob {
     pub(crate) id: String,
+    pub(crate) name: Option<String>,
     #[serde(default)]
     pub(crate) needs: Vec<String>,
     #[serde(rename = "if")]
@@ -137,6 +158,9 @@ pub(crate) struct RawJob {
     #[serde(default)]
     pub(crate) outputs: BTreeMap<String, String>,
     pub(crate) matrix: Option<RawMatrix>,
+    pub(crate) container: Option<RawContainer>,
+    #[serde(default)]
+    pub(crate) service: Vec<RawService>,
     pub(crate) uses: Option<String>,
     #[serde(default)]
     pub(crate) with: BTreeMap<String, toml::Value>,
@@ -153,7 +177,7 @@ pub(crate) struct RawMatrix {
     pub(crate) max_parallel: Option<u16>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawStep {
     pub(crate) id: Option<String>,
@@ -167,6 +191,27 @@ pub(crate) struct RawStep {
     pub(crate) with: BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) continue_on_error: bool,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawContainer {
+    pub(crate) image: String,
+    pub(crate) options: Option<String>,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawService {
+    pub(crate) name: String,
+    pub(crate) image: String,
+    #[serde(default)]
+    pub(crate) ports: Vec<String>,
+    pub(crate) options: Option<String>,
     #[serde(default)]
     pub(crate) env: BTreeMap<String, String>,
 }

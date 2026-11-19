@@ -51,6 +51,10 @@ fn rejects_zero_and_over_limit_execution_controls() -> Result<(), Box<dyn Error>
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "the old engine's OpenTofu-golden collector accepts x86-64 ELF candidates by design (binary_format.rs:55); P4 runs velnor-gen workflows"
+)]
 #[test]
 fn rejects_incomplete_or_changed_case_inventory_without_touching_the_oracle()
 -> Result<(), Box<dyn Error>> {
@@ -97,6 +101,10 @@ fn rejects_incomplete_or_changed_case_inventory_without_touching_the_oracle()
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "the old engine's OpenTofu-golden collector accepts x86-64 ELF candidates by design (binary_format.rs:55); P4 runs velnor-gen workflows"
+)]
 #[test]
 fn caps_stdout_after_successful_entry_and_retains_the_prefix() -> Result<(), Box<dyn Error>> {
     let harness = Harness::new()?;

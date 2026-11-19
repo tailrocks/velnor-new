@@ -16,10 +16,9 @@ fn plain(dir: &std::path::Path, runners: u16, fork_runners: u16) -> EnvironmentA
         dir: dir.to_path_buf(),
         runners,
         fork_runners,
-        default_branch: "main".to_owned(),
         runner: RunnerMode::Plain,
         velnor_host: Some("velnor-host".into()),
-        policy: None,
+        ..EnvironmentArgs::default()
     }
 }
 
@@ -282,6 +281,8 @@ fn a_control_token_without_a_control_listener_is_refused() {
     assert!(!parse(&["--control-token", "t"]));
     assert!(!parse(&["--control-listen", "127.0.0.1:81"]));
 }
+
+mod plain_ready;
 
 struct Published(String);
 

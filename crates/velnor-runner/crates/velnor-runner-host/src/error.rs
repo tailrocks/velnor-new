@@ -139,6 +139,9 @@ pub enum HostError {
     #[error("docker socket")]
     Docker,
 
+    #[error("runner container exited with a failure")]
+    RunnerExited,
+
     #[error("docker operation timed out")]
     DockerTimeout,
 
@@ -235,6 +238,7 @@ impl HostError {
             Self::Endpoint => "endpoint",
             Self::Keychain => "keychain",
             Self::EmptySecret => "empty_secret",
+            Self::RunnerExited => "runner_exited",
         }
     }
 }

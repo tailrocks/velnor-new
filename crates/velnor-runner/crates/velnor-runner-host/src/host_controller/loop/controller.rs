@@ -14,7 +14,7 @@ use crate::{
     docker_client::{connect_unix, docker_deadline},
     error::HostError,
     journal::{EngineContext, Journal},
-    launch::{ImageAuthority, SelectedEngineContext, startup_storage_profile},
+    launch::{ImageAuthority, SelectedEngineContext},
     launch_blocking::ListenFault,
 };
 
@@ -27,6 +27,8 @@ use super::{
 };
 #[path = "controller/doctor.rs"]
 mod doctor;
+#[path = "controller/profile.rs"]
+mod profile;
 #[path = "controller/readiness.rs"]
 mod readiness;
 #[path = "controller/startup.rs"]
@@ -110,6 +112,7 @@ struct ControllerLoop<'a> {
     admission_ready: bool,
     rotation_due: bool,
     next_profile_attempt: tokio::time::Instant,
+    hold_log: startup::HoldLog,
 }
 
 impl<'a> ControllerLoop<'a> {
@@ -203,6 +206,7 @@ impl<'a> ControllerLoop<'a> {
             admission_ready: startup.admission_ready,
             rotation_due: false,
             next_profile_attempt: tokio::time::Instant::now() + STORAGE_PROFILE_RETRY,
+            hold_log: startup.hold_log,
         })
     }
 
@@ -341,59 +345,6 @@ impl<'a> ControllerLoop<'a> {
                         "The host controller cannot assign capacity to the next connection: {error}"
                     );
                 }
-            }
-        }
-    }
-
-    async fn refresh_storage_profile(&mut self) {
-        if self.admission_ready || tokio::time::Instant::now() < self.next_profile_attempt {
-            return;
-        }
-        self.next_profile_attempt = tokio::time::Instant::now() + STORAGE_PROFILE_RETRY;
-        let profile = startup_storage_profile(
-            &self.docker,
-            &self.journal,
-            match self.current.resource_budget() {
-                Ok(budget) => budget,
-                Err(error) => {
-                    eprintln!("host controller storage profile refresh held: {error}");
-                    return;
-                }
-            },
-            self.current.max_jobs(),
-            &self.image_authority,
-            &self.worker_images,
-            &self.current.docker().endpoint,
-        )
-        .await;
-        let Some(profile) = profile else {
-            eprintln!("host controller storage profile remains unavailable");
-            return;
-        };
-        match self.journal.configure_storage_profile(profile).await {
-            Ok(()) => {
-                let receipts = match setup_receipt_inputs(
-                    &self.connection_sessions,
-                    &self.current,
-                    self.selected_engine.engine_id(),
-                    self.selected_engine.docker_root_digest(),
-                ) {
-                    Ok(receipts) => receipts,
-                    Err(error) => {
-                        eprintln!("host controller setup receipt refresh held: {error}");
-                        return;
-                    }
-                };
-                if let Err(error) = self.control_state.replace_setup_receipts(receipts) {
-                    eprintln!("host controller setup receipt refresh held: {error}");
-                    return;
-                }
-                self.admission_ready = true;
-                self.control_state.set_admission_ready(true);
-            }
-            Err(error) => {
-                self.control_state.set_admission_ready(false);
-                eprintln!("The controller could not store the storage profile. Error: {error}.");
             }
         }
     }

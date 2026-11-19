@@ -41,6 +41,19 @@ struct RequiredChecks {
     exempt_sources: Vec<ApiRequiredCheck>,
 }
 
+fn refuse_blank_pr_only(pr_only_checks: &[String]) -> Result<(), CiError> {
+    match pr_only_checks
+        .iter()
+        .position(|name| name.trim().is_empty())
+    {
+        Some(index) => Err(CiError::new(format!(
+            "--pr-only-check #{} is blank; fix pr_only_checks in .velnor/release.toml",
+            index + 1
+        ))),
+        None => Ok(()),
+    }
+}
+
 pub fn release_gate(
     github: &dyn GitHub,
     repo: &Repo,
@@ -48,6 +61,7 @@ pub fn release_gate(
     pr_only_checks: &[String],
     current_run_id: Option<u64>,
 ) -> Result<Verdict, CiError> {
+    refuse_blank_pr_only(pr_only_checks)?;
     if sha.len() != 40
         || !sha
             .bytes()
@@ -353,10 +367,15 @@ fn with_status(by_jobs: Check, states: &[&str]) -> Check {
 }
 
 fn judge(name: &str, jobs: &[ApiRunJob], running: bool, branch: &str) -> Check {
-    let ours: Vec<&ApiRunJob> = jobs.iter().filter(|job| job.name == name).collect();
+    let ours: Vec<&ApiRunJob> = jobs
+        .iter()
+        .filter(|job| job.name == name && job.conclusion.as_deref() != Some("skipped"))
+        .collect();
     if ours.is_empty() {
         return if running {
             Check::Waiting("has not started".to_owned())
+        } else if jobs.iter().any(|job| job.name == name) {
+            Check::Failed("it concluded skipped".to_owned())
         } else {
             Check::Failed(format!("no job of a push run on {branch} reports it"))
         };
