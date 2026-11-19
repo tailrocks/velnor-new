@@ -52,6 +52,7 @@ mod state_v4_packer;
 mod ubuntu_owned_publication;
 
 mod job_image_candidate_execution_public;
+mod job_image_rust_ci_gate_public;
 mod job_image_source_inputs_public;
 
 mod agents_md_public;
