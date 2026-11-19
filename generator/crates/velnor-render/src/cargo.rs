@@ -181,7 +181,7 @@ pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
     )
 }
 
-fn cache_debug_env() -> (String, Value) {
+pub(crate) fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
         Value::Expr(format!(

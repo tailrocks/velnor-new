@@ -185,9 +185,13 @@ fn lookup_action(
     organization: bool,
 ) -> ScaleSetLookupAction {
     match (state, found) {
-        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) if !organization => {
-            ScaleSetLookupAction::Adopt
-        }
+        (
+            ScaleSetCreateState::Prepared
+            | ScaleSetCreateState::Requested
+            | ScaleSetCreateState::Uncertain
+            | ScaleSetCreateState::NoEffect,
+            true,
+        ) if !organization => ScaleSetLookupAction::Adopt,
         (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
         (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
             ScaleSetLookupAction::Verify
@@ -261,7 +265,7 @@ pub(crate) fn observe_scale_set_runners(
         pat,
     )
     .map_err(map_repository)?;
-    let (mut transport, admin) = open_admin(pat, &scope)?;
+    let (mut transport, admin) = open_admin(pat, &scope, binding)?;
     let request = ScaleSetCreateRequest::new(binding, 1).map_err(map_host)?;
     let owned = get_runner_scale_set_by_id(
         &mut transport,
