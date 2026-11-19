@@ -185,16 +185,9 @@ pub(crate) fn condition(
             parts.push(SAME_REPOSITORY.to_owned());
             parts.push(has_label(CI_RUN_LABEL));
         }
-        When::SaveToolsOnDefaultBranch | When::SaveToolsUnlessLocal => {
-            parts.push(ON_DEFAULT_BRANCH.to_owned());
-            parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
-            if when == When::SaveToolsUnlessLocal {
-                parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
-            }
-        }
-        When::RestoreToolsUnlessLocal => {
-            parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
-        }
+        When::SaveToolsOnDefaultBranch
+        | When::SaveToolsUnlessLocal
+        | When::RestoreToolsUnlessLocal => tools_parts(when, &mut parts),
     }
     parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
@@ -205,6 +198,16 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
+    }
+}
+
+fn tools_parts(when: When, parts: &mut Vec<String>) {
+    if when != When::RestoreToolsUnlessLocal {
+        parts.push(ON_DEFAULT_BRANCH.to_owned());
+        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
+    }
+    if when != When::SaveToolsOnDefaultBranch {
+        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
     }
 }
 

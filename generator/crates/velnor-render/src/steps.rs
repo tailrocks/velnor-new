@@ -276,8 +276,7 @@ fn step_body(
         StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
         | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
-        StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
-        StepKind::ToolsLocal(verb) => crate::helper_steps::tools_local_step(*verb),
+        StepKind::MbxSeed | StepKind::ToolsLocal(_) => crate::helper_steps::node_step(kind),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
