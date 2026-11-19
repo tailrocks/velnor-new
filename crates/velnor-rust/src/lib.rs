@@ -105,6 +105,7 @@ pub use config_keys::KEYS;
 pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{member_sources, optional_steps, root_sources};
+pub use docs_post_merge::defer_post_merge_docs;
 pub use embedded::is_plain_source;
 pub use error::{DetectError, Reason};
 pub use external_config::external_config_profile;
