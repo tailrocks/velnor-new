@@ -24,11 +24,13 @@ use crate::shape::decide_shape;
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
+pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
 const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
+const IGNORED_COUNT_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
@@ -157,6 +159,13 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
     );
     if facts.config.mbx_store == MbxStore::Shared {
         steps.push(step(StepKind::MbxStore));
+        if facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
+        {
+            steps.push(step(StepKind::MbxSeed));
+        }
     }
     steps
 }
@@ -350,6 +359,10 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
         plan_outputs: Vec::new(),
+        reports_ignored: facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(IGNORED_COUNT_HELPER)),
         steps: Vec::new(),
     }
 }

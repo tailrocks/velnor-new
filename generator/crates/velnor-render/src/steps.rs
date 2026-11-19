@@ -3,7 +3,8 @@
 
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, RunnerLabel,
-    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted,
+    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, github_hosted,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -90,12 +91,16 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
                     .any(|step| {
                         matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
                     })
-                    .then_some([
-                        TESTS_RUN_OUTPUT,
-                        TESTS_LISTED_OUTPUT,
-                        TESTS_BY_PACKAGE_OUTPUT,
-                    ])
+                    .then(|| {
+                        [
+                            Some(TESTS_RUN_OUTPUT),
+                            Some(TESTS_LISTED_OUTPUT),
+                            job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
+                            Some(TESTS_BY_PACKAGE_OUTPUT),
+                        ]
+                    })
                     .into_iter()
+                    .flatten()
                     .flatten()
                     .map(|name| {
                         (
@@ -279,6 +284,7 @@ fn step_body(
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),

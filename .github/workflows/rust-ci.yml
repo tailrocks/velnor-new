@@ -74,19 +74,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: &velnor_1 'directory="$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB" && "$VELNOR_HELPER_MKDIR" -m 700 "$directory" && "$VELNOR_HELPER_CP" "$RUNNER_TEMP/velnor-ci-bin/velnor-ci" "$directory/velnor-ci" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci" && printf ''%s\n'' "$VELNOR_HELPER_LAUNCHER" > "$directory/velnor-ci-exec" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci-exec" && printf ''%s=%s\n'' VELNOR_HELPER "$directory/velnor-ci" VELNOR_EXEC "$directory/velnor-ci-exec" VELNOR_HELPER_SHA256 "$VELNOR_HELPER_SHA256" >> "$GITHUB_ENV"'
           VELNOR_HELPER_LAUNCHER: &velnor_2 'directory=$("$VELNOR_HELPER_MKTEMP" -d "$RUNNER_TEMP/velnor-helper.XXXXXXXXXX") && copy=$("$VELNOR_HELPER_MKTEMP" "$directory/velnor-ci.XXXXXXXXXX") && "$VELNOR_HELPER_CP" "$VELNOR_HELPER" "$copy" && "$VELNOR_HELPER_CHMOD" 500 "$copy" && { "$VELNOR_HELPER_ENV" -i PATH=/usr/bin:/bin "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $copy" || { printf ''%s\n'' ''velnor-ci integrity check failed'' >&2; exit 1; }; } && exec "$copy" "$@"'
-          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'' || '''' }}'
+          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a'' || runner.os == ''macOS'' && runner.arch == ''ARM64'' && ''3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'' || '''' }}'
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - id: plan
         name: velnor-ci plan
         run: '. "$VELNOR_EXEC" plan --explain'
@@ -109,19 +111,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -258,19 +262,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -554,19 +560,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -781,19 +789,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -1050,19 +1060,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -1301,19 +1313,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -1518,19 +1532,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -1773,19 +1789,21 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - name: velnor-ci mbx-store
+        run: '. "$VELNOR_EXEC" mbx-store'
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
         run: '. "$VELNOR_EXEC" crates-mirror --registry ''sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/'' --cainfo /opt/velnor/crates-mirror/ca-bundle.pem'
@@ -1874,13 +1892,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -2058,13 +2076,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -2100,13 +2118,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
+      - name: Install velnor-ci 0.1.85
+        uses: tailrocks/velnor-new/actions/setup-velnor@911bef6ec7c6d84f864369d6dad43b8ae1edf702  # tools-v0.1.85
         with:
-          version: '0.1.83'
-          sha256-linux-x64: '0babd3dd59bf63e36632b86cb58f6e4e71ca7b4e5c73a29402e9193ea7ae7a86'
-          sha256-linux-arm64: '51bbe5539dd95e112df22516b492008a9717294db9aa8e41942e99e681ade302'
-          sha256-macos-arm64: '7a28203218e3e3eb0629b2a9aee4119e9b4a6587bd6a26495a490a2971da1e0c'
+          version: '0.1.85'
+          sha256-linux-x64: '79357c15479702f6b9da8a7d5ec93076a8ca090c16f8e62ecdb616caf636d2a6'
+          sha256-linux-arm64: a5d66effbe6557b97541ca466c24abcde731043508d3db6e1336edf2d6d0117a
+          sha256-macos-arm64: '3ec8b464d1ffb7a479ec295ef7bcf978696b9fe9f5363177d665d0aa479ce6a4'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
