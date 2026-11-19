@@ -25,6 +25,7 @@ mod compile_inputs;
 mod concurrency;
 mod crates_mirror;
 mod credential_hooks;
+mod declared_cache_modes;
 mod declared_call_fence;
 mod declared_call_secrets;
 mod declared_calls;

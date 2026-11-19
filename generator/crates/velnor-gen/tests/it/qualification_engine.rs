@@ -11,6 +11,7 @@ use serde_json::Value;
 use crate::declared_fixture::{TestResult, rendered_text};
 use crate::yaml_tree::document;
 
+mod cache;
 mod lists;
 mod scripted;
 mod shapes;
@@ -200,13 +201,12 @@ fn compare(
             ));
         }
     }
-    if condition(engine) != condition(generated) {
-        unexpected.push(format!(
-            "{id}: if: engine {:?}, generated {:?}",
-            condition(engine),
-            condition(generated)
-        ));
-    }
+    cache::head(
+        id,
+        [engine, engine_workflow, generated],
+        &mut note,
+        unexpected,
+    );
     let engine_lane = lane(engine.get("runs-on"));
     if engine_lane.is_none() || engine_lane != lane(generated.get("runs-on")) {
         unexpected.push(format!(
@@ -242,6 +242,7 @@ fn compare(
     }
     let (chains, flat) = engine_steps(engine);
     let (flat, piped) = replace_pipes(flat);
+    let (flat, applied) = cache::apply(id, flat);
     if flat != gen_steps(generated) {
         unexpected.push(format!(
             "{id}: steps: engine {flat:#?}, generated {:#?}",
@@ -250,6 +251,9 @@ fn compare(
     }
     if piped {
         note("a pipe is written as two steps");
+    }
+    for kind in applied {
+        note(kind);
     }
     if chains.len()
         != engine
@@ -337,6 +341,7 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         set(&lists::CHAINS)
     );
     assert_eq!(listed("permissions are narrower"), set(&lists::NARROWER));
+    cache::assert_notes(&kinds);
     Ok(())
 }
 
