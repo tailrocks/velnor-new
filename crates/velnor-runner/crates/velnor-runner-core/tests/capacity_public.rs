@@ -9,11 +9,11 @@ use velnor_runner_core::{
 };
 
 fn worker(raw: u64) -> WorkerId {
-    WorkerId::new(raw).expect("nonzero worker")
+    WorkerId::new(raw).unwrap_or_else(|error| std::panic::panic_any(error))
 }
 
 fn intent(raw: u64) -> AcquireIntentId {
-    AcquireIntentId::new(raw).expect("nonzero intent")
+    AcquireIntentId::new(raw).unwrap_or_else(|error| std::panic::panic_any(error))
 }
 
 fn owned() -> OwnedIds {
@@ -121,13 +121,14 @@ fn concurrent_reserves_after_releases_only_refill_the_released_slots() {
             thread::spawn(move || {
                 for round in 0..50 {
                     let unique = 1000 * raw + round;
-                    let _ = capacity.lock().expect("lock").reserve(
+                    let reserved = capacity.lock().expect("lock").reserve(
                         worker(raw),
                         intent(unique),
                         Epoch::new(2),
                         9,
                         9,
                     );
+                    assert_eq!(reserved.is_ok(), raw <= 2 && round == 0);
                 }
             })
         })
