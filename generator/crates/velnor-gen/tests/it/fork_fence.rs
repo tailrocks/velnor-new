@@ -130,3 +130,23 @@ fn a_self_hosted_label_that_could_break_out_of_the_runs_on_expression_is_refused
     }
     Ok(())
 }
+
+#[test]
+fn only_exact_github_hosted_labels_skip_the_fork_fence() {
+    for runner in [
+        "ubuntu-24.04-arm",
+        "windows-11-arm",
+        "ubuntu-latest",
+        "macos-15",
+    ] {
+        assert!(velnor_model::github_hosted(runner), "{runner}");
+    }
+    for runner in [
+        "ubuntu-26.04-arm-scale-set",
+        "ubuntu-24.04-armada",
+        "ubuntu-26.04-scale-set",
+        "ubuntu-24.04-arm-",
+    ] {
+        assert!(!velnor_model::github_hosted(runner), "{runner}");
+    }
+}
