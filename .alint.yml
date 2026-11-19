@@ -122,6 +122,21 @@ rules:
     level: error
     message: "Rust sources MUST live in canonical crate dirs (ARCH-1.10 strict placement)"
 
+  # The root workspace lists its members explicitly. A crate directory that is
+  # missing from `[workspace] members` would silently skip every root gate.
+  - id: crates-listed-in-workspace
+    kind: command
+    paths:
+      include: ["crates/*/Cargo.toml"]
+    command:
+      - sh
+      - -c
+      - 'grep -qxF "    \"$(dirname "$1")\"," Cargo.toml'
+      - alint-workspace-member
+      - "{path}"
+    level: error
+    message: "Every crates/*/Cargo.toml must have its directory listed in the root Cargo.toml [workspace] members"
+
   # Snapshot .source duplicates are forbidden everywhere: compare against the
   # live file, merge the best hunks, delete the snapshot. No .source file has
   # a legitimate reason to exist (fixtures/** stays globally ignored).
