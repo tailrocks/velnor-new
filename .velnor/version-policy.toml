@@ -82,9 +82,9 @@ reviewed = "2026-10-26"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.21.0"
-sha = "d61e4c802b02ac811224b35c59a62cfe5176f4d0"
-reviewed = "2026-11-02"
+version = "v0.22.1"
+sha = "5054852d00d47affc9ea71440240147d9999f4d3"
+reviewed = "2026-11-19"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"
