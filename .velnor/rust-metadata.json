@@ -1350,12 +1350,6 @@
               "optional": true
             },
             {
-              "name": "velnor-freshness",
-              "kind": "normal",
-              "manifest": "crates/velnor-actions-freshness/Cargo.toml",
-              "optional": true
-            },
-            {
               "name": "velnor-actions-mise",
               "kind": "normal",
               "manifest": "crates/velnor-actions-mise/Cargo.toml",
@@ -1365,6 +1359,12 @@
               "name": "velnor-actions-orchestrator",
               "kind": "normal",
               "manifest": "crates/velnor-actions-orchestrator/Cargo.toml",
+              "optional": true
+            },
+            {
+              "name": "velnor-freshness",
+              "kind": "normal",
+              "manifest": "crates/velnor-freshness/Cargo.toml",
               "optional": true
             },
             {
@@ -1673,7 +1673,7 @@
         {
           "name": "velnor-freshness",
           "version": "0.1.82",
-          "manifest": "crates/velnor-actions-freshness/Cargo.toml",
+          "manifest": "crates/velnor-freshness/Cargo.toml",
           "dependencies": [
             {
               "name": "flate2",
@@ -1739,17 +1739,52 @@
               "features": [
                 "rustls-no-provider"
               ]
+            },
+            {
+              "name": "tempfile",
+              "kind": "dev",
+              "manifest": null
             }
           ],
           "targets": [
             {
-              "name": "velnor_actions_freshness",
+              "name": "velnor_freshness",
               "kinds": [
                 "lib"
               ],
               "tests": true,
               "doctest": true,
-              "source": "crates/velnor-actions-freshness/src/lib.rs",
+              "source": "crates/velnor-freshness/src/lib.rs",
+              "requires_features": false
+            },
+            {
+              "name": "velnor-freshness",
+              "kinds": [
+                "bin"
+              ],
+              "tests": false,
+              "doctest": false,
+              "source": "crates/velnor-freshness/src/main.rs",
+              "requires_features": false
+            },
+            {
+              "name": "freshness_path_dependencies",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-freshness/tests/freshness_path_dependencies.rs",
+              "requires_features": false
+            },
+            {
+              "name": "freshness_bin",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-freshness/tests/freshness_bin.rs",
               "requires_features": false
             }
           ]
@@ -3483,16 +3518,15 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "3a1d26ca60a6e14c8d9bb0da01044d5c3b13aa6b09dc40a01c8fb54cc7a19ea1",
+    "Cargo.toml": "6f01590564a38e91e1fa34a207ba8a7cc780dfa4670b62d7362c67f9f2b44cfc",
     "ci-helper/Cargo.toml": "fb3550bb8e3743f3be2ecbced69fa2328b3054f2046213a49f006064abf316ec",
     "ci-helper/crates/velnor-ci/Cargo.toml": "030191a7247281c8b6e7d2dc54ce251c1fb24cd987023b5b807694691e0c9515",
     "crates/velnor-actions-actionlint/Cargo.toml": "7fc5bdb266e2a0f9335b250acecdd1f97ddbcee27322e6f90855b82fad1b6a04",
     "crates/velnor-actions-ansible/Cargo.toml": "df14f689efc7246f0a4043d8032ec785555d71143f1aa85387b09ed34240b7f3",
     "crates/velnor-actions-bun/Cargo.toml": "ad06f4370b77872dcc37f86f92ce558c9d9b30d1c56765aea33d070fa9a564b8",
-    "crates/velnor-actions-cli/Cargo.toml": "e167e03492e72c3877fd6121de445ae78696357f257f3ec1165b82299ab2279a",
+    "crates/velnor-actions-cli/Cargo.toml": "bdf1a459171d6f1e5aec978c61ca10d7e4000635b05541222bdb6d50aa6ead64",
     "crates/velnor-actions-contract/Cargo.toml": "47eaaeebcccf2dd8bb200ad142dbd243fd68e7e554b64fb1eb24bcb5687d874a",
     "crates/velnor-actions-dbt/Cargo.toml": "78d142959ce5344dd3fe3f9ad3ee17f48aaf58ab43faab24587b7b26df951d3e",
-    "crates/velnor-actions-freshness/Cargo.toml": "599ba78bcef762ac75ccc17c932bf7288b68fd41d6d6808fb03f3fb62862b6b1",
     "crates/velnor-actions-gradle/Cargo.toml": "837cbc05ffb13c48d287c397b3574241e41a4ac712ae2f028e844f4f0734d0fc",
     "crates/velnor-actions-mise/Cargo.toml": "2c20ced017b9fdaa96b42b5087bb10dc0b3302133fe29f31109ac411239d90b3",
     "crates/velnor-actions-orchestrator/Cargo.toml": "5b672843a75d2658e9bc889dbb92989ae2dcff25b906a5fcaa8738201af5177d",
@@ -3500,6 +3534,7 @@
     "crates/velnor-actions-tofu/Cargo.toml": "07f783ad6343158762250014686772d6cf9931023dcd4935f5f3efe3ce5b4318",
     "crates/velnor-actions-workflow-renderer/Cargo.toml": "93b053bb82385d6b406e6555ece2cdb5d85f421e5c41ce0a0366a574a17dba74",
     "crates/velnor-archive-guard/Cargo.toml": "379015dd4bd2dda00d4fa6dab8fe8c1dd87699975aa519b203a1f3370d78517a",
+    "crates/velnor-freshness/Cargo.toml": "9e8af5269b2711aedff45a35a573a285b8a158cb4eeb13b00fea5bd441c782e6",
     "crates/velnor-runner/Cargo.toml": "75742814fbdc055c2a4dd1d443a8e4904c3b5e93d67421e9688727c0cdae805a",
     "crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml": "fbbedc3707b8b14e20d89ecca6c50919fd9ea35bc754405e9efc573c502af623",
     "crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml": "bef6bf2c47edf3da8af53acfd8eddd0f82f80dc17ae37a380aaa6c350717d135",
@@ -3520,5 +3555,5 @@
     "local/crates/velnor-cache-rules/Cargo.toml": "f3c549575677f1bb0241725787ea1458f5754cf0e36fa0dedc6ed18ece9996aa",
     "local/crates/velnor-local/Cargo.toml": "d6c37d4efee766f87f78e45ec36d93cc4d1d845ecb4117f0ec8b53d6eed51724"
   },
-  "layout": "bd03830d2e48b0e5371dd96614dcc390fb51b06adf33026cc3b970c9ebee2030"
+  "layout": "dcff48297724f7b81230840734a71d23e32486857b70782048f68ac8dd7ed649"
 }
