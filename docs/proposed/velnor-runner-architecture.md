@@ -80,13 +80,15 @@ greens have zero tolerance. "Same confidence" is this contract.
    identity, or that publish, run fresh on every verification request, an exact-tree rebase and a
    merge group included, unless the varying input is fixed and recorded in the key (a fixed clock or
    seed, pinned fixtures). Tests get a loopback-only network and no event file; sandboxes have no
-   `.git`, a scrubbed environment (no `GITHUB_*`; fixed `HOME`, `PATH` and locale) and a fixed CPU
-   count.
+   `.git` (a census first finds obligations that need it, such as `root.rs:22`'s `git rev-parse
+   --show-toplevel`; they get a read-only repository at the subject commit and are keyed by it), a
+   scrubbed environment (no `GITHUB_*`; fixed `HOME`, `PATH` and locale) and a fixed CPU count.
 6. **C6. Reuse is audited, compile reuse included.** A new reuse class runs in shadow with every
    reuse re-executed until about 3,000 clean comparisons per obligation kind; then 2% are
    re-executed. Until compile reuse graduates, the second witness builds cold. Every landed commit is
-   rebuilt cold and its changed obligations re-run (audit A1, section 6.5). A disagreement is re-run
-   five times to separate a flake from a wrong key; a confirmed one revokes the key version by epoch.
+   rebuilt cold and its changed obligations re-run (audit A1, section 6.5). The first disagreement
+   suspends the class and blocks its dependants at once; five re-runs then decide between a flake
+   (the class resumes) and a wrong key (the epoch is revoked).
 7. **C7. Flakes are budgeted** (section 1.3).
 
 **Two independent witnesses.** Every obligation whose key is new needs two passing witnesses before
@@ -109,9 +111,9 @@ rerun or a queue ejection, and every queued entry behind an ejection is rebuilt.
 - **Act:** retries stay at 0, so a flaky test fails and is counted. Two false failures in seven days
   open an owner-labelled issue; a test is fixed, or quarantined only when a blocking check covers the
   same property or under an expiring owner exception.
-- **Known causes first:** CPU starvation of tight timeouts, such as the 2 s kill in
-  `ci-helper/.config/nextest.toml`'s default profile under pods that request 2 CPU and burst to 84
-  cores (§B.2.2); the `event.json` rewrite race between steps (I023).
+- **Known causes first:** CPU starvation of tight timeouts under pods that request 2 CPU and burst
+  to 84 cores (§B.2.2); the `event.json` rewrite race between steps (I023). Obligations run the `ci`
+  nextest profile, so the 2 s kill of the default profile (S8, F-H36) is not among them.
 
 ### 1.4 Targets
 
@@ -126,8 +128,8 @@ Measured on the clocks of section 1.1; the arithmetic is in sections 3, 4 and 10
 
 The goal needs per-root keys enrolled, compile reuse graduated and the test floor fixed; the
 stretch needs per-package keys and the commit stamped after link. Further goals [T]: job start ≤ 1 s
-P50, ≤ 2 s P90 from the broker message; `Journal::open` ≤ 1 s; no test over 60 s alone (stretch 15
-s); per release, zero compiles and about 15 s of publication [E].
+P50, ≤ 2 s P90 from the broker message; no test over 60 s alone (stretch 15 s); per release, zero
+compiles and about 15 s of publication [E].
 
 ## 2. Where the time goes, and what changes the problem
 
@@ -153,7 +155,7 @@ One typical PR (the 47% class touching only `generator/` or `ci-helper/`), label
 | Stage | Today [M] | Goal [T] (estimate) | Bottleneck removed |
 |---|---|---|---|
 | 1. Event, webhook, job offer | push → run 1–2 s; run → first job 2 s p50, 226 s p90; hosted Plan queue 5.5 min median | webhook 1–2 s; the reconciler within 10 s | Verification starts from the label or labelled push; no Actions job is on the verdict path |
-| 2. Acquire | 12 s p50, 18 s p90 from job created to started (scale set) | not on the verdict path | Obligations are not Actions jobs; Actions jobs (release, image, scheduled) acquire on pre-registered JIT identities |
+| 2. Acquire | 13 s p50, 27 s p90 from job created to started, n = 1,124 (scale set, ruling V5) | not on the verdict path | Obligations are not Actions jobs; Actions jobs (release, image, scheduled) acquire on pre-registered JIT identities |
 | 3. Sandbox start | ARC pod about 6 s (436 starts) plus a dind probe | ≤ 0.3 s | Warm pool; reflink clone 0.25 s [M] |
 | 4. Checkout | 6 s per job × 31–39 jobs; Plan 12 s | ≤ 1 s | Node mirror; a reflink clone of a sealed tree plus the changed files, then a full tree check (section 7.4) |
 | 5. Toolchain and tools | 10 s median, 18 s p90, plus mise 2 s and action downloads 4.4 s per job | ≈ 0 s | Read-only verified tool store; native actions |
@@ -270,41 +272,37 @@ pub enum Role { Production, Reference } // Reference: conformance, shadow, diff;
 - **Velnor Native** is the default and the recommendation: steps run natively, the closed action set
   without Node, next to the node's mirror, stores and generations.
 - **GitHub Official** runs the latest official runner (`Runner.Worker`, JavaScript actions on Node)
-  in the same sandboxes, with the same platforms, pools, label flow, status, ledger and caches;
-  Velnor's dispatcher drives both, ARC neither. For an *acquired job* (release, image, scheduled)
-  Velnor hands the Worker GitHub's job message; the Worker completes against GitHub's run service,
-  as v2.338.2 does (`JobRunner.cs` `CompleteJobAsync`), and the dispatcher owns the lease. An
-  *obligation* has no GitHub job: Velnor synthesises a job message whose steps are the released
-  command and serves the run-service, Results and cache endpoints it names from the node agent, so
-  the Worker never reaches GitHub. The command runs under `velnor-ci obligation exec`, which reports
-  exits and the test inventory to the agent over a channel the sandbox cannot write, so the receipt
-  comes from observation, not the Worker's completion. This mode passes its own conformance cases
-  before `.velnor/` may select Official for an obligation kind; until then the plan refuses that
-  selection.
+  in the same sandboxes, pools, label flow, ledger and caches; Velnor's dispatcher drives both, ARC
+  neither. For an *acquired job* (release, image, scheduled) the Worker gets GitHub's job message and
+  completes it against GitHub's run service, as v2.338.2 does (`JobRunner.cs` `CompleteJobAsync`);
+  the dispatcher owns the lease. An *obligation* has no GitHub job: Velnor synthesises a job message
+  from the released command and serves the run-service, Results and cache endpoints it names from
+  the node agent. The command runs under `velnor-ci obligation exec`, which reports exits and the
+  test inventory over a channel the sandbox cannot write, so the receipt comes from observation,
+  not the Worker. This mode passes its own conformance cases before it may be selected.
 - **Choice and identity.** `.velnor/` names the executor per job type or obligation kind, or
-  globally; Velnor never switches on failure. The identity is in every key, so a deliberate switch
-  re-runs verification and mints separate records, and can never produce a false green.
+  globally, read from the base commit and limited to certified identities and digests, so a change
+  takes effect only after it lands; Velnor never switches on failure. The identity is in every key,
+  so a deliberate switch re-runs verification and can never produce a false green.
 - **Reference role** (decision 19): the conformance gate, sampled shadow runs and "run both ways and
   diff", writing only to an isolated reference namespace.
-- **APIs** (decision 3), as the latest release implements them, including broker-session ownership
-  on deletion and the connectivity probe: scale-set sessions, broker long-poll, JIT configuration,
-  run-service `acquirejob`, `renewjob`, `completejob`, Results twirp, cache service v2, artifacts v4,
-  OIDC. Out: the AES legacy session, legacy pipelines and distributed task, cache v1, artifacts v3.
+- **APIs** (decision 3), as v2.338.2 implements them (broker-session ownership and the connectivity
+  probe included): scale-set sessions, broker long-poll, JIT configuration, run-service acquire,
+  renew and complete, Results twirp, cache v2, artifacts v4, OIDC. Out: the AES legacy session,
+  legacy pipelines, cache v1, artifacts v3.
 - **Expressions (owner question D4).** At v2.338.2 the Worker returns the legacy `Expressions2`
   result on every path, even with the new evaluator in compare mode. The oracle runs in compare mode
   and Velnor refuses any job on which GitHub's two evaluators differ, so on every accepted job both
   give the runner's result. Option A ships velnor-legacy's port of `Expressions2` (3 agent-hours;
   conflicts with decision 3); option B ports `src/Sdk/Expressions` and `src/Sdk/WorkflowParser`
-  (about 28; ruling Q4). Until the owner answers, the default is A, matching what the latest runner
+  (about 28; ruling Q4). Until the owner answers the default is A, matching what the latest runner
   returns; B is built in parallel, and only the chosen one ships (decision 18).
 
-**Speed per job type** [the difference is unmeasured; paired runs on the same backend, tool store,
-generation and warm or cold mix measure it, section 5.7]. Official adds Worker start and set-up (4–5
-s per job [M, ARC era]), Node start for each JavaScript action (87–147 ms [M]), and GitHub's cache
-until the cache endpoint is qualified (section 7.2). Per-job tool installs and the 44–61 s cache
-restore measured under ARC are not charged to it: both executors share the tool store and
-generations. The paired runs itemise Worker and Node costs apart from cache routing and set-up, with
-Results, artifacts and OIDC behaviour kept equal.
+**Speed per job type** [unmeasured as a difference; paired runs on the same backend, tool store,
+generation and warm or cold mix measure it, section 5.7]. Official adds Worker set-up (4–5 s per job
+[M, ARC era]), Node start per JavaScript action (87–147 ms [M]) and GitHub's cache until the cache
+endpoint is qualified. Tool installs and the 44–61 s cache restore measured under ARC are not
+charged to it: both executors share the tool store and generations.
 
 ### 5.4 The platform abstraction
 
@@ -382,7 +380,7 @@ refuses a job before its first step when an action, SHA or input is outside the 
 | Action | Uses | Native implementation | Node-local state |
 |---|---|---|---|
 | `actions/checkout` | 61 | The action's inputs and outputs, including `sparse-checkout` (44 uses) and `fetch-depth`; a reflink clone of a sealed tree with only the changed files rewritten, then the full tree checked (section 7.4) | The node's bare mirror |
-| `actions/upload-artifact`, `download-artifact` | 77, 60 | Artifacts v4 | Downloads by digest from the storage tiers |
+| `actions/upload-artifact`, `download-artifact` | 77, 60 | Artifacts v4 on GitHub's service, so `gh run download` and the API see them | The site tier as a read-through cache by digest |
 | `actions/cache`, `/restore`, `/save` | 2, 17, 5 | Section 7.2 | L0 and L1 tiers |
 | `jdx/mise-action` | 48 | Pinned tools on `PATH`, with mise's environment | The prepopulated, read-only tool store |
 | `jdx/mr-boxington-action` | 12 | Until `velnor-gen` drops it: jobs run plain cargo (section 7.3) | The node store |
@@ -398,37 +396,33 @@ cases.
 ### 5.7 The conformance oracle
 
 `velnor-conformance` runs each corpus case through both executors, on each platform backend, and
-compares; velnor-new's `qualification.yml` is its seed. The oracle side is `velnor-official` in the
-reference role, the same maintained adapter production may select.
+compares; `qualification.yml` is its seed. The oracle is `velnor-official` in the reference role, the
+same maintained adapter production may select.
 
-- **Corpus.** At least 240 semantics, 65 fault and 30 refusal cases beside replayed jobs:
-  velnor-new's full job set under every event at pinned commits, with recorded failures,
-  cancellations and re-runs; every expression function and coercion pair, every context including
-  masking, status functions × job states, `continue-on-error`, outputs and `needs`, env files,
-  workflow commands, post and background steps, cancellation at every step boundary, timeouts; each
-  native action across its inputs, including a cache or artifact saved by one executor and restored
-  by the other; both executors' obligation mode; the label flow's states.
-- **Normalisation.** Ids, times, runner names, versions and paths, tokens, the official runner's own
-  set-up lines, ANSI codes, and output interleaving (compared per stream); contexts as JSON.
-- **Pass criteria.** Exact equality, after normalisation, of step outcomes, outputs, contexts and
-  env, expression results, annotations and summaries, cache and artifact effects, post-step order,
-  and cancellation and timeout outcomes; other differences need an owner-signed allow-list entry.
-  The gate is 100% per backend with zero secret leaks, and the harness must kill at least 95% of
-  about 30 executor mutants before its green counts.
-- **When.** On every change to an executor, a native action or the protocol code; nightly; within 14
-  days of each official release against its tag (v2.338.2, `d1eb12d4`, today); as sampled shadow
-  runs of real jobs.
+- **Corpus.** At least 240 semantics, 65 fault and 30 refusal cases beside replays of velnor-new's
+  full job set under every event at pinned commits (failures, cancellations, re-runs included):
+  every expression function and coercion, every context and masking, status functions × job states,
+  outputs and `needs`, env files, commands, post and background steps, cancellation at every step
+  boundary, timeouts; each native action across its inputs, with an artifact, and once the Official
+  cache endpoint is qualified a cache, saved by one executor and restored by the other; both
+  executors' obligation mode; the label flow's states.
+- **Normalisation and pass.** Ids, times, runner names and paths, tokens, the official runner's
+  set-up lines, ANSI codes and interleaving (per stream) are normalised; then outcomes, outputs,
+  contexts, env, expression results, annotations, summaries, cache and artifact effects, post-step
+  order, cancellation and timeouts must be equal, unless an owner-signed allow-list entry covers a
+  difference. 100% per backend, zero secret leaks, and at least 95% of about 30 executor mutants
+  killed before the harness's green counts.
+- **When.** On every executor, native-action or protocol change; nightly; within 14 days of each
+  official release against its tag (v2.338.2, `d1eb12d4`, today); as sampled shadow runs.
 - **Drift.** Deadlines per version from the deprecations endpoint (2.337.0 stops on 2026-12-25,
-  2.338.0 on 2027-01-04), with an alarm 21 days ahead and a page on a critical update; unknown
-  protocol fields alerted, never dropped; a protocol surface diff per release; release binaries
-  scanned for banned legacy endpoints.
-- **Evaluators.** The oracle runs with `ACTIONS_RUNNER_COMPARE_WORKFLOW_PARSER=true`; a job on which
-  GitHub's two evaluators differ is refused until understood, and a fuzzer compares both.
+  2.338.0 on 2027-01-04): an alarm 21 days ahead, a page on a critical update; unknown protocol
+  fields alerted; a protocol surface diff per release; a scan for banned legacy endpoints.
+- **Evaluators.** `ACTIONS_RUNNER_COMPARE_WORKFLOW_PARSER=true`; a job on which GitHub's two
+  evaluators differ is refused until understood; a fuzzer compares both.
 - **Canaries.** A production-path canary every 10 min per site (checkout, cache and artifact round
   trips, OIDC, an attestation, a summary, a background step, a cancel). Permanent canary PRs that
-  must stay unmergeable (no status; the context from another source; a required Actions job with
-  `if: false`) are probed every 10 min; any `mergeable_state` but `blocked` pages the owner and
-  stops `success` writes.
+  must stay unmergeable (no status; the context from another source; a required `if: false` job),
+  probed every 10 min: any `mergeable_state` but `blocked` pages the owner and stops `success`.
 - **Per-job-type gate** (decision 16): section 10.1.
 
 ### 5.8 Isolation and trust
@@ -501,48 +495,49 @@ is well designed for this architecture.
   features the toolchain may target, CPU count, sandbox profile digest and tool versions.
 - **Inputs:** the Git tree of the whole repository (today's checkout is `/*` without `/docs/**`,
   `ci.yml:97`); the exact package selection and features (a test passed under `-p a` and failed
-  under `--workspace` [M]); the execution manifest (allowed environment and values, path prefix,
-  modes and symlink targets).
-- **Narrower keys need an enrolled contract.** A per-root or per-package key is used only after: (1)
-  the read audit has run in shadow on that obligation; (2) a reviewed dependency contract in the
-  trusted inventory names every path the obligation may observe, directory contents and absent paths
-  included, with deterministic inputs enforced; (3) every execution, hit or sample, runs on the
-  intact tree with the audit enforcing the contract, so one observation outside it fails the witness
-  and revokes the enrolment; (4) a shadow case where a new sibling file outside the contract changes
-  the expected verdict is caught; (5) about 3,000 clean comparisons for its kind. The trace proposes
-  candidates and revokes enrolment; it never licenses a hit. In velnor-new 79 of 86 files using
-  `CARGO_MANIFEST_DIR` climb out of their package and 70 test files list directories, so most test
-  keys stay whole-tree.
+  under `--workspace` [M]); the execution manifest (allowed environment, path prefix, modes,
+  symlink targets).
+- **Narrower keys need an enrolled contract.** A per-root or per-package key is used only after the
+  read audit (section 6.4) has run in shadow on that obligation; a reviewed dependency contract in
+  the trusted inventory names every path it may observe, directory contents and absent paths
+  included, with deterministic inputs enforced; every execution, hit or sample, runs on the intact
+  tree with the audit enforcing the contract, so one observation outside it fails the witness and
+  revokes the enrolment; a shadow case where a new sibling file outside the contract changes the
+  verdict is caught; and about 3,000 comparisons for its kind are clean. The trace proposes and
+  revokes; it never licenses a hit. 79 of 86 files using `CARGO_MANIFEST_DIR` climb out of their
+  package and 70 test files list directories, so most test keys stay whole-tree.
 - **Time and randomness.** No test manifest declares proptest, quickcheck or rand [M]. The trusted
-  planner classes an obligation as C5 when its sources or workspace closure read the wall clock,
+  planner classes an obligation as C5 when its sources or workspace closure read the clock,
   randomness, the network or the event (11 test files read the clock today); nothing is reused on a
   time-to-live.
-- **The obligation vector.** For every subject SHA the planner derives every obligation and key; the
-  ledger resolves the vector against current, unrevoked records. An "instant" verdict (rebase-only
-  push, identical group tree) is reported only for a vector with zero C5 obligations and zero
-  misses; otherwise the C5 set and the misses run.
+- **The obligation vector.** For every subject SHA the planner derives every obligation and key;
+  the ledger resolves the vector against current, unrevoked records. An "instant" verdict
+  (rebase-only push, identical group tree) needs zero C5 obligations and zero misses; otherwise the
+  C5 set and the misses run.
 
 ### 6.2 Verification records, witnesses, joins and scopes
 
-- **A verification record per key**, with mandatory witness slots: two for a new key, in a PR or a
+- **A verification record per key** has mandatory witness slots: two for a new key, in a PR or a
   group alike. Each slot binds one receipt from a distinct node, attempt and order seed, over a
-  different verified generation or cold, bound to the immutable inputs and the active epoch. The
-  record passes only when every slot holds a passing receipt, and a receipt fills one slot of one
-  record. Audit re-execution (sampling, A1, shadow) writes to an audit stream, never to a slot.
-- **In-flight join:** a request joins the record its key needs, not one execution; a cancelled
-  request drops its claim, and execution continues while another claimant needs it. Shared work
-  takes the highest live claimant's priority and moves to reserved capacity if it cannot resume
-  promptly (section 9).
-- **Hedging** is for preparation only (fetching, cloning, compiling a closure whose output digest
-  must then equal). A raced copy of a verification attempt is an extra witness: the obligation
-  passes only when every launched copy passes, and a cancelled, timed-out or lost copy fails it.
-  Only an infrastructure abort the platform proves (the node `AbsentProven`, a preemption by policy)
-  lets a fresh attempt replace a lost one, and that one must pass. Hedging can shorten the time to a
-  failure, never to a green.
-- **Scopes.** A PR's execution writes `candidate` records, reusable by any request with the same
-  key: later pushes, other and stacked PRs, merge groups. A record becomes `trusted` only when its
-  tree is on `main` and A1 has passed for that commit. A build that can mint a reusable receipt reads
-  only the `trusted` scope and its own outputs.
+  different verified generation or cold, bound to the immutable inputs and the active epoch; the
+  record passes only when every slot passes, and a receipt fills one slot of one record. Audit
+  re-execution writes to an audit stream, never a slot. A failed record is shown, never reused.
+- **Order.** nextest 0.9.151 is pinned (`mise.toml:24`) with no shuffled order configured, so the
+  agent lists a binary's tests and runs them in seeded batches through filter expressions; until
+  that is built and measured, no order difference is claimed. A fanned-out witness records its shard
+  layout in the execution manifest; fan-out stays off for receipt runs until lab C shows equal
+  results.
+- **In-flight join:** a request joins the record its key needs; a cancelled request drops its claim
+  and execution continues for the others. Shared work takes its highest live claimant's priority
+  and moves to reserved capacity if it cannot resume promptly (section 9).
+- **Hedging** is for preparation only (fetch, clone, a compile whose output digest must then equal).
+  A raced verification copy is an extra witness that must pass; a cancelled, timed-out or lost copy
+  fails the obligation, and only a platform-proven infrastructure abort (`AbsentProven`, policy
+  preemption) lets a fresh attempt replace it. Hedging shortens the time to a failure, never to a
+  green.
+- **Scopes.** A PR's execution writes `candidate` records, reusable by any request with the same key.
+  A record becomes `trusted` only when its tree is on `main` and A1 has passed; a build that can mint
+  a reusable receipt reads only the `trusted` scope and its own outputs.
 
 ### 6.3 What a request executes
 
@@ -571,39 +566,45 @@ not, how that is detected, and the automatic fallback.
 | `actions/cache` entries | The user's key and version, resolved by the authoritative index with GitHub's scope and order | A user key that omits an input (as on GitHub) | Conformance against the official runner; content hash on every read | Treated as a miss; never used by a receipt-minting obligation |
 | Artifacts and test binaries by digest | Content address | Corruption | Hash verified on read | Refetch or rebuild |
 | Tool and crate stores | Pinned versions and lockfile checksums | A store edited in place | Read-only mounts (`EROFS`); digests | Rebuild the store |
+| Hedged copy of a slow shard | Every launched copy is a witness of the same key and must pass | A hang discarded as the losing copy | A cancelled, timed-out or lost copy fails the obligation (C4) | None needed: hedging cannot produce a green |
 | Mirror checkout | The staged tree is hashed in full and must equal the requested tree before the first step | A stale, corrupt or concurrently refreshed base | The full check, every time | Fetch the commit from GitHub; rebuild the mirror from the site bundle |
 | Release promotion | Closure, release profile, target, tool image; the digest is in the receipt and the attestation | Wrong bytes published | Re-hash and `gh attestation verify` at publish; A1 rebuilds cold and compares | The release stops; nothing is rebuilt silently |
 
-**The read audit** is node-agent tracing of the sandbox's cgroup: opens, stats, `readlink`,
-directory listings and failed lookups (`ENOENT`), with paths resolved against the materialised
-tree. A backend without it keeps whole-tree keys.
+**The read audit** is eBPF in the node agent on the exits of `openat`, `openat2`, `newfstatat`,
+`statx`, `readlinkat` and `getdents64`, filtered by the sandbox's cgroup, failed lookups (`ENOENT`)
+included, with paths resolved against the materialised tree; its overhead is measured in shadow. A
+backend without it keeps whole-tree keys. **Every per-root contract includes** each tracked file
+directly in the repository root and in every ancestor of the root (today `rustfmt.toml`,
+`clippy.toml`, `deny.toml`, `rust-toolchain.toml`, both `Cargo.*` and `mise.*`) and `.cargo/`,
+`.config/`, `.github/`, `.velnor/`: rustfmt, clippy and cargo search parent directories, and
+`ci-helper/` and `generator/` have no configuration of their own.
 
 ### 6.5 Trust root, publication and audit
 
 - **Keys.** One Ed25519 signing key per node and sandbox class, held by a signer daemon outside every
   sandbox and the agent's general process; receipts go to an append-only log per site; the ledger
   verifies signature, class and log entry before a receipt fills a slot.
-- **Publication.** One fenced status writer per repository holds an epoch-numbered lease; until a
-  third-site witness exists it runs only in the repository's home site, and the other site executes
-  and reports to it. It keeps a durable index of every `success` it published (subject SHA, PR or
-  group, epoch), including heads that later lost the label. Before a write it rechecks the request
-  generation and the active epoch; after it, it reads the status back and reconciles an ambiguous
-  write. The fence refuses a late write from a stale lease.
-- **Revocation.** Every record carries its policy epoch. A *planned* change (a reuse class enabled, a
-  key version raised) freezes new `success` writes, lets in-flight groups finish under the old
-  epoch, activates the new one and re-resolves open heads. An *emergency* revocation (a signer, a
-  reuse class, a reused pass whose cold run fails) stops writes at once, writes `failure` on every
-  indexed success that is still an open head or queued group under the revoked epoch (GitHub ejects a
-  group whose required status fails), re-verifies them, and lists every commit that landed in the
-  propagation window for an immediate cold audit and, on failure, a revert.
-- **Audit A1.** For each confirmed update of `main`, the ledger journals an audit request for every
-  new first-parent commit (a group of two lands two) and reconciles gaps from Git history, so an
-  intermediate commit with no push run is still audited. Each is rebuilt cold and its changed
-  obligations re-run, comparing results and binary digests with the records it landed on; the result
-  is bound to the commit and that proof set. One SLO: within 2 h of landing at P90 [T]. A commit
-  unaudited at 6 h pages; the trusted scope does not advance past it, its release waits, and
-  warm-compile reuse suspends until it clears. The push run's `Required` job on the tip reports A1
-  for the release gate. A class with about 3,000 clean comparisons drops to 2% sampling.
+- **Publication.** One fenced status writer per repository holds an epoch-numbered lease, in the
+  repository's home site until a third-site witness exists; the other site executes and reports to
+  it. It keeps a durable index of every `success` it published (subject SHA, PR or group, epoch),
+  labelled or not, rechecks the request generation and active epoch before a write, reads the
+  status back after it, and reconciles an ambiguous write. The fence refuses a stale lease's write.
+- **Revocation.** Every record carries its epoch. A *planned* change (a reuse class enabled, a key
+  version raised) freezes new `success` writes, lets in-flight groups finish, activates the new epoch
+  and re-resolves open heads. An *emergency* revocation (a signer, a reuse class, a reused pass whose
+  cold run fails) stops writes, writes `failure` on every indexed success still an open head or
+  queued group (GitHub ejects a group whose required status fails), re-verifies them, and audits
+  every commit landed in the window cold, reverting on failure.
+- **Audit A1.** For each confirmed update of `main` the ledger journals an audit request per new
+  first-parent commit (a group of two lands two) and reconciles gaps from Git history, so an
+  intermediate commit with no push run is audited too. Each is rebuilt cold at the fixed path and
+  its changed obligations re-run; results and the digests of every test binary and spawned
+  executable are compared with the records it landed on and bound to the commit. A1 has a reserved
+  build slot per site outside the batch class; its SLO, within 2 h of landing at P90 [T], holds at
+  95% utilisation, and a lag over 2 h alarms. A commit unaudited at 6 h pages; the trusted scope
+  does not advance past it, its release waits, and warm-compile reuse suspends until it clears. The
+  push run's `Required` job reports A1 (section 8.1). After about 3,000 clean comparisons a class
+  drops to 2% sampling.
 - **Audit A2** runs nightly with the clock shifted 8 and 30 days ahead through a shim. **Degraded
   mode:** with the ledger unreachable nothing is satisfied by lookup; obligations run fresh.
 
@@ -672,35 +673,33 @@ against the official runner.
 **Measured** [M, `experiments/mbx-cache-cluster.md`, the runner workspace of 357 crates at
 `/w/velnor-new`, idle nodes]: plain cargo cold 92 s; a reflink clone of the warm target 0.25 s and
 2.5 MB, then 0.31 s and 0 crates to build; today's ext4 copy 8.6 s and 10.75 GiB; mbx on a second
-node from a warm `mbx-cache` 39.9 s; a lockfile change 67.4 s plain, 88.4 s with mbx on the same
-node, 43.4 s on another node once one has built it.
+node from a warm `mbx-cache` 39.9 s; a lockfile change 67.4 s plain, 43.4 s with mbx on another node
+once one has built it.
 
 **The hot path is plain cargo over a reflink clone of a verified generation** at a fixed checkout
 path, with inputs proven by content, independently of cargo's freshness:
 
-1. A generation G is the target directory of a trusted build, sealed with its **input manifest**
-   M_G (every path's blob id, mode and materialised time) and every unit's dep-info.
+1. A generation G is the target directory of a trusted build whose cold A1 rebuild gave equal
+   digests, sealed with its **input manifest** M_G (every path's blob id, mode and materialised
+   time) and every unit's dep-info. Nothing unqualified is ever a base.
 2. For a request tree T, the changed set Δ is every path whose blob or mode differs from M_G, plus
-   every path added or removed. The base is G's manifest, never the checkout's base tree.
+   every path added or removed. The base is G's manifest, never the checkout's base tree: a verbatim
+   port of `inputs restore`, which stamps only files unchanged against the checkout
+   (`inputs.rs:102-151`), reproduces Q16 when `main` has moved past G.
 3. If a path in Δ is outside every unit's declared inputs (dep-info, `rerun-if-changed`, the package
    directory of a script without directives), every workspace unit of that Cargo root builds cold;
    third-party units, whose inputs are the checksummed crate, features, profile, toolchain and
    declared environment, are reused.
-4. The materialiser stamps times: unchanged paths keep M_G's times; every path in Δ gets a time
-   later than G's newest output.
+4. Unchanged paths keep M_G's times; every path in Δ is stamped later than G's newest output.
 5. After cargo runs, each dep-info input of every unit it did not rebuild is checked against M_G by
    blob id (`velnor-ci` `io/audit/dep_info.rs`); a mismatch fails the build and retires G.
 6. Toolchain, profile, environment and fingerprint are in G's key; another one means another
    generation or a cold build.
 
 - **Witnesses.** Until compile reuse graduates (about 3,000 clean warm-against-cold digest
-  comparisons per Cargo root, from production's cold witnesses and lab B2 replay), the second
-  witness of every obligation builds cold and both must report equal binary digests. Afterwards the
-  second witness runs over a different verified generation on another node, and 2% build cold. A
-  unit that is not reproducible at the fixed path (lab C06) keeps its dependants' obligations cold
-  until it is fixed.
-- **Generations.** The landed group's output becomes the next generation only after A1's cold
-  rebuild gives equal digests; nothing unqualified is ever a base.
+  comparisons per Cargo root), the second witness builds cold and both must report equal binary
+  digests; afterwards it runs over a different verified generation on another node, and 2% build
+  cold. A unit not reproducible at the fixed path (lab C06) keeps its dependants cold until fixed.
 - **No transport on the verdict path by default:** a node holding the generation, or cold. mbx with
   a per-site `mbx-cache` fills nodes in the background while it saves ≥ 20 runner-min a day or ≥ 10%
   of builds would start cold (N54). Lab B3 measures waiting for a warm slot against fetching
@@ -710,9 +709,9 @@ path, with inputs proven by content, independently of cargo's freshness:
   `-Z checksum-freshness` is nightly-only; `CARGO_INCREMENTAL=0` on every receipt or shipped build
   (lab B4); blaze rejected (it built none of the five workspaces and missed a clippy `deny` [M]).
 - **Standing canaries** (lab B2, then hourly): the Q16 reproduction (a source file changed to a
-  failing value and stamped older than the outputs must rebuild and fail); a build script reading an
-  undeclared file that then changes; a changed, a removed and a newly present input; a proc macro
-  reading a file.
+  failing value and stamped older than the outputs must rebuild and fail), also with the checkout
+  base a commit ahead of G and the file changed between them; an undeclared build-script input that
+  changes; a changed, a removed and a new input; a proc macro reading a file.
 
 ### 7.4 Node-local mirrors
 
@@ -755,7 +754,8 @@ green groups in three days [M]) × about 6.5 runs per merge × about 30 job reco
 | Rust toolchain and mise tools | 14–15 s; toolchain restored 0 of 58 times | 0 s: a read-only store, once per site per version | about 14 s | about 39 runner-hours |
 | Container images | pulled per node, and per daemon inside dind | a registry mirror per site | not yet measured | measured when the Docker-class jobs move |
 
-At most about 62 runner-hours a day at today's volume, about a fifth of today's 250–290 [E]; under
+At most about 62 runner-hours a day at today's volume, about a fifth of today's 238–289 [E: 285–347
+runner-min × about 50 merges]; under
 v3 far fewer jobs run, but each still saves about 20 s.
 
 ### 7.5 Budgets
@@ -775,6 +775,11 @@ obligation graph runs through `ensure` and the App's status judges it. `ci.yml` 
 image and scheduled workflows stay Actions jobs on Velnor. Inside a request, format, lint, docs,
 "check alone" and tests run as parallel lanes, one target directory per check kind (cargo locks a
 target directory, `docs/hard-decisions.md:56-62`); `cargo-deny` reads a pinned RustSec database.
+
+**The push `Required` job** runs `velnor-ci audit wait` with a read-only ledger token: it polls for
+the A1 result bound to `GITHUB_SHA` and passes only on a pass, failing after 2.5 h (the SLO plus
+margin); re-running the attempt waits again. Its concurrency group is per SHA, so one tip's wait
+never queues behind another's (today push runs are not cancelled, `ci.yml:57-59`).
 
 **The obligation inventory** is the parity contract, not summary text. It is versioned, released
 with `velnor-ci`, and maps every check that blocks today (Plan, the lints, every Rust variant, the
@@ -828,18 +833,18 @@ does.
 - **PRs at one SHA share a verdict** (Q9); the merge group verifies the merged tree again.
 - **No bypass.** `bypass_actors` is empty (an admin bypass carried 7 of 136 merges in three days
   [M]); agents act under an identity that cannot edit the ruleset; no procedure uses an admin merge.
-- **Lab A proves it before it gates:** draft → ready with and without a carried label; label removal
-  racing a completion; a superseding push; group destruction; duplicate and lost events; a two-site
-  partition with a delayed stale write; a read-back showing the App context required on both
-  subjects.
+- **Lab A proves it before it gates:** draft → ready with and without a carried label; removal racing a
+  completion; a superseding push; group destruction; duplicate and lost events; a partition with a
+  delayed stale write; a read-back of the App context required on both subjects.
 - **Transition.** Step 0, now: today's two contexts bound to 15368, `bypass_actors: []`, ALLGREEN,
   depth 2, timeout 90 min, minimum wait 0. Step 1: `velnor-ci release-gate` released and both release
   entry points migrated (section 8.4). Step 2: the App in shadow on every PR head and group. Step 3,
   after lab A and shadow parity: all three contexts required, label flow on. Step 4: the Actions
-  contexts dropped and the PR and group Actions gates deleted; the push `Required` stays. Before step
-  3 the only label gate is an always-run Actions job with no `if:` or `needs:` that fails without the
-  label; it comes from the candidate's workflow, the same authority as today's gate, so it adds no
-  hole, and independent authority arrives only with the App.
+  contexts and the PR and group Actions gates deleted; the push `Required` stays. Before step 3 the
+  label gate is an always-run Actions job with no `if:` or `needs:` that fails without the label: the
+  candidate's workflow, the same authority as today's gate, so no new hole; independence arrives with
+  the App. Accepted interim costs: any label change re-runs the workflow (`ci.yml:59`), and removing
+  the label turns a verified head red; agents and Renovate label only at PR creation until step 3.
 
 ### 8.3 Merge queue
 
@@ -860,51 +865,47 @@ catch-up merges.
 
 A release never rebuilds (decision 10). Tests stay in the dev profile [M, `generator` / `ci-helper`,
 cargo 1.99.1]: testing the release build costs 320.8 / 365.7 CPU-s per cold build against 191.9 /
-282.8 for debug tests plus release bytes built once, shares only 15 of 90 crates with the shipped
-binary, and still is not the shipped code, because Cargo ignores `panic` for test targets and the
-tools ship as musl binaries with `panic = "abort"`, thin LTO and `strip`. Release bytes are one
-obligation keyed by closure, lockfile, toolchain, profile, target and, while the commit id is
-compiled in, the commit SHA, first computable in the merge group, whose SHA becomes `main`'s [M]:
+282.8 for debug tests plus release bytes once, shares 15 of 90 crates with the shipped binary, and
+still is not the shipped code (Cargo ignores `panic` for tests; the tools ship as musl binaries with
+`panic = "abort"`, thin LTO and `strip`). Release bytes are one obligation keyed by closure,
+lockfile, toolchain, profile, target and, while the commit id is compiled in, the commit SHA, first
+computable in the merge group, whose SHA becomes `main`'s [M]:
 
-- **The tools:** the release PR's group builds them and smoke-tests the shipped bytes in its
-  verdict.
+- **The tools:** the release PR's group builds them and smoke-tests the shipped bytes in its verdict.
 - **The product**, released by dispatch on the `main` tip: each group starts the build at batch
-  priority under a durable claim keyed by the group SHA. Landing retains the claim; a destroyed
-  group drops it unless its SHA landed. A release stays pending until A1 has passed for the SHA and
-  qualified bytes exist.
+  priority under a durable claim keyed by the group SHA; landing retains it, a destroyed group drops
+  it. A release waits until A1 has passed for the SHA and qualified bytes exist.
 
 Bytes are qualified once (`--version`, `check-tag`, the post-merge black-box suites), packed with
 `SHA256SUMS` and attested once, bound to the approved source, identity, target and digest.
 
 **One release authority.** Today the product workflow embeds its own shell gate
-(`schema2_release_eligibility.rs:223-247`, run again by `schema2_release_publish.sh:45-60`), which
-checks the current tip and the exact push run and attempt but never the App's status or the ruleset
-[C]. Before the ruleset changes, both product entry points (eligibility and the publisher's
-recheck) and the tools release call one released `velnor-ci release-gate`. It keeps the source SHA,
-workflow authority, run and attempt and current-tip checks, and adds the App's `success` on the SHA
-under the active epoch (`--app-check 'Velnor / Verified'=velnor-verify`), an active ruleset with
-that context required and empty `bypass_actors`, and exactly one successful push `Required` job
-reporting A1 (`--push-check Required`; `gate.rs:84-94,277-288,354-376`). Missing or stale proof, a
-wrong source, a skipped audit and a changed ruleset are exercised at both entry points.
+(`schema2_release_eligibility.rs:223-247`, rerun by `schema2_release_publish.sh:45-60`) that checks
+the tip and the exact push run but never the App or the ruleset [C]. Before the ruleset changes,
+both product entry points and the tools release call one released `velnor-ci release-gate`: it
+keeps the source SHA, workflow authority, run, attempt and current-tip checks, and adds the App's
+`success` on the SHA under the active epoch (`--app-check`), an active ruleset requiring it with
+empty `bypass_actors`, and exactly one successful push `Required` reporting A1 (`--push-check`;
+`gate.rs:84-94,277-288,354-376`). Missing or stale proof, a wrong source, a skipped audit and a
+changed ruleset are exercised at both entry points.
 
 A tag runs one job: gate, fetch by digest, re-hash, `gh attestation verify`, publish (idempotent,
-read back, crates.io receiving the exact packaged `.crate` bytes): about 15 s [E; timed in the dry
-runs] instead of 190–434 s for the tools and 4,105–6,238 s for a product release [M]. Stamping the
-commit after link would build the product once per closure instead of once per tip; it is a lab
-item. The macOS legs are paused (decision 9); `aarch64-unknown-linux-musl` is cross-compiled and
-smoke-run under user-mode qemu.
+read back, the exact `.crate` bytes to crates.io): about 15 s [E; timed in the dry runs] instead of
+190–434 s for the tools and 4,105–6,238 s for a product release [M]. Stamping the commit after link
+would build the product once per closure, not per tip; it is a lab item. macOS legs are paused;
+`aarch64-unknown-linux-musl` is cross-compiled and smoke-run under qemu.
 
 ### 8.5 Tests and the floor
 
-- **The unit of cost is `Journal::open`** (93 call sites): a pre-migrated template opens in ≤ 1 s;
-  no test exceeds 10 CPU-seconds alone outside a shrinking list; the 40-, 12-, 10-, 6- and 4-case
-  loops become one test per case; `test-threads=1` goes once tests use private temp directories and
-  ports; expensive valid prefixes are built once and cloned per case. Behind the loops the longest
-  test is still 132 s in actions-cli, 125 s in runner-host and 138 s in local-mode, and one
-  receipt-integrity test took 924.8 s [M, 28 job logs].
-- **The compile floor:** `velnor-runner-host` (156,822 lines) splits into five or six crates with
-  `velnor-runner-local` extracted; the 356 integration-test binaries become one `tests/it` binary
-  per package, saving about 340 link passes per cold build.
+- **The floor that survives.** `velnor-runner-host`, its Turso journal and `Journal::open` are
+  deleted at the final milestone (decision 16 gives them no new investment), so the floor work aims
+  at what stays: the 679 s `non_inputs_differential` suite, the 924.8 s receipt-integrity test, the
+  132 s actions-cli test and every other test over 60 s [M, 28 job logs]. No test exceeds 10 CPU-s
+  alone outside a shrinking list; looped cases become one test each; `test-threads=1` goes once
+  tests use private temp directories and ports; expensive valid prefixes are built once and cloned
+  per case. The 356 integration-test binaries become one `tests/it` per package, saving about 340
+  link passes per cold build. Runner-host is 25% of today's PRs, so B15 recomputes the PR-class mix
+  behind the P90 after the final milestone.
 - **The Git differential stays whole.** `non_inputs_differential.rs` compares the planner, Git's
   sparse checkout and the archive guard for every accepted generated glob (about 45,000 `git`
   processes, a 679 s suite). It stays on the merge gate until those paths are deleted or an
@@ -951,7 +952,7 @@ smoke-run under user-mode qemu.
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 800 agent-hours of building and 120 of review,
+(v2, decisions 1–24 and the rulings) sizes about 805 agent-hours of building and 120 of review,
 about 2.8 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min
@@ -968,7 +969,7 @@ Shadow sampling continues (decision 19); a divergence is fixed forward on a 2-ho
 |---|---|---|---|---|
 | 1 | `Required` gate, `Required verdict`, Plan, Ledger CLI, the four lints, freshness | 100–150 per type | about 15 s of acquisition and 25–40 s of set-up per gate job, on the critical path | Their ARC routes and hosted twins; Plan's tool-seed steps; two tool composites |
 | 2 | The Rust crate template (26 jobs), `check-maintenance-helpers`, `check-generator-samples` | 300 across crates; 150 | about 30 s of set-up × 26 = 13 runner-min per run; the verdict's maximum 8.5 → ≤ 4 min | 26 routes; six tool composites |
-| 3 | `velnor-runner-host`, its `local-mode`, `velnor-local` (the three Docker-class binaries) | 150 each | verdict P90 10.1–10.4 → ≤ 6 min | Their routes; the shared dind sidecar for velnor-new |
+| 3 | `velnor-runner-host`, its `local-mode`, `velnor-local` (the three Docker-class binaries), only what review keeps; the rest is deleted with its code at the final milestone instead of moved | 150 each | verdict P90 10.1–10.4 → ≤ 6 min | Their routes; the shared dind sidecar for velnor-new |
 | 4 | State seal (then deleted), job image candidate, source qualification, `release-rust-ci-tools` and product release (Linux) | 30 each; three release dry runs per workflow | hosted queue 5.9–9.1 min per run; a release about 104 → about 1 min with promotion | Hosted release labels in velnor-gen and the engine; the state seal and `cache-prune.yml` |
 | — | `qualification.yml`, homebrew and mac-proof | — | — | Retired |
 

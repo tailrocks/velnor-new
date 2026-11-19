@@ -349,6 +349,10 @@ in the design review. "Same as" marks a merged duplicate.
 | N128 | A private Docker daemon per request on both backends, or refusal; memory reserved from measured peaks; restartable batch requeued at the watermark. | GPT-6.2-Sol (final review) | — | Adopted (v3 final) | Freezing frees no memory; host-daemon siblings are shared state |
 | N129 | Proxy baselines labelled; targets restated as goals until joint traces support them. | GPT-6.2-Sol, Claude Opus 5.5 (final reviews) | — | Adopted (v3 final) | The 85/457 and 26.7/92.3 baselines come from stand-in clocks and cohorts |
 | N130 | Shared work inherits its highest live claimant's priority; lab B3 measures the wait, fetch and cold crossover under load. | GPT-6.2-Sol (final review) | — | Adopted (v3 final) | A real group could wait behind its own frozen speculation |
+| N131 | A standing canary with the checkout base a commit ahead of the generation and the file changed between them; `inputs restore` is not ported verbatim. | Claude Opus 5.5 (final review) | — | Adopted (v3 final) | `restore_inputs` stamps only files unchanged against the checkout (`inputs.rs:102-151`) |
+| N132 | Every per-root contract includes each ancestor's tracked files and `.cargo/`, `.config/`, `.github/`, `.velnor/`; the read audit is eBPF on the file-lookup syscalls, `ENOENT` included. | Claude Opus 5.5 (final review) | — | Adopted (v3 final) | Root `rustfmt.toml` and `clippy.toml` govern `ci-helper/` and `generator/`, which have none |
+| N133 | Executor selection, versions and digests are read from the base commit's `.velnor/`, certified identities only. | Claude Opus 5.5 (final review) | — | Adopted (v3 final) | A candidate must not choose its own verifier (C3) |
+| N134 | The push `Required` job waits on the ledger's A1 result for its SHA (`velnor-ci audit wait`, 2.5 h, per-SHA concurrency). | Claude Opus 5.5 (final review) | — | Adopted (v3 final) | Push runs are not cancelled (`ci.yml:57-59`); a shared group would queue tips |
 
 
 ## Load-bearing decisions
@@ -879,6 +883,36 @@ Rows N116–N130 are new.
 | A19 | The Native/Official delta charged ARC behaviour | Fixed: the difference marked unmeasured; paired runs on the same backend and stores; Worker and Node costs itemised | 5.3; plan O04 |
 | A20 | Eligible merges could wait behind their own speculation | Fixed: shared work inherits the highest claimant's priority and moves to reserved capacity; lab B3 measures wait, fetch and cold crossovers (N130) | 6.2, 7.3, 9 |
 | A21 | The DAG could not produce the promised system | Fixed: plan v2 with 121 items (Official, storage, cache index, RustFS, mirrors, ledger, witnesses, read audit, A1, A2, parity, release authority, canaries), the evidence matrix, smoke tests before deletions, recomputed dates; the `executor/` root stated once | 5.2, 10; plan |
+
+### Group 24: final review by Claude Opus 5.5
+
+Twenty-one findings, all verified. Eight were already fixed by group 23 and are cross-referenced;
+twelve are fixed here; one (B21) is fixed by group 23 in a stronger form, and its own remedy is
+rejected. Rows N131–N134 are new.
+
+| # | Finding | Decision | v3 section |
+|---|---|---|---|
+| B1 | A hedged shard turns a hang green | Fixed by group 23 (A4); here a soundness row for hedging and the corrected log row | 6.2, 6.4 |
+| B2 | The plan builds a check-run gate | Fixed by group 23 (A13, A21): plan L02 writes the status, the detail check is `Velnor / Details` | plan L02 |
+| B3 | The plan predates decisions 19–24 and the rulings | Fixed by group 23 (A21, A8, A1, A12, A13): plan v2, Official kept, the missing items added, numbers aligned | plan |
+| B4 | Compile reuse skips its shadow; twins share a generation | Fixed by group 23 (A2, A4): cold second witness until graduation, dep-info blob check | 7.3, 6.2 |
+| B5 | The mtime diff base is ambiguous | Base fixed by group 23 (A2); here the `inputs restore` warning and a canary with the checkout base ahead of the generation (N131) | 7.3 |
+| B6 | Per-root keys miss root configuration; no audit mechanism | Fixed: every per-root contract includes each ancestor's tracked files and `.cargo/`, `.config/`, `.github/`, `.velnor/`; the eBPF audit named; plan V07, V08 (N132) | 6.4; plan |
+| B7 | D15 admin merge | Fixed by group 23 (A1) | 5.9, 12 |
+| B8 | The candidate may choose its own verifier | Fixed: executor selection from the base commit, certified identities only; plan G05 (N133) | 5.3 |
+| B9 | Targets and work on code day 7 deletes | Fixed: `Journal::open` target, T01 and the runner-host split dropped; the floor restated on surviving suites; cohort 3 moves only what review keeps; PR-class mix recomputed after F01 | 1.4, 8.5, 10.1; plan |
+| B10 | D4 omits the compliant option | Fixed by group 23 (A14) | 5.3, 12 |
+| B11 | Push `Required` kept and deleted; mechanics undefined | Contradiction fixed by group 23 (A11); here `velnor-ci audit wait`, a 2.5 h timeout and a per-SHA concurrency group (N134) | 8.1; plan G04 |
+| B12 | Runner-minute targets lack arithmetic | Fixed by group 23 (A18); product bytes under durable claims (A12) | 4 |
+| B13 | A1 can starve | Fixed: a reserved A1 slot per site; the SLO stated at 95% utilisation; a 2 h lag alarm | 6.5 |
+| B14 | Twin orders and fan-out unspecified | Fixed: seeded batches through nextest filters, no order claimed until built; shard layout in the manifest; no receipt fan-out until lab C | 6.2; plan V03 |
+| B15 | Disagreement ordering contradicts revocation | Fixed: the first disagreement suspends at once; five re-runs decide flake or revoke | 1.2 |
+| B16 | The cross-executor cache case cannot pass yet; artifacts unclear | Fixed: the cache case waits for the endpoint; artifacts go to GitHub's v4 service with a read-through tier | 5.6, 5.7 |
+| B17 | Checkout tree verified on a sample | Fixed by group 23 (A10) | 7.4 |
+| B18 | Executability gaps | Fixed: queue-tip conflict verifies against `main` (group 23's state machine); failed records never reused; A1 compares cold digests at the fixed path; the `.velnor/` schema (G05); a no-`.git` census (V14) | 1.2, 6.2, 6.5, 8.2 |
+| B19 | Numbers | Fixed: acquire 13 / 27 s (V5); 238–289 runner-hours; the 2 s kill is not in the `ci` profile; the owner table no longer splits | 1.3, 3, 7.4, 12 |
+| B20 | The interim label flow restarts on any label | Fixed: named as an accepted interim cost; agents and Renovate label at creation only | 8.2; plan B07 |
+| B21 | Storage invariants across sites | Fixed by group 23 (A9): names live in one home-site index, blobs are content-addressed. B's site-local first-writer-wins names are rejected: two sites could then bind one key to two manifests, which breaks key immutability | 7.1, 7.2 |
 
 ## Design review
 
