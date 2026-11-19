@@ -18,6 +18,7 @@ pub mod gate;
 pub mod github;
 pub mod inputs;
 pub mod io;
+pub mod lane_guard;
 pub mod logscan;
 pub mod mbx_store;
 pub mod metrics;
