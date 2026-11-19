@@ -21,7 +21,7 @@ use velnor_model::{
 use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
-    silent_build_scripts,
+    silent_build_scripts, source_roots_over_limit,
 };
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
@@ -67,6 +67,9 @@ pub fn expected_with_notes(
     let facts = detect(view)?;
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
+    if let Some(roots) = source_roots_over_limit(&facts) {
+        return Err(GenerateError::TooManySourceRoots(roots));
+    }
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;

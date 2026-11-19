@@ -13,6 +13,7 @@ const LIMIT: u64 = 10_000_000_000;
 const CACHES: &str = "/repos/tailrocks/velnor-lab/actions/caches";
 
 mod cache;
+mod job_admin;
 mod listener;
 
 use cache::{archives, keys, mode};

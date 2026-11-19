@@ -27,6 +27,10 @@ mod tree_inventory;
 
 use support::{Harness, copy_fingerprint_inputs, retained_workspace};
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "the old engine's OpenTofu-golden collector accepts x86-64 ELF candidates by design (binary_format.rs:55); P4 runs velnor-gen workflows"
+)]
 #[test]
 fn retains_nonzero_version_diagnostics_and_leaves_capture_destination_untouched()
 -> Result<(), Box<dyn Error>> {

@@ -3,6 +3,8 @@
 
 mod activity;
 mod archive_witness;
+mod artifact_api;
+mod artifact_unzip;
 mod audit;
 mod build_inputs;
 mod cache;
@@ -17,6 +19,7 @@ mod crates_mirror_dispatch;
 mod crates_mirror_mise;
 mod fetch;
 mod fetch_credentials;
+mod fetch_reports;
 mod fetch_toolchain;
 mod git;
 mod git_witness;
@@ -190,6 +193,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Plan(args) => plan::run_plan(&args),
         Command::WriteRequest(args) => write_request::run(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::Fetch(args) => fetch::fetch(&args),
