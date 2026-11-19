@@ -3,7 +3,7 @@
 
 use bytes::Bytes;
 use http_body_util::{BodyExt, Full};
-use hyper::header::{CONTENT_TYPE, HeaderValue, LINK};
+use hyper::header::{CONTENT_TYPE, HeaderValue, LINK, LOCATION};
 use hyper::{Response, StatusCode};
 use serde_json::{Value, json};
 
@@ -104,5 +104,30 @@ pub(super) fn created() -> Response<Body> {
             .boxed_unsync(),
     );
     *response.status_mut() = StatusCode::CREATED;
+    response
+}
+
+pub(super) fn redirect(location: &str) -> Response<Body> {
+    let mut response = Response::new(
+        Full::new(Bytes::new())
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    *response.status_mut() = StatusCode::FOUND;
+    if let Ok(location) = HeaderValue::from_str(location) {
+        response.headers_mut().insert(LOCATION, location);
+    }
+    response
+}
+
+pub(super) fn gzip_response(bytes: Vec<u8>) -> Response<Body> {
+    let mut response = Response::new(
+        Full::new(Bytes::from(bytes))
+            .map_err(|never| match never {})
+            .boxed_unsync(),
+    );
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("application/x-gzip"));
     response
 }

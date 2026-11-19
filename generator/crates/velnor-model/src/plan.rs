@@ -205,6 +205,7 @@ pub enum When {
     SaveBase,
     SaveBaseDecided,
     SaveSources,
+    FetchSources,
     FullAudit,
     FullAuditOrPush,
     BaseExpired,

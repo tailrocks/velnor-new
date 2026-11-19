@@ -12,6 +12,7 @@ mod hazards;
 mod lock_version;
 mod members;
 mod mise;
+mod nested;
 mod plan;
 mod reality;
 mod registry;
