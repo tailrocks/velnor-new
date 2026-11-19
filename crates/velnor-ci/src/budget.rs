@@ -337,6 +337,22 @@ pub fn budget_text(budget: &SpeedBudget) -> String {
 }
 
 #[must_use]
+pub fn current_report(budget: &SpeedBudget, wall_seconds: u64, runner_seconds: u64) -> String {
+    let limit = |seconds: u64| {
+        if seconds == 0 {
+            "off".to_owned()
+        } else {
+            format!("{seconds}s")
+        }
+    };
+    format!(
+        "this run so far: wall {wall_seconds}s (default branch budget {}), runner {runner_seconds}s (budget {})\n",
+        limit(budget.main_wall_seconds),
+        limit(budget.runner_seconds)
+    )
+}
+
+#[must_use]
 pub fn report(budget: &SpeedBudget, evaluation: &Evaluation) -> String {
     let mut lines = vec![format!("speed budget: {}", budget_text(budget))];
     for medians in &evaluation.medians {

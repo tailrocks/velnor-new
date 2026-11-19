@@ -7,8 +7,8 @@ use crate::rules::{
 };
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{
-    BUDGET_OUTPUTS, MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT,
 };
 
 /// True for every event except a pull request from a fork.
@@ -25,7 +25,9 @@ pub(crate) enum ShellcheckMarks {
 
 pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
     let mut items = Vec::new();
-    if let Some(name) = &job.name {
+    if let Some(expression) = &job.check_name {
+        items.push(entry("name", Yaml::Expr(expression.clone())));
+    } else if let Some(name) = &job.name {
         items.push(entry("name", text(name)));
     }
     if !job.needs.is_empty() {
@@ -126,7 +128,6 @@ fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
                         || name == TESTS_LISTED_OUTPUT
                         || name == TESTS_IGNORED_OUTPUT
                         || name == TESTS_BY_PACKAGE_OUTPUT
-                        || BUDGET_OUTPUTS.contains(&name.as_str())
                     {
                         Yaml::Unread(value)
                     } else {

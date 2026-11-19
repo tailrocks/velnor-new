@@ -3,6 +3,7 @@
 
 pub mod bounded;
 pub mod budget;
+pub mod budget_history;
 pub mod cache;
 pub mod cargo_artifacts;
 pub mod cargo_package;

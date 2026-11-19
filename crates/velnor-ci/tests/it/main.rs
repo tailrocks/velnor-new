@@ -6,6 +6,7 @@ mod base_expiry;
 mod bench_compare;
 mod bounded;
 mod budget;
+mod budget_history;
 mod budget_window;
 mod cache;
 mod cache_budget;
