@@ -72,42 +72,12 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
         .collect()
 }
 
-pub(crate) fn with_saved_lane(condition: String, steps: &[Step]) -> String {
-    let mut terms = Vec::new();
-    for step in steps {
-        if let StepKind::CacheTrim { lane, family } = &step.kind {
-            let term = admitted_lane(lane, *family);
-            if !terms.contains(&term) {
-                terms.push(term);
-            }
-        }
-    }
-    if terms.is_empty() {
-        return condition;
-    }
-    let clause = format!("({})", terms.join(" || "));
-    let Some(inner) = condition
-        .strip_prefix("${{ ")
-        .and_then(|rest| rest.strip_suffix(" }}"))
-    else {
-        return format!("{condition} && {clause}");
-    };
-    format!("${{{{ {inner} && {clause} }}}}")
-}
-
-fn admitted_lane(lane: &JobId, family: TrimFamily) -> String {
-    match family {
-        TrimFamily::Target => trimmed_lane(lane, family),
-        TrimFamily::Sources => format!(
-            "(needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true' || needs.{lane}.outputs.{SOURCES_KEY_OUTPUT} != '')"
-        ),
-    }
-}
-
 pub(crate) fn trimmed_lane(lane: &JobId, family: TrimFamily) -> String {
     match family {
         TrimFamily::Target => format!("needs.{lane}.outputs.{BASE_SAVE_OUTPUT} == 'true'"),
-        TrimFamily::Sources => format!("needs.{lane}.outputs.{SOURCES_PREFIX_OUTPUT} != ''"),
+        TrimFamily::Sources => format!(
+            "needs.{lane}.outputs.{SOURCES_PREFIX_OUTPUT} != '' && (needs.{lane}.outputs.{SOURCES_SAVED_OUTPUT} == 'true' || needs.{lane}.outputs.{SOURCES_KEY_OUTPUT} != '')"
+        ),
     }
 }
 
@@ -199,4 +169,16 @@ pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
         restores,
         has(|kind| *kind == StepKind::Helper(HelperCommand::InputsAudit)),
     )
+}
+
+pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {
+    RenderedStep {
+        name: "Enforce the repository cache budget".to_owned(),
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some(format!("velnor-ci cache budget --budget-bytes {bytes}")),
+        ..RenderedStep::default()
+    }
 }

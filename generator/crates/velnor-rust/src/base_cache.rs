@@ -109,13 +109,14 @@ pub(crate) fn save_steps(
 pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     let release = facts.helper.as_ref()?;
     let trims: Vec<Step> = jobs.iter().flat_map(lane_trims).collect();
-    if trims.is_empty() {
-        return None;
-    }
-    let lanes: Vec<JobId> = jobs
+    let needs: Vec<JobId> = jobs
         .iter()
-        .filter(|lane| lane.steps.iter().any(is_decide))
-        .map(|lane| lane.id.clone())
+        .filter(|job| {
+            job.steps
+                .iter()
+                .any(|step| matches!(step.kind, StepKind::CacheSave(_)))
+        })
+        .map(|job| job.id.clone())
         .collect();
     let uploads: Vec<(JobId, TrimFamily)> = jobs.iter().flat_map(lane_uploads).collect();
     let verifies = uploads.iter().map(|(lane, family)| {
@@ -124,17 +125,22 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
             family: *family,
         })
     });
+    let result = (!uploads.is_empty()).then(|| step(StepKind::CacheResult(uploads.clone())));
     let steps = std::iter::once(step(StepKind::InstallHelper(release.clone())))
         .chain(trims)
         .chain(verifies)
-        .chain([step(StepKind::CacheResult(uploads.clone()))])
+        .chain(result)
+        .chain([step(StepKind::CacheBudget(facts.config.cache_budget_bytes))])
         .collect();
     Some(Job {
         name: Some("Cache maintenance".to_owned()),
-        needs: lanes,
+        needs,
         when: When::SaveBase,
         skip_on_draft: false,
-        permissions: Permissions(BTreeMap::from([(PermissionScope::Actions, Access::Write)])),
+        permissions: Permissions(BTreeMap::from([
+            (PermissionScope::Actions, Access::Write),
+            (PermissionScope::PullRequests, Access::Read),
+        ])),
         steps,
         ..job(facts, TRIM_JOB)
     })

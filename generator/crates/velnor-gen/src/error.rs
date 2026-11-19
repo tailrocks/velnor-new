@@ -20,6 +20,7 @@ pub enum GenerateError {
     ReleaseToolchainPath,
     HelperNotPinned,
     HelperTooOld(HelperVersion),
+    MbxStoreHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
@@ -52,6 +53,7 @@ impl fmt::Display for GenerateError {
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2,
                 HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2
             ),
+            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.84 or later"),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"

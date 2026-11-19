@@ -305,3 +305,20 @@ fn a_file_written_before_versions_were_recorded_is_refused_with_the_regenerate_c
     assert!(message.ends_with("run velnor-gen generate"), "{message}");
     Ok(())
 }
+
+#[test]
+fn only_a_pin_whose_helper_reads_target_dir_gets_it_recorded() -> TestResult {
+    let mut files = two_workspaces()?;
+    pin(&mut files, "0.1.81");
+    let released = recorded(&files)?;
+    assert!(!released.contains("target_dir"), "{released}");
+    for released in ["0.1.82", "0.1.83", "0.1.84"] {
+        pin(&mut files, released);
+        let metadata = recorded(&files)?;
+        assert!(!metadata.contains("target_dir"), "{released}: {metadata}");
+    }
+    pin(&mut files, "0.1.85");
+    let newer = recorded(&files)?;
+    assert!(newer.contains("\"target_dir\""), "{newer}");
+    Ok(())
+}

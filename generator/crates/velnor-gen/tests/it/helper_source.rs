@@ -53,7 +53,7 @@ fn the_helper_key_builds_the_helper_once_without_making_checks_depend_on_it() ->
     assert_eq!(
         helper.lines().find(|line| line.starts_with("    if:")),
         Some(
-            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
+            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
         )
     );
     let lanes: Vec<&&str> = jobs
@@ -227,7 +227,7 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     assert_eq!(
         helper.lines().find(|line| line.starts_with("    if:")),
         Some(
-            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
+            "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'"
         )
     );
     assert!(!text.contains("Download velnor-ci"));
