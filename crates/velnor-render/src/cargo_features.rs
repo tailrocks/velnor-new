@@ -23,6 +23,7 @@ pub(crate) fn nextest_features(
         filter,
         ci_profile,
         NO_TESTS_FAIL,
+        "",
     );
     (
         format!("{TEST_STEP} (features: {})", features.join(",")),
@@ -44,7 +45,7 @@ pub(crate) fn clippy_features(
     cargo: &str,
     features: &[String],
 ) -> (String, String, Vec<(String, Value)>) {
-    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[]);
+    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[], "");
     (
         format!("{name} (features: {})", features.join(",")),
         run,

@@ -15,7 +15,7 @@ pub enum CacheKeySegment {
     Host,
     TargetOwner { job: JobId, root: RootSlug },
     Compat,
-    Lock(RepoPath),
+    Locks(Vec<RepoPath>),
     RootLock(RootSlug),
     SourcesLocks,
     Mise,
@@ -62,7 +62,7 @@ impl CacheKey {
     #[must_use]
     pub fn layout(&self) -> CacheKeyLayout {
         use CacheKeySegment::{
-            Commit, Compat, DeltaBase, Host, Lock, Mise, PullRequest, RunId, SourcesLocks,
+            Commit, Compat, DeltaBase, Host, Locks, Mise, PullRequest, RunId, SourcesLocks,
             TargetOwner, Text,
         };
         let (segments, fallback_lengths): (Vec<_>, &'static [usize]) = match self {
@@ -72,7 +72,7 @@ impl CacheKey {
                     Text(self.tag().into()),
                     Host,
                     Mise,
-                    Lock(RepoPath::from_static("mise.lock")),
+                    Locks(vec![RepoPath::from_static("mise.lock")]),
                 ],
                 &[],
             ),
@@ -126,7 +126,7 @@ impl CacheKey {
 
 fn lock_segment(root: &CacheRoot) -> CacheKeySegment {
     match root.lock_identity() {
-        LockIdentity::File => CacheKeySegment::Lock(root.lock_file()),
+        LockIdentity::File => CacheKeySegment::Locks(root.locks().to_vec()),
         LockIdentity::Members => CacheKeySegment::RootLock(root.slug().clone()),
     }
 }
