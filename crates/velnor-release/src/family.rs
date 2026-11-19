@@ -46,6 +46,7 @@ pub(crate) fn plan_family(
             include: Vec::new(),
             asset_name: None,
             format: binary.format,
+            attest: binary.attest,
             profile: binary.profile.clone(),
             tag_pattern: tag_pattern.clone(),
         });
@@ -75,6 +76,8 @@ fn unsupported(binary: &Binary) -> Option<&'static str> {
         Some("include")
     } else if binary.asset_name.is_some() {
         Some("asset_name")
+    } else if binary.attest {
+        Some("attest")
     } else {
         None
     }

@@ -128,6 +128,7 @@ mod release_unguarded;
 mod release_workflow;
 mod release_yml;
 mod release_yml_asset_name;
+mod release_yml_attest;
 mod release_yml_binaries;
 mod release_yml_cargo;
 mod release_yml_family;

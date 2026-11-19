@@ -12,7 +12,7 @@ scale_set_runner = "ubuntu-26.04-scale-set"
 name = "mode"
 type = "choice"
 default = "both"
-options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs"]
+options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs", "js-pin"]
 
 
 [[workflow.case]]
@@ -65,6 +65,16 @@ run = "echo expected-negative"
 [[workflow.case.step]]
 name = "Intentional failure"
 run = "exit 1"
+
+[[workflow.case]]
+id = "js-pin"
+title = "Pinned JavaScript"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Pinned script"
+uses = "github-script"
+with = { script = "console.log('js-pin-ok')" }
 
 [[workflow.case]]
 id = "composite"
