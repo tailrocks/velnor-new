@@ -24,6 +24,7 @@ mod fetch_toolchain;
 mod git;
 mod git_witness;
 mod http;
+mod image_candidate;
 mod inputs;
 mod manifests;
 mod merge_group;
@@ -63,8 +64,8 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
-    SourcesCommand,
+    DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
+    ReleaseGateArgs, SourcesCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -210,6 +211,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::Image(ImageCommand::VerifyCandidate(args)) => {
+            image_candidate::verify_candidate(&args)
+        }
         Command::Fetch(args) => fetch::fetch(&args),
         Command::PrivateTokenAllowed => private_check::run(),
         Command::MbxStore => crate::mbx_store::setup(),

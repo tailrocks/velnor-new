@@ -16,6 +16,7 @@ pub mod escape;
 pub mod event;
 pub mod gate;
 pub mod github;
+pub mod image_candidate;
 pub mod inputs;
 pub mod io;
 pub mod lane_guard;

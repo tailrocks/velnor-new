@@ -33,6 +33,7 @@ mod fetch;
 mod fetch_reports;
 mod fetch_server;
 mod gate;
+mod image_candidate;
 mod inputs;
 mod io;
 mod io_admit_parity;
