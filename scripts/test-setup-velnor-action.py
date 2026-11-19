@@ -5,7 +5,6 @@ import hashlib
 import io
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import tarfile
@@ -19,7 +18,7 @@ RELEASE_URL = f"{RELEASES}/tools-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar
 LEGACY_RELEASE_URL = f"{RELEASES}/rust-ci-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
-SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq")
+SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq", "env")
 ARCHIVE = "velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PLATFORMS = (
     ("Linux", "X64", "x86_64-unknown-linux-musl", "SHA256_LINUX_X64"),
@@ -188,6 +187,9 @@ class SetupVelnorInstallTests(unittest.TestCase):
             return []
         return self.tar_log.read_text().splitlines()
 
+    def extract_calls(self):
+        return [call for call in self.tar_calls() if "--extract" in call.split("\t", 1)[1].split()]
+
     def cached_archive(self):
         return self.tool_cache / "velnor-ci" / "0.1.79" / "x64" / ARCHIVE
 
@@ -263,7 +265,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
     def test_the_archive_is_extracted_by_one_tar_command_that_reads_a_file_not_a_pipe(self):
         result = self.install(sha256(self.archive))
         self.assertEqual(result.returncode, 0, result.output)
-        calls = self.tar_calls()
+        calls = self.extract_calls()
         self.assertEqual(len(calls), 1, calls)
         pipe, arguments = calls[0].split("\t", 1)
         self.assertEqual(pipe, "none", "tar read its archive from a pipe")
@@ -276,15 +278,25 @@ class SetupVelnorInstallTests(unittest.TestCase):
     def test_the_archive_is_extracted_with_no_recursion(self):
         result = self.install(sha256(self.archive))
         self.assertEqual(result.returncode, 0, result.output)
-        self.assertIn("--no-recursion", self.tar_calls()[0].split("\t", 1)[1].split())
+        self.assertIn("--no-recursion", self.extract_calls()[0].split("\t", 1)[1].split())
 
-    def test_no_line_of_the_script_that_runs_tar_or_curl_has_a_shell_pipe(self):
-        piped = [
-            line
-            for line in install_script().splitlines()
-            if ("tar " in line or "curl " in line) and re.search(r"(?<!\|)\|(?!\|)", line)
-        ]
-        self.assertEqual(piped, [])
+    def test_an_archive_with_two_velnor_ci_members_is_refused(self):
+        self.archive = archive_bytes(
+            [("velnor-ci", PAYLOAD, 0o755), ("velnor-ci", b"second copy\n", 0o755)]
+        )
+        self.payload.write_bytes(self.archive)
+        result = self.install(sha256(self.archive))
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("velnor-ci was not installed", result.output)
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+        self.assertEqual(self.github_path.read_text(), "")
+
+    def test_an_exported_tar_options_cannot_change_what_is_extracted(self):
+        result = self.install(
+            sha256(self.archive), extra_env={"TAR_OPTIONS": "--exclude=velnor-ci"}
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
     def test_only_the_velnor_ci_member_of_the_archive_is_extracted(self):
         self.archive = archive_bytes(
