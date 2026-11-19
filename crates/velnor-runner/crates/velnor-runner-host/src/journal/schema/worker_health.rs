@@ -75,7 +75,6 @@ const OBJECTS: [(&str, &str, &str); 8] = [
 ];
 
 pub(super) async fn migrate_v40_to_v41(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v40(conn).await?;
     for (_, _, sql) in OBJECTS {
         conn.execute(sql, ())
             .await
@@ -84,7 +83,7 @@ pub(super) async fn migrate_v40_to_v41(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 41", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v41(conn).await
+    Ok(())
 }
 
 pub(super) async fn validate(conn: &turso::Connection) -> Result<(), HostError> {

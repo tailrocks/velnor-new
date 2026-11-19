@@ -13,6 +13,7 @@ mod connection;
 mod developer_images;
 mod job_authority;
 mod platform;
+mod registration;
 mod release_read;
 mod source_policy;
 
