@@ -150,9 +150,7 @@ fn secret_in(
             scope.events.join(", ")
         ));
     }
-    let named = reference
-        .strip_prefix("secrets.")
-        .is_some_and(secret_name);
+    let named = reference.strip_prefix("secrets.").is_some_and(secret_name);
     if inner != reference || !named {
         return refuse(format!(
             "the expression {inner} must be exactly secrets.<NAME>, where NAME is an upper case letter followed by upper case letters, digits and underscores; {SECRET_PLACE}"

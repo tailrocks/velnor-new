@@ -51,11 +51,7 @@ fn a_secret_is_refused_in_step_with_run_and_if() -> TestResult {
     let run = config(DISPATCH, "", "").replace("sleep 1", "echo ${{ secrets.G3_CANARY }}");
     let message = refusal(&run)?;
     assert!(message.contains("expression"), "run: {message}");
-    let message = refusal(&config(
-        DISPATCH,
-        "",
-        "if = \"secrets.G3_CANARY != ''\"",
-    ))?;
+    let message = refusal(&config(DISPATCH, "", "if = \"secrets.G3_CANARY != ''\""))?;
     assert!(message.contains("secrets.G3_CANARY"), "if: {message}");
     assert!(message.contains("step env"), "if: {message}");
     Ok(())
@@ -63,7 +59,11 @@ fn a_secret_is_refused_in_step_with_run_and_if() -> TestResult {
 
 #[test]
 fn a_secret_is_refused_in_a_job_env_and_in_a_container_or_service_env() -> TestResult {
-    let job_env = config(DISPATCH, "env = { CANARY = \"${{ secrets.G3_CANARY }}\" }", "");
+    let job_env = config(
+        DISPATCH,
+        "env = { CANARY = \"${{ secrets.G3_CANARY }}\" }",
+        "",
+    );
     let message = refusal(&job_env)?;
     assert!(message.contains("env"), "job env: {message}");
     let container = config(
@@ -72,7 +72,10 @@ fn a_secret_is_refused_in_a_job_env_and_in_a_container_or_service_env() -> TestR
         "",
     );
     let message = refusal(&container)?;
-    assert!(message.contains("without expressions"), "container env: {message}");
+    assert!(
+        message.contains("without expressions"),
+        "container env: {message}"
+    );
     Ok(())
 }
 
@@ -112,13 +115,17 @@ fn a_secret_is_refused_in_a_workflow_with_any_other_trigger() -> TestResult {
             message.contains("secrets.G3_CANARY") && message.contains(event),
             "{event}: {message}"
         );
-        assert!(message.contains("workflow_dispatch alone"), "{event}: {message}");
+        assert!(
+            message.contains("workflow_dispatch alone"),
+            "{event}: {message}"
+        );
     }
     Ok(())
 }
 
 #[test]
-fn a_secret_name_is_upper_case_letters_digits_and_underscores_and_nothing_else_is_read() -> TestResult {
+fn a_secret_name_is_upper_case_letters_digits_and_underscores_and_nothing_else_is_read()
+-> TestResult {
     for name in ["G3_CANARY", "A", "A1_B2", "TOKEN"] {
         rendered(&config(
             DISPATCH,
