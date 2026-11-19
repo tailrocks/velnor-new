@@ -3,7 +3,7 @@
 
 use velnor_gen::expected_files;
 use velnor_model::{RepoPath, RepoView, TargetKind};
-use velnor_rust::{CONFIG_PATH, DetectError, Reason};
+use velnor_rust::{CONFIG_PATH, DetectError, LOCK_PATH, Reason};
 
 use crate::facts::{TestResult, package, path, repo};
 use crate::golden::{load, samples};
@@ -144,9 +144,11 @@ fn every_check_job_uses_the_released_helper_even_when_building_it_from_source() 
 
 #[test]
 fn the_job_that_builds_the_helper_uploads_the_fingerprint_log_too() -> TestResult {
-    let text = text_of(&sample(Some(&format!(
-        "{HELPER_CONFIG}cache_debug = true\n"
-    )))?)?;
+    let mut repo = sample(Some(&format!("{HELPER_CONFIG}cache_debug = true\n")))?;
+    let lock = String::from_utf8(repo.files.get(&LOCK_PATH).ok_or("no lock")?.clone())?;
+    repo.files
+        .insert(LOCK_PATH, lock.replace("0.1.81", "0.1.82").into_bytes());
+    let text = text_of(&repo)?;
     let start = text.find("  rust-helper:\n").ok_or("no helper job")?;
     let body = &text[start..];
     let end = body[1..].find("\n  rust-").map_or(body.len(), |at| at + 1);
