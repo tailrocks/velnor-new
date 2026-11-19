@@ -221,7 +221,7 @@ qualified actions.
 |---|---|---|
 | Not requested | none (blocks) | `Velnor / Details` is `neutral`: "Not requested: add velnor:verify" (**Proposed — owner to confirm**) |
 | Running | `pending` | "Verifying: 12 to run, 29 reused" |
-| Passed | `success` | "Verified: 41 checks (29 reused, 12 run twice)" |
+| Passed | `success` | "Verified: 41 checks (29 reused, 8 verified before push, 3 run now twice, 1 fresh)" |
 | Failed | `failure` | "2 checks failed: velnor-ci tests" |
 
 `Velnor / Details` is a check run with the full report. No ruleset lists it, so it never gates.

@@ -38,8 +38,7 @@ handicapped baselines]. After it passes: *the fastest measured push-to-merge on 
 velnor-new workload, at a stated resource budget, with the same verification contract*. The speed
 belongs to the verification system (ledger, label flow, mirrors, warm generations): PR and group
 verdicts run no Actions job, so the executor is off the verdict path; an executor claim needs its
-own race (section 11). Every `ensure` is one OpenTelemetry trace (D11): plan, record resolution with
-its reason, provision, checkout, compile, each test binary, signing and the status write, exported
+own race (section 11). Every `ensure` is one OpenTelemetry trace (D11), every stage a span, exported
 over OTLP to a self-hosted collector; nothing in the gate reads it.
 
 | Measure | Today | Basis |
@@ -58,58 +57,48 @@ Correctness is the hard constraint and speed is optimised only inside it (decisi
 that could turn a real failure green is rejected, however fast. False reds have a budget; false
 greens have zero tolerance. "Same confidence" is this contract.
 
-1. **C1. Every commit that lands on `main` is verified.** For every landed commit and every
-   obligation the released inventory lists for it, a passing verification record exists whose key
-   equals the obligation's key at that commit, with every required witness passing (section 6.2).
-   An *obligation* is one unit of verification: format, lint, docs, a per-crate check, one test
-   binary under one configuration, release bytes, or a named check. ALLGREEN keeps this true for
-   every landed commit, not only a group's tip: under HEADGREEN three commits whose own `Required`
-   failed already sit on `main` [M].
-2. **C2. Keys capture every input, by construction:** sources, every workspace manifest, toolchain,
-   dependency versions, environment, flags, features, the binaries a test executes
-   (`CARGO_BIN_EXE_*`), data files, the execution fingerprint and the executor's identity (section
-   6.1). Every obligation runs on the full tree: cargo refuses a missing member, and a trimmed
-   sandbox turns a real failure green [M, reproduced]. **Keys are the whole tree** until section
-   6.1's enrolment narrows one; a read trace never proves a key complete: it cannot see a branch the
-   run did not take, clock reads answered in the vDSO, or the run-to-run variation of what is read
-   (a `HashMap`'s seed chose a different fixture on one tree, so a trace-keyed lookup passed a tree
-   where 12 of 40 fresh runs fail [M, landscape ruling X01]).
-3. **C3. Selection is sound or wide.** The plan and the **obligation inventory** come from a
-   released helper and the base commit, never from the change under test (`docs/goals.md` rule 12).
-   The inventory is versioned and maps every check that gates today (section 8.1); a file the plan
-   cannot place selects everything. Each obligation carries its exact expected test IDs, each with
-   one outcome; a missing, duplicate or extra ID fails. A head whose plan drops an obligation or test
-   that `main`'s plan has fails, unless an owner-signed reduction entry names it.
-4. **C4. Only what Velnor observed is evidence.** A receipt is minted only from processes the node
-   agent started in a sandbox it created, running the released command graph on inputs it mounted,
-   with every exit and the expected inventory observed. **A receipt binds the digest of every binary
-   it executed** (each test binary and every `CARGO_BIN_EXE_*` it spawned), the generation it
-   compiled over (or "cold"), the node, the witness slot and the epoch. A missing, skipped,
-   cancelled, timed-out, masked or zero-test result fails. Results never cross executors, and a
-   reference run never produces a verdict, receipt, cache entry or release.
-5. **C5. Uncomparable work runs on every request.** Obligations that read the network, the event
-   payload, the wall clock, unseeded randomness, Docker images not pinned by digest or the commit's
-   identity, or that publish, run fresh on every verification request, an exact-tree rebase and a
-   merge group included, unless the varying input is fixed and recorded in the key (a fixed clock or
-   seed, pinned fixtures). Tests get a loopback-only network and no event file; sandboxes have no
-   `.git` (a census first finds obligations that need it, such as `root.rs:22`'s `git rev-parse
-   --show-toplevel`; they get a read-only repository at the subject commit and are keyed by it), a
-   scrubbed environment (no `GITHUB_*`; fixed `HOME`, `PATH` and locale) and a fixed CPU count.
-6. **C6. Reuse is audited, compile reuse included.** A new reuse class runs in shadow with every
-   reuse re-executed until about 3,000 clean comparisons per obligation kind (a bound near 0.1% at
-   95%, never a proof of zero, so A1, sampling and planted failures stay); then 2% are re-executed. Until compile reuse graduates, the second witness builds cold. Every landed commit is
-   rebuilt cold and its changed obligations re-run (audit A1, section 6.5). The first disagreement
-   suspends the class and blocks its dependants at once; five re-runs then decide between a flake
-   (the class resumes) and a wrong key (the epoch is revoked).
+1. **C1. Every landed commit is verified.** For every commit on `main` and every obligation the
+   released inventory lists for it, a passing record exists whose key equals the obligation's key at
+   that commit, every required witness passing (section 6.2). An *obligation* is one unit: format,
+   lint, docs, a per-crate check, one test binary under one configuration, release bytes, or a named
+   check. ALLGREEN keeps this true for every landed commit: under HEADGREEN three commits whose own
+   `Required` failed already sit on `main` [M].
+2. **C2. Keys capture every input, by construction:** sources, manifests, toolchain, dependency
+   versions, environment, flags, features, the binaries a test executes (`CARGO_BIN_EXE_*`), data
+   files, the execution fingerprint and the executor (section 6.1). Every obligation runs on the full
+   tree: a trimmed sandbox turns a real failure green [M, reproduced]. **Keys are the whole tree**
+   until an enrolled contract narrows one; a read trace never proves a key complete: it cannot see an
+   untaken branch, clock reads answered in the vDSO, or run-to-run variation (a `HashMap` seed chose
+   another fixture, so a trace-keyed lookup passed a tree where 12 of 40 fresh runs fail [M, X01]).
+3. **C3. Selection is sound or wide.** The plan and the versioned **obligation inventory** come from
+   a released helper and the base commit, never the change under test; a file the plan cannot place
+   selects everything; each obligation carries its exact expected test IDs, and a missing, duplicate
+   or extra ID fails; a head dropping an obligation or test that `main` has fails unless an
+   owner-signed reduction names it.
+4. **C4. Only what Velnor observed is evidence.** A receipt comes only from processes the node agent
+   started in a sandbox it created, running the released command graph on inputs it mounted, with
+   every exit and the expected inventory observed. **It binds the digest of every binary executed**
+   (each test binary and spawned `CARGO_BIN_EXE_*`), the generation compiled over (or "cold"), the
+   node, the slot and the epoch. A missing, skipped, cancelled, timed-out, masked or zero-test result
+   fails. Results never cross executors; a reference run never yields a verdict, cache or release.
+5. **C5. Uncomparable work runs on every request.** Obligations that read the network, the event,
+   the wall clock, unseeded randomness, unpinned images or the commit's identity, or that publish,
+   run fresh on every request, rebases and groups included, unless the varying input is fixed and
+   keyed. Tests get a loopback-only network and no event file; sandboxes get no `.git` (a census
+   finds those that need it, such as `root.rs:22`, which get a read-only repository keyed by the
+   commit), a scrubbed environment and a fixed CPU count.
+6. **C6. Reuse is audited, compile reuse included.** A new reuse class runs in shadow, every reuse
+   re-executed, until about 3,000 clean comparisons per obligation kind (a bound near 0.1% at 95%,
+   never zero), then 2%; until compile reuse graduates the second witness builds cold; A1 audits
+   every landed commit (section 6.5). The first disagreement suspends the class and its dependants;
+   five re-runs decide between a flake and a wrong key (the epoch is revoked).
 7. **C7. Flakes are budgeted** (section 1.3).
 
-**Two independent witnesses.** Every obligation whose key is new needs two passing witnesses before
-it counts, in a PR or a merge group: on two nodes, in two attempts, with different test orders, and
-over two different verified generations or with one built cold. A witness counts once, for one slot
-of one record; any failure blocks, with no retry. The cold audit of every landed commit is the third
-execution, as today's push run is. A regression failing with probability p is caught before merge
-with 1−(1−p)², as today; if lab C2 finds the twins correlated, the merge group re-runs the PR's
-changed obligations even on an identical tree.
+**Two independent witnesses.** Every new key needs two passing witnesses, in a PR or a group: two
+nodes, two attempts, different test orders, and two verified generations or one cold build. A
+witness fills one slot of one record; any failure blocks, with no retry; A1 is the third execution.
+A regression failing with probability p is caught before merge with 1−(1−p)², as today; if lab C2
+finds the twins correlated, the group re-runs the PR's changed obligations even on an equal tree.
 
 ### 1.3 Flake budget
 
@@ -224,10 +213,10 @@ misses]:
 |---|---|---|
 | Two witnesses per labelled head | 2 × (16 warm + 22 cold) = 76 | 2 × 2 × 3 = 12 |
 | Group misses (twins) | 0.3 × 38 = 11 | 0.3 × 6 = 2 |
-| A1: cold build and changed obligations | ≈ 10 | ≈ 10 |
+| A1 (cold build, changed and sampled obligations) and the nightly reuse-free run | ≈ 10 | ≈ 11 |
 | Product bytes per landed tip (410–534 s preview build today [M]) | ≈ 8 | ≈ 8 |
 | C5 fresh work, 2% sampling, speculation, cancelled claims | ≈ 5 | ≈ 5 |
-| **Total** | **≈ 110** (warm 16 and cold 22 per full tree are [E]) | **≈ 37; goal ≤ 50 [T]** |
+| **Total** | **≈ 110** (warm 16 and cold 22 per full tree are [E]) | **≈ 38; goal ≤ 50 [T]** |
 
 The runner class costs more; the stretch's ≤ 20 needs product bytes once per closure (stamp after
 link). Per release: 68–104 runner-min (product) or 3.2–7.2 (tools) → promotion, zero compiles.
@@ -357,21 +346,16 @@ pub struct Capabilities {
 
 The core branches on capabilities, never backend names; a missing one selects a slower, correct
 path (copy for reflink, refusal of the Docker class, whole-tree keys without a read audit, container
-kill for `cgroup.kill`). Each Docker-class request gets its own daemon, and a backend passes the
-private-daemon cases (nothing of one request visible to the next; process, mount and network
-proofs) or refuses the class. Lifecycle, recovery, tri-state proofs (`Unknown` is never absent) and
-teardown are in the contract; conformance runs per backend. A microVM or Apple Containerization
-backend declares `kernel: Separate`, `dir_entry: [VirtioFs]` or `[DiskImage]` and
-`snapshot_restore`: a new implementation of this trait and nothing else. Direct namespace and cgroup
-slots in the node agent, instead of a pod per sandbox, are a Kubernetes-backend candidate measured
-against warm pods (provision to first step under load, section 11). **Pool:** per class, a floor by
-hour plus the sandboxes `ensure`'s vector asks for plus one group's worth per auto-merge enqueue;
-idle members hold small requests and are resized in place at claim (stable on the cluster's
-Kubernetes 1.37); a deferred resize counts as a miss; delivery, queue, claim, attach and first
-process are timed. **Snapshots** (contract only, nothing built): a snapshot's digest joins the
-execution fingerprint; only the builder class takes one, from a pristine environment before any
-assignment; a restore supplies fresh identity, entropy, credentials and private writable storage,
-and is chosen only where measured faster than provisioning.
+kill). Each Docker-class request gets its own daemon, or the backend refuses the class. Lifecycle,
+recovery, tri-state proofs (`Unknown` is never absent) and teardown are in the contract;
+conformance runs per backend; a microVM or Apple Containerization backend is a new implementation
+of this trait and nothing else. Namespace and cgroup slots in the node agent are a Kubernetes
+variant measured against warm pods (P08). **Pool:** per class, an hourly floor plus `ensure`'s
+forecast plus one group per auto-merge enqueue; idle members hold small requests and are resized in
+place at claim (stable on Kubernetes 1.37), a deferred resize counting as a miss. **Snapshots**
+(contract only): the digest joins the fingerprint; only the builder class takes one, from a pristine
+environment; a restore gets fresh identity, entropy, credentials and storage, and is used only
+where measured faster than provisioning.
 
 ### 5.5 The job path
 
@@ -502,47 +486,39 @@ is well designed for this architecture.
 
 ### 6.1 Keys
 
-- **Definition digest:** command, configuration and features, profile, nextest profile and
-  overrides, helper version, toolchain, image and tool-store digests, the **executor identity**
-  (decision 20), and the **execution fingerprint**: kernel release, architecture, OS, the CPU
-  features the toolchain may target, CPU count, sandbox profile digest and tool versions.
-- **Inputs:** the Git tree of the whole repository (today's checkout is `/*` without `/docs/**`,
-  `ci.yml:97`); the exact package selection and features (a test passed under `-p a` and failed
-  under `--workspace` [M]); the execution manifest (allowed environment, path prefix, modes,
-  symlink targets).
-- **Enrolled keys** are computed from Git subtree ids plus the contract's single files and absent
-  paths; records also carry the digests of their log and JUnit output.
-- **Narrower keys need an enrolled contract.** A per-root or per-package key is used only after the
-  read audit (section 6.4) has run in shadow on that obligation; a reviewed dependency contract in
-  the trusted inventory names every path it may observe, directory contents and absent paths
-  included, with deterministic inputs enforced; every execution, hit or sample, runs on the intact
-  tree with the audit enforcing the contract, so one observation outside it fails the witness and
-  revokes the enrolment; a shadow case where a new sibling file outside the contract changes the
-  verdict is caught; and about 3,000 comparisons for its kind are clean. The trace proposes and
-  revokes; it never licenses a hit. 79 of 86 files using `CARGO_MANIFEST_DIR` climb out of their
-  package and 70 test files list directories, so most test keys stay whole-tree.
-- **Time and randomness.** No test manifest declares proptest, quickcheck or rand [M]. The trusted
-  planner classes an obligation as C5 when its code path reads the realtime clock, randomness, the
-  network or the event: today 5 test files of `velnor-ci` and `velnor-gen` read `SystemTime`, and
-  `velnor-ci`'s `now_seconds()` (`io/mod.rs:210`) feeds cache and recording decisions [C]. Ten more
-  test files use only `Instant` deadlines: a load-dependent flake risk inside the flake budget, not a
-  C5 input. Nothing is reused on a time-to-live; the share of obligations and obligation-seconds in
-  C5 is measured before any target counts it (section 11). Repository work shrinks C5: realtime reads
-  go through one injectable clock fixed per obligation and recorded in its key (A2 still shifts it
-  to catch date bombs), and `CARGO_MANIFEST_DIR` climbs become declared fixture lists. A process-wide
-  clock shim is not used: it would silently change what every test checks.
+- **A key is a canonical struct** (Dagger D01) with named fields, digested over its encoding, so
+  `velnor explain` names the field that changed; a new field raises the key version (a miss):
+  *definition* (command, configuration and features, profile, nextest profile and overrides, helper,
+  toolchain, image and tool-store digests); the **executor identity** (decision 20); the **execution
+  fingerprint** (kernel release, architecture, OS, the CPU features the toolchain may target, CPU
+  count, sandbox profile digest, tool versions); the *reuse class*; and the *inputs*: the whole
+  repository's tree (today's checkout is `/*` without `/docs/**`, `ci.yml:97`), the exact package
+  selection and features (a test passed under `-p a` and failed under `--workspace` [M]), and the
+  execution manifest (allowed environment, path prefix, modes, symlink targets). Records also carry
+  the digests of their log and JUnit output.
+- **Narrower keys need an enrolled contract.** A per-root or per-package key, computed from Git
+  subtree ids plus the contract's single files and absent paths, is used only after the read audit
+  (section 6.4) has run in shadow on that obligation; a reviewed contract in the trusted inventory
+  names every path it may observe, directory contents and absent paths included; every execution,
+  hit or sample, runs on the intact tree with the audit enforcing the contract, so one observation
+  outside it fails the witness and revokes the enrolment; a sibling-file shadow case is caught; and
+  about 3,000 comparisons for its kind are clean. The trace proposes and revokes; it never licenses
+  a hit. 79 of 86 files using `CARGO_MANIFEST_DIR` climb out of their package and 70 test files list
+  directories, so most test keys stay whole-tree.
+- **Time, randomness and the network.** The planner classes an obligation as C5 when its code path
+  reads the realtime clock, randomness, the network or the event: today 5 test files of `velnor-ci`
+  and `velnor-gen` read `SystemTime`, and `now_seconds()` (`io/mod.rs:210`) feeds cache and
+  recording decisions [C]; ten more use only `Instant` deadlines, a flake risk, not a C5 input. Each
+  inventory obligation also declares `reuse = content | per-request | never` (D04), and the stricter
+  of that and the classifier wins. Nothing is reused on a time-to-live (TTLs serve advice only).
+  Repository work shrinks C5: realtime reads go through one injectable clock fixed per obligation and
+  recorded in its key (A2 still shifts it), and `CARGO_MANIFEST_DIR` climbs become declared fixture
+  lists; no process-wide clock shim. Network inputs resolve `frozen` (D10), only from committed locks
+  through the digest-checked mirrors; an unlocked input fails or is C5, and `velnor lock update` is
+  the only `live` path.
 - **The obligation vector.** For every subject SHA the planner derives every obligation and key;
-  the ledger resolves the vector against current, unrevoked records. An "instant" verdict
-  (rebase-only push, identical group tree) needs zero C5 obligations and zero misses; otherwise the
-  C5 set and the misses run.
-- **Key shape and reuse class** (Dagger ideas D01, D04, D10). A key is a canonical struct with named
-  fields (definition, inputs, fingerprint, executor, reuse class), digested over its encoding, so
-  `velnor explain` names the field that changed; a new field raises the key version (a miss, never
-  a hit). Each inventory obligation declares `reuse = content | per-request | never`; the planner
-  takes the stricter of that and the C5 classifier, and a TTL is used only for advice, never
-  evidence. Obligations resolve network inputs `frozen`, only from a committed lock through the
-  digest-checked mirrors; an unlocked input fails the obligation or makes it C5, and `velnor lock
-  update` is the only `live` path.
+  the ledger resolves it against current, unrevoked records. An "instant" verdict (rebase-only push,
+  identical group tree) needs zero C5 obligations and zero misses.
 
 ### 6.2 Verification records, witnesses, joins and scopes
 
@@ -610,18 +586,14 @@ not, how that is detected, and the automatic fallback.
 | Release promotion | Closure, release profile, target, tool image; the digest is in the receipt and the attestation | Wrong bytes published | Re-hash and `gh attestation verify` at publish; A1 rebuilds cold and compares | The release stops; nothing is rebuilt silently |
 
 **The read audit** resolves paths in the kernel through LSM hooks (opens, attribute and directory
-reads, failed lookups), filtered by the sandbox's cgroup, and a seccomp filter makes every path call
-it cannot see fail the witness: `access`, `faccessat2`, `execve` lookups, the legacy `open`, `stat`,
-`lstat`, `readlink` and `getdents`, and io_uring opens, which complete without a syscall exit. Paths
-resolve against the materialised tree; its overhead, with the tree hash, must
-stay within 3% of suite wall and 1.5 s per obligation at P50, measured in shadow. A
-backend without it keeps whole-tree keys. **Every per-root contract includes** each tracked file
-directly in the repository root and in every ancestor of the root (today `rustfmt.toml`,
-`clippy.toml`, `deny.toml`, `rust-toolchain.toml`, both `Cargo.*` and `mise.*`) and `.cargo/` and
-`.config/`: rustfmt, clippy, cargo and nextest search parent directories, and `ci-helper/` and
-`generator/` have no configuration of their own. `.github/` and `.velnor/`, which 20% of commits
-touch, enter a contract only where review or the audit finds a reader (generator goldens, the
-planner's own inputs), so most heads that touch them keep narrow keys.
+reads, failed lookups) per sandbox cgroup, and a seccomp filter fails the witness on every path call
+it cannot see (`access`, `faccessat2`, `execve` lookups, legacy `open`/`stat`/`lstat`/`readlink`/
+`getdents`, io_uring opens). With the tree hash it must stay within 3% of suite wall and 1.5 s per
+obligation at P50; a backend without it keeps whole-tree keys. **Every per-root contract includes**
+each tracked file in the repository root and every ancestor of the root (`rustfmt.toml`,
+`clippy.toml`, `deny.toml`, `rust-toolchain.toml`, `Cargo.*`, `mise.*`) and `.cargo/` and `.config/`,
+because the tools search parent directories; `.github/` and `.velnor/` (touched by 20% of commits)
+enter a contract only where review or the audit finds a reader.
 
 ### 6.5 Trust root, publication and audit
 
@@ -732,103 +704,79 @@ and the default branch, writes its own ref, and keys are immutable; conformance 
 
 ### 7.3 Compile reuse
 
-**Measured** [M, `experiments/mbx-cache-cluster.md`, the runner workspace of 357 crates at
-`/w/velnor-new`, idle nodes]: plain cargo cold 92 s; a reflink clone of the warm target 0.25 s and
-2.5 MB, then 0.31 s and 0 crates to build; today's ext4 copy 8.6 s and 10.75 GiB; mbx on a second
-node from a warm `mbx-cache` 39.9 s; a lockfile change 67.4 s plain, 43.4 s with mbx on another node
-once one has built it.
+**Measured** [M, `experiments/mbx-cache-cluster.md`, 357 crates at `/w/velnor-new`, idle nodes]:
+cold 92 s; a reflink clone of the warm target 0.25 s and 2.5 MB, then 0.31 s and 0 crates; today's
+ext4 copy 8.6 s and 10.75 GiB; mbx on a second node 39.9 s; a lockfile change 67.4 s plain, 43.4 s
+with mbx on another node once one has built it.
 
-**The hot path is plain cargo over a reflink clone of a verified generation** at a fixed checkout
-path, with inputs proven by content, independently of cargo's freshness:
+**The hot path is plain cargo over a reflink clone of a verified generation** at a fixed path, with
+inputs proven by content, independently of cargo's freshness:
 
-1. A generation G is the target directory of a trusted build whose cold A1 rebuild gave equal
-   digests, sealed with its **input manifest** M_G (every path's blob id, mode and materialised
-   time) and every unit's dep-info. Nothing unqualified is ever a base.
+1. A generation G is the target of a trusted build whose cold A1 rebuild gave equal digests, sealed
+   with its **input manifest** M_G (each path's blob id, mode and time) and every unit's dep-info.
 2. For a request tree T, the changed set Δ is every path whose blob or mode differs from M_G, plus
-   every path added or removed. The base is G's manifest, never the checkout's base tree: a verbatim
-   port of `inputs restore`, which stamps only files unchanged against the checkout
-   (`inputs.rs:102-151`), reproduces Q16 when `main` has moved past G.
+   every path added or removed; the base is G's manifest, never the checkout's base (a verbatim port
+   of `inputs restore`, `inputs.rs:102-151`, reproduces Q16 when `main` has moved past G).
 3. If a path in Δ is outside every unit's declared inputs (dep-info, `rerun-if-changed`, the package
-   directory of a script without directives), every workspace unit of that Cargo root builds cold;
-   third-party units, whose inputs are the checksummed crate, features, profile, toolchain and
-   declared environment, are reused. A new `.rs` file is always outside them, and 64% of landed
-   commits add one [M, 137 of 213]. Behind lab B5 this narrows (landscape ruling X01b, as selection,
-   never proof): an added or removed path that meets no unit's traced read set (step 5) rebuilds
-   nothing by itself, one that meets a set rebuilds that unit and its dependants, and cargo still
-   plans on the real tree. It needs a complete trace of every unit of the root, or the root builds
-   cold; it is its own reuse class, so the second witness builds cold with equal digests until about
-   3,000 clean comparisons on such deltas per root, and the first digest disagreement restores
-   root-cold.
+   directory of a script without directives), every workspace unit of that root builds cold;
+   third-party units (checksummed crate, features, profile, toolchain, declared environment) are
+   reused. A new `.rs` file is always outside them, and 64% of landed commits add one [M, 137 of
+   213]. Behind lab B5 this narrows, as selection and never proof (ruling X01b): an added or removed
+   path that meets no unit's traced read set rebuilds nothing by itself, one that meets a set
+   rebuilds that unit and its dependants, cargo plans on the real tree, an incomplete trace sends the
+   root cold, and as its own reuse class it keeps a cold second witness until about 3,000 clean
+   comparisons per root; the first digest disagreement restores root-cold.
 4. Unchanged paths keep M_G's times; every path in Δ is stamped later than G's newest output.
 5. Each unit's read set is its dep-info plus every path its build script, proc macro or `rustc`
-   opened, listed or failed to find while G was built, traced by the node agent. Before cargo runs,
-   any unit whose read set meets Δ has its fingerprint removed, so it and its dependants rebuild,
-   even when another unit declared the path. After cargo runs, each dep-info input of every unit it
-   did not rebuild is checked against M_G by blob id (`io/audit/dep_info.rs`); a mismatch fails the
-   build and retires G.
-6. Toolchain, profile, environment and fingerprint are in G's key; another one means another
-   generation or a cold build.
+   opened, listed or failed to find while G was built. Any unit whose read set meets Δ loses its
+   fingerprint before cargo runs, so it and its dependants rebuild; afterwards each dep-info input
+   of every unit not rebuilt is checked against M_G by blob id (`io/audit/dep_info.rs`), and a
+   mismatch fails the build and retires G.
+6. Toolchain, profile, environment and fingerprint are in G's key.
 
 - **Witnesses.** Until compile reuse graduates (about 3,000 clean warm-against-cold digest
-  comparisons per Cargo root), the second witness builds cold and both must report equal binary
-  digests; afterwards it runs over a different verified generation on another node, and 2% build
-  cold. A unit not reproducible at the fixed path (lab C06) keeps its dependants cold until fixed.
-- **No transport on the verdict path by default:** a node holding the generation, or cold. mbx with
-  a per-site `mbx-cache` fills nodes in the background while it saves ≥ 20 runner-min a day or ≥ 10%
-  of builds would start cold (N54). Lab B3 measures waiting for a warm slot against fetching
-  verified state and starting cold, under load, and the wait threshold comes from those queue
-  observations; a bounded transfer joins the verdict path only where
-  measured faster at the same provenance bar.
-- **Variants.** Incremental compilation stays off for every minting witness (ruling Q17) until lab
-  B4 shows zero differences; it serves only the fast-red lane. Overlayfs and compressed layers are
-  lab candidates; no hard-linked `deps/` base;
-  `-Z checksum-freshness` is nightly-only; `CARGO_INCREMENTAL=0` on every receipt or shipped build
-  (lab B4); blaze rejected (it built none of the five workspaces and missed a clippy `deny` [M]).
-- **Standing canaries** (lab B2, then hourly): the Q16 reproduction (a source file changed to a
-  failing value and stamped older than the outputs must rebuild and fail), also with the checkout
-  base a commit ahead of G and the file changed between them; an undeclared build-script input that
-  changes; a changed, a removed and a new input; a proc macro reading a file.
+  comparisons per root), the second witness builds cold with equal digests; afterwards it runs over
+  another verified generation on another node, 2% build cold, and a unit not reproducible at the
+  fixed path (lab C06) keeps its dependants cold.
+- **Transport.** None on the verdict path by default: a node holding the generation, or cold. mbx
+  with a per-site `mbx-cache` fills nodes in the background while it saves ≥ 20 runner-min a day
+  (N54); lab B3 sets the wait-or-fetch-or-cold threshold from queue observations, and a bounded
+  transfer joins the verdict path only where measured faster at the same provenance bar.
+- **Variants.** `CARGO_INCREMENTAL=0` on every minting or shipped build (ruling Q17) until lab B4
+  shows zero differences; incremental serves only the fast-red lane. Overlayfs and compressed layers
+  are lab candidates; no hard-linked `deps/` base; `-Z checksum-freshness` is nightly-only; blaze
+  rejected (it built none of the five workspaces and missed a clippy `deny` [M]).
+- **Standing canaries** (lab B2, then hourly): the Q16 older-time edit, also with the checkout base a
+  commit ahead of G; an undeclared build-script input; a changed, removed and new input; a proc macro
+  reading a file.
 
 ### 7.4 Node-local mirrors
 
-Each node keeps a bare mirror of every configured repository (decision 24), covering PR head refs,
-merge-group refs and tags, fetched on push webhooks with a periodic catch-up. One writer per mirror
-per node (`flock`); at most one fetch runs and one waits, absorbing later requests and rechecking
-for the commit after the lock; explicit refspecs with `--atomic --no-auto-maintenance`, `gc.auto=0`
-and no pruning in place; a refresh is a new mirror swapped in, the old one deleted only after its
-readers are proven absent, which protects jobs that read `.git` through alternates. New or wiped nodes
-seed from a git bundle in the site store, not from GitHub. Mirrors are read-only to jobs.
+Each node keeps a bare, job-read-only mirror of every configured repository (decision 24): PR heads,
+merge-group refs and tags, fetched on push webhooks with a periodic catch-up, seeded from a site
+bundle. One writer per mirror (`flock`); one fetch runs and one waits, absorbing later requests;
+refspecs with `--atomic --no-auto-maintenance`, `gc.auto=0`, no pruning in place; a refresh is a new
+mirror swapped in, the old one deleted only once its readers are proven absent.
 
-**Native checkout from the mirror,** with a target well under 1 s:
+**Native checkout,** well under 1 s:
 
-1. Make sure the exact commit is in the mirror, fetching only missing objects in one round trip.
-2. Reflink-clone a **sealed base**: a pre-materialised tree recorded with its tree id, read-only and
-   never refreshed in place (a refresh makes a new base). Rewrite the paths whose blob or mode
-   differs (deletions and symlinks included), each from a hash-verified blob.
+1. Fetch only the missing objects of the exact commit, in one round trip.
+2. Reflink-clone a **sealed base** (a pre-materialised tree recorded with its tree id, read-only,
+   never refreshed in place) and rewrite each path whose blob or mode differs from a hash-verified
+   blob.
 3. Before the first step, hash the whole staged tree (contents, modes, symlink targets) and require
-   it to equal the requested tree. The cost is per file, not per byte: 5,164 files and 37.3 MiB, read
-   cold because a reflink clone has no resident pages; 0.43 s on eight threads on a Mac [M, proxy],
-   unmeasured on a worker (BM13, a fresh clone, idle and loaded); stage 4's ≤ 1 s is the budget. A
-   delta-only hash needs a kernel-verified lower layer, which XFS lacks (no fs-verity). A sparse checkout verifies the selected paths against the tree filtered
-   by the same patterns; submodules are verified as gitlinks and fetched only when the job asks,
-   from that repository's mirror, verified the same way.
+   it to equal the requested tree. The cost is per file: 5,164 files and 37.3 MiB, read cold because
+   a clone has no resident pages; 0.43 s on eight threads on a Mac [M, proxy], unmeasured on a worker
+   (BM13); stage 4's ≤ 1 s is the budget. A delta-only hash needs a kernel-verified lower layer,
+   which XFS lacks. Sparse checkouts verify the filtered tree; submodules are verified as gitlinks.
 4. Set times by the generation rule (section 7.3). A job that needs `.git` gets the read-only mirror
    through alternates; obligations get no `.git` (C5).
 
-A kernel-verified read-only lower layer that lets only the delta be hashed is a lab candidate; the
-full hash stays until its measured cost is known. Tested: a stale unchanged file in the base, a mode-only change, a deletion, and a base refresh
-concurrent with a clone.
-
-**Every upstream the same way,** each new version crossing the internet about once per site and
-pinned and verified before use: crates by lockfile checksum (the unused crates-mirror DaemonSet,
-§B.4.2), toolchains and mise tools by digest, images by digest through a registry mirror per site.
-All of it is configuration per platform; on a Mac the Docker backend may reuse the developer's clone.
-
-**What it saves** [E, an upper bound: about 10,000 job records a day, skipped jobs included]: per
-job about 5 s of checkout (110 MiB from GitHub today), 4.5 s of crates (sources cache 0 of 48) and
-14 s of toolchain and tools (restored 0 of 58 times) [M per job], about 62 runner-hours a day, a
-fifth of today's 238–289 [E]; images are measured when the Docker class moves. v3 runs far fewer
-jobs, each still saving about 20 s.
+Tested: a stale unchanged base file, a mode-only change, a deletion, a refresh during a clone.
+**Every upstream the same way,** pinned and verified before use: crates by lockfile checksum,
+toolchains and mise tools by digest, images by digest through a registry mirror per site. **Saved**
+[E, upper bound]: about 5 s of checkout, 4.5 s of crates and 14 s of tools per job [M per job],
+about 62 runner-hours a day today.
 
 ### 7.5 Budgets
 
@@ -876,13 +824,11 @@ PR.
 
 ### 8.2 The label flow and the required status
 
-**The gate is one commit status, `Velnor / Verified`, and only `success` passes.** A dedicated GitHub
-App (working name `velnor-verify`) writes it, bound by `integration_id`. GitHub applies the branch's
-required list to the PR head, to merge or enter the queue, and to each merge group's head, to land.
-No Actions job is in the list: a skipped job passes a required check, also through `needs` [docs],
-and integration 15368 is every workflow, including one a PR adds or edits [M]. A check run also
-passes on `neutral` or `skipped`, so the detail view is a differently named check run, `Velnor /
-Details`, that no ruleset lists.
+**The gate is one commit status, `Velnor / Verified`, and only `success` passes.** A dedicated App
+(`velnor-verify`) writes it, bound by `integration_id`; GitHub applies it to the PR head (to merge or
+enqueue) and to each group's head (to land). No Actions job is in the list: a skipped job passes a
+required check [docs], and integration 15368 is every workflow, a PR's own included [M]. A check run
+also passes on `neutral` or `skipped`, so the detail view, `Velnor / Details`, is never required.
 
 **The App.** Permissions `statuses: write`, `checks: write`, `pull_requests: read`, `contents:
 read`, `metadata: read`. Webhooks: `pull_request` (`opened`, `reopened`, `synchronize`, `labeled`,
@@ -908,12 +854,11 @@ does.
   writer (section 6.5) writes `success`, from a signed ledger verdict naming the subject SHA, tree,
   inventory version and epoch, to that SHA only, never the test-merge commit. A new push has no
   status; absence, `pending`, `failure` and `error` all block.
-- **Liveness from state.** Every 10 s the reconciler reads the labelled open PRs with heads and
-  draft state (a conditional request; a `304` costs no rate limit), the queue's branches, and, for a
-  PR whose arming it does not hold, the issue's label and draft events; it starts what is missing,
-  cancels what is unwanted and corrects any status the ledger does not hold. A webhook only cuts the
-  delay to about 1 s; lost, duplicate or reordered deliveries converge. Labels are applied by people
-  or an App token, never `GITHUB_TOKEN`.
+- **Liveness from state.** Every 10 s the reconciler reads the labelled open PRs (a conditional
+  request; a `304` is free), the queue's branches and, where needed, label and draft events; it
+  starts what is missing, cancels what is unwanted and corrects any status the ledger does not hold;
+  webhooks only cut the delay to about 1 s. Labels come from people or App tokens, never
+  `GITHUB_TOKEN`.
 - **PRs at one SHA share a verdict** (Q9); the merge group verifies the merged tree again.
 - **No bypass.** `bypass_actors` is empty (an admin bypass carried 7 of 136 merges in three days
   [M]); agents act under an identity that cannot edit the ruleset; no procedure uses an admin merge.
@@ -924,11 +869,9 @@ does.
   depth 2, timeout 90 min, minimum wait 0. Step 1: `velnor-ci release-gate` released and both release
   entry points migrated (section 8.4). Step 2: the App in shadow on every PR head and group. Step 3,
   after lab A and shadow parity: all three contexts required, label flow on. Step 4: the Actions
-  contexts and the PR and group Actions gates deleted; the push `Required` stays. Before step 3 the
-  label gate is an always-run Actions job with no `if:` or `needs:` that fails without the label: the
-  candidate's workflow, the same authority as today's gate, so no new hole; independence arrives with
-  the App. Accepted interim costs: any label change re-runs the workflow (`ci.yml:59`), and removing
-  the label turns a verified head red; agents and Renovate label only at PR creation until step 3.
+  contexts and PR and group Actions gates deleted; the push `Required` stays. Before step 3 the label
+  gate is an always-run Actions job that fails without the label (today's authority, no new hole);
+  any label change re-runs it and removing the label turns a head red, so agents label at creation.
 
 ### 8.3 Merge queue
 
@@ -1007,55 +950,47 @@ An agent's verification runs through Velnor, on warm cluster nodes in the gate's
 sandbox, so it counts; a Mac result is advice only; agents ask the ledger before running anything;
 and the label then mostly finds the work done. The gate's meaning and decisions 1–24 do not change.
 
-- **Front end.** `velnor cargo` takes the `mise.toml` cargo wrapper slot from `mbx` (which missed 10
-  of 10 workspace units locally [M, Carbon]), and a per-user daemon,
-  `velnord`, keeps state (≤ 50 ms added per call at P90 [T]). Verbs: `velnor verify`, `velnor ship`,
-  `velnor check <name>`, `velnor resolve`, `velnor wait`. A command the planner maps to an inventory
-  obligation (its argv shape, package selection and features) is *counting*; anything else is
-  scratch and runs locally as advice. The verbs are the contract; the wrapper only maps exact argv
-  shapes (a wrong mapping is a miss, never a wrong hit) and stays only if count-only data show agents
-  use it. Every verb has `--json`, and `velnor resolve --json` prints the planned vector without
-  running anything. The first release only counts and journals (no cluster part).
+- **Front end.** `velnor cargo` takes `mise.toml`'s cargo wrapper slot from `mbx` (which missed 10 of
+  10 workspace units locally [M]); a per-user daemon, `velnord`, keeps state (≤ 50 ms per call at
+  P90 [T]). The verbs are the contract (`verify`, `ship`, `check <name>`, `resolve`, `wait`, each
+  with `--json`); the wrapper maps exact argv shapes of inventory obligations to *counting* runs
+  (a wrong mapping is a miss), runs anything else locally as scratch, and stays only if count-only
+  data show agents use it. The first release only counts and journals.
 - **Trees, not pushes.** The daemon snapshots the worktree as a Git tree through a private index
-  (tracked and untracked, never ignored files) and sends a thin pack against the node mirror under
+  (tracked and untracked, never ignored files) and sends a thin pack to the node mirror under
   `refs/velnor/wip/` (seven-day expiry, secret scan on the delta); the node hashes the whole staged
-  tree before step 1. A later commit, push or PR of the same tree has the same key.
-- **Where it runs.** Counting commands go to a warm node of the agent's site in the `interactive`
-  class; per command class, a replay of 200 recorded commands sets the route (remote by default where
-  its P50 is within 1 s of the Mac's: today's Mac nextest P50 is 7.2 s [M, agent transcripts]). The
-  Mac keeps a non-minting fast-red lane (incremental, changed tests first) that races the remote
-  run: the first red is reported at once, and a local green is shown as provisional. The `hk`
-  pre-commit hooks call `velnor check <name>`, so their keys are the gate's.
-- **Trust tiers, shown to users:** T0 Mac native and T1 sealed Linux on a Mac, advice only (never a
-  slot; a Mac key signs only in an advisory namespace); T2 a cluster candidate, node-signed, which may
-  fill one witness slot; T3 trusted, on `main` after A1. T0 stays in the daemon's local journal and
-  never enters the ledger. The gate is unchanged: two T2-or-better
-  witnesses per new key on distinct nodes, seeds and generations, then A1; an arm64 key never equals
-  an amd64 key, so a Mac pass proves nothing to the gate and a Mac fail is a useful red. The planner
-  keeps host, execution and target triples apart: a cross-built arm64 binary satisfies only its own
-  released obligation. Work run early is charged once, to the claimant, in the runner-minutes.
-- **Verify and ship.** `velnor verify` fills both slots on two nodes (`--witnesses=1` fills one and
-  leaves the other to the label) against `merge-tree(queue tip,
-  tree)` and shows both SHAs; `velnor ship` runs it, pushes, labels with the agent's App identity and
-  enables auto-merge, an explicit act under decision 12. The control plane derives the PR's subject
-  tree itself, never from the client. `velnor wait` long-polls the verdict and returns the failing
-  test id, its signature and the last log lines as an NDJSON failure packet with a `velnor repro`
-  command (the first red cancels sibling work no other request shares), and streams queue-tip moves so a stale merge base
-  is visible. Any two qualified runs fill a record: a builder agent's run and its verifier
-  subagent's run on another node, with distinct seeds, are its two witnesses.
-- **Ledger first.** `velnor resolve` (and the wrapper, automatically) asks the ledger before running:
-  a hit returns its record (44 of 107 agent sessions ran cargo on a tree before editing it [M, Opus
-  transcripts]), in-flight work is joined, and the gate re-resolves everything under the current
-  epoch; a stale or unreachable ledger means run fresh. A failed record on an unchanged key comes
-  back as advice (`velnor why-red`: also red on `main`, a known flake, or new on this tree) unless
-  the agent passes `--rerun-failed`; it never satisfies or blocks the gate. `verify` soaks new or changed test
-  ids 20 times under seeds and CPU pressure at batch priority; soak runs never fill a slot.
+  tree before step 1, and a later commit, push or PR of the same tree has the same key.
+- **Where it runs.** Counting commands run on a warm node of the agent's site in the `interactive`
+  class, routed per command class by a replay of 200 recorded commands (remote where its P50 is
+  within 1 s of the Mac's 7.2 s nextest P50 [M]). The Mac's non-minting fast-red lane (incremental,
+  changed tests first) races it: the first red shows at once, a local green is provisional. The `hk`
+  hooks call `velnor check <name>`. A Mac may keep one content-proven generation shared by its
+  worktrees (an APFS clone at a fixed path), for T0 speed only.
+- **Trust tiers, shown to users:** T0 Mac native (kept in the daemon's journal, never the ledger) and
+  T1 sealed Linux on a Mac (a Mac key signs only in an advisory namespace) are advice and never fill
+  a slot; T2, a node-signed cluster candidate, fills one witness slot; T3 is trusted, on `main` after
+  A1. The gate is unchanged: two T2-or-better witnesses per new key on distinct nodes, seeds and
+  generations, then A1. Host, execution and target triples stay apart, so an arm64 result never
+  satisfies an amd64 key and a Mac fail is only a useful red.
+- **Verify and ship.** `velnor verify` fills both slots on two nodes (`--witnesses=1` leaves one to
+  the label) against `merge-tree(queue tip, tree)`, showing both SHAs; any two qualified runs count,
+  such as a builder agent's and its verifier subagent's. `velnor ship` verifies, pushes, labels with
+  the agent's App identity and enables auto-merge, an explicit act under decision 12; the control
+  plane derives the PR's subject tree itself. `velnor wait` returns an NDJSON failure packet (test
+  id, signature, last lines, a `velnor repro` command), cancels sibling work no other request
+  shares on the first red, and streams queue-tip moves. Work run early is charged once, to the
+  claimant; `Velnor / Details` lists reused, pre-push, run-now and fresh counts.
+- **Ledger first.** `velnor resolve` (the wrapper calls it) asks before running: a hit returns its
+  record (44 of 107 agent sessions ran cargo before editing [M]), in-flight work is joined, and the
+  gate re-resolves under the current epoch; an unreachable ledger means run fresh. A failed record on
+  an unchanged key returns as advice (`why-red`: red on `main`, a known flake, or new) unless
+  `--rerun-failed`. `verify` soaks new or changed tests 20 times at batch; soaks never fill a slot.
 - **The `interactive` class** sits between gate and PR work, with a per-identity budget (30 CPU-min
-  an hour, then demoted to PR class), never touching the merge, gate or A1 reservations.
+  an hour, then demoted), never touching the merge, gate or A1 reservations.
 - **The PR verdict becomes a lookup:** the label resolves the head's own vector; hits read, misses
-  and C5 run; its floor is the C5 critical path plus about 3 s [E], which falls to about 3 s on the
-  helper and generator class once plan T08 injects the clock. Continuous verification of
-  unpushed commits would start work no one asked for, so it is owner question D23, default off.
+  and C5 run; its floor is the C5 critical path plus about 3 s [E], about 3 s on the helper and
+  generator class once T08 injects the clock. Continuous verification of unpushed commits would
+  start work no one asked for, so it is owner question D23, default off.
 
 ## 9. The cluster
 
@@ -1087,8 +1022,8 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1276 agent-hours of building and 120 of review,
-about 4.4 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 1292 agent-hours of building and 120 of review,
+about 4.5 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0
 comes first: an agent PR's cycle falls from 94 to about 34 min at P50 [E].
@@ -1128,9 +1063,10 @@ the delivery plan's critical path, except the goal row, which is [T].
 | 4.8 (7) | Cohort 4 (releases on Velnor). **Deletes** hosted release labels, the state seal and prune | — | — | — | Release dry runs |
 | 5.2 (7.5) | Ruleset step 4; obligations verify PRs and groups with whole-tree keys and a cold second witness; A1 replaces the full push run. **Deletes** the PR and group Actions gates and the interim label step | ≈ 6 / 18 | ≈ 9 / 30 | ≈ 110 | Parity report; A1 live |
 | 6.5 (9) | Final deletion. **Deletes** ARC's velnor-new scale set and profiles, the Turso journal and the parts of `crates/velnor-runner` review did not keep. **Keeps** the official runner's image, `.velnor/runner.lock` and `velnor-official` (decisions 19, 20) | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 90 | Local runs on Docker; review of a large deletion |
+| 6.5 (9) | `velnor verify` and `ship` (section 8.6): agents' runs fill witnesses; the label becomes mostly a lookup | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 90 | Exact-tree records; the App gate |
 | 7.5 (10) | Compile reuse graduated on the helper and generator roots: second witness over another generation | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 80 | 3,000 comparisons per root |
 | 10 (13.5) | **Goal.** Per-root keys enrolled after the read audit's shadow; the test floor fixed | **≤ 90 s / ≤ 4 min** [T] | **≤ 3 / ≤ 8 min** [T] | **≤ 50** [T] | Contract review; statistical evidence |
-| 16–18 | **Stretch measured:** per-package keys, `velnor verify`, longest test ≤ 15 s, the commit stamped after link | 30 s / 100 s [T] | 100 s / 4 min [T] | ≤ 20 [T] | Package enrolment; labs B and C |
+| 16–18 | **Stretch measured:** per-package keys, longest test ≤ 15 s, the commit stamped after link | 30 s / 100 s [T] | 100 s / 4 min [T] | ≤ 20 [T] | Package enrolment; labs B and C |
 
 A missed milestone holds the next cohort until explained. Items are 2–8 agent-hours, one PR under
 400 refactored lines; every replacing PR deletes what it replaces.
@@ -1146,48 +1082,34 @@ A missed milestone holds the next cohort until explained. Items are 2–8 agent-
 
 ## 11. Proving the speed
 
-Nothing has run end to end, and no comparator has raced this repository, so the speed claim waits
-on this suite (decision log, fastest-runner critiques K01–K27).
-
-**The contract is frozen first** (K20): workload revisions, expected test IDs, features, Git and
-toolchain versions, timeouts, the released planner and both exact subjects are pinned; every arm
-must agree with an independent cold oracle on every contracted case, and unknown inputs force fresh
-work.
-
-**Workload.** 300 historical velnor-new PR heads replayed at their SHAs and arrival times, every
-class unweighted (the class mix from the daily report), plus the 2026-11-18 arrival trace; the same
-released inventory, expected test IDs, features, toolchain and contract for every arm.
-**Resource budget.** Each self-hosted arm gets the same two FI workers (EPYC 9454P, 125.5 GiB, XFS
-NVMe) exclusively, with ChainArgos and jackin load replayed beside them in the loaded runs; rented
-arms get at most the same vCPU concurrency, and every arm reports CPU-seconds, GiB-minutes, bytes
-and cost.
+Nothing has run end to end and no comparator has raced this repository, so the speed claim waits on
+this suite (fastest-runner critiques K01–K27). **The contract is frozen first** (K20): workload
+revisions, expected test IDs, features, Git and toolchain versions, timeouts, the released planner
+and both exact subjects; every arm must agree with an independent cold oracle on every contracted
+case. **Workload:** 300 historical PR heads replayed at their SHAs and arrival times, every class
+unweighted, plus the 2026-11-18 trace. **Budget:** each self-hosted arm gets the same two FI workers
+exclusively (other organisations' load replayed beside them in loaded runs); rented arms at most the
+same vCPU concurrency; every arm reports CPU-seconds, GiB-minutes, bytes and cost.
 
 | # | Benchmark (K ids) | Setup | Pass |
 |---|---|---|---|
-| S1 | Planted failures (K07) | 100 failing edits: the Q16 older-time edit, an undeclared build-script input, a new sibling file, a clock-shifted test, a stale generation, flaky tests at p = 0.05–0.2, on every fast path | 100% red, or detected at the measured (1−p)² rate; it gates every other run |
-| S2 | **Control race** (K01, K26) | Velnor Native against GitHub Official on the same warm workers, mirrors, tool store and generation, separate executor keys; ≥ 30 interleaved pairs per job type at 15% and 80% CPU; the same race on today's ARC with phase 0 applied | Per-job-type deltas with intervals; an executor claim only at ≥ 5 s per job at P50 on ≥ 3 job types |
-| S3 | **Head-to-head** (K02, K03, K25) | Arms: today's CI; **a strong conventional baseline** on the same workers (the official runner on persistent agents with a reflink-cloned warm target, crates mirror, baked tool image, gates on the cluster, auto-merge, ALLGREEN); Velnor with Official; Velnor Native; rented arms per owner question D22 | The publication rule below, on push-to-merge gross and net and on the verdict; every stage timed, `ensure` included |
-| S4 | Loaded replay (K04, K21) | The 2026-11-18 trace with other organisations' load, A1 and release preparation at production priority; then the reversal cases: a root or manifest edit, a cold toolchain, a lost worker, an ejected predecessor | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s |
-| S5 | Census (K06, D02) | C5 classifier and read audit on `main` and the last 300 heads; a content-key would-hit counter (equal binary digests under a different source key), telemetry only | Shares of C5 obligation-seconds and of heads with whole-tree keys published; goals restated from them |
-| S6 | Warm compile (K05) | 300 replayed diffs per root over a clone, cold page cache, idle and 70–90% load, with a cold control; heads that add a source file reported separately | Slower witness P90 ≤ 25 s for helper and generator, ≤ 40 s loaded; digests equal cold |
+| S1 | Planted failures (K07) | 100 failing edits on every fast path: the Q16 older-time edit, an undeclared build-script input, a new sibling file, a clock shift, a stale generation, a data-file change that leaves the binary unchanged, flaky tests at p = 0.05–0.2 | 100% red, or detected at the measured (1−p)² rate; it gates every other run |
+| S2 | **Control race** (K01, K26) | Native against Official on the same warm workers, mirrors, tool store and generation, ≥ 30 interleaved pairs per job type at 15% and 80% CPU; the same on today's ARC with phase 0 | Per-type deltas with intervals; an executor claim only at ≥ 5 s per job at P50 on ≥ 3 types |
+| S3 | **Head-to-head** (K02, K03, K25) | Today's CI; **a strong conventional baseline** on the same workers (persistent official-runner agents, reflink-cloned warm target, crates mirror, baked tools, cluster gates, auto-merge, ALLGREEN); Velnor with Official; Velnor Native; Velnor Native with agents' `verify` (section 8.6); rented arms per D22 | The publication rule, on push-to-merge gross and net and on the verdict; every stage timed |
+| S4 | Loaded replay (K04, K21) | The 11-18 trace with other organisations' load, A1 and release preparation; then a manifest edit, a cold toolchain, a lost worker, an ejected predecessor | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s |
+| S5 | Census (K06, D02) | C5 classifier, read audit and a content-key would-hit counter on `main` and 300 heads | C5 and whole-tree shares published; goals restated from them |
+| S6 | Warm compile (K05) | 300 diffs per root over a clone, cold page cache, idle and 70–90% load, cold control; heads that add a source file reported apart | Slower witness P90 ≤ 25 s (helper, generator), ≤ 40 s loaded; digests equal cold |
 
-**Publication rule** (K22, pre-registered). Velnor is "fastest" against an arm only if paired
-arrival-block bootstrap intervals for the P50 and the P90 difference, at simultaneous 95%, lie
-strictly below zero, per class; each self-hosted pair is interleaved at least five times and
-reported as median and range. A tie, an unrun arm, a lost class or a win only in the light class
-narrows the sentence, and any false green or skipped work disqualifies the arm or configuration.
-No claim is made against an arm S3 has not run. The strong baseline (BM07) stands in for
-persistent agents such as Buildkite's and keeps the Actions hop, so it bounds them on stages 3–9
-only; "Velnor with Official" is the same-ledger, other-agent case. A rented arm runs with the
-vendor's recommended caches and phase 0 applied, or it is another handicapped baseline. Against
-Bazel and Buck2 remote execution the sentence excludes cold and wide builds unless BM10 ran; BM10
-runs only if one `cargo build --timings` of the cold runner root shows its longest dependency chain
-under 70% of the wall, and reports a subgraph result.
-
-Component labs carry the rest: twin independence (K08), group reuse and GitHub's share (K09, K10),
-hardware (K11), floor inventory (K12), page cache (K13), overhead (K14), graduation (K15), storage
-(K16, K27), sandbox lifecycle (K17), toolchain matrix (K18), batching (K19), release timing (K23)
-and cost (K24); the plan's BM items own them.
+**Publication rule** (K22, pre-registered): "fastest" against an arm only if paired arrival-block
+bootstrap intervals for the P50 and the P90 difference, at simultaneous 95%, lie strictly below
+zero per class, each self-hosted pair interleaved at least five times; a tie, an unrun arm, a lost
+class or a light-class-only win narrows the sentence; a false green or skipped work disqualifies.
+The strong baseline stands in for Buildkite-style agents but keeps the Actions hop, so it bounds
+them on stages 3–9 only; "Velnor with Official" is the same-ledger, other-agent case; a rented arm
+runs with its vendor's caches and phase 0, or it is another handicapped baseline; against remote
+execution the sentence excludes cold and wide builds unless BM10 ran, and BM10 runs only if one
+`cargo build --timings` shows the cold runner root's longest chain under 70% of its wall.
+Component labs (K08–K19, K23, K24) belong to the plan's BM items.
 
 ## 12. Top risks
 

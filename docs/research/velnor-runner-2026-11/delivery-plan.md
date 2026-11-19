@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 1276 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 4.4 days of fleet time (1276 ÷ 12 builders ≈ 106 h). Coding does not set the dates.
+- **Total work:** about 1292 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 4.5 days of fleet time (1292 ÷ 12 builders ≈ 108 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -364,6 +364,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | AN11 | Ejection prediction (lab) | Pairwise `merge-tree` of labelled heads at batch priority, results only in `Velnor / Details`; count ejections first (Opus, Carbon) | L06 | 8 | mid | Dropped if fewer than 2% of 100 groups are ejected for semantic conflicts | — |
 | AN12 | Failure lookaside and queue-tip stream | Failed records on an unchanged key returned as advice with `why-red` classes, `--rerun-failed`; `velnor wait` streams queue-tip moves (Argon, Fable); NDJSON failure packets with `velnor repro`; the first red cancels unshared sibling work (Neon) | AN04 | 12 | mid | Repeat failures returned in < 50 ms; never a gate input | — |
 | AN13 | Receipt-coverage parity | Shadow: a receipt minted by `verify` must equal what the label would have run for the exact subject; planted failures blocked; every path timed (Sol, Astra) | AN04, L06 | 12 | strong | Exact-subject parity on 100 labelled heads before the label relies on it | — |
+| AN14 | Shared local generation | One content-proven target per Mac, APFS-cloned into each worktree at a fixed path, retired on manifest mismatch; T0 speed only (W-Full) | AN01 | 16 | mid | 0.25 s per worktree against 8.6 s and 10.75 GiB; never evidence | Per-worktree cold targets on the Mac |
 | AN09 | Per-test-case receipts (stretch) | Receipt per (binary digest, test id, definition), shadow against whole-binary runs (Fable) | AN04, DG03 | 30 | strong | 3,000 clean, then 2% sampled; no slot before | — |
 | V12 | C5 classifier | The trusted planner's scan for clock, randomness, network and event reads | G03 | 6 | strong | The 11 clock-reading test files are C5 | — |
 | V14 | No-`.git` census | Find obligations that need Git metadata (`root.rs:22` runs `git rev-parse --show-toplevel`); give them a read-only repository at the subject commit, keyed by it | G03 | 4 | mid | Every obligation passes without `.git` or is listed and keyed by commit | — |
@@ -463,7 +464,7 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 173 items, about 1276 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 174 items, about 1292 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
@@ -764,7 +765,7 @@ is [E] except the goal and stretch rows, which are [T].
 | 7.5 (10) | Compile reuse graduated on the helper and generator roots | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 80 | 3,000 comparisons per root |
 | 10 (13.5) | **Goal:** per-root keys enrolled; floor fixed | **≤ 90 s / ≤ 4 min** | **≤ 3 / ≤ 8 min** | **≤ 50** | Contracts; evidence |
 | 15 (19) | **Speed claim published** if S1–S6 pass; otherwise the claim stays "designed to cut push-to-merge" | — | — | — | Arms run one at a time on two workers |
-| 16–18 | **Stretch:** per-package keys, `velnor verify`, longest test ≤ 15 s, stamp after link | 30 s / 100 s | 100 s / 4 min | ≤ 20 | Labs B and C |
+| 16–18 | **Stretch:** per-package keys, longest test ≤ 15 s, stamp after link | 30 s / 100 s | 100 s / 4 min | ≤ 20 | Labs B and C |
 
 A milestone that misses its numbers holds the next cohort until the miss is explained; stretch work
 continues. Runner-minutes follow design section 4's formula [E]: day 5.2, 2 × (16 warm + 22 cold) +

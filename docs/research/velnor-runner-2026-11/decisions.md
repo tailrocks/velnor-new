@@ -1169,6 +1169,17 @@ mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
 | A26 `--quorum` | Adopted inversely: `verify` fills both by default, `--witnesses=1` fills one | 8.6 |
 | C7 what is stored | Settled: T0 stays in the local journal, never in the ledger | 8.6 |
 
+### Group 43: agent-native answer by Muse Wonder Full
+
+| Idea | Decision | v3 section; plan |
+|---|---|---|
+| Count-only first (C12) | Settled: AN01 ships count-only, with no cluster part, before AN03 | 8.6; AN01 |
+| A25 shared local generation | Adopted, T0 only | 8.6; AN14 |
+| A26 reused, pre-push, run-now and fresh counts in `Velnor / Details` | Adopted | 8.6; UX 4 |
+
+Muse Wonder's ideas (MCP and JSON, ledger query first, `--where auto`, claimant charging, pair
+admission) are all in groups 35–43 (DG09, 8.6, G21); it gets no separate group.
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
