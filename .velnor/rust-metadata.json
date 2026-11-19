@@ -2392,6 +2392,16 @@
               "doctest": false,
               "source": "crates/velnor-runner-core/tests/lifecycle_acquire.rs",
               "requires_features": false
+            },
+            {
+              "name": "cleanup_proof_public",
+              "kinds": [
+                "test"
+              ],
+              "tests": true,
+              "doctest": false,
+              "source": "crates/velnor-runner-core/tests/cleanup_proof_public.rs",
+              "requires_features": false
             }
           ]
         },
@@ -3537,7 +3547,7 @@
     "crates/velnor-resource-probe/Cargo.toml": "43762b2c9ad022824a51e68c9327ae656032950d30c029baeaa18032f11c452e",
     "crates/velnor-runner-attestation/Cargo.toml": "c8bfd6f95bcfbbba9a486ddef11e7050698bc33bab83f193d9f868b8c0e94a17",
     "crates/velnor-runner-cli/Cargo.toml": "40a12ad00ebd2c1e8142ed597977c0be6b3d69e2c60f49c89ed2c94bf05e78e7",
-    "crates/velnor-runner-core/Cargo.toml": "431bb261fccdaead5def2646a137f65c20db7ff6b80e9e42763401f38ce771ed",
+    "crates/velnor-runner-core/Cargo.toml": "840a5d400de507934a9977b52967e0e593e2e48ca5eadc248fae44cbca6f005e",
     "crates/velnor-runner-github/Cargo.toml": "2554a74db1c7c02032fb7ec7fad8c8ec56534affaf7a873516ebf4f413ea8251",
     "crates/velnor-runner-host/Cargo.toml": "5ef44e46e6afc1616576efe535b7e54de6b954d515515647ddbae56dfc1b2e6e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
@@ -3545,5 +3555,5 @@
     "crates/velnor-rust/Cargo.toml": "e94a06ddc959217f1d0e955626704344b1bde461c09dcf242505116b5990aa6b",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "26d4d2acc8628ae46e1e8ad67803b75fe5a07db5c376cd4912436ac9b33696c2"
+  "layout": "e03ebc35a1eb35a2ca3072723d291297d5038f6aff8689fd2e712f89c11518de"
 }
