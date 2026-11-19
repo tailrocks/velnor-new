@@ -3,8 +3,8 @@
 
 use velnor_runner_github::{
     ScaleSetById, ScaleSetByName, ScaleSetDelete, ScaleSetDeleteStatus, ScaleSetFound,
-    ScaleSetObserved, Transport, delete_runner_scale_set, get_runner_scale_set,
-    observe_runner_scale_set_by_id,
+    ScaleSetObserveById, ScaleSetObserved, SessionError, Transport, delete_runner_scale_set,
+    get_runner_scale_set, observe_runner_scale_set_by_id, observe_runner_scale_set_id_only,
 };
 
 use crate::config::RepositoryConnection;
@@ -148,7 +148,7 @@ fn observe<T: Transport + ?Sized>(
     admin_token: &str,
     target: &ScaleSetDeleteTarget,
 ) -> Observation {
-    match observe_runner_scale_set_by_id(transport, &by_id(admin_token, target)) {
+    match observe_by_id(transport, admin_token, target) {
         Ok(ScaleSetObserved::Found(view)) if view.id == target.scale_set_id => Observation::Present,
         Ok(ScaleSetObserved::Missing) => absent_from_group(transport, admin_token, target)
             .map_or(Observation::Unknown, Observation::Absent),
@@ -162,7 +162,7 @@ fn absence<T: Transport + ?Sized>(
     target: &ScaleSetDeleteTarget,
 ) -> Option<ScaleSetAbsence> {
     if !matches!(
-        observe_runner_scale_set_by_id(transport, &by_id(admin_token, target)),
+        observe_by_id(transport, admin_token, target),
         Ok(ScaleSetObserved::Missing)
     ) {
         return None;
@@ -193,13 +193,29 @@ fn absent_from_group<T: Transport + ?Sized>(
     }
 }
 
-fn by_id<'a>(admin_token: &'a str, target: &'a ScaleSetDeleteTarget) -> ScaleSetById<'a> {
-    ScaleSetById {
-        scale_set_id: target.scale_set_id,
-        name: &target.name,
-        expected_labels: &target.labels,
-        admin_token,
+fn observe_by_id<T: Transport + ?Sized>(
+    transport: &mut T,
+    admin_token: &str,
+    target: &ScaleSetDeleteTarget,
+) -> Result<ScaleSetObserved, SessionError> {
+    if target.unverified {
+        return observe_runner_scale_set_id_only(
+            transport,
+            &ScaleSetObserveById {
+                scale_set_id: target.scale_set_id,
+                admin_token,
+            },
+        );
     }
+    observe_runner_scale_set_by_id(
+        transport,
+        &ScaleSetById {
+            scale_set_id: target.scale_set_id,
+            name: &target.name,
+            expected_labels: &target.labels,
+            admin_token,
+        },
+    )
 }
 
 #[cfg(test)]

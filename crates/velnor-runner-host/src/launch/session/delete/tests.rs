@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_runner_github::{
-    Exchange, Method, QueueSession, SessionRequest, Transport, TransportFail,
-};
+use velnor_runner_github::{Exchange, Method, SessionRequest, Transport, TransportFail};
 
 use super::{delete_removed_connection_session_with, retire_session_of_deleted_set_with};
 use crate::journal::{CapacityLimits, OperationalCapacityLimits};
@@ -36,21 +34,6 @@ impl Transport for Answer {
             body: Vec::new(),
         })
     }
-}
-
-fn queue_session() -> TestResult<QueueSession> {
-    struct Queue;
-    impl Transport for Queue {
-        fn exchange(&mut self, _: &SessionRequest) -> Result<Exchange, TransportFail> {
-            Ok(Exchange {
-                status: 200,
-                body: br#"{"sessionId":"session-1","messageQueueUrl":"https://queue.example.com/messages","messageQueueAccessToken":"queue-token"}"#.to_vec(),
-            })
-        }
-    }
-    Ok(velnor_runner_github::create_session(
-        &mut Queue, 10, "owner", "admin",
-    )?)
 }
 
 async fn ready_to_delete(fixture: &Fixture) -> TestResult<(i64, crate::journal::HeaderAllocation)> {
@@ -107,7 +90,7 @@ async fn delete_with(
     let outcome = delete_removed_connection_session_with(
         &mut transport,
         "admin-token",
-        &queue_session()?,
+        "session-1",
         &fixture.scoped,
         intent,
         allocation,
@@ -220,7 +203,7 @@ async fn retire_after_set_delete(
     let outcome = retire_session_of_deleted_set_with(
         &mut transport,
         "admin-token",
-        &queue_session()?,
+        "session-1",
         &fixture.scoped,
         intent,
     )
@@ -269,5 +252,32 @@ async fn a_set_not_recorded_deleted_is_left_to_the_normal_poll() -> TestResult {
         assert_eq!(outcome, None, "{state:?}");
         assert!(transport.seen.is_empty(), "{state:?}");
     }
+    Ok(())
+}
+
+#[tokio::test]
+async fn an_uncertain_session_delete_on_a_deleted_set_settles_and_the_connection_retires()
+-> TestResult {
+    let fixture = fixture(true).await?;
+    let (intent, allocation) = ready_to_delete(&fixture).await?;
+    let attempt = fixture
+        .scoped
+        .begin_session_delete(intent, &allocation)
+        .await?;
+    fixture
+        .scoped
+        .mark_session_delete_uncertain(intent, attempt)
+        .await?;
+    record_set_delete(&fixture, "deleted").await?;
+    let (outcome, transport) = retire_after_set_delete(&fixture, intent).await?;
+    assert_eq!(outcome, Some(SessionDeleteOutcome::Deleted));
+    assert_eq!(transport.seen.len(), 1);
+    assert_eq!(transport.seen[0].0, Method::Delete);
+    assert!(
+        fixture
+            .journal
+            .retire_connection_if_drained(&fixture.binding)
+            .await?
+    );
     Ok(())
 }
