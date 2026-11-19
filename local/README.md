@@ -68,6 +68,17 @@ The production `actions/setup-velnor/action.yml` has no local path at all and is
 
 The binary is unverified by design: this is for a developer's own machine, and the SHA-256 in the output is the way to tell a local result from a release result.
 
+## Against a throwaway dind
+
+`velnor-local` mounts host paths into the containers and reaches the control ports that `up` publishes on `127.0.0.1`, so it must run on the machine that runs the Docker daemon. To keep a dind daemon from touching your own Docker, start `velnor-local` in a container that shares the dind container's network namespace and sees the same paths:
+
+```sh
+docker run -d --privileged --name dind -e DOCKER_TLS_CERTDIR= -v "$WORK:$WORK" docker:dind
+docker run -d --name driver --network container:dind -e DOCKER_HOST=tcp://127.0.0.1:2375 -v "$WORK:$WORK" debian:trixie-slim sleep infinity
+```
+
+Put the linux/arm64 `velnor-local` (the one in the `velnor-local/cache-server` image), the `docker` client, `git` and `ps` in `driver`, build the three images inside dind, and keep `--repo` and `--dir` under `$WORK`. A program that is not installed is named in the error (`cannot start `docker``). Pointing `DOCKER_HOST` of the Mac at the dind instead fails with `docker port ... no public port`, because the published ports exist only inside the dind.
+
 ## The three modes
 
 | | GitHub-hosted | Self-hosted scale set | Local (this tool) |

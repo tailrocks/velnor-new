@@ -16,6 +16,7 @@ mod io_edges;
 mod labels;
 mod local_ci;
 mod local_setup;
+mod missing_program;
 mod online;
 mod pair;
 mod pair_inputs;
