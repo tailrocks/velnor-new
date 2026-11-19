@@ -361,10 +361,8 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
 fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> TestResult {
     let (_, tree) = two_binaries()?;
     let outputs = job(&tree, "tag")?.get("outputs").ok_or("no outputs")?;
-    assert_eq!(
-        outputs.keys(),
-        ["app", "tools", "app_commit", "tools_commit"]
-    );
+    let keys = outputs.keys();
+    assert_eq!(keys, ["app", "tools", "app_commit", "tools_commit"]);
     for package in ["app", "tools"] {
         assert_eq!(
             outputs.get(package).and_then(Node::text),
@@ -372,10 +370,8 @@ fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> Tes
         );
     }
     let (_, without) = two_roots()?;
-    assert_eq!(
-        job(&without, "tag")?.get("outputs").map(Node::keys),
-        Some(vec!["app", "tools"])
-    );
+    let kept = job(&without, "tag")?.get("outputs").map(Node::keys);
+    assert_eq!(kept, Some(vec!["app", "tools"]));
     Ok(())
 }
 
