@@ -12,6 +12,7 @@ use crate::base_steps::{
     cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
     sources_locks, trimmed_lane,
 };
+use crate::budget_steps::{budget_outputs, budget_step};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
@@ -89,6 +90,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             .chain(test_outputs(job))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
+            .chain(budget_outputs(job))
             .collect(),
         steps,
         ..RenderedJob::default()
@@ -292,6 +294,7 @@ fn step_body(
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+        StepKind::Budget { last } => budget_step(*last),
     }
 }
 

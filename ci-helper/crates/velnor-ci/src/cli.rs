@@ -12,8 +12,8 @@ mod resolve_qualification;
 pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
-    BaseFile, BenchCommand, CheckConfigurationsArgs, CollectArgs, CompareArgs, CratesMirrorArgs,
-    ImageCommand, PlanArgs, PlanMode, PreviewGhArgs, QualificationCommand,
+    BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
+    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, PreviewGhArgs, QualificationCommand,
     QualificationCompareArgs, RunAuthorityArgs, ToolsLocalArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};

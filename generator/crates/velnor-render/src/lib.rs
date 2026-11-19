@@ -3,6 +3,7 @@
 
 mod artifact_steps;
 mod base_steps;
+mod budget_steps;
 mod cache;
 mod cache_upload;
 mod cargo;

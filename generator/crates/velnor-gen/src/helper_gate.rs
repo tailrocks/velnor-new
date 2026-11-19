@@ -5,7 +5,7 @@ use velnor_model::{
     FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
-use crate::{COMPATIBLE_HELPER_SERIES, GenerateError};
+use crate::{BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError};
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -47,6 +47,11 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
         ));
+    }
+    if facts.config.budget.is_some_and(|budget| budget.enabled())
+        && !release.version().at_least(BUDGET_HELPER)
+    {
+        return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
     }
     Ok(release)
 }

@@ -7,6 +7,7 @@ mod base_expiry;
 mod base_safety;
 mod base_save;
 mod base_token;
+mod budget;
 mod build_target;
 mod cache_budget;
 mod cache_budget_workflow;

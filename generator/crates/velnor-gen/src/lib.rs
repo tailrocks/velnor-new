@@ -30,6 +30,7 @@ use velnor_rust::{
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub const RELEASE_HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 80);
+pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 91);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)
