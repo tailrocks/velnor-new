@@ -220,6 +220,7 @@ async fn the_authority_is_started_with_every_extra_label() {
         untrusted: 0,
         policy: None,
         labels: vec!["ubuntu-26.04-scale-set".to_owned(), "ci-fast".to_owned()],
+        ..Pairs::default()
     };
     let started = supervisor::start_pairs(
         &dir,
