@@ -13,9 +13,16 @@ autotests = false
 name = "capacity_public"
 path = "tests/capacity_public.rs"
 
+[[test]]
+name = "lifecycle_public"
+path = "tests/lifecycle_public.rs"
+
 [lib]
 doctest = false
-test = false
+
+[[test]]
+name = "lifecycle_acquire"
+path = "tests/lifecycle_acquire.rs"
 
 [lints]
 workspace = true

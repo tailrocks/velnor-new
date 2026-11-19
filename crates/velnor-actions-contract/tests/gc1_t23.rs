@@ -148,6 +148,13 @@ fn check_retained_distinctions() -> Result<(), Box<dyn Error>> {
     {
         return Err(fail("source payload roots drifted"));
     }
+    if sources
+        .paths
+        .iter()
+        .any(|path| path.contains("runner.temp"))
+    {
+        return Err(fail("source cache paths depend on the runner temp root"));
+    }
     if CacheFamily::Sources.gc1_family() != Some(Gc1Family::Sources) {
         return Err(fail("source contract identity drifted"));
     }
