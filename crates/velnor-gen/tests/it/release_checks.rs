@@ -230,12 +230,35 @@ fn a_check_may_not_hold_id_token_write_and_id_token_has_no_read() -> TestResult 
 }
 
 #[test]
-fn a_check_accepts_the_token_scopes_github_added() -> TestResult {
-    for scope in ["code-quality", "copilot-requests", "vulnerability-alerts"] {
+fn a_check_accepts_the_token_scopes_github_added_with_the_access_each_takes() -> TestResult {
+    for (scope, access) in [
+        ("code-quality", "read"),
+        ("copilot-requests", "write"),
+        ("vulnerability-alerts", "read"),
+        ("models", "read"),
+        ("discussions", "write"),
+    ] {
         let checks = format!(
-            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\n{scope} = \"read\"\n"
+            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\n{scope} = \"{access}\"\n"
         );
         assert_eq!(problem(&checks)?, None, "{scope}");
+    }
+    for (scope, access) in [
+        ("copilot-requests", "read"),
+        ("vulnerability-alerts", "write"),
+        ("models", "write"),
+    ] {
+        let checks = format!(
+            "[[checks]]\nname = \"a\"\nrun = \"x\"\n[checks.permissions]\n{scope} = \"{access}\"\n"
+        );
+        assert_eq!(
+            problem(&checks)?,
+            Some(CheckProblem::InvalidAccess {
+                scope: scope.to_owned(),
+                access: access.to_owned(),
+            }),
+            "{scope}"
+        );
     }
     Ok(())
 }
