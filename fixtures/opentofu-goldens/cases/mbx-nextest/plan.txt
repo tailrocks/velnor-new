@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.80
+Velnor Actions plan 0.1.82
 Repository: <repo>
 
 Detected stacks
@@ -25,8 +25,8 @@ Workflow to generate
     - state-producer-root (35 steps)
     - state-seal-root (9 steps)
     - tools-producer-36cc6f04 (9 steps)
-    - tools-producer-a518576a (10 steps)
-    - tools-producer-c645831b (11 steps)
+    - tools-producer-67dbb7c0 (11 steps)
+    - tools-producer-ed0a9770 (10 steps)
     - 1 Rust crate job
       Timeout: 5 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doctests -> doc build -> format check
@@ -66,4 +66,4 @@ Recommendations
   mise.lock not found; Velnor will not create or refresh it
   mise.toml is read-only input; Velnor never modifies it
   rust-toolchain.toml not found; Velnor will not create it
-  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.3, nextest@0.9.151, shellcheck@0.11.0; install on the CI platform and commit the resulting lock
+  tool_install_unverified:3 installs skip verification (no mise.lock): gh@2.103.3, nextest@0.9.152, shellcheck@0.11.0; install on the CI platform and commit the resulting lock

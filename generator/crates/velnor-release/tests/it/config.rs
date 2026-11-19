@@ -165,15 +165,18 @@ fn a_release_plz_that_cannot_fetch_without_persisted_credentials_is_refused() {
     ] {
         let mut files = files();
         files.mise_tomls = vec![format!("[tools]\nrelease-plz = \"{version}\"\n")];
-        files.mise_lock = locked("release-plz", version);
+        files.mise_lock = locked("release-plz", version)
+            .replace("release-plz-v0.4.3", &format!("release-plz-v{version}"));
+        let error = refusal(&files);
         assert_eq!(
             matches!(
-                refusal(&files),
+                &error,
                 Some(ReleaseError::ReleasePlzVersionTooOld { minimum, .. }) if minimum == "0.3.168"
             ),
             refused,
-            "{version}"
+            "{version}: {error:?}"
         );
+        assert_eq!(error.is_none(), !refused, "{version}: {error:?}");
     }
 }
 
@@ -214,6 +217,26 @@ fn empty_roots_and_blank_workflow_names_are_refused() {
     assert_eq!(refusal(&files), Some(ReleaseError::EmptyRoots));
     files.release_toml = Some("after = [\"\"]\n".to_owned());
     assert_eq!(refusal(&files), Some(ReleaseError::EmptyAfter));
+}
+
+#[test]
+fn blank_or_repeated_pr_only_checks_are_refused_by_index() {
+    let mut files = files();
+    for (text, index, why) in [
+        ("pr_only_checks = [\"\"]\n", 0, "is blank"),
+        ("pr_only_checks = [\"DCO\", \" \"]\n", 1, "is blank"),
+        ("pr_only_checks = [\"DCO\", \"DCO\"]\n", 1, "repeats"),
+    ] {
+        files.release_toml = Some(text.to_owned());
+        let message = refusal(&files).map(|e| e.to_string()).unwrap_or_default();
+        assert!(message.contains(".velnor/release.toml"), "{message}");
+        assert!(
+            message.contains(&format!("pr_only_checks[{index}] {why}")),
+            "{message}"
+        );
+    }
+    files.release_toml = Some("pr_only_checks = [\"DCO\"]\n".to_owned());
+    assert_eq!(refusal(&files), None);
 }
 
 #[test]

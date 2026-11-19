@@ -6,7 +6,6 @@ use crate::error::HostError;
 use super::ddl;
 
 pub(super) async fn migrate_v39_to_v40(conn: &turso::Connection) -> Result<(), HostError> {
-    super::super::legacy_validation::validate_persisted_schema_v39(conn).await?;
     create_recovery_tables(conn).await?;
     rebuild_jit_table(conn).await?;
     replace_terminal_view(conn).await?;
@@ -16,7 +15,6 @@ pub(super) async fn migrate_v39_to_v40(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version=40", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::super::validate_persisted_schema_v40(conn).await?;
     Ok(())
 }
 

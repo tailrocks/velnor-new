@@ -135,6 +135,7 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} names profile {profile:?}, which is not a Cargo profile this generator can build with (use letters, digits, `-` and `_`, starting with a letter or `_`, and not dev, test, bench, debug, doc, build-override, package, deps, examples, build or incremental)"
             ),
+            Self::Family(error) => write!(f, "{error}"),
             _ => Ok(()),
         }
     }

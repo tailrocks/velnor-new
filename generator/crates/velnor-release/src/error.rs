@@ -203,6 +203,7 @@ pub enum ReleaseError {
     RootWithoutCargoManifest {
         root: String,
     },
+    Family(crate::error_family::FamilyError),
     UnknownWorkflow {
         name: String,
     },

@@ -41,6 +41,8 @@ pub(super) struct ConnectRequest<'a> {
     pub(super) branches: Vec<String>,
     pub(super) tag_prefixes: Vec<String>,
     pub(super) pull_request_rules: Vec<String>,
+    pub(super) organization: Option<&'a str>,
+    pub(super) runner_group: Option<&'a str>,
     pub(super) platform: &'a str,
     pub(super) max_jobs: Option<u32>,
     pub(super) docker_context: Option<&'a str>,
@@ -331,7 +333,7 @@ pub(super) fn connection_from(
         pull_request_rules,
     )
     .map_err(|_| ConnectError::Config)?;
-    RepositoryConnection::try_new(
+    let connection = RepositoryConnection::try_new(
         connection_id,
         request.repository_id,
         request.repo.to_owned(),
@@ -339,7 +341,14 @@ pub(super) fn connection_from(
         scale_set,
         source_policy,
     )
-    .map_err(|_| ConnectError::Config)
+    .map_err(|_| ConnectError::Config)?;
+    match request.organization {
+        Some(organization) => connection
+            .with_organization_group(organization, request.runner_group)
+            .map_err(|_| ConnectError::Config),
+        None if request.runner_group.is_some() => Err(ConnectError::Config),
+        None => Ok(connection),
+    }
 }
 
 fn parse_event(value: &str) -> Result<WorkflowEvent, ConnectError> {

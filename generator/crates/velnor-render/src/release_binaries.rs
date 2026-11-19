@@ -18,10 +18,10 @@ const UPLOAD_VERSION: &str = "v7.0.2";
 const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 const DOWNLOAD_VERSION: &str = "v8.0.2";
-const BUILD_TIMEOUT_MINUTES: u16 = 60;
-const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
-const DIST: &str = "dist";
-const SUMS_FILE: &str = "SHA256SUMS";
+pub(crate) const BUILD_TIMEOUT_MINUTES: u16 = 60;
+pub(crate) const PUBLISH_TIMEOUT_MINUTES: u16 = 10;
+pub(crate) const DIST: &str = "dist";
+pub(crate) const SUMS_FILE: &str = "SHA256SUMS";
 
 pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<RenderedJob> {
     plan.binaries
@@ -39,7 +39,7 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
         .collect()
 }
 
-fn target(platform: Platform) -> (&'static str, &'static str) {
+pub(crate) fn target(platform: Platform) -> (&'static str, &'static str) {
     match platform {
         Platform::LinuxX64 => ("ubuntu-24.04", "x86_64-unknown-linux-musl"),
         Platform::LinuxArm64 => ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl"),
@@ -47,11 +47,11 @@ fn target(platform: Platform) -> (&'static str, &'static str) {
     }
 }
 
-fn asset(binary: &BinaryPlan, platform: Platform) -> String {
+pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
     format!("{}-{}.tar.gz", binary.bin, platform.file_suffix())
 }
 
-fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
+pub(crate) fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
     format!("{}-{}", binary.package, platform.file_suffix())
 }
 
@@ -70,7 +70,32 @@ fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> Rende
 }
 
 fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> RenderedJob {
-    let (runner, triple) = target(platform);
+    let (runner, _) = target(platform);
+    RenderedJob {
+        permissions: permissions(&[("contents", "read")]),
+        runs_on: runner.to_owned(),
+        timeout_minutes: BUILD_TIMEOUT_MINUTES,
+        steps: build_steps(
+            binary,
+            platform,
+            &tagged_source(binary),
+            same_commit(binary, helper),
+        ),
+        ..behind_the_gate(
+            format!("build-{}-{}", binary.package, platform.file_suffix()),
+            binary,
+            Vec::new(),
+        )
+    }
+}
+
+pub(crate) fn build_steps(
+    binary: &BinaryPlan,
+    platform: Platform,
+    source: &str,
+    same_commit: RenderedStep,
+) -> Vec<RenderedStep> {
+    let (_, triple) = target(platform);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
     let profile = binary.profile.as_deref();
@@ -87,9 +112,9 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
     let mut steps = vec![
         RenderedStep {
             id: Some("source".to_owned()),
-            ..checkout(&tagged_source(binary), 1)
+            ..checkout(source, 1)
         },
-        same_commit(binary, helper),
+        same_commit,
     ];
     if linux {
         steps.push(command(
@@ -124,17 +149,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
         ),
         upload(artifact(binary, platform), file),
     ]);
-    RenderedJob {
-        permissions: permissions(&[("contents", "read")]),
-        runs_on: runner.to_owned(),
-        timeout_minutes: BUILD_TIMEOUT_MINUTES,
-        steps,
-        ..behind_the_gate(
-            format!("build-{}-{suffix}", binary.package),
-            binary,
-            Vec::new(),
-        )
-    }
+    steps
 }
 
 fn same_commit(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedStep {
@@ -252,7 +267,7 @@ fn assets(binary: &BinaryPlan) -> Vec<String> {
         .collect()
 }
 
-fn command(name: String, run: String) -> RenderedStep {
+pub(crate) fn command(name: String, run: String) -> RenderedStep {
     RenderedStep {
         name,
         run: Some(run),
@@ -260,7 +275,7 @@ fn command(name: String, run: String) -> RenderedStep {
     }
 }
 
-fn upload(name: String, path: String) -> RenderedStep {
+pub(crate) fn upload(name: String, path: String) -> RenderedStep {
     RenderedStep {
         name: format!("Upload {name}"),
         uses: Some(UPLOAD_ARTIFACT.to_owned()),
@@ -278,7 +293,7 @@ fn upload(name: String, path: String) -> RenderedStep {
     }
 }
 
-fn download(name: String) -> RenderedStep {
+pub(crate) fn download(name: String) -> RenderedStep {
     RenderedStep {
         name: format!("Download {name}"),
         uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
