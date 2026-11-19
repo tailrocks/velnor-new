@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::WORKFLOW_PATH;
+use velnor_model::{Selection, WORKFLOW_PATH};
 
 use crate::budget::{History, Population, Sample};
 use crate::collect::{all_jobs, setup_seconds};
@@ -16,6 +16,9 @@ const PAGE_SIZE: usize = 100;
 /// Runs come newest first, so a window older than this many pages of successful
 /// runs is not a recent measurement.
 const MAX_PAGES: u32 = 10;
+/// Runs of another selection are skipped, not measured; a window of one
+/// selection is not worth reading more runs than this.
+const MAX_INSPECTED: usize = 40;
 const POPULATIONS: [Population; 3] = [
     Population::PullRequest,
     Population::MainPush,
@@ -78,7 +81,9 @@ fn newest_runs(
 
 /// The newest finished, successful runs of each population, newest first. The
 /// running run, when it has a population, leads its window: it is judged by its
-/// own figures against the runs before it, which never include a run that failed.
+/// own figures against the runs before it of the same selection, which never
+/// include a run that failed or a run that selected something else. Without a
+/// running run, each population's newest runs are split by selection.
 pub fn gather(
     github: &dyn GitHub,
     repo: &Repo,
@@ -90,29 +95,85 @@ pub fn gather(
     for population in POPULATIONS {
         let running = running.filter(|running| running.population == Some(population));
         let earlier = last.saturating_sub(usize::from(running.is_some()));
-        let mut samples: Vec<Sample> = running
-            .map(|running| running.sample.clone())
-            .into_iter()
-            .collect();
         let ids = newest_runs(
             github,
             repo,
             population,
             default_branch,
-            earlier,
+            if running.is_some() {
+                MAX_INSPECTED
+            } else {
+                earlier
+            },
             running.map(|running| running.sample.run_id),
         )?;
-        for run_id in ids {
-            samples.push(sample(github, repo, run_id)?);
+        histories.extend(match running {
+            Some(running) => vec![anchored(github, repo, population, running, &ids, earlier)?],
+            None => by_selection(github, repo, population, &ids)?,
+        });
+    }
+    Ok(histories
+        .into_iter()
+        .filter(|h| !h.samples.is_empty())
+        .collect())
+}
+
+/// The running run followed by the newest earlier runs of its own selection.
+fn anchored(
+    github: &dyn GitHub,
+    repo: &Repo,
+    population: Population,
+    running: &Current,
+    ids: &[u64],
+    earlier: usize,
+) -> Result<History, CiError> {
+    let mode = running.sample.selection;
+    let mut samples = vec![running.sample.clone()];
+    for run_id in ids {
+        if samples.len() > earlier {
+            break;
         }
-        if !samples.is_empty() {
-            histories.push(History {
-                population,
-                samples,
-            });
+        let candidate = sample(github, repo, *run_id)?;
+        if candidate.selection == mode {
+            samples.push(candidate);
         }
     }
-    Ok(histories)
+    Ok(History {
+        population,
+        mode,
+        samples,
+    })
+}
+
+/// Newest runs of a population grouped by what their plan selected.
+fn by_selection(
+    github: &dyn GitHub,
+    repo: &Repo,
+    population: Population,
+    ids: &[u64],
+) -> Result<Vec<History>, CiError> {
+    let mut groups: Vec<History> = Vec::new();
+    for run_id in ids {
+        let measured = sample(github, repo, *run_id)?;
+        let mode = measured.selection;
+        match groups.iter_mut().find(|history| history.mode == mode) {
+            Some(history) => history.samples.push(measured),
+            None => groups.push(History {
+                population,
+                mode,
+                samples: vec![measured],
+            }),
+        }
+    }
+    Ok(groups)
+}
+
+/// The selection a run records in the title of its budget job, when it has one
+/// that ran.
+fn selection_of(jobs: &[ApiJob]) -> Option<Selection> {
+    jobs.iter()
+        .filter(|job| job.conclusion.as_deref() != Some("skipped"))
+        .find_map(|job| Selection::of_job_title(&job.name))
 }
 
 fn job_seconds(job: &ApiJob, run_id: u64) -> Result<u64, CiError> {
@@ -150,6 +211,7 @@ pub fn sample(github: &dyn GitHub, repo: &Repo, run_id: u64) -> Result<Sample, C
     .ok_or_else(|| CiError::new(format!("run {run_id} has no measurable wall time")))?;
     Ok(Sample {
         run_id,
+        selection: selection_of(&jobs),
         wall_seconds,
         runner_seconds,
         setup_seconds: setup,
@@ -182,7 +244,8 @@ pub fn current(
     let mut runner_seconds = 0_u64;
     let mut setup: Option<u64> = None;
     let mut measured = Vec::new();
-    for job in all_jobs(github, run_id, |page| run_jobs_path(repo, run_id, page))? {
+    let jobs = all_jobs(github, run_id, |page| run_jobs_path(repo, run_id, page))?;
+    for job in &jobs {
         if job.conclusion.as_deref() == Some("skipped") {
             continue;
         }
@@ -200,7 +263,7 @@ pub fn current(
                 ))
             })?;
         runner_seconds = runner_seconds.saturating_add(duration);
-        if let Some(seconds) = setup_seconds(&job) {
+        if let Some(seconds) = setup_seconds(job) {
             setup = Some(setup.map_or(seconds, |current: u64| current.max(seconds)));
         }
         measured.push((job.name.clone(), duration));
@@ -209,6 +272,7 @@ pub fn current(
         population: population_of(&run.event),
         sample: Sample {
             run_id,
+            selection: selection_of(&jobs),
             wall_seconds,
             runner_seconds,
             setup_seconds: setup,

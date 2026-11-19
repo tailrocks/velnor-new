@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::budget_mode::{ModeBudget, Selection};
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
@@ -70,15 +71,72 @@ pub struct SpeedBudget {
     pub main_wall_seconds: u64,
     pub runner_seconds: u64,
     pub setup_seconds: u64,
+    /// Limits of runs whose plan selected everything; a key the table leaves
+    /// out takes the plain key above.
+    pub full: ModeBudget,
+    pub affected: ModeBudget,
+    pub none: ModeBudget,
 }
 
 impl SpeedBudget {
+    fn any_mode(&self, check: impl Fn(&ModeBudget) -> bool) -> bool {
+        [&self.full, &self.affected, &self.none]
+            .into_iter()
+            .any(check)
+    }
+
     #[must_use]
     pub fn enabled(&self) -> bool {
+        let above = |limit: Option<u64>| limit.is_some_and(|seconds| seconds > 0);
         self.pr_wall_seconds > 0
             || self.main_wall_seconds > 0
             || self.runner_seconds > 0
             || self.setup_seconds > 0
+            || self.any_mode(|mode| {
+                above(mode.pr_wall_seconds)
+                    || above(mode.main_wall_seconds)
+                    || above(mode.runner_seconds)
+                    || above(mode.setup_seconds)
+            })
+    }
+
+    /// True when some per-mode table sets a limit.
+    #[must_use]
+    pub fn has_modes(&self) -> bool {
+        self.any_mode(ModeBudget::is_set)
+    }
+
+    /// True when the pull request wall time is limited for some mode.
+    #[must_use]
+    pub fn limits_pull_request_wall(&self) -> bool {
+        self.pr_wall_seconds > 0
+            || self.any_mode(|mode| mode.pr_wall_seconds.is_some_and(|seconds| seconds > 0))
+    }
+
+    /// True when the default branch wall time is limited for some mode.
+    #[must_use]
+    pub fn limits_main_wall(&self) -> bool {
+        self.main_wall_seconds > 0
+            || self.any_mode(|mode| mode.main_wall_seconds.is_some_and(|seconds| seconds > 0))
+    }
+
+    /// The limits of runs of `mode`: each key the mode table leaves out takes
+    /// the plain key. A run whose selection is unknown has the plain keys.
+    #[must_use]
+    pub fn for_mode(&self, mode: Option<Selection>) -> Self {
+        let table = match mode {
+            Some(Selection::Full) => self.full,
+            Some(Selection::Affected) => self.affected,
+            Some(Selection::Nothing) => self.none,
+            None => ModeBudget::default(),
+        };
+        Self {
+            pr_wall_seconds: table.pr_wall_seconds.unwrap_or(self.pr_wall_seconds),
+            main_wall_seconds: table.main_wall_seconds.unwrap_or(self.main_wall_seconds),
+            runner_seconds: table.runner_seconds.unwrap_or(self.runner_seconds),
+            setup_seconds: table.setup_seconds.unwrap_or(self.setup_seconds),
+            ..Self::default()
+        }
     }
 
     #[must_use]

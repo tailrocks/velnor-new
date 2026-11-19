@@ -179,3 +179,71 @@ fn an_unknown_key_in_the_budget_is_a_config_error() -> TestResult {
     assert!(error.to_string().contains("budget.wall_seconds"), "{error}");
     Ok(())
 }
+
+#[test]
+fn a_pin_that_reads_the_selection_titles_the_budget_job_with_what_the_plan_selected() -> TestResult
+{
+    let files = budgeted("0.1.104", "[budget]\nmain_wall_seconds = 600\n")?;
+    let tree = crate::yaml_tree::document(&workflow(&files)?)?;
+    let name = tree
+        .pointer("/jobs/rust-budget/name")
+        .and_then(serde_json::Value::as_str)
+        .ok_or("the budget job has no title")?;
+    assert!(
+        name.contains("format('Speed budget ({0})'"),
+        "the title records the selection\n{name}"
+    );
+    for (value, mode) in [("all", "full"), ("some", "affected"), ("none", "none")] {
+        assert!(
+            name.contains(&format!("needs.rust.outputs.rust_root_mode == '{value}'"))
+                && name.contains(&format!("'{mode}'")),
+            "{name}"
+        );
+    }
+    assert_eq!(
+        tree.pointer("/jobs/rust-budget/needs"),
+        Some(&serde_json::json!(["required", "rust"])),
+        "the job reads the plan outputs, so it needs the job that has them"
+    );
+    assert_eq!(
+        tree.pointer("/jobs/rust/outputs/rust_root_mode"),
+        Some(&serde_json::json!(
+            "${{ steps.plan.outputs.rust_root_mode }}"
+        ))
+    );
+    Ok(())
+}
+
+#[test]
+fn a_pin_that_cannot_read_the_selection_keeps_the_plain_title_and_needs() -> TestResult {
+    let files = budgeted("0.1.103", "[budget]\nmain_wall_seconds = 600\n")?;
+    let tree = crate::yaml_tree::document(&workflow(&files)?)?;
+    assert_eq!(
+        tree.pointer("/jobs/rust-budget/name"),
+        Some(&serde_json::json!("Speed budget"))
+    );
+    assert_eq!(
+        tree.pointer("/jobs/rust-budget/needs"),
+        Some(&serde_json::json!(["required"]))
+    );
+    assert_eq!(tree.pointer("/jobs/rust/outputs/rust_root_mode"), None);
+    Ok(())
+}
+
+#[test]
+fn per_mode_limits_need_a_pin_that_applies_them() -> TestResult {
+    let config = "[budget.full]\nmain_wall_seconds = 900\n";
+    let old = budgeted("0.1.103", config)?;
+    let error = velnor_gen::expected_with_notes(&old).expect_err("the old pin was accepted");
+    let GenerateError::BudgetModesHelperTooOld(version) = &error else {
+        return Err(format!("unexpected error: {error}").into());
+    };
+    assert_eq!(version.to_string(), "0.1.103");
+    assert!(
+        error.to_string().contains("pin velnor-ci 0.1.104 or later"),
+        "{error}"
+    );
+    let files = budgeted("0.1.104", config)?;
+    assert!(workflow(&files)?.contains("  rust-budget:"));
+    Ok(())
+}

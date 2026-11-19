@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    DocsRun, HelperRelease, HelperVersion, MbxStore, Platform, PrCi, PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, MbxStore, Platform, PrCi,
+    PushAfterMergeGroup, RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
@@ -91,6 +92,13 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         && !release.version().at_least(BUDGET_HELPER)
     {
         return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
+    }
+    if facts.config.budget.is_some_and(|budget| budget.has_modes())
+        && !release.version().at_least(BUDGET_MODES_HELPER)
+    {
+        return Err(GenerateError::BudgetModesHelperTooOld(
+            release.version().clone(),
+        ));
     }
     Ok(release)
 }
