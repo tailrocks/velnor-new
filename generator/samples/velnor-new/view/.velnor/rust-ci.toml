@@ -7,6 +7,11 @@ mbx_shared_store = true
 docs = "post_merge"
 check_alone = "post_merge"
 pr_ci = "label"
+# Recorded sample checkouts are data, not roots of this repository (velnor-gen skips them the same way).
+exclude = ["generator/samples/**"]
+
+[ci]
+skip_push_after_merge_group = true
 
 [crates_mirror]
 runner = "ubuntu-26.04-scale-set"
@@ -30,3 +35,14 @@ packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 lint = true
 doc = true
+
+# Workflow and repository-policy lint. Each entry is a generated job that the
+# Required check waits for. Tool versions come from mise.toml and mise.lock.
+[[lint]]
+kind = "jactionlint"
+config = ".github/jactionlint.yaml"
+
+[[lint]]
+kind = "alint"
+config = ".alint.yml"
+probe = "scripts/alint-line-cap-probe.sh"
