@@ -86,6 +86,7 @@ async fn restoring_credentials_for_a_deleted_set_sends_nothing_to_it() -> TestRe
     .await;
     assert!(!restored);
     assert!(fixture.prepared.credentials.is_none());
-    assert!(refreshes(&fixture).await?.is_empty());
+    let sent = refreshes(&fixture).await?;
+    assert!(sent.is_empty(), "{sent:?}");
     Ok(())
 }
