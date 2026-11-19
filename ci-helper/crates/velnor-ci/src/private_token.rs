@@ -3,6 +3,7 @@
 
 use serde::Deserialize;
 
+use crate::cache::encode;
 use crate::error::CiError;
 use crate::github::GitHub;
 
@@ -78,10 +79,15 @@ fn is_sha(text: &str) -> bool {
     text.len() == SHA_LENGTH && text.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
-pub fn check(head_ref: &str, repository: &str, github: &dyn GitHub) -> Result<(), CiError> {
+pub fn check(
+    head_ref: &str,
+    repository: &str,
+    event_sha: &str,
+    github: &dyn GitHub,
+) -> Result<(), CiError> {
     let entry = parse_queue_ref(head_ref)?;
     authenticate(&entry, repository, github)?;
-    for earlier in entries_in_checkout(&entry, repository, github)? {
+    for earlier in entries_in_checkout(&entry, repository, event_sha, github)? {
         authenticate(&earlier, repository, github)?;
     }
     Ok(())
@@ -112,11 +118,13 @@ fn authenticate(entry: &QueueEntry, repository: &str, github: &dyn GitHub) -> Re
 fn entries_in_checkout(
     entry: &QueueEntry,
     repository: &str,
+    event_sha: &str,
     github: &dyn GitHub,
 ) -> Result<Vec<QueueEntry>, CiError> {
+    let base: Vec<String> = entry.base.split('/').map(encode).collect();
     let path = format!(
         "/repos/{repository}/git/matching-refs/heads/{QUEUE_PREFIX}{}/?per_page={REFS_PAGE}",
-        entry.base
+        base.join("/")
     );
     let text = github.get(&path)?;
     let refs: Vec<QueueRef> = serde_json::from_str(&text)
@@ -152,6 +160,12 @@ fn entries_in_checkout(
             entry.number, entry.sha
         ))
     })?;
+    if !checkout.eq_ignore_ascii_case(event_sha) {
+        return Err(CiError::new(format!(
+            "the queue ref of pr-{} is at {checkout} now, but this run's event checked out {event_sha}; the queue was rebuilt",
+            entry.number
+        )));
+    }
     let mut earlier = Vec::new();
     for (other, group) in others {
         let path = format!("/repos/{repository}/compare/{group}...{checkout}?per_page=1");

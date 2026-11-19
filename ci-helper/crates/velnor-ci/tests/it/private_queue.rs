@@ -5,7 +5,7 @@ use std::collections::HashMap;
 
 use velnor_ci::error::CiError;
 use velnor_ci::github::GitHub;
-use velnor_ci::private_token::check;
+use velnor_ci::private_token::{check, parse_queue_ref};
 
 const REPOSITORY: &str = "acme/app";
 const OURS: &str = "1111111111111111111111111111111111111111";
@@ -76,7 +76,7 @@ fn a_queue_entry_stacked_on_a_fork_pull_request_is_refused() {
             compare(AHEAD_GROUP, "ahead"),
         ],
     );
-    let message = error(check(&head_ref(42, OURS), REPOSITORY, &github));
+    let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github));
     assert!(message.contains("mallory/app"), "{message}");
 }
 
@@ -91,7 +91,7 @@ fn a_queue_entry_stacked_only_on_same_repository_pull_requests_is_allowed() {
         ],
     );
     assert_eq!(
-        check(&head_ref(42, OURS), REPOSITORY, &github)
+        check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github)
             .err()
             .map(|e| e.to_string()),
         None
@@ -109,7 +109,7 @@ fn a_fork_pull_request_queued_behind_this_entry_is_not_part_of_its_checkout() {
         ],
     );
     assert_eq!(
-        check(&head_ref(42, OURS), REPOSITORY, &github)
+        check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github)
             .err()
             .map(|e| e.to_string()),
         None
@@ -122,7 +122,7 @@ fn an_unreadable_queue_listing_or_comparison_is_refused() {
         &[(41, AHEAD, AHEAD_GROUP)],
         vec![pull(42, REPOSITORY, OURS)],
     );
-    let message = error(check(&head_ref(42, OURS), REPOSITORY, &missing));
+    let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &missing));
     assert!(message.contains("queue"), "{message}");
     let unknown = queue(
         &[(42, OURS, OURS_GROUP), (41, AHEAD, AHEAD_GROUP)],
@@ -132,7 +132,40 @@ fn an_unreadable_queue_listing_or_comparison_is_refused() {
             compare(AHEAD_GROUP, "teapot"),
         ],
     );
-    assert!(check(&head_ref(42, OURS), REPOSITORY, &unknown).is_err());
+    assert!(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &unknown).is_err());
     let no_listing = Fake(HashMap::from([pull(42, REPOSITORY, OURS)]));
-    assert!(check(&head_ref(42, OURS), REPOSITORY, &no_listing).is_err());
+    assert!(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &no_listing).is_err());
+}
+
+#[test]
+fn a_malformed_head_ref_is_not_a_queue_entry() {
+    for reference in [
+        "",
+        "refs/heads/main",
+        "refs/heads/gh-readonly-queue/main/pr-42",
+        "refs/heads/gh-readonly-queue/main/pr-x-0123456789abcdef0123456789abcdef01234567",
+        "refs/heads/gh-readonly-queue/main/pr-42-0123",
+        "refs/heads/gh-readonly-queue/main/pr-42-0123456789abcdef0123456789abcdef0123456789",
+        "refs/heads/gh-readonly-queue/main/pr-42-g123456789abcdef0123456789abcdef01234567",
+        "refs/heads/feature/pr-42-0123456789abcdef0123456789abcdef01234567",
+        "gh-readonly-queue//pr-42-0123456789abcdef0123456789abcdef01234567",
+    ] {
+        assert!(parse_queue_ref(reference).is_err(), "{reference}");
+    }
+}
+
+#[test]
+fn a_pull_request_answer_without_a_head_is_refused() {
+    let github = Fake(HashMap::from([(
+        format!("/repos/{REPOSITORY}/pulls/42"),
+        "{}".to_owned(),
+    )]));
+    assert!(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github).is_err());
+}
+
+#[test]
+fn a_queue_ref_rebuilt_since_the_event_is_refused() {
+    let github = queue(&[(42, OURS, OURS_GROUP)], vec![pull(42, REPOSITORY, OURS)]);
+    let message = error(check(&head_ref(42, OURS), REPOSITORY, AHEAD_GROUP, &github));
+    assert!(message.contains("rebuilt"), "{message}");
 }

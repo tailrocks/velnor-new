@@ -142,7 +142,10 @@ impl Server {
                     "{SERVER_VARIABLE} must be https://<host>[:<port>] (github.server_url)"
                 ))
             })?;
-        let mut forms = vec![format!("https://{authority}/")];
+        let mut forms = vec![
+            format!("https://{authority}/"),
+            format!("http://{authority}/"),
+        ];
         if !authority.contains(':') {
             forms.extend([
                 format!("ssh://git@{authority}/"),

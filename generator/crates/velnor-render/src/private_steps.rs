@@ -8,7 +8,7 @@ use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
 pub(crate) const CHECK_STEP: &str = "private-check";
-const TOKEN_ALLOWED: &str = "${{ (github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true') || (github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))) }}";
+const TOKEN_ALLOWED: &str = "${{ (github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true') || (github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')))) }}";
 
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {

@@ -339,7 +339,7 @@ fn a_merge_queue_entry_gets_the_token_only_when_the_check_before_it_allows_it() 
             "{guard}"
         );
         assert!(
-            guard.contains("github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'))"),
+            guard.contains("github.event_name != 'merge_group' && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && !endsWith(github.actor, '[bot]') && !endsWith(github.event.pull_request.user.login, '[bot]')))"),
             "{guard}"
         );
         assert_eq!(job["permissions"]["pull-requests"], "read", "{job}");

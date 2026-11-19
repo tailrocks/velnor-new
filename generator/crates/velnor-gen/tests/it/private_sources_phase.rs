@@ -110,7 +110,7 @@ fn the_phase_runs_when_any_direct_harness_runs_not_only_the_first_one() -> TestR
 }
 
 #[test]
-fn dependabot_runs_get_no_token_and_the_fetch_learns_the_server() -> TestResult {
+fn bot_pull_requests_get_no_token_and_the_fetch_learns_the_server() -> TestResult {
     let repo = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
     let mut checked = 0;
     for job in jobs(&workflow(&repo)?)? {
@@ -118,10 +118,12 @@ fn dependabot_runs_get_no_token_and_the_fetch_learns_the_server() -> TestResult 
             if step["id"] == "private-token" {
                 checked += 1;
                 let guard = step["if"].as_str().unwrap_or_default();
-                assert!(
-                    guard.contains("github.actor != 'dependabot[bot]'"),
-                    "{guard}"
-                );
+                for bot in [
+                    "!endsWith(github.actor, '[bot]')",
+                    "!endsWith(github.event.pull_request.user.login, '[bot]')",
+                ] {
+                    assert!(guard.contains(bot), "{guard}");
+                }
             }
             if step["run"]
                 .as_str()

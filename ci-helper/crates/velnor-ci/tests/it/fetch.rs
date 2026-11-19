@@ -233,6 +233,9 @@ fn a_token_that_cannot_be_revoked_fails_the_step() -> TestResult {
 #[test]
 fn every_github_url_form_a_lock_file_records_is_authenticated_and_nothing_else() -> TestResult {
     let fixture = Fixture::new("fetch-urls", 0)?;
+    let mut urls = URLS.to_vec();
+    urls.insert(1, "http://github.com/acme/private.git");
+    fs::write(fixture.repo.root().join("urls"), urls.join(" "))?;
     let api = serve(204)?;
     let output = fixture.run(&api, Some(TOKEN), None);
     assert!(output.status.success(), "{output:?}");
@@ -241,6 +244,7 @@ fn every_github_url_form_a_lock_file_records_is_authenticated_and_nothing_else()
     assert_eq!(
         urls.lines().collect::<Vec<_>>(),
         [
+            authenticated.as_str(),
             authenticated.as_str(),
             authenticated.as_str(),
             authenticated.as_str(),

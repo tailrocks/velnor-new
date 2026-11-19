@@ -9,6 +9,7 @@ use crate::private_token::check;
 
 const HEAD_REF_VARIABLE: &str = "VELNOR_MERGE_GROUP_HEAD_REF";
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
+const SHA_VARIABLE: &str = "GITHUB_SHA";
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
 const LOOKUP_TIMEOUT: Duration = Duration::from_secs(30);
 
@@ -22,8 +23,9 @@ fn variable(name: &str) -> Result<String, CiError> {
 fn decide() -> Result<(), CiError> {
     let head_ref = variable(HEAD_REF_VARIABLE)?;
     let repository = variable(REPOSITORY_VARIABLE)?;
+    let event_sha = variable(SHA_VARIABLE)?;
     let github = super::fetch::api_client(variable(TOKEN_VARIABLE)?, LOOKUP_TIMEOUT)?;
-    check(&head_ref, &repository, &github)
+    check(&head_ref, &repository, &event_sha, &github)
 }
 
 pub(super) fn run() -> Result<String, CiError> {
