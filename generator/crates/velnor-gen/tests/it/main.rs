@@ -28,6 +28,7 @@ mod drift;
 mod events;
 mod events_policy;
 mod facts;
+mod fixed_uses;
 mod fork_fence;
 mod freshness;
 mod golden;
