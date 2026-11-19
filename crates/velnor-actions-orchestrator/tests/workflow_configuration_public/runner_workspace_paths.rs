@@ -136,6 +136,12 @@ fn qualification_scripts(tree: &BTreeMap<String, String>) -> Result<Vec<String>,
     Ok(found)
 }
 
+fn shellcheck_required() -> bool {
+    ["CI", "GITHUB_ACTIONS"]
+        .iter()
+        .any(|name| std::env::var(name).is_ok_and(|value| value == "true"))
+}
+
 fn shellcheck(script: &str) -> Result<Option<String>, Box<dyn Error>> {
     let spawned = Command::new("shellcheck")
         .args(["--shell=bash", "--severity=style", "-"])
@@ -145,7 +151,15 @@ fn shellcheck(script: &str) -> Result<Option<String>, Box<dyn Error>> {
         .spawn();
     let mut child = match spawned {
         Ok(child) => child,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            if shellcheck_required() {
+                return Err(
+                    "shellcheck is required in CI; install it via mise (mise.toml pins shellcheck)"
+                        .into(),
+                );
+            }
+            return Ok(None);
+        }
         Err(error) => return Err(error.into()),
     };
     child
