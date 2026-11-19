@@ -178,18 +178,18 @@ fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
         for (job_id, job) in jobs {
             let steps = job["steps"].as_array().ok_or("steps missing")?;
             let plan = steps.iter().position(|step| step["id"] == "plan");
-            let selection = if shape == "one-job" && job_id == "rust" {
-                Some(
-                    "steps.plan.outcome == 'success' && steps.plan.outputs.rust_root_mode != 'none'",
-                )
-            } else if shape == "one-job" && job_id == "policy" {
-                Some(
-                    "steps.plan.outcome == 'success' && (steps.plan.outputs.rust_deny == 'run' || steps.plan.outputs.rust_machete == 'run')",
+            let (selection, owns_plan) = if shape == "one-job" && job_id == "rust" {
+                (
+                    Some(
+                        "steps.plan.outcome == 'success' && steps.plan.outputs.rust_root_mode != 'none'",
+                    ),
+                    true,
                 )
             } else {
-                None
+                (None, false)
             };
-            let expected = selection.map_or_else(
+            let policy_lane = shape == "one-job" && job_id == "policy";
+            let expected = selection.as_ref().map_or_else(
                 || MIRROR_GUARD.to_owned(),
                 |selected| {
                     format!(
@@ -224,8 +224,10 @@ fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
                     &format!("{shape}: {job_id}: {step}"),
                 );
             }
-            if selection.is_some() {
-                assert!(plan.is_some(), "{shape}: {job_id}: plan missing");
+            if selection.is_some() || policy_lane {
+                if owns_plan {
+                    assert!(plan.is_some(), "{shape}: {job_id}: plan missing");
+                }
                 assert!(saw_mirror, "{shape}: {job_id}: mirror missing");
             }
         }

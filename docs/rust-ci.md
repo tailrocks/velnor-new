@@ -126,6 +126,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `ci` | none | table; `skip_push_after_merge_group = true` skips checks the merge queue already ran |
 | `docs` | `"always"` | `post_merge` runs `cargo doc` only after a merge |
 | `check_alone` | `"always"` | `post_merge` runs the per-crate `Check <crate> alone` steps only after a merge |
+| `sparse_checkout` | `false` | each Rust lane job checks out only the paths its lane reads |
 | `inputs`, `non_inputs`, `exclude` | none | map files to packages, map files to nothing, or leave Cargo manifests out |
 | `default_ignores` | `true` | documentation and licence files select nothing |
 | `nextest_harnesses` | none | `package:target` entries for `harness = false` test targets that nextest can run; the others run in a direct step |
