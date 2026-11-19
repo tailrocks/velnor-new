@@ -40,20 +40,22 @@ pub fn root_target(root: &Path) -> Vec<PathBuf> {
     vec![root.join("target")]
 }
 
-#[must_use]
-pub fn every_root_target(root: &Path) -> Vec<PathBuf> {
+pub fn every_root_target(root: &Path) -> Result<Vec<PathBuf>, CiError> {
     let mut targets = root_target(root);
-    if let Ok(listed) = tracked_paths(root) {
-        for path in listed.paths {
-            if let Some(dir) = path.strip_suffix("Cargo.toml")
-                && (dir.is_empty() || dir.ends_with('/'))
-            {
-                let target = listed.top.join(dir).join("target");
-                if !targets.contains(&target) {
-                    targets.push(target);
-                }
+    let listed = tracked_paths(root).map_err(|e| {
+        CiError::new(format!(
+            "cannot list the tracked Cargo manifests, so the cached target directories cannot all be found and cleared: {e}"
+        ))
+    })?;
+    for path in listed.paths {
+        if let Some(dir) = path.strip_suffix("Cargo.toml")
+            && (dir.is_empty() || dir.ends_with('/'))
+        {
+            let target = listed.top.join(dir).join("target");
+            if !targets.contains(&target) {
+                targets.push(target);
             }
         }
     }
-    targets
+    Ok(targets)
 }

@@ -12,6 +12,7 @@ mod hazards;
 mod lock_version;
 mod members;
 mod mise;
+mod nested;
 mod plan;
 mod reality;
 mod registry;
@@ -41,4 +42,4 @@ pub use ruleset::{
 pub use tag::{TagPattern, is_tag_name};
 pub use timeout::TAG_JOB_BASE_MINUTES;
 pub use velnor_config::BinaryFormat;
-pub use versions::{Versions, check_release_versions};
+pub use versions::{ExpectedRelease, Versions, check_release_versions, expected_releases};
