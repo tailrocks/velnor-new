@@ -33,7 +33,7 @@ list-wrapper = "no-programs"
 run-wrapper = "no-programs"
 
 [[profile.ci.scripts]]
-filter = 'package(=velnor-runner-host) and binary(=local_pair_public)'
+filter = 'package(=velnor-runner-host) and (binary(=local_pair_public) or binary(=local_host_public))'
 platform = 'cfg(target_os = "linux")'
 run-wrapper = 'local-docker-ci'
 
