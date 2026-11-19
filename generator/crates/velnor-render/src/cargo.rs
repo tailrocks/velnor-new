@@ -75,20 +75,13 @@ fn cargo_command(
     match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
+        CargoCommand::ClippyFeatures { features } => clippy_features(cargo, features),
         CargoCommand::NextestBuild => nextest_build(nextest),
         CargoCommand::NextestRun { filter } => {
             nextest_run(&format!("--workspace --locked{nextest}"), filter)
         }
         CargoCommand::NextestFeatures { features, filter } => {
-            let (_, run, env) = nextest_run(
-                &format!("--workspace --locked{nextest}{}", feature_flag(features)),
-                filter,
-            );
-            (
-                format!("{TEST_STEP} (features: {})", features.join(",")),
-                run,
-                env,
-            )
+            nextest_features(nextest, features, filter)
         }
         CargoCommand::NextestRunArchive { file, filter } => nextest_run(
             &format!(
@@ -125,6 +118,7 @@ fn cargo_command(
             vec![],
         ),
         CargoCommand::Doc => ("Documentation".into(), format!("{DOC_RUN}{cargo}"), vec![]),
+        CargoCommand::DocFeatures { features } => doc_features(cargo, features),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
             format!("cargo check -p {package} --locked{cargo}"),
@@ -176,6 +170,39 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
         .collect::<Vec<_>>()
         .join(" "),
         vec![],
+    )
+}
+
+fn clippy_features(cargo: &str, features: &[String]) -> (String, String, Vec<(String, Value)>) {
+    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[]);
+    (
+        format!("{name} (features: {})", features.join(",")),
+        run,
+        env,
+    )
+}
+
+fn doc_features(cargo: &str, features: &[String]) -> (String, String, Vec<(String, Value)>) {
+    (
+        format!("Documentation (features: {})", features.join(",")),
+        format!("{DOC_RUN}{cargo}{}", feature_flag(features)),
+        vec![],
+    )
+}
+
+fn nextest_features(
+    nextest: &str,
+    features: &[String],
+    filter: &FilterRef,
+) -> (String, String, Vec<(String, Value)>) {
+    let (_, run, env) = nextest_run(
+        &format!("--workspace --locked{nextest}{}", feature_flag(features)),
+        filter,
+    );
+    (
+        format!("{TEST_STEP} (features: {})", features.join(",")),
+        run,
+        env,
     )
 }
 

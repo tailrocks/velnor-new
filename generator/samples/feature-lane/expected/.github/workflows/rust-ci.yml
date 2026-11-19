@@ -167,6 +167,12 @@ jobs:
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || steps.plan.outputs.rust_root_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --features ''local-mode'' --no-fail-fast --ignore-default-filter --status-level pass -E "($TEST_FILTER) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))" --no-tests=pass'
+      - name: 'Lint (features: local-mode)'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
+        run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics --features ''local-mode'' -- -D warnings'
+      - name: 'Documentation (features: local-mode)'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || steps.plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args) != '''' }}'
+        run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics --features ''local-mode'''
       - name: velnor-ci inputs audit
         if: '${{ (github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'' || steps.restored.outputs.expired == ''true'') && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
         run: '. "$VELNOR_EXEC" inputs audit'

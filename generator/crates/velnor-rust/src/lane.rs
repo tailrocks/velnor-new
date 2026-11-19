@@ -68,7 +68,7 @@ impl Lane {
     ) -> Step {
         let gate = match command {
             CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
-            CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
+            CargoCommand::Doc | CargoCommand::DocFeatures { .. } => Some(self.gate(GateNeed::Docs)),
             CargoCommand::Deny { .. } => Some(self.gate(GateNeed::Deny)),
             CargoCommand::Machete => Some(self.gate(GateNeed::Machete)),
             CargoCommand::CheckAlone { ref package }

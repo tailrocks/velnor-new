@@ -228,6 +228,12 @@ pub enum CargoCommand {
         features: Vec<String>,
         filter: FilterRef,
     },
+    ClippyFeatures {
+        features: Vec<String>,
+    },
+    DocFeatures {
+        features: Vec<String>,
+    },
     NextestArchive {
         file: RepoPath,
     },

@@ -59,6 +59,17 @@ filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_p
 
 `filter` is optional. It is a nextest filterset that the generator joins to the plan's selection with `and`, so a lane never runs a test the plan did not select. Without it the lane re-runs the whole selected set with the features. Every generated `run:` value is one command with no shell syntax, so the filterset is one quoted argument and must not contain `|`, `&`, `;`, `<`, a quote, `$`, a backtick, a backslash, a line break or one of the words `if`, `for`, `while`, `case` and `coproc`. Write the nextest operators as words: `or` for `|`, `and` for `&` and `not` for `!`. Binaries that run with `cargo test` because their harness is off stay out of the lane, as they stay out of the default step.
 
+`lint` and `doc` are optional booleans, `false` by default. A lane without them renders exactly as before. `lint = true` adds a clippy step named `Lint (features: local-mode)` and `doc = true` adds a rustdoc step named `Documentation (features: local-mode)`. Each runs the root's default command with `--features '<features>'` added, so clippy keeps `--workspace --all-targets --locked ... -- -D warnings` and rustdoc keeps `--workspace --no-deps --locked` with `-D warnings` for rustdoc. The steps follow the lane's test step in the same job, in the same folder and with the same target directory, so the build cache is shared. They are steps of a job that the `required` job already needs, so a failure there fails the gate. Format checks need no features and stay in the default lint step.
+
+```toml
+[[test_lane]]
+root = "crates/velnor-runner"
+features = ["local-mode"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
+lint = true
+doc = true
+```
+
 The generator does not check that `filter` selects every test that exists only under the features. A new feature-only test whose name falls outside the filter is skipped without an error. Keep the filter to a naming rule that new feature-only tests follow.
 
 ## Dependency policy flags
