@@ -1,0 +1,8 @@
+after = ["CI", "Rust CI"]
+
+[[binaries]]
+package = "app"
+format = "raw"
+target = "musl"
+smoke = true
+commit_file = true
