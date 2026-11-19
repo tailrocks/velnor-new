@@ -224,6 +224,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
         fork_runner: RunnerLabel::new("ubuntu-latest")?,
+        hosted_runners: velnor_model::HostedRunners::new(vec![RunnerLabel::new("ubuntu-latest")?]),
         jobs: vec![Job {
             id: JobId::new("rust")?,
             name: None,

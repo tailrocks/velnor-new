@@ -13,6 +13,8 @@ pub struct TestGroup {
     pub test_threads: Option<u16>,
     pub timeout_minutes: Option<u16>,
     pub runner: Option<RunnerLabel>,
+    /// The `hosted` key written next to `runner`, if any.
+    pub hosted: Option<bool>,
     pub paths: Vec<PathGlob>,
     pub events: Vec<GroupEvent>,
     pub root: GroupRoot,

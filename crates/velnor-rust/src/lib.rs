@@ -21,6 +21,7 @@ mod config_events;
 mod config_exclude;
 mod config_fork;
 mod config_helper;
+mod config_hosting;
 mod config_keys;
 mod config_lint;
 mod config_mirror;

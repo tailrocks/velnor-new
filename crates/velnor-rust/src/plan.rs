@@ -113,6 +113,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         },
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         fork_runner: facts.config.fork_runner.clone(),
+        hosted_runners: facts.config.hosted_runners.clone(),
         jobs,
     }
 }

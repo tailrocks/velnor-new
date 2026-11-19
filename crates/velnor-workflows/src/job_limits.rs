@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::github_hosted;
-
 use crate::error::{WorkflowsError, refuse};
 use crate::plan::{Action, Body, Env, Job, Step};
 
@@ -35,7 +33,7 @@ pub(crate) fn containers_on_linux(
         .filter(|job| job.container.is_some() || !job.services.is_empty())
     {
         let primary = job.runner.as_deref().unwrap_or(runner);
-        let fork = (!github_hosted(primary)).then_some(fork_runner);
+        let fork = (!job.hosted).then_some(fork_runner);
         for label in std::iter::once(primary).chain(fork) {
             let label_lower = label.to_ascii_lowercase();
             if label_lower.starts_with("macos") || label_lower.starts_with("windows") {

@@ -31,6 +31,9 @@ fn rendered_run(manifests: &[&str]) -> String {
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
         fork_runner: RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
+        hosted_runners: velnor_model::HostedRunners::new(vec![
+            RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
+        ]),
         jobs: vec![Job {
             id: JobId::new("rust").unwrap_or_else(|e| unreachable!("{e}")),
             name: None,

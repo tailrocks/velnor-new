@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperRelease, github_hosted};
+use velnor_model::HelperRelease;
 use velnor_workflows::{
     Action, Body, CallTarget, CallValue, Concurrency, Env, Job, Matrix, MatrixSource, Step,
     Workflow, WorkflowsPlan,
@@ -113,7 +113,7 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             .iter()
             .flat_map(|call| call_values(&call.with))
             .collect(),
-        fork_runner: (!github_hosted(&runs_on)).then(|| workflow.fork_runner.clone()),
+        fork_runner: (!job.hosted).then(|| workflow.fork_runner.clone()),
         permissions: job.permissions.clone(),
         no_permissions: job.permissions.is_empty(),
         outputs: job

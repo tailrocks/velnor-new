@@ -17,7 +17,7 @@ pub(crate) fn mirror(raw: RawCratesMirror) -> Result<velnor_model::CratesMirror,
     let invalid = |key, value| Reason::InvalidValue { key, value };
     let runner = RunnerLabel::new(raw.runner.clone())
         .map_err(|_| invalid("crates_mirror.runner", raw.runner))?;
-    if velnor_model::github_hosted(runner.as_str()) {
+    if velnor_model::looks_github_hosted(runner.as_str()) {
         return Err(invalid("crates_mirror.runner", runner.to_string()));
     }
     if !raw.registry.starts_with("sparse+https://")

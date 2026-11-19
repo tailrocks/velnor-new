@@ -3,8 +3,8 @@
 
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
-    MERGE_GROUP_STEP, RunnerLabel, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted, group_output_name,
+    MERGE_GROUP_STEP, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, WorkflowPlan, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -50,7 +50,7 @@ pub(crate) const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329a
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
+pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
     let lane = crate::cargo::cargo_lane(job);
     let tests = Tests::of(job);
@@ -68,7 +68,8 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
-        fork_runner: (!github_hosted(job.runs_on.as_str())).then(|| fork_runner.to_string()),
+        fork_runner: (!plan.hosted_runners.contains(&job.runs_on))
+            .then(|| plan.fork_runner.to_string()),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
         outputs: job

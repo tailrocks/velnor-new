@@ -2,6 +2,7 @@
 file = "qualification"
 name = "Qualification"
 runner = "ubuntu-26.04"
+hosted = true
 fork_runner = "ubuntu-26.04"
 hosted_runner = "ubuntu-26.04"
 scale_set_runner = "ubuntu-26.04-scale-set"
@@ -964,6 +965,7 @@ run = "bash qualification/stable-sources.sh archive-guard"
 file = "release-rust-ci-tools"
 name = "Release Rust CI tools"
 runner = "ubuntu-24.04"
+hosted = true
 
 [workflow.concurrency]
 group = "${{ github.workflow }}-${{ github.ref }}"
@@ -1079,6 +1081,7 @@ id = "build-linux-arm64"
 name = "Build linux-arm64"
 needs = ["gate"]
 runner = "ubuntu-24.04-arm"
+hosted = true
 timeout_minutes = 30
 permissions = { contents = "read" }
 env = { TARGET = "aarch64-unknown-linux-musl" }
@@ -1233,6 +1236,7 @@ env = { GH_TOKEN = "${{ github.token }}" }
 file = "tag-ruleset-drift"
 name = "Tag ruleset drift"
 runner = "ubuntu-24.04"
+hosted = true
 
 [workflow.on]
 

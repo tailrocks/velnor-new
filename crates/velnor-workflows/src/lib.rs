@@ -13,6 +13,7 @@ mod error;
 mod expression;
 mod functions;
 mod helper_call;
+mod hosting;
 mod job_env;
 mod job_limits;
 mod matrix;

@@ -146,6 +146,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `private_sources` | none | private dependencies, see above |
 | `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93) |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
+| `hosted` | `true` when `runner` is not set | `true` opens `runner` to fork pull requests, `false` fences it; required when `runner` is spelled like a GitHub-hosted label |
 | `fork_runner` | `"ubuntu-latest"` | the hosted runner for fork pull requests when `runner` is self-hosted |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |
 | `required_check` | `"Required"` | the name of the one required check |

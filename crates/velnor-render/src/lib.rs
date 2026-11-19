@@ -86,7 +86,7 @@ pub fn rendered_workflow(plan: &WorkflowPlan) -> RenderedWorkflow {
         jobs: plan
             .jobs
             .iter()
-            .map(|job| rendered_job(job, &plan.fork_runner))
+            .map(|job| rendered_job(job, plan))
             .collect(),
     }
 }

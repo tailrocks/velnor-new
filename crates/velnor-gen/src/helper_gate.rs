@@ -9,6 +9,9 @@ use crate::{
     BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
 };
 
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
+const HOSTED_HELPER: (u64, u64, u64) = (0, 1, 98);
+
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
         .helper
@@ -37,6 +40,9 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 93)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
+    }
+    if facts.config.hosted_runners.key_written() && !release.version().at_least(HOSTED_HELPER) {
+        return Err(GenerateError::HostedHelperTooOld(release.version().clone()));
     }
     if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
         return Err(GenerateError::PrivateSourcesHelperTooOld(
