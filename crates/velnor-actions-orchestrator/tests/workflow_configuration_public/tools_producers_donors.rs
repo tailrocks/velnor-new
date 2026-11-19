@@ -282,23 +282,3 @@ fn producers_scrub_and_verify_mise_before_installing() -> Result<(), Box<dyn Err
     }
     Ok(())
 }
-
-pub(super) fn producer_ids_and_digests(workflow: &str) -> (BTreeSet<String>, BTreeSet<String>) {
-    let mut produced = BTreeSet::new();
-    let mut consumed = BTreeSet::new();
-    let mut owner = String::new();
-    for line in workflow.lines() {
-        if line.starts_with("  ") && !line.starts_with("   ") && line.trim_end().ends_with(':') {
-            line.trim().trim_end_matches(':').clone_into(&mut owner);
-            if let Some(short) = owner.strip_prefix("tools-producer-") {
-                produced.insert(short.to_owned());
-            }
-        }
-        if let Some(digest) = line.trim().strip_prefix("d: ")
-            && !owner.starts_with("tools-producer-")
-        {
-            consumed.insert(digest.chars().take(8).collect());
-        }
-    }
-    (produced, consumed)
-}

@@ -25,6 +25,7 @@ fn helper_case(name: &str) -> Option<(Vec<HelperSpec>, bool)> {
     };
     Some(match name {
         "publication" => (vec![publication], true),
+        "storage_proven" => (Vec::new(), true),
         "initializer" => (vec![initializer], true),
         "initializer_already_removed" => (
             vec![HelperSpec {
@@ -94,7 +95,8 @@ fn helper_case_child() -> TestResult<()> {
         return Ok(());
     };
     let (specs, expect_success) = helper_case(&name).ok_or("unknown helper case")?;
-    let observed = run_cancelled_before_start_scenario(&specs, expect_success)?;
+    let observed =
+        run_cancelled_before_start_scenario(&specs, expect_success, name == "storage_proven")?;
     println!("{}", observed.encode());
     Ok(())
 }
@@ -134,6 +136,14 @@ fn public_cancelled_run_retires_a_journaled_publication_helper_before_removing_v
     assert_eq!(observed.phase, "removed", "{stderr}");
     assert_eq!(observed.lease, "released", "{stderr}");
     assert!(!stderr.contains("UNROUTED"), "{stderr}");
+    Ok(())
+}
+
+#[test]
+fn public_cancelled_run_removes_the_job_network() -> TestResult<()> {
+    let (observed, stderr) = run_helper_case("storage_proven")?;
+    assert_eq!(observed.network_left, 0, "{stderr}");
+    assert_eq!(observed.network, "created/removed", "{stderr}");
     Ok(())
 }
 

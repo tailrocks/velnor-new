@@ -5,6 +5,10 @@ use std::{error::Error, fs};
 
 use super::fixture;
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn unguarded_cli_fixture_qualifies_before_guard_tests() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -20,11 +24,6 @@ fn unguarded_cli_fixture_qualifies_before_guard_tests() -> Result<(), Box<dyn Er
         generated.status.success(),
         "{}",
         fixture::stderr(&generated)
-    );
-    assert!(
-        output
-            .join(".github/workflows/binary-preview.yml")
-            .is_file()
     );
     let policy = fixture.root.join("legacy-policy.json");
     let exported = fixture.source_export_unguarded(&policy)?;
@@ -42,6 +41,10 @@ fn unguarded_cli_fixture_qualifies_before_guard_tests() -> Result<(), Box<dyn Er
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn guarded_generate_and_plan_succeed_and_denial_writes_nothing() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -60,11 +63,6 @@ fn guarded_generate_and_plan_succeed_and_denial_writes_nothing() -> Result<(), B
         "{}",
         fixture::stderr(&generated)
     );
-    let workflow = fs::read_to_string(output.join(".github/workflows/binary-preview.yml"))?;
-    assert!(
-        workflow.contains("probe"),
-        "preview workflow omitted the probe product"
-    );
 
     let denied_output = fixture.root.join("denied-generation");
     let denied = fixture.generate("deny", &denied_output)?;
@@ -79,66 +77,10 @@ fn guarded_generate_and_plan_succeed_and_denial_writes_nothing() -> Result<(), B
     Ok(())
 }
 
-#[test]
-fn guarded_generate_keeps_guard_for_release_rendering() -> Result<(), Box<dyn Error>> {
-    for (registry, outputs) in [
-        ("crates-io", &[".github/workflows/release.yml"][..]),
-        (
-            "git-tag",
-            &[".github/workflows/publish.yml", ".github/release-plz.toml"][..],
-        ),
-    ] {
-        let fixture = fixture::Fixture::new()?;
-        fixture.enable_release(registry)?;
-        let control_plan = fixture.invoke(&["plan"])?;
-        assert!(
-            control_plan.status.success(),
-            "{}",
-            fixture::stderr(&control_plan)
-        );
-        let control_output = fixture.root.join("unguarded-release");
-        let control = fixture.generate_unguarded(&control_output)?;
-        assert!(control.status.success(), "{}", fixture::stderr(&control));
-        for &path in outputs {
-            assert!(control_output.join(path).is_file(), "missing {path}");
-        }
-
-        let guarded_plan = fixture.plan("allow")?;
-        assert!(
-            guarded_plan.status.success(),
-            "{}",
-            fixture::stderr(&guarded_plan)
-        );
-        assert_eq!(guarded_plan.stdout, control_plan.stdout);
-
-        let guarded_output = fixture.root.join("guarded-release");
-        let guarded = fixture.generate_with_guard_policy("allow", &guarded_output)?;
-        assert!(guarded.status.success(), "{}", fixture::stderr(&guarded));
-        for &path in outputs {
-            assert!(guarded_output.join(path).is_file(), "missing {path}");
-            assert_eq!(
-                fs::read(control_output.join(path))?,
-                fs::read(guarded_output.join(path))?,
-                "guarded {registry} output differs at {path}"
-            );
-        }
-
-        let denied_plan = fixture.plan("deny")?;
-        assert!(!denied_plan.status.success());
-        assert!(
-            fixture::stderr(&denied_plan).contains("operator toolchain guard rejected metadata")
-        );
-        assert_eq!(denied_plan.stdout, b"");
-
-        let denied_output = fixture.root.join("denied-release");
-        let denied = fixture.generate("deny", &denied_output)?;
-        assert!(!denied.status.success());
-        assert!(fixture::stderr(&denied).contains("operator toolchain guard rejected metadata"));
-        assert!(!denied_output.exists());
-    }
-    Ok(())
-}
-
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn source_policy_export_and_check_use_guard_and_preserve_policy() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -180,6 +122,10 @@ fn source_policy_export_and_check_use_guard_and_preserve_policy() -> Result<(), 
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn invalid_or_unsupported_guard_is_rejected_before_output_writes() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;

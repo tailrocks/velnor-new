@@ -4,8 +4,8 @@
 use std::{fs, io, path::Path};
 
 use serde_json::Value;
-use velnor_actions_freshness::BaseRef;
 use velnor_actions_mise::{ToolCatalog, catalog::lock::verify_version_policy};
+use velnor_freshness::BaseRef;
 
 #[path = "pin_mirror_public_fixture.rs"]
 mod fixture;
