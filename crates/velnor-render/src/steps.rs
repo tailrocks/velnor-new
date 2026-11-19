@@ -115,7 +115,7 @@ fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (Str
 fn merge_group_output(job: &Job) -> Option<(String, String)> {
     job.steps
         .iter()
-        .any(|step| step.kind == StepKind::Helper(HelperCommand::MergeGroupPassed))
+        .any(|step| matches!(step.kind, StepKind::MergeGroupPassed { .. }))
         .then(|| {
             (
                 MERGE_GROUP_SKIP_OUTPUT.to_owned(),
@@ -184,7 +184,7 @@ fn rendered_steps(
         extra.extend(
             step.skip_after_merge_group
                 .as_ref()
-                .map(merge_group_skipped),
+                .map(|from| merge_group_skipped(from, setup)),
         );
         body.condition = all_conditions(
             body.condition.take(),
@@ -267,6 +267,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::MergeGroupPassed { required } => crate::helper_steps::merge_group_step(required),
         StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
         StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
         StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),

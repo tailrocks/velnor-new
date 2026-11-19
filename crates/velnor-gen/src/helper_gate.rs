@@ -57,7 +57,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
-        && !release.version().at_least((0, 1, 82))
+        && !release.version().at_least((0, 1, 88))
     {
         return Err(GenerateError::MergeGroupHelperTooOld(
             release.version().clone(),

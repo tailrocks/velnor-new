@@ -38,6 +38,7 @@ pub enum GenerateError {
         version: HelperVersion,
         runner: String,
     },
+    VersionGroupsHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
@@ -100,7 +101,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+                "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.88 or later with `velnor-gen pin-helper 0.1.88`"
             ),
             Self::DocsHelperTooOld(version) => write!(
                 f,
@@ -121,6 +122,10 @@ impl fmt::Display for GenerateError {
             Self::FamilyTagHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
+            ),
+            Self::VersionGroupsHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot record the members of a release-plz version_group as one release; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Workflows(error) => error.fmt(f),
