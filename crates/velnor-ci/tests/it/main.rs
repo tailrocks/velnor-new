@@ -153,6 +153,7 @@ mod run_nextest_output;
 mod run_nextest_reconcile;
 mod run_process;
 mod run_summary;
+mod scope_identity;
 mod setup_mise_identity;
 mod setup_pure;
 mod sources_fetch;

@@ -174,10 +174,22 @@ fn a_root_reads_its_own_sources_its_members_and_what_its_packages_read_but_not_a
         ),
     ]);
     facts.compile_inputs = BTreeMap::from([
-        (Some(path("shared/gen.rs")), BTreeSet::from([name("tool")])),
-        (Some(path("shared/gen.inc")), BTreeSet::from([name("tool")])),
-        (Some(path("macros")), BTreeSet::from([name("tool")])),
-        (Some(path("other/only.rs")), BTreeSet::from([name("app")])),
+        (
+            Some(path("shared/gen.rs")),
+            BTreeSet::from([velnor_model::InputOwner::named(name("tool"))]),
+        ),
+        (
+            Some(path("shared/gen.inc")),
+            BTreeSet::from([velnor_model::InputOwner::named(name("tool"))]),
+        ),
+        (
+            Some(path("macros")),
+            BTreeSet::from([velnor_model::InputOwner::named(name("tool"))]),
+        ),
+        (
+            Some(path("other/only.rs")),
+            BTreeSet::from([velnor_model::InputOwner::named(name("app"))]),
+        ),
     ]);
     let tracked: BTreeSet<_> = TRACKED.into_iter().map(path).collect();
     let sources = |index: usize| -> Vec<String> {
@@ -226,7 +238,10 @@ fn a_package_that_reads_the_whole_repository_reads_no_file_and_runs_both_steps()
         "Cargo.toml",
         vec![library(true), member("other", "other", &[])],
     )]);
-    facts.compile_inputs = BTreeMap::from([(None, BTreeSet::from([name("a")]))]);
+    facts.compile_inputs = BTreeMap::from([(
+        None,
+        BTreeSet::from([velnor_model::InputOwner::named(name("a"))]),
+    )]);
     let tracked: BTreeSet<_> = ["a/src/lib.rs", "logo.png"].into_iter().map(path).collect();
     let root = &facts.rust_roots[0];
     assert_eq!(root_sources(&facts, root, &tracked), None);
