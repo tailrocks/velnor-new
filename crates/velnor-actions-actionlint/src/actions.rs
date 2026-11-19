@@ -66,9 +66,9 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
-pub const ALINT_ACTION_VERSION: &str = "v0.21.0";
+pub const ALINT_ACTION_VERSION: &str = "v0.22.1";
 
-pub const ALINT_ACTION_SHA: &str = "d61e4c802b02ac811224b35c59a62cfe5176f4d0";
+pub const ALINT_ACTION_SHA: &str = "5054852d00d47affc9ea71440240147d9999f4d3";
 
 pub const MISE_ACTION_VERSION: &str = "v5.2.9";
 
