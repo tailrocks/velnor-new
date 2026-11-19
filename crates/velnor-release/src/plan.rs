@@ -21,6 +21,7 @@ use crate::mise;
 use crate::reality::check_reality;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
+use crate::shipped::check_shipped;
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES, publish_budget};
 use crate::velnor_config::{BinaryFormat, Checksum, Libc, VelnorConfig, parse};
@@ -373,6 +374,9 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
+        if let Some(metadata) = &files.rust_metadata {
+            check_shipped(&config.binaries, &configs, metadata)?;
+        }
         let checks = plan_checks(config.checks, &binaries)?;
         let roots = plan_roots(configs, files.rust_metadata.as_ref());
         check_trigger(family.as_ref(), &roots)?;

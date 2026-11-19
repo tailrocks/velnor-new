@@ -22,19 +22,30 @@ pub fn lock_key(lock: Option<&[u8]>, members: &BTreeSet<String>) -> String {
 
 fn without_member_versions(bytes: &[u8], members: &BTreeSet<String>) -> Option<String> {
     let mut document: toml::Table = toml::from_str(std::str::from_utf8(bytes).ok()?).ok()?;
-    let packages = document.get_mut("package")?.as_array_mut()?;
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
-    for package in packages.iter() {
-        let name = package.as_table()?.get("name")?.as_str()?;
-        *counts.entry(name.to_owned()).or_default() += 1;
+    for package in document.get("package")?.as_array()? {
+        *counts.entry(name_of(package.as_table()?)?).or_default() += 1;
     }
-    for package in packages.iter_mut() {
-        let table = package.as_table_mut()?;
-        let name = table.get("name")?.as_str()?.to_owned();
+    if let Some(root) = document.get("root") {
+        *counts.entry(name_of(root.as_table()?)?).or_default() += 1;
+    }
+    let unversioned = |table: &mut toml::Table| -> Option<()> {
+        let name = name_of(table)?;
         let unique_member = members.contains(&name) && counts.get(&name) == Some(&1);
         if unique_member && !table.contains_key("source") {
             table.remove("version");
         }
+        Some(())
+    };
+    if let Some(root) = document.get_mut("root") {
+        unversioned(root.as_table_mut()?)?;
+    }
+    for package in document.get_mut("package")?.as_array_mut()? {
+        unversioned(package.as_table_mut()?)?;
     }
     toml::to_string(&document).ok()
+}
+
+fn name_of(table: &toml::Table) -> Option<String> {
+    table.get("name")?.as_str().map(str::to_owned)
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CratesMirror, GroupFilter, HelperCommand, InputsCli, MERGE_GROUP_STEP, RepoPath,
+    CratesMirror, GroupFilter, HelperCommand, InputsCli, MERGE_GROUP_STEP, PrepareLocks, RepoPath,
 };
 
 use crate::base_steps::base_age;
@@ -194,7 +194,6 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
     let arguments = match command {
         HelperCommand::Plan => "plan",
         HelperCommand::PlanFull => "plan --full",
-        HelperCommand::Prepare => "prepare",
         HelperCommand::CheckMetadata => "check-metadata",
         HelperCommand::Restored(..) => "restored",
         HelperCommand::InputsAudit => "inputs audit",
@@ -202,7 +201,6 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
     let (id, env) = match command {
         HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
         HelperCommand::PlanFull => (Some(REPLAN_STEP), Vec::new()),
-        HelperCommand::Prepare => (Some(PREPARE_STEP), Vec::new()),
         HelperCommand::Restored(expiry) => (Some("restored"), base_age(expiry)),
         _ => (None, Vec::new()),
     };
@@ -330,6 +328,26 @@ pub(crate) fn merge_queue_step() -> RenderedStep {
             crate::rules::Value::Expr("${{ github.token }}".to_owned()),
         )],
         run: Some("velnor-ci merge-queue-check".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn prepare_step(locks: &PrepareLocks) -> RenderedStep {
+    let mut run = "velnor-ci prepare".to_owned();
+    match locks {
+        PrepareLocks::All => {}
+        PrepareLocks::Only(roots) if roots.is_empty() => run.push_str(" --no-locks"),
+        PrepareLocks::Only(roots) => {
+            for root in roots {
+                run.push_str(" --lock-root ");
+                run.push_str(root.as_str());
+            }
+        }
+    }
+    RenderedStep {
+        name: "velnor-ci prepare".to_owned(),
+        id: Some(PREPARE_STEP.to_owned()),
+        run: Some(run),
         ..RenderedStep::default()
     }
 }

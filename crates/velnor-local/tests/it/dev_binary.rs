@@ -122,7 +122,7 @@ async fn a_local_dev_binary_is_accepted_by_the_launcher_check_with_the_flag() {
     assert!(!refused(&output), "{output:?}");
     assert_eq!(
         git(&repo, &["log", "-1", "--format=%s"]),
-        "velnor-local: pin the local velnor-ci"
+        "velnor-local: rewrite the workflows of this run"
     );
     assert_eq!(git(&repo, &["status", "--porcelain"]), "");
 }
@@ -208,7 +208,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
         &file
     )));
 
-    pin_branch(&repo, &pin)
+    pin_branch(&repo, Some(&pin))
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
 
@@ -217,7 +217,7 @@ async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_
     let output = launch(&workflow, &pinned_digest(&workflow), &file);
     assert!(!refused(&output), "{output:?}");
     let commits = git(&repo, &["rev-list", "--count", "HEAD"]);
-    pin_branch(&repo, &pin)
+    pin_branch(&repo, Some(&pin))
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), commits);
@@ -292,11 +292,11 @@ async fn a_symlinked_github_directory_is_refused_and_its_target_is_left_alone() 
     unchanged(&victim);
 }
 
-fn sources(root: &Path, skip: &Path, found: &mut Vec<PathBuf>) {
+fn sources(root: &Path, skip: &[PathBuf], found: &mut Vec<PathBuf>) {
     for entry in std::fs::read_dir(root).into_iter().flatten().flatten() {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
-        if name == "target" || name == ".git" || name == "node_modules" || path == skip {
+        if name == "target" || name == ".git" || name == "node_modules" || skip.contains(&path) {
             continue;
         }
         if path.is_dir() {
@@ -312,7 +312,12 @@ fn nothing_outside_velnor_local_can_reach_the_override() {
     let root = std::fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../.."))
         .unwrap_or_else(|e| unreachable!("{e}"));
     let mut files = Vec::new();
-    sources(&root, &root.join("crates/velnor-local"), &mut files);
+    // generator/samples holds recorded copies of the repo, not live code.
+    let skip = [
+        root.join("crates/velnor-local"),
+        root.join("generator/samples"),
+    ];
+    sources(&root, &skip, &mut files);
     assert!(files.len() > 100, "{}", files.len());
     for file in files {
         let text = std::fs::read_to_string(&file).unwrap_or_default();

@@ -58,3 +58,35 @@ fn pin_helper_downloads_every_digest_file_from_the_tag_of_the_version() -> TestR
     }
     Ok(())
 }
+
+#[test]
+fn check_tag_accepts_only_the_rust_ci_v_or_tools_v_tag_of_its_own_version() {
+    for tag in ["rust-ci-v0.1.79", "tools-v0.1.79"] {
+        assert_eq!(
+            velnor_gen::check_tag("0.1.79", tag),
+            Ok(format!("tag {tag} names version 0.1.79"))
+        );
+    }
+    for tag in [
+        "rust-ci-v0.1.80",
+        "rust-ci-v0.1.79-rc1",
+        "rust-ci-v0.1.79 ",
+        "tools-v0.1.80",
+        "tools-v0.1.79-rc1",
+        "tools-v0.1.79 ",
+        "v0.1.79",
+        "vv0.1.79",
+        "runner-v0.1.79",
+        "actions-v0.1.79",
+        "velnor-ci-v0.1.79",
+        "velnor-gen-v0.1.79",
+        "rust-ci-0.1.79",
+        "0.1.79",
+        "",
+    ] {
+        assert!(
+            velnor_gen::check_tag("0.1.79", tag).is_err(),
+            "{tag:?} was accepted"
+        );
+    }
+}
