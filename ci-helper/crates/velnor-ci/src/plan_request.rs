@@ -146,7 +146,9 @@ fn parse(text: &str) -> Result<Request, CiError> {
         .as_object()
         .and_then(|fields| fields.keys().find(|key| !FIELDS.contains(&key.as_str())))
     {
-        return Err(internal(&format!("malformed_request:unknown field `{unknown}`")));
+        return Err(internal(&format!(
+            "malformed_request:unknown field `{unknown}`"
+        )));
     }
     let request: Request = serde_json::from_value(value)
         .map_err(|error| internal(&format!("malformed_request:{error}")))?;
@@ -162,7 +164,9 @@ fn parse(text: &str) -> Result<Request, CiError> {
 fn check_mode(mode: Mode, event: Event) -> Result<(), CiError> {
     match (mode, event) {
         (Mode::Qualification, Event::Qualification) => Ok(()),
-        (Mode::Ci, Event::Qualification) => Err(internal("qualification_event_needs_qualification_mode")),
+        (Mode::Ci, Event::Qualification) => {
+            Err(internal("qualification_event_needs_qualification_mode"))
+        }
         (Mode::Qualification, _) => Err(internal("qualification_mode_needs_qualification_event")),
         (Mode::Ci, _) => Ok(()),
     }
@@ -170,9 +174,8 @@ fn check_mode(mode: Mode, event: Event) -> Result<(), CiError> {
 
 fn check_context(request: &Request) -> Result<(), CiError> {
     match (request.event, request.qualification.as_ref()) {
-        (Event::Qualification, Some(_)) => Ok(()),
         (Event::Qualification, None) => Err(internal("missing_qualification_context")),
-        (_, None) => Ok(()),
+        (Event::Qualification, Some(_)) | (_, None) => Ok(()),
         (_, Some(_)) => Err(internal("qualification_context_on_wrong_event")),
     }
 }

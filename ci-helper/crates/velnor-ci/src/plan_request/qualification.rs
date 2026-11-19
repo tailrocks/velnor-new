@@ -94,7 +94,10 @@ impl Dispatch {
             self.repository
         );
         if self.workflow_ref != expected {
-            return Err(invalid("qualification.workflow_ref", "workflow_ref_mismatch"));
+            return Err(invalid(
+                "qualification.workflow_ref",
+                "workflow_ref_mismatch",
+            ));
         }
         if self.source_sha != expected_source_sha
             || self.workflow_sha != expected_source_sha
@@ -150,13 +153,18 @@ impl Dispatch {
             return Err(invalid("qualification.run", "invalid_run_identity"));
         }
         match (self.phase.needs_predecessor(), self.predecessor) {
-            (false, None) => Ok(()),
-            (false, Some(_)) => Err(invalid("qualification.predecessor", "unexpected_run_reference")),
-            (true, None) => Err(invalid("qualification.predecessor", "missing_run_reference")),
-            (true, Some(reference)) if reference.run_id == 0 || reference.run_attempt == 0 => {
-                Err(invalid("qualification.predecessor", "invalid_run_reference"))
-            }
-            (true, Some(_)) => Ok(()),
+            (false, Some(_)) => Err(invalid(
+                "qualification.predecessor",
+                "unexpected_run_reference",
+            )),
+            (true, None) => Err(invalid(
+                "qualification.predecessor",
+                "missing_run_reference",
+            )),
+            (true, Some(reference)) if reference.run_id == 0 || reference.run_attempt == 0 => Err(
+                invalid("qualification.predecessor", "invalid_run_reference"),
+            ),
+            _ => Ok(()),
         }
     }
 
@@ -164,11 +172,17 @@ impl Dispatch {
         if !valid_branch(&self.default_branch)
             || self.git_ref != format!("refs/heads/{}", self.default_branch)
         {
-            return Err(invalid("qualification.default_branch", "default_branch_mismatch"));
+            return Err(invalid(
+                "qualification.default_branch",
+                "default_branch_mismatch",
+            ));
         }
         let expected = format!("{}/{CI_WORKFLOW_PATH}@{}", self.repository, self.git_ref);
         if self.workflow_ref != expected {
-            return Err(invalid("qualification.workflow_ref", "workflow_ref_mismatch"));
+            return Err(invalid(
+                "qualification.workflow_ref",
+                "workflow_ref_mismatch",
+            ));
         }
         Ok(())
     }
