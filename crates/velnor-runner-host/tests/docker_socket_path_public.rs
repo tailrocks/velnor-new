@@ -52,7 +52,9 @@ fn config_admission_rejects_the_endpoint_connect_unix_rejects() -> TestResult<()
     let directory = tempfile::tempdir()?;
     let base = directory.path().display();
     let with_endpoint = |endpoint: String| CONFIG.replace("unix:///docker.sock", &endpoint);
-    assert!(HostConfig::parse(&with_endpoint(format!("unix://{base}/unix://docker.sock"))).is_err());
+    assert!(
+        HostConfig::parse(&with_endpoint(format!("unix://{base}/unix://docker.sock"))).is_err()
+    );
     assert!(HostConfig::parse(&with_endpoint(format!("unix://{base}/docker.sock"))).is_ok());
     Ok(())
 }
