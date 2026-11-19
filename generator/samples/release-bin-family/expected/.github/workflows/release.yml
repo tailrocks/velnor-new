@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -64,7 +64,7 @@ jobs:
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -150,7 +150,7 @@ jobs:
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -242,7 +242,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -470,7 +470,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'

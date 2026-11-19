@@ -185,9 +185,13 @@ fn lookup_action(
     organization: bool,
 ) -> ScaleSetLookupAction {
     match (state, found) {
-        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) if !organization => {
-            ScaleSetLookupAction::Adopt
-        }
+        (
+            ScaleSetCreateState::Prepared
+            | ScaleSetCreateState::Requested
+            | ScaleSetCreateState::Uncertain
+            | ScaleSetCreateState::NoEffect,
+            true,
+        ) if !organization => ScaleSetLookupAction::Adopt,
         (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
         (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
             ScaleSetLookupAction::Verify

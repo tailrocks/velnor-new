@@ -136,7 +136,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
@@ -283,7 +283,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
@@ -543,7 +543,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
@@ -761,7 +761,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
@@ -1007,7 +1007,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
@@ -1241,7 +1241,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
@@ -1447,7 +1447,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
@@ -1692,7 +1692,7 @@ jobs:
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: 'Configure the crates mirror in $RUNNER_TEMP/velnor-cargo/config.toml'
         if: '${{ runner.environment == ''self-hosted'' && (github.event_name != ''pull_request'' || github.event.pull_request.head.repo.full_name == github.repository) }}'
