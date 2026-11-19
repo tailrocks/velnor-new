@@ -302,7 +302,7 @@ async fn terminate(dir: &Path, pid: &str, binary: &str) -> io::Result<()> {
 pub(super) async fn stop(dir: &Path) -> io::Result<Option<String>> {
     let authority = authority_dir(dir);
     let pid = recorded_pid(&authority.join("pid")).await?;
-    let host_pid = recorded_pid(&runner_dir(dir).join(PID)).await?;
+    recorded_pid(&runner_dir(dir).join(PID)).await?;
     if let Some(pid) = pid {
         let binary = match fs::read_to_string(authority.join("binary")).await {
             Ok(binary) => Some(binary),
@@ -323,6 +323,7 @@ pub(super) async fn stop(dir: &Path) -> io::Result<Option<String>> {
     forget(&authority.join("pid")).await?;
     forget(&authority.join("binary")).await?;
     forget(&authority.join("address")).await?;
+    let host_pid = recorded_pid(&runner_dir(dir).join(PID)).await?;
     stop_host(dir, host_pid).await
 }
 

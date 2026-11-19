@@ -38,7 +38,7 @@ async fn assert_down_keeps_records(dir: &Path) {
     assert!(down.is_err(), "down claimed success: {down:?}");
     for name in ["pid", "binary", "address"] {
         assert!(
-            dir.join("authority").join(name).exists(),
+            dir.join("authority").join(name).symlink_metadata().is_ok(),
             "{name} was deleted"
         );
     }
@@ -86,12 +86,13 @@ async fn down_keeps_the_host_pid_and_fails_when_it_is_malformed() {
     assert!(dir.join("runner/pid").exists());
 }
 
+#[cfg(unix)]
 #[tokio::test]
-async fn down_succeeds_repeatedly_when_nothing_was_ever_started() {
-    let dir = temp_dir("supervisor-down-twice");
-    let env = Environment::at(&dir, Silent)
-        .await
+async fn down_keeps_every_record_when_the_authority_pid_is_a_dangling_link() {
+    let dir = temp_dir("supervisor-pid-dangling");
+    write_authority_records(&dir, b"123");
+    std::fs::remove_file(dir.join("authority/pid")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::os::unix::fs::symlink(dir.join("nowhere"), dir.join("authority/pid"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert!(env.down().await.is_ok());
-    assert!(env.down().await.is_ok());
+    assert_down_keeps_records(&dir).await;
 }
