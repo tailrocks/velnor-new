@@ -8,6 +8,7 @@ on:
       - reopened
       - ready_for_review
       - edited
+      - labeled
   push:
     branches:
       - main
@@ -18,8 +19,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) && github.event.pull_request.number || github.run_id }}${{ ((github.event.action == ''labeled'' && github.event.label.name != ''ci:run'' && github.event.label.name != ''ci:auto'') || (github.event.action == ''edited'' && github.event.changes.base == null)) && format(''-ignored-{0}'', github.run_id) || '''' }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
 env:
   MISE_AUTO_INSTALL: 'false'
   RUSTUP_AUTO_INSTALL: '0'
@@ -29,7 +30,7 @@ defaults:
 jobs:
   # jactionlint ignore=shellcheck
   rust-plan:
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null)) }}'
     permissions:
       contents: read
     outputs:
@@ -74,17 +75,17 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: &velnor_1 'directory="$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB" && "$VELNOR_HELPER_MKDIR" -m 700 "$directory" && "$VELNOR_HELPER_CP" "$RUNNER_TEMP/velnor-ci-bin/velnor-ci" "$directory/velnor-ci" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci" && printf ''%s\n'' "$VELNOR_HELPER_LAUNCHER" > "$directory/velnor-ci-exec" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci-exec" && printf ''%s=%s\n'' VELNOR_HELPER "$directory/velnor-ci" VELNOR_EXEC "$directory/velnor-ci-exec" VELNOR_HELPER_SHA256 "$VELNOR_HELPER_SHA256" >> "$GITHUB_ENV"'
           VELNOR_HELPER_LAUNCHER: &velnor_2 'directory=$("$VELNOR_HELPER_MKTEMP" -d "$RUNNER_TEMP/velnor-helper.XXXXXXXXXX") && copy=$("$VELNOR_HELPER_MKTEMP" "$directory/velnor-ci.XXXXXXXXXX") && "$VELNOR_HELPER_CP" "$VELNOR_HELPER" "$copy" && "$VELNOR_HELPER_CHMOD" 500 "$copy" && { "$VELNOR_HELPER_ENV" -i PATH=/usr/bin:/bin "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $copy" || { printf ''%s\n'' ''velnor-ci integrity check failed'' >&2; exit 1; }; } && exec "$copy" "$@"'
-          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'' || '''' }}'
+          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f'' || '''' }}'
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - name: velnor-ci mbx-store
         run: '. "$VELNOR_EXEC" mbx-store'
@@ -98,7 +99,7 @@ jobs:
   rust-helper:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') }}'
     permissions:
       contents: read
     runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
@@ -113,12 +114,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -142,7 +143,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -240,7 +241,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -271,12 +272,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -300,7 +301,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -418,25 +419,25 @@ jobs:
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-freshness '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-freshness --locked --message-format=json-render-diagnostics'
       - name: Build the tests
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - name: Prepare test fixtures
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         run: bash scripts/ci-fixtures.sh
       - name: Prepare pinned Mac proof verifier
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         run: 'mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4'
       - name: Prepare pinned attestation verifier
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
-        run: mise --no-config --no-env --no-hooks install gh@2.103.3
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
+        run: mise --no-config --no-env --no-hooks install gh@2.104.0
       - id: test
         name: Test
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || needs.rust-plan.outputs.rust_root_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --profile ci --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: Doctests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
         env:
           DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
         run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
@@ -516,7 +517,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -547,12 +548,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -576,7 +577,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -663,12 +664,12 @@ jobs:
         working-directory: ci-helper
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-ci --locked --message-format=json-render-diagnostics'
       - name: Build the tests
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: ci-helper
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: ci-helper
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_ci_helper_test_filter || needs.rust-plan.outputs.rust_ci_helper_test_filter }}'
@@ -750,7 +751,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -781,12 +782,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -810,7 +811,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -925,12 +926,12 @@ jobs:
         working-directory: crates/velnor-runner
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-qualification --locked --message-format=json-render-diagnostics'
       - name: Build the tests
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: crates/velnor-runner
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: crates/velnor-runner
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_crates_velnor_runner_test_filter || needs.rust-plan.outputs.rust_crates_velnor_runner_test_filter }}'
@@ -1012,7 +1013,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_generator_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_generator_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -1043,12 +1044,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1072,7 +1073,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1179,12 +1180,12 @@ jobs:
         working-directory: generator
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-workflows --locked --message-format=json-render-diagnostics'
       - name: Build the tests
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: generator
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: generator
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_generator_test_filter || needs.rust-plan.outputs.rust_generator_test_filter }}'
@@ -1266,7 +1267,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_local_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_local_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -1297,12 +1298,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1326,7 +1327,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1417,12 +1418,12 @@ jobs:
         working-directory: local
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-local --locked --message-format=json-render-diagnostics'
       - name: Build the tests
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: local
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         working-directory: local
         env:
           TEST_FILTER: '${{ steps.replan.outputs.rust_local_test_filter || needs.rust-plan.outputs.rust_local_test_filter }}'
@@ -1502,7 +1503,7 @@ jobs:
   rust-inputs-audit:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && ((github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && ((github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null)) }}'
     permissions:
       contents: read
     runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
@@ -1517,12 +1518,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1546,7 +1547,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1726,7 +1727,7 @@ jobs:
   policy:
     needs:
       - rust-plan
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust-plan.result == ''success'' && (needs.rust-plan.outputs.rust_deny == ''run'' || needs.rust-plan.outputs.rust_machete == ''run'')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && needs.rust-plan.result == ''success'' && (needs.rust-plan.outputs.rust_deny == ''run'' || needs.rust-plan.outputs.rust_machete == ''run'')) }}'
     permissions:
       contents: read
     runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
@@ -1741,12 +1742,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1770,7 +1771,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1835,7 +1836,7 @@ jobs:
       - rust-local
       - rust-inputs-audit
       - policy
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null)) }}'
     permissions:
       pull-requests: read
       actions: write
@@ -1846,12 +1847,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -2019,33 +2020,56 @@ jobs:
       - rust-local
       - rust-inputs-audit
       - policy
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always() && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null)) }}'
     permissions:
       contents: read
     runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
     timeout-minutes: 30
     steps:
+      - name: Note that CI is not requested on a draft pull request
+        if: '${{ github.event.pull_request.draft == true }}'
+        run: 'echo "::notice title=Draft::draft: CI not requested"'
       - name: Resolve released helper tools
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - name: velnor-ci gate
+        if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
           NEEDS_JSON: '${{ toJSON(needs) }}'
           GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-helper=lane:ci_helper --job rust-root=lane:root --job rust-ci_helper=lane:ci_helper --job rust-crates_velnor_runner=lane:crates_velnor_runner --job rust-generator=lane:generator --job rust-local=lane:local --job rust-inputs-audit=schedule-or-dispatch --job policy=policy --tests rust-root=root --tests rust-ci_helper=ci_helper --tests rust-crates_velnor_runner=crates_velnor_runner --tests rust-generator=generator --tests rust-local=local'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
+      - name: Fail when a Rust job failed or was cancelled
+        if: '${{ (contains(needs.*.result, ''failure'') || contains(needs.*.result, ''cancelled'')) && (github.event_name == ''pull_request'' && github.event.pull_request.draft != true && !(github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
+        run: exit 1
+  ci-run-label:
+    name: 'Remove the ci:run label'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (github.event_name == ''pull_request'' && github.event.pull_request.head.repo.full_name == github.repository && contains(github.event.pull_request.labels.*.name, ''ci:run'') && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null)) }}'
+    permissions:
+      pull-requests: write
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-latest'' }}'
+    timeout-minutes: 30
+    steps:
+      - name: 'Remove the ci:run label'
+        env:
+          GH_TOKEN: '${{ github.token }}'
+          PR_NUMBER: '${{ github.event.pull_request.number }}'
+        run: 'curl --fail --silent --show-error --request DELETE --header "Authorization: Bearer $GH_TOKEN" --header "Accept: application/vnd.github+json" "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/ci%3Arun"'
   # jactionlint ignore=shellcheck
   cache:
     name: Cache
@@ -2059,7 +2083,7 @@ jobs:
       - rust-inputs-audit
       - policy
       - rust-trim
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null)) }}'
     permissions:
       actions: read
       contents: read
@@ -2070,12 +2094,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.87
-        uses: tailrocks/velnor-new/actions/setup-velnor@af14cda737869091fbe3c4bfe88cb0ad4c456f70  # tools-v0.1.87
+      - name: Install velnor-ci 0.1.88
+        uses: tailrocks/velnor-new/actions/setup-velnor@5dbd84e88c11132810803de5bffc862ba42807c5  # tools-v0.1.88
         with:
-          version: '0.1.87'
-          sha256-linux-x64: '1339beb28c9e3c24090d3d784a986d7d78312da13c76b1965df1dfe7c36a598d'
-          sha256-linux-arm64: '00c764436e63cf4179e821454474cd8fc6eb7feb57dbe9b1a6a6643f98b53cc1'
+          version: '0.1.88'
+          sha256-linux-x64: '2cab09d624461fbfbc0284fb2e289fa677900085e7b25e0b590d1935a08e755d'
+          sha256-linux-arm64: afb4fb64610e500eac7d9b9df5179b55ae9e8804b886065b8d1fdd209e4c278f
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1

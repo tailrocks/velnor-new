@@ -66,13 +66,13 @@ pub const AWS_CREDENTIALS_ACTION_VERSION: &str = "v6.3.0";
 
 pub const AWS_CREDENTIALS_ACTION_SHA: &str = "e1253824e5c10ff9df46874f81ed3ec929e19cfd";
 
-pub const ALINT_ACTION_VERSION: &str = "v0.21.0";
+pub const ALINT_ACTION_VERSION: &str = "v0.22.1";
 
-pub const ALINT_ACTION_SHA: &str = "d61e4c802b02ac811224b35c59a62cfe5176f4d0";
+pub const ALINT_ACTION_SHA: &str = "5054852d00d47affc9ea71440240147d9999f4d3";
 
-pub const MISE_ACTION_VERSION: &str = "v5.2.6";
+pub const MISE_ACTION_VERSION: &str = "v5.2.9";
 
-pub const MISE_ACTION_SHA: &str = "f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
+pub const MISE_ACTION_SHA: &str = "236a21c3b91f5db6d4e174b348674a0f0caac06d";
 
 pub const CHECKOUT_ACTION_VERSION: &str = "v7.0.1";
 

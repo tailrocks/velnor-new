@@ -107,6 +107,47 @@ run = "bash scripts/ci-fixtures.sh"
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
 
+## Non-Rust lint jobs
+
+A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs one command or one pinned action. It has `contents: read` and no other permission, no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and the only action a lint job adds to the fixed list is `asamarts/alint`, accepted at one pinned commit.
+
+```toml
+[[lint]]
+kind = "jactionlint"
+config = ".github/jactionlint.yaml"
+
+[[lint]]
+kind = "alint"
+config = ".alint.yml"
+probe = "scripts/alint-line-cap-probe.sh"
+
+[[lint]]
+kind = "mise-task"
+id = "generator-samples"
+name = "Generator samples"
+task = "lint-generator-samples"
+tools = ["jactionlint"]
+timeout_minutes = 5
+```
+
+| Key | Kinds | Meaning |
+|---|---|---|
+| `kind` | all | `jactionlint`, `alint` or `mise-task`. |
+| `id` | all | Job id suffix. Defaults to the kind, or to the task name for `mise-task`. Two entries cannot share it. |
+| `name` | all | Job name. Defaults to `Jactionlint`, `Alint` or `Mise task <task>`. |
+| `timeout_minutes` | all | 1 to 360, default 10. |
+| `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
+| `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
+| `task` | `mise-task` | The mise task, run as `mise run --skip-tools <task>`. |
+| `tools` | `mise-task` | Tools from `mise.toml` to install before the task. The task runs with `--skip-tools`, so a tool it needs and `tools` lacks fails the job instead of being installed unpinned. |
+
+`jactionlint` is the version pinned in `mise.toml` (and its checksum in `mise.lock`); generation fails when `mise.toml` does not pin it. It checks the repository with `--strict-exit --no-online`. It runs ShellCheck when `mise.toml` pins `shellcheck`, and turns it off otherwise. A path or task name that is not made of letters, digits and `_-./:@`, or that starts with `-`, is refused, because it is written into a command.
+
+`alint` runs with `fail-on-warning`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
+
+### One required check
+
+The `Required` job (named by `required_check`) lists every lint job in `needs` and in its gate spec with no condition, next to the Rust lanes. A lint job that failed, was cancelled, was skipped or is absent from `needs` fails the gate, and a job in `needs` that the spec does not name fails it too. A ruleset therefore requires one check name for the Rust lanes and the lint lane together.
 ## Test groups
 
 Heavy or special tests get their own job; every other test stays in the default job. A group names a nextest filterset, what its tests need and the limits of its job.
@@ -119,6 +160,8 @@ needs = ["docker"]
 test_threads = 2
 timeout_minutes = 30
 runner = "ubuntu-latest"
+paths = ["app/migrations/**"]
+events = ["push", "schedule"]
 root = "."
 ```
 
@@ -127,7 +170,7 @@ root = "."
 - `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
 - `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only.
 - `root` is the folder of the Cargo root's `Cargo.toml`, or `.`. It is required when the repository has several Cargo roots, and it must name a root with nextest tests.
-- `paths` and `events` are in the model but refused for now, because choosing groups at run time needs the plan. A group runs whenever its root is selected.
+- `paths` (globs, as in `inputs`) and `events` (`pull_request`, `push`, `merge_group`, `schedule`, `workflow_dispatch`) are optional. A group with neither key runs whenever its root is selected. A group with either key is decided at run time by `velnor-ci plan`, which writes one output `rust_<root>_group_<name>` (`run` or `skip`) that is the job's `if`. The group runs when its root has a selected package and one of these holds, in this order: the event is a push to the default branch (every group runs, but only where the default lanes select the root); the event is listed in `events`; the event is a merge group and the group sets no `paths` (`events` never skip a group on a merge group); a changed path matches `paths`; every package is selected. Otherwise the job is skipped, and the `Required` check expects it to be skipped. On a merge group, `paths` are matched against the merge group's own base to head diff, the same diff the default lanes select by; when that diff cannot be computed, every package is selected and every group runs. `velnor-ci plan --explain` and the plan summary say why each group ran or was skipped. On a push to the default branch the groups follow exactly the same selection as the default lanes, neither stricter nor looser: with `on_main = "affected"` a docs-only push selects no package, so the lanes and every group skip; with `on_main = "everything"` the lanes and every group run. The default job still leaves out the group's tests, so tests of a skipped group do not run in that workflow run.
 
 A repository with any `[[test_groups]]` splits each root that has a group into the archive build job and the test jobs, whatever `shape` is: the group jobs run from the archive of the build job (`shape = "groups"`), and lint and doctests stay on the build job. The default job `rust-test-default` leaves out every group's tests with `and not (<filter>)`, and every group job is a need of the `Required` check. Two groups with one name in one root are refused. The key needs `velnor-ci` 0.1.82 or later, because the helper reads the same file.
 

@@ -74,19 +74,21 @@ fn a_trusted_save_is_restored_whole_on_a_pull_request() {
     let cosign = node
         .root
         .join("fresh/.local/share/mise/installs/cosign/3.0.0/bin/cosign");
+    assert_eq!(fs::read_to_string(&cosign).unwrap_or_default(), "binary");
+    assert_eq!(fs::metadata(&cosign).map_or(0, |m| m.mode() & 0o777), 0o755);
     assert_eq!(
-        fs::read_to_string(&cosign).unwrap_or_default(),
-        "binary"
-    );
-    assert_eq!(
-        fs::metadata(&cosign).map_or(0, |m| m.mode() & 0o777),
-        0o755
-    );
-    assert_eq!(
-        fs::read_link(node.root.join("fresh/.local/share/mise/installs/cosign/latest")).ok(),
+        fs::read_link(
+            node.root
+                .join("fresh/.local/share/mise/installs/cosign/latest")
+        )
+        .ok(),
         Some(PathBuf::from("3.0.0"))
     );
-    assert!(node.root.join("fresh/.rustup/toolchains/stable/rustc").is_file());
+    assert!(
+        node.root
+            .join("fresh/.rustup/toolchains/stable/rustc")
+            .is_file()
+    );
 }
 
 #[test]
@@ -136,7 +138,10 @@ fn a_key_that_is_not_a_plain_name_is_refused() {
     let node = node("tools-local-badkey");
     for key in ["", ".hidden", "a/b", "../x", "a b", "a;b", &"k".repeat(201)] {
         assert!(!valid_key(key), "{key}");
-        assert_eq!(go(&node, Verb::Restore, key, "push", "home"), Outcome::BadKey);
+        assert_eq!(
+            go(&node, Verb::Restore, key, "push", "home"),
+            Outcome::BadKey
+        );
     }
     assert!(valid_key(KEY));
 }

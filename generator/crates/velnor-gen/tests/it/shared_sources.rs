@@ -76,6 +76,7 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             reports_ignored: false,
             gate: None,
             plan_outputs: Vec::new(),
+            group_outputs: Vec::new(),
             steps: vec![Step {
                 kind: StepKind::SourcesLocks(locks),
                 directory: None,

@@ -13,7 +13,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 28] = [
+const KEYS: [&str; 29] = [
     "private_sources",
     "cache_check_blocks",
     "cache_debug",
@@ -41,6 +41,7 @@ const KEYS: [&str; 28] = [
     "ci_debuginfo",
     "cache_budget_bytes",
     "test_setup",
+    "lint",
     "test_groups",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
@@ -80,6 +81,8 @@ struct RawConfig {
     cache_budget_bytes: Option<u64>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
+    #[serde(default)]
+    lint: Vec<crate::config_lint::RawLint>,
     #[serde(default)]
     test_groups: Vec<crate::config_test_groups::RawTestGroup>,
 }
@@ -128,7 +131,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let pr_ci = crate::config_pr_ci::parse(raw.pr_ci.as_deref(), skip_draft_pull_requests)
         .map_err(invalid)?;
     let default_branch =
-        default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
+        crate::config_branch::default_branch(raw.default_branch, defaults.default_branch)
+            .map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
     let full_run = match raw.full_run {
         None => defaults.full_run,
@@ -138,6 +142,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
@@ -145,6 +150,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
+        lint,
         test_groups,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
@@ -224,35 +230,6 @@ fn without_helper_build(label: &str) -> bool {
         .and_then(|digits| digits.parse().ok())
         .unwrap_or(u32::MAX);
     major <= 13 || version.ends_with("-large") || version.ends_with("-intel")
-}
-
-fn default_branch(configured: Option<String>, default: String) -> Result<String, Reason> {
-    match configured {
-        None => Ok(default),
-        Some(name) if branch_name(&name) => Ok(name),
-        Some(name) => Err(Reason::InvalidValue {
-            key: "default_branch",
-            value: name,
-        }),
-    }
-}
-
-fn branch_name(name: &str) -> bool {
-    !name.is_empty()
-        && !name.starts_with(['/', '-'])
-        && !name.ends_with(['/', '.'])
-        && !name.contains("..")
-        && !name.contains("//")
-        && !name.contains("@{")
-        && !name.contains("{{")
-        && !name.contains("}}")
-        && name != "HEAD"
-        && !name.split('/').any(|part| {
-            part.starts_with('.') || part.rsplit_once('.').is_some_and(|(_, ext)| ext == "lock")
-        })
-        && !name
-            .chars()
-            .any(|c| c.is_control() || c.is_whitespace() || "~^:?*[\\".contains(c))
 }
 
 pub(crate) fn excluded(config: &RustCiConfig, manifest: &RepoPath) -> bool {

@@ -118,9 +118,7 @@ fn complete(entry: &Path, owner: u32) -> bool {
     };
     sound(entry)
         && fs::symlink_metadata(entry.join(MARKER)).is_ok_and(|metadata| metadata.is_file())
-        && HOME_PATHS
-            .iter()
-            .all(|path| sound(&entry.join(slot(path))))
+        && HOME_PATHS.iter().all(|path| sound(&entry.join(slot(path))))
 }
 
 fn slot(path: &str) -> String {
@@ -212,17 +210,28 @@ fn prune(tools: &Path, current: &str) {
 pub fn message(outcome: &Outcome) -> String {
     match outcome {
         Outcome::NotOffered => "velnor: no node-local tools store offered\n".to_owned(),
-        Outcome::BadKey => "::warning::the tools key is not a plain name; the node store is skipped\n".to_owned(),
-        Outcome::Miss => "velnor: the node-local tools store has no entry for this key\n".to_owned(),
+        Outcome::BadKey => {
+            "::warning::the tools key is not a plain name; the node store is skipped\n".to_owned()
+        }
+        Outcome::Miss => {
+            "velnor: the node-local tools store has no entry for this key\n".to_owned()
+        }
         Outcome::Restored { from } => {
-            format!("velnor: tools restored from the node store {}\n", from.display())
+            format!(
+                "velnor: tools restored from the node store {}\n",
+                from.display()
+            )
         }
         Outcome::Rejected(reason) => {
             format!("::warning::node-local tools store ignored ({reason})\n")
         }
-        Outcome::Saved { to } => format!("velnor: tools saved to the node store {}\n", to.display()),
+        Outcome::Saved { to } => {
+            format!("velnor: tools saved to the node store {}\n", to.display())
+        }
         Outcome::AlreadySaved => "velnor: the node store already holds this key\n".to_owned(),
-        Outcome::Untrusted => "velnor: tools are saved to the node store on trusted events only\n".to_owned(),
+        Outcome::Untrusted => {
+            "velnor: tools are saved to the node store on trusted events only\n".to_owned()
+        }
     }
 }
 
