@@ -95,9 +95,9 @@ output across trust scopes.
 - Compat does not name a job: every reader of a workspace shares the entry,
   and the key changes only when the lock, toolchain, MBX version or platform
   changes. The `unit` keeps the union and suite bundles apart.
-- Units are the key schema of decision 2. `union` is written only by the
-  non-crate `State seal` job of a root (protected default-branch pushes only,
-  outside `Required`) from the bytes of that root's `State producer` job; crate
+- Units are the key schema of decision 2. `union` is written only by a
+  non-crate job of a root (protected default-branch pushes only,
+  outside `Required`) from the bytes that root's build produced; crate
   jobs restore it read-only and never mark a producer, export or save. No job
   writes a `suite` entry, because a suite bundle binds the root workspace and
   not the manifest the suite selects.
