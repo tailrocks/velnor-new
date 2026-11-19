@@ -3,7 +3,7 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CheckoutScope, RepoFacts, RepoPath, RustRoot};
+use velnor_model::{CheckoutScope, RepoFacts, RepoPath, RustRoot, Unread};
 
 const TOP_FILES: [&str; 12] = [
     "Cargo.toml",
@@ -20,6 +20,7 @@ const TOP_FILES: [&str; 12] = [
     ".rustfmt.toml",
 ];
 const TOP_DIRECTORIES: [&str; 3] = [".cargo", ".config", ".velnor"];
+const EVERY_MANIFEST: &str = "**/Cargo.toml";
 
 pub(crate) fn paths(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {
     if facts.config.checkout == CheckoutScope::Full
@@ -31,6 +32,7 @@ pub(crate) fn paths(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>
     }
     let mut paths: BTreeSet<String> = TOP_FILES.iter().map(|file| format!("/{file}")).collect();
     paths.extend(TOP_DIRECTORIES.iter().map(|dir| format!("/{dir}/")));
+    paths.insert(EVERY_MANIFEST.to_owned());
     for root in roots {
         let directories = std::iter::once(&root.manifest)
             .chain(&root.depends_on)
@@ -43,7 +45,10 @@ pub(crate) fn paths(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>
         for manifest in directories {
             paths.insert(directory(manifest)?);
         }
+        paths.extend(ancestor_cargo_directories(&root.manifest));
     }
+    paths.extend(unowned_directories(facts, roots)?);
+    paths.extend(toolchain_directory(facts)?);
     paths.extend(
         facts
             .compile_inputs
@@ -56,9 +61,78 @@ pub(crate) fn paths(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>
             .config
             .inputs
             .iter()
-            .map(|rule| format!("/{}", rule.glob)),
+            .map(|rule| format!("/{}", escaped(rule.glob.as_str()))),
     );
     Some(paths.into_iter().collect())
+}
+
+fn ancestor_cargo_directories(manifest: &RepoPath) -> Vec<String> {
+    let mut ancestors = Vec::new();
+    let mut folder = manifest.parent().and_then(|folder| folder.parent());
+    while let Some(current) = folder {
+        ancestors.push(format!("/{current}/.cargo/"));
+        folder = current.parent();
+    }
+    ancestors
+}
+
+fn unowned_directories(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {
+    let mut pending: Vec<&RepoPath> = roots
+        .iter()
+        .flat_map(|root| &root.members)
+        .flat_map(|member| &member.dependencies)
+        .map(|dependency| &dependency.manifest)
+        .collect();
+    let mut seen = BTreeSet::new();
+    let mut directories = Vec::new();
+    while let Some(manifest) = pending.pop() {
+        let Some(package) = facts.unowned.get(manifest) else {
+            continue;
+        };
+        if !seen.insert(manifest) {
+            continue;
+        }
+        if package
+            .unread
+            .as_ref()
+            .is_some_and(|unread| !matches!(unread, Unread::Git(_) | Unread::Outside(_)))
+        {
+            return None;
+        }
+        directories.push(directory(manifest)?);
+        pending.extend(package.dependencies.iter().map(|edge| &edge.manifest));
+    }
+    Some(directories)
+}
+
+fn toolchain_directory(facts: &RepoFacts) -> Option<Option<String>> {
+    let Some(path) = facts
+        .toolchain
+        .as_ref()
+        .and_then(|toolchain| toolchain.path.as_deref())
+        .filter(|path| !path.starts_with('/'))
+    else {
+        return Some(None);
+    };
+    let path = path
+        .strip_prefix("./")
+        .unwrap_or(path)
+        .trim_end_matches('/');
+    if path.split('/').any(|part| matches!(part, "" | "." | "..")) {
+        return None;
+    }
+    Some(Some(format!("/{}/", escaped(path))))
+}
+
+fn escaped(text: &str) -> String {
+    let mut escaped = String::with_capacity(text.len());
+    for c in text.chars() {
+        if matches!(c, '?' | '[' | ']' | '\\' | ' ') {
+            escaped.push('\\');
+        }
+        escaped.push(c);
+    }
+    escaped
 }
 
 fn directory(manifest: &RepoPath) -> Option<String> {
