@@ -4,9 +4,13 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, VerdictSpec,
+    GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, TESTS_BY_PACKAGE_OUTPUT,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
+
+#[path = "verdict_counts.rs"]
+mod verdict_counts;
+use verdict_counts::{counts, number};
 
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
@@ -57,6 +61,7 @@ pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 1_000_000;
 pub struct TestCounts {
     pub run: u64,
     pub listed: u64,
+    pub ignored: Option<u64>,
     pub packages: BTreeMap<String, PackageCounts>,
 }
 
@@ -190,7 +195,9 @@ impl PlanOutput {
                 }
             }
         }
-        test_lanes.retain(|_, jobs| !jobs.is_empty());
+        let merge_group_ran = event == Some(PUSH)
+            && outputs.get(MERGE_GROUP_SKIP_OUTPUT).map(String::as_str) == Some("true");
+        test_lanes.retain(|_, jobs| !merge_group_ran && !jobs.is_empty());
         Ok(Self {
             planned,
             test_lanes,
@@ -308,6 +315,11 @@ pub fn verdict(
             ));
         } else {
             for job in counts.iter().flatten() {
+                if job.listed == 0 && job.run == 0 && job.ignored == Some(0) {
+                    out.problems.push(format!(
+                        "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
+                    ));
+                }
                 for (name, package) in &job.packages {
                     if package.listed > 0 && package.run == 0 {
                         out.problems.push(format!(
@@ -356,37 +368,6 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     }
     out.passed = out.problems.is_empty();
     out
-}
-
-fn counts(need: Option<&Need>) -> Option<TestCounts> {
-    let need = need?;
-    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
-    let summed_run = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.run))?;
-    let summed_listed = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.listed))?;
-    if run != summed_run || listed != summed_listed {
-        return None;
-    }
-    Some(TestCounts {
-        run,
-        listed,
-        packages,
-    })
-}
-
-fn number(text: &str) -> Option<u64> {
-    if text.is_empty()
-        || (text.len() > 1 && text.starts_with('0'))
-        || !text.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
-    text.parse().ok()
 }
 
 #[cfg(test)]

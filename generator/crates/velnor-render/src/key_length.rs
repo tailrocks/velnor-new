@@ -41,7 +41,7 @@ fn expansion(expression: &str) -> usize {
         "runner.arch" => RUNNER_ARCH_MAX_LENGTH,
         "github.sha" => 40,
         "github.run_id" => 20,
-        _ if expression.starts_with("hashFiles(") => 64,
+        _ if expression.starts_with("hashFiles(") || expression.contains(".outputs.lock_") => 64,
         _ if expression.ends_with(".outputs.compat") => CACHE_COMPAT_LENGTH,
         _ if expression.ends_with(".outputs.base8") => 8,
         _ => expression.encode_utf16().count(),

@@ -3,6 +3,8 @@
 
 mod activity;
 mod archive_witness;
+mod artifact_api;
+mod artifact_unzip;
 mod audit;
 mod build_inputs;
 mod cache;
@@ -15,19 +17,24 @@ mod configurations;
 mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
+mod fetch_reports;
 mod git;
 mod git_witness;
 mod http;
 mod inputs;
 mod manifests;
+mod merge_group;
 mod plan;
+pub mod preview;
 pub mod pump;
 mod recording;
+mod registry;
 mod release;
 mod report;
 mod report_checkout;
 mod report_inputs;
 mod required;
+mod resolve_qualification;
 mod restored;
 mod run;
 mod setup;
@@ -182,11 +189,15 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::WriteRequest(args) => write_request::run(&args),
+        Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::MbxStore => crate::mbx_store::setup(),
+        Command::MbxSeed => crate::mbx_seed::setup(),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
@@ -199,7 +210,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let root = current_dir()?;
             let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
             let targets = if configured.is_empty() {
-                every_root_target(&root)
+                every_root_target(&root)?
             } else {
                 configured
                     .iter()
@@ -211,6 +222,10 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
             Ok(expiry.report + &ties)
         }
+        Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
+        Command::VerifyMacProof => preview::cli::verify_mac_proof(),
+        Command::RunAuthority(args) => preview::cli::run_authority(&args),
+        Command::AdmitPreview => preview::admit::admit_preview(),
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
         Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }

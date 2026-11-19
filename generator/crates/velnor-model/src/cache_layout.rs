@@ -1,11 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::{CacheKey, JobId, RepoPath, RootSlug};
+use crate::{CacheKey, CacheRoot, JobId, LockIdentity, RepoPath, RootSlug};
 
 pub const CACHE_COMPAT_LENGTH: usize = 16;
+pub const LOCK_OUTPUT_PREFIX: &str = "lock_";
 pub const RUNNER_OS_MAX_LENGTH: usize = "Windows".len();
 pub const RUNNER_ARCH_MAX_LENGTH: usize = "ARM64".len();
+pub const SHARED_SOURCES_OWNER: &str = "all.roots";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CacheKeySegment {
@@ -14,6 +16,8 @@ pub enum CacheKeySegment {
     TargetOwner { job: JobId, root: RootSlug },
     Compat,
     Lock(RepoPath),
+    RootLock(RootSlug),
+    SourcesLocks,
     Mise,
     Commit,
     RunId,
@@ -47,7 +51,7 @@ impl CacheKey {
     #[must_use]
     pub fn layout(&self) -> CacheKeyLayout {
         use CacheKeySegment::{
-            Commit, Compat, DeltaBase, Host, Lock, Mise, RunId, TargetOwner, Text,
+            Commit, Compat, DeltaBase, Host, Lock, Mise, RunId, SourcesLocks, TargetOwner, Text,
         };
         let (segments, fallback_lengths): (Vec<_>, &'static [usize]) = match self {
             Self::Tools { .. } => (
@@ -60,13 +64,13 @@ impl CacheKey {
                 ],
                 &[],
             ),
-            Self::Sources { root, .. } => (
+            Self::Sources { .. } => (
                 vec![
                     Text("velnor".into()),
                     Text("src".into()),
                     Host,
-                    Text(root.slug().to_string()),
-                    Lock(root.lock_file()),
+                    Text(SHARED_SOURCES_OWNER.into()),
+                    SourcesLocks,
                 ],
                 &[4],
             ),
@@ -79,7 +83,7 @@ impl CacheKey {
                         root: root.slug().clone(),
                     },
                     Compat,
-                    Lock(root.lock_file()),
+                    lock_segment(root),
                     Commit,
                     RunId,
                 ],
@@ -103,6 +107,13 @@ impl CacheKey {
             segments,
             fallback_lengths,
         }
+    }
+}
+
+fn lock_segment(root: &CacheRoot) -> CacheKeySegment {
+    match root.lock_identity() {
+        LockIdentity::File => CacheKeySegment::Lock(root.lock_file()),
+        LockIdentity::Members => CacheKeySegment::RootLock(root.slug().clone()),
     }
 }
 

@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL, RootSlug,
-    S256_DIGEST_BYTES, StateScope, StateTrust, StateUnit, state_snapshot_plan_expr,
+    COMPLETE_STATE_TRANSPORT_EXPR, CacheFamily, RootSlug, S256_DIGEST_BYTES, STATE_RUNNER_TEMP,
+    StateScope, StateTrust, StateUnit, state_snapshot_plan_expr,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_RESTORE_CONDITION, MBX_BUNDLE_ROOT_ENV, MBX_BUNDLE_SNAPSHOT_ENV,
@@ -127,8 +127,8 @@ fn workspace_root(working_directory: Option<&str>) -> Result<String, RenderError
 /// the shell form. Both derive from the same common family literal so the
 /// transport path cannot drift between restore, recovery, publish, and save.
 fn shell_literal(expr: &str) -> Result<String, RenderError> {
-    expr.strip_prefix(RUNNER_TEMP_EXPR)
-        .map(|rest| format!("{RUNNER_TEMP_SHELL}{rest}"))
+    expr.starts_with(&format!("{STATE_RUNNER_TEMP}/"))
+        .then(|| expr.to_owned())
         .ok_or_else(|| RenderError::InvalidWorkflow("state_transport_not_runner_temp".to_owned()))
 }
 
