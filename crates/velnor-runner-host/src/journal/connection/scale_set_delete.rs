@@ -7,6 +7,12 @@ use crate::scale_set::delete::ScaleSetAbsence;
 use super::ConnectionJournal;
 use super::session::has_work_besides_bound_session;
 use super::storage::{has_ambiguous_legacy_work, in_transaction, read_transaction};
+use rows::BindingRow;
+
+mod lifecycle;
+mod rows;
+
+pub(super) use lifecycle::restart_after_deleted_set;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScaleSetDeleteState {
@@ -112,7 +118,11 @@ impl ConnectionJournal {
     pub(crate) async fn has_intended_scale_set_delete(&self) -> Result<bool, HostError> {
         read_transaction(&self.journal, async |connection| {
             self.validate_scope(connection).await?;
-            has_pending_scale_set_delete(connection, self.connection_id.as_str()).await
+            let id = self.connection_id.as_str();
+            Ok(has_pending_scale_set_delete(connection, id).await?
+                || lifecycle::unverified_target(connection, id)
+                    .await?
+                    .is_some())
         })
         .await
     }
@@ -186,7 +196,12 @@ impl ConnectionJournal {
                 ScaleSetDeleteRecord::Uncertain => (&["requested", "uncertain"][..], "uncertain"),
                 ScaleSetDeleteRecord::Resend => (&["requested", "uncertain"][..], "requested"),
             };
-            move_state(connection, self, from, to).await
+            move_state(connection, self, from, to).await?;
+            if matches!(record, ScaleSetDeleteRecord::Deleted(_)) {
+                let id = self.connection_id.as_str();
+                lifecycle::release_unverified(connection, id, claim.scale_set_id).await?;
+            }
+            Ok(())
         })
         .await
     }
@@ -197,9 +212,13 @@ impl ConnectionJournal {
     ) -> Result<ScaleSetDeleteGate, HostError> {
         self.validate_scope(connection).await?;
         let id = self.connection_id.as_str();
-        if has_ambiguous_legacy_work(connection).await?
-            || has_work_besides_bound_session(connection, id).await?
-        {
+        if has_ambiguous_legacy_work(connection).await? {
+            return Ok(ScaleSetDeleteGate::NotDrained);
+        }
+        if let Some(target) = lifecycle::unverified_target(connection, id).await? {
+            return Ok(ScaleSetDeleteGate::Owned(target));
+        }
+        if has_work_besides_bound_session(connection, id).await? {
             return Ok(ScaleSetDeleteGate::NotDrained);
         }
         let mut rows = connection
@@ -239,76 +258,6 @@ impl ConnectionJournal {
             runner_group_id: intent.runner_group_id,
             state,
         }))
-    }
-}
-
-struct BindingRow {
-    set: Option<(i64, String, String)>,
-    intent: Option<IntentRow>,
-}
-
-struct IntentRow {
-    state: String,
-    ownership: String,
-    remote_id: i64,
-    remote_name: String,
-    labels: Vec<String>,
-    runner_group_id: i64,
-}
-
-impl BindingRow {
-    fn read(row: &turso::Row) -> Result<Self, HostError> {
-        let id = row.get::<Option<i64>>(0).map_err(|_| HostError::Journal)?;
-        let name = row
-            .get::<Option<String>>(1)
-            .map_err(|_| HostError::Journal)?;
-        let owner = row
-            .get::<Option<String>>(2)
-            .map_err(|_| HostError::Journal)?;
-        let set = match (id, name, owner) {
-            (None, None, None) => None,
-            (Some(id), Some(name), Some(owner)) if id > 0 && !name.is_empty() => {
-                Some((id, name, owner))
-            }
-            _ => return Err(HostError::Journal),
-        };
-        let state = row
-            .get::<Option<String>>(3)
-            .map_err(|_| HostError::Journal)?;
-        let intent = match state {
-            None => None,
-            Some(state) => Some(IntentRow::read(row, state)?),
-        };
-        Ok(Self { set, intent })
-    }
-}
-
-impl IntentRow {
-    fn read(row: &turso::Row, state: String) -> Result<Self, HostError> {
-        let labels = row
-            .get::<Option<String>>(7)
-            .map_err(|_| HostError::Journal)?;
-        Ok(Self {
-            state,
-            ownership: row
-                .get::<Option<String>>(4)
-                .map_err(|_| HostError::Journal)?
-                .unwrap_or_default(),
-            remote_id: row
-                .get::<Option<i64>>(5)
-                .map_err(|_| HostError::Journal)?
-                .unwrap_or_default(),
-            remote_name: row
-                .get::<Option<String>>(6)
-                .map_err(|_| HostError::Journal)?
-                .unwrap_or_default(),
-            labels: labels
-                .map(|text| serde_json::from_str(&text))
-                .transpose()
-                .map_err(|_| HostError::Journal)?
-                .unwrap_or_default(),
-            runner_group_id: row.get::<i64>(8).map_err(|_| HostError::Journal)?,
-        })
     }
 }
 

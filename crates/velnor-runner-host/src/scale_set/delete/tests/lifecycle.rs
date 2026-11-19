@@ -195,7 +195,12 @@ async fn disconnect_with_delete(fixture: &Fixture) -> TestResult<()> {
 async fn reconnecting_after_the_created_set_was_deleted_creates_a_new_set() -> TestResult<()> {
     let fixture = fixture(true).await?;
     disconnect_with_delete(&fixture).await?;
-    assert!(fixture.journal.reactivate_if_drained(&fixture.binding).await?);
+    assert!(
+        fixture
+            .journal
+            .reactivate_if_drained(&fixture.binding)
+            .await?
+    );
     let scoped = fixture.journal.connection_scope(&fixture.binding).await?;
     let request = ScaleSetCreateRequest::new(&fixture.binding, 1)?;
     let record = scoped.prepare_scale_set_create(&request).await?;
@@ -229,7 +234,12 @@ async fn reactivating_without_a_set_delete_keeps_the_created_set() -> TestResult
             .retire_connection_if_drained(&fixture.binding)
             .await?
     );
-    assert!(fixture.journal.reactivate_if_drained(&fixture.binding).await?);
+    assert!(
+        fixture
+            .journal
+            .reactivate_if_drained(&fixture.binding)
+            .await?
+    );
     let scoped = fixture.journal.connection_scope(&fixture.binding).await?;
     let request = ScaleSetCreateRequest::new(&fixture.binding, 1)?;
     let record = scoped.prepare_scale_set_create(&request).await?;

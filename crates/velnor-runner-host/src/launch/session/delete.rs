@@ -115,6 +115,13 @@ pub(super) async fn retire_session_of_deleted_set_with<T: Transport + ?Sized>(
     if !created_set_deleted_by_us(scoped, allocation.scale_set_id()).await {
         return None;
     }
+    if scoped
+        .settle_header_of_deleted_set(session_intent_id, &allocation)
+        .await
+        .is_err()
+    {
+        return Some(SessionDeleteOutcome::NotReady);
+    }
     Some(
         delete_removed_connection_session_with(
             transport,

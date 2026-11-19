@@ -3,6 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+#[path = "ledger/deleted_set.rs"]
+mod deleted_set;
 #[path = "ledger/pressure.rs"]
 mod pressure;
 #[path = "ledger/readiness.rs"]
