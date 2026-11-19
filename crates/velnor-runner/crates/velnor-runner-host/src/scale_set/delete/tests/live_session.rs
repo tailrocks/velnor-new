@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The delete gate with the connection's own bound session still live, which
-//! is the state `disconnect --wait` finds it in.
-
 use super::{
     Fixture, ScaleSetDeleteOutcome, TestResult, attempt, delete_state, fixture, found, ok,
 };

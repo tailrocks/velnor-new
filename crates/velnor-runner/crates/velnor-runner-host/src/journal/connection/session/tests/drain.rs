@@ -1,10 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Drain semantics with a live session: the connection's own bound session is
-//! standing presence, not work, so `disconnect --wait` and `drain --wait` can
-//! finish before the controller deletes it. Any other work still blocks.
-
 use tempfile::TempDir;
 
 use crate::config::HostConfig;
@@ -148,6 +144,22 @@ async fn a_charged_session_header_does_not_block_the_connection_drain() -> TestR
     let allocation = fx.scope.session_header_allocation(intent).await?;
     assert_eq!(allocation.target(), 1);
     assert!(fx.scope.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unsettled_header_poll_keeps_the_session_in_the_drain_count() -> TestResult {
+    let fx = fixture().await?;
+    let intent = bind_session(&fx.scope, NONCE, "session-1", 1).await?;
+    let allocation = fx.scope.session_header_allocation(intent).await?;
+    let attempt = fx.scope.begin_zero_header_poll(intent, &allocation).await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    fx.scope
+        .mark_session_poll_uncertain(intent, attempt)
+        .await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
     Ok(())
 }
 
