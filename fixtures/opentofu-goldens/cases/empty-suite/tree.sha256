@@ -3,7 +3,7 @@
 - 68a8b65ce4e558b2c13d0f4d8efc9eef0353762b86d18d967bdc54e1ed4f6daf  ./.github/actions/declared-task-0/action.yml
 - 9766d53303391d75f53c123a0db60b090c7cd52bb70c3aeca0d54c1caa3e3f8f  ./.github/actions/u26/action.yml
 - 0d6a2e6d160660b4cc68a35b696312b40540540565aa53fc61704a41fd2404ed  ./.github/actions/velnor-tool-seed/action.yml
-- d1d97a9c81c5ec6b886f071ee296aafc3e149788e83efa6ddbf7b735092899bd  ./.github/actions/velnor-tools-cache-restore/action.yml
+- 839b60ffb9df7061bc363e618a8a4779fb6dd45b9401efe860ae65ea7455f42f  ./.github/actions/velnor-tools-cache-restore/action.yml
 - 97a52d358ab13c56f90296fb59da411421a5fbcab3f68acfe0102178035fa365  ./.github/actions/velnor-tools-cache-scrub/action.yml
 - accd699b0d108fe4adfa97dfbe966ac267ee9e4387a02be803d488ddebd75680  ./.github/actions/velnor-tools-prelude-u26/action.yml
 - a1f9f9eac859b08174804d9f71ef765bcf2585ef9c0a449fb9a282ca4875d588  ./.github/actions/velnor-verify-jactionlint/action.yml

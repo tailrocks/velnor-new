@@ -188,15 +188,6 @@
       "expires": "2026-12-03"
     },
     {
-      "key": "opentofu",
-      "held_version": "1.13.8",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v1.13.9 published 2026-11-05T19:09:38Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
       "key": "asamarts/alint",
       "held_version": "v0.21.0",
       "owner": "Alexey Zhokhov",
@@ -329,10 +320,10 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v1.13.9",
       "name": "opentofu",
-      "pinned": "1.13.8",
-      "qualified": "1.13.8",
+      "pinned": "1.13.9",
+      "qualified": "1.13.9",
       "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
