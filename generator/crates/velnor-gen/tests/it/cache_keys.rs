@@ -43,7 +43,7 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
     assert_eq!(
         tools,
         RenderedKey {
-            key: format!("velnor-tools-{HOST}-mise2026.11.1-${{{{ hashFiles('mise.lock') }}}}"),
+            key: format!("velnor-tools-{HOST}-mise2026.11.9-${{{{ hashFiles('mise.lock') }}}}"),
             restore_keys: vec![],
         }
     );
@@ -180,6 +180,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
+        fork_runner: RunnerLabel::new("ubuntu-latest")?,
         jobs: vec![Job {
             id: JobId::new("rust")?,
             name: None,
