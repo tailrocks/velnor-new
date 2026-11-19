@@ -1,11 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
-"""Run the legacy candidate.py validate and `velnor-ci image verify-candidate` on the
-same generated fixtures and compare verdicts and messages.
-
-usage: parity-verify-candidate.py <velnor-ci binary>
-"""
 import bz2, copy, gzip, hashlib, importlib.util, io, json, lzma, os, subprocess, sys
 import tarfile, tempfile, zlib
 from pathlib import Path
