@@ -6,14 +6,17 @@ mod base_cache;
 mod build_profile;
 mod build_script;
 mod build_target;
+mod cache_budget;
 mod cargo_flags;
 mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_fork;
 mod config_helper;
 mod config_mirror;
 mod config_test_setup;
+mod config_values;
 mod credentials;
 mod detect;
 mod doc_steps;
@@ -76,7 +79,7 @@ pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
     METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
-    recorded_roots,
+    recorded_roots, recorded_target_dirs,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
@@ -100,4 +103,8 @@ pub use verdict::{
 };
 pub use weaken::introduced;
 
+pub use cache_budget::{
+    CacheEntry, CacheFamily, CacheId, DEFAULT_CACHE_BUDGET_BYTES, Timestamp, budget_plan,
+    cache_family, delta_pull_request,
+};
 pub use private_sources::{cacheable_config, cacheable_lock};

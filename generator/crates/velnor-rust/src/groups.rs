@@ -12,7 +12,7 @@ use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
 
 const ROOT_MANIFEST: RepoPath = RepoPath::from_static("Cargo.toml");
-const GROUP_HELPER: (u64, u64, u64) = (0, 1, 82);
+const GROUP_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]

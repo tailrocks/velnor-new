@@ -365,6 +365,7 @@ fn pins() -> ProductReleasePins {
         mr_boxington_version: "1.0.0".to_owned(),
         gh_version: "2.83.1".to_owned(),
         bun_version: "1.4.4".to_owned(),
+        runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig::default(),
     }
 }
 

@@ -5,8 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug, RustRoot,
-    Shape, ShapeDecision, Step, StepKind, TargetName, Timings, Toolchain, Triggers, When,
+    MbxStore, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
+    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Timings, Toolchain, Triggers, When,
     WorkflowPlan,
 };
 
@@ -103,6 +103,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        fork_runner: facts.config.fork_runner.clone(),
         jobs,
     }
 }
@@ -122,6 +123,7 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
     );
     steps.push(Step {
         directory: root.manifest.parent(),
+        target_dir: Some(root.target_dir.clone()),
         ..step(StepKind::Cargo(CargoCommand::BuildBinary {
             package: PackageName::from_static(HELPER_PACKAGE),
             binary: TargetName::from_static(HELPER_PACKAGE),
@@ -162,6 +164,9 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
+    if facts.config.mbx_store == MbxStore::Shared {
+        steps.push(step(StepKind::MbxStore));
+    }
     steps
 }
 

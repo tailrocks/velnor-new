@@ -75,20 +75,22 @@ impl RootJobs<'_> {
         }
     }
 
-    fn cargo(&self, member: &Member, commands: Vec<CargoCommand>) -> Vec<Step> {
-        let directory = if self.unit.grouped {
-            None
-        } else {
-            member.root.manifest.parent()
-        };
-        let manifest = self.unit.grouped.then(|| member.root.manifest.clone());
-        let target_dir = self.unit.grouped.then(|| self.unit.target_dir.clone());
+    fn cargo(
+        &self,
+        member: &Member,
+        commands: impl IntoIterator<Item = CargoCommand>,
+    ) -> Vec<Step> {
         commands
             .into_iter()
             .map(|command| {
-                let mut step = member.lane.cargo(command, directory.clone());
-                step.manifest.clone_from(&manifest);
-                step.target_dir.clone_from(&target_dir);
+                let mut step = member.lane.cargo(command, Some(&member.root));
+                if self.unit.grouped {
+                    step.directory = None;
+                    step.manifest = Some(member.root.manifest.clone());
+                    if step.target_dir.is_some() {
+                        step.target_dir = Some(self.unit.target_dir.clone());
+                    }
+                }
                 step
             })
             .collect()
@@ -175,8 +177,7 @@ impl RootJobs<'_> {
             member,
             [CargoCommand::Doc]
                 .into_iter()
-                .chain(check_alone(&member.root))
-                .collect(),
+                .chain(check_alone(&member.root)),
         )
     }
 
@@ -235,12 +236,12 @@ impl RootJobs<'_> {
                         other => after.push(other),
                     }
                 }
-                let mut member_steps = self.cargo(member, workspace);
-                member_steps.extend(
-                    self.cargo(member, after)
-                        .into_iter()
-                        .map(|step| self.skip_on_draft(step)),
-                );
+                let member_steps = self
+                    .cargo(member, workspace)
+                    .into_iter()
+                    .chain(self.cargo(member, after))
+                    .map(|step| self.skip_on_draft(step))
+                    .collect();
                 steps.extend(self.member_steps(member, member_steps));
             }
             steps.extend(self.audit());
@@ -261,10 +262,7 @@ impl RootJobs<'_> {
         let lint_id = self.id(LINT_JOB);
         let mut steps = self.setup(&lint_id);
         for member in &self.members {
-            steps.extend(self.cargo(
-                member,
-                lint().into_iter().chain([CargoCommand::Doc]).collect(),
-            ));
+            steps.extend(self.cargo(member, lint().into_iter().chain([CargoCommand::Doc])));
         }
         if tests.is_empty() {
             steps.extend(self.audit());
@@ -284,8 +282,8 @@ impl RootJobs<'_> {
             let test_id = self.id(TEST_JOB);
             let mut steps = self.setup(&test_id);
             let saves = self.saves(&test_id, None, true);
-            let before_tests = self.nextest() && !saves.is_empty();
-            if before_tests {
+            let saving = self.nextest() && !saves.is_empty();
+            if saving {
                 for member in &self.members {
                     if !member.nextest {
                         continue;
@@ -296,14 +294,25 @@ impl RootJobs<'_> {
                             .map(saving_run),
                     );
                 }
+                for member in &self.members {
+                    let tests = self.cargo(
+                        member,
+                        member
+                            .nextest_run(self.facts)
+                            .into_iter()
+                            .chain(member.built_without_nextest(self.facts)),
+                    );
+                    steps.extend(self.member_steps(member, tests));
+                }
                 steps.extend(saves.iter().cloned());
-            }
-            for member in &self.members {
-                let tests = self.cargo(member, member.tests(self.facts));
-                steps.extend(self.member_steps(member, tests));
+            } else {
+                for member in &self.members {
+                    let tests = self.cargo(member, member.tests(self.facts));
+                    steps.extend(self.member_steps(member, tests));
+                }
             }
             steps.extend(self.audit());
-            if !before_tests {
+            if !saving {
                 steps.extend(saves);
             }
             jobs.push(self.lane_job(test_id, steps));
@@ -331,22 +340,13 @@ impl RootJobs<'_> {
             name: artifact.clone(),
             file: member.root.manifest.sibling(&ARCHIVE_FILE),
         }));
+        build.extend(self.cargo(member, member.built_without_nextest(self.facts)));
+        build.extend(self.audit());
         build.extend(self.saves(
             &build_id,
             Some(member.root.manifest.sibling(&ARCHIVE_FILE)),
             true,
         ));
-        build.extend(
-            self.cargo(
-                member,
-                member
-                    .direct_harnesses(self.facts)
-                    .into_iter()
-                    .chain(member.doctests())
-                    .collect(),
-            ),
-        );
-        build.extend(self.audit());
         let mut group = head(self.facts, CHECKOUT_DEPTH);
         group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
         group.extend(tools_restore(self.facts).map(|restore| Step {
@@ -367,6 +367,7 @@ impl RootJobs<'_> {
                 vec![CargoCommand::NextestRunArchive {
                     file: ARCHIVE_FILE,
                     filter: member.filter(self.facts),
+                    ci_profile: member.root.nextest_ci_profile,
                 }],
             )
             .into_iter()

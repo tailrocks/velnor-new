@@ -20,7 +20,7 @@ fn grouped(config: &str) -> Result<String, Box<dyn Error>> {
         .get_mut(&lock)
         .ok_or("the lock file is missing")?;
     *bytes = String::from_utf8(bytes.clone())?
-        .replace("0.1.81", "0.1.82")
+        .replace("0.1.81", "0.1.86")
         .into_bytes();
     workflow(&view)
 }
@@ -155,8 +155,69 @@ fn a_group_named_after_a_root_is_refused() -> TestResult {
 fn a_group_needs_a_helper_that_writes_the_group_mode() -> TestResult {
     let error = refused(GROUP)?;
     assert!(
-        error.contains("workspace_groups needs velnor-ci 0.1.82 or later"),
+        error.contains("workspace_groups needs velnor-ci 0.1.86 or later"),
         "{error}"
+    );
+    Ok(())
+}
+
+#[test]
+fn only_the_building_steps_of_a_group_set_the_shared_target_directory() -> TestResult {
+    let text = grouped(GROUP)?;
+    let group = job(&text, "rust-tools");
+    let shared = "CARGO_TARGET_DIR: '${{ github.workspace }}/target-velnor/tools'";
+    assert!(group.matches(shared).count() > 4, "{group}");
+    assert_eq!(
+        group.matches("CARGO_TARGET_DIR").count(),
+        group.matches(shared).count()
+    );
+    for line in group.lines().filter(|line| line.contains("cargo-fmt")) {
+        let at = group.find(line).ok_or("fmt line vanished")?;
+        let step = group[..at].rsplit("\n      - ").next().unwrap_or_default();
+        assert!(!step.contains("CARGO_TARGET_DIR"), "{step}");
+    }
+    let own = job(&text, "rust-root");
+    assert!(
+        own.contains("CARGO_TARGET_DIR: '${{ github.workspace }}/target'"),
+        "{own}"
+    );
+    assert!(
+        !own.contains("CARGO_TARGET_DIR: '${{ github.workspace }}/target-velnor"),
+        "{own}"
+    );
+    Ok(())
+}
+
+#[test]
+fn each_root_of_a_group_picks_the_ci_profile_of_its_own_nextest_config() -> TestResult {
+    let mut files = view(&ROOTS, Some(GROUP.as_bytes()))?;
+    let lock = RepoPath::new(LOCK)?;
+    let bytes = files
+        .files
+        .get_mut(&lock)
+        .ok_or("the lock file is missing")?;
+    *bytes = String::from_utf8(bytes.clone())?
+        .replace("0.1.81", "0.1.86")
+        .into_bytes();
+    let config = RepoPath::new("tools/a/.config/nextest.toml")?;
+    files.tracked_paths.insert(config.clone());
+    files
+        .files
+        .insert(config, b"[profile.ci]\nslow-timeout = \"60s\"\n".to_vec());
+    let text = workflow(&files)?;
+    let group = job(&text, "rust-tools");
+    let runs: Vec<&str> = group
+        .lines()
+        .filter(|line| line.contains("nextest run") && line.contains("--no-fail-fast"))
+        .collect();
+    assert_eq!(runs.len(), 2, "{group}");
+    assert!(
+        runs[0].contains("tools/a/Cargo.toml") && runs[0].contains("--profile ci"),
+        "{group}"
+    );
+    assert!(
+        runs[1].contains("tools/b/Cargo.toml") && !runs[1].contains("--profile ci"),
+        "{group}"
     );
     Ok(())
 }

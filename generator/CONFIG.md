@@ -2,6 +2,17 @@
 
 The new Rust generator reads `.velnor/rust-ci.toml`.
 
+## Fork pull requests
+
+A pull request from a fork must never run on a self-hosted runner. When `runner` is not a GitHub-hosted label, the generator renders `runs-on` of every job, including the `Required` gate, as an expression. It selects `runner` when the event is not a pull request or the pull request head repository is this repository, and `fork_runner` otherwise. No job is skipped for a fork, so the gate sees the real result of every job and fails when one fails. A deleted fork has no head repository, so it counts as a fork.
+
+`fork_runner` is a GitHub-hosted label. It defaults to `ubuntu-latest`, to `ubuntu-24.04-arm` when `runner` is a Linux arm64 label and to `macos-15` when `runner` is an Apple silicon macOS label. The generator refuses a `fork_runner` that is not GitHub-hosted or that does not match the platform of `runner`. It also refuses a self-hosted `runner` label that holds anything beyond letters, digits, `-`, `_` and `.`, because the label is written into an expression.
+
+```toml
+runner = "ubuntu-26.04-scale-set"
+fork_runner = "ubuntu-24.04"
+```
+
 ## Optional cargo fingerprint log
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
@@ -45,7 +56,13 @@ roots = ["tools/a", "tools/b", "tools/c"]
 
 A group gets one set of jobs, named after the group. The job runs each cargo command once per root, one after another, with `--manifest-path` naming that root's manifest, from the repository root. All roots of a group share one build folder, `target-velnor/<name>`, so a crate that several of them use at the same version and features is compiled once. The group has one sources cache and one target cache, and the target cache key hashes the lock file of every root of the group. A root with nothing selected is skipped inside the job; the job itself runs when any root of the group is selected.
 
-The key needs a helper release that writes the plan output of every group (`0.1.82` or later); generation fails with an older pin.
+The key needs a helper release that writes the plan output of every group (`0.1.86` or later); generation fails with an older pin.
+
+## Optional shared MBX store
+
+`mbx_shared_store = true` in `.velnor/rust-ci.toml` makes every job run `velnor-ci mbx-store` right after the helper is installed. It needs `velnor-ci` 0.1.84 or later and is off by default.
+
+The runner host may set `VELNOR_MBX_SHARED_DIR` in the runner pod. The workflow `env` context cannot see the runner process environment, so the helper decides at run time. On a trusted event (a push or schedule on the default branch), when the directory is absolute, exists, is not a symlink and contains no symlink, and is writable, the helper appends `MBX_CACHE_DIR=<dir>` and a pod-private `MBX_SHIMS_DIR=$RUNNER_TEMP/velnor-mbx-shims` to `$GITHUB_ENV`. A pull request, a fork, a `merge_group` run, or any other event never gets the shared directory. A directory that fails a check produces a `::warning::` and the job keeps MBX's own per-job store. Without the variable the step changes nothing.
 
 ## Test setup steps
 

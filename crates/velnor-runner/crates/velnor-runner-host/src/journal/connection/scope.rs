@@ -6,6 +6,7 @@ use crate::error::HostError;
 use crate::journal::Journal;
 
 use super::ConnectionJournal;
+use super::session::has_work_besides_bound_session;
 use super::storage::{
     connection_record, digest, has_ambiguous_legacy_work, has_connection_work, in_transaction,
     read_transaction,
@@ -219,7 +220,8 @@ impl ConnectionJournal {
             if has_ambiguous_legacy_work(connection).await? {
                 return Ok(false);
             }
-            let active = has_connection_work(connection, self.connection_id.as_str()).await?;
+            let active =
+                has_work_besides_bound_session(connection, self.connection_id.as_str()).await?;
             Ok(!active)
         })
         .await

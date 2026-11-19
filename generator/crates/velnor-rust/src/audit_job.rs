@@ -28,7 +28,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Opti
     let mut steps = setup_units(facts, units, &lane, &families);
     steps.extend(units.iter().flat_map(|unit| {
         unit.roots.iter().map(|root| {
-            let mut build = lane.cargo(CargoCommand::BuildAll, root.manifest.parent());
+            let mut build = lane.cargo(CargoCommand::BuildAll, Some(root));
             if unit.grouped {
                 build.directory = None;
                 build.manifest = Some(root.manifest.clone());

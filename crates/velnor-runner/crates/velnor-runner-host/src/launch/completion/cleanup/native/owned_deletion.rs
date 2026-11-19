@@ -19,8 +19,12 @@ use crate::launch::completion::diagnostics;
 
 use super::super::super::{Context, EffectBudget, Failure, run_effect};
 
+#[path = "owned_deletion/helpers.rs"]
+mod helpers;
 #[path = "owned_deletion/identity.rs"]
 mod identity;
+#[path = "owned_deletion/initializer.rs"]
+mod initializer;
 #[path = "owned_deletion/retirement.rs"]
 mod retirement;
 #[path = "owned_deletion/runner_logs.rs"]
@@ -116,7 +120,7 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_container(
     .await
 }
 
-async fn remove_container_and_check(
+pub(super) async fn remove_container_and_check(
     context: &Context<'_>,
     launch: &CompletedLaunch,
     claim: CleanupClaim,
@@ -141,7 +145,7 @@ async fn remove_container_and_check(
                 }),
             ))
             .await?
-            .map_err(|_| HostError::Docker)
+            .map_err(|error| helpers::docker_error("container remove", id, &error))
         },
     )
     .await?;
@@ -182,6 +186,27 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
     pending: &PendingStorageCleanupWitness,
 ) -> Result<(), Failure> {
     let identity = pending.identity();
+    if let Some((role, name)) = identity
+        .volumes()
+        .iter()
+        .find(|(role, _)| *role == StorageRole::EngineMetadata)
+    {
+        let volume = request_effect(
+            context,
+            launch,
+            claim,
+            budget,
+            "volume inspect",
+            identity,
+            || async { inspect_volume(context.docker, name).await },
+        )
+        .await?;
+        if let Some(volume) = volume {
+            validate_volume(&volume, name, *role, identity, context)?;
+        }
+        helpers::remove_volume_helpers(context, launch, claim, budget, identity, name, true)
+            .await?;
+    }
     for (role, name) in identity.volumes() {
         let volume = request_effect(
             context,
@@ -197,6 +222,8 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
             continue;
         };
         validate_volume(&volume, name, *role, identity, context)?;
+        helpers::remove_volume_helpers(context, launch, claim, budget, identity, name, false)
+            .await?;
         request_effect(
             context,
             launch,
@@ -212,7 +239,7 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
                     ),
                 )
                 .await?
-                .map_err(|_| HostError::Docker)
+                .map_err(|error| helpers::docker_error("volume remove", name, &error))
             },
         )
         .await?;
@@ -231,7 +258,10 @@ pub(in crate::launch::completion::cleanup::native) async fn remove_owned_volumes
             return Err(Failure::not_proven("volume absence"));
         }
     }
-    Ok(())
+    Box::pin(initializer::settle_journaled_initializer(
+        context, launch, claim, budget, identity,
+    ))
+    .await
 }
 
 fn validate_volume(

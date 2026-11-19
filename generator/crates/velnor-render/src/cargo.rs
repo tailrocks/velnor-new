@@ -45,7 +45,6 @@ impl ArtifactFormat {
 pub(crate) fn cargo_step(
     command: &CargoCommand,
     manifest: Option<&RepoPath>,
-    target_dir: Option<&RepoPath>,
     audit: bool,
     lane: CargoLane,
     test_id: Option<String>,
@@ -61,12 +60,6 @@ pub(crate) fn cargo_step(
         id: test_id,
         env: env
             .into_iter()
-            .chain(target_dir.map(|dir| {
-                (
-                    "CARGO_TARGET_DIR".to_owned(),
-                    Value::Expr(format!("${{{{ github.workspace }}}}/{dir}")),
-                )
-            }))
             .chain(lane.cache_debug.then(cache_debug_env))
             .collect(),
         run: Some(format!(
@@ -93,25 +86,26 @@ fn cargo_command(
         ),
         CargoCommand::Clippy { extra } => clippy(cargo, extra, &path),
         CargoCommand::NextestBuild => nextest_build(nextest, &path),
-        CargoCommand::NextestRun { filter } => {
-            nextest_run(&format!("--workspace --locked{nextest}"), filter, &path)
-        }
-        CargoCommand::NextestRunArchive { file, filter } => nextest_run(
+        CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
+            &format!("--workspace --locked{nextest}"),
+            filter,
+            *ci_profile,
+            &path,
+        ),
+        CargoCommand::NextestRunArchive {
+            file,
+            filter,
+            ci_profile,
+        } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
                 file.as_str().replace('\'', "'\\''")
             ),
             filter,
+            *ci_profile,
             &path,
         ),
-        CargoCommand::NextestArchive { file } => (
-            BUILD_TESTS_STEP.into(),
-            format!(
-                "cargo-nextest nextest archive{path} --workspace --locked{nextest} --archive-file '{}'",
-                file.as_str().replace('\'', "'\\''")
-            ),
-            vec![],
-        ),
+        CargoCommand::NextestArchive { file } => nextest_archive(file, nextest, &path),
         CargoCommand::TestTarget {
             package,
             target,
@@ -154,7 +148,7 @@ fn cargo_command(
             vec![],
         ),
         CargoCommand::Deny { manifest } => deny(manifest),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+        CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
 
@@ -188,12 +182,37 @@ fn clippy(cargo: &str, extra: &[String], path: &str) -> (String, String, Vec<(St
     )
 }
 
+pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
+    (
+        "CARGO_TARGET_DIR".to_owned(),
+        Value::Expr(format!(
+            "${{{{ github.workspace }}}}/{}",
+            target.as_str().replace("${{", "${{ '${{' }}")
+        )),
+    )
+}
+
 fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
         Value::Expr(format!(
             "${{{{ {CACHE_DEBUG_ON} && '{FINGERPRINT_LOG}' || '' }}}}"
         )),
+    )
+}
+
+fn nextest_archive(
+    file: &RepoPath,
+    format: &str,
+    path: &str,
+) -> (String, String, Vec<(String, Value)>) {
+    (
+        BUILD_TESTS_STEP.into(),
+        format!(
+            "cargo-nextest nextest archive{path} --workspace --locked{format} --archive-file '{}'",
+            file.as_str().replace('\'', "'\\''")
+        ),
+        vec![],
     )
 }
 
@@ -210,12 +229,14 @@ fn nextest_build(format: &str, path: &str) -> (String, String, Vec<(String, Valu
 fn nextest_run(
     scope: &str,
     filter: &FilterRef,
+    ci_profile: bool,
     path: &str,
 ) -> (String, String, Vec<(String, Value)>) {
+    let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run{path} {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run{path} {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
             nextest_filter(filter)
         ),
         vec![],

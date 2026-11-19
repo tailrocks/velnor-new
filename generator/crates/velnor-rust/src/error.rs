@@ -16,6 +16,7 @@ pub enum DetectError {
     MiseLockRequired { path: RepoPath },
     ToolNotPrebuilt { tool: String, platform: String },
     NextestRequired { path: RepoPath },
+    RustPinRequired { channel: String, path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
     NestedToolchain { file: RepoPath },
@@ -147,7 +148,7 @@ impl Reason {
                 "workspace_groups names the group {name}, which is the name of a Cargo root of this repository; the group and the root would share one cache and one job name"
             ),
             Self::GroupHelper => f.write_str(
-                "workspace_groups needs velnor-ci 0.1.82 or later, which writes the plan output of every group; run `velnor-gen pin-helper 0.1.82`",
+                "workspace_groups needs velnor-ci 0.1.86 or later, which writes the plan output of every group; run `velnor-gen pin-helper 0.1.86`",
             ),
             Self::GroupShape => f.write_str(
                 "workspace_groups cannot be used with shape = \"groups\": a group's roots share one job, and the groups shape needs one archive and one test job per workspace; use shape = \"lint-test\" or leave the shape out",
@@ -185,7 +186,7 @@ impl Reason {
             Self::TargetDirOverlap(value) => write!(f, "build.target-dir {value:?} overlaps tracked checkout content or repository control paths; use an untracked build directory"),
             Self::RuntimeTargetDir { used, rendered } => write!(
                 f,
-                "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
+                "puts the target directory at {used}, but the generated workflow caches {rendered}, so cargo would write outside the cached target path: restore the generated target directory, or commit the change and regenerate"
             ),
             Self::BuildDirKey(key) => write!(
                 f,
@@ -307,6 +308,10 @@ impl fmt::Display for DetectError {
             Self::NextestRequired { path } => write!(
                 f,
                 "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
+            ),
+            Self::RustPinRequired { channel, path } => write!(
+                f,
+                "the Rust toolchain file names {channel}, and the generated jobs never let rustup install a toolchain on its own; pin rust = \"{channel}\" in {path}"
             ),
             Self::SameSlug { first, second } => write!(
                 f,

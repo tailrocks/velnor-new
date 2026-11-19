@@ -12,11 +12,13 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 20] = [
+const KEYS: [&str; 23] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
+    "fork_runner",
     "crates_mirror",
+    "mbx_shared_store",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -31,6 +33,7 @@ const KEYS: [&str; 20] = [
     "full_run",
     "helper",
     "ci_debuginfo",
+    "cache_budget_bytes",
     "test_setup",
     "workspace_groups",
 ];
@@ -41,7 +44,9 @@ struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     runner: Option<String>,
+    fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
+    mbx_shared_store: Option<bool>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -60,6 +65,7 @@ struct RawConfig {
     full_run: Option<String>,
     helper: Option<crate::config_helper::RawHelper>,
     ci_debuginfo: Option<String>,
+    cache_budget_bytes: Option<u64>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
@@ -95,7 +101,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
     let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
     let required_check =
-        required_check(raw.required_check, &defaults.required_check).map_err(invalid)?;
+        crate::config_values::required_check(raw.required_check, &defaults.required_check)
+            .map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
@@ -108,8 +115,12 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
+    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
+    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
+        cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
+            .map_err(invalid)?,
         test_setup,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
@@ -118,6 +129,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
+        mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
@@ -132,33 +144,10 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
+        runner,
+        fork_runner,
         timeout_minutes,
-        exclude: raw
-            .exclude
-            .into_iter()
-            .map(|entry| {
-                PathGlob::new(entry.trim_end_matches('/')).map_err(|_| {
-                    invalid(Reason::InvalidValue {
-                        key: "exclude",
-                        value: entry,
-                    })
-                })
-            })
-            .collect::<Result<_, _>>()?,
-    })
-}
-
-fn required_check(configured: Option<String>, default: &str) -> Result<String, Reason> {
-    Ok(match configured {
-        None => default.to_owned(),
-        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => name,
-        Some(name) => {
-            return Err(Reason::InvalidValue {
-                key: "required_check",
-                value: name,
-            });
-        }
+        exclude: crate::config_values::excludes(raw.exclude).map_err(invalid)?,
     })
 }
 
@@ -199,6 +188,7 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
     RunnerLabel::new(label.clone())
         .ok()
         .filter(|runner| !without_helper_build(runner.as_str()))
+        .filter(crate::config_fork::expression_safe)
         .ok_or(Reason::InvalidValue {
             key: "runner",
             value: label,

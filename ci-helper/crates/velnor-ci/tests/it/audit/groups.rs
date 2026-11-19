@@ -8,7 +8,7 @@ use crate::io::Repo;
 
 use super::{placed, unit};
 
-const LOCK_0_1_82: &str =
+const GROUP_LOCK: &str =
     include_str!("../../../../../../generator/samples/helper-lock/view/.velnor/rust-ci.lock");
 
 fn grouped_tools() -> Repo {
@@ -23,7 +23,7 @@ fn grouped_tools() -> Repo {
     unit(
         &repo,
         ".velnor/rust-ci.lock",
-        &LOCK_0_1_82.replace("version = \"0.1.79\"", "version = \"0.1.82\""),
+        &GROUP_LOCK.replace("version = \"0.1.79\"", "version = \"0.1.86\""),
     );
     for package in ["a", "b"] {
         unit(

@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, Step, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RunnerLabel, Step,
+    StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
-use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane};
+use crate::base_steps::{cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
 use crate::gate::{
@@ -29,14 +29,14 @@ pub(crate) const UPLOAD_ARTIFACT: &str =
 pub(crate) const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 
-pub(crate) const MISE_VERSION: &str = "2026.11.1";
+pub(crate) const MISE_VERSION: &str = "2026.11.9";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
     let artifacts = job
         .steps
@@ -65,11 +65,12 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: Some(with_saved_lane(
-            crate::base_steps::audited_lane(admission(job.when, job.gate.as_ref(), job.skip_on_draft), job),
-            &job.steps,
+        condition: Some(crate::base_steps::audited_lane(
+            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
+        fork_runner: (!github_hosted(job.runs_on.as_str())).then(|| fork_runner.to_string()),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
         outputs: job
@@ -140,7 +141,6 @@ fn rendered_steps(
         rendered.push(cargo_step(
             &CargoCommand::BuildAll,
             step.manifest.as_ref(),
-            step.target_dir.as_ref(),
             true,
             lane,
             None,
@@ -148,6 +148,9 @@ fn rendered_steps(
     }
     rendered.push(step_body(step, audit, tests, lane));
     for body in &mut rendered {
+        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+            body.env.push(crate::cargo::target_dir_env(target));
+        }
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
         {
@@ -209,6 +212,14 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
+fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: format!("Add Rust {kind}s"),
+        run: Some(format!("rustup {kind} add {}", items.join(" "))),
+        ..RenderedStep::default()
+    }
+}
+
 fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> RenderedStep {
     let kind = &step.kind;
     let directory = step.directory.as_ref();
@@ -245,18 +256,12 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
-        StepKind::RustComponents(components) => rustup_step(
-            "Add Rust components",
-            format!("rustup component add {}", components.join(" ")),
-        ),
-        StepKind::RustTargets(targets) => rustup_step(
-            "Add Rust targets",
-            format!("rustup target add {}", targets.join(" ")),
-        ),
+        StepKind::CacheBudget(bytes) => cache_budget(*bytes),
+        StepKind::RustComponents(components) => rustup_add("component", components),
+        StepKind::RustTargets(targets) => rustup_add("target", targets),
         StepKind::Cargo(command) => cargo_step(
             command,
             step.manifest.as_ref(),
-            step.target_dir.as_ref(),
             audit,
             lane,
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
@@ -267,6 +272,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             crate::helper_steps::inputs_step("restore", target, directory)
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
@@ -293,14 +299,6 @@ fn fail_when_a_need_failed() -> RenderedStep {
         name: "Fail when a Rust job failed or was cancelled".to_owned(),
         condition: Some(A_NEED_FAILED.to_owned()),
         run: Some("exit 1".to_owned()),
-        ..RenderedStep::default()
-    }
-}
-
-fn rustup_step(name: &str, run: String) -> RenderedStep {
-    RenderedStep {
-        name: name.to_owned(),
-        run: Some(run),
         ..RenderedStep::default()
     }
 }
@@ -365,7 +363,7 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     RenderedStep {
         name: format!("Install velnor-ci {version}"),
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
-        uses_comment: Some(format!("rust-ci-v{version}")),
+        uses_comment: Some(version.release_tag()),
         with,
         ..RenderedStep::default()
     }

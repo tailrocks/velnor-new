@@ -74,13 +74,22 @@ impl Member {
     }
 
     pub(crate) fn tests(&self, facts: &RepoFacts) -> Vec<CargoCommand> {
-        let run = CargoCommand::NextestRun {
-            filter: self.filter(facts),
-        };
-        self.nextest
-            .then_some(run)
+        self.nextest_run(facts)
             .into_iter()
-            .chain(self.direct_harnesses(facts))
+            .chain(self.built_without_nextest(facts))
+            .collect()
+    }
+
+    pub(crate) fn nextest_run(&self, facts: &RepoFacts) -> Option<CargoCommand> {
+        self.nextest.then(|| CargoCommand::NextestRun {
+            filter: self.filter(facts),
+            ci_profile: self.root.nextest_ci_profile,
+        })
+    }
+
+    pub(crate) fn built_without_nextest(&self, facts: &RepoFacts) -> Vec<CargoCommand> {
+        self.direct_harnesses(facts)
+            .into_iter()
             .chain(self.doctests())
             .collect()
     }
