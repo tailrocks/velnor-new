@@ -179,6 +179,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::MbxStore => crate::mbx_store::setup(),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),

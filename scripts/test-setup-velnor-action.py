@@ -14,7 +14,9 @@ import unittest
 
 
 ACTION = Path(__file__).resolve().parent.parent / "actions" / "setup-velnor" / "action.yml"
-RELEASE_URL = "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
+RELEASES = "https://github.com/tailrocks/velnor-new/releases/download"
+RELEASE_URL = f"{RELEASES}/tools-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
+LEGACY_RELEASE_URL = f"{RELEASES}/rust-ci-v0.1.79/velnor-ci-x86_64-unknown-linux-musl.tar.gz"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
 SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc", "gzip", "head", "sleep", "seq")
@@ -29,6 +31,10 @@ STUB_CURL = """#!/bin/sh
 printf '%s\\n' "$*" >> "$STUB_LOG"
 out=
 max=
+for last; do :; done
+for missing in $STUB_MISSING; do
+  case "$last" in */"$missing"/*) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;; esac
+done
 while [ $# -gt 0 ]; do
   if [ "$1" = "--output" ]; then out="$2"; fi
   if [ "$1" = "--max-filesize" ] && [ -z "$STUB_IGNORE_MAX" ]; then max="$2"; fi
@@ -38,6 +44,9 @@ if [ -n "$max" ] && [ "$(wc -c < "$STUB_PAYLOAD")" -gt "$max" ]; then
   echo "curl: (63) Maximum file size exceeded" >&2
   exit 63
 fi
+for missing in $STUB_MISSING; do
+  case "$*" in */"$missing"/*) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;; esac
+done
 cp "$STUB_PAYLOAD" "$out"
 """
 
@@ -192,7 +201,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
                 self.assertEqual(len(calls), 1, calls)
                 self.assertTrue(
                     calls[0].endswith(
-                        f"/rust-ci-v0.1.79/velnor-ci-{triple}.tar.gz"
+                        f"/tools-v0.1.79/velnor-ci-{triple}.tar.gz"
                     ),
                     calls,
                 )
@@ -359,6 +368,44 @@ class SetupVelnorInstallTests(unittest.TestCase):
                 self.assertEqual(binary.read_bytes(), PAYLOAD)
                 self.assertTrue(os.access(binary, os.X_OK))
                 self.assertFalse(binary.is_symlink())
+
+    def test_the_tools_v_tag_is_tried_first_and_the_legacy_tag_is_not_touched_when_it_exists(self):
+        result = self.install(sha256(self.archive))
+        self.assertEqual(result.returncode, 0, result.output)
+        calls = self.curl_calls()
+        self.assertEqual(len(calls), 1, calls)
+        self.assertTrue(calls[0].endswith(RELEASE_URL), calls)
+
+    def test_a_release_with_only_the_legacy_rust_ci_v_tag_is_installed_after_the_tools_v_tag_is_missing(self):
+        result = self.install(sha256(self.archive), extra_env={"STUB_MISSING": "tools-v0.1.79"})
+        self.assertEqual(result.returncode, 0, result.output)
+        calls = self.curl_calls()
+        self.assertEqual(len(calls), 2, calls)
+        self.assertTrue(calls[0].endswith(RELEASE_URL), calls)
+        self.assertTrue(calls[1].endswith(LEGACY_RELEASE_URL), calls)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
+
+    def test_an_archive_from_the_legacy_tag_is_still_checked_against_the_pinned_sha256(self):
+        result = self.install(
+            sha256(b"some other archive"), extra_env={"STUB_MISSING": "tools-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("SHA-256 mismatch for velnor-ci 0.1.79 linux-x64", result.output)
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+        self.assertEqual(self.github_path.read_text(), "")
+
+    def test_a_version_with_neither_tag_fails_naming_both(self):
+        result = self.install(
+            sha256(self.archive),
+            extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"},
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertEqual(len(self.curl_calls()), 2, self.curl_calls())
+        self.assertIn("downloading velnor-ci", result.output)
+        self.assertIn("tools-v0.1.79", result.output)
+        self.assertIn("rust-ci-v0.1.79", result.output)
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+        self.assertEqual(self.github_path.read_text(), "")
 
     def test_a_read_only_tool_cache_does_not_stop_the_install(self):
         self.tool_cache.chmod(0o500)

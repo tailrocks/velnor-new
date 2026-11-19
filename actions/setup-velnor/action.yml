@@ -74,8 +74,16 @@ runs:
             [ -n "$dir" ] && [ -f "$dir/$archive" ] && [ ! -L "$dir/$archive" ] || continue
             bounded_copy "$dir/$archive" "$staging/$archive" || continue
           else
-            echo "Downloading $RELEASES/rust-ci-v$VERSION/$archive"
-            curl --fail --silent --show-error --location --retry 3 --max-filesize "$MAX_BYTES" --output "$staging/$archive" "$RELEASES/rust-ci-v$VERSION/$archive" || fail "downloading $archive for velnor-ci $VERSION failed, or the file is larger than $MAX_BYTES bytes"
+            downloaded=
+            for tag in "tools-v$VERSION" "rust-ci-v$VERSION"; do
+              echo "Downloading $RELEASES/$tag/$archive"
+              if curl --fail --silent --show-error --location --retry 3 --max-filesize "$MAX_BYTES" --output "$staging/$archive" "$RELEASES/$tag/$archive"; then
+                downloaded=1
+                break
+              fi
+              rm -f "$staging/$archive"
+            done
+            [ -n "$downloaded" ] || fail "downloading $archive for velnor-ci $VERSION from the release tag tools-v$VERSION or rust-ci-v$VERSION failed, or the file is larger than $MAX_BYTES bytes"
             [ "$(wc -c < "$staging/$archive")" -le "$MAX_BYTES" ] || fail "the $archive download for velnor-ci $VERSION is larger than $MAX_BYTES bytes"
           fi
           if [ "$(digest "$staging/$archive")" = "$expected" ]; then

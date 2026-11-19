@@ -374,7 +374,14 @@ fn check_tag_exits_0_for_the_tag_of_its_own_version_and_1_for_any_other() {
     let version = env!("CARGO_PKG_VERSION");
     for (tag, code) in [
         (format!("rust-ci-v{version}"), Some(0)),
+        (format!("tools-v{version}"), Some(0)),
         ("rust-ci-v0.0.0".to_owned(), Some(1)),
+        ("tools-v0.0.0".to_owned(), Some(1)),
+        (format!("v{version}"), Some(1)),
+        (format!("runner-v{version}"), Some(1)),
+        (format!("actions-v{version}"), Some(1)),
+        (format!("x{version}"), Some(1)),
+        (format!("rust-ci-{version}"), Some(1)),
         (version.to_owned(), Some(1)),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
