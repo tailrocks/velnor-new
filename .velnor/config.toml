@@ -65,6 +65,15 @@ packages = ["velnor-runner-host"]
 complete = true
 
 [[stacks.rust.inputs]]
+globs = [
+  "crates/velnor-runner-cli/**",
+  "Cargo.toml",
+  "Cargo.lock",
+]
+packages = ["velnor-runner-cli"]
+complete = true
+
+[[stacks.rust.inputs]]
 globs = ["crates/velnor-local/**", "crates/velnor-cache-rules/**"]
 packages = ["velnor-cache-rules", "velnor-local"]
 complete = true

@@ -5,6 +5,8 @@ runner = "ubuntu-26.04-scale-set"
 exclude = ["fixtures/**"]
 required_check = "Required"
 mbx_shared_store = true
+docs = "post_merge"
+pr_ci = "label"
 
 [[inputs]]
 glob = "scripts/ci-fixtures.sh"

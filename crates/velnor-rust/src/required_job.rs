@@ -34,11 +34,22 @@ fn tests_lane(job: &Job) -> Option<RootSlug> {
 }
 
 fn conditions(job: &Job) -> Vec<JobCondition> {
-    let gate = job.gate.as_ref().and_then(|gate| match gate.need {
-        GateNeed::Selected => Some(JobCondition::Lane(gate.slug.clone())),
-        GateNeed::Policy => Some(JobCondition::Policy),
-        _ => None,
-    });
+    let gate: Vec<JobCondition> = job
+        .gate
+        .iter()
+        .flat_map(|gate| match gate.need {
+            GateNeed::Selected => vec![JobCondition::Lane(gate.slug.clone())],
+            GateNeed::Group => std::iter::once(JobCondition::Lane(gate.slug.clone()))
+                .chain(
+                    gate.group
+                        .iter()
+                        .map(|name| JobCondition::Group(gate.slug.clone(), name.clone())),
+                )
+                .collect(),
+            GateNeed::Policy => vec![JobCondition::Policy],
+            _ => Vec::new(),
+        })
+        .collect();
     let when = match job.when {
         When::FullAudit => Some(JobCondition::ScheduleOrDispatch),
         When::FullAuditOrPush => Some(JobCondition::ScheduleOrPushOrDispatch),
@@ -46,6 +57,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
         When::Success
         | When::NotCancelled
+        | When::NotCancelledPostMerge
         | When::Finalizer
         | When::SaveBase
         | When::SaveBaseDecided

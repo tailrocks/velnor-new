@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec, group_output_name,
 };
 
 #[path = "verdict_counts.rs"]
@@ -170,6 +170,9 @@ impl PlanOutput {
                             }
                         }
                     }
+                    JobCondition::Group(slug, name) => {
+                        flag(group_output_name(slug, name), "run", "skip")?
+                    }
                     JobCondition::Policy => {
                         let slug = RootSlug::from_static("policy");
                         let deny = flag(GateNeed::Deny.output_name(&slug), "run", "skip")?;
@@ -320,13 +323,21 @@ pub fn verdict(
                         "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
                     ));
                 }
-                for (name, package) in &job.packages {
-                    if package.listed > 0 && package.run == 0 {
-                        out.problems.push(format!(
-                            "package {name} of {slug} listed {} tests and ran none",
-                            package.listed
-                        ));
-                    }
+            }
+            // The default job and the group jobs each run part of one package:
+            // `run` adds up, and `listed` is the most any job saw.
+            let mut lane: BTreeMap<&str, PackageCounts> = BTreeMap::new();
+            for (name, package) in counts.iter().flatten().flat_map(|job| &job.packages) {
+                let total = lane.entry(name).or_default();
+                total.run = total.run.saturating_add(package.run);
+                total.listed = total.listed.max(package.listed);
+            }
+            for (name, package) in lane {
+                if package.listed > 0 && package.run == 0 {
+                    out.problems.push(format!(
+                        "package {name} of {slug} listed {} tests and ran none",
+                        package.listed
+                    ));
                 }
             }
         }

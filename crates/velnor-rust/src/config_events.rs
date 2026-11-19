@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CronExpr, FullRun, OnMain};
+use velnor_model::{CronExpr, DocsRun, FullRun, OnMain};
 
 use crate::error::Reason;
 
@@ -30,4 +30,15 @@ pub(crate) fn full_run(value: String) -> Result<FullRun, Reason> {
             })?,
         ),
     })
+}
+
+pub(crate) fn docs_run(configured: Option<&str>) -> Result<DocsRun, Reason> {
+    match configured {
+        None | Some("always") => Ok(DocsRun::Always),
+        Some("post_merge") => Ok(DocsRun::PostMerge),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "docs",
+            value: other.to_owned(),
+        }),
+    }
 }

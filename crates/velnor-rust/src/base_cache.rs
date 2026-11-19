@@ -5,7 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, LockIdentity,
-    PermissionScope, Permissions, RepoFacts, RepoPath, RustRoot, Step, StepKind, TrimFamily, When,
+    PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step, StepKind,
+    TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -14,6 +15,7 @@ use crate::plan::{job, step};
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
+const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 86);
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
@@ -37,8 +39,52 @@ pub const MAX_SOURCE_ROOTS: usize = 16;
 
 #[must_use]
 pub fn source_roots_over_limit(facts: &RepoFacts) -> Option<usize> {
-    (writes_base(facts) && facts.rust_roots.len() > MAX_SOURCE_ROOTS)
+    (writes_base(facts)
+        && !fetches_all_roots_at_once(facts)
+        && facts.rust_roots.len() > MAX_SOURCE_ROOTS)
         .then_some(facts.rust_roots.len())
+}
+
+fn fetches_all_roots_at_once(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(SOURCES_FETCH_HELPER))
+}
+
+fn sources_fetches(facts: &RepoFacts, lane: &RootSlug) -> Vec<Step> {
+    let fetch = |kind, directory| Step {
+        directory,
+        when: When::FetchSources,
+        ..step(kind)
+    };
+    if fetches_all_roots_at_once(facts) {
+        return vec![fetch(
+            StepKind::SourcesFetchAll {
+                lane: lane.clone(),
+                manifests: facts
+                    .rust_roots
+                    .iter()
+                    .map(|root| root.manifest.clone())
+                    .collect(),
+            },
+            None,
+        )];
+    }
+    facts
+        .rust_roots
+        .iter()
+        .enumerate()
+        .map(|(position, other)| {
+            fetch(
+                StepKind::SourcesFetch {
+                    lane: lane.clone(),
+                    position,
+                },
+                other.manifest.parent(),
+            )
+        })
+        .collect()
 }
 
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
@@ -135,21 +181,7 @@ pub(crate) fn save_steps(
         },
     ];
     if sources {
-        let lane_slug = cache_root.slug().clone();
-        steps.extend(
-            facts
-                .rust_roots
-                .iter()
-                .enumerate()
-                .map(|(position, other)| Step {
-                    directory: other.manifest.parent(),
-                    when: When::FetchSources,
-                    ..step(StepKind::SourcesFetch {
-                        lane: lane_slug.clone(),
-                        position,
-                    })
-                }),
-        );
+        steps.extend(sources_fetches(facts, cache_root.slug()));
         steps.push(Step {
             when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {

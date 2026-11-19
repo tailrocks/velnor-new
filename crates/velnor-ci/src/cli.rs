@@ -3,7 +3,7 @@
 
 use std::path::PathBuf;
 
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 use velnor_model::{InvalidId, RepoPath};
 
 mod fetch_reports;
@@ -86,6 +86,14 @@ pub enum Command {
     )]
     CratesMirror(CratesMirrorArgs),
     #[command(
+        about = "Run cargo fetch --locked for each manifest with the token in VELNOR_PRIVATE_TOKEN given to git for that command only, then revoke the token with DELETE /installation/token on the API in VELNOR_API_URL. Starts cargo and git by absolute path from the tool directories the runner installed, with an environment it builds itself, so that the checkout's configuration cannot redirect the token. Without a token it runs cargo fetch --locked --offline and fails when the restored caches lack a dependency"
+    )]
+    Fetch(FetchArgs),
+    #[command(
+        about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY, its author's login does not end in [bot] and its head sha is the queue entry's sha, and when the live queue ref of that entry still points at $GITHUB_SHA, the commit this run checked out. Every other queue entry of the same base whose commit is in that checkout (one GET /repos/$GITHUB_REPOSITORY/compare/<base>...$GITHUB_SHA, at most three pages of 100 commits) must pass the same pull request checks; a queue of 100 entries or more fails. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork or bot entry, a sha mismatch, a queue that was rebuilt, a bound that is exceeded or anything else, so that no token is created"
+    )]
+    PrivateTokenAllowed,
+    #[command(
         about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
     )]
     MbxStore,
@@ -109,6 +117,8 @@ pub enum Command {
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(crate::cli_cache::RestoredArgs),
+    #[command(subcommand, about = "Check job image candidates")]
+    Image(ImageCommand),
     #[command(
         subcommand,
         about = "Decide whether the run saves the build directory, and delete the older entries of its family"
@@ -118,6 +128,8 @@ pub enum Command {
         about = "Run a command, stream its output unchanged, append it to velnor-run.log in $RUNNER_TEMP, and exit with its exit code"
     )]
     Run(RunArgs),
+    #[command(subcommand, about = "Work on the shared Sources cache")]
+    Sources(SourcesCommand),
     #[command(
         about = "Verify the source preview runtime SDK that .velnor/generator.lock at PUBLIC_SOURCE pins (run PUBLIC_RUN_ID attempt PUBLIC_RUN_ATTEMPT of the image workflow): the lock change was approved by the parent commit, the preview's runs, jobs, annotated tag, immutable release, digests and Sigstore attestation (gh attestation verify with the pinned gh, signer pinned to the publication workflow commit) all match. Then install the SDK under $RUNNER_TEMP/source-preview-runtime (linux, darwin, receipt.json, bundle.json, identity.json) and write linux_sha256 and darwin_sha256 to $GITHUB_OUTPUT, which must be empty. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT; exits 1 on any failed check"
     )]
@@ -138,6 +150,61 @@ pub enum Command {
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+    #[command(
+        about = "Exit 1 unless VELNOR_EVIDENCE_ARTIFACT_ID is a canonical positive decimal integer of at most 16 digits that does not exceed 9007199254740991"
+    )]
+    ValidateArtifactId,
+    #[command(
+        about = "Run mise install of the pinned GitHub CLI version without ambient mise configuration, environment or hooks; exit 1 when GITHUB_TOKEN is missing or empty or mise fails"
+    )]
+    InstallGh(InstallGhArgs),
+    #[command(
+        about = "Copy the attestation bundle at BUNDLE_PATH to $RUNNER_TEMP/SDK_PREVIEW_RECEIPT.json.sigstore.jsonl with mode 0400; exit 1 unless BUNDLE_PATH is a non-empty regular file that is not a symlink and nothing exists at the destination"
+    )]
+    StageBundle,
+    #[command(subcommand, about = "Decide the qualification workflow")]
+    Qualification(QualificationCommand),
+}
+
+#[derive(Debug, Args)]
+pub struct InstallGhArgs {
+    #[arg(
+        long,
+        value_parser = plain_version,
+        help = "The exact GitHub CLI version, three dot-separated numbers"
+    )]
+    pub version: String,
+}
+
+fn plain_version(text: &str) -> Result<String, String> {
+    let parts: Vec<&str> = text.split('.').collect();
+    let plain = parts.len() == 3
+        && parts
+            .iter()
+            .all(|part| !part.is_empty() && part.bytes().all(|byte| byte.is_ascii_digit()));
+    if plain {
+        Ok(text.to_owned())
+    } else {
+        Err(format!("{text:?} is not a version like 2.103.3"))
+    }
+}
+
+#[derive(Debug, Subcommand)]
+pub enum QualificationCommand {
+    #[command(
+        about = "Read the needs context from NEEDS_JSON and exit 1 unless every --lane job succeeded, which is the verdict of the qualification compare job. Fails when NEEDS_JSON is unset or invalid, a lane is missing from needs, or a lane result is missing, skipped, cancelled, failure or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
+    )]
+    Compare(QualificationCompareArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct QualificationCompareArgs {
+    #[arg(
+        long,
+        default_values = ["verify-hosted", "verify-scale-set"],
+        help = "Job id of a lane the compare job needs; repeat for each lane"
+    )]
+    pub lane: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -173,6 +240,42 @@ pub struct CheckConfigurationsArgs {
         help = "JSON array of named feature configurations; without a file, check the default configuration"
     )]
     pub configurations: Option<PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SourcesCommand {
+    #[command(
+        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code"
+    )]
+    Fetch(SourcesFetchArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SourcesFetchArgs {
+    #[arg(
+        long,
+        required = true,
+        num_args = 1..,
+        value_name = "DIR",
+        help = "Cargo root directories, relative to the working directory or absolute, fetched in the order given"
+    )]
+    pub roots: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct FetchArgs {
+    #[arg(
+        long,
+        required = true,
+        help = "Cargo manifest to fetch; repeat for each Cargo root"
+    )]
+    pub manifest_path: Vec<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        help = "An extra absolute directory whose programs and CARGO_HOME count as installed by the runner"
+    )]
+    pub trusted_dir: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -246,12 +349,40 @@ pub struct PlanArgs {
     )]
     pub full: bool,
     #[arg(
+        long,
+        value_enum,
+        requires = "request",
+        help = "Write the plan contract of a plan request instead of the Rust selection: ci for a push or merge_group run, qualification for a qualification run"
+    )]
+    pub mode: Option<PlanMode>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "mode",
+        conflicts_with_all = ["changed", "explain", "full", "base_files"],
+        help = "The plan request, as velnor-ci write-request wrote it. Writes plan_id, run_key, not_affected_jobs and the qualification_* values to $GITHUB_OUTPUT, and reads no cargo metadata. The run key comes from the request, else from $GITHUB_RUN_ID and $VELNOR_RUN_KEY_ATTEMPT or $GITHUB_RUN_ATTEMPT. A pull_request, fork or local request, and a qualification phase that has a predecessor, are refused"
+    )]
+    pub request: Option<PathBuf>,
+    #[arg(
+        long,
+        value_name = "BRANCH",
+        requires = "request",
+        help = "The default branch a qualification run must be on; required with --mode qualification"
+    )]
+    pub default_branch: Option<String>,
+    #[arg(
         long = "base-file",
         value_name = "PATH=FILE",
         value_parser = base_file,
         help = "The text a changed Cargo.lock, Cargo.toml or configuration file had before the change: the repository path, an equals sign, and a file holding the old text. Without it a changed Cargo.lock or root Cargo.toml selects everything, and a changed file that makes a check do less (.velnor/rust-ci.toml, a Cargo.toml, a cargo, mise or nextest configuration) counts as adding every such setting it holds, which the run reports as a warning. Repeat for each file"
     )]
     pub base_files: Vec<BaseFile>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub enum PlanMode {
+    Ci,
+    Qualification,
 }
 
 #[derive(Debug, Clone)]
@@ -369,4 +500,26 @@ pub struct CratesMirrorArgs {
     pub registry: String,
     #[arg(long)]
     pub cainfo: PathBuf,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ImageCommand {
+    #[command(
+        about = "Check a job image candidate: exit 1 unless the OCI archive is a bounded linux/amd64 image whose blobs, layer DiffIDs and graph match the candidate record, the record's archive hash and size match the archive bytes, the build inputs under --root hash to the recorded values, and the record's source commit, ref and workflow identity equal the current GITHUB_* environment and its Buildx version equals buildx_version in .velnor/runner.lock. Prints PASS on success"
+    )]
+    VerifyCandidate(VerifyCandidateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyCandidateArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Source checkout the record's inputs hash against"
+    )]
+    pub root: PathBuf,
+    #[arg(long, help = "The candidate OCI archive")]
+    pub archive: PathBuf,
+    #[arg(long, help = "The candidate record JSON")]
+    pub record: PathBuf,
 }
