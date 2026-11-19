@@ -18,8 +18,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) }}'
 env:
   MISE_AUTO_INSTALL: 'false'
   RUSTUP_AUTO_INSTALL: '0'
@@ -35,8 +35,6 @@ jobs:
       actions: read
       contents: read
     outputs:
-      rust_deny: '${{ steps.plan.outputs.rust_deny }}'
-      rust_machete: '${{ steps.plan.outputs.rust_machete }}'
       rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'
       # jactionlint ignore=unused-job-output
       tests_run: '${{ steps.test.outputs.tests_run }}'
@@ -52,6 +50,8 @@ jobs:
       sources_key: '${{ steps.sources_root_key.outputs.key }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: '${{ github.workspace }}/target'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -89,7 +89,7 @@ jobs:
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -158,29 +158,20 @@ jobs:
         run: '. "$VELNOR_EXEC" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || steps.plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args) != '''' }}'
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check single-crate alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' -p single-crate '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p single-crate --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
         env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || steps.plan.outputs.rust_root_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs audit
@@ -253,9 +244,7 @@ jobs:
           overwrite: true
   # jactionlint ignore=shellcheck
   policy:
-    needs:
-      - rust
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (needs.rust.result == ''success'' && (needs.rust.outputs.rust_deny == ''run'' || needs.rust.outputs.rust_machete == ''run'')) }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -264,7 +253,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
-          fetch-depth: 1
+          fetch-depth: 2
           persist-credentials: false
       - name: Resolve released helper tools
         env:
@@ -283,8 +272,12 @@ jobs:
           VELNOR_HELPER_LAUNCHER: *velnor_2
           VELNOR_HELPER_SHA256: *velnor_3
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
+      - id: plan
+        name: velnor-ci plan
+        run: '. "$VELNOR_EXEC" plan --explain'
       - id: tools
         name: Restore the tools cache
+        if: '${{ steps.plan.outcome == ''success'' && (steps.plan.outputs.rust_deny == ''run'' || steps.plan.outputs.rust_machete == ''run'') }}'
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -292,13 +285,14 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        if: '${{ steps.plan.outcome == ''success'' && (steps.plan.outputs.rust_deny == ''run'' || steps.plan.outputs.rust_machete == ''run'') }}'
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
       - id: save_tools
         name: Save the tools cache
-        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'
+        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' && steps.plan.outcome == ''success'' && (steps.plan.outputs.rust_deny == ''run'' || steps.plan.outputs.rust_machete == ''run'') }}'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: |
@@ -306,10 +300,10 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Dependency policy
-        if: '${{ !cancelled() && needs.rust.outputs.rust_deny == ''run'' }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-deny --locked check'
+        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_deny == ''run'' }}'
+        run: '. "$VELNOR_EXEC" run -- cargo-deny --config ''deny.toml'' --locked check'
       - name: Unused dependencies
-        if: '${{ !cancelled() && needs.rust.outputs.rust_machete == ''run'' }}'
+        if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_machete == ''run'' }}'
         run: '. "$VELNOR_EXEC" run -- cargo machete'
       - id: report_cache_metrics
         name: Report cache telemetry
@@ -428,7 +422,7 @@ jobs:
       - name: velnor-ci gate
         env:
           NEEDS_JSON: '${{ toJSON(needs) }}'
-          GATE_SPEC: '--plan rust --job rust=always --job policy=policy --tests rust=root'
+          GATE_SPEC: '--plan rust --job rust=always --job policy=always --tests rust=root'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
   # jactionlint ignore=shellcheck
   cache:

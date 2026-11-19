@@ -32,10 +32,13 @@ fn steps_of(text: &str) -> Result<JobSteps, Box<dyn std::error::Error>> {
     Ok(jobs
         .iter()
         .map(|(id, job)| {
-            (
-                id.clone(),
-                job["steps"].as_array().cloned().unwrap_or_default(),
-            )
+            let mut steps = job["steps"].as_array().cloned().unwrap_or_default();
+            if let Some(inherited) = job["env"][TARGET_VARIABLE].as_str() {
+                for step in steps.iter_mut().filter(|step| builds(step)) {
+                    step["env"][TARGET_VARIABLE] = Value::from(inherited);
+                }
+            }
+            (id.clone(), steps)
         })
         .collect())
 }

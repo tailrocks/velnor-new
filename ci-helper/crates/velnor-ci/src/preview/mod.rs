@@ -10,9 +10,11 @@
 //! network, `gh` or shell. The real network, `gh` process and file system live in
 //! `crate::io::preview`.
 
+pub mod admit;
 pub mod attest;
 pub mod authority;
 pub mod json;
+pub mod login;
 pub mod net;
 pub mod record;
 pub mod release;

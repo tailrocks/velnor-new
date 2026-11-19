@@ -6,7 +6,7 @@ mod validation;
 
 #[cfg(test)]
 #[path = "execution_authorization/tests.rs"]
-mod tests;
+pub(super) mod tests;
 
 pub(super) async fn bootstrap(
     connection: &turso::Connection,

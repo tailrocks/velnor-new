@@ -18,8 +18,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) }}'
 env:
   MISE_AUTO_INSTALL: 'false'
   RUSTUP_AUTO_INSTALL: '0'
@@ -143,7 +143,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -168,7 +168,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: &velnor_4 '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
@@ -452,7 +452,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -480,7 +480,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_ci_helper
         name: Restore the sources cache
@@ -707,7 +707,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -735,7 +735,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_crates_velnor_runner
         name: Restore the sources cache
@@ -1004,7 +1004,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1032,7 +1032,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_generator
         name: Restore the sources cache
@@ -1277,7 +1277,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1305,7 +1305,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_local
         name: Restore the sources cache
@@ -1522,7 +1522,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1547,7 +1547,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
