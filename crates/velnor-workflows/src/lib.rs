@@ -17,6 +17,7 @@ mod hosting;
 mod job_env;
 mod job_limits;
 mod matrix;
+mod matrix_runner;
 mod plan;
 mod raw;
 mod secret_events;
@@ -28,6 +29,6 @@ pub use error::WorkflowsError;
 pub use helper_call::HELPER_COMMANDS;
 pub use plan::{
     Action, Body, Call, CallTarget, CallValue, Concurrency, Container, Env, Input, InputKind, Job,
-    LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
-    Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
+    LocalAction, Matrix, MatrixRunner, MatrixSource, Output, PullRequest, Push, Service, Step,
+    Triggers, Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };

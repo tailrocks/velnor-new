@@ -41,6 +41,7 @@ mod declared_job_limits;
 mod declared_jobs;
 mod declared_local_actions;
 mod declared_matrix_include;
+mod declared_matrix_runner;
 mod declared_paths;
 mod declared_rules;
 mod declared_secrets;

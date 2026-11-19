@@ -37,10 +37,32 @@ fn fenced(job: &serde_json::Value) -> bool {
     }
     match &job["runs-on"] {
         serde_json::Value::String(label) => {
-            github_hosted(label) || label.contains(RUNS_ON_FENCE) || condition.contains(FENCE)
+            github_hosted(label)
+                || label.contains(RUNS_ON_FENCE)
+                || condition.contains(FENCE)
+                || matrix_hosted(job, label)
         }
         _ => condition.contains(FENCE),
     }
+}
+
+/// `runs-on: ${{ matrix.<axis> }}` where every value of the axis is a hosted label.
+fn matrix_hosted(job: &serde_json::Value, label: &str) -> bool {
+    let Some(axis) = label
+        .strip_prefix("${{ matrix.")
+        .and_then(|rest| rest.strip_suffix(" }}"))
+    else {
+        return false;
+    };
+    let matrix = &job["strategy"]["matrix"];
+    let listed = matrix[axis].as_array().into_iter().flatten();
+    let included = matrix["include"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|entry| entry.get(axis));
+    let values: Vec<&str> = listed.chain(included).filter_map(|v| v.as_str()).collect();
+    !values.is_empty() && values.into_iter().all(github_hosted)
 }
 
 fn triggers(workflow: &serde_json::Value) -> Vec<String> {
