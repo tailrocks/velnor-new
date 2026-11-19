@@ -90,7 +90,6 @@ Workflow to generate
     - plan (18 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - required-infra-gate (1 steps)
     - sources-producer (15 steps)
     - tools-producer-06f9acb0 (8 steps)
     - tools-producer-caf63d48 (9 steps)

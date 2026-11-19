@@ -18,7 +18,6 @@ Workflow to generate
     - plan (13 steps)
     - required (10 steps)
     - required-gate (1 steps)
-    - required-infra-gate (1 steps)
     - tools-producer-36cc6f04 (9 steps)
     - tools-producer-67ffdb60 (10 steps)
     - no matrix entries (no-work workflow)

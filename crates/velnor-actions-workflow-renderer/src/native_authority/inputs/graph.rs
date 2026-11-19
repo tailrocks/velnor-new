@@ -23,7 +23,6 @@ pub(in crate::native_authority) fn validate_graph(
                 | crate::render::FINAL_JOB_ID
                 | crate::native_job_builders::LINT_JOB_ID
                 | "required-gate"
-                | "required-infra-gate"
         ) || !ids.insert(fact.id.as_str())
         {
             return Err(invalid("native_graph_reserved_or_duplicate_job"));

@@ -590,19 +590,6 @@ jobs:
       - name: Fail unless the verdict passed
         if: ${{ always() && needs.required.result != 'success' }}
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR false
-  required-infra-gate:
-    name: Required (infra)
-    runs-on: ubuntu-26.04
-    timeout-minutes: 15
-    env:
-      VELNOR_RUN_KEY_ATTEMPT: ${{ github.run_attempt }}
-    needs:
-      - required
-    if: ${{ always() }}
-    steps:
-      - name: Fail unless the verdict passed
-        if: ${{ always() && needs.required.result != 'success' }}
-        run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR false
   sources-producer:
     name: Sources producer
     runs-on: ubuntu-26.04

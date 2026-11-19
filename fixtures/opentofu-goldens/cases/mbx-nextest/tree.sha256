@@ -10,4 +10,4 @@
 - 58ec8d2b6796a17e12302fd3036654f937af357d7c0031ced49fc98bbf69fb63  ./.github/actions/velnor-verify-rust-manifest/action.yml
 - de88eb79d09cd38d75272a351c6527f5c1da5fb3d6981d6a031557ba159ac625  ./.github/jactionlint.yaml
 - 96536aaddf245c41c4c1956d9b468d6415e9f558ede684003418187368136678  ./.github/scripts/velnor-tools-cache-identity.sh
-- 354ad4dc0ebc8acdf056725e6dc75a6091e74061638e4ad227866166bbcd28c7  ./.github/workflows/ci.yml
+- 2bf4fed0fba35b49eff9de6bdc8eebbf09b6823b05d175b83dbfb0d1d4b22230  ./.github/workflows/ci.yml

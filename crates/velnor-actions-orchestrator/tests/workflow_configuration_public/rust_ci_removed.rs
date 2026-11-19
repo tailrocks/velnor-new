@@ -93,23 +93,3 @@ fn source_qualification_runs_for_every_pull_request() -> Result<(), Box<dyn Erro
     assert!(workflow.contains("CLI_ROUTES: '[]'") || workflow.contains("CLI_ROUTES: \"[]\""));
     Ok(())
 }
-
-#[test]
-fn old_gate_publishes_both_required_names_for_the_transition() -> Result<(), Box<dyn Error>> {
-    let rendered = render()?;
-    let parsed: serde_json::Value = serde_saphyr::from_str(&rendered[CI])?;
-    let jobs = parsed["jobs"].as_object().ok_or("jobs")?;
-    let named = |name: &str| -> Vec<&str> {
-        jobs.iter()
-            .filter(|(_, job)| job["name"] == name)
-            .map(|(id, _)| id.as_str())
-            .collect()
-    };
-    assert_eq!(named("Required"), ["required-gate"]);
-    assert_eq!(named("Required (infra)"), ["required-infra-gate"]);
-    for id in ["required-gate", "required-infra-gate"] {
-        assert_eq!(jobs[id]["needs"], serde_json::json!(["required"]), "{id}");
-        assert_eq!(jobs[id]["if"], "${{ always() }}", "{id}");
-    }
-    Ok(())
-}
