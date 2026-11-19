@@ -27,6 +27,7 @@ mod removal_audit;
 mod report;
 mod reset;
 mod restore;
+mod run_signal;
 mod runners;
 mod side;
 mod standin;

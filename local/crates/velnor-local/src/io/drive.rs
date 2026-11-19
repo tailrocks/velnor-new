@@ -23,11 +23,14 @@ use crate::scenario::{
 use crate::side::{fork_heads, push_event, refuse_fork_branches};
 use crate::verdict::{Check, conclude, verdict};
 
+mod interrupt;
 mod outcome;
 mod pulls;
 mod refusal;
 mod send;
 mod steps;
+
+use interrupt::Interrupt;
 
 #[derive(Debug)]
 struct Driver<'a> {
@@ -54,21 +57,18 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
     let args = Arc::new(args);
     let slots = Arc::new(Semaphore::new(usize::from(args.parallel)));
     let closer = Arc::clone(&slots);
-    let interrupt = tokio::spawn(async move {
-        if tokio::signal::ctrl_c().await.is_ok() {
-            closer.close();
-        }
-    });
+    let interrupt = Arc::new(Interrupt::watch(move || closer.close())?);
     let mut running = JoinSet::new();
     let mut spawned = BTreeMap::new();
     for (name, stem, dir) in planned {
         let (args, slots) = (Arc::clone(&args), Arc::clone(&slots));
+        let interrupt = Arc::clone(&interrupt);
         let task = (stem.clone(), dir.clone());
         let handle = running.spawn(async move {
             let Ok(_slot) = slots.acquire().await else {
                 return (stem, Err("interrupted before it started".to_owned()));
             };
-            let result = run_one(&args, &name, &stem, &dir, &slots).await;
+            let result = run_one(&args, &name, &stem, &dir, (&slots, &interrupt)).await;
             (stem, result.map_err(|error| error.to_string()))
         });
         spawned.insert(handle.id(), task);
@@ -89,7 +89,6 @@ pub(super) async fn run(args: RunArgs) -> io::Result<()> {
             }
         }
     }
-    interrupt.abort();
     summary(&results).map_err(io::Error::other)
 }
 
@@ -121,7 +120,7 @@ async fn run_one(
     scenario: &str,
     tag: &str,
     dir: &Path,
-    slots: &Semaphore,
+    (slots, interrupt): (&Semaphore, &Interrupt),
 ) -> io::Result<()> {
     let scenario = load_scenario(args, scenario).await?;
     let env = Environment::at(dir, DockerCli)
@@ -160,7 +159,7 @@ async fn run_one(
     }
     let (outcomes, up_at, up_seconds, replayed) = tokio::select! {
         session = session(args, &environment, &env, repo, &scenario, tag, pairs.as_ref()) => session,
-        _ = tokio::signal::ctrl_c() => (
+        () = interrupt.raised() => (
             Vec::new(), 0, 0.0, Err(io::Error::new(io::ErrorKind::Interrupted, "interrupted")),
         ),
     };
