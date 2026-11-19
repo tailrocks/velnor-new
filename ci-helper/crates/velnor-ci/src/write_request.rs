@@ -5,7 +5,7 @@
 //! from the workflow run's own context, given as arguments, so no caller sets
 //! `VELNOR_REQUEST_FILE`. The bytes equal what the legacy `write-request-v1` writes.
 
-mod canonical;
+pub(crate) mod canonical;
 mod lanes;
 mod qualification;
 
@@ -15,7 +15,7 @@ use crate::error::CiError;
 
 pub use qualification::{Phase, RunnerContext, dispatch_for_parts};
 
-const SCHEMA: u32 = 1;
+pub(crate) const SCHEMA: u32 = 1;
 const OP: &str = "plan-v1";
 
 /// What the run knows about itself; every field except the event name may be absent.

@@ -1,0 +1,232 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use std::collections::HashSet;
+
+use serde::Deserialize;
+
+use crate::cache::encode;
+use crate::error::CiError;
+use crate::github::GitHub;
+
+const QUEUE_PREFIX: &str = "gh-readonly-queue/";
+const REFS_HEADS: &str = "refs/heads/";
+const SHA_LENGTH: usize = 40;
+const REFS_PAGE: usize = 100;
+const COMPARE_PAGE: usize = 100;
+const COMPARE_PAGES: usize = 3;
+
+#[derive(Debug, PartialEq, Eq)]
+pub struct QueueEntry {
+    pub base: String,
+    pub number: u64,
+    pub sha: String,
+}
+
+#[derive(Deserialize)]
+struct Pull {
+    user: Author,
+    head: Head,
+}
+
+#[derive(Deserialize)]
+struct Author {
+    login: String,
+}
+
+#[derive(Deserialize)]
+struct Head {
+    sha: String,
+    repo: Option<HeadRepo>,
+}
+
+#[derive(Deserialize)]
+struct HeadRepo {
+    full_name: String,
+}
+
+#[derive(Deserialize)]
+struct QueueRef {
+    r#ref: String,
+    object: RefObject,
+}
+
+#[derive(Deserialize)]
+struct RefObject {
+    sha: String,
+}
+
+#[derive(Deserialize)]
+struct Comparison {
+    total_commits: usize,
+    commits: Vec<CompareCommit>,
+}
+
+#[derive(Deserialize)]
+struct CompareCommit {
+    sha: String,
+}
+
+pub fn parse_queue_ref(head_ref: &str) -> Result<QueueEntry, CiError> {
+    let malformed = || {
+        CiError::new(format!(
+            "merge_group.head_ref `{head_ref}` is not gh-readonly-queue/<base>/pr-<number>-<sha>"
+        ))
+    };
+    let name = head_ref.strip_prefix(REFS_HEADS).unwrap_or(head_ref);
+    let (path, last) = name.rsplit_once('/').ok_or_else(malformed)?;
+    let base = path.strip_prefix(QUEUE_PREFIX).ok_or_else(malformed)?;
+    let (number, sha) = last
+        .strip_prefix("pr-")
+        .and_then(|rest| rest.split_once('-'))
+        .ok_or_else(malformed)?;
+    let digits = !number.is_empty() && number.bytes().all(|byte| byte.is_ascii_digit());
+    if base.is_empty() || !digits || !is_sha(sha) {
+        return Err(malformed());
+    }
+    Ok(QueueEntry {
+        base: base.to_owned(),
+        number: number.parse().map_err(|_| malformed())?,
+        sha: sha.to_ascii_lowercase(),
+    })
+}
+
+fn is_sha(text: &str) -> bool {
+    text.len() == SHA_LENGTH && text.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+pub fn check(
+    head_ref: &str,
+    repository: &str,
+    event_sha: &str,
+    github: &dyn GitHub,
+) -> Result<(), CiError> {
+    let entry = parse_queue_ref(head_ref)?;
+    authenticate(&entry, repository, github)?;
+    for earlier in entries_in_checkout(&entry, repository, event_sha, github)? {
+        authenticate(&earlier, repository, github)?;
+    }
+    Ok(())
+}
+
+fn authenticate(entry: &QueueEntry, repository: &str, github: &dyn GitHub) -> Result<(), CiError> {
+    let path = format!("/repos/{repository}/pulls/{}", entry.number);
+    let text = github.get(&path)?;
+    let pull: Pull = serde_json::from_str(&text)
+        .map_err(|e| CiError::new(format!("GET {path} is not readable: {e}")))?;
+    let full_name = pull.head.repo.as_ref().map(|repo| repo.full_name.as_str());
+    if full_name != Some(repository) {
+        return Err(CiError::new(format!(
+            "pull request #{} comes from {}, not from {repository}",
+            entry.number,
+            full_name.unwrap_or("a deleted repository")
+        )));
+    }
+    if pull.user.login.to_ascii_lowercase().ends_with("[bot]") {
+        return Err(CiError::new(format!(
+            "pull request #{} is by {}, a bot, and a bot's pull request gets no private-source token",
+            entry.number, pull.user.login
+        )));
+    }
+    if !pull.head.sha.eq_ignore_ascii_case(&entry.sha) {
+        return Err(CiError::new(format!(
+            "pull request #{} is at {}, but the queue entry is {}",
+            entry.number, pull.head.sha, entry.sha
+        )));
+    }
+    Ok(())
+}
+
+fn entries_in_checkout(
+    entry: &QueueEntry,
+    repository: &str,
+    event_sha: &str,
+    github: &dyn GitHub,
+) -> Result<Vec<QueueEntry>, CiError> {
+    let base: Vec<String> = entry.base.split('/').map(encode).collect();
+    let path = format!(
+        "/repos/{repository}/git/matching-refs/heads/{QUEUE_PREFIX}{}/?per_page={REFS_PAGE}",
+        base.join("/")
+    );
+    let text = github.get(&path)?;
+    let refs: Vec<QueueRef> = serde_json::from_str(&text)
+        .map_err(|e| CiError::new(format!("GET {path} is not readable: {e}")))?;
+    if refs.len() >= REFS_PAGE {
+        return Err(CiError::new(format!(
+            "the merge queue for {} has {} or more entries, too many to authenticate",
+            entry.base, REFS_PAGE
+        )));
+    }
+    let mut ours = None;
+    let mut others = Vec::new();
+    for queued in refs {
+        let parsed = parse_queue_ref(&queued.r#ref)?;
+        if parsed.base != entry.base {
+            continue;
+        }
+        if !is_sha(&queued.object.sha) {
+            return Err(CiError::new(format!(
+                "queue ref {} points at `{}`, not a commit",
+                queued.r#ref, queued.object.sha
+            )));
+        }
+        if parsed.number == entry.number && parsed.sha == entry.sha {
+            ours = Some(queued.object.sha);
+        } else {
+            others.push((parsed, queued.object.sha));
+        }
+    }
+    let checkout = ours.ok_or_else(|| {
+        CiError::new(format!(
+            "the merge queue does not list pr-{}-{}",
+            entry.number, entry.sha
+        ))
+    })?;
+    if !checkout.eq_ignore_ascii_case(event_sha) {
+        return Err(CiError::new(format!(
+            "the queue ref of pr-{} is at {checkout} now, but this run's event checked out {event_sha}; the queue was rebuilt",
+            entry.number
+        )));
+    }
+    if others.is_empty() {
+        return Ok(Vec::new());
+    }
+    let in_checkout = commits_since_base(&entry.base, &checkout, repository, github)?;
+    Ok(others
+        .into_iter()
+        .filter(|(_, group)| in_checkout.contains(&group.to_ascii_lowercase()))
+        .map(|(other, _)| other)
+        .collect())
+}
+
+fn commits_since_base(
+    base: &str,
+    checkout: &str,
+    repository: &str,
+    github: &dyn GitHub,
+) -> Result<HashSet<String>, CiError> {
+    let base: Vec<String> = base.split('/').map(encode).collect();
+    let base = base.join("/");
+    let mut shas = HashSet::new();
+    for page in 1..=COMPARE_PAGES {
+        let path = format!(
+            "/repos/{repository}/compare/{base}...{checkout}?per_page={COMPARE_PAGE}&page={page}"
+        );
+        let text = github.get(&path)?;
+        let comparison: Comparison = serde_json::from_str(&text)
+            .map_err(|e| CiError::new(format!("GET {path} is not readable: {e}")))?;
+        shas.extend(
+            comparison
+                .commits
+                .into_iter()
+                .map(|c| c.sha.to_ascii_lowercase()),
+        );
+        if shas.len() >= comparison.total_commits {
+            return Ok(shas);
+        }
+    }
+    Err(CiError::new(format!(
+        "the queue checkout {checkout} holds more than {} commits beyond {base}, too many to authenticate",
+        COMPARE_PAGES * COMPARE_PAGE
+    )))
+}

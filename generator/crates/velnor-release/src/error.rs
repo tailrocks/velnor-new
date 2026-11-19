@@ -45,6 +45,7 @@ pub enum ReleaseError {
         package: String,
         bin: String,
     },
+    InvalidProfile(String, String),
     EmptyAfter,
     EmptyRoots,
     EmptyPlatforms {
@@ -202,6 +203,9 @@ pub enum ReleaseError {
     RootWithoutCargoManifest {
         root: String,
     },
+    NestedReleasePlzRoot {
+        root: String,
+    },
     Family(crate::error_family::FamilyError),
     UnknownWorkflow {
         name: String,
@@ -224,7 +228,7 @@ pub enum ReleaseError {
     },
 }
 
-fn subject(package: Option<&String>) -> String {
+pub(crate) fn subject(package: Option<&String>) -> String {
     package.map_or_else(
         || "the [workspace] table".to_owned(),
         |name| format!("package {name}"),
@@ -368,11 +372,6 @@ impl ReleaseError {
             } => write!(
                 f,
                 "{root}/release-plz.toml: {field} must not be false for {}",
-                subject(package.as_ref())
-            ),
-            Self::PublishWithGitOnly { root, package } => write!(
-                f,
-                "{root}/release-plz.toml: {} sets publish = true together with git_only = true, which release-plz refuses",
                 subject(package.as_ref())
             ),
             Self::ExecutableConfig { root, key } => write!(

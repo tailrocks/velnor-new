@@ -18,6 +18,7 @@ use super::workflow_configuration_fixture;
 const CI_PATH: &str = ".github/workflows/ci.yml";
 const STATE_SEAL_PATH: &str = ".github/workflows/state-seal.yml";
 const QUALIFICATION_PATH: &str = ".github/workflows/qualification.yml";
+const VELNOR_GEN_PATH: &str = ".github/workflows/rust-ci.yml";
 const SOURCES_PRODUCER: &str = "sources-producer";
 const STATE_SEAL_PREFIX: &str = "state-seal-";
 const QUALIFICATION_WRITERS: [&str; 4] = [
@@ -126,6 +127,7 @@ fn expected_writer(path: &str, id: &str) -> bool {
 fn workflow_files(files: &Files) -> impl Iterator<Item = (&String, &String)> {
     files.iter().filter(|(path, _)| {
         path.starts_with(".github/workflows/")
+            && path.as_str() != VELNOR_GEN_PATH
             && std::path::Path::new(path)
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("yml"))

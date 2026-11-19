@@ -7,11 +7,20 @@ use velnor_model::Platform;
 use crate::error::ReleaseError;
 use crate::release_plz::valid_package_name;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BinaryFormat {
+    Archive,
+    Raw,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Binary {
     pub(crate) package: String,
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
+    pub(crate) format: BinaryFormat,
+    pub(crate) profile: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -29,6 +38,8 @@ struct RawBinary {
     package: String,
     bin: Option<String>,
     platforms: Option<Vec<String>>,
+    format: Option<BinaryFormat>,
+    profile: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -134,6 +145,34 @@ fn text_refs(values: &[String]) -> Vec<&str> {
     values.iter().map(String::as_str).collect()
 }
 
+/// Names Cargo reserves, or that would build into a directory another profile or
+/// Cargo itself owns. `dev`, `test` and `bench` land in `target/debug`; the rest are
+/// refused by Cargo or collide with its own `target` subdirectories.
+const RESERVED_PROFILES: [&str; 11] = [
+    "dev",
+    "test",
+    "bench",
+    "debug",
+    "doc",
+    "build-override",
+    "package",
+    "deps",
+    "examples",
+    "build",
+    "incremental",
+];
+
+fn profile(package: &str, name: Option<String>) -> Result<Option<String>, ReleaseError> {
+    let Some(name) = name else {
+        return Ok(None);
+    };
+    refuse_expressions("binaries.profile", &[&name])?;
+    if !valid_package_name(&name) || RESERVED_PROFILES.contains(&name.as_str()) {
+        return Err(ReleaseError::InvalidProfile(package.to_owned(), name));
+    }
+    Ok(Some(name))
+}
+
 fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
     refuse_expressions("binaries.package", &[&raw.package])?;
     let bin = raw.bin.unwrap_or_else(|| raw.package.clone());
@@ -144,6 +183,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             bin,
         });
     }
+    let profile = profile(&raw.package, raw.profile)?;
     let platforms = match raw.platforms {
         None => Platform::ALL.to_vec(),
         Some(names) if names.is_empty() => {
@@ -172,5 +212,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         package: raw.package,
         bin,
         platforms,
+        format: raw.format.unwrap_or(BinaryFormat::Archive),
+        profile,
     })
 }

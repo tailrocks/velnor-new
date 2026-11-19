@@ -24,6 +24,11 @@ impl HttpGitHub {
     pub(super) fn new(api: String, token: String, timeout: Duration) -> Self {
         let agent = ureq::Agent::config_builder()
             .timeout_global(Some(timeout))
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .root_certs(crate::trusted_roots::configured_roots())
+                    .build(),
+            )
             .build()
             .into();
         Self { agent, api, token }
@@ -108,5 +113,14 @@ impl GitHubWrite for HttpGitHub {
             self.signed(self.agent.delete(&url)).call(),
         )
         .map(drop)
+    }
+}
+
+impl HttpGitHub {
+    /// The body of a GET of `path`, `None` on any failure or a body over `limit` bytes.
+    pub(super) fn get_bytes(&self, path: &str, limit: u64) -> Option<Vec<u8>> {
+        let url = format!("{}{path}", self.api);
+        let mut response = self.signed(self.agent.get(&url)).call().ok()?;
+        super::read_limited(response.body_mut().as_reader(), limit).ok()
     }
 }
