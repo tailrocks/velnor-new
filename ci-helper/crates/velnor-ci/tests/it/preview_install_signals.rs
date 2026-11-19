@@ -55,7 +55,11 @@ fn termination_signals_are_held_from_the_rename_through_the_output_handoff() {
         [Signal::SIGINT, Signal::SIGTERM, Signal::SIGALRM],
         "the handoff must hold SIGINT, SIGTERM and SIGALRM like the legacy install"
     );
-    assert!(held().is_empty(), "the mask is restored afterwards");
+    assert_eq!(
+        held(),
+        Vec::<Signal>::new(),
+        "the mask is restored afterwards"
+    );
 }
 
 #[test]
@@ -66,6 +70,6 @@ fn a_failed_handoff_restores_the_mask_and_removes_the_install() {
         Err(velnor_ci::error::CiError::new("emit"))
     });
     assert!(installed.is_err());
-    assert!(held().is_empty());
+    assert_eq!(held(), Vec::<Signal>::new());
     assert!(!temp.join("source-preview-runtime").exists());
 }
