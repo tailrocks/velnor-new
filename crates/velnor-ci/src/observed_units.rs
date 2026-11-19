@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use std::path::{Component, Path};
 
 use crate::cargo_artifacts::CargoArtifact;
+use crate::report::LaneMetrics;
 use crate::telemetry::Invocation;
 
 pub(crate) fn identity(invocation: &Invocation, artifact: &CargoArtifact) -> Option<String> {
@@ -68,6 +69,64 @@ pub fn collect(invocation: &Invocation, units: &mut BTreeMap<String, (String, u6
             entry.1 += 1;
         }
     }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CommandKind {
+    Lint,
+    Build,
+}
+
+/// `cargo clippy`, `check` and `doc` against `cargo build`, `test` and `nextest archive`: the two
+/// jobs of the lint and test split run one each, in parallel, with a target cache apiece.
+fn command_kind(invocation: &Invocation) -> CommandKind {
+    let command = invocation
+        .argv
+        .iter()
+        .skip(1)
+        .find(|word| !word.starts_with('-') && !word.starts_with('+'));
+    match command.map(String::as_str) {
+        Some("check" | "c" | "clippy" | "doc" | "d") => CommandKind::Lint,
+        _ => CommandKind::Build,
+    }
+}
+
+/// Units that were compiled more than once where one compilation would have served.
+///
+/// A unit repeated inside one job is a miss. A unit repeated between jobs is a miss when both run
+/// the same kind of command: they could have shared a cache or an archive. The lint job and the
+/// test-archive job of the split are the exception, because they are parallel by design and
+/// cannot share a target cache. What they both compile is the host side (proc-macro crates and the
+/// crates only they need), which `clippy` and `nextest archive` build in the same way.
+#[must_use]
+pub fn repeats(lanes: &[LaneMetrics]) -> Vec<String> {
+    let mut groups: Vec<BTreeMap<String, (String, u64)>> = Vec::new();
+    for lane in lanes {
+        let mut within = BTreeMap::new();
+        for invocation in &lane.invocations {
+            collect(invocation, &mut within);
+        }
+        groups.push(within);
+    }
+    for kind in [CommandKind::Lint, CommandKind::Build] {
+        let mut across = BTreeMap::new();
+        for invocation in lanes
+            .iter()
+            .flat_map(|lane| &lane.invocations)
+            .filter(|invocation| command_kind(invocation) == kind)
+        {
+            collect(invocation, &mut across);
+        }
+        groups.push(across);
+    }
+    groups
+        .into_iter()
+        .flatten()
+        .filter(|(_, (_, count))| *count > 1)
+        .map(|(_, (package, count))| {
+            format!("{package}: identical observed compilation unit executed {count} times")
+        })
+        .collect()
 }
 
 #[must_use]
