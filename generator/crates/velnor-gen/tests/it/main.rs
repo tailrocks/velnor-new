@@ -26,6 +26,7 @@ mod declared_call_fence;
 mod declared_call_secrets;
 mod declared_calls;
 mod declared_concurrency;
+mod declared_containers;
 mod declared_fixture;
 mod declared_helper_integrity;
 mod declared_jobs;

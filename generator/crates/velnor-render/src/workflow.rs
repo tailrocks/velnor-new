@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::rules::{
-    RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource, RenderedStep, Value,
+    RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, Value,
 };
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
@@ -40,6 +41,20 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     }
     if job.uses.is_none() {
         items.push(entry("runs-on", runs_on(job)));
+    }
+    if let Some(container) = &job.container {
+        items.push(entry("container", yaml_container(container)));
+    }
+    if !job.services.is_empty() {
+        items.push(entry(
+            "services",
+            Yaml::Map(
+                job.services
+                    .iter()
+                    .map(|(name, service)| entry(name, yaml_container(service)))
+                    .collect(),
+            ),
+        ));
     }
     if let Some(matrix) = &job.matrix {
         items.push(entry("strategy", yaml_matrix(matrix)));
@@ -94,6 +109,23 @@ fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
             })
             .collect(),
     )
+}
+
+fn yaml_container(container: &RenderedContainer) -> Yaml {
+    let mut items = vec![entry("image", text(&container.image))];
+    if !container.env.is_empty() {
+        items.push(entry("env", pairs(&container.env)));
+    }
+    if !container.ports.is_empty() {
+        items.push(entry(
+            "ports",
+            Yaml::Seq(container.ports.iter().map(|port| text(port)).collect()),
+        ));
+    }
+    if let Some(options) = &container.options {
+        items.push(entry("options", text(options)));
+    }
+    Yaml::Map(items)
 }
 
 fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
