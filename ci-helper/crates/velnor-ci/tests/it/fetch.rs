@@ -13,9 +13,9 @@ use std::thread;
 
 use crate::io::Repo;
 
-type TestResult = Result<(), Box<dyn Error>>;
+pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
-const TOKEN: &str = "ghs_recorded_installation_token";
+pub(crate) const TOKEN: &str = "ghs_recorded_installation_token";
 const URLS: [&str; 5] = [
     "https://github.com/acme/private.git",
     "ssh://git@github.com/acme/private.git",
@@ -24,7 +24,7 @@ const URLS: [&str; 5] = [
     "https://example.invalid/acme/public.git",
 ];
 
-fn script(path: &Path, body: &str) -> TestResult {
+pub(crate) fn script(path: &Path, body: &str) -> TestResult {
     fs::create_dir_all(path.parent().ok_or("parent")?)?;
     fs::write(path, format!("#!/bin/sh\n{body}\n"))?;
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
@@ -36,7 +36,7 @@ pub(crate) struct Api {
     pub(crate) requests: Arc<Mutex<Vec<String>>>,
 }
 
-fn serve(status: u16) -> Result<Api, Box<dyn Error>> {
+pub(crate) fn serve(status: u16) -> Result<Api, Box<dyn Error>> {
     serve_body(status, "")
 }
 
@@ -75,12 +75,12 @@ pub(crate) fn serve_body(status: u16, body: &str) -> Result<Api, Box<dyn Error>>
     Ok(Api { url, requests })
 }
 
-struct Fixture {
-    repo: Repo,
+pub(crate) struct Fixture {
+    pub(crate) repo: Repo,
 }
 
 impl Fixture {
-    fn new(name: &str, cargo_exit: u8) -> Result<Self, Box<dyn Error>> {
+    pub(crate) fn new(name: &str, cargo_exit: u8) -> Result<Self, Box<dyn Error>> {
         let repo = Repo::empty(name);
         let root = repo.root().to_path_buf();
         let log = root.join("log");
@@ -113,7 +113,7 @@ impl Fixture {
         self.run_with(api, token, home, &["Cargo.toml"], &[])
     }
 
-    fn run_with(
+    pub(crate) fn run_with(
         &self,
         api: &Api,
         token: Option<&str>,
@@ -154,7 +154,7 @@ impl Fixture {
         command.output().unwrap_or_else(|e| unreachable!("{e}"))
     }
 
-    fn log(&self, name: &str) -> String {
+    pub(crate) fn log(&self, name: &str) -> String {
         fs::read_to_string(self.repo.root().join("log").join(name)).unwrap_or_default()
     }
 }
@@ -344,66 +344,5 @@ fn the_crates_mirror_the_runner_configured_is_used_and_any_other_config_is_refus
     );
     assert!(!output.status.success());
     assert_eq!(refused.log("cargo.args"), "");
-    Ok(())
-}
-
-#[test]
-fn a_github_enterprise_server_gets_its_own_urls_authenticated_and_github_com_is_left_alone()
--> TestResult {
-    let fixture = Fixture::new("fetch-ghes", 0)?;
-    let urls = [
-        "https://github.corp/acme/private.git",
-        "ssh://git@github.corp/acme/private.git",
-        "ssh://github.corp/acme/private.git",
-        "git@github.corp:acme/private.git",
-        "https://github.com/acme/other.git",
-    ];
-    fs::write(fixture.repo.root().join("urls"), urls.join(" "))?;
-    let api = serve(204)?;
-    let output = fixture.run_with(
-        &api,
-        Some(TOKEN),
-        None,
-        &["Cargo.toml"],
-        &[("VELNOR_SERVER_URL", "https://github.corp")],
-    );
-    assert!(output.status.success(), "{output:?}");
-    let authenticated = format!("https://x-access-token:{TOKEN}@github.corp/acme/private.git");
-    assert_eq!(
-        fixture.log("cargo.urls").lines().collect::<Vec<_>>(),
-        [
-            authenticated.as_str(),
-            authenticated.as_str(),
-            authenticated.as_str(),
-            authenticated.as_str(),
-            "https://github.com/acme/other.git"
-        ]
-    );
-    Ok(())
-}
-
-#[test]
-fn a_server_url_that_is_not_a_plain_https_host_runs_nothing_and_still_revokes() -> TestResult {
-    for (index, bad) in [
-        "http://github.corp",
-        "https://user@github.corp",
-        "https://github.corp/path",
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let fixture = Fixture::new(&format!("fetch-server-{index}"), 0)?;
-        let api = serve(204)?;
-        let output = fixture.run_with(
-            &api,
-            Some(TOKEN),
-            None,
-            &["Cargo.toml"],
-            &[("VELNOR_SERVER_URL", bad)],
-        );
-        assert!(!output.status.success(), "{bad}: {output:?}");
-        assert_eq!(fixture.log("cargo.args"), "", "{bad}");
-        assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
-    }
     Ok(())
 }

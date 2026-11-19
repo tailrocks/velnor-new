@@ -39,6 +39,7 @@ velnor-model = { version = "=0.0.0", path = "../../../generator/crates/velnor-mo
 velnor-release = { version = "=0.0.0", path = "../../../generator/crates/velnor-release" }
 velnor-rust = { version = "=0.0.0", path = "../../../generator/crates/velnor-rust" }
 ureq = { version = "=3.5.2", default-features = false, features = ["rustls"] }
+toml = { version = "=1.1.8" }
 
 [dev-dependencies]
 ring = { version = "=0.17.14", default-features = false }

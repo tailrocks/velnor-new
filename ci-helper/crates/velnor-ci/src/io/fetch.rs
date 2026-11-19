@@ -95,6 +95,21 @@ fn run_fetches(
         command
             .env_clear()
             .envs(environment.iter().map(|(k, v)| (k, v)));
+        let neutralised = if with_token {
+            let cargo_home = environment
+                .iter()
+                .find(|(name, _)| name == "CARGO_HOME")
+                .map(|(_, home)| PathBuf::from(home))
+                .unwrap_or_default();
+            let here = manifest
+                .parent()
+                .filter(|parent| !parent.as_os_str().is_empty())
+                .unwrap_or(Path::new("."));
+            super::fetch_credentials::neutralise(here, &cargo_home)?
+        } else {
+            super::fetch_credentials::Neutralised::default()
+        };
+        command.envs(neutralised.environment.iter().map(|(k, v)| (k, v)));
         if let Some(mirror) = mirror {
             command.arg("--config").arg(mirror);
         }
@@ -110,6 +125,9 @@ fn run_fetches(
             .arg(manifest.file_name().unwrap_or(manifest.as_os_str()));
         if with_token {
             command.args(["--config", "net.offline=false"]);
+            for config in &neutralised.config {
+                command.args(["--config", config]);
+            }
         } else {
             command.arg("--offline");
         }

@@ -932,6 +932,7 @@ dependencies = [
  "serde",
  "serde_json",
  "signal-hook",
+ "toml",
  "ureq",
  "velnor-gen",
  "velnor-model",

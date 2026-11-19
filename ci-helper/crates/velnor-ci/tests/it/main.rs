@@ -25,6 +25,7 @@ mod configuration_targets;
 mod crates_mirror;
 mod event;
 mod fetch;
+mod fetch_server;
 mod gate;
 mod inputs;
 mod io;
