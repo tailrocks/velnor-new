@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 
 use serde::Deserialize;
 use velnor_model::{
-    GroupEvent, GroupRoot, JobId, PathGlob, RepoFacts, RepoPath, RustCiConfig, RustRoot, Shape,
-    ShapeDecision, TestGroup, TestNeed,
+    GroupEvent, GroupRoot, JobId, PathGlob, RepoFacts, RepoPath, RootSlug, RustCiConfig, RustRoot,
+    Shape, ShapeDecision, TestGroup, TestNeed, group_output_name,
 };
 
 use crate::config::{CONFIG_PATH, runner};
@@ -157,6 +157,7 @@ pub(crate) fn check_tests(
 fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
     let invalid = |reason| DetectError::invalid(&CONFIG_PATH, reason);
     let mut seen = BTreeSet::new();
+    let mut outputs = BTreeSet::new();
     for group in &config.test_groups {
         let root = match &group.root {
             GroupRoot::OnlyRoot if rust_roots.len() == 1 => &rust_roots[0],
@@ -181,10 +182,15 @@ fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectErr
                 group.name.to_string(),
             )));
         }
-        if !seen.insert((
+        let duplicate_name = !seen.insert((
             group.name.as_str().to_ascii_lowercase(),
             root.manifest.clone(),
-        )) {
+        ));
+        let shared_output = !outputs.insert(group_output_name(
+            &RootSlug::of(&root.manifest),
+            &group.name,
+        ));
+        if duplicate_name || shared_output {
             return Err(invalid(Reason::InvalidValue {
                 key: "test_groups.name",
                 value: group.name.to_string(),

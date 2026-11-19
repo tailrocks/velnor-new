@@ -3,7 +3,9 @@
 
 use std::path::Path;
 
-use velnor_model::{AllTrigger, PackageName, RepoPath, RustCiConfig, WORKFLOW_PATH};
+use velnor_model::{
+    AllTrigger, CACHE_TRIM_WORKFLOW_PATH, PackageName, RepoPath, RustCiConfig, WORKFLOW_PATH,
+};
 
 use crate::config::{CONFIG_PATH, rule_matches};
 use crate::lock::LOCK_PATH;
@@ -47,6 +49,10 @@ pub(crate) fn classify<'c>(
         .collect();
     if !packages.is_empty() {
         return Class::Packages(packages);
+    }
+    // The generated cache cleanup only deletes PR cache entries; no build or test reads it.
+    if *path == CACHE_TRIM_WORKFLOW_PATH {
+        return Class::Nothing;
     }
     if let Some(trigger) = global(path, is_root_manifest) {
         return Class::Global(trigger);

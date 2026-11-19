@@ -118,7 +118,7 @@ fn smoke_runs_each_built_binary_before_packing_in_a_job_with_no_secrets() -> Tes
             .ok_or("no check-tag run")?;
         let pack = commands
             .iter()
-            .position(|run| run.starts_with("tar -czf"))
+            .position(|run| run.starts_with("tar ") && run.contains(" -czf "))
             .ok_or("no pack")?;
         assert!(run < check && check < pack);
         let step = steps(build)

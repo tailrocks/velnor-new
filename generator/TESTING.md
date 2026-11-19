@@ -4,7 +4,7 @@
 |---|---|---|
 | Rule tests | One function: this input gives this output | Next to the code, in each crate |
 | Golden tests | A whole sample repository gives exactly the expected files | `crates/velnor-gen/tests/it/golden.rs` |
-| Helper tests | `velnor-ci` commands against temporary folders and recorded API responses | `ci-helper/` |
+| Helper tests | `velnor-ci` commands against temporary folders and recorded API responses | `crates/velnor-ci/tests/it/` |
 | Real runs | The generated workflow works on GitHub | `velnor-lab` nightly and this repository's CI |
 
 ## Rules
@@ -14,7 +14,12 @@
 - A rule test is a table of inputs and outputs, not one test per case.
 - No test starts a program found through `PATH` or touches the network. `.config/nextest.toml` wraps every test binary, when nextest lists it and when it runs it, in `env PATH=/nonexistent`, and `no_programs` fails if `git`, `cargo` or `sh` can still be found through `PATH`. A program named by an absolute path is not blocked. The `io` module is tested by the real runs.
 - One behavior is tested at one layer.
-- A test that runs longer than 2 s fails the suite. `.config/nextest.toml` sets that limit on `profile.default`, and `profile.ci` inherits it. The same file gives 10 s, on both profiles, only to `release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository`, `release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository`, `release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository`, `release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository` and `release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository`. Other tests that run real git in a temporary repository, including `the_binary_prints_the_golden_ruleset_for_a_repository_that_holds_the_sample`, keep the 2 s timeout.
+- Timeouts are set in `.config/nextest.toml`, not in this file. There are three tiers, 2 s, 10 s and 30 s:
+  - 2 s is the catch-all on `profile.default` for velnor-gen, velnor-model, velnor-release, velnor-render and velnor-rust. A test that runs longer fails the suite, unless a 10 s override names it.
+  - 10 s applies to the velnor-gen tests the file names: the `release_cargo_include`, `release_symlink`, `release_ruleset_lock_version` and `release_nested_toolchain` tests, the `golden_env` tests and `helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them`.
+  - 30 s applies to the velnor-ci tests the file names, such as the `io_*` test modules (for example `io_restore_cargo` and `io_scope_cache`), `crates_mirror` and a handful of named tests. Other velnor-ci tests have no limit in the file, and velnor-ci has no 2 s catch-all.
+  - `profile.ci` repeats the 10 s and 30 s overrides. It has no 2 s catch-all line.
+  - A test that builds a temporary repository and runs real git, such as `ruleset::the_binary_prints_the_golden_ruleset_for_a_repository_that_holds_the_sample`, is on none of these lists and keeps the 2 s catch-all.
 
 ## Samples
 

@@ -59,7 +59,7 @@ block (least privilege for its role); see [workflow
 > Amendment 2026-09-30: the consumer release scope ([release
 > §11](release-contract.md)) overrides the earlier blanket
 > prohibition on consumer release emission. `consumer-v1` MUST emit
-> `release.yml` plus `.github/release-plz.toml` and
+> `release.yml` plus `release-plz.toml` and
 > `.github/release-plz-bootstrap.toml` when
 > `[stacks.rust.release].enabled = true`, and MUST emit none of them
 > otherwise.
@@ -115,7 +115,7 @@ none of their workflows; successful generation retires their prior marked files.
 | .github/CLAUDE.md | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated pointer file with the single `@AGENTS.md` import line (or relative symlink `.github/CLAUDE.md -> AGENTS.md` when `[agents] claude_md = "symlink"`); replaced on generation |
 | .github/workflows/** | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Reserved generator-owned namespace; every path is replaced or retired on successful generation except a regular file directly in `.github/workflows/` whose first line is the velnor-gen header, which is preserved; generation refuses to overwrite a velnor-gen file |
 | .github/dco.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Emitted only when `[dco]` is configured; a file whose first line carries the Velnor generated marker is owned (replaced, or retired when `[dco]` is removed); an unmarked file stays repository-owned and makes generation refuse to overwrite it |
-| .github/release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
+| release-plz*.toml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Exact generated release-plz config paths; retired when no longer emitted |
 | .github/actions/<logical>/action.yml | velnor-actions-workflow-renderer | velnor-actions-orchestrator | Generated shared action path is owned when its first line has a Velnor generated marker; replaced or retired with dispatch output |
 | mise.toml, mise.lock, rust-toolchain.toml | None | None | Repository-owned read-only inputs; never create or modify |
 
@@ -235,7 +235,7 @@ configuration, and findings are fixed in the generator. Every generated lint
 before any write) checks the same files, the `hk` `Builtins.jactionlint`
 set: `.github/workflows/*.y*ml`, `.github/actions/**/action.y*ml` and
 `.github/dependabot.y*ml`, with `--strict-exit --no-online
---shellcheck=shellcheck --pyflakes=`. A marked `.github/actionlint.yaml` from
+--shellcheck=shellcheck --pyflakes=`. A marked `.github/jactionlint.yaml` from
 an older generator is retired by the next generation; an unmarked one is
 repository content and is preserved.
 
@@ -296,7 +296,7 @@ that behavior):
 ```toml
 [github]
 unmanaged = "deny"                 # "allow" (default) | "warn" | "deny"
-allow = [".github/CODEOWNERS", ".github/ISSUE_TEMPLATE"]
+allow = ["CODEOWNERS", ".github/ISSUE_TEMPLATE"]
 ```
 
 - An unmanaged entry is any file, symbolic link or empty directory under

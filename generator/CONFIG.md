@@ -46,7 +46,7 @@ skip_push_after_merge_group = true
 
 The merge queue fast-forwards the commit it tested, so the push to the default branch has the SHA of the `merge_group` run. On such a push, the plan job (or the single job, right after its plan) runs `velnor-ci merge-group-passed`. That step asks the GitHub API for runs of this same workflow file with `event=merge_group`, `head_sha=$GITHUB_SHA` and a completed, successful conclusion, and writes `skip=true` when one exists. It reads `github.token` and the plan job gains `actions: read`, nothing more.
 
-When the flag is true, Format, Lint, Documentation, the single-crate checks, test setup, tests, doctests, `cargo deny` and `cargo machete` skip. A lane that planned everything again because its base expired runs its checks anyway, because the plan of the queue run did not cover the added packages. Builds that warm the caches and every cache save keep running, so the caches stay warm. When the workflow has a plan job (more than one job), every non-Rust `[[lint]]` job also waits for the plan job and skips all its steps on such a push; the job still succeeds, so the gate needs no change for it. A single-job workflow has no plan job to read, so its `[[lint]]` jobs keep running on that push. The `Required` gate then passes without test counts for this case only: the event is `push` and the plan job output `skip_push` is exactly `true`. Any other value, event or a failed job fails the gate as before.
+When the flag is true, Format, Lint, Documentation, the single-crate checks, test setup, tests, doctests, `cargo deny` and `cargo machete` skip. A lane that planned everything again because its base expired runs its checks anyway, because the plan of the queue run did not cover the added packages. Builds that warm the caches and every cache save keep running, so the caches stay warm. When the workflow has a plan job (more than one job), every non-Rust `[[lint]]` job also waits for the plan job and skips all its steps on such a push; the job still succeeds, so the gate needs no change for it. A single-job workflow has no plan job to read, so each of its `[[lint]]` jobs runs `velnor-ci merge-group-passed` itself (after installing `velnor-ci`, with `actions: read`) and skips all its steps on such a push, as the plan-job form does. The `Required` gate then passes without test counts for this case only: the event is `push` and the plan job output `skip_push` is exactly `true`. Any other value, event or a failed job fails the gate as before.
 
 The step fails safe. A non-push event, a missing variable, an API error, an unreadable response, a missing run, a run that failed, or a run that is still going without a succeeded `Required` job all write `skip=false`, and everything runs. The step is `continue-on-error`, so a crash also runs everything.
 
@@ -138,7 +138,7 @@ A test that needs a fixture, such as a built example executable or a provisioned
 [[test_setup]]
 root = "."
 name = "Prepare the fixtures"
-run = "bash scripts/ci-fixtures.sh"
+run = "bash scripts/prepare-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
@@ -182,7 +182,7 @@ The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key 
 The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool.
 ## Optional speed budget
 
-The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request. It runs after the required check has ended, which does not wait for it, so its failure never fails the required check.
+The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request. It runs after the required check has ended, also when a job before it was skipped, and only when the required check succeeded. The required check does not wait for it, so its failure never fails the required check. A run that failed the budget is not a sample for the next run, so a breach clears with the next run that is fast again.
 
 ```toml
 [budget]
@@ -192,7 +192,7 @@ runner_seconds = 0
 setup_seconds = 0
 ```
 
-`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it collects the last ten successful first attempts of the generated workflow for each kind of event, compares the medians of that window and the latest run of each kind with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
+`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it measures the run that executes it so far, collects the successful first attempts of the generated workflow before it for each kind of event (ten runs in the window with the running one), compares the median of that window and the running run with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
 
 The check fails closed. A budget for a kind of run there is none of is a failure, not a pass, and so is a budget whose runs do not carry a measurement it needs. The report is printed before the check fails, so that the breach is read next to the medians it broke.
 
@@ -201,6 +201,52 @@ A budget is a number the project measures, not a number it guesses: set every ke
 ## Optional sparse checkout
 
 `sparse_checkout = true` in `.velnor/rust-ci.toml` makes the checkout step of each Rust lane job list only what that lane reads: its root and its members, the roots it depends on, the lockfiles and tool files at the repository top, `.cargo/`, `.config/`, `.velnor/`, and every path of the inputs lock and of declared `[[inputs]]`. It is `false` by default, and then the generated workflow is unchanged. The plan, policy and audit-plan jobs keep the full tree. The lane keeps a full checkout when a root manifest sits at the repository top, when the inputs lock has a repository-wide read, or when `[[test_setup]]` is set, because those reads are unknown. A test that reads a tracked file outside the list fails with a missing file; add that path under `[[inputs]]`.
+
+## Run selection
+
+These keys choose which jobs a run starts. The defaults are in the table in [`docs/rust-ci.md`](../docs/rust-ci.md).
+
+- `shape` is `"auto"` (default), `"one-job"`, `"lint-test"` or `"groups"`. `auto` picks the shape from `.velnor/rust-ci-timings.json`; any other value is fixed. A root with a `[[test_groups]]` entry always uses the `groups` layout.
+- `on_main` is `"affected"` (default) or `"everything"`. It sets what a push to the default branch and a merge queue run select.
+- `full_run` is `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a five-field cron expression. It sets the schedule of the run that selects everything.
+- `skip_draft_pull_requests` is `false` (default). With `true`, a draft pull request runs nothing. It cannot be combined with `pr_ci = "label"`.
+- `timeout_minutes` is the time limit of each job, 1 to 360, `30` by default.
+- `runner` is the runner label of every job, `"ubuntu-latest"` by default. See Fork pull requests for `hosted` and `fork_runner`.
+- `required_check` is the name of the one required check, `"Required"` by default. The name must not be blank or contain a control character.
+- `default_branch` is `"main"` by default. It must equal the repository's default branch, or the run fails.
+
+The shapes, and the jobs each one starts:
+
+| `shape` | Jobs | Chosen when |
+|---|---|---|
+| `one-job` | `rust` | `auto` and `.velnor/rust-ci-timings.json` has no entry for the root, or the shorter of its lint build and test build takes 5 s or less |
+| `lint-test` | `rust-lint`, `rust-test` | `auto` and the shorter build takes more than 5 s |
+| `groups` | `rust-lint`, `rust-test` (builds the tests once), `rust-test-default`, `rust-test-<name>` | `shape = "groups"`, or the root has a `[[test_groups]]` entry |
+
+## Files and packages
+
+- `inputs` is a list of `[[inputs]]` entries. Each has a `glob`, a path glob, and `packages`, a non-empty list of package names. The files the glob matches belong to those packages. For a file that no package owns, `velnor-ci plan --explain` says what to add.
+
+  ```toml
+  [[inputs]]
+  glob = "assets/**"
+  packages = ["app"]
+  ```
+
+- `non_inputs` is a list of globs whose files select nothing. A glob may not overlap an `inputs` glob; the generator refuses that.
+- `exclude` is a list of globs. A `Cargo.toml` that a glob matches is not a Cargo root. Each glob must match a tracked `Cargo.toml`, or the config is refused. A trailing `/` is removed.
+- `default_ignores` is `true` by default: documentation, licence files and root-level `*.md` files select nothing. `false` lets them select.
+
+## Cache and debug settings
+
+- `cache_budget_bytes` is the cache budget in bytes. It is `8000000000` (8 GB) by default, and a larger value is refused. `Cache maintenance` keeps the repository under it.
+- `cache_check_blocks` is `false` by default. `true` makes the `Cache` check part of `Required`.
+- `ci_debuginfo` is `"line-tables-only"` (default), `"full"` or `"none"`. It sets the debug info of the CI build profile.
+- `nextest_harnesses` is a list of `"package:target"` entries for `harness = false` test targets that nextest can run. Other such targets run in a direct step.
+
+## Helper from this repository
+
+`helper = { path = "tools/velnor-ci" }` names a folder of this repository that holds the source of `velnor-ci`. The generated workflow then builds the helper from that folder instead of using a release. A trailing `/` is removed. The path must be a valid repository path.
 
 ## Test groups
 
@@ -222,7 +268,8 @@ root = "."
 - `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
 - `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only.
 - `root` is the folder of the Cargo root's `Cargo.toml`, or `.`. It is required when the repository has several Cargo roots, and it must name a root with nextest tests.
-- `paths` and `events` are in the model but refused for now, because choosing groups at run time needs the plan. A group runs whenever its root is selected.
+- `paths` (globs, as in `inputs`) and `events` (`pull_request`, `push`, `merge_group`, `schedule`, `workflow_dispatch`) are optional. A group with neither key runs whenever its root is selected. A group with either key is decided at run time by `velnor-ci plan`, which writes one output `rust_<root>_group_<name>` (`run` or `skip`) that is the job's `if`. The group runs when its root has a selected package and one of these holds, in this order: the event is a push to the default branch (every group runs, but only where the default lanes select the root); the event is listed in `events`; the event is a merge group and the group sets no `paths` (`events` never skip a group on a merge group); a changed path matches `paths`; every package is selected. Otherwise the job is skipped, and the `Required` check expects it to be skipped. On a merge group, `paths` are matched against the merge group's own base to head diff, the same diff the default lanes select by; when that diff cannot be computed, every package is selected and every group runs. `velnor-ci plan --explain` and the plan summary say why each group ran or was skipped. On a push to the default branch the groups follow exactly the same selection as the default lanes, neither stricter nor looser: with `on_main = "affected"` a docs-only push selects no package, so the lanes and every group skip; with `on_main = "everything"` the lanes and every group run. The default job still leaves out the group's tests, so tests of a skipped group do not run in that workflow run.
+- `hosted = true` or `hosted = false` declares the group's `runner` (see Fork pull requests). It needs a `runner` in the same group, and, like the top-level key, `velnor-ci` 0.1.99.
 
 A repository with any `[[test_groups]]` splits each root that has a group into the archive build job and the test jobs, whatever `shape` is: the group jobs run from the archive of the build job (`shape = "groups"`), and lint and doctests stay on the build job. The default job `rust-test-default` leaves out every group's tests with `and not (<filter>)`, and every group job is a need of the `Required` check. Two groups with one name in one root are refused. A root with two or more groups gets a step `velnor-ci test-groups check` in its build job, after the archive is built and before it is uploaded: it lists the workspace once per group with `cargo-nextest`, under the group's filter, and fails naming every test that two groups select (ignored tests are exempt), so the overlap is found at run time, not guessed from the filters. The key needs `velnor-ci` 0.1.82 or later, because the helper reads the same file.
 
@@ -230,7 +277,7 @@ A repository with any `[[test_groups]]` splits each root that has a group into t
 
 ## Non-Rust lint jobs
 
-A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission, no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`.
+A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission (plus `actions: read` in a single-job workflow with `skip_push_after_merge_group`), no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`.
 
 ```toml
 [[lint]]
@@ -271,31 +318,6 @@ Every tool a lint entry needs is checked at generation. The tool must be pinned 
 ### One required check
 
 The `Required` job (named by `required_check`) lists every lint job in `needs` and in its gate spec with no condition, next to the Rust lanes. A lint job that failed, was cancelled, was skipped or is absent from `needs` fails the gate, and a job in `needs` that the spec does not name fails it too. A ruleset therefore requires one check name for the Rust lanes and the lint lane together.
-## Test groups
-
-Heavy or special tests get their own job; every other test stays in the default job. A group names a nextest filterset, what its tests need and the limits of its job.
-
-```toml
-[[test_groups]]
-name = "database"
-filter = "package(app) and test(/^db_/)"
-needs = ["docker"]
-test_threads = 2
-timeout_minutes = 30
-runner = "ubuntu-latest"
-paths = ["app/migrations/**"]
-events = ["push", "schedule"]
-root = "."
-```
-
-- `name` is the job name `rust-test-<name>` (then the root suffix when the repository has several roots). It uses letters, digits, `_` and `-`, at most 40 characters, and is not `default`.
-- `filter` is a nextest filterset. The group job runs the tests the plan selects that this filter matches. Write nextest's `and`, `or` and `not` instead of `&`, `|` and `!`: a generated `run:` value is one command with no `&`, `|`, `;`, quote, `$`, backtick, backslash, `<` or line break. An empty filter is refused.
-- `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
-- `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only.
-- `root` is the folder of the Cargo root's `Cargo.toml`, or `.`. It is required when the repository has several Cargo roots, and it must name a root with nextest tests.
-- `paths` (globs, as in `inputs`) and `events` (`pull_request`, `push`, `merge_group`, `schedule`, `workflow_dispatch`) are optional. A group with neither key runs whenever its root is selected. A group with either key is decided at run time by `velnor-ci plan`, which writes one output `rust_<root>_group_<name>` (`run` or `skip`) that is the job's `if`. The group runs when its root has a selected package and one of these holds, in this order: the event is a push to the default branch (every group runs, but only where the default lanes select the root); the event is listed in `events`; the event is a merge group and the group sets no `paths` (`events` never skip a group on a merge group); a changed path matches `paths`; every package is selected. Otherwise the job is skipped, and the `Required` check expects it to be skipped. On a merge group, `paths` are matched against the merge group's own base to head diff, the same diff the default lanes select by; when that diff cannot be computed, every package is selected and every group runs. `velnor-ci plan --explain` and the plan summary say why each group ran or was skipped. On a push to the default branch the groups follow exactly the same selection as the default lanes, neither stricter nor looser: with `on_main = "affected"` a docs-only push selects no package, so the lanes and every group skip; with `on_main = "everything"` the lanes and every group run. The default job still leaves out the group's tests, so tests of a skipped group do not run in that workflow run.
-
-A repository with any `[[test_groups]]` splits each root that has a group into the archive build job and the test jobs, whatever `shape` is: the group jobs run from the archive of the build job (`shape = "groups"`), and lint and doctests stay on the build job. The default job `rust-test-default` leaves out every group's tests with `and not (<filter>)`, and every group job is a need of the `Required` check. Two groups with one name in one root are refused. The key needs `velnor-ci` 0.1.82 or later, because the helper reads the same file.
 
 ## Optional extra binaries and files in a release asset
 
@@ -314,6 +336,15 @@ include = ["LICENSE", "NOTICE"]
 Every entry lands at the top level of the asset, flat and by its file name: the main binary, then `bins` in the order written, then `include` in the order written. This is the layout of the old engine's `velnor-host` release. A `bin` or file name that appears twice, an `include` path that is absolute, starts with `-`, contains `..` or a character other than letters, digits, `.`, `_`, `-` and `/`, a `bin` that no package of the root builds, and an expression in any value are refused at generation. A listed file that is missing from the checkout fails the build job, not generation.
 
 Both keys are absent by default, and then the generated workflow is byte-identical to one generated without this feature. The `SHA256SUMS` file still covers the archives, not their members. With `attest = true` each archive is its own attestation subject, so the binary, the helper, `LICENSE` and `NOTICE` travel in one verified file.
+
+## Optional family tag for binary releases
+
+`family_tag` in `.velnor/release.toml` gives every `[[binaries]]` entry of a release one tag, such as `tools-v0.1.80`, bound to the verified source commit. Its value holds one `{{ version }}` and no `{{ package }}`, and the repository needs at least one `[[binaries]]` entry. Without it, each binary keeps its own release-plz tag.
+
+- A `family` job reads the version of every binary from `cargo metadata` at the verified commit, and all must agree. It runs `velnor-ci release family-tag`, which creates the tag on the verified commit, refuses unless the tag resolves to that commit, and opens one draft release. A run at a version that already has a release does nothing.
+- Build jobs check out `refs/tags/<family tag>` and refuse any commit other than the verified one. The `sums-family` and `publish-family` jobs publish the assets of every binary under the one tag.
+- The generator refuses a binary that release-plz still releases under its own tag, and a helper older than `velnor-ci` 0.1.83.
+- Binary packages are `release = false` in release-plz, so their version is bumped by hand or by a pull request.
 
 ## Release binary asset format
 
@@ -349,7 +380,7 @@ With `bins`, each extra binary is published the same way, as its own `<bin>-<pla
 
 ## Optional release asset names
 
-A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<target-triple>.tar.gz` by default, for example `app-x86_64-unknown-linux-musl.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional, and an entry without it generates the same workflow as before.
+A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<target-triple>.tar.gz` by default, for example `app-x86_64-unknown-linux-musl.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional; without it the default name above applies.
 
 ```toml
 [[binaries]]
@@ -366,7 +397,7 @@ The placeholders are `{{ bin }}`, `{{ platform }}` (`linux-x64`), `{{ target }}`
 
 ### Raw binary keys
 
-Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
+Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` (now `release.yml`) did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
 
 ```toml
 [[binaries]]
@@ -388,7 +419,7 @@ A repository that must pass its own checks before a release publishes declares o
 ```toml
 [[checks]]
 name = "Qualify linux"
-run = "bash scripts/qualify-linux.sh"
+run = "bash scripts/qualify.sh"
 before = "publish"
 artifacts = ["app-linux-x64"]
 needs = ["Verify release inputs"]
@@ -513,6 +544,7 @@ Every workflow lists its events under `[workflow.on]`. The generator writes them
 
 ### Jobs
 
+- `name` is the job's display name, which GitHub shows in place of the job id. It is optional.
 - `needs` lists earlier jobs of the workflow. `if` is one expression, with or without `${{ }}`. A workflow `if` and a job `if` both apply: the job gets `(workflow if) && (job if)`.
 - `runner` sets the runner of one job; the workflow `runner` is the default. A runner label is letters, digits, dashes, underscores and dots. A job's `hosted` declares its `runner` (see "Fork pull requests"); without `hosted`, a job whose `runner` is the workflow's label takes the workflow's value, a label spelled like a GitHub-hosted one is refused, and any other label is self-hosted. A runner that is not declared `hosted = true` gets the fork fence: `runs-on` is `<runner>` for a push, a schedule and a pull request from this repository, and `fork_runner` for a pull request from a fork.
 - `runner = "${{ matrix.<axis> }}"` takes the runner from an axis (or an `include` key) of the job's static matrix, so one job builds for two runners. The expression is exactly that and nothing else, and the matrix must be `axes` and `include`, not `from_output`. `runner_labels = { "ubuntu-24.04" = true, "velnor-arm" = false }` declares every value of the axis, `true` for GitHub-hosted and `false` for self-hosted, as `hosted` does for one label; a value that is not declared, and a declared label that no value uses, is refused, and so is `hosted` beside such a runner. The job is open to a pull request from a fork only when every label is `true`, and then `runs-on` is `${{ matrix.<axis> }}`. With one `false` label, `runs-on` is `<same repository> && matrix.<axis> || '<fork_runner>'`, the fence of a fixed self-hosted runner, so every leg of a fork pull request runs on `fork_runner`. A container or service job is refused when any label is a `macos-*` or `windows-*` one. `runner_labels` without such a runner is refused. The sample `declared-workflows` has a `tools-build` workflow that builds two targets this way.
@@ -595,6 +627,14 @@ With `attest = true` a separate `verify-<package>` job verifies every asset and 
 A re-run of only the verify or publish job can fail. The artifacts expire after one day, and the attestation is checked against the commit of that run. The failure fails closed: nothing is published. Re-run the whole workflow run, or let the next default-branch run release.
 
 With `family_tag`, set `attest` at the top level of `release.toml` instead (see Release family tag).
+
+## Release settings
+
+These top-level keys of `.velnor/release.toml` sit beside `[[binaries]]`, `[[checks]]` and the family keys.
+
+- `roots` is the list of Cargo root folders that the release reads. It is `["."]` by default. Each root is a relative folder with no leading `/` or `-` and no empty, `.` or `..` part. `"."` alone is the repository root. An expression is refused.
+- `after` is the list of workflow names that the release follows with `workflow_run`. It is `["Rust CI"]` by default. The list may not be empty or hold a blank name, and a name that no workflow has is an error.
+- `pr_only_checks` is a list of required checks that run only on pull requests. The release gate does not wait for them on the tagged commit. Each name must be a required check of the default branch, and each name is listed once; blank and repeated names are refused. It is refused together with `family_required_checks = false`.
 
 ## Release binaries and their Cargo profile
 

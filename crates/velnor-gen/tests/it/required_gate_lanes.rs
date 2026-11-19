@@ -156,6 +156,19 @@ fn a_package_split_across_the_lane_passes_when_the_lane_ran_it() -> TestResult {
 }
 
 #[test]
+fn a_split_lane_job_that_listed_and_ran_no_tests_fails_while_another_job_ran_some() -> TestResult {
+    let run = Run {
+        b: ("0", "0"),
+        ..passing()
+    };
+    expect(
+        &run,
+        false,
+        "a test job of root listed no tests and ran none",
+    )
+}
+
+#[test]
 fn a_package_that_listed_tests_and_the_lane_ran_none_fails() -> TestResult {
     let run = Run {
         a: ("0", "3"),

@@ -194,7 +194,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
             "sudo apt-get install --yes musl-tools",
             "rustup target add aarch64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target aarch64-unknown-linux-musl --target-dir target",
-            "tar -czf rg-aarch64-unknown-linux-musl.tar.gz -C target/aarch64-unknown-linux-musl/release rg",
+            "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf rg-aarch64-unknown-linux-musl.tar.gz -C target/aarch64-unknown-linux-musl/release rg",
         ]
     );
     let upload = steps(build).last().ok_or("no steps")?;
@@ -228,7 +228,7 @@ fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory(
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
-            "tar -czf tools-x86_64-unknown-linux-musl.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools",
+            "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf tools-x86_64-unknown-linux-musl.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools",
         ]
     );
     Ok(())

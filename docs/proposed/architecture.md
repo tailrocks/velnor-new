@@ -16,7 +16,7 @@ Normative terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their usual
 Velnor Actions is a stack-generic GitHub Actions workflow generator. V1 registers
 the `rust` and `tofu` detectors; the architecture keeps stack analysis, Mise integration,
 generic workflow rendering, and orchestration in separate packages. Runner execution
-and supervision live in the nested `crates/velnor-runner-*` workspace under
+and supervision live in the `crates/velnor-runner-*` crates of the root workspace under
 `docs/proposed/macos-scaleset-runner.md`.
 
 Cargo dependency direction (`A -> B` means “A depends on B”):

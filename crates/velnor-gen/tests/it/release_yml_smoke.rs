@@ -132,7 +132,7 @@ fn smoke_on_an_archive_binary_runs_the_built_binary_before_packing() -> TestResu
         .ok_or("no run")?;
     let pack = commands
         .iter()
-        .position(|run| run.starts_with("tar -czf"))
+        .position(|run| run.starts_with("tar ") && run.contains(" -czf "))
         .ok_or("no pack")?;
     assert_eq!(
         commands[run + 1],

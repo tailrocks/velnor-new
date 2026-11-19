@@ -22,7 +22,18 @@ struct Run {
     workflow_id: u64,
     repository: Identity,
     head_repository: Option<Identity>,
+    head_sha: String,
     pull_requests: Vec<Pull>,
+}
+#[derive(Deserialize)]
+struct Association {
+    number: u64,
+    base: Branch,
+    head: Branch,
+}
+#[derive(Deserialize)]
+struct Branch {
+    repo: Option<Identity>,
 }
 #[derive(Deserialize)]
 struct Side {
@@ -64,13 +75,16 @@ pub fn trim_deltas(github: &dyn GitHubWrite, repo: &Repo, run_id: u64) -> Result
         || run
             .head_repository
             .is_none_or(|head| head.id != identity.id)
-        || run.pull_requests.len() != 1
+        || run.pull_requests.len() > 1
     {
         return Err(CiError::new(
             "cleanup requires a completed, unambiguous same-repository Rust CI PR run",
         ));
     }
-    let number = run.pull_requests[0].number;
+    let number = match run.pull_requests.as_slice() {
+        [pull] => pull.number,
+        _ => pull_from_commit(github, repo, &identity, &run.head_sha)?,
+    };
     if number == 0 {
         return Err(CiError::new("cleanup PR number is zero"));
     }
@@ -131,6 +145,35 @@ pub fn trim_deltas(github: &dyn GitHubWrite, repo: &Repo, run_id: u64) -> Result
     Ok(format!(
         "PR {number}: kept one delta per lane, deleted {deleted} older entries\n"
     ))
+}
+
+// GitHub empties a run's pull_requests once its PR merges or closes while the run is
+// still reported, so the PR is found through the run's head commit instead.
+fn pull_from_commit(
+    github: &dyn GitHubWrite,
+    repo: &Repo,
+    identity: &Identity,
+    sha: &str,
+) -> Result<u64, CiError> {
+    if sha.len() != 40 || !sha.bytes().all(|c| c.is_ascii_hexdigit()) {
+        return Err(CiError::new("cleanup run has no valid head commit"));
+    }
+    let found: Vec<Association> =
+        decode(&github.get(&format!("/repos/{repo}/commits/{sha}/pulls"))?)?;
+    let same_repo: Vec<u64> = found
+        .iter()
+        .filter(|pull| {
+            pull.base.repo.as_ref().is_some_and(|r| r.id == identity.id)
+                && pull.head.repo.as_ref().is_some_and(|r| r.id == identity.id)
+        })
+        .map(|pull| pull.number)
+        .collect();
+    match same_repo.as_slice() {
+        [number] if *number != 0 => Ok(*number),
+        _ => Err(CiError::new(
+            "cleanup run has no single same-repository PR for its commit",
+        )),
+    }
 }
 
 fn owner(key: &str, prefix: &str) -> Option<String> {

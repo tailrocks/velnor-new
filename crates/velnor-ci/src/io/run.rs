@@ -88,7 +88,8 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let path = log_path()?;
     let started = Instant::now();
     let mut invocation =
-        super::recording::start_invocation(&args.command).map_err(|e| (2, e.to_string()))?;
+        super::recording::start_invocation(super::recording::cargo_command(&args.command))
+            .map_err(|e| (2, e.to_string()))?;
     let mut log =
         open_log(&path).map_err(|e| (2, format!("cannot open {}: {e}", path.display())))?;
     let write_error = |e: std::io::Error| (2, format!("cannot write {}: {e}", path.display()));

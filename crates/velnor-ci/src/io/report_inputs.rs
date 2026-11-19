@@ -115,7 +115,7 @@ fn collect_invocations(metrics: &mut LaneMetrics, inputs: &RootInputs<'_>) -> Re
         cache.family == "target" && cache.root.as_deref() == Some(inputs.root_text) && cache.usable
     });
     for invocation in &mut metrics.invocations {
-        if Path::new(&invocation.root) != inputs.root_path {
+        if !same_directory(Path::new(&invocation.root), inputs.root_path) {
             continue;
         }
         let progress = progress(invocation, inputs.log)?;

@@ -22,14 +22,8 @@ pub(crate) fn attest(binary: &BinaryPlan) -> RenderedStep {
 
 pub(crate) fn provenance(name: String) -> RenderedStep {
     RenderedStep {
-        name,
-        uses: Some(format!(
-            "{}@{}",
-            ATTEST_BUILD_PROVENANCE.action, ATTEST_BUILD_PROVENANCE.commit
-        )),
-        uses_comment: Some(ATTEST_BUILD_PROVENANCE.tag.to_owned()),
         with: vec![("subject-path".to_owned(), Value::Text(format!("{DIST}/*")))],
-        ..RenderedStep::default()
+        ..ATTEST_BUILD_PROVENANCE.step(name)
     }
 }
 

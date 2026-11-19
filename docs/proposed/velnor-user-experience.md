@@ -89,7 +89,7 @@ runner_lock = ".velnor/runner.lock"  # the official runner pin that exists today
 image = "ghcr.io/tailrocks/velnor-official@sha256:<digest>"
 
 [velnor.executor.job_types]          # Actions jobs that stay jobs: release, image, scheduled
-"release-rust-ci-tools" = "native"
+"release"               = "native"
 "product-release"       = "native"
 "job-image-candidate"   = "native"
 

@@ -8,7 +8,8 @@ use std::time::{Duration, Instant};
 use bollard::Docker;
 use bollard::models::NetworkCreateRequest;
 use bollard::query_parameters::{
-    DownloadFromContainerOptions, ListContainersOptions, UploadToContainerOptions,
+    DownloadFromContainerOptions, KillContainerOptionsBuilder, ListContainersOptions,
+    UploadToContainerOptions, WaitContainerOptions,
 };
 use futures_util::TryStreamExt;
 use tokio::task::JoinHandle;
@@ -331,12 +332,23 @@ pub(crate) async fn submit(docker: &Docker, runner: &str, bytes: &[u8]) -> TestR
     Ok(())
 }
 
+/// Ends the guest job the way a real runner does: the runner process exits 0.
+/// The fixture program exits 0 on SIGTERM; a SIGKILL would exit 137, which the
+/// host rightly treats as a crashed runner and stops the slot (#1495).
 pub(crate) async fn finish_job(docker: &Docker, runner: &str) -> TestResult<()> {
     docker
         .kill_container(
             runner,
-            None::<bollard::query_parameters::KillContainerOptions>,
+            Some(
+                KillContainerOptionsBuilder::default()
+                    .signal("SIGTERM")
+                    .build(),
+            ),
         )
+        .await?;
+    docker
+        .wait_container(runner, None::<WaitContainerOptions>)
+        .try_next()
         .await?;
     Ok(())
 }

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
+    CI_AUTO_LABEL, CI_RUN_LABEL, Gate, GateNeed, JobId, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP,
     PlanFrom, PrRun, RootSlug, VerdictSpec, When, group_output_name,
 };
 
@@ -140,7 +140,7 @@ pub(crate) fn merge_group_skipped(from: &PlanFrom, setup: Setup) -> String {
 
 fn event_gate(when: When) -> String {
     match when {
-        When::Scheduled => format!("github.event_name == '{SCHEDULE}'"),
+        When::Scheduled | When::ScheduledAfterNeeds => format!("github.event_name == '{SCHEDULE}'"),
         When::ScheduledOrPush => {
             format!("(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')")
         }
@@ -176,6 +176,9 @@ pub(crate) fn condition(
         }
         When::Scheduled | When::ScheduledOrPush | When::DefaultBranchPush => {
             parts.push(event_gate(when));
+        }
+        When::ScheduledAfterNeeds | When::DefaultBranchPushAfterNeeds => {
+            parts.extend([NOT_CANCELLED.to_owned(), event_gate(when)]);
         }
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
@@ -294,12 +297,13 @@ fn pr_parts(pr: PrRun) -> Vec<String> {
     }
 }
 
-pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun) -> String {
-    let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
+pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun, needs: &[JobId]) -> String {
+    let mut plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
         Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
         Some(PlanFrom::WorkJob(_)) => vec![NOT_CANCELLED.to_owned()],
         _ => Vec::new(),
     };
+    plan_succeeded.extend(crate::gate_needs::succeeded(when, needs));
     match condition(when, gate, Setup::Before, pr, &plan_succeeded) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
