@@ -1,0 +1,289 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+use crate::check::workflow;
+use crate::error::{WorkflowsError, refuse};
+use crate::raw::RawFile;
+
+pub(crate) const DEFAULT_RUNNER: &str = "ubuntu-latest";
+pub(crate) const DEFAULT_TIMEOUT_MINUTES: u16 = 30;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowsPlan {
+    pub workflows: Vec<Workflow>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Workflow {
+    pub file: String,
+    pub name: String,
+    pub runner: String,
+    pub fork_runner: String,
+    pub condition: Option<String>,
+    pub concurrency: Option<Concurrency>,
+    pub triggers: Triggers,
+    pub jobs: Vec<Job>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Concurrency {
+    pub group: String,
+    pub cancel_in_progress: bool,
+}
+
+/// The events that start a workflow. Every field that is empty, `None` or
+/// `false` leaves its event out of the file.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Triggers {
+    pub workflow_call: Option<WorkflowCall>,
+    pub workflow_dispatch: Option<Vec<Input>>,
+    pub schedule: Vec<String>,
+    pub push: Option<Push>,
+    pub pull_request: Option<PullRequest>,
+    pub merge_group: bool,
+    pub workflow_run: Option<WorkflowRun>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct WorkflowCall {
+    pub inputs: Vec<Input>,
+    pub outputs: Vec<Output>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Push {
+    pub branches: Vec<String>,
+    pub tags: Vec<String>,
+    pub paths: Vec<String>,
+    pub paths_ignore: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullRequest {
+    pub types: Vec<String>,
+    pub branches: Vec<String>,
+    pub paths: Vec<String>,
+    pub paths_ignore: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkflowRun {
+    pub workflows: Vec<String>,
+    pub types: Vec<String>,
+    pub branches: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Input {
+    pub name: String,
+    pub description: Option<String>,
+    pub required: bool,
+    pub kind: InputKind,
+    pub default: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum InputKind {
+    String,
+    Boolean,
+    Number,
+    Choice(Vec<String>),
+    Environment,
+}
+
+impl InputKind {
+    #[must_use]
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::String => "string",
+            Self::Boolean => "boolean",
+            Self::Number => "number",
+            Self::Choice(_) => "choice",
+            Self::Environment => "environment",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Output {
+    pub name: String,
+    pub description: Option<String>,
+    pub from_job: String,
+    pub from_output: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Job {
+    pub id: String,
+    pub needs: Vec<String>,
+    pub condition: Option<String>,
+    pub helper: bool,
+    pub runner: Option<String>,
+    pub environment: Option<String>,
+    pub timeout_minutes: u16,
+    pub concurrency: Option<Concurrency>,
+    pub permissions: Vec<(String, String)>,
+    pub outputs: Vec<(String, String)>,
+    pub matrix: Option<Matrix>,
+    pub steps: Vec<Step>,
+    pub call: Option<Call>,
+}
+
+/// A job that calls a reusable workflow instead of running steps.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Call {
+    pub target: CallTarget,
+    pub with: Vec<(String, CallValue)>,
+    pub outputs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallTarget {
+    /// A workflow declared earlier in the same file, by its `file`.
+    Declared(String),
+    /// `./.github/workflows/<name>.yml` of this repository.
+    Local(String),
+    /// `owner/repo/.github/workflows/<name>.yml@<full commit SHA>`.
+    Pinned(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CallValue {
+    Text(String),
+    Boolean(bool),
+    Number(u64),
+    Expression(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Matrix {
+    pub source: MatrixSource,
+    pub fail_fast: Option<bool>,
+    pub max_parallel: Option<u16>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MatrixSource {
+    Output {
+        from_job: String,
+        from_output: String,
+    },
+    Axes(Vec<(String, Vec<String>)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Step {
+    pub id: Option<String>,
+    pub name: String,
+    pub condition: Option<String>,
+    pub body: Body,
+    pub with: Vec<(String, Env)>,
+    pub continue_on_error: bool,
+    pub env: Vec<(String, Env)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Body {
+    Run(String),
+    Uses(Action),
+    Helper(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    Checkout,
+    Mise,
+    UploadArtifact,
+    DownloadArtifact,
+    CacheRestore,
+    CacheSave,
+    AttestBuildProvenance,
+}
+
+impl Action {
+    pub const NAMES: [&'static str; 7] = [
+        "checkout",
+        "mise",
+        "upload-artifact",
+        "download-artifact",
+        "cache-restore",
+        "cache-save",
+        "attest",
+    ];
+
+    #[must_use]
+    pub fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "checkout" => Self::Checkout,
+            "mise" => Self::Mise,
+            "upload-artifact" => Self::UploadArtifact,
+            "download-artifact" => Self::DownloadArtifact,
+            "cache-restore" => Self::CacheRestore,
+            "cache-save" => Self::CacheSave,
+            "attest" => Self::AttestBuildProvenance,
+            _ => return None,
+        })
+    }
+
+    #[must_use]
+    pub fn locked_off(self) -> &'static [&'static str] {
+        match self {
+            Self::Checkout => &["persist-credentials"],
+            Self::Mise => &["cache", "cache_save"],
+            Self::AttestBuildProvenance => &["push-to-registry"],
+            Self::UploadArtifact
+            | Self::DownloadArtifact
+            | Self::CacheRestore
+            | Self::CacheSave => &[],
+        }
+    }
+
+    /// The job permissions the action cannot run without.
+    #[must_use]
+    pub fn needs_permissions(self) -> &'static [(&'static str, &'static str)] {
+        match self {
+            Self::AttestBuildProvenance => &[("id-token", "write"), ("attestations", "write")],
+            _ => &[],
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Env {
+    Text(String),
+    Expression(String),
+}
+
+impl WorkflowsPlan {
+    pub fn read(text: &str) -> Result<Self, WorkflowsError> {
+        let raw: RawFile =
+            toml::from_str(text).map_err(|error| WorkflowsError(error.to_string()))?;
+        if raw.workflow.is_empty() {
+            return refuse("declare at least one [[workflow]]");
+        }
+        let mut workflows: Vec<Workflow> = Vec::new();
+        for flow in raw.workflow {
+            let checked = workflow(flow, &workflows)?;
+            if workflows.iter().any(|other| other.file == checked.file) {
+                return refuse(format!(
+                    "the workflow file {} is declared twice",
+                    checked.file
+                ));
+            }
+            workflows.push(checked);
+        }
+        Ok(Self { workflows })
+    }
+}
+
+impl Job {
+    /// The output names other jobs may read: the declared outputs of a step
+    /// job, or the outputs of the reusable workflow a call job runs.
+    pub fn output_names(&self) -> impl Iterator<Item = &str> {
+        self.outputs.iter().map(|(name, _)| name.as_str()).chain(
+            self.call
+                .iter()
+                .flat_map(|call| call.outputs.iter().map(String::as_str)),
+        )
+    }
+}

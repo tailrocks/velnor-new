@@ -57,6 +57,7 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
@@ -115,6 +116,9 @@ impl Reason {
                 f,
                 "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
             ),
+            Self::PrCiWithSkipDraft => f.write_str(
+                "pr_ci = \"label\" and skip_draft_pull_requests = true both decide what a draft pull request runs; remove skip_draft_pull_requests, because pr_ci = \"label\" already runs nothing on a draft",
+            ),
             Self::HelperSourceRelease => f.write_str(
                 "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
             ),
@@ -150,6 +154,9 @@ impl Reason {
             Self::BuildDirKey(key) => write!(
                 f,
                 "{key} is not supported: the target cache cannot model a separate build directory, so remove it"
+            ),
+            Self::RustdocflagsString => f.write_str(
+                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
@@ -226,9 +233,6 @@ impl fmt::Display for Reason {
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
-            Self::RustdocflagsString => f.write_str(
-                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
-            ),
             Self::MiseOverridesFlags(_) | Self::MiseTemplate | Self::OtherMiseConfig => {
                 self.fmt_mise(f)
             }
@@ -240,7 +244,8 @@ impl fmt::Display for Reason {
             Self::UnpinnedTool(_)
             | Self::HelperBox(_)
             | Self::HelperSourceRelease
-            | Self::MbxRemotePrivate(_) => self.fmt_setup(f),
+            | Self::MbxRemotePrivate(_)
+            | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
@@ -248,6 +253,7 @@ impl fmt::Display for Reason {
             | Self::TargetDirOverlap(_)
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
+            | Self::RustdocflagsString
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
             Self::InvalidPatch(key) => {
                 write!(

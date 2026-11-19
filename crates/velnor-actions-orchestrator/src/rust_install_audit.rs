@@ -342,6 +342,7 @@ fn is_rust_verifier(step: &StepText, owner: &str, verifiers: &VerifierActionSet)
         .any(|template| canonical_inline_shape(step, template))
 }
 
-#[cfg(test)]
+// Its fixture builds a release manifest for linux-x86_64 and macOS hosts only (tests/support/consumer_manifest.rs).
+#[cfg(all(test, not(all(target_os = "linux", target_arch = "aarch64"))))]
 #[path = "rust_install_audit_tests.rs"]
 pub(crate) mod tests;

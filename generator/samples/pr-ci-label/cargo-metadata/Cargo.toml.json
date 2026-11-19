@@ -1,0 +1,423 @@
+{
+  "build_directory": "/repo/target",
+  "metadata": null,
+  "packages": [
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "serde",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "serde_json",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/core#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/core/Cargo.toml",
+      "metadata": null,
+      "name": "core",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": true,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "lab_core",
+          "src_path": "/repo/core/src/lib.rs",
+          "test": true
+        }
+      ],
+      "version": "0.0.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "core",
+          "optional": false,
+          "path": "/repo/core",
+          "registry": null,
+          "rename": null,
+          "req": "*",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "alloc"
+          ],
+          "kind": null,
+          "name": "hex",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^0.4",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": false
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "macros",
+          "optional": false,
+          "path": "/repo/macros",
+          "registry": null,
+          "rename": null,
+          "req": "*",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/lib#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/lib/Cargo.toml",
+      "metadata": null,
+      "name": "lib",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "lib"
+          ],
+          "doc": true,
+          "doctest": true,
+          "edition": "2024",
+          "kind": [
+            "lib"
+          ],
+          "name": "lab_lib",
+          "src_path": "/repo/lib/src/lib.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "custom-build"
+          ],
+          "name": "build-script-build",
+          "src_path": "/repo/lib/build.rs",
+          "test": false
+        }
+      ],
+      "version": "0.0.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/macros#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/macros/Cargo.toml",
+      "metadata": null,
+      "name": "macros",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "proc-macro"
+          ],
+          "doc": true,
+          "doctest": true,
+          "edition": "2024",
+          "kind": [
+            "proc-macro"
+          ],
+          "name": "lab_macros",
+          "src_path": "/repo/macros/src/lib.rs",
+          "test": true
+        }
+      ],
+      "version": "0.0.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [
+            "derive"
+          ],
+          "kind": null,
+          "name": "clap",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^4",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "core",
+          "optional": false,
+          "path": "/repo/core",
+          "registry": null,
+          "rename": null,
+          "req": "*",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [],
+          "kind": null,
+          "name": "lib",
+          "optional": false,
+          "path": "/repo/lib",
+          "registry": null,
+          "rename": null,
+          "req": "*",
+          "source": null,
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "macros",
+            "rt"
+          ],
+          "kind": null,
+          "name": "tokio",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/app#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/app/Cargo.toml",
+      "metadata": null,
+      "name": "app",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "app",
+          "src_path": "/repo/app/src/main.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "cli",
+          "src_path": "/repo/app/tests/cli.rs",
+          "test": true
+        },
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": false,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "test"
+          ],
+          "name": "slow",
+          "src_path": "/repo/app/tests/slow.rs",
+          "test": true
+        }
+      ],
+      "version": "0.0.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [
+        {
+          "features": [],
+          "kind": null,
+          "name": "fnv",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        },
+        {
+          "features": [
+            "std",
+            "serde"
+          ],
+          "kind": null,
+          "name": "hex",
+          "optional": false,
+          "registry": null,
+          "rename": null,
+          "req": "^0.4",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "target": null,
+          "uses_default_features": true
+        }
+      ],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/tool#0.0.0",
+      "keywords": [],
+      "license": "Apache-2.0",
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/tool/Cargo.toml",
+      "metadata": null,
+      "name": "tool",
+      "publish": [],
+      "readme": null,
+      "repository": null,
+      "rust_version": "1.99",
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "tool",
+          "src_path": "/repo/tool/src/main.rs",
+          "test": true
+        }
+      ],
+      "version": "0.0.0"
+    }
+  ],
+  "resolve": null,
+  "target_directory": "/repo/target",
+  "version": 1,
+  "workspace_default_members": [
+    "path+file:///repo/core#0.0.0",
+    "path+file:///repo/lib#0.0.0",
+    "path+file:///repo/macros#0.0.0",
+    "path+file:///repo/app#0.0.0",
+    "path+file:///repo/tool#0.0.0"
+  ],
+  "workspace_members": [
+    "path+file:///repo/core#0.0.0",
+    "path+file:///repo/lib#0.0.0",
+    "path+file:///repo/macros#0.0.0",
+    "path+file:///repo/app#0.0.0",
+    "path+file:///repo/tool#0.0.0"
+  ],
+  "workspace_root": "/repo"
+}

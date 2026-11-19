@@ -159,7 +159,8 @@ fn realized_output(
         };
         let mut key = key
             .replace("${{ github.sha }}", &"a".repeat(40))
-            .replace("${{ github.run_id }}", &u64::MAX.to_string());
+            .replace("${{ github.run_id }}", &u64::MAX.to_string())
+            .replace("${{ steps.sources_locks.outputs.hash }}", &"f".repeat(64));
         while let Some(start) = key.find("${{ hashFiles(") {
             let end = key[start..].find(" }}").ok_or("hash expression")? + start + 3;
             key.replace_range(start..end, &"f".repeat(64));
@@ -332,7 +333,7 @@ fn production_job_lowering_preserves_planned_jobs_and_matches_yaml_dependencies_
 #[test]
 fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_context() -> TestResult
 {
-    for roots in [22, 24, 26] {
+    for roots in [22, 25, 26, 28] {
         let plan = saving_plan(roots, false)?;
         let workflow = rendered_workflow(&plan);
         let actual = realized_needs(&workflow, "required", &test_packages(roots, false)?)?;
@@ -341,10 +342,10 @@ fn saving_lane_outputs_fit_the_required_context_bound_and_reject_an_oversized_co
             actual <= bound,
             "roots={roots}, actual={actual}, bound={bound}"
         );
-        if roots <= 22 {
+        if roots <= 25 {
             assert!(velnor_render::check_rules(&workflow).is_ok());
         } else {
-            if roots == 26 {
+            if roots == 28 {
                 assert!(
                     actual > MAX_ENV_CHARACTERS,
                     "actual={actual}, bound={bound}"
