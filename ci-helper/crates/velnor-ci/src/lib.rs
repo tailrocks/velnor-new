@@ -20,6 +20,7 @@ pub mod inputs;
 pub mod io;
 pub mod lane_guard;
 pub mod logscan;
+pub mod mbx_store;
 pub mod metrics;
 mod needs;
 pub mod observed_units;

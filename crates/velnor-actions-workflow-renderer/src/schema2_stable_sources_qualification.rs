@@ -79,13 +79,16 @@ fn producer(platform: Platform, pins: &ProductReleasePins) -> Result<(String, Ya
         &credential_free_command("bash scripts/generator-release/stable-source-producer.sh"),
         &[("VELNOR_RUST_VERSION", &pins.rust_version)],
     ));
-    let identity = r#"set -eu
+    let identity = format!(
+        r#"set -eu
 test "$(env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR /usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py "$RUNNER_TEMP/stable-cargo-sources")" = "$STABLE_SOURCES_TREE"
 test "$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_ROOT_LOCK"
-test "$(shasum -a 256 crates/velnor-runner/Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_RUNNER_LOCK"
-printf 'tree=%s\nroot_lock=%s\nrunner_lock=%s\nattempt=%s\n' "$STABLE_SOURCES_TREE" "$STABLE_SOURCES_ROOT_LOCK" "$STABLE_SOURCES_RUNNER_LOCK" "$STABLE_SOURCES_ATTEMPT" >> "$GITHUB_OUTPUT""#;
+test "$(shasum -a 256 {runner_lock} | cut -d ' ' -f 1)" = "$STABLE_SOURCES_RUNNER_LOCK"
+printf 'tree=%s\nroot_lock=%s\nrunner_lock=%s\nattempt=%s\n' "$STABLE_SOURCES_TREE" "$STABLE_SOURCES_ROOT_LOCK" "$STABLE_SOURCES_RUNNER_LOCK" "$STABLE_SOURCES_ATTEMPT" >> "$GITHUB_OUTPUT""#,
+        runner_lock = pins.runner_workspace.lock_path()
+    );
     steps.push(with_id(
-        shell("Record producer identity", identity, &[]),
+        shell("Record producer identity", &identity, &[]),
         "identity",
     ));
     steps.push(Yaml::Map(vec![
@@ -148,7 +151,7 @@ fn consumer(
         ],
     ));
     let expected = if warm { "1" } else { "0" };
-    steps.push(shell("Require source provenance and fetch mode", &format!("set -eu\nevidence=\"$RUNNER_TEMP/source-qualification-artifacts/cargo-fetch-lock-identity.txt\"\ngrep -Fx 'source_artifact_admitted={expected}' \"$evidence\"\ngrep -Fx 'fetch_mode=Cargo.toml:{}' \"$evidence\"\ngrep -Fx 'fetch_mode=crates/velnor-runner/Cargo.toml:{}' \"$evidence\"", if warm { "offline" } else { "network" }, if warm { "offline" } else { "network" }), &[]));
+    steps.push(shell("Require source provenance and fetch mode", &format!("set -eu\nevidence=\"$RUNNER_TEMP/source-qualification-artifacts/cargo-fetch-lock-identity.txt\"\ngrep -Fx 'source_artifact_admitted={expected}' \"$evidence\"\ngrep -Fx 'fetch_mode=Cargo.toml:{}' \"$evidence\"\ngrep -Fx 'fetch_mode={runner_manifest}:{}' \"$evidence\"", if warm { "offline" } else { "network" }, if warm { "offline" } else { "network" }, runner_manifest = pins.runner_workspace.manifest_path()), &[]));
     steps.push(shell(
         "Measure offline archive guard build",
         &credential_free_command(GUARD),

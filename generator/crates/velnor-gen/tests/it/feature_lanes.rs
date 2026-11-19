@@ -20,7 +20,7 @@ fn lane_view(
 }
 
 fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let repo = lane_view("0.1.82", config)?;
+    let repo = lane_view("0.1.86", config)?;
     Ok(crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone())
 }
 
@@ -164,7 +164,7 @@ fn a_feature_lane_that_is_not_one_safe_command_is_rejected() -> TestResult {
         ),
         (format!("{LANE}extra = 1\n"), "extra"),
     ] {
-        let repo = lane_view("0.1.82", &config)?;
+        let repo = lane_view("0.1.86", &config)?;
         let error = workflow(&repo)
             .err()
             .ok_or_else(|| format!("the configuration was accepted: {config}"))?;
@@ -190,7 +190,7 @@ fn guard_steps(jobs: &serde_json::Value) -> Vec<(String, usize, serde_json::Valu
 
 #[test]
 fn a_filtered_lane_is_followed_by_exactly_one_guard_step() -> TestResult {
-    let repo = crate::base_save::pinned("0.1.82", LANE)?;
+    let repo = crate::base_save::pinned("0.1.86", LANE)?;
     let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
     let guards = guard_steps(&jobs);
     assert_eq!(guards.len(), 1, "{guards:?}");
@@ -264,16 +264,16 @@ fn a_single_quote_in_the_filter_is_escaped_for_the_shell() -> TestResult {
 }
 
 #[test]
-fn a_filtered_lane_needs_helper_0_1_82() -> TestResult {
+fn a_filtered_lane_needs_helper_0_1_86() -> TestResult {
     let off = format!("full_run = 'off'\n{LANE}");
-    for helper in ["0.1.79", "0.1.80", "0.1.81"] {
+    for helper in ["0.1.79", "0.1.80", "0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
         let error = workflow(&lane_view(helper, &off)?)
             .err()
             .ok_or("an old helper was accepted")?;
         let text = error.to_string();
         assert!(
             text.contains(&format!("velnor-ci {helper} cannot run lane-guard"))
-                && text.contains("pin-helper 0.1.82"),
+                && text.contains("pin-helper 0.1.86"),
             "{text}"
         );
         assert!(
@@ -283,7 +283,7 @@ fn a_filtered_lane_needs_helper_0_1_82() -> TestResult {
             "{text}"
         );
     }
-    assert!(workflow(&lane_view("0.1.82", &off)?).is_ok());
+    assert!(workflow(&lane_view("0.1.86", &off)?).is_ok());
     Ok(())
 }
 

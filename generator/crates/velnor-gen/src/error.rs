@@ -21,6 +21,7 @@ pub enum GenerateError {
     HelperNotPinned,
     ReleaseHelperTooOld(HelperVersion),
     MirrorHelperTooOld(HelperVersion),
+    MbxStoreHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     LaneGuardHelperTooOld(HelperVersion),
@@ -55,6 +56,7 @@ impl fmt::Display for GenerateError {
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
             ),
+            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.84 or later"),
             Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
             Self::InputsBuildHelperTooOld(version) => write!(
                 f,
@@ -66,7 +68,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::LaneGuardHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot run lane-guard; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+                "velnor-ci {version} cannot run lane-guard; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Rules(violations) => {

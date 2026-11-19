@@ -32,15 +32,15 @@ fn rendered_ci(approvals: &str, lock: &str) -> Result<String, Box<dyn Error>> {
 }
 
 #[test]
-fn shipped_controller_080_accepts_its_lock_and_renders_qualified_identities()
+fn shipped_controller_081_accepts_its_lock_and_renders_qualified_identities()
 -> Result<(), Box<dyn Error>> {
     let approvals = include_str!("../../../../.velnor/controller-approvals.json");
     let lock = include_str!("../../../../.velnor/generator.lock");
     let value: Value = serde_json::from_str(approvals)?;
-    assert_eq!(value["active"]["version"], "0.1.80");
+    assert_eq!(value["active"]["version"], "0.1.81");
     assert_eq!(
         value["active"]["commit"],
-        "b71a0045e42f6a8b620aa9283d0106bed622fe3b"
+        "7d9340921fbe06bb23ca5f02c071c65870c39277"
     );
     assert!(value["staged"].is_null());
     let ci = rendered_ci(approvals, lock)?;
@@ -54,9 +54,9 @@ fn shipped_controller_080_accepts_its_lock_and_renders_qualified_identities()
         ],
     )?;
     for hash in [
-        "ac64d353024a8956c7ebe81c7c03ad5207f004bdb1d4624972ccdfacb789bcee",
-        "26f52efa2b1a36255644d07915b2eca7a31a57495bb3a27029da6aceb45104d0",
-        "e37fd97734d53fb744c298c3314bc223e378ca60532d939bac7b5b3e19a88478",
+        "f08dd0330bb47b59f0e34d8c024a6e08d2eac5c12949d6d11fe904a46263cd1e",
+        "1038d59dcb0c91d520509fb91f868084fd0e27e32be0940188f20b55671c286e",
+        "6cf672259dd777e469538f456e3b9736b9fc24488cbd66db434b4424324dee58",
     ] {
         assert!(lock.contains(hash), "qualified SDK target missing: {hash}");
     }
@@ -64,8 +64,8 @@ fn shipped_controller_080_accepts_its_lock_and_renders_qualified_identities()
         ci.contains("2.103.3"),
         "qualified GitHub CLI identity missing"
     );
-    assert!(ci.contains("ac64d353024a8956c7ebe81c7c03ad5207f004bdb1d4624972ccdfacb789bcee"));
-    assert!(ci.contains("/v0.1.78/velnor-actions-0.1.78-x86_64-unknown-linux-gnu"));
+    assert!(ci.contains("f08dd0330bb47b59f0e34d8c024a6e08d2eac5c12949d6d11fe904a46263cd1e"));
+    assert!(ci.contains("/v0.1.81/velnor-actions-0.1.81-x86_64-unknown-linux-gnu"));
     let stale = fixture(Some(approvals), BASE_LOCK)?;
     assert!(prepare_error(stale.path())?.contains("lock_mismatch"));
     Ok(())

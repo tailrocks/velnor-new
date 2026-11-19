@@ -16,6 +16,7 @@ pub enum DetectError {
     MiseLockRequired { path: RepoPath },
     ToolNotPrebuilt { tool: String, platform: String },
     NextestRequired { path: RepoPath },
+    RustPinRequired { channel: String, path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
     NestedToolchain { file: RepoPath },
@@ -163,7 +164,7 @@ impl Reason {
             Self::TargetDirOverlap(value) => write!(f, "build.target-dir {value:?} overlaps tracked checkout content or repository control paths; use an untracked build directory"),
             Self::RuntimeTargetDir { used, rendered } => write!(
                 f,
-                "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
+                "puts the target directory at {used}, but the generated workflow caches {rendered}, so cargo would write outside the cached target path: restore the generated target directory, or commit the change and regenerate"
             ),
             Self::BuildDirKey(key) => write!(
                 f,
@@ -285,6 +286,10 @@ impl fmt::Display for DetectError {
             Self::NextestRequired { path } => write!(
                 f,
                 "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
+            ),
+            Self::RustPinRequired { channel, path } => write!(
+                f,
+                "the Rust toolchain file names {channel}, and the generated jobs never let rustup install a toolchain on its own; pin rust = \"{channel}\" in {path}"
             ),
             Self::SameSlug { first, second } => write!(
                 f,

@@ -17,16 +17,32 @@ enum JobDuration {
 }
 
 pub fn compare(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
-    for (what, left, right) in [
-        ("repository", &a.repo, &b.repo),
-        ("workflow", &a.workflow, &b.workflow),
-        ("event", &a.event, &b.event),
+    compare_runs(a, b, false)
+}
+
+pub fn compare_across_populations(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
+    compare_runs(a, b, true)
+}
+
+fn compare_runs(
+    a: &RunMetrics,
+    b: &RunMetrics,
+    allow_different_populations: bool,
+) -> Result<String, CiError> {
+    for (what, left, right, relaxable) in [
+        ("repository", &a.repo, &b.repo, false),
+        ("workflow", &a.workflow, &b.workflow, true),
+        ("event", &a.event, &b.event, true),
     ] {
-        if left != right {
-            return Err(CiError::new(format!(
-                "cannot compare runs of different {what}s: {left} and {right}"
-            )));
+        if left == right {
+            continue;
         }
+        if allow_different_populations && relaxable {
+            continue;
+        }
+        return Err(CiError::new(format!(
+            "cannot compare runs of different {what}s: {left} and {right}"
+        )));
     }
     let rows: [(&str, Option<u64>, Option<u64>); 6] = [
         ("Wall seconds", a.wall_seconds, b.wall_seconds),
@@ -83,9 +99,20 @@ pub fn compare(a: &RunMetrics, b: &RunMetrics) -> Result<String, CiError> {
         )
     };
     Ok(format!(
-        "| Metric | A | B | Change |\n|---|---:|---:|---:|\n{}\n{jobs_table}",
+        "{}| Metric | A | B | Change |\n|---|---:|---:|---:|\n{}\n{jobs_table}",
+        caveat(a, b),
         metric_lines.join("\n")
     ))
+}
+
+fn caveat(a: &RunMetrics, b: &RunMetrics) -> String {
+    if a.workflow == b.workflow && a.event == b.event {
+        return String::new();
+    }
+    format!(
+        "> Different workflow or event populations: A is the `{}` workflow on `{}`, B is the `{}` workflow on `{}`. The workloads differ, so these numbers are not like for like.\n",
+        a.workflow, a.event, b.workflow, b.event
+    )
 }
 
 fn changed_jobs(a: &RunMetrics, b: &RunMetrics) -> Vec<(String, JobDuration, JobDuration)> {

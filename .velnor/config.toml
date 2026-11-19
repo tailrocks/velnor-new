@@ -279,6 +279,38 @@ name = "ubuntu-26.04-scale-set"
 labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
 
+[execution.overrides.plan]
+profile = "local"
+role = "control"
+
+[execution.overrides.alint]
+profile = "local"
+role = "control"
+
+[execution.overrides.cargo-deny]
+profile = "local"
+role = "control"
+
+[execution.overrides.cargo-machete]
+profile = "local"
+role = "control"
+
+[execution.overrides.jactionlint]
+profile = "local"
+role = "control"
+
+[execution.overrides.ledger-cli]
+profile = "local"
+role = "control"
+
+[execution.overrides.required-gate]
+profile = "local"
+role = "control"
+
+[execution.overrides.required]
+profile = "local"
+role = "control"
+
 [[checks]]
 id = "maintenance-helpers"
 task = "test-maintenance-helpers"

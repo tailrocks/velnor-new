@@ -76,23 +76,32 @@ fn cargo_command(
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
         CargoCommand::NextestBuild => nextest_build(nextest),
-        CargoCommand::NextestRun { filter } => {
-            nextest_run(&format!("--workspace --locked{nextest}"), filter)
-        }
-        CargoCommand::NextestFeatures { features, filter } => {
-            nextest_features(nextest, features, filter)
-        }
+        CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
+            &format!("--workspace --locked{nextest}"),
+            filter,
+            *ci_profile,
+        ),
+        CargoCommand::NextestFeatures {
+            features,
+            filter,
+            ci_profile,
+        } => nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::LaneGuard {
             features,
             filter,
             except,
         } => lane_guard(features, filter, except),
-        CargoCommand::NextestRunArchive { file, filter } => nextest_run(
+        CargoCommand::NextestRunArchive {
+            file,
+            filter,
+            ci_profile,
+        } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
                 file.as_str().replace('\'', "'\\''")
             ),
             filter,
+            *ci_profile,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
@@ -142,7 +151,7 @@ fn cargo_command(
             locked,
             config,
         } => deny(manifest, *locked, config.as_ref()),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+        CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
 
@@ -196,11 +205,16 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
+fn nextest_run(
+    scope: &str,
+    filter: &FilterRef,
+    ci_profile: bool,
+) -> (String, String, Vec<(String, Value)>) {
+    let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
             nextest_filter(filter)
         ),
         vec![],
@@ -232,10 +246,12 @@ fn nextest_features(
     nextest: &str,
     features: &[String],
     filter: &FilterRef,
+    ci_profile: bool,
 ) -> (String, String, Vec<(String, Value)>) {
     let (_, run, env) = nextest_run(
         &format!("--workspace --locked{nextest}{}", feature_flag(features)),
         filter,
+        ci_profile,
     );
     (
         format!("{TEST_STEP} (features: {})", features.join(",")),

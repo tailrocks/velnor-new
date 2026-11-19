@@ -230,7 +230,7 @@ fn a_recorded_sample_keeps_the_member_manifests_detection_reads() -> TestResult 
 fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> TestResult {
     let lane = "[[test_lane]]\nroot = '.'\nfeatures = ['x']\nfilter = 'test(~a)'\n";
     let mut repo = view(Some(lane))?;
-    crate::pipeline::pin_helper(&mut repo, "0.1.82")?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.86")?;
     let text = workflow(&repo)?;
     let step = text
         .lines()
@@ -253,7 +253,7 @@ fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> Tes
 fn direct_harness_binaries_become_except_binary_arguments_of_the_guard() -> TestResult {
     let lane = "[[test_lane]]\nroot = '.'\nfeatures = ['x']\nfilter = 'test(~a)'\n";
     let mut repo = view(Some(lane))?;
-    crate::pipeline::pin_helper(&mut repo, "0.1.82")?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.86")?;
     let text = workflow(&repo)?;
     let guard = text
         .lines()

@@ -26,7 +26,7 @@ pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
-    RunnerLabel, Sha256, TargetName,
+    RunnerLabel, Sha256, TargetName, github_hosted,
 };
 pub use plan::{
     Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP,
@@ -36,7 +36,7 @@ pub use plan::{
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DenyConfig,
-    DependencyKind, FullRun, InputRule, MemberDependency, OnMain, PackageDependency, PolicyTools,
+    DependencyKind, FullRun, InputRule, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools,
     RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage,
     RustRoot, Target, TargetKind, TestLane, TestSetup, Timings, ToolPin, ToolPins, Toolchain,
     UnownedPackage, Unread, Weakening,
