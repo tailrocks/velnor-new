@@ -3,7 +3,7 @@
 
 use crate::expression::is_identifier;
 
-pub const HELPER_COMMANDS: [&str; 38] = [
+pub const HELPER_COMMANDS: [&str; 34] = [
     "report",
     "bench",
     "inputs",
@@ -33,10 +33,6 @@ pub const HELPER_COMMANDS: [&str; 38] = [
     "cache",
     "run",
     "sources",
-    "verify-runtime",
-    "verify-mac-proof",
-    "run-authority",
-    "admit-preview",
     "timings",
     "validate-artifact-id",
     "install-gh",

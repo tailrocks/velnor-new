@@ -4,6 +4,7 @@
 use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use velnor_ci::mbx_seed::{Inputs, Outcome, env_lines, message, select};
 
@@ -12,6 +13,19 @@ use crate::io::Repo;
 struct Host {
     _repo: Repo,
     root: PathBuf,
+}
+
+impl Drop for Host {
+    fn drop(&mut self) {
+        for seed in ["seed", "linked", "followed", "empty"] {
+            fs::set_permissions(self.root.join(seed), fs::Permissions::from_mode(0o755)).ok();
+        }
+    }
+}
+
+fn read_only(path: &Path) {
+    fs::set_permissions(path, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
 }
 
 fn host(name: &str) -> Host {
@@ -40,10 +54,21 @@ fn warm_seed(host: &Host) -> PathBuf {
     ] {
         put(&seed.join(path), text);
     }
+    read_only(&seed);
     seed
 }
 
 fn run(host: &Host, event: &str, git_ref: &str, seed: Option<&Path>) -> Outcome {
+    run_within(host, event, git_ref, seed, Duration::from_secs(60))
+}
+
+fn run_within(
+    host: &Host,
+    event: &str,
+    git_ref: &str,
+    seed: Option<&Path>,
+    budget: Duration,
+) -> Outcome {
     let seed = seed.map(|path| path.display().to_string());
     let temp = host.root.join("temp");
     select(&Inputs {
@@ -54,6 +79,7 @@ fn run(host: &Host, event: &str, git_ref: &str, seed: Option<&Path>) -> Outcome 
         runner_temp: &temp,
         owner: fs::metadata(&temp).map_or(0, |m| m.uid()),
         threads: 4,
+        budget,
     })
 }
 
@@ -89,7 +115,11 @@ fn a_pull_request_copies_only_the_action_store_subset_into_the_private_store() {
     let Outcome::Seeded { copied, .. } = &outcome else {
         unreachable!("{outcome:?}")
     };
-    assert_eq!((copied.files, copied.bytes, copied.present), (5, 22, 0));
+    assert_eq!(
+        (copied.files, copied.bytes, copied.present, copied.failed),
+        (5, 22, 0, 0)
+    );
+    assert!(!copied.expired);
     assert_eq!(
         env_lines(&outcome),
         format!("MBX_CACHE_DIR={}\n", store.display())
@@ -138,6 +168,7 @@ fn an_absent_seed_changes_nothing() {
     assert!(!host.root.join("temp/velnor").exists());
     let empty = host.root.join("empty");
     fs::create_dir_all(&empty).unwrap_or_else(|e| unreachable!("{e}"));
+    read_only(&empty);
     let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&empty));
     assert_eq!(outcome, Outcome::Empty);
     assert_eq!(env_lines(&outcome), "");
@@ -189,6 +220,7 @@ fn a_symlinked_or_unsafe_seed_is_refused() {
         runner_temp: &host.root.join("temp"),
         owner: 4_000_000,
         threads: 2,
+        budget: Duration::from_secs(60),
     });
     let root_owned = fs::metadata(&seed).is_ok_and(|m| m.uid() == 0);
     if !root_owned {
@@ -236,4 +268,88 @@ fn a_private_store_that_is_a_symlink_is_refused() {
         Outcome::Rejected("private store path is not a directory")
     );
     assert_eq!(tree(&victim), Vec::<String>::new());
+}
+
+#[test]
+fn a_seed_the_job_can_write_is_refused() {
+    let host = host("mbx-seed-writable");
+    let seed = warm_seed(&host);
+    fs::set_permissions(&seed, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    assert_eq!(outcome, Outcome::Rejected("writable by this job"));
+    assert_eq!(env_lines(&outcome), "");
+    assert!(!host.root.join("temp/velnor").exists());
+}
+
+#[test]
+fn a_symlinked_subset_root_is_never_followed() {
+    let host = host("mbx-seed-subset-link");
+    let outside = host.root.join("outside");
+    put(&outside.join("zz/secret"), "outside");
+    let linked = host.root.join("linked");
+    put(&linked.join("actions/task-manifests/m/1"), "manifest");
+    symlink(&outside, linked.join("actions/cas")).unwrap_or_else(|e| unreachable!("{e}"));
+    read_only(&linked);
+    let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&linked));
+    let Outcome::Seeded { copied, .. } = &outcome else {
+        unreachable!("{outcome:?}")
+    };
+    assert_eq!((copied.files, copied.failed), (1, 1));
+    assert!(!host.root.join("temp/velnor/mbx/actions/cas").exists());
+    assert!(message(&outcome).contains("::warning::1 seed entries failed to copy"));
+
+    let followed = host.root.join("followed");
+    fs::create_dir_all(&followed).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(linked.join("actions"), followed.join("actions"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    read_only(&followed);
+    assert_eq!(
+        run(&host, "pull_request", "refs/pull/1/merge", Some(&followed)),
+        Outcome::Rejected("actions is a symlink")
+    );
+}
+
+#[test]
+fn a_copy_that_fails_is_reported_not_counted_as_success() {
+    let host = host("mbx-seed-failed");
+    let seed = warm_seed(&host);
+    put(
+        &host.root.join("temp/velnor/mbx/actions/cas/ab"),
+        "in the way",
+    );
+    let outcome = run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    let Outcome::Seeded { copied, .. } = &outcome else {
+        unreachable!("{outcome:?}")
+    };
+    assert_eq!((copied.files, copied.failed), (4, 1));
+    let text = message(&outcome);
+    assert!(
+        text.contains("::warning::1 seed entries failed to copy"),
+        "{text}"
+    );
+}
+
+#[test]
+fn seeding_stops_at_the_startup_budget_and_says_so() {
+    let host = host("mbx-seed-budget");
+    let seed = warm_seed(&host);
+    let outcome = run_within(
+        &host,
+        "pull_request",
+        "refs/pull/1/merge",
+        Some(&seed),
+        Duration::ZERO,
+    );
+    let Outcome::Seeded { copied, .. } = &outcome else {
+        unreachable!("{outcome:?}")
+    };
+    assert_eq!((copied.files, copied.failed), (0, 0));
+    assert!(copied.expired);
+    assert!(message(&outcome).contains("::warning::MBX seeding stopped at the startup budget"));
+    let within = run(&host, "pull_request", "refs/pull/1/merge", Some(&seed));
+    let Outcome::Seeded { copied, .. } = &within else {
+        unreachable!("{within:?}")
+    };
+    assert_eq!((copied.files, copied.expired), (5, false));
 }

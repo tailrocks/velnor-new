@@ -9,6 +9,28 @@ const BIN: &str = "{{ bin }}";
 const PLATFORM: &str = "{{ platform }}";
 const TARGET: &str = "{{ target }}";
 const VERSION: &str = "{{ version }}";
+const MAX_FILE_NAME_BYTES: usize = 255;
+const LONGEST_SUFFIX: &str = ".provenance.json";
+const LONGEST_TARGET: &str = "aarch64-unknown-linux-musl";
+const LONGEST_PLATFORM: &str = "linux-arm64";
+const VERSION_ALLOWANCE: &str = "vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv";
+
+fn fits_file_name_limit(template: &str, binary: &Binary) -> bool {
+    std::iter::once(binary.bin.as_str())
+        .chain(binary.bins.iter().map(|extra| extra.bin.as_str()))
+        .all(|bin| {
+            expand_asset_name(
+                template,
+                bin,
+                LONGEST_PLATFORM,
+                LONGEST_TARGET,
+                VERSION_ALLOWANCE,
+            )
+            .len()
+                + LONGEST_SUFFIX.len()
+                <= MAX_FILE_NAME_BYTES
+        })
+}
 
 pub(crate) fn valid(template: &str) -> bool {
     let literal = [BIN, PLATFORM, TARGET, VERSION]
@@ -48,6 +70,12 @@ pub(crate) fn checked(binary: &Binary, tag: &TagPattern) -> Result<Option<String
                 && !binary.bins.is_empty()
                 && !template.contains(BIN) =>
         {
+            Err(ReleaseError::InvalidAssetName {
+                package: binary.package.clone(),
+                template: template.clone(),
+            })
+        }
+        Some(template) if !fits_file_name_limit(template, binary) => {
             Err(ReleaseError::InvalidAssetName {
                 package: binary.package.clone(),
                 template: template.clone(),

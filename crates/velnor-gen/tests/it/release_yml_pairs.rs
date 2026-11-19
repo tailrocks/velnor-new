@@ -26,13 +26,18 @@ fn a_versioned_asset_name_names_every_bin_of_a_raw_release() -> TestResult {
     let commands = runs(build);
     let version = "echo \"version=${TAG#app-v}\" >> \"$GITHUB_OUTPUT\"";
     assert!(commands.contains(&version), "{commands:?}");
-    assert!(commands.contains(&"mkdir stage"), "{commands:?}");
+    assert!(
+        commands.contains(&"mkdir \"$RUNNER_TEMP/stage\""),
+        "{commands:?}"
+    );
     for bin in ["app", "rg"] {
         let name = format!("{bin}-${{VERSION}}-linux-x64");
         assert!(
             commands.contains(
-                &format!("cp target/x86_64-unknown-linux-gnu/release/{bin} \"stage/{name}\"")
-                    .as_str()
+                &format!(
+                    "cp target/x86_64-unknown-linux-gnu/release/{bin} \"$RUNNER_TEMP/stage/{name}\""
+                )
+                .as_str()
             ),
             "{commands:?}"
         );
@@ -54,12 +59,15 @@ fn a_versioned_asset_name_names_every_bin_of_a_raw_release() -> TestResult {
         })
         .filter_map(|step| step.get("working-directory").and_then(Node::text))
         .collect();
-    assert_eq!(staged, ["stage"; 4]);
+    assert_eq!(staged, ["${{ runner.temp }}/stage"; 4]);
     let upload = steps(build)
         .last()
         .and_then(|step| step.at(&["with", "path"]))
         .and_then(Node::text);
-    assert_eq!(upload, Some("stage/*\n!stage/*.rustc"));
+    assert_eq!(
+        upload,
+        Some("${{ runner.temp }}/stage/*\n!${{ runner.temp }}/stage/*.rustc")
+    );
 
     for job_id in ["sums-app", "publish-app"] {
         let commands = runs(job(&tree, job_id)?);
@@ -95,9 +103,9 @@ fn an_unversioned_asset_name_names_every_bin_of_a_raw_release_without_staging() 
         );
         assert!(commands.contains(&format!("sha256sum {name} > {name}.sha256").as_str()));
         assert!(commands.iter().any(|run| {
-            run.contains(&format!(
-                "capture(\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\")"
-            ))
+            run.contains(
+                "capture(\"\\\\A(?<sha256>[0-9a-f]{64})  \\\\Q\" + $asset + \"\\\\E\\\\n\\\\z\")",
+            ) && run.contains(&format!("--arg asset {name} "))
         }));
     }
     let upload = steps(build)
@@ -136,7 +144,7 @@ fn a_versioned_archive_packs_the_extra_bins_and_files_under_the_expanded_name() 
     let commands = runs(job(&tree, "build-app-linux-x64")?);
     assert!(
         commands.contains(
-            &"tar -czf \"stage/app-${VERSION}-linux-x64.tar.gz\" -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
+            &"tar -czf \"$RUNNER_TEMP/stage/app-${VERSION}-linux-x64.tar.gz\" -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
         ),
         "{commands:?}"
     );
