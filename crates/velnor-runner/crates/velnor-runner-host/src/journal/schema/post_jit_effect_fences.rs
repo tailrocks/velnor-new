@@ -45,7 +45,7 @@ pub(super) async fn bootstrap(conn: &turso::Connection) -> Result<(), HostError>
 }
 
 pub(super) async fn migrate_v54_to_v55(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema(conn).await?;
+    super::validate_persisted_schema_v53(conn).await?;
     for name in ["post_jit_jit_claim_fence", "post_jit_runner_start_fence"] {
         conn.execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
             .await
@@ -59,7 +59,7 @@ pub(super) async fn migrate_v54_to_v55(conn: &turso::Connection) -> Result<(), H
     conn.execute("PRAGMA user_version = 55", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema(conn).await
+    super::validate_persisted_schema_v53(conn).await
 }
 
 #[cfg(test)]
