@@ -9,6 +9,7 @@ use crate::pairs::{
     DEFAULT_RUNNER_CPU_MILLICORES, DEFAULT_RUNNER_MEMORY_BYTES, Limits, parse_memory,
 };
 use crate::side::Side;
+use crate::timeout::{TimeoutScale, parse_timeout_scale};
 
 mod environment;
 mod servers;
@@ -250,4 +251,12 @@ pub struct RunArgs {
         help = "Start from an empty cache instead of the one that an earlier run on the same --dir left"
     )]
     pub fresh_cache: bool,
+    #[arg(
+        long,
+        default_value = "1",
+        value_name = "FACTOR",
+        value_parser = parse_timeout_scale,
+        help = "Multiply every numeric timeout-minutes in the run's copy of the workflows (job and step level) by FACTOR, rounding each up to whole minutes, for a slower local machine; at least 1, at most three decimals (3 on a laptop). Expressions are left alone, and the checkout is not modified"
+    )]
+    pub timeout_scale: TimeoutScale,
 }

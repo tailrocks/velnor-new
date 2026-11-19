@@ -15,7 +15,7 @@ fn locked(
     sources: &[(&str, &str)],
     listed: &[&str],
 ) -> Result<RepoView, Box<dyn std::error::Error>> {
-    let mut view = pinned("0.1.86", "")?;
+    let mut view = pinned("0.1.88", "")?;
     let mut lock =
         "version = 4\n\n[[package]]\nname = \"package-0\"\nversion = \"0.1.0\"\n".to_owned();
     for (name, source) in sources {

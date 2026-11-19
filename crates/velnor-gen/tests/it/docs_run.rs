@@ -19,7 +19,7 @@ fn step_conditions(
     named: &dyn Fn(&str) -> bool,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], None)?;
-    pin_helper(&mut repo, "0.1.95")?;
+    pin_helper(&mut repo, "0.1.97")?;
     repo.files
         .insert(path(".velnor/rust-ci.toml")?, config.as_bytes().to_vec());
     let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
@@ -160,8 +160,8 @@ fn an_unknown_docs_mode_is_refused() {
 #[test]
 fn a_post_merge_mode_needs_a_helper_that_knows_its_key() -> TestResult {
     for (key, floor, too_old) in [
-        ("docs", "0.1.88", "0.1.87"),
-        ("check_alone", "0.1.91", "0.1.90"),
+        ("docs", "0.1.97", "0.1.96"),
+        ("check_alone", "0.1.97", "0.1.96"),
     ] {
         let config = format!("{key} = \"post_merge\"\n");
         let mut old = view(&["Cargo.toml"], Some(config.as_bytes()))?;

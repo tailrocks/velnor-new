@@ -16,6 +16,17 @@ use velnor_model::RepoPath;
 
 pub(crate) type TestResult = Result<(), Box<dyn Error>>;
 
+/// A name no other test in this process shares. Tests run as threads of one
+/// process under plain `cargo test`, so the process id alone is not unique.
+pub(crate) fn unique_id() -> String {
+    static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+    format!(
+        "{}-{}",
+        std::process::id(),
+        NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    )
+}
+
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 const CONFIG: &str = ".velnor/rust-ci.toml";
 
@@ -23,8 +34,7 @@ pub(crate) struct Scratch(PathBuf);
 
 impl Scratch {
     pub(crate) fn new(name: &str) -> Result<Self, Box<dyn Error>> {
-        let base =
-            std::env::temp_dir().join(format!("velnor-gen-io-{}-{name}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("velnor-gen-io-{}-{name}", unique_id()));
         if base.exists() {
             fs::remove_dir_all(&base)?;
         }

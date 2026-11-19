@@ -6,7 +6,7 @@ use std::fs;
 use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView, SAMPLES};
 use velnor_rust::{MetadataError, cargo_files, is_plain_source, manifests, wanted_files};
 
 use crate::expected_with_notes;
@@ -16,7 +16,6 @@ use staged::StagedSample;
 
 mod staged;
 
-pub const SAMPLES: &str = "generator/samples";
 pub const SAMPLE_REPOSITORY: &str = "/repo";
 
 pub fn record_sample(
@@ -34,10 +33,15 @@ pub fn record_sample(
 
 pub fn recording_of(
     checkout: &Path,
-    view: RepoView,
-    metadata: BTreeMap<RepoPath, Vec<u8>>,
+    mut view: RepoView,
+    mut metadata: BTreeMap<RepoPath, Vec<u8>>,
     out: &mut dyn Write,
 ) -> Result<Recording, Error> {
+    let outside = |path: &RepoPath| !path.as_str().starts_with(&format!("{SAMPLES}/"));
+    view.tracked_paths.retain(outside);
+    view.files.retain(|path, _| outside(path));
+    view.symlinks.retain(outside);
+    metadata.retain(|workspace, _| outside(workspace));
     let (_, notes) = expected_with_notes(&view).map_err(Error::Generate)?;
     for note in notes {
         writeln!(out, "velnor-gen: {note}").ok();

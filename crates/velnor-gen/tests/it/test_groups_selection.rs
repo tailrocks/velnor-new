@@ -25,7 +25,7 @@ fn condition(workflow: &serde_json::Value, id: &str) -> Result<String, String> {
 
 #[test]
 fn a_group_takes_paths_and_events() -> TestResult {
-    let facts = detect(&view_with(&["Cargo.toml"], &selected(), "0.1.82")?)?;
+    let facts = detect(&view_with(&["Cargo.toml"], &selected(), "0.1.90")?)?;
     let group = &facts.config.test_groups[0];
     assert_eq!(
         group
@@ -75,7 +75,7 @@ fn a_group_with_a_selection_runs_only_when_the_plan_says_so_and_the_others_alway
 
 #[test]
 fn the_required_gate_expects_a_skipped_group_exactly_when_the_plan_skips_it() -> TestResult {
-    let text = workflow(&view_with(&["Cargo.toml"], &selected(), "0.1.82")?)?;
+    let text = workflow(&view_with(&["Cargo.toml"], &selected(), "0.1.90")?)?;
     let spec = text
         .lines()
         .find_map(|line| line.trim().strip_prefix("GATE_SPEC: '"))
@@ -98,7 +98,7 @@ fn a_group_of_another_root_reads_that_roots_output() -> TestResult {
     let text = workflow(&view_with(
         &["Cargo.toml", "lab/Cargo.toml"],
         config,
-        "0.1.82",
+        "0.1.90",
     )?)?;
     let tree = document(&text)?;
     let slow = condition(&tree, "rust-test-slow-lab")?;

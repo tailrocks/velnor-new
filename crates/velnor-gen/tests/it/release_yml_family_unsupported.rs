@@ -19,7 +19,7 @@ fn generate(binaries: &str) -> Result<(), Box<dyn Error>> {
     let config = format!("{FAMILY}{binaries}");
     let mut view = release_view(&[APP], Some(&config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.83").into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.85").into_bytes());
     view.files.insert(
         RepoPath::new("release-plz.toml")?,
         RELEASE_PLZ.as_bytes().to_vec(),

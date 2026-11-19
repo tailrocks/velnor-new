@@ -70,7 +70,7 @@ fn an_unrelated_label_gets_its_own_concurrency_group_and_cannot_cancel_the_run_i
             "${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' }}"
         )
     );
-    let always = crate::yaml_tree::document(&render("0.1.86", "shape = \"lint-test\"\n")?)?;
+    let always = crate::yaml_tree::document(&render("0.1.88", "shape = \"lint-test\"\n")?)?;
     assert!(
         !always
             .pointer("/concurrency/group")
@@ -101,7 +101,7 @@ fn an_ignored_event_cannot_publish_a_check_named_required() -> TestResult {
         assert_ne!(shown, "Required");
         assert!(shown.starts_with("Required"), "{shown}");
     }
-    let always = crate::yaml_tree::document(&render("0.1.86", "shape = \"lint-test\"\n")?)?;
+    let always = crate::yaml_tree::document(&render("0.1.88", "shape = \"lint-test\"\n")?)?;
     assert_eq!(
         always.pointer("/jobs/required/name").and_then(Json::as_str),
         Some("Required")
@@ -112,7 +112,7 @@ fn an_ignored_event_cannot_publish_a_check_named_required() -> TestResult {
 fn every_generated_workflow(
     config: &str,
 ) -> Result<Vec<(String, Json)>, Box<dyn std::error::Error>> {
-    let mut view = pinned("0.1.86", config)?;
+    let mut view = pinned("0.1.88", config)?;
     for (path, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let path = RepoPath::new(path)?;
         view.tracked_paths.insert(path.clone());

@@ -104,7 +104,6 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     manifest: None,
                     target_dir: None,
                     when: When::Success,
-                    skip_on_draft: false,
                     skip_after_merge_group: None,
                     skip_when_cold: false,
                     pr: PrRun::Always,

@@ -3,7 +3,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::classify::{Class, classify};
+use crate::classify::{Class, classify, generated_workflow};
 use crate::config::rule_matches;
 use crate::lock_affected::lock_affected;
 use crate::manifest_diff::only_dependency_versions_differ;
@@ -270,6 +270,7 @@ impl<'a> Graph<'a> {
             path,
             is_root_manifest,
             self.shelters(path, root),
+            generated_workflow(self.changes, path),
         ) {
             Class::Nothing => {}
             Class::Packages(names) => self.seed_where(&|name, _| names.contains(&name), path, walk),

@@ -21,6 +21,14 @@ fn respond(state: &mut State, method: &str, segments: &[&str]) -> (u16, Value) {
                 .find(|(id, container)| *id == key || container.name == *key)
                 .map(|(id, container)| inspection(id, container)),
         ),
+        ("POST", ["containers", id, "start"]) => match state.containers.get_mut(*id) {
+            Some(container) => {
+                container.running = true;
+                container.fresh = false;
+                (204, Value::Null)
+            }
+            None => found(None),
+        },
         ("POST", ["containers", id, "stop"]) => match state.containers.get_mut(*id) {
             Some(container) => {
                 container.running = false;
@@ -87,6 +95,13 @@ pub(super) async fn serve(
     if !active {
         hung.notify_one();
         return std::future::pending().await;
+    }
+    if method == "POST" && segments.len() == 3 && segments[2] == "attach" {
+        let ready = lock(state)
+            .containers
+            .get(segments[1])
+            .and_then(|container| attach::ready(&container.name));
+        return attach::serve(stream, ready).await;
     }
     let (status, body) = if method == "POST" && segments.len() == 2 && segments[1] == "create" {
         create(state, segments[0], query, &body).await?
@@ -159,6 +174,22 @@ async fn create(
             json!({"Name": name, "Driver": "local", "Mountpoint": format!("/var/lib/docker/volumes/{name}/_data"), "Labels": labels, "Scope": "local", "Options": {}}),
         ));
     }
+    if kind == "containers" {
+        let scripted = lock(state).scripted.remove(name);
+        if let Some(pair) = scripted {
+            lock(state).containers.insert(
+                pair.helper_id(),
+                Container {
+                    name: name.to_owned(),
+                    labels,
+                    running: false,
+                    fresh: true,
+                    inspection: Some(initializer::inspection(pair)),
+                },
+            );
+            return Ok((201, json!({"Id": pair.helper_id(), "Warnings": []})));
+        }
+    }
     let delayed = lock(state)
         .creates
         .remove(&(kind.to_owned(), name.to_owned()));
@@ -182,6 +213,7 @@ async fn create(
                     name: name.to_owned(),
                     labels,
                     running: false,
+                    fresh: false,
                     inspection: None,
                 },
             );
@@ -204,7 +236,18 @@ fn inspection(id: &str, container: &Container) -> Value {
         .unwrap_or_else(|| json!({"Config": {}}));
     value["Id"] = json!(id);
     value["Name"] = json!(format!("/{}", container.name));
-    value["State"] = json!({"Running": container.running, "Status": if container.running { "running" } else { "exited" }});
+    let status = match (container.running, container.fresh) {
+        (true, _) => "running",
+        (false, true) => "created",
+        (false, false) => "exited",
+    };
+    let started_at = if container.fresh {
+        "0001-01-01T00:00:00Z"
+    } else {
+        "2026-01-01T00:00:00Z"
+    };
+    value["State"] =
+        json!({"Running": container.running, "Status": status, "StartedAt": started_at});
     value["Config"]["Labels"] = container.labels.clone();
     value
 }

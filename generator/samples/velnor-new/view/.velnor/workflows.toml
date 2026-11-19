@@ -459,6 +459,36 @@ run = "sleep 180"
 env = { G3_CANARY = "${{ secrets.G3_CANARY }}" }
 
 [[workflow.job]]
+id = "mode-guard"
+name = "Mode guard / unknown mode"
+if = "!(inputs.mode == 'both' || inputs.mode == 'features' || inputs.mode == 'js' || inputs.mode == 'artifacts' || inputs.mode == 'buildx' || inputs.mode == 'negative' || inputs.mode == 'composite' || inputs.mode == 'docker-action' || inputs.mode == 'post-fail' || inputs.mode == 'oidc' || inputs.mode == 'cancel' || inputs.mode == 'compose' || inputs.mode == 'bind' || inputs.mode == 'testcontainers' || inputs.mode == 'submodule' || inputs.mode == 'pressure' || inputs.mode == 'mask' || inputs.mode == 'outputs' || inputs.mode == 'js-pin' || inputs.mode == 'services' || inputs.mode == 'container' || inputs.mode == 'cancel-service' || inputs.mode == 'ports' || inputs.mode == 'secret' || inputs.mode == 'mise-pin' || inputs.mode == 'stable-sources' || inputs.mode == 'cache' || inputs.mode == 'empty-cache' || inputs.mode == 'mbx-cache-roundtrip')"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject a mode that no job runs"
+run = "echo '::error title=unknown_qualification_mode::The mode is not one that Qualification runs. Without this job the run would succeed with every job skipped.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
+
+[[workflow.job]]
+id = "stable-sources-guard"
+name = "Stable sources / branch guard"
+if = "inputs.mode == 'stable-sources' && !(github.event_name == 'workflow_dispatch' && github.repository == 'tailrocks/velnor-new' && startsWith(github.ref, 'refs/heads/') && github.ref != format('refs/heads/{0}', github.event.repository.default_branch))"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Reject stable sources outside a non-default branch"
+run = "echo '::error title=stable_sources_requires_non_default_branch::Dispatch stable-sources from a non-default branch of this repository. Every stable-sources job is skipped otherwise.'"
+
+[[workflow.job.step]]
+name = "Fail the guard"
+run = "exit 1"
+
+[[workflow.job]]
 id = "verify-hosted"
 name = "Verify / GitHub hosted / Linux x64"
 if = "inputs.mode == 'both'"

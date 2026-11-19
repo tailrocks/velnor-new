@@ -126,7 +126,7 @@ fn the_token_reaches_only_the_fetch_step_and_every_cargo_command_after_it_runs_o
         let repo = private_repo(
             &["Cargo.toml", "tools/Cargo.toml"],
             &format!("{shape}{SECTION}"),
-            "0.1.86",
+            "0.1.88",
         )?;
         let text = workflow(&repo)?;
         let mut fetches = 0;
@@ -155,7 +155,7 @@ fn the_token_reaches_only_the_fetch_step_and_every_cargo_command_after_it_runs_o
 
 #[test]
 fn without_the_section_the_workflow_has_no_token_and_no_offline_flag() -> TestResult {
-    let mut repo = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
+    let mut repo = private_repo(&["Cargo.toml"], SECTION, "0.1.88")?;
     repo.files.insert(
         path(".velnor/rust-ci.toml")?,
         b"full_run = 'off'\n".to_vec(),
@@ -188,18 +188,18 @@ fn a_misconfigured_section_or_an_old_helper_is_refused() -> TestResult {
         SECTION.replace("secrets.DEPS_APP_PRIVATE_KEY", "secrets.github_deps_key"),
     ];
     for section in bad {
-        let repo = private_repo(&["Cargo.toml"], &section, "0.1.86")?;
+        let repo = private_repo(&["Cargo.toml"], &section, "0.1.88")?;
         assert!(workflow(&repo).is_err(), "{section}");
     }
-    for released in ["0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
-        let old = private_repo(&["Cargo.toml"], SECTION, released)?;
+    for minor in 81..=87 {
+        let old = private_repo(&["Cargo.toml"], SECTION, &format!("0.1.{minor}"))?;
         assert!(
             workflow(&old)
-                .is_err_and(|error| error.to_string().contains("pin velnor-ci 0.1.86 or later")),
-            "{released}"
+                .is_err_and(|error| error.to_string().contains("pin velnor-ci 0.1.88 or later")),
+            "0.1.{minor}"
         );
     }
-    let current = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
+    let current = private_repo(&["Cargo.toml"], SECTION, "0.1.88")?;
     assert!(workflow(&current).is_ok());
     Ok(())
 }
@@ -220,7 +220,7 @@ fn misses(condition: &str, hits: &[&str]) -> Result<bool, Box<dyn std::error::Er
 
 #[test]
 fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches() -> TestResult {
-    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.86")?;
+    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.88")?;
     let text = workflow(&repo)?;
     let mut checked = 0;
     for job in jobs(&text)? {
@@ -261,7 +261,7 @@ fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches(
 
 #[test]
 fn the_dependency_policy_job_fetches_before_cargo_deny_resolves_the_graph() -> TestResult {
-    let mut repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.86")?;
+    let mut repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.88")?;
     for (name, text) in [("deny.toml", ""), ("mise.toml", crate::events::DENY_MISE)] {
         let name = path(name)?;
         repo.tracked_paths.insert(name.clone());
@@ -302,7 +302,7 @@ fn the_dependency_policy_job_fetches_before_cargo_deny_resolves_the_graph() -> T
 
 #[test]
 fn a_merge_queue_entry_gets_the_token_only_when_the_check_before_it_allows_it() -> TestResult {
-    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.86")?;
+    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.88")?;
     let text = workflow(&repo)?;
     let mut checked = 0;
     for job in jobs(&text)? {
@@ -350,7 +350,7 @@ fn a_merge_queue_entry_gets_the_token_only_when_the_check_before_it_allows_it() 
 
 #[test]
 fn the_token_action_gets_the_configured_value_as_its_client_id() -> TestResult {
-    let text = workflow(&private_repo(&["Cargo.toml"], SECTION, "0.1.86")?)?;
+    let text = workflow(&private_repo(&["Cargo.toml"], SECTION, "0.1.88")?)?;
     let mut checked = 0;
     for job in jobs(&text)? {
         for step in job["steps"].as_array().into_iter().flatten() {
@@ -368,7 +368,7 @@ fn the_token_action_gets_the_configured_value_as_its_client_id() -> TestResult {
 #[test]
 fn test_binaries_built_with_private_sources_are_never_uploaded_as_an_artifact() -> TestResult {
     let config = format!("shape = 'groups'\n{SECTION}");
-    let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.86")?)?;
+    let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.88")?)?;
     for job in jobs(&text)? {
         for step in job["steps"].as_array().into_iter().flatten() {
             let name = step["with"]["name"].as_str().unwrap_or_default();
@@ -385,7 +385,7 @@ fn test_binaries_built_with_private_sources_are_never_uploaded_as_an_artifact() 
 fn a_cargo_config_include_is_refused_so_no_included_source_can_hide_the_private_dependencies()
 -> TestResult {
     for config in ["", "[build]\njobs = 2\n"] {
-        let mut repo = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
+        let mut repo = private_repo(&["Cargo.toml"], SECTION, "0.1.88")?;
         repo.files.insert(
             path(".cargo/config.toml")?,
             format!("include = [\"private.toml\"]\n{config}").into_bytes(),

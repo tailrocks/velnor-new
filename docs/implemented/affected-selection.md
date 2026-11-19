@@ -2,7 +2,7 @@
 
 Note: crate paths below that name `crates/velnor-actions-*` and the `plan-v1`/`merge-v1` operations describe the retired engine (deleted in #1459). `velnor-ci` implements the selection now; the policy is unchanged.
 
-Hard decision: [3. Pull requests test only what they affect](../hard-decisions.md#3-pull-requests-test-only-what-they-affect).
+Former hard decision 3 (pull requests test only what they affect) was removed with the engine's Rust path in #608.
 
 A pull request runs only the crate jobs its change can affect. The other crate
 jobs are skipped as whole jobs: no runner, checkout, tool setup, cache restore,

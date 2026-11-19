@@ -10,9 +10,9 @@ use velnor_model::{
     AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection,
 };
 use velnor_rust::{
-    cargo_files, defer_post_merge_docs, detect, introduced, member_sources, optional_steps,
-    plan_groups, policy_runs, root_sources, select_event, selects_by_diff, tests_expected,
-    unknown_paths, unread_packages,
+    cargo_files, defer_post_merge_docs, detect, introduced, is_workflow_file, member_sources,
+    optional_steps, plan_groups, policy_runs, root_sources, select_event, selects_by_diff,
+    tests_expected, unknown_paths, unread_packages,
 };
 
 use super::{
@@ -219,6 +219,7 @@ fn event_changes(
     let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
         .into_iter()
         .filter(|path| paths.contains(path) && (is_lock(path) || roots.contains(path)))
+        .chain(paths.iter().filter(|path| is_workflow_file(path)).cloned())
         .chain(
             facts
                 .weakenings
@@ -296,6 +297,14 @@ fn read_head_files(
 ) -> Result<BTreeMap<RepoPath, String>, CiError> {
     let wanted: Vec<RepoPath> = cargo_files(&checkout.view.tracked_paths)
         .into_iter()
+        .chain(
+            checkout
+                .view
+                .tracked_paths
+                .iter()
+                .filter(|path| is_workflow_file(path))
+                .cloned(),
+        )
         .filter(|path| changed.contains(path))
         .collect();
     let files = read_files(&checkout.root, &wanted).map_err(ci)?;

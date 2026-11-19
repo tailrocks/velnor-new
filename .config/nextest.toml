@@ -15,6 +15,7 @@ command = ["/usr/bin/env", "PATH=/nonexistent"]
 [test-groups]
 docker-networks = { max-threads = 4 }
 velnor-ci-serial = { max-threads = 1 }
+probe-cleanup-observer-serial = { max-threads = 1 }
 
 [profile.ci]
 retries = 0
@@ -90,9 +91,21 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 filter = 'package(=velnor-ci) and test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
 slow-timeout = { period = "30s", terminate-after = 4 }
 
+# Every delta_baseline test runs velnor-ci subprocesses on real trees, and the staging test
+# waits out the 2 s racy-ctime margin on purpose: both run past the 2 s default.
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(delta_baseline::)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
 [[profile.default.overrides]]
 filter = 'package(=velnor-ci) and test(audit::bounds::)'
 slow-timeout = { period = "30s", terminate-after = 4 }
+
+# Every delta_baseline test runs velnor-ci subprocesses on real trees, and the staging test
+# waits out the 2 s racy-ctime margin on purpose: both run past the 2 s default.
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(delta_baseline::)'
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-ci) and test(audit::bounds::)'
@@ -126,3 +139,11 @@ slow-timeout = { period = "30s", terminate-after = 1 }
 [[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = "package(=velnor-resource-probe) and binary(=job_hook_public)"
+test-group = "probe-cleanup-observer-serial"
+
+[[profile.ci.overrides]]
+filter = "package(=velnor-resource-probe) and binary(=job_hook_public)"
+test-group = "probe-cleanup-observer-serial"

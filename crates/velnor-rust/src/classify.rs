@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use velnor_model::{
-    AllTrigger, CACHE_TRIM_WORKFLOW_PATH, PackageName, RepoPath, RustCiConfig, WORKFLOW_PATH,
+    AllTrigger, ChangeSet, Owner, PackageName, RepoPath, RustCiConfig, WORKFLOW_PATH, owner_of,
 };
 
 use crate::config::{CONFIG_PATH, rule_matches};
@@ -33,6 +33,7 @@ pub(crate) fn classify<'c>(
     path: &RepoPath,
     is_root_manifest: bool,
     sheltered: bool,
+    generated: bool,
 ) -> Class<'c> {
     if config
         .non_inputs
@@ -50,17 +51,38 @@ pub(crate) fn classify<'c>(
     if !packages.is_empty() {
         return Class::Packages(packages);
     }
-    // The generated cache cleanup only deletes PR cache entries; no build or test reads it.
-    if *path == CACHE_TRIM_WORKFLOW_PATH {
-        return Class::Nothing;
-    }
     if let Some(trigger) = global(path, is_root_manifest) {
         return Class::Global(trigger);
+    }
+    // velnor-gen owns this workflow and it runs no Rust code; rust-ci.yml is matched above.
+    if generated {
+        return Class::Nothing;
     }
     if config.default_ignores && !sheltered && ignored(path) {
         return Class::Nothing;
     }
     Class::Unknown
+}
+
+/// A workflow file: its content can carry the velnor-gen header.
+#[must_use]
+pub fn is_workflow_file(path: &RepoPath) -> bool {
+    let text = path.as_str();
+    text.starts_with(".github/workflows/")
+        && Path::new(text).extension().is_some_and(|extension| {
+            extension.eq_ignore_ascii_case("yml") || extension.eq_ignore_ascii_case("yaml")
+        })
+}
+
+/// True when `path` is a workflow that velnor-gen owns, judged by its sealed
+/// header in the head version or, for a deleted file, the base version.
+pub(crate) fn generated_workflow(changes: &ChangeSet, path: &RepoPath) -> bool {
+    is_workflow_file(path)
+        && changes
+            .head_files
+            .get(path)
+            .or_else(|| changes.base_files.get(path))
+            .is_some_and(|text| owner_of(text.as_bytes()) == Owner::VelnorGen)
 }
 
 fn global(path: &RepoPath, is_root_manifest: bool) -> Option<AllTrigger> {
