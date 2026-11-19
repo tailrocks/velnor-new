@@ -75,6 +75,38 @@ fn compat_follows_the_runner_image() {
 }
 
 #[test]
+fn compat_follows_the_distro_in_os_release() {
+    let release = |name: &str, body: &str| {
+        let dir = scratch_root("os-release");
+        fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
+        let path = dir.join(name);
+        fs::write(&path, body).unwrap_or_else(|e| unreachable!("{e}"));
+        let path: &'static str = Box::leak(path.display().to_string().into_boxed_str());
+        compat_with("compat-inputs", |setup| {
+            setup.env.push(("VELNOR_OS_RELEASE", path));
+        })
+    };
+    let base = release("a", "ID=ubuntu\nVERSION_ID=\"24.04\"\n");
+    assert_eq!(base, release("b", "ID=ubuntu\nVERSION_ID=\"24.04\"\n"));
+    assert_ne!(base, release("c", "ID=ubuntu\nVERSION_ID=\"22.04\"\n"));
+    assert_ne!(base, release("d", "ID=debian\nVERSION_ID=\"24.04\"\n"));
+}
+
+#[test]
+fn an_unreadable_os_release_fails_prepare_instead_of_sharing_a_digest() {
+    let missing = scratch_root("os-release-missing").join("no-such-os-release");
+    let missing: &'static str = Box::leak(missing.display().to_string().into_boxed_str());
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.env.push(("ImageOS", "ubuntu24"));
+    setup.env.push(("VELNOR_OS_RELEASE", missing));
+    let run = prepare("compat-no-os-release", &setup);
+    assert!(!run.output.status.success(), "{:?}", run.output);
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert!(stderr.contains("os-release"), "{stderr}");
+    assert!(run.outputs.is_empty(), "{}", run.outputs);
+}
+
+#[test]
 fn rust_before_1_71_gets_numeric_debug_values() {
     let mut setup = Setup::new(reported("1.70.0", Some("0.9.151")));
     setup.release = "1.70.0";

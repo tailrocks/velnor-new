@@ -198,6 +198,9 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         script(&bin.join("rustc"), &format!("cat <<'EOF'\n{report}EOF"));
     }
     let (env_file, outputs) = (dir.join("env"), dir.join("output"));
+    let os_release = dir.join("os-release");
+    fs::write(&os_release, "ID=ubuntu\nVERSION_ID=\"24.04\"\n")
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .arg("prepare")
@@ -206,7 +209,8 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
         .env("CARGO_HOME", &cargo_home)
         .env("GITHUB_ENV", &env_file)
-        .env("GITHUB_OUTPUT", &outputs);
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("VELNOR_OS_RELEASE", &os_release);
     for (name, value) in &setup.env {
         command.env(name, value);
     }
