@@ -92,6 +92,8 @@ pub use crate::homebrew_adoption_workflow::{
     RenderedHomebrewAdoptionCallee, render_homebrew_adoption_callee,
 };
 
+pub use crate::project_tool_resolver::quote_project_tool_run_refs;
+
 pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
 
 pub const VERIFY_PATH: &str = "/usr/bin:/bin:/usr/sbin:/sbin";

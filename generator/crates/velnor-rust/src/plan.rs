@@ -101,6 +101,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        fork_runner: facts.config.fork_runner.clone(),
         jobs,
     }
 }

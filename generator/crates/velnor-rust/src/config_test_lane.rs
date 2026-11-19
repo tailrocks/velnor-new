@@ -96,6 +96,7 @@ pub(crate) fn commands(
                 None if direct.is_empty() => FilterRef::All,
                 None => FilterRef::AllExcept(direct.to_vec()),
             },
+            ci_profile: root.nextest_ci_profile,
         })
         .collect()
 }

@@ -52,6 +52,7 @@ pub struct RenderContext {
     pub preseed: bool,
     pub workflow_tasks: Vec<crate::verification_jobs::WorkflowTaskPolicy>,
     pub lane_plan: Option<LanePlan>,
+    pub scale_set_support_jobs: std::collections::BTreeSet<String>,
     pub pull_request_cache_policy: PullRequestCachePolicy,
     pub mise_quiet: bool,
     pub plan_consumer_env: BTreeMap<String, String>,

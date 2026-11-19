@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use velnor_model::{
     CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName,
+    RunnerLabel, RustCiConfig, Shape,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,10 +12,11 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 21] = [
+const KEYS: [&str; 23] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
+    "fork_runner",
     "crates_mirror",
     "timeout_minutes",
     "exclude",
@@ -31,6 +32,7 @@ const KEYS: [&str; 21] = [
     "full_run",
     "helper",
     "ci_debuginfo",
+    "cache_budget_bytes",
     "test_setup",
     "test_lane",
     "deny",
@@ -42,6 +44,7 @@ struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     runner: Option<String>,
+    fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
@@ -61,6 +64,7 @@ struct RawConfig {
     full_run: Option<String>,
     helper: Option<crate::config_helper::RawHelper>,
     ci_debuginfo: Option<String>,
+    cache_budget_bytes: Option<u64>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
@@ -110,7 +114,11 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let tests =
         crate::config_roots::parse(raw.test_setup, raw.test_lane, raw.deny).map_err(invalid)?;
+    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
+    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
+        cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
+            .map_err(invalid)?,
         test_setup: tests.0,
         test_lanes: tests.1,
         deny: tests.2,
@@ -121,7 +129,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
+        nextest_harnesses: crate::config_lists::harnesses(raw.nextest_harnesses)
+            .map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
             .skip_draft_pull_requests
@@ -135,20 +144,10 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
+        runner,
+        fork_runner,
         timeout_minutes,
-        exclude: raw
-            .exclude
-            .into_iter()
-            .map(|entry| {
-                PathGlob::new(entry.trim_end_matches('/')).map_err(|_| {
-                    invalid(Reason::InvalidValue {
-                        key: "exclude",
-                        value: entry,
-                    })
-                })
-            })
-            .collect::<Result<_, _>>()?,
+        exclude: crate::config_lists::excludes(raw.exclude).map_err(invalid)?,
     })
 }
 
@@ -161,23 +160,6 @@ fn required_check(configured: Option<String>, default: String) -> Result<String,
             value: name,
         }),
     }
-}
-
-fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
-    entries
-        .into_iter()
-        .map(|entry| {
-            let invalid = || Reason::InvalidValue {
-                key: "nextest_harnesses",
-                value: entry.clone(),
-            };
-            let (package, target) = entry.split_once(':').ok_or_else(invalid)?;
-            Ok((
-                PackageName::new(package).map_err(|_| invalid())?,
-                TargetName::new(target).map_err(|_| invalid())?,
-            ))
-        })
-        .collect()
 }
 
 fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
@@ -200,6 +182,7 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
     RunnerLabel::new(label.clone())
         .ok()
         .filter(|runner| !without_helper_build(runner.as_str()))
+        .filter(crate::config_fork::expression_safe)
         .ok_or(Reason::InvalidValue {
             key: "runner",
             value: label,
