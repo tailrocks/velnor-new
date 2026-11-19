@@ -45,6 +45,7 @@ pub enum ReleaseError {
         bin: String,
     },
     InvalidProfile(String, String),
+    UndefinedProfile(String, String, String),
     InvalidAssetName {
         package: String,
         template: String,
