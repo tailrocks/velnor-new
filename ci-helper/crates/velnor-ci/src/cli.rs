@@ -118,6 +118,8 @@ pub enum Command {
         about = "Run a command, stream its output unchanged, append it to velnor-run.log in $RUNNER_TEMP, and exit with its exit code"
     )]
     Run(RunArgs),
+    #[command(subcommand, about = "Work on the shared Sources cache")]
+    Sources(SourcesCommand),
     #[command(
         about = "Verify the source preview runtime SDK that .velnor/generator.lock at PUBLIC_SOURCE pins (run PUBLIC_RUN_ID attempt PUBLIC_RUN_ATTEMPT of the image workflow): the lock change was approved by the parent commit, the preview's runs, jobs, annotated tag, immutable release, digests and Sigstore attestation (gh attestation verify with the pinned gh, signer pinned to the publication workflow commit) all match. Then install the SDK under $RUNNER_TEMP/source-preview-runtime (linux, darwin, receipt.json, bundle.json, identity.json) and write linux_sha256 and darwin_sha256 to $GITHUB_OUTPUT, which must be empty. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT; exits 1 on any failed check"
     )]
@@ -173,6 +175,26 @@ pub struct CheckConfigurationsArgs {
         help = "JSON array of named feature configurations; without a file, check the default configuration"
     )]
     pub configurations: Option<PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SourcesCommand {
+    #[command(
+        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code"
+    )]
+    Fetch(SourcesFetchArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SourcesFetchArgs {
+    #[arg(
+        long,
+        required = true,
+        num_args = 1..,
+        value_name = "DIR",
+        help = "Cargo root directories, relative to the working directory or absolute, fetched in the order given"
+    )]
+    pub roots: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

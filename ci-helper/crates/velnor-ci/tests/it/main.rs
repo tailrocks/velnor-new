@@ -116,6 +116,8 @@ mod run_nextest_reconcile;
 mod run_process;
 mod run_summary;
 mod setup_pure;
+mod sources_fetch;
+mod sources_fetch_contract;
 mod support;
 mod telemetry;
 mod ties;

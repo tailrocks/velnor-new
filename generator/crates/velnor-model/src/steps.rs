@@ -26,6 +26,10 @@ pub enum StepKind {
         lane: RootSlug,
         position: usize,
     },
+    SourcesFetchAll {
+        lane: RootSlug,
+        manifests: Vec<RepoPath>,
+    },
     CacheDecide {
         manifests: Vec<RepoPath>,
         target: RepoPath,
