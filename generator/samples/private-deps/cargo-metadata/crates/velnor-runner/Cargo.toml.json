@@ -1166,7 +1166,7 @@
           ],
           "name": "velnor_resource_probe",
           "src_path": "/repo/crates/velnor-runner/crates/velnor-resource-probe/src/lib.rs",
-          "test": false
+          "test": true
         },
         {
           "crate_types": [

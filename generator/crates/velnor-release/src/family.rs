@@ -38,6 +38,7 @@ pub(crate) fn plan_family(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            profile: binary.profile.clone(),
             tag_pattern: tag_pattern.clone(),
         });
     }

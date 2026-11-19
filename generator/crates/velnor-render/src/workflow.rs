@@ -5,7 +5,9 @@ use crate::rules::{
     RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource, RenderedStep, Value,
 };
 use crate::yaml::{Yaml, entry, text};
-use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_model::{
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+};
 
 /// True for every event except a pull request from a fork.
 pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
@@ -84,6 +86,7 @@ fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
                     name,
                     if name == TESTS_RUN_OUTPUT
                         || name == TESTS_LISTED_OUTPUT
+                        || name == TESTS_IGNORED_OUTPUT
                         || name == TESTS_BY_PACKAGE_OUTPUT
                     {
                         Yaml::Unread(value)
