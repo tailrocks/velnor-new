@@ -23,7 +23,6 @@ use url::Url;
 use x509_cert::Certificate;
 
 const MAX_BUNDLE_BYTES: usize = 2_000_000;
-const MAX_CHECKSUM_BYTES: usize = 64 * 1024;
 const MAX_TUF_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 pub(crate) const MAX_REQUEST_BYTES: usize = 3 * 1024 * 1024;
 pub(crate) const MAX_RESPONSE_BYTES: usize = 16 * 1024;

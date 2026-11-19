@@ -1,0 +1,22 @@
+{
+ "action": "synchronize",
+ "number": 1435,
+ "pull_request": {
+  "base": {
+   "sha": "cb45744b7a98e6fb96d741c3861c8cb8358983be",
+   "ref": "main"
+  },
+  "head": {
+   "sha": "4c540a193f8d2594f4570cf6175d675d3a5e6c33",
+   "ref": "fast/x",
+   "repo": {
+    "full_name": "someone/velnor-new",
+    "fork": true
+   }
+  }
+ },
+ "repository": {
+  "full_name": "tailrocks/velnor-new",
+  "default_branch": "main"
+ }
+}

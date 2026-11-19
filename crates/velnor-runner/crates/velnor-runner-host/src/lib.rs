@@ -16,6 +16,7 @@ mod completion_admin;
 mod config;
 mod connect;
 mod controller_ipc;
+mod credential_file;
 pub mod curl_config;
 mod daemon_lock;
 mod digest_hex;

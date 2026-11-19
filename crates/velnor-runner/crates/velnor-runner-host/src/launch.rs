@@ -86,7 +86,7 @@ pub use bootstrap::{
 };
 pub use completion::CompletionWorker;
 pub use execution_authorization::verify_persisted_execution_source_role;
-pub(crate) use gate::{gate_line, reconcile_gate};
+pub(crate) use gate::{evaluate_gate, gate_line};
 pub(crate) use resource_probe::prepare_worker_images;
 pub use resource_probe::{
     AcquiredRegistryImage, DaemonSelection, ImageObservation, ImageReference, ImageSession,
