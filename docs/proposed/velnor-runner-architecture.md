@@ -425,14 +425,16 @@ compares; velnor-new's `qualification.yml` is its seed.
   check; nightly; within hours of each official release (Velnor reports as its runner version the
   newest official release it has passed, so GitHub's 63-day version window becomes a conformance
   deadline); and as sampled shadow runs of real velnor-new jobs. The broker's own
-  `registration_deprecates_at` and `runtime_deprecates_at` fields are read and alerted on. Each new
-  official release also gets a protocol surface diff, the source diff between two tags restricted to
-  about 40 files (the broker, run-service and Results clients, the job dispatcher, the step runner,
-  the execution context, command handling), and a canary runs every 10 min in each site through the
-  production path: checkout, a cache and an artifact round trip, an OIDC token, an attestation of a
-  scratch subject, a step summary, a background step and a cancel, each read back through the API;
-  three failures in a row page the owner. Every release binary is also scanned for the banned legacy
-  endpoint paths, so a legacy API cannot ship by accident.
+  `registration_deprecates_at` and `runtime_deprecates_at` fields are read and alerted on, and every
+  protocol message is parsed strictly: an unknown field is logged and alerted rather than dropped,
+  so new server behaviour shows on its first message. Each new official release also gets a protocol
+  surface diff, the source diff between two tags restricted to about 40 files (the broker,
+  run-service and Results clients, the job dispatcher, the step runner, the execution context,
+  command handling), and a canary runs every 10 min in each site through the production path:
+  checkout, a cache and an artifact round trip, an OIDC token, an attestation of a scratch subject,
+  a step summary, a background step and a cancel, each read back through the API; three failures in
+  a row page the owner. Every release binary is also scanned for the banned legacy endpoint paths,
+  so a legacy API cannot ship by accident.
 - **Per-job-type gate** (decision 16): a job type moves only after its cases pass at 100% on the
   Kubernetes backend, its replayed real-commit pairs show no unexplained difference, and every step
   made to fail is red exactly as on the oracle (section 11).
@@ -787,8 +789,9 @@ under user-mode qemu.
 ### 8.5 Tests and the floor
 
 - **The unit of cost is `Journal::open`** (93 call sites): a pre-migrated template opens in ≤ 1 s,
-  and no test exceeds 10 CPU-seconds alone outside a shrinking list. The 40- and 6-case loops become
-  one test per case; expensive valid prefixes are built once and cloned per case.
+  and no test exceeds 10 CPU-seconds alone outside a shrinking list. The 40-, 12-, 10-, 6- and
+  4-case loops become one test per case, and the serial `test-threads=1` setting goes once tests use
+  private temp directories and ports; expensive valid prefixes are built once and cloned per case.
 - **The floor behind the loops** [M, 28 job logs]: the longest test is still 132 s in actions-cli,
   125 s in runner-host and 138 s in local-mode; one receipt-integrity test took 924.8 s.
 - **The compile floor:** `velnor-runner-host` (156,822 lines) splits into five or six crates, with
@@ -815,8 +818,10 @@ under user-mode qemu.
 - **Sizes.** Idle and running sandboxes share one memory budget per worker: 125.5 GiB less 6 GiB for
   the system, 2 GiB of eviction margin and 8 GiB for gate sandboxes leaves 109.5 GiB. Build
   sandboxes request 16 CPU with no CPU limit and 24 GiB (the heaviest job peaked at 15.7–16.8 GiB,
-  §B.2.2), so four fit per worker, idle ones included. `CARGO_BUILD_JOBS` and nextest's threads
-  equal the sandbox's CPUs, because a pod without a CPU limit sees all 96.
+  §B.2.2), so four fit per worker, idle ones included. Nextest's threads equal the sandbox class's
+  fixed CPU count, which is part of the key, because a pod without a CPU limit sees all 96. Only the
+  compile jobserver's width follows the node's free CPUs at sandbox start, from 16 up to 64, so a
+  lone PR on an idle node builds faster; compile parallelism changes no output.
 - **Page cache.** Clones do not share page cache, so each sandbox's cache counts inside its 24 GiB
   limit: about 7 GiB above the heaviest job's peak, against 14.3 GB for a fully read target. The
   agent records memory pressure per sandbox.

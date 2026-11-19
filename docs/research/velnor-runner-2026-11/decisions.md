@@ -313,6 +313,9 @@ in the design review. "Same as" marks a merged duplicate.
 | N92 | One `tests/it` integration binary per package instead of 356 separate test binaries. | Gemini 4 Carbon (Rust-only round) | — | Adopted (v3) | 177 in the workflow renderer, 109 in the orchestrator, 44 in actions-cli and 26 in runner-host today; about 340 link passes saved per cold build. |
 | N93 | Replace the subprocess loop of `non_inputs_differential.rs` (about 45,000 `git` processes) with in-process `gix` matching, keeping a 32-case differential against real `git`. | Gemini 4 Carbon | — | Adopted (v3) | A 679 s suite; estimated about 135 s → 2 s for the test, with the differential keeping its meaning. |
 | N94 | Corpus floor: at least 240 semantics, 65 fault and 30 refusal cases beside the replayed real jobs. | Gemini 4 Carbon | — | Adopted (v3) | Sizes the harness so a green means coverage, not only the jobs that happened to run. |
+| N95 | Parse every protocol message strictly: an unknown field is logged and alerted, never silently dropped. | Gemini 4 Neon (Rust-only round) | — | Adopted (v3) | Protocol drift shows on the first message that carries it, not after a behaviour change. |
+| N96 | The compile jobserver's width follows the node's free CPUs at sandbox start (16 up to 64), while nextest's threads stay at the class's fixed CPU count. | Gemini 4 Neon | — | Adopted (v3) | A lone PR on an idle node builds faster without changing any key: compile parallelism changes no output, and the test thread count stays in the key. |
+| N97 | Split every looped test (40, 12, 10, 6 and 4 cases) into one test per case and drop `test-threads=1` once tests use private temp directories and ports. | Gemini 4 Neon; earlier I059 | — | Adopted (v3) | The loops, not the cases, set today's floor. |
 
 
 ## Load-bearing decisions
@@ -702,6 +705,19 @@ default, marked "pending ruling" in the design.
 | Firecracker microVMs for the Docker suites | Recorded under pending ruling Q19; the platform trait admits a microVM backend later | Privileged dind on tainted nodes is today's behaviour |
 | A pre-push git hook streaming a thin pack before `git push` ends | Not adopted | It saves under half a second against a 1–2 s delivery |
 | Every landed commit within 6 h; 5% re-execution | Superseded: A1 within 2 h at P90; 2% after about 3,000 clean | — |
+
+### Group 18: what v3 takes from Gemini 4 Neon
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| Strict parsing of protocol messages; unknown fields logged | Adopted (N95) | Drift detected on the first message |
+| A lone job bursts to 48–64 threads | Adopted for compile width only (N96) | Test threads stay keyed |
+| Every looped test split; `test-threads=1` removed | Adopted (N97) | — |
+| A 10 s watchdog that relabels with the App when a label run is suppressed | Recorded under pending ruling Q3 | The reconciler every 30 s is the safe default |
+| `ci / Required` through a skipped reusable-workflow caller | Recorded under pending rulings Q1, Q2 | The App check is the safe default |
+| Overlay sandboxes, six per worker, sharing page cache | Recorded under pending ruling Q16 | — |
+| Per-organisation floors and disk caps | Already in v3 as quotas and store budgets | — |
+| Agents' workspaces hosted on the cluster | Not adopted in v3 | Outside this design's scope; agents verify through `velnor verify` |
 
 ## Design review
 
