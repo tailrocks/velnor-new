@@ -184,6 +184,7 @@ impl RootJobs<'_> {
     fn nextest_run(&self) -> Option<CargoCommand> {
         self.nextest.then(|| CargoCommand::NextestRun {
             filter: self.filter(),
+            ci_profile: self.root.nextest_ci_profile,
         })
     }
 
@@ -342,6 +343,7 @@ impl RootJobs<'_> {
             self.cargo(vec![CargoCommand::NextestRunArchive {
                 file: ARCHIVE_FILE,
                 filter: self.filter(),
+                ci_profile: self.root.nextest_ci_profile,
             }])
             .map(|step| Step {
                 when: When::Success,

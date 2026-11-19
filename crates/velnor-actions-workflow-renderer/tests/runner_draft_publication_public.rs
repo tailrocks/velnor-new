@@ -106,6 +106,7 @@ fn pins() -> ProductReleasePins {
         mr_boxington_version: "1.0.0".to_owned(),
         gh_version: "2.103.2".to_owned(),
         bun_version: "1.4.4".to_owned(),
+        runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig::default(),
     }
 }
 
@@ -131,6 +132,7 @@ fn rendered() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box
         mbx_qualification: None,
         mise_pin_qualification: None,
         product_release: Some(pins()),
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
     };
     request
         .runner_image_family
