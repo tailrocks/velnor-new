@@ -23,7 +23,7 @@ use tokio::signal::unix::{SignalKind, signal};
 
 pub(super) use host::pairs;
 pub use host::{Pairs, default_host, write_plan};
-pub use online::await_online;
+pub use online::{await_online, await_replacement};
 
 use super::authority::{Authority, Backend, LEDGER, Runners};
 use super::env::{DockerCli, Environment, program};

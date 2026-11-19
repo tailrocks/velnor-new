@@ -24,6 +24,7 @@ mod release;
 mod release_assets;
 mod release_attest;
 mod release_binaries;
+mod release_binary_sums;
 mod release_checks;
 mod release_family;
 mod release_finalize;

@@ -8,6 +8,7 @@ use tokio::fs;
 
 use super::Driver;
 use crate::event::{Commit, MergeGroup, PullRequest};
+use crate::io::env::Engine;
 use crate::io::now;
 use crate::io::probe::request;
 use crate::rest::rfc3339;
@@ -25,7 +26,7 @@ pub(super) struct Pull {
     fork: bool,
 }
 
-impl Driver<'_> {
+impl<E: Engine + Copy + Send> Driver<'_, E> {
     fn pull(&self, head: &str) -> io::Result<usize> {
         self.pulls
             .iter()

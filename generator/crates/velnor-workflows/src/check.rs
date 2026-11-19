@@ -186,7 +186,6 @@ fn job_shape(raw: &RawJob, earlier: &[Job]) -> Result<u16, WorkflowsError> {
 
 fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
-    let raw_id = id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
     let job_concurrency = raw
@@ -216,10 +215,10 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needs: &raw.needs,
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
+        events: ctx.triggers.events(),
     };
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
     let mut job = Job {
-        id,
         name: raw.name.clone(),
         needs: raw.needs.clone(),
         condition,
@@ -231,13 +230,11 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         permissions: raw.permissions.clone().into_iter().collect(),
         outputs: Vec::new(),
         matrix,
-        container: raw
-            .container
-            .map(|raw| container(&raw_id, raw))
-            .transpose()?,
-        services: services(&raw_id, raw.service)?,
+        container: raw.container.map(|raw| container(&id, raw)).transpose()?,
+        services: services(&id, raw.service)?,
         steps: Vec::new(),
         call: None,
+        id,
     };
     if let Some(uses) = &raw.uses {
         scope.level = Level::Call;

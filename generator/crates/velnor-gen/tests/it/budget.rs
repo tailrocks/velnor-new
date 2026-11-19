@@ -142,9 +142,7 @@ fn a_pin_of_0_1_91_is_refused_because_it_predates_the_budget_command() -> TestRe
     };
     assert_eq!(version.to_string(), "0.1.91");
     assert!(
-        error
-            .to_string()
-            .contains("pin velnor-ci 0.1.92 or later"),
+        error.to_string().contains("pin velnor-ci 0.1.92 or later"),
         "{error}"
     );
     Ok(())

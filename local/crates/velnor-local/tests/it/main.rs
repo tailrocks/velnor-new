@@ -7,6 +7,7 @@ mod cache_server;
 mod checkout;
 mod conformance;
 mod dev_binary;
+mod dispatch;
 mod doctor;
 mod driver;
 mod environment;
