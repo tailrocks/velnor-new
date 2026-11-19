@@ -1928,6 +1928,11 @@
               "name": "ring",
               "kind": "dev",
               "manifest": null
+            },
+            {
+              "name": "velnor-render",
+              "kind": "dev",
+              "manifest": "generator/crates/velnor-render/Cargo.toml"
             }
           ],
           "targets": [
@@ -3520,7 +3525,7 @@
   "manifests": {
     "Cargo.toml": "6f01590564a38e91e1fa34a207ba8a7cc780dfa4670b62d7362c67f9f2b44cfc",
     "ci-helper/Cargo.toml": "fb3550bb8e3743f3be2ecbced69fa2328b3054f2046213a49f006064abf316ec",
-    "ci-helper/crates/velnor-ci/Cargo.toml": "030191a7247281c8b6e7d2dc54ce251c1fb24cd987023b5b807694691e0c9515",
+    "ci-helper/crates/velnor-ci/Cargo.toml": "a434533556333fe50a9554561cc620dfb145534617e0e30e4c67f7344bcba858",
     "crates/velnor-actions-actionlint/Cargo.toml": "7fc5bdb266e2a0f9335b250acecdd1f97ddbcee27322e6f90855b82fad1b6a04",
     "crates/velnor-actions-ansible/Cargo.toml": "df14f689efc7246f0a4043d8032ec785555d71143f1aa85387b09ed34240b7f3",
     "crates/velnor-actions-bun/Cargo.toml": "ad06f4370b77872dcc37f86f92ce558c9d9b30d1c56765aea33d070fa9a564b8",
