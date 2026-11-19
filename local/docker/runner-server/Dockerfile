@@ -21,6 +21,25 @@ RUN sed -i \
       src/Runner.Server/contextTemplate.yml \
     && grep -q "||startsWith(server.ref,'refs/pull/') }}:" src/Runner.Server/contextTemplate.yml \
     && grep -q "|| 'refs/pull/')\[1\]" src/Runner.Server/contextTemplate.yml
+COPY job-grant.cs.snippet /job-grant.cs.snippet
+RUN test "$(grep -c 'if(!string.IsNullOrEmpty(github_token?.Value) ||' src/Runner.Server/Controllers/MessageController.cs)" = 1 \
+    && sed -i '/if(!string.IsNullOrEmpty(github_token?.Value) ||/e cat /job-grant.cs.snippet' src/Runner.Server/Controllers/MessageController.cs \
+    && grep -q 'new Claim("velnor", "job-cache-admin")' src/Runner.Server/Controllers/MessageController.cs
+# runner.server arms a timer when it hands a job to a runner, so that the job's cancel request fires
+# at timeout-minutes (360 when unset), and answers the runner's next poll with a cancel message, the
+# way GitHub cancels a job that outruns its timeout. The wait on that poll never throws when the
+# request fires (Helper.WaitAnyCancellationToken awaits Task.WhenAny, which completes without
+# throwing), so the catch that sends the cancel message is dead code: the runner is never told, the
+# job keeps running and the run waits for it for ever. Wait with Task.Delay, which throws, so the
+# cancel message reaches the runner and runner.server completes the job as cancelled if the runner
+# does not (cancel-timeout-minutes + 2). The job token keeps runner.server's own expiry, timeout-minutes
+# + 10, which covers a cancelled job's reporting. Exactly one line is rewritten; the build fails when
+# it moves.
+RUN f=src/Runner.Server/Controllers/MessageController.cs \
+    && test "$(grep -c 'await Helper.WaitAnyCancellationToken(jobRunningToken, ts.Token, job.CancelRequest.Token);' $f)" = 1 \
+    && sed -i 's#await Helper.WaitAnyCancellationToken(jobRunningToken, ts.Token, job.CancelRequest.Token);#await Task.Delay(-1, CancellationTokenSource.CreateLinkedTokenSource(jobRunningToken, ts.Token, job.CancelRequest.Token).Token);#' $f \
+    && grep -q 'await Task.Delay(-1, CancellationTokenSource.CreateLinkedTokenSource(jobRunningToken, ts.Token, job.CancelRequest.Token).Token);' $f \
+    && ! grep -q 'WaitAnyCancellationToken(jobRunningToken, ts.Token, job.CancelRequest.Token)' $f
 COPY WorkflowObjectConverter.cs src/Runner.Server/Controllers/WorkflowObjectConverter.cs
 RUN cd src && dotnet msbuild dir.proj -t:GenerateConstant \
     && dotnet publish Runner.Client -c Release --no-self-contained -p:BUILD_OS=Any -p:RuntimeFrameworkVersion=8.0.0 -o /out

@@ -35,6 +35,7 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
 }
 
 pub(super) async fn migrate_v56_to_v57(connection: &turso::Connection) -> Result<(), HostError> {
+    validate_existing_transition_guard(connection).await?;
     connection
         .execute("DROP TRIGGER IF EXISTS doctor_probe_transition_guard", ())
         .await
@@ -48,6 +49,28 @@ pub(super) async fn migrate_v56_to_v57(connection: &turso::Connection) -> Result
         .await
         .map_err(|_| HostError::Journal)?;
     validate(connection).await
+}
+
+async fn validate_existing_transition_guard(
+    connection: &turso::Connection,
+) -> Result<(), HostError> {
+    let mut rows = connection
+        .query(
+            "SELECT sql FROM sqlite_schema WHERE type = 'trigger' AND name = 'doctor_probe_transition_guard'",
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
+        return Ok(());
+    };
+    let sql: String = row.get(0).map_err(|_| HostError::Journal)?;
+    let actual = canonical_sql(&sql);
+    if actual == canonical_sql(TRANSITION_GUARD) || actual == canonical_sql(TRANSITION_GUARD_V52) {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
+    }
 }
 
 pub(super) async fn validate(connection: &turso::Connection) -> Result<(), HostError> {
@@ -255,4 +278,51 @@ fn canonical_sql(sql: &str) -> String {
         }
     }
     normalized
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::journal::Journal;
+
+    type TestResult = Result<(), Box<dyn std::error::Error>>;
+
+    async fn rewind_to_version_56(path: &std::path::Path, guard: Option<&str>) -> TestResult {
+        let journal = Journal::open(path).await?;
+        let connection = journal.connection().await?;
+        connection
+            .execute("DROP TRIGGER doctor_probe_transition_guard", ())
+            .await?;
+        if let Some(sql) = guard {
+            connection.execute(sql, ()).await?;
+        }
+        connection.execute("PRAGMA user_version = 56", ()).await?;
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn an_altered_transition_guard_is_refused_before_it_is_replaced() -> TestResult {
+        let state = tempfile::tempdir()?;
+        let path = state.path().join("launch.db");
+        rewind_to_version_56(
+            &path,
+            Some(
+                "CREATE TRIGGER doctor_probe_transition_guard BEFORE UPDATE ON doctor_probe_requests BEGIN SELECT 1; END",
+            ),
+        )
+        .await?;
+        assert!(
+            Journal::open(&path).await.is_err(),
+            "a weakened transition guard must be refused, not silently replaced"
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    async fn an_absent_transition_guard_still_migrates_on_rerun() -> TestResult {
+        let state = tempfile::tempdir()?;
+        let path = state.path().join("launch.db");
+        rewind_to_version_56(&path, None).await?;
+        Journal::open(&path).await?;
+        Ok(())
+    }
 }

@@ -213,6 +213,31 @@ async fn a_current_journal_with_the_previous_guard_is_refused_at_open() -> TestR
 }
 
 #[tokio::test]
+async fn an_altered_version_53_guard_is_refused_before_it_is_replaced() -> TestResult<()> {
+    let state = tempfile::tempdir()?;
+    let path = state.path().join("launch.db");
+    {
+        let journal = Journal::open(&path).await?;
+        let connection = journal.connection().await?;
+        connection.execute("PRAGMA user_version = 53", ()).await?;
+        connection
+            .execute("DROP TRIGGER pre_jit_cleanup_progress_update_guard", ())
+            .await?;
+        connection
+            .execute(
+                "CREATE TRIGGER pre_jit_cleanup_progress_update_guard BEFORE UPDATE ON capacity_reservation_pre_jit_cleanup_progress BEGIN SELECT 1; END",
+                (),
+            )
+            .await?;
+    }
+    assert!(
+        Journal::open(&path).await.is_err(),
+        "a tampered v53 guard must be refused, not silently replaced by the v54 guard"
+    );
+    Ok(())
+}
+
+#[tokio::test]
 async fn the_ladder_walks_when_the_claim_premise_is_intact() -> TestResult<()> {
     let (_state, journal) = scenario(
         ("uncertain", None),

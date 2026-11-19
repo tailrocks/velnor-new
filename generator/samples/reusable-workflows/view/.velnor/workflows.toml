@@ -1,0 +1,44 @@
+[[workflow]]
+file = "native-checks"
+name = "Native checks"
+
+[[workflow.input]]
+name = "sdk_version"
+description = "SDK version to check"
+
+[[workflow.input]]
+name = "transition_id"
+description = "Transition to check"
+
+[[workflow.job]]
+id = "plan"
+helper = true
+timeout_minutes = 15
+outputs = { matrix = "steps.plan.outputs.matrix" }
+
+[[workflow.job.step]]
+id = "plan"
+name = "Plan the checks"
+run = "velnor-ci plan"
+env = { SDK_VERSION = "${{ inputs.sdk_version }}", GH_TOKEN = "${{ github.token }}" }
+
+[[workflow.job]]
+id = "check"
+needs = ["plan"]
+helper = true
+timeout_minutes = 30
+
+[workflow.job.matrix]
+from_output = "plan.matrix"
+fail_fast = false
+max_parallel = 2
+
+[[workflow.job.step]]
+name = "Warm the cache"
+run = "velnor-ci warm"
+continue_on_error = true
+env = { TARGET = "${{ matrix.target }}" }
+
+[[workflow.job.step]]
+name = "Run the check"
+run = "velnor-ci check"

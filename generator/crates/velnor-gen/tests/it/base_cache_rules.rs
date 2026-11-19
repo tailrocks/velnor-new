@@ -304,7 +304,7 @@ fn the_trim_job_also_prunes_the_sources_family_of_the_lane_that_saves_it() -> Te
     let test = lane("rust-test").ok_or("no test lane")?;
     assert!(
         test.contains(
-            "      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'\n"
+            "      sources_prefix: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'\n"
         ),
         "{test}"
     );

@@ -9,7 +9,7 @@ use velnor_runner_host::RepositoryConnection;
 use super::super::TestResult;
 use super::{DIND_ID, DIND_IMAGE_ID, PRIVATE_VOLUME, RUNNER_ID, RUNNER_IMAGE_ID};
 
-const RUNNER_NAME: &str = "v0123456789abcdef0123456789abcdef";
+pub(super) const RUNNER_NAME: &str = "v0123456789abcdef0123456789abcdef";
 const BOOT_ID: &str = "01234567-89ab-cdef-0123-456789abcdef";
 
 fn hex_sha256(bytes: &[u8]) -> String {
@@ -163,8 +163,8 @@ async fn seed_connection_and_reservation(
         (RUNNER_ID, DIND_ID, hex64.as_str(), BOOT_ID, RUNNER_NAME),
     )
     .await?;
-    let net_name = format!("velnor-{RUNNER_NAME}-private");
-    let net_labels = r#"{"io.velnor.connection-id":"conn-test-1","io.velnor.engine-id":"engine-1","io.velnor.managed":"true","io.velnor.operation-id":"1","io.velnor.reservation-id":"2"}"#;
+    let net_name = network_name();
+    let net_labels = NETWORK_LABELS;
     conn.execute(
         "INSERT INTO capacity_reservation_networks (reservation_id, connection_id, operation_id, engine_id, docker_root_digest, network_name, labels_json, create_state, network_id, remove_state) VALUES (2, 'conn-test-1', 1, 'engine-1', ?1, ?2, ?3, 'created', ?4, 'not_requested')",
         (root_digest, net_name.as_str(), net_labels, hex64.as_str()),
@@ -172,6 +172,12 @@ async fn seed_connection_and_reservation(
     .await?;
     Ok(())
 }
+
+pub(super) fn network_name() -> String {
+    format!("velnor-{RUNNER_NAME}-private")
+}
+
+pub(super) const NETWORK_LABELS: &str = r#"{"io.velnor.connection-id":"conn-test-1","io.velnor.engine-id":"engine-1","io.velnor.managed":"true","io.velnor.operation-id":"1","io.velnor.reservation-id":"2"}"#;
 
 async fn insert_att(
     conn: &turso::Connection,
