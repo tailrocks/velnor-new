@@ -56,6 +56,7 @@ mod prepare_configs;
 mod prepare_inputs;
 mod prepare_install;
 mod private_check;
+mod private_queue;
 mod release_branch_prefix;
 mod release_cargo_discovery;
 mod release_check_config;

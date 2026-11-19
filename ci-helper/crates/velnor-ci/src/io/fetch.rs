@@ -106,7 +106,9 @@ fn run_fetches(
             .args(["fetch", "--locked"])
             .arg("--manifest-path")
             .arg(manifest.file_name().unwrap_or(manifest.as_os_str()));
-        if !with_token {
+        if with_token {
+            command.args(["--config", "net.offline=false"]);
+        } else {
             command.arg("--offline");
         }
         let status = command

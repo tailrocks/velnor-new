@@ -5,7 +5,12 @@ use std::error::Error;
 use std::fs;
 use std::process::{Command, Output};
 
-use crate::fetch::{Api, serve_body};
+use std::io::{Read, Write};
+use std::net::TcpListener;
+use std::sync::{Arc, Mutex};
+use std::thread;
+
+use crate::fetch::Api;
 use crate::io::Repo;
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -22,6 +27,54 @@ fn pull(repository: &str, sha: &str) -> String {
     format!(
         "{{\"number\":42,\"head\":{{\"sha\":\"{sha}\",\"repo\":{{\"full_name\":\"{repository}\"}}}}}}"
     )
+}
+
+const GROUP_SHA: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+fn serve_queue(status: u16, pull_body: &str, refs_body: String) -> Result<Api, Box<dyn Error>> {
+    let pull_body = pull_body.to_owned();
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let url = format!("http://{}", listener.local_addr()?);
+    let requests = Arc::new(Mutex::new(Vec::new()));
+    let seen = Arc::clone(&requests);
+    thread::spawn(move || {
+        for stream in listener.incoming() {
+            let Ok(mut stream) = stream else { continue };
+            let mut buffer = [0_u8; 4096];
+            let read = stream.read(&mut buffer).unwrap_or(0);
+            let text = String::from_utf8_lossy(&buffer[..read]).to_lowercase();
+            let first = text.lines().next().unwrap_or_default().to_owned();
+            let bearer = text
+                .lines()
+                .find(|line| line.starts_with("authorization:"))
+                .unwrap_or_default()
+                .to_owned();
+            if let Ok(mut seen) = seen.lock() {
+                seen.push(format!("{first} | {bearer}"));
+            }
+            let (code, body) = if first.contains("/git/matching-refs/") {
+                (200, refs_body.as_str())
+            } else {
+                (status, pull_body.as_str())
+            };
+            drop(stream.write_all(
+                format!(
+                    "HTTP/1.1 {code} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                    body.len()
+                )
+                .as_bytes(),
+            ));
+        }
+    });
+    Ok(Api { url, requests })
+}
+
+fn queue_listing(head_ref: Option<&str>) -> String {
+    let Some(head_ref) = head_ref else {
+        return "[]".to_owned();
+    };
+    let name = head_ref.strip_prefix("refs/heads/").unwrap_or(head_ref);
+    format!("[{{\"ref\":\"refs/heads/{name}\",\"object\":{{\"sha\":\"{GROUP_SHA}\"}}}}]")
 }
 
 struct Outcome {
@@ -48,7 +101,7 @@ fn check(
 ) -> Result<Outcome, Box<dyn Error>> {
     let repo = Repo::empty(name);
     let outputs = repo.root().join("github-output");
-    let api = serve_body(status, body)?;
+    let api = serve_queue(status, body, queue_listing(head_ref))?;
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .current_dir(repo.root())
@@ -80,9 +133,12 @@ fn a_same_repository_pull_request_in_the_queue_is_allowed_and_the_job_token_asks
     assert_eq!(outcome.written, "allowed=true\n");
     assert_eq!(
         outcome.requests(),
-        [format!(
-            "get /repos/acme/app/pulls/42 http/1.1 | authorization: bearer {JOB_TOKEN}"
-        )]
+        [
+            format!("get /repos/acme/app/pulls/42 http/1.1 | authorization: bearer {JOB_TOKEN}"),
+            format!(
+                "get /repos/acme/app/git/matching-refs/heads/gh-readonly-queue/main/?per_page=100 http/1.1 | authorization: bearer {JOB_TOKEN}"
+            ),
+        ]
     );
     Ok(())
 }
@@ -92,7 +148,7 @@ fn a_base_branch_with_slashes_is_parsed_from_the_last_pr_segment() -> TestResult
     let reference = head_ref("release/pr-7-x/1.2", 42, SHA);
     let outcome = check("pc-slash", Some(&reference), 200, &pull("acme/app", SHA))?;
     assert_eq!(outcome.written, "allowed=true\n");
-    assert_eq!(outcome.requests().len(), 1);
+    assert_eq!(outcome.requests().len(), 2);
     Ok(())
 }
 

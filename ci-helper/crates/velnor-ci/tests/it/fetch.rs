@@ -168,7 +168,7 @@ fn the_token_reaches_only_the_real_cargo_and_git_and_is_revoked_after_the_fetch(
     assert_eq!(fixture.log("hostile.log"), "");
     assert_eq!(
         fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml"
+        "fetch --locked --manifest-path Cargo.toml --config net.offline=false"
     );
     let cargo_env = fixture.log("cargo.env");
     let git_env = fixture.log("git.env");
@@ -281,7 +281,7 @@ fn each_manifest_is_fetched_from_its_own_directory_so_its_cargo_config_applies()
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         fixture.log("cargo.args").trim(),
-        "fetch --locked --manifest-path Cargo.toml"
+        "fetch --locked --manifest-path Cargo.toml --config net.offline=false"
     );
     assert!(fixture.log("cargo.pwd").trim().ends_with("/tools"));
     Ok(())
@@ -307,7 +307,9 @@ fn the_crates_mirror_the_runner_configured_is_used_and_any_other_config_is_refus
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         fixture.log("cargo.args").trim(),
-        format!("--config {path} fetch --locked --manifest-path Cargo.toml")
+        format!(
+            "--config {path} fetch --locked --manifest-path Cargo.toml --config net.offline=false"
+        )
     );
     assert!(!fixture.log("cargo.env").contains("VELNOR_CARGO_CONFIG"));
     let refused = Fixture::new("fetch-mirror-refused", 0)?;

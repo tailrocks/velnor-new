@@ -121,3 +121,18 @@ fn a_locked_url_with_credentials_is_refused_because_the_token_cannot_replace_it(
     }
     Ok(())
 }
+
+#[test]
+fn a_locked_url_with_credentials_is_not_suggested_the_section_that_would_refuse_it() -> TestResult {
+    for (source, owner) in [
+        (
+            "git+https://deploy@github.com/acme/lib#abc",
+            Some("acme/app"),
+        ),
+        ("git+https://user:pw@git.example.invalid/acme/lib#abc", None),
+    ] {
+        let found = suggestions(&with_source(source, owner)?)?;
+        assert!(found.is_empty(), "{source}: {found:?}");
+    }
+    Ok(())
+}

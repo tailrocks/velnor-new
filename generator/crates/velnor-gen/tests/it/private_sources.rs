@@ -184,6 +184,8 @@ fn a_misconfigured_section_or_an_old_helper_is_refused() -> TestResult {
         SECTION.replace("'acme/shared-lib', 'acme/other-lib'", ""),
         SECTION.replace("'acme/shared-lib'", "'acme'"),
         format!("{SECTION}extra = 1\n"),
+        SECTION.replace("vars.DEPS_APP_ID", "vars.GITHUB_DEPS_APP_ID"),
+        SECTION.replace("secrets.DEPS_APP_PRIVATE_KEY", "secrets.github_deps_key"),
     ];
     for section in bad {
         let repo = private_repo(&["Cargo.toml"], &section, "0.1.86")?;

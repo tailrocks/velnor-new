@@ -182,7 +182,10 @@ fn private_looking(source: &str, owner: Option<&str>) -> bool {
         return true;
     };
     let authority = tail.split('/').next().unwrap_or("");
-    let credentialed = scheme == "ssh" || authority.contains('@');
+    if scheme != "ssh" && authority.contains('@') {
+        return false;
+    }
+    let credentialed = scheme == "ssh";
     let host = authority.rsplit('@').next().unwrap_or("");
     credentialed || !PUBLIC_GIT_HOSTS.contains(&host) || same_owner(tail, owner)
 }

@@ -51,7 +51,8 @@ fn context_name<'a>(value: &'a str, context: &str) -> Option<&'a str> {
         .strip_prefix(context)
         .and_then(|rest| rest.strip_prefix('.'))
         .filter(|name| {
-            name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            !name.to_ascii_uppercase().starts_with("GITHUB_")
+                && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
                 && name.chars().next().is_some_and(|c| !c.is_ascii_digit())
         })
 }
