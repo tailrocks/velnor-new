@@ -295,6 +295,19 @@ fn a_root_whose_workspace_releases_nothing_is_refused() -> TestResult {
 }
 
 #[test]
+fn a_root_whose_workspace_releases_nothing_is_accepted_when_it_lists_its_packages() -> TestResult {
+    let text = edit(
+        &PLZ.replace("name = \"app\"\n", "name = \"app\"\nrelease = false\n"),
+        "[workspace]\n",
+        "[workspace]\nrelease = false\n",
+    )?;
+    let mut files = files();
+    files.release_plz_toml.insert(".".to_owned(), text);
+    assert_eq!(refusal(&files), None);
+    Ok(())
+}
+
+#[test]
 fn a_bin_name_that_is_not_a_plain_binary_name_is_refused() {
     for bin in ["rg; echo", "a.b", "", "-x", "a b", "$(x)"] {
         let mut files = files();

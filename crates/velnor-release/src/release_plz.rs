@@ -289,7 +289,7 @@ pub(crate) fn read(root: &str, text: &str) -> Result<RootConfig, ReleaseError> {
         });
     }
     check_groups(root, &released, &packages)?;
-    let workspace_tags = workspace_tags(root, workspace, released.is_empty())?;
+    let workspace_tags = workspace_tags(root, workspace, document.package.is_empty())?;
     let publishes_to_crates_io = publishes(workspace, &released);
     let entries = document
         .package
