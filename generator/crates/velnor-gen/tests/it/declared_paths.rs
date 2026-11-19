@@ -129,6 +129,11 @@ fn a_schedule_faster_than_every_five_minutes_is_refused() -> TestResult {
         "*/7 * * * *",
         "0/4 * * * *",
         "*/3 6 * * 1",
+        "0,57 0,23 * * *",
+        "0,57 0,23 * * 1,2",
+        "0,57 0,23 1,2 * *",
+        "0,57 0,23 1 * 2",
+        "0,57 0,23 * 1-2 *",
     ];
     for cron in refused {
         let message = refusal(&with_on(&format!(
@@ -140,6 +145,10 @@ fn a_schedule_faster_than_every_five_minutes_is_refused() -> TestResult {
         );
     }
     let allowed = [
+        "0,57 0,23 * * 1",
+        "0,57 0,23 1 * *",
+        "0,57 0,23 29 2 *",
+        "0,57 0,23 * * 1,3",
         "*/5 * * * *",
         "*/10 * * * *",
         "*/15 * * * *",
@@ -156,5 +165,42 @@ fn a_schedule_faster_than_every_five_minutes_is_refused() -> TestResult {
             "[workflow.on]\nschedule = [\"{cron}\"]\n"
         )))?;
     }
+    Ok(())
+}
+
+#[test]
+fn a_schedule_no_day_matches_is_refused() -> TestResult {
+    for cron in ["0 0 31 2 *", "0 0 30 2 *", "0 0 31 4,6,9,11 *"] {
+        let message = refusal(&with_on(&format!(
+            "[workflow.on]\nschedule = [\"{cron}\"]\n"
+        )))?;
+        assert!(
+            message.contains(cron) && message.contains("never runs"),
+            "{cron}: {message}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_filter_of_only_negative_patterns_is_refused() -> TestResult {
+    let cases = [
+        "[workflow.on.push]\nbranches = [\"!release\"]\n",
+        "[workflow.on.push]\nbranches = [\"main\"]\ntags = [\"!v1\"]\n",
+        "[workflow.on.push]\nbranches = [\"main\"]\npaths = [\"!docs/**\"]\n",
+        "[workflow.on.pull_request]\ntypes = [\"opened\"]\nbranches = [\"!wip\", \"!old\"]\n",
+        "[workflow.on.pull_request]\ntypes = [\"opened\"]\npaths = [\"!docs/**\"]\n",
+        "[workflow.on.workflow_run]\nworkflows = [\"CI\"]\nbranches = [\"!wip\"]\n",
+    ];
+    for on in cases {
+        let message = refusal(&with_on(on))?;
+        assert!(
+            message.contains("only negative patterns"),
+            "{on}: {message}"
+        );
+    }
+    rendered(&with_on(
+        "[workflow.on.push]\nbranches = [\"main\", \"!release\"]\ntags = [\"v*\", \"!v1\"]\npaths = [\"src/**\", \"!src/gen/**\"]\n",
+    ))?;
     Ok(())
 }

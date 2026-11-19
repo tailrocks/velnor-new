@@ -6,13 +6,10 @@ use std::collections::BTreeSet;
 use serde::Deserialize;
 use velnor_model::{JobId, LintJob, LintKind, RepoPath, RepoView, RustCiConfig, ToolPins};
 
-use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
+use crate::lint_tools::{ALINT, JACTIONLINT};
 use crate::mise::tool_pins;
 
-pub(crate) const JACTIONLINT: &str = "jactionlint";
-pub(crate) const SHELLCHECK: &str = "shellcheck";
-const ALINT: &str = "alint";
 const MISE_TASK: &str = "mise-task";
 const PREFIX: &str = "lint-";
 const DEFAULT_TIMEOUT_MINUTES: u16 = 10;
@@ -171,39 +168,11 @@ pub(crate) fn parse(raw: Vec<RawLint>) -> Result<Vec<LintJob>, Reason> {
     }
 }
 
-pub(crate) fn tool_key<'a>(tools: &'a ToolPins, name: &str) -> Option<&'a str> {
-    tools
-        .tools
-        .keys()
-        .find(|key| key.rsplit(['/', ':']).next() == Some(name))
-        .map(String::as_str)
-}
-
 pub(crate) fn pinned_tools(
     view: &RepoView,
     config: &RustCiConfig,
 ) -> Result<ToolPins, DetectError> {
     let tools = tool_pins(&view.files)?;
-    check(config, &tools)?;
+    crate::lint_tools::check(view, config, &tools)?;
     Ok(tools)
-}
-
-fn check(config: &RustCiConfig, tools: &ToolPins) -> Result<(), DetectError> {
-    for job in &config.lint {
-        let names: Vec<&str> = match &job.kind {
-            LintKind::Jactionlint { .. } => vec![JACTIONLINT],
-            LintKind::Alint { .. } => Vec::new(),
-            LintKind::MiseTask { tools, .. } => tools.iter().map(String::as_str).collect(),
-        };
-        if let Some(name) = names
-            .into_iter()
-            .find(|name| tool_key(tools, name).is_none())
-        {
-            return Err(DetectError::invalid(
-                &CONFIG_PATH,
-                Reason::LintToolUnpinned(name.to_owned()),
-            ));
-        }
-    }
-    Ok(())
 }

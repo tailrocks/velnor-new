@@ -12,6 +12,7 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
+pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -29,6 +30,7 @@ use velnor_rust::{
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub const RELEASE_HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 80);
+pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 91);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)
@@ -139,6 +141,11 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         return Err(GenerateError::MergeGroupHelperTooOld(
             release.version().clone(),
         ));
+    }
+    if facts.config.budget.is_some_and(|budget| budget.enabled())
+        && !release.version().at_least(BUDGET_HELPER)
+    {
+        return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
     }
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
