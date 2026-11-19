@@ -280,7 +280,9 @@ fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() 
                     for key in ["family", "restore_step", "save_step"] {
                         assert!(cache[key].as_str().is_some_and(|value| !value.is_empty()));
                     }
-                    if !cache["root"].is_null() {
+                    if cache["family"] == "sources" {
+                        assert!(cache["root"].is_null(), "{cache}");
+                    } else if !cache["root"].is_null() {
                         assert_eq!(cache["root"], root);
                         reported_root = true;
                     }
