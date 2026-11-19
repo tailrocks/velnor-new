@@ -3,7 +3,7 @@
 
 use velnor_model::{FilterRef, TEST_STEP};
 
-use crate::cargo::{feature_flag, nextest_run, without_binaries};
+use crate::cargo::{DOC_RUN, clippy, feature_flag, nextest_run, without_binaries};
 use crate::rules::Value;
 
 /// The default step may select nothing, because the plan narrows it to the
@@ -38,4 +38,27 @@ pub(crate) fn expr(expr: &str, except: &[String]) -> String {
     } else {
         without_binaries(format!("({both})"), except)
     }
+}
+
+pub(crate) fn clippy_features(
+    cargo: &str,
+    features: &[String],
+) -> (String, String, Vec<(String, Value)>) {
+    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[]);
+    (
+        format!("{name} (features: {})", features.join(",")),
+        run,
+        env,
+    )
+}
+
+pub(crate) fn doc_features(
+    cargo: &str,
+    features: &[String],
+) -> (String, String, Vec<(String, Value)>) {
+    (
+        format!("Documentation (features: {})", features.join(",")),
+        format!("{DOC_RUN}{cargo}{}", feature_flag(features)),
+        vec![],
+    )
 }

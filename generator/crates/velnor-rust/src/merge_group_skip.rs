@@ -13,7 +13,9 @@ fn is_check(kind: &StepKind) -> bool {
             | StepKind::Cargo(
                 CargoCommand::FmtCheck
                     | CargoCommand::Clippy { .. }
+                    | CargoCommand::ClippyFeatures { .. }
                     | CargoCommand::Doc
+                    | CargoCommand::DocFeatures { .. }
                     | CargoCommand::CheckAlone { .. }
                     | CargoCommand::NextestRun { .. }
                     | CargoCommand::NextestFeatures { .. }

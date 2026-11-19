@@ -22,6 +22,10 @@ pub(crate) struct RawTestLane {
     features: Vec<String>,
     filter: Option<String>,
     #[serde(default)]
+    lint: bool,
+    #[serde(default)]
+    doc: bool,
+    #[serde(default)]
     packages: Vec<String>,
 }
 
@@ -62,6 +66,8 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
         root,
         features: raw.features,
         filter: raw.filter,
+        lint: raw.lint,
+        doc: raw.doc,
         packages,
     })
 }
@@ -130,18 +136,32 @@ pub(crate) fn commands(
         .test_lanes
         .iter()
         .filter(|lane| lane.root == root.manifest.parent())
-        .map(|lane| CargoCommand::NextestFeatures {
-            features: lane.features.clone(),
-            packages: lane.packages.clone(),
-            filter: match &lane.filter {
-                Some(expr) => FilterRef::Expr {
-                    expr: expr.clone(),
-                    except: direct.to_vec(),
+        .flat_map(|lane| {
+            let features = || lane.features.clone();
+            let test = CargoCommand::NextestFeatures {
+                features: features(),
+                packages: lane.packages.clone(),
+                filter: match &lane.filter {
+                    Some(expr) => FilterRef::Expr {
+                        expr: expr.clone(),
+                        except: direct.to_vec(),
+                    },
+                    None if direct.is_empty() => FilterRef::All,
+                    None => FilterRef::AllExcept(direct.to_vec()),
                 },
-                None if direct.is_empty() => FilterRef::All,
-                None => FilterRef::AllExcept(direct.to_vec()),
-            },
-            ci_profile: root.nextest_ci_profile,
+                ci_profile: root.nextest_ci_profile,
+            };
+            [
+                Some(test),
+                lane.lint.then(|| CargoCommand::ClippyFeatures {
+                    features: features(),
+                }),
+                lane.doc.then(|| CargoCommand::DocFeatures {
+                    features: features(),
+                }),
+            ]
+            .into_iter()
+            .flatten()
         })
         .collect()
 }
