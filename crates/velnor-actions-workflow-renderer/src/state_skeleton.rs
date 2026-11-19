@@ -19,7 +19,7 @@ pub const STATE_SKELETON_DIR: &str = "$RUNNER_TEMP/velnor/state-skeleton";
 
 const GUARD: &str = "case \"$RUNNER_TEMP\" in /*) ;; *) printf '%s\\n' 'RUNNER_TEMP must be absolute' >&2; exit 1 ;; esac";
 
-const STORE_GUARD: &str = "[ -n \"${MBX_CACHE_DIR-}\" ] && [ \"$MBX_CACHE_DIR\" = \"$RUNNER_TEMP/velnor/mbx\" ] || { printf '%s\\n' 'MBX_CACHE_DIR is not the store path' >&2; exit 1; }";
+const STORE_GUARD: &str = "[ -n \"${MBX_CACHE_DIR-}\" ] && [ \"$MBX_CACHE_DIR\" = \"/home/runner/work/_temp/velnor/mbx\" ] || { printf '%s\\n' 'MBX_CACHE_DIR is not the store path' >&2; exit 1; }";
 
 pub fn state_skeleton_step(
     rust_toolchain: &str,

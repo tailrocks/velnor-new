@@ -234,21 +234,28 @@ fn missing(group: &Group<'_>, configuration: &str, built: &Built) -> Option<Stri
                 target: target.clone(),
                 source: (*source).clone(),
             })],
-            Need::Library(name) => places
-                .iter()
-                .filter(|place| {
-                    built
-                        .libraries
-                        .contains(&((**place).to_owned(), (*name).clone()))
-                })
-                .map(|place| {
-                    built.units.iter().any(|unit| {
-                        unit.kind == UnitKind::Normal
-                            && unit.configuration == *place
-                            && unit.package == name.as_str()
+            Need::Library { name, required } => {
+                let libraries: Vec<bool> = places
+                    .iter()
+                    .filter(|place| {
+                        built
+                            .libraries
+                            .contains(&((**place).to_owned(), (*name).clone()))
                     })
-                })
-                .collect(),
+                    .map(|place| {
+                        built.units.iter().any(|unit| {
+                            unit.kind == UnitKind::Normal
+                                && unit.configuration == *place
+                                && unit.package == name.as_str()
+                        })
+                    })
+                    .collect();
+                if libraries.is_empty() && *required {
+                    vec![false]
+                } else {
+                    libraries
+                }
+            }
             Need::Run(name) => {
                 let scripts: Vec<bool> = built
                     .scripts

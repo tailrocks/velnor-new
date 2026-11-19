@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    JobId, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+    JobId, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
 use crate::verdict_plan::{Need, PlanOutput};
@@ -48,12 +48,14 @@ pub struct PackageCounts {
     pub listed: u64,
 }
 
-pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 32_768;
+/// GitHub caps one job output at 1 MB; the gate bounds the whole needs JSON separately.
+pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 1_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TestCounts {
     pub run: u64,
     pub listed: u64,
+    pub ignored: Option<u64>,
     pub packages: BTreeMap<String, PackageCounts>,
 }
 
@@ -225,6 +227,11 @@ pub fn verdict(
             ));
         } else {
             for job in counts.iter().flatten() {
+                if job.listed == 0 && job.run == 0 && job.ignored == Some(0) {
+                    out.problems.push(format!(
+                        "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
+                    ));
+                }
                 for (name, package) in &job.packages {
                     if package.listed > 0 && package.run == 0 {
                         out.problems.push(format!(
@@ -289,9 +296,14 @@ fn counts(need: Option<&Need>) -> Option<TestCounts> {
     if run != summed_run || listed != summed_listed {
         return None;
     }
+    let ignored = match need.outputs.get(TESTS_IGNORED_OUTPUT).map(String::as_str) {
+        None | Some("") => None,
+        Some(text) => Some(number(text)?),
+    };
     Some(TestCounts {
         run,
         listed,
+        ignored,
         packages,
     })
 }
@@ -305,3 +317,7 @@ fn number(text: &str) -> Option<u64> {
     }
     text.parse().ok()
 }
+
+#[cfg(test)]
+#[path = "verdict_package_map.rs"]
+mod package_map_size;

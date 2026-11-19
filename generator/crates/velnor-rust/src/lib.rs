@@ -62,6 +62,7 @@ mod weaken_nextest;
 mod weaken_scope;
 mod weaken_targets;
 
+pub use base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
