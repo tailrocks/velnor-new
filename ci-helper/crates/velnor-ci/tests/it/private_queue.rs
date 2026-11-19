@@ -37,7 +37,9 @@ fn pull(number: u32, repository: &str, sha: &str) -> (String, String) {
 fn authored(number: u32, login: &str, repository: &str, sha: &str) -> (String, String) {
     (
         format!("/repos/{REPOSITORY}/pulls/{number}"),
-        format!("{{\"user\":{{\"login\":\"{login}\"}},\"head\":{{\"sha\":\"{sha}\",\"repo\":{{\"full_name\":\"{repository}\"}}}}}}"),
+        format!(
+            "{{\"user\":{{\"login\":\"{login}\"}},\"head\":{{\"sha\":\"{sha}\",\"repo\":{{\"full_name\":\"{repository}\"}}}}}}"
+        ),
     )
 }
 
@@ -250,7 +252,10 @@ fn a_bot_authored_queue_entry_or_one_stacked_under_it_gets_no_token() {
             vec![authored(42, bot, REPOSITORY, OURS)],
         );
         let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &own));
-        assert!(message.contains("#42") && message.contains("bot"), "{bot}: {message}");
+        assert!(
+            message.contains("#42") && message.contains("bot"),
+            "{bot}: {message}"
+        );
         let stacked = queue(
             &[(42, OURS, OURS_GROUP), (41, AHEAD, AHEAD_GROUP)],
             vec![
@@ -260,7 +265,10 @@ fn a_bot_authored_queue_entry_or_one_stacked_under_it_gets_no_token() {
             ],
         );
         let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &stacked));
-        assert!(message.contains("#41") && message.contains("bot"), "{bot}: {message}");
+        assert!(
+            message.contains("#41") && message.contains("bot"),
+            "{bot}: {message}"
+        );
     }
 }
 
@@ -270,7 +278,9 @@ fn a_pull_request_without_an_author_is_refused() {
         &[(42, OURS, OURS_GROUP)],
         vec![(
             format!("/repos/{REPOSITORY}/pulls/42"),
-            format!("{{\"head\":{{\"sha\":\"{OURS}\",\"repo\":{{\"full_name\":\"{REPOSITORY}\"}}}}}}"),
+            format!(
+                "{{\"head\":{{\"sha\":\"{OURS}\",\"repo\":{{\"full_name\":\"{REPOSITORY}\"}}}}}}"
+            ),
         )],
     );
     let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github));
