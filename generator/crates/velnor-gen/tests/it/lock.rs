@@ -61,7 +61,7 @@ fn a_release_whose_sums_do_not_cover_both_programs_on_every_platform_is_not_pinn
     let short = SUMS.replacen("10e3511a", "10E3511A", 1);
     let cases = [
         (without("velnor-ci-linux-arm64"), "0.1.79"),
-        (without("velnor-gen-macos-arm64"), "0.1.79"),
+        (without("velnor-gen-linux-x64"), "0.1.79"),
         (twice, "0.1.79"),
         (short, "0.1.79"),
         (SUMS.to_owned(), "0.1"),
@@ -74,6 +74,31 @@ fn a_release_whose_sums_do_not_cover_both_programs_on_every_platform_is_not_pinn
         let result = pin_lock(version, COMMIT_FILE, &sums);
         assert!(result.is_err(), "{version} with {sums:?} gave {result:?}");
     }
+}
+
+fn linux_only_sums() -> String {
+    SUMS.lines()
+        .filter(|line| !line.contains("macos"))
+        .flat_map(|line| [line, "\n"])
+        .collect()
+}
+
+#[test]
+fn a_release_without_macos_is_pinned_and_gives_the_action_no_macos_digest() -> TestResult {
+    let lock = pin_lock("0.1.79", COMMIT_FILE, &linux_only_sums())?;
+    assert!(!lock.contains("macos"), "{lock}");
+    let text = workflow(&with_lock(&lock)?)?;
+    assert!(text.contains("sha256-linux-x64:"), "{text}");
+    assert!(text.contains("sha256-linux-arm64:"), "{text}");
+    assert!(!text.contains("macos"), "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_release_with_macos_still_hands_the_action_its_digest() -> TestResult {
+    let text = workflow(&locked("0.1.79")?)?;
+    assert!(text.contains("sha256-macos-arm64:"), "{text}");
+    Ok(())
 }
 
 #[test]

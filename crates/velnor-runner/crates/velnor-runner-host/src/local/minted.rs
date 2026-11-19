@@ -38,28 +38,34 @@ fn valid_name(name: &str) -> bool {
             .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
 }
 
+fn checksum(body: &str) -> u32 {
+    body.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    })
+}
+
+fn encode(kind: &str, side: &str, name: &str) -> String {
+    let body = format!("{kind} {side} {name}");
+    format!("{body} {:08x}\n", checksum(&body))
+}
+
 fn record(text: &str) -> Option<(&str, Entry)> {
     let fields: Vec<&str> = text.split(' ').collect();
-    let [kind, side, name] = fields.as_slice() else {
-        return None;
+    let [kind, side, name] = match fields.as_slice() {
+        [kind, side, name] => [kind, side, name],
+        [kind, side, name, sum] => {
+            let body = &text[..text.len() - sum.len() - 1];
+            if sum.len() != 8 || u32::from_str_radix(sum, 16).ok() != Some(checksum(body)) {
+                return None;
+            }
+            [kind, side, name]
+        }
+        _ => return None,
     };
     if !matches!(*kind, INTENT | RETIRED) || Side::parse(side).is_none() || !valid_name(name) {
         return None;
     }
     Some((kind, ((*side).to_owned(), (*name).to_owned())))
-}
-
-fn salvage(line: &str) -> Option<(&str, Entry)> {
-    record(line).or_else(|| {
-        line.match_indices([' '])
-            .filter_map(|(at, _)| at.checked_sub(1))
-            .filter(|&at| {
-                line.as_bytes()
-                    .get(at)
-                    .is_some_and(|b| matches!(*b, b'+' | b'-'))
-            })
-            .find_map(|at| record(&line[at..]))
-    })
 }
 
 fn parse(text: &str) -> (BTreeSet<Entry>, usize) {
@@ -69,7 +75,11 @@ fn parse(text: &str) -> (BTreeSet<Entry>, usize) {
         let Some(line) = line.strip_suffix('\n') else {
             continue;
         };
-        let Some((kind, key)) = salvage(line) else {
+        if line.is_empty() {
+            continue;
+        }
+        lines += 1;
+        let Some((kind, key)) = record(line) else {
             continue;
         };
         if kind == INTENT {
@@ -77,7 +87,6 @@ fn parse(text: &str) -> (BTreeSet<Entry>, usize) {
         } else {
             open.remove(&key);
         }
-        lines += 1;
     }
     (open, lines)
 }
@@ -150,12 +159,7 @@ impl MintedAgents {
         }
         let mut text = String::new();
         for (side, name) in &journal.open {
-            text.push_str(INTENT);
-            text.push(' ');
-            text.push_str(side);
-            text.push(' ');
-            text.push_str(name);
-            text.push('\n');
+            text.push_str(&encode(INTENT, side, name));
         }
         let fresh = self.path.with_extension("new");
         let mut file = private_options()
@@ -192,13 +196,13 @@ impl MintedAgents {
             .map_err(|_| HostError::Path)?;
         let before = file.metadata().await.map_err(|_| HostError::Path)?.len();
         let written = async {
-            file.write_all(format!("{kind} {side} {name}\n").as_bytes())
+            file.write_all(format!("\n{}", encode(kind, side, name)).as_bytes())
                 .await?;
             file.sync_data().await
         }
         .await;
         if written.is_err() {
-            let _torn = file.set_len(before).await;
+            file.set_len(before).await.map_err(|_| HostError::Path)?;
             return Err(HostError::Path);
         }
         Ok(())
