@@ -130,13 +130,20 @@ fn source_qualification_plan(
             "source_qualification_plan_jobs".to_owned(),
         ));
     };
-    let job = jobs
+    let mut job = jobs
         .iter()
         .find(|(id, _)| id == "plan")
         .map(|(_, job)| job.clone())
         .ok_or_else(|| {
             RenderError::InvalidWorkflow("source_qualification_plan_missing".to_owned())
         })?;
+    if let crate::yaml::Yaml::Map(fields) = &mut job {
+        // Source qualification keeps its own hosted, unfenced plan wherever the CI plan runs.
+        fields.retain(|(key, _)| key != "if" && key != "defaults");
+        if let Some((_, runs_on)) = fields.iter_mut().find(|(key, _)| key == "runs-on") {
+            *runs_on = crate::yaml::Yaml::str(ctx.runs_on.clone());
+        }
+    }
     Ok(Some(
         crate::source_qualification_plan::SourceQualificationPlan {
             job,

@@ -4,18 +4,20 @@
 use serde::Deserialize;
 use velnor_model::{
     CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName,
+    RunnerLabel, RustCiConfig, TargetName,
 };
 
 use crate::error::{DetectError, Reason};
+use crate::shape::parse_shape;
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 21] = [
+const KEYS: [&str; 22] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
+    "fork_runner",
     "crates_mirror",
     "timeout_minutes",
     "exclude",
@@ -42,6 +44,7 @@ struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     runner: Option<String>,
+    fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
@@ -118,6 +121,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
+    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
+    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
@@ -144,7 +149,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
+        runner,
+        fork_runner,
         timeout_minutes,
         exclude: excludes(raw.exclude).map_err(invalid)?,
     })
@@ -178,19 +184,6 @@ fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Rea
         .collect()
 }
 
-fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
-    match configured {
-        None | Some("auto") => Ok(None),
-        Some("one-job") => Ok(Some(Shape::OneJob)),
-        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
-        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
-        Some(other) => Err(Reason::InvalidValue {
-            key: "shape",
-            value: other.to_owned(),
-        }),
-    }
-}
-
 pub(crate) fn runner(
     configured: Option<String>,
     default: RunnerLabel,
@@ -201,6 +194,7 @@ pub(crate) fn runner(
     RunnerLabel::new(label.clone())
         .ok()
         .filter(|runner| !without_helper_build(runner.as_str()))
+        .filter(crate::config_fork::expression_safe)
         .ok_or(Reason::InvalidValue {
             key: "runner",
             value: label,

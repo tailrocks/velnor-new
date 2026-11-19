@@ -244,6 +244,7 @@ pub struct ToolPin {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
+    pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
@@ -361,6 +362,7 @@ impl Default for RustCiConfig {
     fn default() -> Self {
         Self {
             runner: RunnerLabel::from_static("ubuntu-latest"),
+            fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
             timeout_minutes: 30,
             exclude: Vec::new(),
