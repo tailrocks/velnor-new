@@ -183,7 +183,7 @@ pub(crate) fn check_shared_counts(text: &str) -> Result<(), Box<dyn Error>> {
     require_count(
         text,
         "authority=\\\"$VELNOR_IMAGE_AUTHORITY_DIR\\\"",
-        2,
+        3,
         "shared body binding",
     )?;
     require_count(
