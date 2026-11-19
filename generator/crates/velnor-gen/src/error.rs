@@ -6,7 +6,7 @@ use std::fmt;
 use velnor_model::{HelperVersion, RELEASE_CONFIG_PATH, RepoPath};
 use velnor_release::ReleaseError;
 use velnor_render::RuleViolation;
-use velnor_rust::{DetectError, MetadataFileError};
+use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 
 use crate::{COMPATIBLE_HELPER_SERIES, RELEASE_HELPER_MINIMUM};
 
@@ -23,6 +23,7 @@ pub enum GenerateError {
     MirrorHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
+    TooManySourceRoots(usize),
     Metadata(MetadataFileError),
     Rules(Vec<RuleViolation>),
 }
@@ -53,6 +54,10 @@ impl fmt::Display for GenerateError {
                 "velnor-ci {version} cannot check the release on the released commit, because it does not recheck the live tag ruleset or the manifests; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
+            ),
+            Self::TooManySourceRoots(roots) => write!(
+                f,
+                "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or wait for tailrocks/velnor-new#1362 (velnor-ci sources fetch --roots), which replaces the per-root steps"
             ),
             Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
             Self::InputsBuildHelperTooOld(version) => write!(

@@ -35,14 +35,6 @@ fn target_cache_paths(text: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error
     Ok(paths)
 }
 
-fn sources_key(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(render_key(&CacheKey::Sources {
-        host: Host,
-        root: CacheRoot::new(&RepoPath::new(manifest)?, RepoPath::new("target")?),
-    })
-    .key)
-}
-
 #[test]
 fn a_root_path_with_glob_characters_is_read_literally_by_hash_files() -> TestResult {
     for (manifest, literal) in [
@@ -53,11 +45,8 @@ fn a_root_path_with_glob_characters_is_read_literally_by_hash_files() -> TestRes
         ("#h/Cargo.toml", "./#h/Cargo.lock"),
         ("plain/Cargo.toml", "plain/Cargo.lock"),
     ] {
-        let key = sources_key(manifest)?;
-        assert!(
-            key.ends_with(&format!("-${{{{ hashFiles('{literal}') }}}}")),
-            "{key}"
-        );
+        let hash = crate::shared_sources::locks_hash(&[manifest])?;
+        assert_eq!(hash, format!("${{{{ hashFiles('{literal}') }}}}"));
     }
     Ok(())
 }
@@ -82,7 +71,7 @@ fn no_key_family_carries_the_run_attempt() -> TestResult {
         CacheKey::Tools { host: Host },
         CacheKey::Sources {
             host: Host,
-            root: root.clone(),
+            lane: root.clone(),
         },
         CacheKey::Target {
             job: JobId::new("rust")?,

@@ -8,14 +8,14 @@ use velnor_model::CacheKey;
 const REPORT_STEP: &str = "report_cache_metrics";
 
 pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
-    if let CacheKey::Sources { root, .. } = key
+    if let CacheKey::Sources { lane, .. } = key
         && !restore
     {
-        return crate::gate::sources_save_step(root.slug());
+        return crate::gate::sources_save_step(lane.slug());
     }
     let root = match key {
         CacheKey::Tools { .. } => None,
-        CacheKey::Sources { root, .. }
+        CacheKey::Sources { lane: root, .. }
         | CacheKey::Target { root, .. }
         | CacheKey::Delta { root, .. } => Some(root),
     };
@@ -36,7 +36,7 @@ pub(crate) fn cache_id(key: &CacheKey, restore: bool) -> String {
 
 pub(crate) fn lane(caches: &[CacheKey], tests: bool) -> RenderedStep {
     let caches: Vec<_> = caches.iter().map(|key| {
-        let root = match key { CacheKey::Tools { .. } => None, CacheKey::Sources { root, .. } | CacheKey::Target { root, .. } | CacheKey::Delta { root, .. } => Some(root.lock_file().parent().map_or_else(|| ".".to_owned(), |root| root.to_string())) };
+        let root = match key { CacheKey::Tools { .. } => None, CacheKey::Sources { lane: root, .. } | CacheKey::Target { root, .. } | CacheKey::Delta { root, .. } => Some(root.lock_file().parent().map_or_else(|| ".".to_owned(), |root| root.to_string())) };
         serde_json::json!({"family":key.family(),"root":root,"restore_step":cache_id(key,true),"save_step":cache_id(key,false)})
     }).collect();
     RenderedStep {
