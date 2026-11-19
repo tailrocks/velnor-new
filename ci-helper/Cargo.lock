@@ -1052,6 +1052,7 @@ name = "velnor-render"
 version = "0.0.0"
 dependencies = [
  "serde_json",
+ "sha2",
  "velnor-model",
  "velnor-release",
  "velnor-workflows",
