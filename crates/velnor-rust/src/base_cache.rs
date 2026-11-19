@@ -41,7 +41,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
 }
 
 const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
-const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
+const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 88);
 
 pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
     let lock = if facts

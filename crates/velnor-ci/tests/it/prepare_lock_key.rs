@@ -232,3 +232,102 @@ fn a_member_the_metadata_does_not_list_keeps_its_version() {
     let unlisted = key(&workspace("0.1.85", "1.0.229"), &["app"]);
     assert_ne!(listed, unlisted);
 }
+
+fn legacy_workspace(root_version: &'static str, registry_version: &'static str) -> String {
+    format!(
+        "[root]\nname = \"app\"\nversion = \"{root_version}\"\ndependencies = [\"serde\"]\n{}",
+        entry(&registry("serde", registry_version))
+    )
+}
+
+#[test]
+fn a_root_version_bump_in_a_legacy_lock_keeps_the_lock_key() {
+    let members = ["app"];
+    assert_eq!(
+        key(&legacy_workspace("0.1.83", "1.0.229"), &members),
+        key(&legacy_workspace("0.1.85", "1.0.229"), &members)
+    );
+}
+
+#[test]
+fn a_registry_version_change_in_a_legacy_lock_moves_the_lock_key() {
+    let members = ["app"];
+    assert_ne!(
+        key(&legacy_workspace("0.1.83", "1.0.229"), &members),
+        key(&legacy_workspace("0.1.83", "1.0.230"), &members)
+    );
+}
+
+#[test]
+fn a_legacy_root_that_the_metadata_does_not_list_keeps_its_version() {
+    assert_ne!(
+        key(&legacy_workspace("0.1.83", "1.0.229"), &["core"]),
+        key(&legacy_workspace("0.1.85", "1.0.229"), &["core"])
+    );
+}
+
+fn scoped(args: &[&'static str], other_lock: fn(&Path)) -> super::prepare::Run {
+    let metadata = metadata(&["app"], &["shared"]);
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.args = args.to_vec();
+    setup.populate = Some(Box::new(move |checkout: &Path| {
+        fs::write(checkout.join("Cargo.lock"), workspace("0.1.83", "1.0.229"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::create_dir_all(checkout.join("other")).unwrap_or_else(|e| unreachable!("{e}"));
+        other_lock(&checkout.join("other"));
+        fs::write(checkout.join(".velnor/rust-metadata.json"), &metadata)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }));
+    prepare("lock-scope", &setup)
+}
+
+fn lock_names(run: &super::prepare::Run) -> Vec<&str> {
+    run.outputs
+        .lines()
+        .filter_map(|line| line.split_once('=')?.0.strip_prefix("lock_"))
+        .collect()
+}
+
+fn no_lock(_: &Path) {}
+
+#[test]
+fn without_arguments_prepare_writes_the_lock_key_of_every_root() {
+    let run = scoped(&[], no_lock);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert_eq!(lock_names(&run), ["root", "other"]);
+}
+
+#[test]
+fn lock_root_writes_only_the_named_roots() {
+    let run = scoped(&["--lock-root", "root"], no_lock);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert_eq!(lock_names(&run), ["root"]);
+    let both = scoped(&["--lock-root", "root", "--lock-root", "other"], no_lock);
+    assert_eq!(lock_names(&both).len(), 2, "{}", both.outputs);
+}
+
+#[test]
+fn no_locks_writes_no_lock_key() {
+    let run = scoped(&["--no-locks"], no_lock);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert!(lock_names(&run).is_empty(), "{}", run.outputs);
+}
+
+#[test]
+fn a_root_the_lane_did_not_name_is_not_read() {
+    let unreadable = |other: &Path| {
+        fs::create_dir_all(other.join("Cargo.lock")).unwrap_or_else(|e| unreachable!("{e}"));
+    };
+    let named = scoped(&["--lock-root", "root"], unreadable);
+    assert!(named.output.status.success(), "{:?}", named.output);
+    let all = scoped(&[], unreadable);
+    assert!(!all.output.status.success(), "{}", all.outputs);
+}
+
+#[test]
+fn a_lock_root_that_is_not_recorded_fails_and_names_the_root() {
+    let run = scoped(&["--lock-root", "missing"], no_lock);
+    assert!(!run.output.status.success());
+    let stderr = String::from_utf8_lossy(&run.output.stderr);
+    assert!(stderr.contains("missing"), "{stderr}");
+}
