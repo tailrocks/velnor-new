@@ -11,6 +11,7 @@ use velnor_render::{
     RenderedStep, RenderedWorkflow, Rule, Value, check_rules, render_workflow,
 };
 
+use crate::cache_mode_scan::{carries_cache_mode, rendered_samples, without_github_mode};
 use crate::release_fixture::app;
 use crate::rules::plan;
 
@@ -338,36 +339,6 @@ fn a_rendered_new_action_carries_its_tag_in_a_trailing_comment() -> TestResult {
     Ok(())
 }
 
-fn yaml_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) -> TestResult {
-    for entry in fs::read_dir(dir)? {
-        let path = entry?.path();
-        if path.is_dir() {
-            yaml_files(&path, found)?;
-        } else if path
-            .extension()
-            .is_some_and(|extension| extension == "yml" || extension == "yaml")
-        {
-            found.push(path);
-        }
-    }
-    Ok(())
-}
-
-const JOB_CACHE_MODES: [&str; 4] = [
-    "    cache-mode: read",
-    "    cache-mode: write",
-    "    cache-mode: write-only",
-    "    cache-mode: none",
-];
-
-fn without_github_mode(text: &str) -> String {
-    text.lines()
-        .filter(|line| !JOB_CACHE_MODES.contains(line))
-        .collect::<Vec<_>>()
-        .join("\n")
-        .replace("github-cache-mode", "")
-}
-
 #[test]
 fn no_rendered_workflow_writes_cache_mode_but_as_a_job_level_literal() -> TestResult {
     let (release, _) = app()?;
@@ -381,15 +352,23 @@ fn no_rendered_workflow_writes_cache_mode_but_as_a_job_level_literal() -> TestRe
         assert!(!without_github_mode(text).contains("cache-mode"));
     }
     let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../generator/samples");
-    let mut files = Vec::new();
-    yaml_files(&samples, &mut files)?;
+    let files = rendered_samples(&samples)?;
     assert_ne!(files.len(), 0);
     for file in files {
         assert!(
-            !without_github_mode(&fs::read_to_string(&file)?).contains("cache-mode"),
+            !carries_cache_mode(&fs::read_to_string(&file)?),
             "{}",
             file.display()
         );
     }
     Ok(())
+}
+
+#[test]
+fn the_cache_mode_check_still_refuses_a_top_level_key_in_a_render() {
+    let rendered = "permissions:\n  contents: read\ncache-mode: read\njobs:\n  build:\n    cache-mode: write\n";
+    assert!(carries_cache_mode(rendered));
+    assert!(!carries_cache_mode(
+        "jobs:\n  build:\n    cache-mode: write\n"
+    ));
 }
