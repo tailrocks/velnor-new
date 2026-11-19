@@ -14,6 +14,10 @@ use crate::detect::metadata_roots;
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::sha256::sha256_hex;
 
+mod recorded;
+
+pub use recorded::{recorded_members, recorded_roots, recorded_target_dirs};
+
 pub const METADATA_PATH: RepoPath = RepoPath::from_static(".velnor/rust-metadata.json");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -85,6 +89,8 @@ struct Edge {
     features: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     platform: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    optional: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     rename: Option<String>,
 }
@@ -197,6 +203,7 @@ fn member(package: &RustPackage, versions: bool) -> Member {
                 manifest: dependency.manifest.as_ref().map(ToString::to_string),
                 features: dependency.features.clone(),
                 platform: dependency.platform.clone(),
+                optional: dependency.optional,
                 rename: dependency.rename.clone(),
             })
             .collect(),
@@ -217,26 +224,6 @@ fn member(package: &RustPackage, versions: bool) -> Member {
             })
             .collect(),
     }
-}
-
-pub fn recorded_roots(recorded: Option<&[u8]>) -> Result<Vec<RepoPath>, MetadataFileError> {
-    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
-    let file: File = serde_json::from_slice(bytes)
-        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
-    file.roots.keys().map(|root| path_of(root)).collect()
-}
-
-pub fn recorded_target_dirs(
-    recorded: Option<&[u8]>,
-) -> Result<BTreeMap<RepoPath, RepoPath>, MetadataFileError> {
-    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
-    let file: File = serde_json::from_slice(bytes)
-        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
-    file.roots
-        .iter()
-        .filter_map(|(root, record)| Some((root, record.target_dir.as_ref()?)))
-        .map(|(root, dir)| Ok((path_of(root)?, path_of(dir)?)))
-        .collect()
 }
 
 pub fn recorded_metadata(
@@ -357,6 +344,7 @@ fn package(member: Member, versions: bool) -> Result<RustPackage, MetadataFileEr
                     manifest: edge.manifest.as_deref().map(path_of).transpose()?,
                     features: edge.features,
                     platform: edge.platform,
+                    optional: edge.optional,
                     rename: edge.rename,
                 })
             })

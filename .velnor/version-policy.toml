@@ -109,9 +109,9 @@ reviewed = "2026-10-20"
 
 [[actions]]
 name = "actions/create-github-app-token"
-version = "v3.3.0"
-sha = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
-reviewed = "2026-10-18"
+version = "v3.4.0"
+sha = "f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc"
+reviewed = "2026-11-18"
 
 [[actions]]
 name = "actions/github-script"
