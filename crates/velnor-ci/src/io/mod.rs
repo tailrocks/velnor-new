@@ -45,6 +45,7 @@ mod resolve_qualification;
 mod restored;
 mod run;
 mod setup;
+mod small;
 mod sources;
 mod timings;
 mod unit_platforms;
@@ -84,7 +85,7 @@ const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
 const SUMMARY_VARIABLE: &str = "GITHUB_STEP_SUMMARY";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
 const SOURCE_LIMIT: u64 = 1 << 20;
-const SOURCE_TOTAL_LIMIT: u64 = 8 << 20;
+const SOURCE_TOTAL_LIMIT: u64 = 64 << 20;
 const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
 const UNKNOWN_COMMIT: &str = "unknown";
@@ -231,40 +232,10 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
-        Command::Restored(args) => {
-            let root = current_dir()?;
-            let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
-            let targets = if configured.is_empty() {
-                every_root_target(&root)?
-            } else {
-                configured
-                    .iter()
-                    .map(|target| cache_paths::validated(&root, target))
-                    .collect::<Result<Vec<_>, _>>()?
-            };
-            let expiry = expire_old_bases(&targets, now_seconds())?;
-            append_outputs(&format!("expired={}\n", expiry.expired))?;
-            let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
-            Ok(expiry.report + &ties)
-        }
-        Command::ValidateArtifactId => {
-            crate::preview_helpers::validate_artifact_id(
-                &std::env::var(crate::preview_helpers::ARTIFACT_ID_VARIABLE).unwrap_or_default(),
-            )?;
-            Ok(String::new())
-        }
-        Command::InstallGh(args) => {
-            crate::preview_helpers::install_gh(
-                &args.version,
-                std::env::var(TOKEN_VARIABLE).ok().as_deref(),
-            )?;
-            Ok(String::new())
-        }
-        Command::StageBundle => {
-            let bundle = env_path("BUNDLE_PATH")?;
-            crate::preview_helpers::stage_bundle(&bundle, &env_path("RUNNER_TEMP")?)?;
-            Ok(String::new())
-        }
+        Command::Restored(args) => small::run_restored(args),
+        Command::ValidateArtifactId => small::run_validate_artifact_id(),
+        Command::InstallGh(args) => small::run_install_gh(&args),
+        Command::StageBundle => small::run_stage_bundle(),
         Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
         Command::VerifyMacProof => preview::cli::verify_mac_proof(),
         Command::RunAuthority(args) => preview::cli::run_authority(&args),
@@ -277,7 +248,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
     }
 }
 
-fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
+pub(super) fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
     std::env::var_os(variable)
         .filter(|value| !value.is_empty())
         .map(std::path::PathBuf::from)

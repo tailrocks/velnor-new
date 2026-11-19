@@ -10,6 +10,7 @@ mod ids;
 mod lint;
 mod plan;
 mod repo;
+mod repo_config;
 mod selection;
 mod steps;
 mod test_group;

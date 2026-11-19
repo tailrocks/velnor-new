@@ -52,6 +52,7 @@ mod mise_lock;
 mod os_pins;
 mod owners;
 mod plan;
+mod plan_tools;
 mod policy;
 mod private_fetch;
 mod private_sources;

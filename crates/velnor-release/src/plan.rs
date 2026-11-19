@@ -5,7 +5,10 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{Platform, RepoPath, RustMetadata};
 
+use crate::bundle::{ExtraBin, check_targets};
+use crate::check::{CheckPlan, plan_checks};
 use crate::error::ReleaseError;
+use crate::error_family::FamilyError;
 use crate::family::{FamilyPlan, plan_binaries_and_family};
 use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
@@ -20,7 +23,7 @@ use crate::reality::check_reality;
 use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
-use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
+use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES, publish_budget};
 use crate::velnor_config::{BinaryFormat, VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
@@ -57,8 +60,11 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub extra_bins: Vec<ExtraBin>,
+    pub include: Vec<String>,
     pub format: BinaryFormat,
     pub profile: Option<String>,
+    pub asset_name: Option<String>,
     pub tag_pattern: TagPattern,
 }
 
@@ -68,6 +74,7 @@ pub struct ReleasePlan {
     pub after: Vec<String>,
     pub pr_only_checks: Vec<String>,
     pub binaries: Vec<BinaryPlan>,
+    pub checks: Vec<CheckPlan>,
     pub family: Option<FamilyPlan>,
     pub release_plz_version: String,
     pub release_plz_url: String,
@@ -223,42 +230,21 @@ pub(crate) fn plan_binaries(
             .ok_or_else(|| ReleaseError::BinaryNotReleased {
                 package: binary.package.clone(),
             })?;
-        if let Some(targets) = &files.bin_targets
-            && !targets.contains(&(
-                manifest_of(&root),
-                binary.package.clone(),
-                binary.bin.clone(),
-            ))
-        {
-            return Err(ReleaseError::BinaryTargetMissing {
-                package: binary.package.clone(),
-                bin: binary.bin.clone(),
-            });
-        }
+        check_targets(binary, &manifest_of(&root), files)?;
         binaries.push(BinaryPlan {
             package: binary.package.clone(),
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            extra_bins: binary.bins.clone(),
+            include: binary.include.clone(),
             format: binary.format,
             profile: binary.profile.clone(),
+            asset_name: crate::asset_name::checked(binary, &tag_pattern)?,
             tag_pattern,
         });
     }
     Ok(binaries)
-}
-
-fn publish_budget(config: &RootConfig, inherited: &[String]) -> u128 {
-    let publishing = inherited
-        .iter()
-        .filter(|package| config.publishes(package))
-        .count();
-    let none_known = config.publishes_to_crates_io && publishing == 0 && config.packages.is_empty();
-    let publishing = publishing.max(usize::from(none_known)) as u128;
-    config
-        .listed_nanos
-        .saturating_add(publishing.saturating_mul(config.unlisted_check_nanos))
-        .saturating_add(publishing.saturating_mul(config.unlisted_publish_nanos))
 }
 
 #[must_use]
@@ -366,12 +352,17 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
+        if family.is_some() && !config.checks.is_empty() {
+            return Err(FamilyError::Unsupported { key: "[[checks]]" }.into());
+        }
+        let checks = plan_checks(config.checks, &binaries)?;
         let roots = plan_roots(configs, files.rust_metadata.as_ref());
         Ok(ReleasePlan {
             roots,
             after: config.after,
             pr_only_checks: config.pr_only_checks,
             binaries,
+            checks,
             family,
             release_plz_version: release_plz.version,
             release_plz_url: release_plz.url,

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use crate::bundle::check_targets;
 use crate::error::ReleaseError;
 use crate::error_family::FamilyError;
 use crate::plan::{BinaryPlan, ReleaseFiles, ReleasePlan, manifest_of, plan_binaries};
@@ -32,12 +33,18 @@ pub(crate) fn plan_family(
             .ok_or_else(|| FamilyError::BinaryReleasedByReleasePlz {
                 package: binary.package.clone(),
             })?;
-        check_bin_target(files, &root, binary)?;
+        if let Some(key) = unsupported(binary) {
+            return Err(FamilyError::Unsupported { key }.into());
+        }
+        check_targets(binary, &manifest_of(&root), files)?;
         binaries.push(BinaryPlan {
             package: binary.package.clone(),
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            extra_bins: Vec::new(),
+            include: Vec::new(),
+            asset_name: None,
             format: binary.format,
             profile: binary.profile.clone(),
             tag_pattern: tag_pattern.clone(),
@@ -61,21 +68,15 @@ pub(crate) fn plan_family(
     Ok((FamilyPlan { tag_pattern }, binaries))
 }
 
-fn check_bin_target(files: &ReleaseFiles, root: &str, binary: &Binary) -> Result<(), ReleaseError> {
-    match &files.bin_targets {
-        Some(targets)
-            if !targets.contains(&(
-                manifest_of(root),
-                binary.package.clone(),
-                binary.bin.clone(),
-            )) =>
-        {
-            Err(ReleaseError::BinaryTargetMissing {
-                package: binary.package.clone(),
-                bin: binary.bin.clone(),
-            })
-        }
-        _ => Ok(()),
+fn unsupported(binary: &Binary) -> Option<&'static str> {
+    if !binary.bins.is_empty() {
+        Some("bins")
+    } else if !binary.include.is_empty() {
+        Some("include")
+    } else if binary.asset_name.is_some() {
+        Some("asset_name")
+    } else {
+        None
     }
 }
 

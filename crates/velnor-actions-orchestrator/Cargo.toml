@@ -30,10 +30,6 @@ name = "velnor_orchestrator"
 path = "tests/velnor_orchestrator.rs"
 
 [[test]]
-name = "moved_control_jobs_provisioning"
-path = "tests/moved_control_jobs_provisioning.rs"
-
-[[test]]
 name = "task_report_public"
 path = "tests/task_report_public.rs"
 

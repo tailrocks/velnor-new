@@ -22,7 +22,7 @@ pub(super) fn assert_published_helper_tools(
             Some("false")
         );
     }
-    for (id, expected_gh) in [(PLAN_JOB_ID, "gh@2.103.2"), (FINAL_JOB_ID, "gh@2.103.3")] {
+    for (id, expected_gh) in [(PLAN_JOB_ID, "gh@2.103.2"), (FINAL_JOB_ID, "gh@2.104.0")] {
         let job = jobs
             .get(id)
             .ok_or_else(|| io::Error::other(format!("missing helper job {id}")))?;

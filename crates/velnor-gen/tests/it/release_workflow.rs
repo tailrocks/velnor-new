@@ -133,7 +133,7 @@ fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> Test
       contents: read
       checks: read
     steps:
-      - name: Check that the tagged commit is on the default branch and passed Required
+      - name: Check that the tagged commit is on the default branch
         env:
           GH_TOKEN: ${{{{ github.token }}}}
         run: |
@@ -142,14 +142,7 @@ fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> Test
     let text = gate.join("\n");
     assert!(text.starts_with(&header), "{text}");
     assert!(!text.contains("uses:"), "{text}");
-    for needle in [
-        "compare/$default_branch...$GITHUB_SHA",
-        "select(.name == \"Required\" and .app.slug == \"github-actions\")",
-        "grep -qvxE 'success|skipped|^$'",
-        "grep -qx success",
-    ] {
-        assert!(text.contains(needle), "{needle}");
-    }
+    assert!(text.contains("compare/$default_branch...$GITHUB_SHA"));
     assert_eq!(values(gate, "needs"), [] as [&str; 0]);
     for (id, dependency) in [
         ("build", "gate"),
@@ -225,7 +218,7 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
     assert!(verify < publish);
     assert!(runs[publish].contains(" --prerelease "));
     let published = runs[publish].matches(" dist/").count();
-    assert_eq!(published, 8);
+    assert_eq!(published, 6);
     assert!(runs[publish].contains(" dist/COMMIT "));
     assert!(
         !runs

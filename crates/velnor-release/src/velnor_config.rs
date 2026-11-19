@@ -4,6 +4,9 @@
 use serde::Deserialize;
 use velnor_model::Platform;
 
+use crate::asset_name;
+use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
+use crate::check::RawCheck;
 use crate::error::ReleaseError;
 use crate::release_plz::valid_package_name;
 
@@ -19,8 +22,11 @@ pub(crate) struct Binary {
     pub(crate) package: String,
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
+    pub(crate) bins: Vec<ExtraBin>,
+    pub(crate) include: Vec<String>,
     pub(crate) format: BinaryFormat,
     pub(crate) profile: Option<String>,
+    pub(crate) asset_name: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,6 +36,7 @@ pub(crate) struct VelnorConfig {
     pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
     pub(crate) family_tag: Option<String>,
+    pub(crate) checks: Vec<RawCheck>,
 }
 
 #[derive(Deserialize)]
@@ -40,6 +47,11 @@ struct RawBinary {
     platforms: Option<Vec<String>>,
     format: Option<BinaryFormat>,
     profile: Option<String>,
+    asset_name: Option<String>,
+    #[serde(default)]
+    bins: Vec<RawExtraBin>,
+    #[serde(default)]
+    include: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -52,9 +64,11 @@ struct Raw {
     #[serde(default)]
     binaries: Vec<RawBinary>,
     family_tag: Option<String>,
+    #[serde(default)]
+    checks: Vec<RawCheck>,
 }
 
-fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
+pub(crate) fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
     match values.iter().find(|value| value.contains("${{")) {
         Some(value) => Err(ReleaseError::ExpressionInValue {
             key: key.to_owned(),
@@ -76,6 +90,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             pr_only_checks: Vec::new(),
             binaries: Vec::new(),
             family_tag: None,
+            checks: Vec::new(),
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
@@ -138,6 +153,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         pr_only_checks: raw.pr_only_checks,
         binaries,
         family_tag: raw.family_tag,
+        checks: raw.checks,
     })
 }
 
@@ -184,6 +200,14 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         });
     }
     let profile = profile(&raw.package, raw.profile)?;
+    if let Some(template) = &raw.asset_name
+        && !asset_name::valid(template)
+    {
+        return Err(ReleaseError::InvalidAssetName {
+            package: raw.package,
+            template: template.clone(),
+        });
+    }
     let platforms = match raw.platforms {
         None => Platform::ALL.to_vec(),
         Some(names) if names.is_empty() => {
@@ -208,11 +232,25 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             platforms
         }
     };
+    let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;
+    let format = raw.format.unwrap_or(BinaryFormat::Archive);
+    if format == BinaryFormat::Raw
+        && let Some(path) = include.first()
+    {
+        return Err(ReleaseError::InvalidBundle {
+            package: raw.package,
+            entry: path.clone(),
+            reason: "cannot be included in a raw binary, which publishes only executables",
+        });
+    }
     Ok(Binary {
         package: raw.package,
         bin,
         platforms,
-        format: raw.format.unwrap_or(BinaryFormat::Archive),
+        bins,
+        include,
+        format,
         profile,
+        asset_name: raw.asset_name,
     })
 }

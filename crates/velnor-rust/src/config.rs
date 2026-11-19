@@ -104,27 +104,12 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         .try_into()
         .map_err(|error: toml::de::Error| invalid(Reason::Syntax(error.message().to_owned())))?;
     let defaults = RustCiConfig::default();
-    let timeout_minutes = raw.timeout_minutes.unwrap_or(defaults.timeout_minutes);
-    if !TIMEOUT_RANGE.contains(&timeout_minutes) {
-        return Err(invalid(Reason::OutOfRange {
-            key: "timeout_minutes",
-            value: timeout_minutes,
-            min: *TIMEOUT_RANGE.start(),
-            max: *TIMEOUT_RANGE.end(),
-        }));
-    }
+    let timeout_minutes =
+        timeout(raw.timeout_minutes, defaults.timeout_minutes).map_err(invalid)?;
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
     let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
-    let required_check = match raw.required_check {
-        None => defaults.required_check,
-        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => name,
-        Some(name) => {
-            return Err(invalid(Reason::InvalidValue {
-                key: "required_check",
-                value: name,
-            }));
-        }
-    };
+    let required_check =
+        required_check(raw.required_check, defaults.required_check).map_err(invalid)?;
     let skip_draft_pull_requests = raw
         .skip_draft_pull_requests
         .unwrap_or(defaults.skip_draft_pull_requests);
@@ -183,6 +168,31 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         timeout_minutes,
         exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {
+    let minutes = configured.unwrap_or(default);
+    if TIMEOUT_RANGE.contains(&minutes) {
+        Ok(minutes)
+    } else {
+        Err(Reason::OutOfRange {
+            key: "timeout_minutes",
+            value: minutes,
+            min: *TIMEOUT_RANGE.start(),
+            max: *TIMEOUT_RANGE.end(),
+        })
+    }
+}
+
+fn required_check(configured: Option<String>, default: String) -> Result<String, Reason> {
+    match configured {
+        None => Ok(default),
+        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => Ok(name),
+        Some(name) => Err(Reason::InvalidValue {
+            key: "required_check",
+            value: name,
+        }),
+    }
 }
 
 fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {

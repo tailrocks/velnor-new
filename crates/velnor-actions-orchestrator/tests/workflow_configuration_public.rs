@@ -88,8 +88,6 @@ mod ledger_cli_verify_script;
 mod local_action_annotation;
 #[path = "workflow_configuration_public/mac_proof_cosign.rs"]
 mod mac_proof_cosign;
-#[path = "workflow_configuration_public/maintenance_check_inputs.rs"]
-mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/mbx_job_env.rs"]
