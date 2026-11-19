@@ -7,7 +7,7 @@ use rustix::fs::{
 };
 
 #[cfg(target_os = "linux")]
-use crate::capacity::docker_root_capacity;
+use crate::capacity::{StatvfsCounts, docker_root_capacity, record_free_bytes};
 use crate::mountinfo::MountEntry;
 #[cfg(target_os = "linux")]
 use crate::mountinfo::docker_root_mount;
@@ -41,6 +41,7 @@ pub(crate) struct FilesystemObservation {
     pub(crate) block_size: u64,
     pub(crate) total_bytes: u64,
     pub(crate) free_bytes: u64,
+    pub(crate) record_free_bytes: u64,
     pub(crate) available_bytes: u64,
     pub(crate) total_inodes: u64,
     pub(crate) free_inodes: u64,
@@ -90,6 +91,12 @@ pub(crate) fn observe_docker_root(mountinfo: &[u8]) -> Result<FilesystemObservat
     )?;
     let (free_bytes, total_bytes, available_bytes) =
         docker_root_capacity(vfs.f_blocks, vfs.f_bfree, vfs.f_bavail, vfs.f_frsize)?;
+    let record_free_bytes = record_free_bytes(&StatvfsCounts {
+        blocks: vfs.f_blocks,
+        bfree: vfs.f_bfree,
+        bavail: vfs.f_bavail,
+        frsize: vfs.f_frsize,
+    })?;
     let inode_policy = inode_policy(fs_type_magic, vfs.f_files, vfs.f_ffree, vfs.f_favail)?;
     Ok(FilesystemObservation {
         mount,
@@ -103,6 +110,7 @@ pub(crate) fn observe_docker_root(mountinfo: &[u8]) -> Result<FilesystemObservat
         block_size: vfs.f_frsize,
         total_bytes,
         free_bytes,
+        record_free_bytes,
         available_bytes,
         total_inodes: vfs.f_files,
         free_inodes: vfs.f_ffree,

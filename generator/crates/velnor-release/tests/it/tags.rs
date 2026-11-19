@@ -181,6 +181,9 @@ fn a_release_root_starting_with_a_dash_is_refused() {
     for root in ["-tools", "tools/-x"] {
         let mut files = files();
         files.release_toml = Some(format!("roots = [\"{root}\"]\n"));
+        files
+            .release_plz_toml
+            .insert(root.to_owned(), PLZ.to_owned());
         let error = refusal(&files);
         let expected = root.starts_with('-');
         assert_eq!(
@@ -188,5 +191,8 @@ fn a_release_root_starting_with_a_dash_is_refused() {
             expected,
             "{root}: {error:?}"
         );
+        if !expected {
+            assert!(error.is_none(), "{root}: {error:?}");
+        }
     }
 }
