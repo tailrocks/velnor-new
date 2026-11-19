@@ -19,7 +19,7 @@ fn render(helper: &str) -> Result<Node, Box<dyn Error>> {
         Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n"),
     )?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", helper).into_bytes());
     let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
@@ -58,16 +58,10 @@ fn the_tag_job_binds_each_live_branch_prefix_before_the_app_token_is_minted() ->
 }
 
 #[test]
-fn the_release_pr_job_and_an_older_helper_bind_no_branch_prefix() -> TestResult {
+fn the_release_pr_job_binds_no_branch_prefix() -> TestResult {
     let tree = render("0.1.81")?;
     assert!(
         steps(job(&tree, "release-pr")?)
-            .iter()
-            .all(|step| !run_of(step).contains("--branch-prefix"))
-    );
-    let older = render("0.1.80")?;
-    assert!(
-        steps(job(&older, "tag")?)
             .iter()
             .all(|step| !run_of(step).contains("--branch-prefix"))
     );

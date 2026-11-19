@@ -26,13 +26,20 @@ use crate::io::Repo;
 pub(super) fn command(program: impl AsRef<OsStr>) -> Command {
     let mut command = Command::new(program);
     command
+        .env_remove("CARGO_TARGET_DIR")
         .env("MBX_BUILD_SCRIPT_EXECUTION", "0")
         .env("MBX_SHARE_OUT_DIR", "0");
     command
 }
 
+pub(super) fn velnor_ci() -> Command {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command.env_remove("CARGO_TARGET_DIR");
+    command
+}
+
 pub(super) fn audit(repo: &Repo, args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    velnor_ci()
         .current_dir(repo.root())
         .args(["inputs", "audit"])
         .args(args)

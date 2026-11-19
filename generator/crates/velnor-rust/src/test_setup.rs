@@ -17,6 +17,7 @@ pub(crate) fn inserted(
             step.kind,
             StepKind::Cargo(
                 CargoCommand::NextestRun { .. }
+                    | CargoCommand::NextestFeatures { .. }
                     | CargoCommand::NextestRunArchive { .. }
                     | CargoCommand::TestTarget { .. }
                     | CargoCommand::Doctest
@@ -25,7 +26,7 @@ pub(crate) fn inserted(
     }) else {
         return steps;
     };
-    let (when, skip_on_draft) = (steps[first].when, steps[first].skip_on_draft);
+    let (when, pr) = (steps[first].when, steps[first].pr);
     let setup: Vec<Step> = facts
         .config
         .test_setup
@@ -35,7 +36,7 @@ pub(crate) fn inserted(
             directory: root.manifest.parent(),
             gate: lane.steps(),
             when,
-            skip_on_draft,
+            pr,
             ..step(StepKind::TestSetup {
                 name: setup.name.clone(),
                 run: setup.run.clone(),

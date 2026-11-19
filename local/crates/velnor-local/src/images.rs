@@ -120,7 +120,7 @@ fn target_volume(root: &str) -> String {
     let suffix = digest.as_ref()[..8]
         .iter()
         .fold(String::new(), |mut hex, byte| {
-            let _ = write!(hex, "{byte:02x}");
+            write!(hex, "{byte:02x}").ok();
             hex
         });
     format!("{TARGET_VOLUME}-{suffix}")

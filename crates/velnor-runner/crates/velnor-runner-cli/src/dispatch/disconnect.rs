@@ -5,7 +5,7 @@ use std::path::Path;
 use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
-use velnor_runner_host::{ConnectionId, HostError, RepositoryConnection};
+use velnor_runner_host::{ConnectionId, CreatedSetDeletion, HostError, RepositoryConnection};
 
 use super::DRAIN_WAIT_BUDGET;
 use super::connection_state::{
@@ -14,6 +14,9 @@ use super::connection_state::{
     write_connection_snapshot, write_drain_proof,
 };
 use super::marker::{MarkerToken, marker_token, report_marker_write_error, write_marker};
+
+#[cfg(test)]
+mod tests;
 
 pub(super) fn disconnect(state: &Path, raw_connection_id: &str, wait: bool) -> ExitCode {
     let deadline = Instant::now() + DRAIN_WAIT_BUDGET;
@@ -27,19 +30,24 @@ pub(super) fn disconnect(state: &Path, raw_connection_id: &str, wait: bool) -> E
         move |state, binding, _| {
             crate::readiness_probe::wait_for_connection_detached_until(state, binding, deadline)
         },
+        move |state, binding, _| {
+            crate::readiness_probe::delete_created_scale_set_until(state, binding, deadline)
+        },
     )
 }
 
-pub(super) fn disconnect_with_detach<F, G>(
+pub(super) fn disconnect_with_detach<F, G, H>(
     state: &Path,
     raw_connection_id: &str,
     wait: bool,
     wait_for_drain: F,
     wait_for_detach: G,
+    delete_set: H,
 ) -> ExitCode
 where
     F: FnOnce(&Path, &ConnectionId, Duration) -> Result<bool, HostError>,
     G: FnOnce(&Path, &RepositoryConnection, Duration) -> Result<bool, HostError>,
+    H: FnOnce(&Path, &RepositoryConnection, Duration) -> Result<CreatedSetDeletion, HostError>,
 {
     let Ok(connection_id) = ConnectionId::parse(raw_connection_id) else {
         eprintln!("Connection ID is invalid.");
@@ -85,13 +93,51 @@ where
             }
         }
     }
+    let detached = if drain_proven {
+        "Connection detached."
+    } else {
+        match delete_set(state, &original_connection, DRAIN_WAIT_BUDGET) {
+            Ok(CreatedSetDeletion::Deleted) => "Connection detached. Scale Set deleted.",
+            Ok(CreatedSetDeletion::NotOwned) => {
+                "Connection detached. The existing Scale Set stays."
+            }
+            Ok(other) => {
+                report_delete_failure(other);
+                return ExitCode::from(1);
+            }
+            Err(error) => {
+                eprintln!("{error}");
+                return ExitCode::from(1);
+            }
+        }
+    };
     finish_disconnect(
         state,
         &connection_id,
         &original_connection,
         &token,
+        detached,
         wait_for_detach,
     )
+}
+
+fn report_delete_failure(deletion: CreatedSetDeletion) {
+    match deletion {
+        CreatedSetDeletion::Refused(status) => {
+            eprintln!("Scale Set delete refused (HTTP {status}). Connection stays configured.");
+        }
+        CreatedSetDeletion::ControllerOffline => {
+            eprintln!(
+                "Scale Set created by this controller needs the controller running to delete it. Start it and retry."
+            );
+        }
+        CreatedSetDeletion::Uncertain
+        | CreatedSetDeletion::TimedOut
+        | CreatedSetDeletion::Deleted
+        | CreatedSetDeletion::NotOwned => {
+            eprintln!("Scale Set delete is uncertain. Connection stays configured; retry.");
+        }
+    }
 }
 
 fn request_connection_drain(
@@ -165,6 +211,7 @@ fn finish_disconnect(
     connection_id: &ConnectionId,
     original_connection: &RepositoryConnection,
     token: &MarkerToken,
+    detached: &str,
     wait_for_detach: impl FnOnce(&Path, &RepositoryConnection, Duration) -> Result<bool, HostError>,
 ) -> ExitCode {
     if let Err(message) = remove_connection_config(state, connection_id, original_connection, token)
@@ -176,7 +223,7 @@ fn finish_disconnect(
         Ok(true) => {
             match verify_detached_disconnect(state, connection_id, original_connection, token) {
                 Ok(()) => {
-                    println!("Connection detached. The existing Scale Set stays.");
+                    println!("{detached}");
                     ExitCode::SUCCESS
                 }
                 Err(message) => {

@@ -13,7 +13,7 @@ fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Err
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
     repo.files.insert(
         LOCK_PATH,
-        pin_lock(version, COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock(version, COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     workflow(&repo)
 }
@@ -100,16 +100,13 @@ fn scheduled_budget_runs_after_writers_even_when_a_sibling_or_all_saves_are_skip
         }
     }
     assert!(writers > 1);
-    let old = render("0.1.80", "full_run = \"off\"\n")?;
-    assert!(!old.contains("cache budget"));
-    assert!(!old.contains("rust-trim:"));
     Ok(())
 }
 
 #[test]
 fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestResult {
     for bytes in [0_u64, 8_000_000_000] {
-        for version in ["0.1.80", "0.1.81"] {
+        for version in ["0.1.81"] {
             let mut repo = crate::base_save::pinned(
                 version,
                 &format!("full_run = \"off\"\ncache_budget_bytes = {bytes}\n"),
@@ -132,11 +129,6 @@ fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestRes
             }
             let text = workflow(&repo)?;
             assert!(!text.contains("name: Save the"), "{text}");
-            if version == "0.1.80" {
-                assert!(!text.contains("rust-trim:"), "{text}");
-                assert!(!text.contains("cache budget"), "{text}");
-                continue;
-            }
             let all = jobs_of(&text);
             let (_, trim) = all
                 .iter()
@@ -181,6 +173,30 @@ fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestRes
                 .ok_or("required")?;
             assert!(!required.contains("rust-trim"), "{required}");
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn decide_gets_the_configured_cache_budget() -> TestResult {
+    for (config, bytes) in [
+        ("full_run = \"off\"\n", "8000000000"),
+        ("full_run = \"off\"\ncache_budget_bytes = 123\n", "123"),
+    ] {
+        let text = render("0.1.81", config)?;
+        let mut lanes = 0;
+        for (_, block) in jobs_of(&text) {
+            let Some(decide) = step(&block, "Decide whether to save the build directory") else {
+                continue;
+            };
+            lanes += 1;
+            assert!(
+                decide.contains(&format!("VELNOR_CACHE_BUDGET_BYTES: '{bytes}'"))
+                    || decide.contains(&format!("VELNOR_CACHE_BUDGET_BYTES: {bytes}")),
+                "{decide}"
+            );
+        }
+        assert!(lanes > 0, "{text}");
     }
     Ok(())
 }

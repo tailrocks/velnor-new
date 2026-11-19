@@ -46,6 +46,12 @@ fn public_qualifier_rejects_invalid_image_ids_and_socket_arguments() -> TestResu
     let git = GitFixture::new()?;
     let api = DockerApiFixture::new(ApiPlan::new(git.source_sha()))?;
     let valid_socket = api.socket().to_string_lossy().into_owned();
+    let embedded = {
+        let socket = api.socket();
+        let directory = socket.parent().ok_or("socket directory")?;
+        let name = socket.file_name().ok_or("socket name")?;
+        format!("{}/unix://{}", directory.display(), name.to_string_lossy())
+    };
     let cases = [
         ("sha256:zz".to_owned(), digest_id('b'), valid_socket.clone()),
         (
@@ -60,6 +66,7 @@ fn public_qualifier_rejects_invalid_image_ids_and_socket_arguments() -> TestResu
             digest_id('b'),
             "tcp://localhost:2375".to_owned(),
         ),
+        (digest_id('a'), digest_id('b'), embedded),
     ];
     for (runner, dind, socket) in cases {
         let output = fixture::invoke(

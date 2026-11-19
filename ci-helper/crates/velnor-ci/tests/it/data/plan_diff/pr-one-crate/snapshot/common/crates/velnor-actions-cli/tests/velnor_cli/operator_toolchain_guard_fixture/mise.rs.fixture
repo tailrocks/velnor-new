@@ -1,0 +1,4 @@
+    let script = include_str!("mise.sh")
+        .replace("@RUST_VERSION@", catalog.version(PinnedTool::Rust))
+        .replace("@MBX_VERSION@", catalog.version(PinnedTool::MrBoxington))
+        .replace(

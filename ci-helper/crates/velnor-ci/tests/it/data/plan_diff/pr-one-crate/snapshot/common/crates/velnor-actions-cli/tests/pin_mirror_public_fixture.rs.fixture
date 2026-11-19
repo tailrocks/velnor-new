@@ -1,0 +1,16 @@
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let dir = tempfile::tempdir()?;
+        for relative in CONST_SOURCES.iter().chain(&[POLICY, INVENTORY]) {
+            let target = dir.path().join(relative);
+            fs::create_dir_all(target.parent().ok_or("fixture path has no parent")?)?;
+            fs::copy(source.join(relative), target)?;
+        }
+        Ok(Self { dir })
+            .current_dir(self.dir.path())
+            .output()?;
+        if output.status.success() {
+            Ok(())
+            .current_dir(self.dir.path())
+            .output()?;
+        if output.status.success() {
+            Ok(String::from_utf8(output.stdout)?.trim().to_owned())

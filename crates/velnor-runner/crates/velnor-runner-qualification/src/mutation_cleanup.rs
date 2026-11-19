@@ -14,19 +14,12 @@ use crate::host_config::{validate_owned_id, validate_ownership};
 use super::mutation_lifecycle::{
     MutationKind, MutationResult, MutationValue, MutationWait, PendingMutation, wait,
 };
+mod recovery;
 mod volume_recheck;
+use recovery::{RECOVERY_POLL, RECOVERY_REQUEST, RECOVERY_TIMEOUT, Recovery};
 
 use super::resources::{OwnedResources, TrackedContainer};
 use super::{deadline, missing, volume_owned};
-
-const RECOVERY_TIMEOUT: Duration = Duration::from_secs(3);
-const RECOVERY_POLL: Duration = Duration::from_millis(100);
-const RECOVERY_REQUEST: Duration = Duration::from_secs(1);
-
-enum Recovery {
-    Resolved,
-    Unresolved { owned_observed: bool },
-}
 
 enum Observation {
     Missing,
@@ -157,6 +150,9 @@ impl OwnedResources {
                             Recovery::Unresolved { owned_observed }
                         };
                     }
+                    return Recovery::Unresolved {
+                        owned_observed: true,
+                    };
                 }
                 Ok(Observation::Missing) | Err(HostError::DockerTimeout | HostError::Docker) => {}
                 Err(_) => return Recovery::Unresolved { owned_observed },

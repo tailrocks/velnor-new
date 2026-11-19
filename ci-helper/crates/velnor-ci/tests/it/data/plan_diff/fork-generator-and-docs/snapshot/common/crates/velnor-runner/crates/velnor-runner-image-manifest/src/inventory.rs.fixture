@@ -1,0 +1,12 @@
+const RUNNER_INVENTORY: &str = include_str!("runner_family_inventory.txt");
+pub const RUNNER_INVENTORY_PATH: &str =
+    "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_inventory.txt";
+
+const RUNNER_ABSENCES: &str = include_str!("runner_family_absences.txt");
+pub const RUNNER_ABSENCES_PATH: &str =
+    "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_absences.txt";
+static ABSENCES: OnceLock<Vec<&str>> = OnceLock::new();
+            .all(|component| !component.is_empty() && component != "." && component != "..")
+        && path
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-'))

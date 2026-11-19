@@ -72,11 +72,13 @@ pub(crate) fn expected_release_nested(
 ) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     let plan = ReleasePlan::read(&release_files(view)).map_err(GenerateError::Release)?;
     let helper = helper(view).map_err(|_| GenerateError::HelperNotPinned)?;
-    if !helper
-        .version()
-        .at_least(velnor_gen::RELEASE_HELPER_MINIMUM)
-    {
-        return Err(GenerateError::ReleaseHelperTooOld(helper.version().clone()));
+    if !helper.version().at_least(velnor_gen::HELPER_MINIMUM) {
+        return Err(GenerateError::HelperTooOld(helper.version().clone()));
+    }
+    if plan.family.is_some() && !helper.version().at_least((0, 1, 83)) {
+        return Err(GenerateError::FamilyTagHelperTooOld(
+            helper.version().clone(),
+        ));
     }
     let mut files = render_release(&plan, &helper, "main").map_err(GenerateError::Rules)?;
     files.retain(|path, _| *path == RELEASE_WORKFLOW_PATH);

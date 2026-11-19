@@ -6,9 +6,9 @@ use std::fs;
 use std::path::Path;
 
 use velnor_render::{
-    ACTIONS_CACHE, ALINT, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH,
-    DOCKER_LOGIN, DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
-    RenderedJob, RenderedStep, RenderedWorkflow, Rule, Value, check_rules, render_workflow,
+    ACTIONS_CACHE, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
+    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction, RenderedJob,
+    RenderedStep, RenderedWorkflow, Rule, Value, check_rules, render_workflow,
 };
 
 use crate::release_fixture::app;
@@ -55,9 +55,8 @@ fn at(pin: &PinnedAction, reference: &str) -> String {
     format!("{}@{reference}", pin.action)
 }
 
-const NEW_ACTIONS: [PinnedAction; 8] = [
+const NEW_ACTIONS: [PinnedAction; 7] = [
     ATTEST_BUILD_PROVENANCE,
-    ALINT,
     DOCKER_LOGIN,
     DOCKER_SETUP_BUILDX,
     DOCKER_BUILD_PUSH,
@@ -354,17 +353,32 @@ fn yaml_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) -> TestResult {
     Ok(())
 }
 
+const JOB_CACHE_MODES: [&str; 4] = [
+    "    cache-mode: read",
+    "    cache-mode: write",
+    "    cache-mode: write-only",
+    "    cache-mode: none",
+];
+
+fn without_github_mode(text: &str) -> String {
+    text.lines()
+        .filter(|line| !JOB_CACHE_MODES.contains(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .replace("github-cache-mode", "")
+}
+
 #[test]
-fn no_rendered_workflow_contains_the_non_github_cache_mode_key() -> TestResult {
+fn no_rendered_workflow_writes_cache_mode_but_as_a_job_level_literal() -> TestResult {
     let (release, _) = app()?;
-    assert!(!release.contains("cache-mode"));
+    assert!(!without_github_mode(&release).contains("cache-mode"));
     let rust_ci = render_workflow(
         &plan(Vec::new())?,
-        &workflow(step(&at(&ALINT, ALINT.commit), Vec::new())),
+        &workflow(step(&at(&ACTIONS_CACHE, ACTIONS_CACHE.commit), Vec::new())),
     )
     .map_err(|found| format!("{found:?}"))?;
     for text in rust_ci.values() {
-        assert!(!text.contains("cache-mode"));
+        assert!(!without_github_mode(text).contains("cache-mode"));
     }
     let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples");
     let mut files = Vec::new();
@@ -372,7 +386,7 @@ fn no_rendered_workflow_contains_the_non_github_cache_mode_key() -> TestResult {
     assert_ne!(files.len(), 0);
     for file in files {
         assert!(
-            !fs::read_to_string(&file)?.contains("cache-mode"),
+            !without_github_mode(&fs::read_to_string(&file)?).contains("cache-mode"),
             "{}",
             file.display()
         );

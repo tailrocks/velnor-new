@@ -5,6 +5,9 @@ runner = "ubuntu-26.04-scale-set"
 exclude = ["fixtures/**"]
 required_check = "Required"
 mbx_shared_store = true
+docs = "post_merge"
+check_alone = "post_merge"
+pr_ci = "label"
 helper = { path = "ci-helper" }
 
 [[inputs]]
@@ -37,4 +40,4 @@ run = "mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4"
 [[test_setup]]
 root = "."
 name = "Prepare pinned attestation verifier"
-run = "mise --no-config --no-env --no-hooks install gh@2.103.3"
+run = "mise --no-config --no-env --no-hooks install gh@2.104.0"

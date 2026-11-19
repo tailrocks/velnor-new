@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 #[path = "tests/fixture.rs"]
-mod fixture;
+pub(in crate::journal::schema) mod fixture;
 
 use crate::journal::Journal;
 

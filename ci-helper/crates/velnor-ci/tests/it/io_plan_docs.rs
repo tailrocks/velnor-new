@@ -132,7 +132,7 @@ fn plan_treats_a_source_over_the_size_bound_as_possibly_holding_docs() {
 #[test]
 fn plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs() {
     let repo = plan_repo("doc-flags-total");
-    for n in 0..10 {
+    for n in 0..70 {
         repo.write(&format!("a/src/m{n}.rs"), &"// pad\n".repeat(140_000));
     }
     assert_eq!(

@@ -188,26 +188,46 @@ async fn a_binary_that_cannot_run_in_the_runner_or_cannot_be_mounted_starts_noth
 }
 
 #[tokio::test]
-async fn pair_mode_refuses_the_flag_because_velnor_host_owns_its_runner_containers() {
+async fn pair_mode_serves_the_local_action_and_mounts_nothing_into_containers_it_does_not_own() {
     let dir = temp_dir("local-ci-pair");
     let file = binary(&dir, &ELF_ARM64);
     let flag = file.display().to_string();
     let args = parsed(&dir, "pair", &["--velnor-ci-binary", &flag]);
-    let docker = FakeDocker::default();
-    let env = Environment::at(&dir, &docker)
-        .await
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let error = env.up(&dir, &args).await.err().map(|e| e.to_string());
-    let text = error.unwrap_or_default();
-    assert!(
-        text.contains("--velnor-ci-binary needs --runner plain"),
-        "{text}"
-    );
-    assert!(
-        docker
-            .calls
-            .lock()
-            .unwrap_or_else(|e| unreachable!("{e}"))
-            .is_empty()
-    );
+    let (calls, result) = started(&dir, &args).await;
+    if let Err(error) = &result {
+        assert!(!error.to_string().contains("--velnor-ci-binary"), "{error}");
+    }
+    assert!(calls.len() > 3, "{calls:?}");
+    let (mut standins, mut stubs) = (0, 0);
+    for call in &calls {
+        let name = after(call, "--name")[0];
+        assert!(
+            call.iter().all(|arg| !arg.contains(LOCAL_DIR)),
+            "velnor-host mounts the binary into the pair, not docker run: {call:?}"
+        );
+        let tarballs = after(call, "-e").contains(&TARBALLS);
+        let trusted_standin = name.ends_with("-standin") && !name.contains("-fork-");
+        standins += usize::from(trusted_standin);
+        assert_eq!(tarballs, trusted_standin, "{name}");
+        let serves = call.iter().any(|arg| arg == "--local-setup-velnor");
+        stubs += usize::from(serves);
+        assert_eq!(serves, name.ends_with("-api"), "{name}");
+    }
+    assert_eq!((standins, stubs), (1, 1));
+}
+
+#[tokio::test]
+async fn a_binary_that_cannot_run_is_refused_in_pair_mode_before_any_docker_call() {
+    let dir = temp_dir("local-ci-pair-refused");
+    let colon = dir.join("a:b");
+    std::fs::write(&colon, ELF_ARM64).unwrap_or_else(|e| unreachable!("{e}"));
+    let text_file = binary(&dir, b"#!/bin/sh\n");
+    for case in [colon, text_file, dir.join("missing")] {
+        let flag = case.display().to_string();
+        let args = parsed(&dir, "pair", &["--velnor-ci-binary", &flag]);
+        let (calls, result) = started(&dir, &args).await;
+        let text = result.map_or_else(|e| e.to_string(), |()| String::new());
+        assert!(text.contains("--velnor-ci-binary"), "{flag}: {text}");
+        assert!(calls.is_empty(), "{flag}: {calls:?}");
+    }
 }

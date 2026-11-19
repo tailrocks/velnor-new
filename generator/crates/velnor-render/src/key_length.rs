@@ -4,7 +4,11 @@
 use crate::rules::{RenderedStep, Value};
 use velnor_model::{CACHE_COMPAT_LENGTH, RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH};
 
-const CACHE_ACTIONS: [&str; 2] = ["actions/cache/restore", "actions/cache/save"];
+const CACHE_ACTIONS: [&str; 3] = [
+    "actions/cache",
+    "actions/cache/restore",
+    "actions/cache/save",
+];
 
 pub(crate) fn longest_cache_key(step: &RenderedStep) -> Option<usize> {
     let uses = step.uses.as_deref()?.split('@').next()?;
@@ -41,7 +45,9 @@ fn expansion(expression: &str) -> usize {
         "runner.arch" => RUNNER_ARCH_MAX_LENGTH,
         "github.sha" => 40,
         "github.run_id" => 20,
-        _ if expression.starts_with("hashFiles(") => 64,
+        "github.run_attempt" => 10,
+        "github.job" => 100,
+        _ if expression.starts_with("hashFiles(") || expression.contains(".outputs.lock_") => 64,
         _ if expression.ends_with(".outputs.compat") => CACHE_COMPAT_LENGTH,
         _ if expression.ends_with(".outputs.base8") => 8,
         _ => expression.encode_utf16().count(),

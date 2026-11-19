@@ -79,6 +79,7 @@ fn trim_reads_every_page_of_a_250_entry_family_and_deletes_all_but_the_newest_tw
         "refs/heads/main",
         "velnor-tgt-rust-lab-Linux-X64-abcd-",
         2,
+        0,
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(fake.asked.borrow().len(), 3, "{:?}", fake.asked.borrow());
@@ -105,6 +106,7 @@ fn trim_stops_at_its_page_bound_and_warns_instead_of_reading_forever() {
         "refs/heads/main",
         "velnor-tgt-rust-lab-Linux-X64-abcd-",
         2,
+        0,
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
     let pages = fake.asked.borrow().len();
@@ -176,6 +178,7 @@ fn trim_keeps_the_newest_two_of_one_family_and_compat_and_touches_nothing_else()
         "refs/heads/main",
         "velnor-tgt-rust-lint-lab-Linux-X64-abcd-",
         2,
+        0,
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
@@ -200,8 +203,120 @@ fn trim_deletes_nothing_when_the_family_has_no_more_than_the_kept_entries() {
     let entries =
         velnor_ci::cache::parse_entries(&listing()).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(
-        stale_entries(&entries, "velnor-tgt-rust-lint-lab-Linux-X64-9999-", 2),
+        stale_entries(
+            &entries,
+            "velnor-tgt-rust-lint-lab-Linux-X64-9999-",
+            2,
+            None
+        ),
         Vec::<u64>::new()
     );
-    assert_eq!(stale_entries(&entries, "nothing-", 2), Vec::<u64>::new());
+    assert_eq!(
+        stale_entries(&entries, "nothing-", 2, None),
+        Vec::<u64>::new()
+    );
+}
+
+fn fake(entries: &[(u64, &str, u32)]) -> FakeCaches {
+    let rows: Vec<String> = entries
+        .iter()
+        .map(|(id, key, day)| {
+            format!(r#"{{"id":{id},"key":"{key}","created_at":"2026-11-{day:02}T10:00:00Z"}}"#)
+        })
+        .collect();
+    FakeCaches {
+        listing: format!(
+            r#"{{"total_count":{},"actions_caches":[{}]}}"#,
+            rows.len(),
+            rows.join(",")
+        ),
+        asked: RefCell::default(),
+        deleted: RefCell::default(),
+    }
+}
+
+fn deleted_ids(fake: &FakeCaches) -> Vec<u64> {
+    let mut ids: Vec<u64> = fake
+        .deleted
+        .borrow()
+        .iter()
+        .filter_map(|path| path.rsplit('/').next()?.parse().ok())
+        .collect();
+    ids.sort_unstable();
+    ids
+}
+
+#[test]
+fn trim_deletes_every_target_entry_of_an_older_compatibility_family_of_the_same_lane() {
+    let now = "velnor-tgt-rust-lint.lab.Linux-X64-bbbbbbbbbbbbbbbb-";
+    let old = "velnor-tgt-rust-lint.lab.Linux-X64-aaaaaaaaaaaaaaaa-";
+    let other_lane = "velnor-tgt-rust-test.lab.Linux-X64-aaaaaaaaaaaaaaaa-";
+    let other_host = "velnor-tgt-rust-lint.lab.macOS-ARM64-aaaaaaaaaaaaaaaa-";
+    let caches = fake(&[
+        (1, &format!("{now}h-1"), 1),
+        (2, &format!("{now}h-2"), 2),
+        (3, &format!("{now}h-3"), 3),
+        (7, &format!("{old}h-7"), 1),
+        (8, &format!("{old}h-8"), 2),
+        (9, &format!("{other_lane}h-9"), 1),
+        (10, &format!("{other_host}h-10"), 1),
+    ]);
+    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
+    let report =
+        trim(&caches, &repo, "refs/heads/main", now, 2, 0).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(deleted_ids(&caches), [1, 7, 8]);
+    assert!(
+        report.contains("2 of another compatibility family"),
+        "{report}"
+    );
+    let asked = caches.asked.borrow()[0].clone();
+    assert!(
+        asked.contains("key=velnor-tgt-rust-lint.lab.Linux-X64-&"),
+        "{asked}"
+    );
+}
+
+#[test]
+fn trim_keeps_a_sources_entry_restored_within_a_day_beyond_the_newest_two() {
+    let prefix = "velnor-src-Linux-X64-all.roots-";
+    let keys: Vec<String> = (1..=5).map(|id| format!("{prefix}lock{id}")).collect();
+    let row = |id: u64, accessed: &str| {
+        format!(
+            r#"{{"id":{id},"key":"{}","created_at":"2026-11-{id:02}T10:00:00Z","last_accessed_at":"{accessed}"}}"#,
+            keys[id as usize - 1]
+        )
+    };
+    let listing = |restored: &str| {
+        let rows: Vec<String> = (1..=5)
+            .map(|id| {
+                row(
+                    id,
+                    if id == 1 {
+                        restored
+                    } else {
+                        "2026-11-01T10:00:00Z"
+                    },
+                )
+            })
+            .collect();
+        format!(
+            r#"{{"total_count":5,"actions_caches":[{}]}}"#,
+            rows.join(",")
+        )
+    };
+    let repo = Repo::parse("tailrocks/velnor-lab").unwrap_or_else(|e| unreachable!("{e}"));
+    let now = velnor_ci::time::parse_utc("2026-11-20T12:00:00Z").unwrap_or(0);
+    for (restored, expected) in [
+        ("2026-11-20T06:00:00Z", vec![2, 3]),
+        ("2026-11-18T06:00:00Z", vec![1, 2, 3]),
+    ] {
+        let caches = FakeCaches {
+            listing: listing(restored),
+            asked: RefCell::default(),
+            deleted: RefCell::default(),
+        };
+        trim(&caches, &repo, "refs/heads/main", prefix, 2, now)
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert_eq!(deleted_ids(&caches), expected, "{restored}");
+    }
 }

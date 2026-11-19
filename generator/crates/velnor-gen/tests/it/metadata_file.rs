@@ -11,7 +11,7 @@ use crate::facts::{TestResult, package, path};
 use crate::pipeline::{HELPER_LOCK, view};
 
 fn pin(files: &mut RepoView, version: &str) {
-    let lock = String::from_utf8_lossy(HELPER_LOCK).replace("0.1.79", version);
+    let lock = String::from_utf8_lossy(HELPER_LOCK).replace("0.1.81", version);
     files.files.insert(LOCK_PATH, lock.into_bytes());
 }
 
@@ -303,51 +303,6 @@ fn a_file_written_before_versions_were_recorded_is_refused_with_the_regenerate_c
     assert!(message.contains(".velnor/rust-metadata.json"), "{message}");
     assert!(message.contains("version"), "{message}");
     assert!(message.ends_with("run velnor-gen generate"), "{message}");
-    Ok(())
-}
-
-#[test]
-fn a_pin_below_0_1_81_gets_a_file_its_helper_can_read() -> TestResult {
-    let mut files = two_workspaces()?;
-    pin(&mut files, "0.1.79");
-    files
-        .tracked_paths
-        .insert(RepoPath::new(".velnor/rust-ci.toml")?);
-    files.files.insert(
-        RepoPath::new(".velnor/rust-ci.toml")?,
-        b"full_run = \"off\"\n".to_vec(),
-    );
-    let old = recorded(&files)?;
-    assert!(!old.contains("\"version\""), "{old}");
-    assert!(generated_files(&files).is_ok());
-    let read = recorded_metadata(&files, Some(old.as_bytes()))?;
-    assert!(
-        read.values()
-            .flat_map(|workspace| &workspace.members)
-            .all(|member| member.version.is_none())
-    );
-    pin(&mut files, "0.1.81");
-    assert!(recorded(&files)?.contains("\"version\""));
-    Ok(())
-}
-
-#[test]
-fn the_pin_decides_whether_a_recorded_version_is_read() -> TestResult {
-    let files = two_workspaces()?;
-    let new = recorded(&files)?;
-    let mut old_pin = files.clone();
-    pin(&mut old_pin, "0.1.79");
-    let read = recorded_metadata(&old_pin, Some(new.as_bytes()))?;
-    assert!(
-        read.values()
-            .flat_map(|workspace| &workspace.members)
-            .all(|member| member.version.is_none())
-    );
-    let old = recorded(&old_pin)?;
-    assert!(matches!(
-        recorded_metadata(&files, Some(old.as_bytes())),
-        Err(MetadataFileError::Unreadable(_))
-    ));
     Ok(())
 }
 

@@ -4,12 +4,15 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    GateNeed, JobCondition, JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+    JobId, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    VerdictSpec,
 };
 
-const SCHEDULE: &str = "schedule";
-const PUSH: &str = "push";
+use crate::verdict_plan::{Need, PlanOutput};
+
+#[path = "verdict_counts.rs"]
+mod verdict_counts;
+use verdict_counts::{counts, number};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobResult {
@@ -112,100 +115,6 @@ pub fn package_token(name: &str) -> bool {
     chars.all(|ch| ch.is_alphanumeric() || ch == '_' || ch == '-')
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct Need {
-    pub result: Option<String>,
-    pub outputs: BTreeMap<String, String>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PlanOutput {
-    pub planned: BTreeMap<JobId, bool>,
-    pub test_lanes: BTreeMap<RootSlug, Vec<JobId>>,
-}
-
-impl PlanOutput {
-    pub fn resolve(
-        spec: &VerdictSpec,
-        outputs: &BTreeMap<String, String>,
-        event: Option<&str>,
-    ) -> Result<Self, String> {
-        let read = |key: String| -> Result<&str, String> {
-            outputs
-                .get(&key)
-                .map(String::as_str)
-                .ok_or_else(|| format!("the plan output {key} is missing"))
-        };
-        let flag = |key: String, on: &str, off: &str| -> Result<bool, String> {
-            let value = read(key.clone())?;
-            if value == on {
-                Ok(true)
-            } else if value == off {
-                Ok(false)
-            } else {
-                Err(format!(
-                    "the plan output {key} is `{value}`, not {on} or {off}"
-                ))
-            }
-        };
-        let mut planned = BTreeMap::new();
-        let mut test_lanes: BTreeMap<RootSlug, Vec<JobId>> = BTreeMap::new();
-        for job in &spec.jobs {
-            let mut holds = true;
-            for condition in &job.when {
-                holds &= match condition {
-                    JobCondition::Lane(slug) => {
-                        let key = GateNeed::Selected.output_name(slug);
-                        match read(key.clone())? {
-                            "none" => false,
-                            "some" | "all" => true,
-                            other => {
-                                return Err(format!(
-                                    "the plan output {key} is `{other}`, not none, some or all"
-                                ));
-                            }
-                        }
-                    }
-                    JobCondition::Policy => {
-                        let slug = RootSlug::from_static("policy");
-                        let deny = flag(GateNeed::Deny.output_name(&slug), "run", "skip")?;
-                        let machete = flag(GateNeed::Machete.output_name(&slug), "run", "skip")?;
-                        deny || machete
-                    }
-                    JobCondition::Schedule => event_is(event, &[SCHEDULE])?,
-                    JobCondition::ScheduleOrDispatch => {
-                        event_is(event, &[SCHEDULE, "workflow_dispatch"])?
-                    }
-                    JobCondition::ScheduleOrPushOrDispatch => {
-                        event_is(event, &[SCHEDULE, PUSH, "workflow_dispatch"])?
-                    }
-                    JobCondition::ScheduleOrPush => event_is(event, &[SCHEDULE, PUSH])?,
-                };
-            }
-            planned.insert(job.id.clone(), holds);
-            if let Some(slug) = &job.tests {
-                let expected = flag(GateNeed::TestsExpected.output_name(slug), "run", "skip")?;
-                let jobs = test_lanes.entry(slug.clone()).or_default();
-                if expected {
-                    jobs.push(job.id.clone());
-                }
-            }
-        }
-        test_lanes.retain(|_, jobs| !jobs.is_empty());
-        Ok(Self {
-            planned,
-            test_lanes,
-        })
-    }
-}
-
-fn event_is(event: Option<&str>, names: &[&str]) -> Result<bool, String> {
-    event
-        .filter(|name| !name.is_empty())
-        .map(|name| names.contains(&name))
-        .ok_or_else(|| "GITHUB_EVENT_NAME is not set".to_owned())
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Verdict {
     pub passed: bool,
@@ -252,6 +161,48 @@ impl Verdict {
     }
 }
 
+fn record(out: &mut Verdict, plan: &PlanOutput, job: &JobId, message: String) {
+    if plan.advisory.contains(job) {
+        out.warnings.push(message);
+    } else {
+        out.problems.push(message);
+    }
+}
+
+fn judge(
+    out: &mut Verdict,
+    plan: &PlanOutput,
+    job: &JobId,
+    scheduled: bool,
+    result: Option<&JobResult>,
+) {
+    match (scheduled, result) {
+        (_, None) => out.problems.push(format!("{job} has no result in needs")),
+        (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
+        (true, Some(other)) => record(
+            out,
+            plan,
+            job,
+            format!(
+                "{job} was scheduled by the plan and its result is {}",
+                other.name()
+            ),
+        ),
+        (false, Some(JobResult::Success)) => out
+            .warnings
+            .push(format!("{job} ran although the plan did not schedule it")),
+        (false, Some(other)) => record(
+            out,
+            plan,
+            job,
+            format!(
+                "{job} was not scheduled by the plan and its result is {}",
+                other.name()
+            ),
+        ),
+    }
+}
+
 #[must_use]
 pub fn verdict(
     plan: &PlanOutput,
@@ -277,21 +228,7 @@ pub fn verdict(
             .to_owned(),
             shown.to_owned(),
         ));
-        match (scheduled, result) {
-            (_, None) => out.problems.push(format!("{job} has no result in needs")),
-            (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
-            (true, Some(other)) => out.problems.push(format!(
-                "{job} was scheduled by the plan and its result is {}",
-                other.name()
-            )),
-            (false, Some(JobResult::Success)) => out
-                .warnings
-                .push(format!("{job} ran although the plan did not schedule it")),
-            (false, Some(other)) => out.problems.push(format!(
-                "{job} was not scheduled by the plan and its result is {}",
-                other.name()
-            )),
-        }
+        judge(&mut out, plan, job, *scheduled, result);
     }
     for (slug, jobs) in &plan.test_lanes {
         let counts: Vec<Option<TestCounts>> = jobs
@@ -314,13 +251,21 @@ pub fn verdict(
                         "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
                     ));
                 }
-                for (name, package) in &job.packages {
-                    if package.listed > 0 && package.run == 0 {
-                        out.problems.push(format!(
-                            "package {name} of {slug} listed {} tests and ran none",
-                            package.listed
-                        ));
-                    }
+            }
+            // The default job and the group jobs each run part of one package:
+            // `run` adds up, and `listed` is the most any job saw.
+            let mut lane: BTreeMap<&str, PackageCounts> = BTreeMap::new();
+            for (name, package) in counts.iter().flatten().flat_map(|job| &job.packages) {
+                let total = lane.entry(name).or_default();
+                total.run = total.run.saturating_add(package.run);
+                total.listed = total.listed.max(package.listed);
+            }
+            for (name, package) in lane {
+                if package.listed > 0 && package.run == 0 {
+                    out.problems.push(format!(
+                        "package {name} of {slug} listed {} tests and ran none",
+                        package.listed
+                    ));
                 }
             }
         }
@@ -362,42 +307,6 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     }
     out.passed = out.problems.is_empty();
     out
-}
-
-fn counts(need: Option<&Need>) -> Option<TestCounts> {
-    let need = need?;
-    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
-    let summed_run = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.run))?;
-    let summed_listed = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.listed))?;
-    if run != summed_run || listed != summed_listed {
-        return None;
-    }
-    let ignored = match need.outputs.get(TESTS_IGNORED_OUTPUT).map(String::as_str) {
-        None | Some("") => None,
-        Some(text) => Some(number(text)?),
-    };
-    Some(TestCounts {
-        run,
-        listed,
-        ignored,
-        packages,
-    })
-}
-
-fn number(text: &str) -> Option<u64> {
-    if text.is_empty()
-        || (text.len() > 1 && text.starts_with('0'))
-        || !text.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
-    text.parse().ok()
 }
 
 #[cfg(test)]

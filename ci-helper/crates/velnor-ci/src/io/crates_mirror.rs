@@ -10,9 +10,26 @@ use crate::error::CiError;
 pub(super) const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 pub(super) const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
 pub(super) const REAL_ENV: &str = "VELNOR_CARGO_REAL";
+const DISABLE_ENV: &str = "VELNOR_CRATES_MIRROR";
 const MARKER: &str = "# velnor-ci crates-mirror owns this file\n";
 
 pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
+    match std::env::var(DISABLE_ENV) {
+        Ok(value) if value == "off" => {
+            return Ok(format!("crates mirror disabled by {DISABLE_ENV}=off\n"));
+        }
+        Ok(value) if !value.is_empty() => {
+            return Err(CiError::new(format!(
+                "{DISABLE_ENV} must be unset or exactly off, not {value:?}"
+            )));
+        }
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(CiError::new(format!(
+                "{DISABLE_ENV} must be unset or exactly off"
+            )));
+        }
+        Ok(_) | Err(std::env::VarError::NotPresent) => {}
+    }
     std::fs::File::open(&args.cainfo).map_err(|e| {
         CiError::new(format!(
             "cannot read crates mirror CA {}: {e}",
@@ -68,6 +85,37 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         args.registry,
         config.display()
     ))
+}
+
+pub(super) fn runner_config() -> Result<Option<PathBuf>, CiError> {
+    let Some(path) = std::env::var_os(CONFIG_ENV).filter(|path| !path.is_empty()) else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(path);
+    let written = path.is_absolute()
+        && std::fs::read_to_string(&path).is_ok_and(|text| is_written_by_setup(&text));
+    if written {
+        Ok(Some(path))
+    } else {
+        Err(CiError::new(format!(
+            "{CONFIG_ENV} is {}, which is not a file crates-mirror wrote",
+            path.display()
+        )))
+    }
+}
+
+fn is_written_by_setup(text: &str) -> bool {
+    let lines: Vec<&str> = text.lines().collect();
+    let quoted = |line: &str, key: &str| {
+        line.strip_prefix(key)
+            .and_then(|rest| rest.strip_prefix(" = "))
+            .is_some_and(|value| serde_json::from_str::<String>(value).is_ok())
+    };
+    matches!(
+        lines.as_slice(),
+        [marker, "[source.crates-io]", "replace-with = \"velnor-crates-mirror\"", "[source.velnor-crates-mirror]", registry, "[http]", cainfo]
+            if format!("{marker}\n") == MARKER && quoted(registry, "registry") && quoted(cainfo, "cainfo")
+    )
 }
 
 pub(super) fn is_wrapper() -> bool {

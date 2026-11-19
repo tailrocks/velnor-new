@@ -1,0 +1,12 @@
+const SCRIPT: &str = concat!(
+    "export LC_ALL=C; set -eu; umask 077; ",
+    ": \"${GITHUB_OUTPUT:?missing GITHUB_OUTPUT}\"; ",
+    "scratch_root=; scratch_dir=; ",
+    "case \"$value\" in *[![:print:]]*|*//*|*/./*|*/../*|*/.|*/..) return 1 ;; esac; ",
+    "remaining=${value#/}; prefix=; while [ -n \"$remaining\" ]; do ",
+    "case \"$remaining\" in */*) part=${remaining%%/*}; remaining=${remaining#*/} ;; ",
+    "*) part=$remaining; remaining= ;; esac; [ -n \"$part\" ] || return 1; ",
+        &format!("/bin/bash \"$GITHUB_ACTION_PATH/../../scripts/{SCRIPT_FILE_NAME}\""),
+        &identity_env(runs_on),
+    )?;
+    let outputs = output_entries();

@@ -10,21 +10,24 @@ use bollard::query_parameters::{
 };
 use futures_util::StreamExt;
 
+use crate::config::RunnerPlatform;
 use crate::docker_client::docker_deadline;
 use crate::error::HostError;
 use crate::journal::StorageRole;
 use crate::launch::BootstrapContainerRole;
 use crate::launch::bootstrap::containers::pair::{PairCreate, PairSpecContext, create_body};
-use crate::launch::bootstrap::containers::storage_object::tmpfs_options;
-use crate::worker::{WorkerContainerRole, WorkerVolumeRole};
+use crate::worker::{WorkerContainerRole, WorkerIdentityNames, WorkerVolumeRole};
 
 use super::io::{MetadataUpload, upload_to_metadata};
+use super::layout;
+use super::local_ci;
 use super::remove::{Removed, remove_labelled};
 use super::request::{LocalPairRequest, Validated, validate};
-use super::{layout, storage};
+use super::storage::{self, Sizes};
 
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
 pub(super) const PAIR_LABEL: &str = "velnor-local.pair";
+const CRATES_MIRROR_OFF: &str = "VELNOR_CRATES_MIRROR=off";
 const ROLE_LABEL: &str = "velnor-local.role";
 pub const START_GRACE: std::time::Duration = std::time::Duration::from_millis(250);
 pub(super) const SIDE_LABEL: &str = "velnor-local.side";
@@ -129,11 +132,15 @@ async fn create_and_start(
             names.volume_name(role),
             role,
             labels(volume_role(role)),
+            &validated.sizes,
         )
         .await?;
     }
     prefill_metadata(docker, request, validated).await?;
-    let plan = storage::plan(request.sequence);
+    if let Some(path) = &request.local_ci {
+        publish_local_ci(docker, request, validated, path).await?;
+    }
+    let plan = storage::plan(request.sequence, &validated.sizes);
     let context = PairSpecContext {
         plan: &plan,
         names,
@@ -158,18 +165,56 @@ async fn create_and_start(
         layout::home_archive()?,
     )
     .await?;
-    let mut runner = create_body(
-        names.container_name(WorkerContainerRole::Runner),
+    let runner = runner_create(
+        names,
         request.runner_image.clone(),
-        BootstrapContainerRole::Runner,
-        format!("container:{dind_id}"),
+        &dind_id,
         validated.platform,
         &context,
+        labels("runner"),
+        request.local_ci.is_some(),
     )?;
-    own(&mut runner, labels("runner"), None)?;
     let runner_id = create(docker, runner).await?;
     start(docker, &runner_id).await?;
     Ok((dind_id, runner_id))
+}
+
+fn runner_create(
+    names: &WorkerIdentityNames,
+    image: String,
+    dind_id: &str,
+    platform: RunnerPlatform,
+    context: &PairSpecContext<'_>,
+    labels: HashMap<String, String>,
+    local_ci: bool,
+) -> Result<PairCreate, HostError> {
+    let mut runner = create_body(
+        names.container_name(WorkerContainerRole::Runner),
+        image,
+        BootstrapContainerRole::Runner,
+        format!("container:{dind_id}"),
+        platform,
+        context,
+    )?;
+    own(&mut runner, labels, None)?;
+    runner
+        .config
+        .env
+        .get_or_insert_default()
+        .push(CRATES_MIRROR_OFF.to_owned());
+    if local_ci {
+        runner
+            .config
+            .host_config
+            .as_mut()
+            .ok_or(HostError::Identity)?
+            .mounts
+            .get_or_insert_default()
+            .push(layout::local_ci_mount(
+                names.volume_name(WorkerVolumeRole::RunnerMetadata),
+            ));
+    }
+    Ok(runner)
 }
 
 fn own(
@@ -194,23 +239,9 @@ async fn create_volume(
     name: String,
     role: WorkerVolumeRole,
     labels: HashMap<String, String>,
+    sizes: &Sizes,
 ) -> Result<(), HostError> {
-    let storage_role = storage_role(role);
-    let driver_opts = if storage::on_tmpfs(storage_role) {
-        let mut options = tmpfs_options(
-            storage::charge_bytes(storage_role),
-            storage::charge_inodes(storage_role),
-        )?;
-        if matches!(role, WorkerVolumeRole::Home | WorkerVolumeRole::Work) {
-            options
-                .get_mut("o")
-                .ok_or(HostError::Identity)?
-                .push_str(layout::RUNNER_OWNED_ROOT);
-        }
-        Some(options)
-    } else {
-        None
-    };
+    let driver_opts = storage::driver_opts(storage_role(role), sizes)?;
     docker_deadline(docker.create_volume(VolumeCreateRequest {
         name: Some(name),
         driver: Some("local".to_owned()),
@@ -237,6 +268,26 @@ async fn prefill_metadata(
         &validated.pair,
         &volume,
         MetadataUpload::Initialize(layout::metadata_archive()?),
+    )
+    .await
+}
+
+async fn publish_local_ci(
+    docker: &Docker,
+    request: &LocalPairRequest,
+    validated: &Validated,
+    path: &str,
+) -> Result<(), HostError> {
+    let binary = local_ci::load(path, validated.platform).await?;
+    let volume = validated
+        .names
+        .volume_name(WorkerVolumeRole::RunnerMetadata);
+    upload_to_metadata(
+        docker,
+        request,
+        &validated.pair,
+        &volume,
+        MetadataUpload::LocalCi(layout::local_ci_archive(&binary)?),
     )
     .await
 }
@@ -314,3 +365,7 @@ const fn storage_role(role: WorkerVolumeRole) -> StorageRole {
 const fn volume_role(role: WorkerVolumeRole) -> &'static str {
     storage_role(role).as_str()
 }
+
+#[cfg(test)]
+#[path = "pair_tests.rs"]
+mod tests;

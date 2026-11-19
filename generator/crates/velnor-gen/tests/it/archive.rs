@@ -190,7 +190,7 @@ fn a_groups_root_whose_only_tests_are_doctests_keeps_one_test_job_and_builds_no_
     doctests.config.shape = Some(Shape::BuildThenGroups);
     assert_eq!(
         job_ids(&doctests),
-        ["rust-plan", "rust-lint", "rust-test", "required"]
+        ["rust-plan", "rust-lint", "rust-test", "required", "cache"]
     );
     let commands: Vec<CargoCommand> = plan(&doctests).jobs[2]
         .steps

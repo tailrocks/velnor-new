@@ -43,7 +43,7 @@ fn cargo_metadata_is_run_only_on_a_real_manifest_inside_the_repository() -> Test
 fn pin_helper_writes_the_lock_inside_the_repository_and_never_through_a_symbolic_link() -> TestResult
 {
     let plain = Scratch::new("lock-plain")?;
-    write_lock(&plain.repo(), "version = \"0.1.79\"\n")?;
+    write_lock(&plain.repo(), "version = \"0.1.81\"\n")?;
     write_lock(&plain.repo(), "version = \"0.1.80\"\n")?;
     assert_eq!(
         fs::read_to_string(plain.repo().join(".velnor/rust-ci.lock"))?,

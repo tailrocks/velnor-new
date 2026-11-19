@@ -69,7 +69,7 @@ async fn adopt_after_crash(uncertain: bool) -> TestResult<(String, String)> {
         .await?
         .ok_or("claim")?;
     if uncertain {
-        scoped.mark_scale_set_create_uncertain(claim).await?;
+        scoped.mark_scale_set_create_uncertain(claim, None).await?;
     }
     let labels = request.selector_labels().to_vec();
     let observed = ExistingScaleSetObservation::verified(
@@ -120,6 +120,14 @@ fn an_organization_never_adopts_a_set_it_did_not_create() {
     );
     assert_eq!(
         lookup_action(ScaleSetCreateState::Prepared, false, true),
+        ScaleSetLookupAction::Create
+    );
+}
+
+#[test]
+fn a_no_effect_create_with_no_set_posts_again() {
+    assert_eq!(
+        lookup_action(ScaleSetCreateState::NoEffect, false, false),
         ScaleSetLookupAction::Create
     );
 }

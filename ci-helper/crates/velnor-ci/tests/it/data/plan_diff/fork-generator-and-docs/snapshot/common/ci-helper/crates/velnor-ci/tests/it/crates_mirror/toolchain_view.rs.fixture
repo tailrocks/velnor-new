@@ -1,0 +1,12 @@
+        wrapper.parent().ok_or("wrapper parent")?.to_path_buf(),
+        PathBuf::from("/usr/bin"),
+        PathBuf::from("/bin"),
+    ];
+        .current_dir(root.join("consumer"))
+        .env("MIRROR_FIXTURE_ROOT", root)
+        .env("RUSTUP_HOME", &home)
+        .env("VELNOR_CARGO_CONFIG", &config)
+        .current_dir(bin)
+        .env("RUSTUP_HOME", home)
+        .env_remove("RUSTUP_TOOLCHAIN");
+    command

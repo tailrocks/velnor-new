@@ -21,7 +21,7 @@ const NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 
 type TestResult = Result<(), Box<dyn Error>>;
 fn package_of<'a>(id: &str, packages: &[&'a str]) -> Result<&'a str, Box<dyn Error>> {
-    let rest = ["build-", "sums-", "publish-"]
+    let rest = ["build-", "sums-", "verify-", "publish-"]
         .iter()
         .find_map(|kind| id.strip_prefix(kind))
         .ok_or("not a binary job")?;
@@ -110,6 +110,9 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
             ]);
             if *id == "release-pr" {
                 want.insert(NEWEST.to_owned());
+            }
+            if *id == "finalize" {
+                continue;
             }
             if !matches!(*id, "release-pr" | "tag") {
                 let package = package_of(id, &packages)?;

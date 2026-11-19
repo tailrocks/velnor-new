@@ -15,6 +15,7 @@ use crate::error::HostError;
 
 mod doctor_result;
 mod readiness;
+mod scale_set_delete;
 mod session_observation;
 mod setup_receipt;
 mod transport;
@@ -22,6 +23,7 @@ mod transport;
 use transport::call_socket_response_with_timeout;
 
 pub use readiness::controller_readiness_status;
+pub use scale_set_delete::{CreatedSetDeletion, delete_created_scale_set};
 pub use session_observation::wait_for_session_observation;
 pub use session_observation::{ConnectionCensus, wait_for_connection_census};
 pub use session_observation::{SessionObservation, SessionObservationStatistics};
@@ -203,7 +205,9 @@ fn marker_for(state: &Path, request: &Request) -> std::path::PathBuf {
             target: Target::Connection { connection_id, .. },
             ..
         } => state.join("connection-drain").join(connection_id.as_str()),
-        Request::Reactivate { binding, .. } | Request::Detached { binding, .. } => state
+        Request::Reactivate { binding, .. }
+        | Request::Detached { binding, .. }
+        | Request::ScaleSetDeleteStart { binding, .. } => state
             .join("connection-drain")
             .join(binding.connection_id.as_str()),
         Request::DoctorProbeStart { .. }
@@ -213,7 +217,8 @@ fn marker_for(state: &Path, request: &Request) -> std::path::PathBuf {
         | Request::SessionObservationStatus { .. }
         | Request::ConnectionSetupStatus { .. }
         | Request::ConnectionCensusStart { .. }
-        | Request::ConnectionCensusStatus { .. } => state.join(SOCKET_NAME),
+        | Request::ConnectionCensusStatus { .. }
+        | Request::ScaleSetDeleteStatus { .. } => state.join(SOCKET_NAME),
     }
 }
 
@@ -231,6 +236,8 @@ fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
             | Request::ConnectionSetupStatus { .. }
             | Request::ConnectionCensusStart { .. }
             | Request::ConnectionCensusStatus { .. }
+            | Request::ScaleSetDeleteStart { .. }
+            | Request::ScaleSetDeleteStatus { .. }
     ) {
         return Err(HostError::Lock);
     }
@@ -329,7 +336,11 @@ fn valid_request(request: &Request) -> bool {
             nonce, timeout_ms, ..
         } => valid_nonce(nonce) && (1..=30_000).contains(timeout_ms),
         Request::SessionObservationStatus { nonce, .. }
-        | Request::ConnectionCensusStatus { nonce, .. } => valid_nonce(nonce),
+        | Request::ConnectionCensusStatus { nonce, .. }
+        | Request::ScaleSetDeleteStatus { nonce, .. } => valid_nonce(nonce),
+        Request::ScaleSetDeleteStart { token, nonce, .. } => {
+            valid_token(token) && valid_nonce(nonce)
+        }
         Request::ConnectionSetupStatus { .. } => true,
     }
 }

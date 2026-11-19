@@ -1,0 +1,10 @@
+            .parent()
+            .map(Path::to_path_buf)
+            .ok_or_else(|| CiError::new("manifest has no parent"))?;
+        let lock = directory.join("Cargo.lock");
+        if !read_public(&lock, velnor_rust::cacheable_lock) {
+            return Ok(refused(&lock));
+            .ancestors()
+            .map(|dir| dir.join(".cargo"))
+            .chain([cargo_home.clone()])
+        {

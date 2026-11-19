@@ -26,6 +26,8 @@ mod schema;
 mod session_refresh;
 mod source_authorization;
 mod sql;
+#[cfg(test)]
+mod test_template;
 mod transaction;
 mod worker_volume;
 
@@ -61,6 +63,10 @@ pub(crate) use connection::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
 };
 pub(crate) use connection::{
+    ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode, ScaleSetDeleteRecord,
+    ScaleSetDeleteTarget, ScaleSetDeleted,
+};
+pub(crate) use connection::{
     UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
     UnboundRetirementPhase,
 };
@@ -94,8 +100,8 @@ pub(crate) use image_import::{
     ImageImportIdentity, ImageImportObservation, ImageImportRequest, ImageImportState,
 };
 pub(crate) use scale_set_create::{
-    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateNoEffect,
-    ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
+    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim,
+    ScaleSetCreateNoEffect, ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
 };
 pub(crate) use source_authorization::AssignedAcquireResult;
 pub(crate) use source_authorization::SourceAuthorizationResult;

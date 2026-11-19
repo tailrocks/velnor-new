@@ -7,6 +7,7 @@ use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{
     PackageName, RepoPath, RepoView, RustMetadata, RustPackage, Target, TargetKind, TargetName,
 };
+use velnor_render::Rule;
 use velnor_rust::{CONFIG_PATH, DetectError};
 
 type TestResult = Result<(), Box<dyn Error>>;
@@ -54,12 +55,8 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     crate::facts::lock_pinned_tools(&mut view)?;
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     view.tracked_paths.insert(lock.clone());
-    view.files.insert(
-        lock,
-        String::from_utf8(HELPER_LOCK.to_vec())?
-            .replace("0.1.79", "0.1.81")
-            .into_bytes(),
-    );
+    view.files
+        .insert(lock, String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes());
     if let Some(bytes) = config {
         let path = RepoPath::new(".velnor/rust-ci.toml")?;
         view.tracked_paths.insert(path.clone());
@@ -184,15 +181,21 @@ fn expression_syntax_in_repository_values_is_never_evaluated_by_github() -> Test
     unsaved
         .files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, HELPER_LOCK.to_vec());
-    let text = workflow(&unsaved)?;
+    let Err(GenerateError::Rules(violations)) = expected_with_notes(&unsaved) else {
+        return Err("a root named with expression syntax was rendered".into());
+    };
     assert!(
-        !text.contains("${{ github.event.pull_request.title"),
-        "{text}"
+        violations
+            .iter()
+            .any(|violation| violation.rule == Rule::ExpressionInRun),
+        "{violations:?}"
     );
-    assert!(text.contains(
-        "        working-directory: 'a${{ ''${{'' }} github.event.pull_request.title }}'\n"
-    ));
-    assert!(text.contains("  group: 'ci-${{ github.workflow_ref }}-"));
+    assert!(
+        violations
+            .iter()
+            .all(|violation| violation.rule == Rule::ExpressionInRun),
+        "{violations:?}"
+    );
     Ok(())
 }
 

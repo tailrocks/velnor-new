@@ -1,0 +1,4 @@
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    fs::copy(workspace.join("mise.lock"), root.join("mise.lock"))?;
+    Ok(repo)
+}

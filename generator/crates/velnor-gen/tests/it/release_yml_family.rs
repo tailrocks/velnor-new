@@ -4,12 +4,13 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use velnor_gen::{GenerateError, expected_files};
+use velnor_gen::GenerateError;
 use velnor_model::{RELEASE_WORKFLOW_PATH, RepoPath};
 use velnor_release::{FamilyError, ReleaseError};
 use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, jobs, release_view, steps};
+use crate::release_unguarded::expected_release;
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::{Node, parse};
 
@@ -43,7 +44,7 @@ fn render_family_tagged(
 ) -> Result<Result<Node, GenerateError>, Box<dyn Error>> {
     let mut view = release_view(&[APP, TOOLS], Some(config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.83").into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.83").into_bytes());
     view.files.insert(
         RepoPath::new("release-plz.toml")?,
         release_plz_tagged(&APP, release, app_tag).into_bytes(),
@@ -52,7 +53,7 @@ fn render_family_tagged(
         RepoPath::new("tools/release-plz.toml")?,
         release_plz(&TOOLS, release).into_bytes(),
     );
-    match expected_files(&view) {
+    match expected_release(&view) {
         Ok(mut files) => {
             let text = files
                 .remove(&RELEASE_WORKFLOW_PATH)
@@ -76,6 +77,7 @@ fn family_tag_gives_every_binary_one_tag_and_one_publish() -> TestResult {
         "release-pr",
         "tag",
         "family",
+        "family-versions",
         "build-app-linux-x64",
         "build-app-linux-arm64",
         "build-app-macos-arm64",
@@ -94,11 +96,11 @@ fn family_tag_gives_every_binary_one_tag_and_one_publish() -> TestResult {
     let command = runs(publish).last().copied().ok_or("no publish")?;
     assert!(command.contains("--tag=\"$TAG\""));
     for asset in [
-        "app-linux-x64.tar.gz",
-        "app-linux-arm64.tar.gz",
-        "app-macos-arm64.tar.gz",
-        "tools-linux-x64.tar.gz",
-        "tools-macos-arm64.tar.gz",
+        "app-x86_64-unknown-linux-musl.tar.gz",
+        "app-aarch64-unknown-linux-musl.tar.gz",
+        "app-aarch64-apple-darwin.tar.gz",
+        "tools-x86_64-unknown-linux-musl.tar.gz",
+        "tools-aarch64-apple-darwin.tar.gz",
     ] {
         assert!(command.contains(asset), "{asset}");
     }
@@ -159,7 +161,7 @@ fn family_job_binds_the_tag_to_the_verified_commit_with_the_helper() -> TestResu
 fn family_tag_needs_a_helper_that_knows_the_command() -> TestResult {
     let mut view = release_view(&[APP, TOOLS], Some(FAMILY))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.82").into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.82").into_bytes());
     for (root, path) in [
         (&APP, "release-plz.toml"),
         (&TOOLS, "tools/release-plz.toml"),
@@ -168,7 +170,7 @@ fn family_tag_needs_a_helper_that_knows_the_command() -> TestResult {
             .insert(RepoPath::new(path)?, release_plz(root, false).into_bytes());
     }
     assert!(matches!(
-        expected_files(&view),
+        expected_release(&view),
         Err(GenerateError::FamilyTagHelperTooOld(_))
     ));
     Ok(())

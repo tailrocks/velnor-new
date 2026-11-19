@@ -15,6 +15,8 @@ pub const TESTS_RUN_OUTPUT: &str = "tests_run";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
 pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
+pub const MERGE_GROUP_STEP: &str = "merge_group";
+pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -43,6 +45,7 @@ pub enum PullRequestType {
     ReadyForReview,
     Edited,
     ConvertedToDraft,
+    Labeled,
 }
 
 impl PullRequestType {
@@ -58,6 +61,7 @@ impl PullRequestType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Concurrency {
     CancelOlderPullRequestRuns,
+    CancelOlderPullRequestRunsExceptUnrelatedLabels,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -84,12 +88,13 @@ pub struct Job {
     pub comment: Option<String>,
     pub needs: Vec<JobId>,
     pub when: When,
-    pub skip_on_draft: bool,
+    pub pr: PrRun,
     pub runs_on: RunnerLabel,
     pub permissions: Permissions,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
+    pub group_outputs: Vec<(RootSlug, JobId)>,
     pub reports_ignored: bool,
     pub steps: Vec<Step>,
 }
@@ -101,8 +106,24 @@ pub struct Step {
     pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_on_draft: bool,
+    pub skip_after_merge_group: Option<PlanFrom>,
+    pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
+}
+
+pub const CI_RUN_LABEL: &str = "ci:run";
+pub const CI_AUTO_LABEL: &str = "ci:auto";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PrRun {
+    #[default]
+    Always,
+    Ready,
+    Quick,
+    Related,
+    Requested,
+    Unrequested,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -116,7 +137,13 @@ pub struct Gate {
     pub slug: RootSlug,
     pub need: GateNeed,
     pub from: PlanFrom,
-    pub package: Option<PackageName>,
+    /// A gate on packages passes when the plan selects any of them or the
+    /// whole workspace. Empty means no package condition.
+    pub packages: Vec<PackageName>,
+    /// Passes exactly when the plan selects a package of the root but none
+    /// of `packages`, so a notice can say why the guarded step was skipped.
+    pub unselected: bool,
+    pub group: Option<JobId>,
 }
 
 impl Gate {
@@ -124,7 +151,7 @@ impl Gate {
     pub fn outputs(&self) -> Vec<(RootSlug, GateNeed)> {
         let own = |need| (self.slug.clone(), need);
         match self.need {
-            GateNeed::Selected => vec![own(GateNeed::Selected)],
+            GateNeed::Selected | GateNeed::Group => vec![own(GateNeed::Selected)],
             GateNeed::Doctests | GateNeed::Docs => vec![
                 own(GateNeed::Selected),
                 own(self.need),
@@ -132,6 +159,9 @@ impl Gate {
             ],
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::PackageArgs if self.unselected => {
+                vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
+            }
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
             GateNeed::TestFilter
             | GateNeed::PackageArgs
@@ -155,6 +185,7 @@ pub enum GateNeed {
     Machete,
     Policy,
     TestsExpected,
+    Group,
 }
 
 impl GateNeed {
@@ -176,6 +207,7 @@ impl GateNeed {
             Self::Machete => "machete",
             Self::Policy => "policy",
             Self::TestsExpected => "tests",
+            Self::Group => "group",
         };
         if self.is_global() {
             format!("rust_{name}")
@@ -183,6 +215,11 @@ impl GateNeed {
             format!("rust_{slug}_{name}")
         }
     }
+}
+
+#[must_use]
+pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
+    format!("rust_{slug}_group_{group}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -196,12 +233,16 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    NotCancelledPostMerge,
     Finalizer,
     Always,
     Scheduled,
     ScheduledOrPush,
+    DefaultBranchPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
+    RestoreToolsUnlessLocal,
+    SaveToolsUnlessLocal,
     SaveBase,
     SaveBaseDecided,
     SaveSources,
@@ -210,6 +251,7 @@ pub enum When {
     FullAuditOrPush,
     BaseExpired,
     SavingRun,
+    ClearRunLabel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -231,12 +273,25 @@ pub enum CargoCommand {
         filter: FilterRef,
         ci_profile: bool,
     },
+    NextestFeatures {
+        features: Vec<String>,
+        packages: Vec<PackageName>,
+        filter: FilterRef,
+        ci_profile: bool,
+    },
+    ClippyFeatures {
+        features: Vec<String>,
+    },
+    DocFeatures {
+        features: Vec<String>,
+    },
     NextestArchive {
         file: RepoPath,
     },
     NextestRunArchive {
         file: RepoPath,
         filter: FilterRef,
+        threads: Option<u16>,
         ci_profile: bool,
     },
     TestTarget {
@@ -249,6 +304,7 @@ pub enum CargoCommand {
     Doc,
     Deny {
         manifest: RepoPath,
+        config: Option<RepoPath>,
     },
     Machete,
 }
@@ -265,7 +321,9 @@ impl CargoCommand {
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
-            Self::NextestRun { .. } | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
+            Self::NextestRun { .. }
+            | Self::NextestFeatures { .. }
+            | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
             Self::Doctest => &[GateNeed::DoctestsKnown],
             _ => &[],
         }
@@ -276,6 +334,15 @@ impl CargoCommand {
 pub enum FilterRef {
     All,
     AllExcept(Vec<String>),
+    Expr {
+        expr: String,
+        except: Vec<String>,
+    },
+    Group {
+        include: Option<String>,
+        exclude: Vec<String>,
+        except: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

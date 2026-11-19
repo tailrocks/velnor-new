@@ -1,0 +1,70 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+[package]
+name = "velnor-archive-guard"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+autotests = false
+
+[package.metadata.velnor]
+v1-task-owner = "repository-maintenance"
+
+[lib]
+doctest = false
+path = "src/lib.rs"
+test = true
+
+[[bin]]
+name = "velnor-archive-guard"
+path = "src/bin/velnor_archive_guard.rs"
+test = false
+
+[[bin]]
+name = "velnor-golden-collector"
+path = "src/bin/velnor_golden_collector.rs"
+test = false
+
+[[test]]
+name = "oci_candidate_configuration_public"
+path = "tests/oci_candidate_configuration_public.rs"
+
+[[test]]
+name = "golden_collector_public"
+path = "tests/golden_collector_public.rs"
+
+[[test]]
+name = "attested_projection_public"
+path = "tests/attested_projection_public.rs"
+
+[[test]]
+name = "held_file_public"
+path = "tests/held_file_public.rs"
+
+[[test]]
+name = "provenance_envelope_public"
+path = "tests/provenance_envelope_public.rs"
+
+[[test]]
+name = "registry_graph_public"
+path = "tests/registry_graph_public.rs"
+
+[dependencies]
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+serde = { workspace = true }
+rustix = { version = "=1.1.6", default-features = false, features = ["fs", "process", "std"] }
+serde_json = { workspace = true }
+velnor-actions-mise = { version = "=0.1.82", path = "../velnor-actions-mise" }
+velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner/crates/velnor-runner-image-manifest" }
+sha2 = { version = "=0.11.1", default-features = false }
+tar = { version = "=0.4.46", default-features = false }
+tempfile = { version = "=3.27.0" }
+
+[build-dependencies]
+rustix = { version = "=1.1.6", default-features = false, features = ["fs", "process", "std"] }
+sha2 = { version = "=0.11.1", default-features = false }
+
+[lints]
+workspace = true

@@ -9,11 +9,14 @@ use crate::ids::{JobId, RootSlug};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JobCondition {
     Lane(RootSlug),
+    Group(RootSlug, JobId),
     Policy,
     Schedule,
     ScheduleOrPush,
     ScheduleOrDispatch,
     ScheduleOrPushOrDispatch,
+    DefaultBranchPush,
+    Advisory,
 }
 
 impl JobCondition {
@@ -24,10 +27,19 @@ impl JobCondition {
             "schedule-or-dispatch" => Ok(Self::ScheduleOrDispatch),
             "schedule-or-push-or-dispatch" => Ok(Self::ScheduleOrPushOrDispatch),
             "schedule-or-push" => Ok(Self::ScheduleOrPush),
+            "default-branch-push" => Ok(Self::DefaultBranchPush),
+            "advisory" => Ok(Self::Advisory),
             other => other
                 .strip_prefix("lane:")
                 .and_then(|slug| RootSlug::new(slug).ok())
                 .map(Self::Lane)
+                .or_else(|| {
+                    let (slug, name) = other.strip_prefix("group:")?.split_once(':')?;
+                    Some(Self::Group(
+                        RootSlug::new(slug).ok()?,
+                        JobId::new(name).ok()?,
+                    ))
+                })
                 .ok_or_else(|| format!("`{other}` is not a job condition")),
         }
     }
@@ -37,11 +49,14 @@ impl fmt::Display for JobCondition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Lane(slug) => write!(f, "lane:{slug}"),
+            Self::Group(slug, name) => write!(f, "group:{slug}:{name}"),
             Self::Policy => f.write_str("policy"),
             Self::Schedule => f.write_str("schedule"),
             Self::ScheduleOrDispatch => f.write_str("schedule-or-dispatch"),
             Self::ScheduleOrPushOrDispatch => f.write_str("schedule-or-push-or-dispatch"),
             Self::ScheduleOrPush => f.write_str("schedule-or-push"),
+            Self::DefaultBranchPush => f.write_str("default-branch-push"),
+            Self::Advisory => f.write_str("advisory"),
         }
     }
 }

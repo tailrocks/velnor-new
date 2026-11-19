@@ -4,29 +4,33 @@
 pub mod cli;
 mod drifts;
 mod error;
+mod helper_gate;
 pub mod io;
 mod release;
+mod reusable;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
+use helper_gate::check_helper;
+pub use helper_gate::require_compatible;
+pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{
-    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, RepoFacts, RepoPath, RepoView,
-};
+use velnor_model::{FullRun, OnMain, RepoPath, RepoView};
 use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
-    silent_build_scripts, source_roots_over_limit,
+    silent_build_scripts, source_roots_over_limit, suggest_groups as suggested_groups,
 };
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
-pub const RELEASE_HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 80);
+pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
+pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)
@@ -57,6 +61,11 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
         .collect())
 }
 
+pub fn suggest_groups(view: &RepoView) -> Result<(String, Vec<String>), GenerateError> {
+    let facts = detect(view)?;
+    Ok((suggested_groups(&facts), facts.timings_notes))
+}
+
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     expected_with_notes(view).map(|(files, _)| files)
 }
@@ -73,10 +82,12 @@ pub fn expected_with_notes(
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
+    files.extend(reusable::reusable_workflows(view, helper)?);
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
+    notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     Ok((files, notes))
 }
@@ -93,38 +104,6 @@ pub fn plan_generate(
     }
     let drifts = drift(&expected, on_disk, engine_configured);
     Ok((expected, drifts))
-}
-
-fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
-    let release = facts
-        .helper
-        .as_ref()
-        .ok_or(GenerateError::HelperNotPinned)?;
-    require_compatible(release.version())?;
-    if (facts.config.on_main == OnMain::Everything || facts.config.full_run != FullRun::Off)
-        && !release.version().at_least((0, 1, 81))
-    {
-        return Err(GenerateError::InputsBuildHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
-        return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
-    }
-    if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
-        return Err(GenerateError::MbxStoreHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    Ok(release)
-}
-
-pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
-    if version.series() == Some(COMPATIBLE_HELPER_SERIES) {
-        Ok(())
-    } else {
-        Err(GenerateError::IncompatibleHelper(version.clone()))
-    }
 }
 
 pub fn check_tag(version: &str, tag: &str) -> Result<String, String> {

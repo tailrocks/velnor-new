@@ -15,12 +15,13 @@ use crate::io::{
     Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
 };
 use crate::rest::{self, DEFAULT_PER_PAGE, MAX_PER_PAGE, Page};
-use crate::token;
+use crate::token::{self, Level};
 
 impl ApiStub {
-    /// GitHub lets a job list and delete caches with `actions: write`. Here the job proves it with
-    /// the signed grant that is its `github.token`; any failure to prove it is a refusal.
-    pub(super) fn job_may_administer(&self, request: &Request<Body>) -> bool {
+    /// GitHub lets a job list caches with `actions: read` and delete them with `actions: write`.
+    /// Here the job proves it with the signed grant that is its `github.token`; any failure to
+    /// prove it is a refusal.
+    pub(super) fn job_may_administer(&self, request: &Request<Body>, level: Level) -> bool {
         if self.config.job_cache_admin {
             return true;
         }
@@ -34,7 +35,7 @@ impl ApiStub {
             .and_then(|value| value.strip_prefix("Bearer "));
         bearer
             .and_then(|token| token::verify_job_grant(token, key, now()).ok())
-            .is_some_and(|grant| grant.allows(&rest::repository(request.uri().path())))
+            .is_some_and(|grant| grant.allows(&rest::repository(request.uri().path()), level))
     }
 
     pub(super) async fn cache_list(&self, call: &Call<'_>) -> Reply {
@@ -75,11 +76,13 @@ impl ApiStub {
             );
         }
         if write_index(dir, &index).await.is_err() {
-            let _ = fs::rename(&tombstone, &archive).await;
+            fs::rename(&tombstone, &archive).await.ok();
             return Reply::with(500, json!({"message": "cache index is not writable"}), None);
         }
-        let _ = fs::remove_file(&tombstone).await;
-        let _ = fs::remove_dir_all(dir.join("blocks").join(&record.blob)).await;
+        fs::remove_file(&tombstone).await.ok();
+        fs::remove_dir_all(dir.join("blocks").join(&record.blob))
+            .await
+            .ok();
         Reply {
             status: 204,
             body: None,

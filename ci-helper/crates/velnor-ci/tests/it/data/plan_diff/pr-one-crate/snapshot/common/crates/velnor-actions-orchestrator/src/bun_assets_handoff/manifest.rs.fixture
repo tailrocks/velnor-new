@@ -1,0 +1,4 @@
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        || value.split('/').count() > 256
+        || path
+            .components()

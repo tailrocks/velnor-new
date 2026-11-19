@@ -1,0 +1,4 @@
+            && !url.path().contains("..")
+    }
+
+    fn response_size_allowed(current: usize, next: usize) -> bool {

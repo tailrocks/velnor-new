@@ -1,0 +1,4 @@
+    if root.starts_with('/') && !root.contains("..") && !root.contains("//") && bytes_ok {
+        Ok(())
+    } else {
+        Err(RenderError::BadCommand(format!("bad_seed_root:{root}")))

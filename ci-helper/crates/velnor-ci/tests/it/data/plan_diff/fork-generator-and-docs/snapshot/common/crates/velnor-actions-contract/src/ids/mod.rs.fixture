@@ -1,0 +1,16 @@
+        #[doc = concat!("Validated `", stringify!($name), "` identifier.")]
+        #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+        #[serde(try_from = "String")]
+        pub struct $name(String);
+        || manifest.split('/').any(|seg| seg.is_empty() || seg == "..")
+    {
+        return Err(ContractError::identity(
+            "manifest_key",
+    if !value.is_empty() && value != "." && value != ".." && value.bytes().all(is_component_byte) {
+        Ok(())
+    } else {
+        Err(ContractError::identity(field, "bad_component"))
+    let bad = root.contains("..")
+        || root.contains('\'')
+        || root.contains('"')
+        || root.contains('$')

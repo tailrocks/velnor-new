@@ -1,0 +1,5 @@
+            directory: root.and_then(|root| root.manifest.parent()),
+            target_dir: root
+                .filter(|_| command.builds())
+                .map(|root| root.target_dir.clone()),
+// head

@@ -7,13 +7,14 @@ use crate::{
     error::HostError,
     https::HttpsTransport,
     journal::{
-        ConnectionJournal, CreatedScaleSetResponse, ScaleSetCreateNoEffect, ScaleSetCreateRequest,
+        ConnectionJournal, CreatedScaleSetResponse, ScaleSetCreateClaim, ScaleSetCreateNoEffect,
+        ScaleSetCreateRequest,
     },
 };
 use velnor_runner_github::{
-    AdminConnectionCall, CreateLabel, Exchange, RegistrationTokenCall, RunnerGroup, ScaleSetById,
-    ScaleSetByName, ScaleSetCreate, ScaleSetFound, ScaleSetView, SessionError, SessionRequest,
-    Transport, TransportFail, WireError, admin_connection, create_runner_scale_set,
+    AdminConnectionCall, CreateLabel, Exchange, Method, RegistrationTokenCall, RunnerGroup,
+    ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, ScaleSetView, SessionError,
+    SessionRequest, Transport, TransportFail, WireError, admin_connection, create_runner_scale_set,
     get_runner_scale_set, get_runner_scale_set_by_id, registration_token,
     workflow_run::{
         RepositoryTarget, VerifiedRepositoryScope, WorkflowRunError, get_repository_scope,
@@ -124,6 +125,7 @@ pub(super) struct Recording<T = HttpsTransport> {
     pub(super) inner: T,
     pub(super) status: u16,
     step: &'static str,
+    created_id: Option<i64>,
 }
 
 impl<T> Recording<T> {
@@ -132,6 +134,7 @@ impl<T> Recording<T> {
             inner,
             status: 0,
             step: "registration-token",
+            created_id: None,
         }
     }
 }
@@ -139,8 +142,15 @@ impl<T> Recording<T> {
 impl<T: Transport> Transport for Recording<T> {
     fn exchange(&mut self, request: &SessionRequest) -> Result<Exchange, TransportFail> {
         self.step = step_for(&request.path);
+        self.created_id = None;
         let exchange = self.inner.exchange(request)?;
         self.status = exchange.status;
+        if request.method == Method::Post && self.step == "runnerscalesets" {
+            self.created_id = (exchange.status == 200)
+                .then(|| serde_json::from_slice::<serde_json::Value>(&exchange.body).ok())
+                .flatten()
+                .and_then(|body| body.get("id")?.as_i64());
+        }
         Ok(exchange)
     }
 }
@@ -224,19 +234,13 @@ async fn create_and_verify<T: Transport>(
             )
             .await;
         }
-        Err(error) => {
-            scoped
-                .mark_scale_set_create_uncertain(claim)
-                .await
-                .map_err(map_host)?;
-            return Err(map_session(error, transport));
-        }
+        Err(error) => return Err(settle_failed_create(scoped, claim, error, transport).await),
     };
     let reread = match reread_created_set(transport, admin_token, request, view.id) {
         Ok(reread) => reread,
         Err(error) => {
             scoped
-                .mark_scale_set_create_uncertain(claim)
+                .mark_scale_set_create_uncertain(claim, Some(view.id))
                 .await
                 .map_err(map_host)?;
             return Err(error);
@@ -253,7 +257,7 @@ async fn create_and_verify<T: Transport>(
         Ok(response) => response,
         Err(error) => {
             scoped
-                .mark_scale_set_create_uncertain(claim)
+                .mark_scale_set_create_uncertain(claim, Some(reread.id))
                 .await
                 .map_err(map_host)?;
             return Err(map_host(error));
@@ -264,6 +268,27 @@ async fn create_and_verify<T: Transport>(
         .await
         .map_err(map_host)?;
     ensured_from_record(&created)
+}
+
+async fn settle_failed_create<T>(
+    scoped: &ConnectionJournal,
+    claim: ScaleSetCreateClaim,
+    error: SessionError,
+    transport: &Recording<T>,
+) -> EnsureError {
+    let definite = (400..500).contains(&transport.status);
+    let settled = if definite {
+        scoped.release_rejected_scale_set_create(claim).await
+    } else {
+        scoped
+            .mark_scale_set_create_uncertain(claim, transport.created_id)
+            .await
+    };
+    match settled {
+        Err(host) => map_host(host),
+        Ok(_) if definite && transport.status == 403 => EnsureError::Forbidden,
+        Ok(_) => map_session(error, transport),
+    }
 }
 
 fn reread_created_set<T: Transport>(

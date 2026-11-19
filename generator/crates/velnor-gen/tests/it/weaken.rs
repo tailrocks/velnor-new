@@ -170,12 +170,8 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
         );
         let lock = path(".velnor/rust-ci.lock")?;
         view.tracked_paths.insert(lock.clone());
-        view.files.insert(
-            lock,
-            String::from_utf8(HELPER_LOCK.to_vec())?
-                .replace("0.1.79", "0.1.81")
-                .into_bytes(),
-        );
+        view.files
+            .insert(lock, String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes());
         assert!(expected_files(&view).is_ok(), "{want}");
     }
     Ok(())

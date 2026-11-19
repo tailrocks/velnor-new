@@ -18,9 +18,7 @@ fn rendered() -> Result<String, Box<dyn std::error::Error>> {
         ("mise.toml", MISE.as_bytes().to_vec()),
         (
             ".velnor/rust-ci.lock",
-            String::from_utf8(HELPER_LOCK.to_vec())?
-                .replacen("0.1.79", "0.1.81", 1)
-                .into_bytes(),
+            String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes(),
         ),
     ] {
         let path = RepoPath::new(path)?;
@@ -72,13 +70,12 @@ fn spec(text: &str) -> Result<VerdictSpec, String> {
 fn verdict(
     text: &str,
     policy: &str,
-    keep: impl Fn(&str) -> bool,
+    value: impl Fn(&str) -> Option<&'static str>,
 ) -> Result<(bool, String), Box<dyn std::error::Error>> {
     let spec = spec(text)?;
     let outputs: BTreeMap<String, String> = exported(text, "rust")?
         .into_iter()
-        .filter(|key| keep(key))
-        .map(|key| (key, "run".to_owned()))
+        .filter_map(|key| value(&key).map(|value| (key, value.to_owned())))
         .collect();
     let mut needs = BTreeMap::new();
     needs.insert(
@@ -115,9 +112,9 @@ fn one_job_with_policy_enabled_exports_what_the_policy_gate_reads() -> TestResul
             .iter()
             .any(|job| job.id.to_string() == "policy")
     );
-    let (green, table) = verdict(&text, "success", |_| true)?;
+    let (green, table) = verdict(&text, "success", |_| Some("run"))?;
     assert!(green, "{table}");
-    let (green, table) = verdict(&text, "failure", |_| true)?;
+    let (green, table) = verdict(&text, "failure", |_| Some("run"))?;
     assert!(!green, "{table}");
     assert!(table.contains("policy"), "{table}");
     Ok(())
@@ -127,17 +124,33 @@ fn one_job_with_policy_enabled_exports_what_the_policy_gate_reads() -> TestResul
 fn a_policy_job_that_did_not_succeed_fails_the_gate() -> TestResult {
     let text = rendered()?;
     for result in ["skipped", "cancelled"] {
-        let (green, table) = verdict(&text, result, |_| true)?;
+        let (green, table) = verdict(&text, result, |_| Some("run"))?;
         assert!(!green, "{table}");
     }
     Ok(())
 }
 
 #[test]
-fn the_gate_does_not_read_policy_outputs_the_rust_job_cannot_export() -> TestResult {
+fn the_rust_job_exports_the_policy_outputs_the_gate_reads() -> TestResult {
     let text = rendered()?;
-    let (green, table) = verdict(&text, "success", |key| key.ends_with("_tests"))?;
+    let exported = exported(&text, "rust")?;
+    for output in ["rust_deny", "rust_machete", "rust_root_tests"] {
+        assert!(exported.contains(&output.to_owned()), "{exported:?}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_run_that_skips_both_policy_tools_leaves_the_gate_green_with_a_skipped_policy_job() -> TestResult
+{
+    let text = rendered()?;
+    let (green, table) = verdict(&text, "skipped", |key| {
+        Some(if key.ends_with("_tests") {
+            "run"
+        } else {
+            "skip"
+        })
+    })?;
     assert!(green, "{table}");
-    assert!(spec(&text)?.jobs.iter().all(|job| job.when.is_empty()));
     Ok(())
 }

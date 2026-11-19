@@ -1,0 +1,16 @@
+    let folder = manifest.parent();
+    let effective: BTreeSet<&RepoPath> = effective_configs(&view.files)
+        .map(|(file, _)| file)
+        .collect();
+            let base = file.parent().and_then(|cargo| cargo.parent());
+            let applies = match (&base, &folder) {
+                (None, _) => true,
+                (Some(_), None) => false,
+            ".." => {
+                segments.pop()?;
+            }
+            other => segments.push(other),
+        directory: package.manifest.parent(),
+        dependencies: package
+            .dependencies
+            .iter()

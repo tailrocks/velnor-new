@@ -97,10 +97,24 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
     let release = releases.join("rust-ci-v1.2.3");
     fs::create_dir_all(&release)?;
     let binary = b"#!/bin/sh\necho genuine\n";
-    fs::write(release.join("velnor-ci-linux-x64"), binary)?;
+    let packed = work.join("packed");
+    fs::create_dir_all(&packed)?;
+    fs::write(packed.join("velnor-ci"), binary)?;
+    assert!(
+        Command::new(program("tar"))
+            .arg("--create")
+            .arg(format!("--use-compress-program={}", program("gzip")))
+            .arg("--file")
+            .arg(release.join(ARCHIVE))
+            .arg("--directory")
+            .arg(&packed)
+            .arg("velnor-ci")
+            .status()?
+            .success()
+    );
     let digest = Command::new(program("shasum"))
         .args(["-a", "256"])
-        .arg(release.join("velnor-ci-linux-x64"))
+        .arg(release.join(ARCHIVE))
         .output()?
         .stdout;
     let digest = String::from_utf8(digest)?;
@@ -128,8 +142,8 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
     let installed = Path::new(on_path.trim()).join("velnor-ci");
     assert!(!fs::symlink_metadata(&installed)?.file_type().is_symlink());
     assert!(fs::metadata(&installed)?.permissions().mode() & 0o111 != 0);
-    let cached = cache.join("velnor-ci/1.2.3/x64/velnor-ci");
-    fs::write(&cached, b"#!/bin/sh\necho tampered\n")?;
+    let cached = cache.join("velnor-ci/1.2.3/x64").join(ARCHIVE);
+    fs::write(&cached, b"tampered archive\n")?;
     let copy = fs::read(&installed)?;
     fs::remove_dir_all(&work)?;
     assert_eq!(copy, binary);
@@ -149,6 +163,8 @@ fn no_run_block_of_the_action_expands_an_expression() -> TestResult {
     Ok(())
 }
 
+pub(crate) const ARCHIVE: &str = "velnor-ci-x86_64-unknown-linux-musl.tar.gz";
+
 pub(crate) struct Install {
     pub(crate) work: std::path::PathBuf,
     pub(crate) binary: &'static [u8],
@@ -160,7 +176,21 @@ impl Install {
         let release = work.join("releases/rust-ci-v1.2.3");
         fs::create_dir_all(&release)?;
         fs::create_dir_all(work.join("temp"))?;
-        fs::write(release.join("velnor-ci-linux-x64"), Self::BINARY)?;
+        let packed = work.join("packed");
+        fs::create_dir_all(&packed)?;
+        fs::write(packed.join("velnor-ci"), Self::BINARY)?;
+        let status = std::process::Command::new(program("tar"))
+            .arg("--create")
+            .arg(format!("--use-compress-program={}", program("gzip")))
+            .arg("--file")
+            .arg(release.join(ARCHIVE))
+            .arg("--directory")
+            .arg(&packed)
+            .arg("velnor-ci")
+            .status()?;
+        if !status.success() {
+            return Err("tar could not pack the fixture archive".into());
+        }
         Ok(Self {
             work,
             binary: Self::BINARY,
@@ -168,6 +198,10 @@ impl Install {
     }
 
     const BINARY: &'static [u8] = b"#!/bin/sh\necho genuine\n";
+
+    pub(crate) fn archive_path(&self) -> std::path::PathBuf {
+        self.work.join("releases/rust-ci-v1.2.3").join(ARCHIVE)
+    }
 
     pub(crate) fn run(
         &self,
@@ -208,10 +242,7 @@ impl Install {
         let action = fs::read_to_string(root.join("actions/setup-velnor/action.yml"))?;
         let digest = Command::new(program("shasum"))
             .args(["-a", "256"])
-            .arg(
-                self.work
-                    .join("releases/rust-ci-v1.2.3/velnor-ci-linux-x64"),
-            )
+            .arg(self.archive_path())
             .output()?
             .stdout;
         let digest = String::from_utf8(digest)?;

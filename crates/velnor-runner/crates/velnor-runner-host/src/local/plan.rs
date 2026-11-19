@@ -10,6 +10,8 @@ use serde::Deserialize;
 
 use crate::error::HostError;
 
+use super::storage::Sizes;
+
 pub const MARKER: &str = "velnor-local";
 const MAX_PLAN_BYTES: u64 = 64 * 1024;
 const MAX_PAIRS_PER_SIDE: u32 = 64;
@@ -91,9 +93,13 @@ struct Raw {
     runner_image: String,
     dind_image: String,
     limits: Limits,
+    #[serde(default)]
+    storage: Option<Sizes>,
     sides: Vec<SidePlan>,
     #[serde(default)]
     policy: Option<String>,
+    #[serde(default)]
+    local_ci: Option<String>,
 }
 
 pub struct Plan {
@@ -105,8 +111,10 @@ pub struct Plan {
     pub runner_image: String,
     pub dind_image: String,
     pub limits: Limits,
+    pub storage: Sizes,
     pub sides: Vec<SidePlan>,
     pub policy: Option<String>,
+    pub local_ci: Option<String>,
 }
 
 impl std::fmt::Debug for Plan {
@@ -145,7 +153,12 @@ impl Plan {
                         .all(|seen| seen.side != side.side && seen.network != side.network)
             })
             && raw.sides.iter().any(|side| side.pairs > 0);
-        if !(32..=128).contains(&raw.token.len()) || !token_plain || !sides_valid {
+        let local_ci_valid = raw
+            .local_ci
+            .as_deref()
+            .is_none_or(super::request::valid_local_ci);
+        if !(32..=128).contains(&raw.token.len()) || !token_plain || !sides_valid || !local_ci_valid
+        {
             return Err(HostError::Config);
         }
         Ok(Self {
@@ -157,8 +170,10 @@ impl Plan {
             runner_image: raw.runner_image,
             dind_image: raw.dind_image,
             limits: raw.limits,
+            storage: raw.storage.unwrap_or_default().checked()?,
             sides: raw.sides,
             policy: raw.policy,
+            local_ci: raw.local_ci,
         })
     }
 }
@@ -178,3 +193,7 @@ pub fn check_state(state: &Path) -> Result<(), HostError> {
     }
     Ok(())
 }
+
+#[cfg(test)]
+#[path = "plan_tests.rs"]
+mod tests;

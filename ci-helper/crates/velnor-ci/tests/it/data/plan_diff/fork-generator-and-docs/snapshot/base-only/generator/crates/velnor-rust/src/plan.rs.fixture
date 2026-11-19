@@ -1,0 +1,21 @@
+            .find(|root| root.manifest.parent().as_ref() == Some(path))
+    });
+    let single =
+        facts.rust_roots.len() == 1 && decisions[0].shape == Shape::OneJob && helper_root.is_none();
+        directory: root.manifest.parent(),
+        ..step(StepKind::Cargo(CargoCommand::BuildBinary {
+            package: PackageName::from_static(HELPER_PACKAGE),
+            binary: TargetName::from_static(HELPER_PACKAGE),
+                    directory: root.manifest.parent(),
+                    ..step(kind)
+                });
+            }
+                directory: root.manifest.parent(),
+                ..step(StepKind::Helper(HelperCommand::CheckMetadata))
+            },
+            step(StepKind::CacheRestore(CacheKey::Sources {
+        directory: root.manifest.parent(),
+        ..step(StepKind::InputsRestore(root.target_dir.clone()))
+    })
+}
+// base

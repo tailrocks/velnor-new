@@ -15,8 +15,14 @@ use crate::journal::{
     ScaleSetCreateState,
 };
 use crate::listen::{Link, link_from_admin};
+use delete::recover_intended_delete;
 
+pub(crate) mod delete;
 mod support;
+
+mod removal;
+
+pub(crate) use removal::{RemovedRunnerProver, RunnerProver};
 
 use support::{
     CreateIds, create_connection_scale_set, map_host, map_repository, map_session, open_admin,
@@ -114,6 +120,9 @@ pub(crate) async fn ensure_connection_scale_set(
     let groups = list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|error| map_session(error, &transport))?;
     let group_id = selected_group_id(binding, &groups)?;
+    recover_intended_delete(&mut transport, admin.expose_token(), &scoped)
+        .await
+        .map_err(map_host)?;
     let request = ScaleSetCreateRequest::new(binding, group_id).map_err(map_host)?;
     let record = scoped
         .prepare_scale_set_create(&request)
@@ -192,7 +201,9 @@ fn lookup_action(
             | ScaleSetCreateState::NoEffect,
             true,
         ) if !organization => ScaleSetLookupAction::Adopt,
-        (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
+        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, false) => {
+            ScaleSetLookupAction::Create
+        }
         (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
             ScaleSetLookupAction::Verify
         }
@@ -243,13 +254,12 @@ fn repository_parts(repository: &str) -> Result<(&str, &str), EnsureError> {
     Ok((owner, repo))
 }
 
-/// Lists the runners GitHub reports for `scale_set_id`, or `None` when this
-/// connection does not own that scale set (so it cannot be observed here).
-pub(crate) fn observe_scale_set_runners(
+/// Opens the admin session of `binding`'s repository: the verified scope, then an admin
+/// connection. Shared by every observation and removal that acts for one connection.
+fn open_binding_admin(
     pat: &str,
     binding: &RepositoryConnection,
-    scale_set_id: i64,
-) -> Result<Option<Vec<String>>, EnsureError> {
+) -> Result<(support::Recording, velnor_runner_github::AdminConnection), EnsureError> {
     let (repo_owner, repo_name) = repository_parts(&binding.repository)?;
     if pat.is_empty() || !selector_valid(&binding.scale_set) {
         return Err(EnsureError::Rejected);
@@ -265,20 +275,39 @@ pub(crate) fn observe_scale_set_runners(
         pat,
     )
     .map_err(map_repository)?;
-    let (mut transport, admin) = open_admin(pat, &scope, binding)?;
+    open_admin(pat, &scope, binding)
+}
+
+/// Whether `binding`'s selector owns `scale_set_id`.
+fn binding_owns_set<T: Transport + ?Sized>(
+    transport: &mut T,
+    admin_token: &str,
+    binding: &RepositoryConnection,
+    scale_set_id: i64,
+) -> Result<bool, EnsureError> {
     let request = ScaleSetCreateRequest::new(binding, 1).map_err(map_host)?;
     let owned = get_runner_scale_set_by_id(
-        &mut transport,
+        transport,
         &ScaleSetById {
             scale_set_id,
             name: request.selector_name(),
             expected_labels: request.selector_labels(),
-            admin_token: admin.expose_token(),
+            admin_token,
         },
     );
-    match owned {
-        Ok(view) if view.id == scale_set_id => {}
-        _ => return Ok(None),
+    Ok(matches!(owned, Ok(view) if view.id == scale_set_id))
+}
+
+/// Lists the runners GitHub reports for `scale_set_id`, or `None` when this
+/// connection does not own that scale set (so it cannot be observed here).
+pub(crate) fn observe_scale_set_runners(
+    pat: &str,
+    binding: &RepositoryConnection,
+    scale_set_id: i64,
+) -> Result<Option<Vec<String>>, EnsureError> {
+    let (mut transport, admin) = open_binding_admin(pat, binding)?;
+    if !binding_owns_set(&mut transport, admin.expose_token(), binding, scale_set_id)? {
+        return Ok(None);
     }
     list_runner_ids(&mut transport, admin.expose_token(), scale_set_id).map(Some)
 }

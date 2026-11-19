@@ -1,14 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Drain semantics with a live session: the connection's own bound session is
-//! standing presence, not work, so `disconnect --wait` and `drain --wait` can
-//! finish before the controller deletes it. Any other work still blocks.
-
 use tempfile::TempDir;
 
 use crate::config::HostConfig;
 use crate::journal::{CapacityLimits, ConnectionJournal, Journal, OperationalCapacityLimits};
+use crate::launch::CompletedHeaderPoll;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -152,6 +149,88 @@ async fn a_charged_session_header_does_not_block_the_connection_drain() -> TestR
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn an_unsettled_header_poll_keeps_the_session_in_the_drain_count() -> TestResult {
+    let fx = fixture().await?;
+    let intent = bind_session(&fx.scope, NONCE, "session-1", 1).await?;
+    let allocation = fx.scope.session_header_allocation(intent).await?;
+    let attempt = fx.scope.begin_zero_header_poll(intent, &allocation).await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    fx.scope
+        .mark_session_poll_uncertain(intent, attempt)
+        .await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unsettled_session_delete_keeps_the_session_in_the_drain_count() -> TestResult {
+    let fx = fixture().await?;
+    let intent = bind_session(&fx.scope, NONCE, "session-1", 1).await?;
+    let allocation = fx.scope.session_header_allocation(intent).await?;
+    let poll = fx.scope.begin_zero_header_poll(intent, &allocation).await?;
+    fx.scope
+        .settle_session_poll(intent, CompletedHeaderPoll::for_test(poll))
+        .await?;
+    assert!(fx.scope.is_drained().await?);
+    let attempt = fx.scope.begin_session_delete(intent, &allocation).await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    fx.scope
+        .mark_session_delete_uncertain(intent, attempt)
+        .await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pending_scale_set_delete_keeps_the_host_from_draining() -> TestResult {
+    let fx = fixture().await?;
+    bind_session(&fx.scope, NONCE, "session-1", 0).await?;
+    assert!(fx.journal.is_drained().await?);
+    for state in ["requested", "uncertain"] {
+        run(
+            &fx.journal,
+            &format!("INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, '{state}')"),
+        )
+        .await?;
+        assert!(!fx.journal.is_drained().await?, "{state}");
+        run(&fx.journal, "DELETE FROM connection_scale_set_deletes").await?;
+    }
+    run(
+        &fx.journal,
+        "INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, 'deleted')",
+    )
+    .await?;
+    assert!(fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pending_scale_set_delete_blocks_reactivation() -> TestResult {
+    let fx = fixture().await?;
+    let binding = fx.config.connections().first().ok_or("connection")?;
+    run(
+        &fx.journal,
+        "UPDATE connection_scopes SET retired = 1 WHERE connection_id = 'conn-test-1'",
+    )
+    .await?;
+    for state in ["requested", "uncertain"] {
+        run(
+            &fx.journal,
+            &format!("INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, '{state}')"),
+        )
+        .await?;
+        assert!(!fx.journal.reactivate_if_drained(binding).await?, "{state}");
+        run(&fx.journal, "DELETE FROM connection_scale_set_deletes").await?;
+    }
+    assert!(fx.journal.reactivate_if_drained(binding).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_bound_session_plus_a_running_job_is_not_drained() -> TestResult {
     let fx = fixture().await?;
     bind_session(&fx.scope, NONCE, "session-1", 0).await?;
@@ -251,5 +330,34 @@ async fn one_connections_work_does_not_drain_or_block_another_scope() -> TestRes
     assert!(fx.scope.is_drained().await?);
     assert!(!fx.other.is_drained().await?);
     assert!(!fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn host_wide_drain_counts_an_unresolved_refresh_of_a_bound_session() -> TestResult {
+    let fx = fixture().await?;
+    let intent = bind_session(
+        &fx.scope,
+        "0123456789abcdef0123456789abcdef",
+        "session-1",
+        1,
+    )
+    .await?;
+    fx.scope.session_header_allocation(intent).await?;
+    assert!(fx.journal.is_drained().await?);
+    let claim = fx
+        .scope
+        .claim_session_refresh(intent, "session-1")
+        .await?
+        .ok_or("no refresh claim")?;
+    assert!(!fx.journal.is_drained().await?);
+    fx.scope.mark_session_refresh_uncertain(claim).await?;
+    assert!(!fx.journal.is_drained().await?);
+    run(
+        &fx.journal,
+        "UPDATE connection_session_refreshes SET state = 'succeeded'",
+    )
+    .await?;
+    assert!(fx.journal.is_drained().await?);
     Ok(())
 }

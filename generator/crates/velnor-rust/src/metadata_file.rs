@@ -14,6 +14,10 @@ use crate::detect::metadata_roots;
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::sha256::sha256_hex;
 
+mod recorded;
+
+pub use recorded::{recorded_members, recorded_roots, recorded_target_dirs};
+
 pub const METADATA_PATH: RepoPath = RepoPath::from_static(".velnor/rust-metadata.json");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -132,8 +136,6 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
         .map_or("normal", |(name, _)| name)
 }
 
-pub const VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
-
 const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
 
 fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
@@ -144,7 +146,6 @@ fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
 }
 
 pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
-    let versions = pin_at_least(view, VERSIONS_HELPER);
     let records_target_dir = pin_at_least(view, TARGET_DIR_HELPER);
     let mut manifests = BTreeMap::new();
     let mut roots = BTreeMap::new();
@@ -167,11 +168,7 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
             workspace.to_string(),
             Root {
                 target_dir,
-                members: metadata
-                    .members
-                    .iter()
-                    .map(|package| member(package, versions))
-                    .collect(),
+                members: metadata.members.iter().map(member).collect(),
             },
         );
     }
@@ -185,10 +182,10 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
     Ok(text)
 }
 
-fn member(package: &RustPackage, versions: bool) -> Member {
+fn member(package: &RustPackage) -> Member {
     Member {
         name: package.name.to_string(),
-        version: package.version.clone().filter(|_| versions),
+        version: package.version.clone(),
         manifest: package.manifest.to_string(),
         dependencies: package
             .dependencies
@@ -222,32 +219,11 @@ fn member(package: &RustPackage, versions: bool) -> Member {
     }
 }
 
-pub fn recorded_roots(recorded: Option<&[u8]>) -> Result<Vec<RepoPath>, MetadataFileError> {
-    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
-    let file: File = serde_json::from_slice(bytes)
-        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
-    file.roots.keys().map(|root| path_of(root)).collect()
-}
-
-pub fn recorded_target_dirs(
-    recorded: Option<&[u8]>,
-) -> Result<BTreeMap<RepoPath, RepoPath>, MetadataFileError> {
-    let bytes = recorded.ok_or(MetadataFileError::Missing)?;
-    let file: File = serde_json::from_slice(bytes)
-        .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
-    file.roots
-        .iter()
-        .filter_map(|(root, record)| Some((root, record.target_dir.as_ref()?)))
-        .map(|(root, dir)| Ok((path_of(root)?, path_of(dir)?)))
-        .collect()
-}
-
 pub fn recorded_metadata(
     view: &RepoView,
     recorded: Option<&[u8]>,
 ) -> Result<BTreeMap<RepoPath, RustMetadata>, MetadataFileError> {
     let bytes = recorded.ok_or(MetadataFileError::Missing)?;
-    let versions = pin_at_least(view, VERSIONS_HELPER);
     let file: File = serde_json::from_slice(bytes)
         .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
     for (path, digest) in &file.manifests {
@@ -263,7 +239,7 @@ pub fn recorded_metadata(
         let members = root
             .members
             .into_iter()
-            .map(|member| package(member, versions))
+            .map(package)
             .collect::<Result<Vec<_>, _>>()?;
         for manifest in std::iter::once(&workspace).chain(members.iter().map(|m| &m.manifest)) {
             if !file.manifests.contains_key(manifest.as_str()) {
@@ -337,10 +313,10 @@ fn path_of(text: &str) -> Result<RepoPath, MetadataFileError> {
     RepoPath::new(text).map_err(|error| MetadataFileError::Unreadable(error.to_string()))
 }
 
-fn package(member: Member, versions: bool) -> Result<RustPackage, MetadataFileError> {
-    if versions && member.version.is_none() {
+fn package(member: Member) -> Result<RustPackage, MetadataFileError> {
+    if member.version.is_none() {
         return Err(MetadataFileError::Unreadable(format!(
-            "{} has no version, which this helper pin records",
+            "{} has no version",
             member.name
         )));
     }
@@ -348,7 +324,7 @@ fn package(member: Member, versions: bool) -> Result<RustPackage, MetadataFileEr
         |error: velnor_model::InvalidId| MetadataFileError::Unreadable(error.to_string());
     Ok(RustPackage {
         name: PackageName::new(member.name).map_err(unreadable)?,
-        version: member.version.filter(|_| versions),
+        version: member.version,
         manifest: path_of(&member.manifest)?,
         dependencies: member
             .dependencies

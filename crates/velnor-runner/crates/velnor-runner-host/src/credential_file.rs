@@ -72,7 +72,7 @@ fn has_extended_acl(file: &File) -> bool {
     const NFS4_ACL: &str = "system.nfs4_acl";
     [ACCESS_ACL, NFS4_ACL].into_iter().any(|name| {
         !matches!(
-            rustix::fs::fgetxattr(file, name, &mut []),
+            rustix::fs::fgetxattr(file, name, &mut [0u8; 0]),
             Err(rustix::io::Errno::NODATA | rustix::io::Errno::NOTSUP)
         )
     })

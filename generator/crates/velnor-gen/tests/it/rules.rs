@@ -7,7 +7,7 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform,
+    CommitSha, Concurrency, HelperRelease, HelperVersion, Job, JobId, Permissions, Platform, PrRun,
     PullRequestType, RunnerLabel, Sha256, Step, StepKind, Triggers, WORKFLOW_PATH, When,
     WorkflowPlan,
 };
@@ -87,12 +87,13 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             comment: None,
             needs: Vec::new(),
             when: When::Success,
-            skip_on_draft: false,
+            pr: PrRun::Always,
             runs_on: RunnerLabel::new("ubuntu-latest")?,
             permissions: Permissions::default(),
             timeout_minutes: 10,
             gate: None,
             plan_outputs: Vec::new(),
+            group_outputs: Vec::new(),
             reports_ignored: false,
             steps: kinds
                 .into_iter()
@@ -102,6 +103,8 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                     target_dir: None,
                     when: When::Success,
                     skip_on_draft: false,
+                    skip_after_merge_group: None,
+                    pr: PrRun::Always,
                     gate: None,
                     reads: None,
                 })
@@ -185,8 +188,8 @@ fn each_rule_refuses_a_violating_step_with_its_violation() {
 fn only_the_setup_action_of_this_repository_is_allowed_and_only_by_full_commit_sha() {
     let cases = [
         (
-            uses(&format!("{SETUP_ACTION}@rust-ci-v0.1.79")),
-            Rule::ActionNotPinned(format!("{SETUP_ACTION}@rust-ci-v0.1.79")),
+            uses(&format!("{SETUP_ACTION}@rust-ci-v0.1.81")),
+            Rule::ActionNotPinned(format!("{SETUP_ACTION}@rust-ci-v0.1.81")),
         ),
         (
             uses(&format!("{SETUP_ACTION}@main")),

@@ -346,3 +346,48 @@ fn cache_decision_refuses_locks_that_cannot_prove_public_sources() {
         assert!(repo.root().join("target/debug/incremental").is_dir());
     }
 }
+
+fn decide_within(repo: &Checkout, budget: &str) -> (Output, String) {
+    let temp = repo.root().join("runner-temp");
+    fs::create_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::write(temp.join("velnor-run.log"), COMPILED).unwrap_or_else(|e| unreachable!("{e}"));
+    let outputs = repo.root().join("github-output");
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["cache", "decide", "--target-dir", "target"])
+        .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_OUTPUT", &outputs)
+        .env("VELNOR_CACHE_BUDGET_BYTES", budget)
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    (output, fs::read_to_string(&outputs).unwrap_or_default())
+}
+
+#[test]
+fn a_target_directory_larger_than_the_cache_budget_is_not_saved() {
+    let repo = Checkout::new("decide-over-budget");
+    seed(&repo);
+    repo.write_unstaged("target/debug/deps/libbig.rlib", &"x".repeat(4096));
+    let (output, written) = decide_within(&repo, "1000");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(output.status.success(), "{stdout}");
+    assert_eq!(written, "save=false\nsources=true\n");
+    assert!(
+        stdout.contains("more than the repository cache budget of 1000 bytes"),
+        "{stdout}"
+    );
+    assert!(!repo.root().join("target/.velnor/born").exists());
+    fs::remove_file(repo.root().join("github-output")).unwrap_or_else(|e| unreachable!("{e}"));
+    let (output, written) = decide_within(&repo, "100000");
+    assert!(output.status.success());
+    assert_eq!(written, "save=true\nsources=true\n");
+}
+
+#[test]
+fn an_unreadable_cache_budget_fails_the_decision_instead_of_saving() {
+    let repo = Checkout::new("decide-bad-budget");
+    seed(&repo);
+    let (output, written) = decide_within(&repo, "eight");
+    assert!(!output.status.success());
+    assert_eq!(written, "");
+}

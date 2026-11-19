@@ -1,0 +1,8 @@
+            include_str!("../../../../.velnor/generator.lock"),
+        )?;
+        fs::write(
+            root.join(".velnor/controller-approvals.json"),
+            include_str!("../../../../.velnor/controller-approvals.json"),
+        )?;
+        workflow_configuration_fixture::write_root_cargo_lock(root, &["demo", "maintenance"])?;
+    }

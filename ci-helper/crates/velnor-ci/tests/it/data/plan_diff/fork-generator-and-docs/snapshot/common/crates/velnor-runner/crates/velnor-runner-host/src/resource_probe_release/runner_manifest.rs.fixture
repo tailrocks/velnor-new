@@ -1,0 +1,4 @@
+const SIGNING_IDENTITY: &str = concat!(
+    "https://github.com/tailrocks/velnor-new/",
+    ".github/workflows/product-release-images.yml@refs/heads/main"
+);

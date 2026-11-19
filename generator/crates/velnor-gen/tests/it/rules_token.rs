@@ -56,7 +56,7 @@ fn rules_of(workflow: &RenderedWorkflow) -> Vec<Rule> {
 #[test]
 fn a_job_with_the_release_app_token_may_not_use_mise_action_or_run_mise_with_the_repository_config()
 {
-    let action = "jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c";
+    let action = "jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d";
     assert_eq!(
         rules_of(&token_job(vec![uses(action)], "ubuntu-latest")),
         [Rule::MiseActionInTokenJob]

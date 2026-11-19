@@ -1,0 +1,4 @@
+                || pattern.split('/').any(|seg| seg == "..")
+                || !pattern.bytes().all(is_glob_byte)
+            {
+                return Err(ContractError::config(

@@ -1,0 +1,4 @@
+    command.current_dir(context.root);
+    fixture_git::isolate_git_environment(&mut command);
+    if operation == "plan" {
+        command.arg("plan");

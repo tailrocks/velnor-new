@@ -23,20 +23,27 @@ pub(crate) fn cache_decide(
     target: &RepoPath,
     archive: Option<&RepoPath>,
     manifests: &[RepoPath],
+    budget_bytes: u64,
 ) -> RenderedStep {
     RenderedStep {
         id: Some(BASE_STEP.to_owned()),
         name: "Decide whether to save the build directory".to_owned(),
-        env: vec![(
-            "VELNOR_CACHE_MANIFESTS".to_owned(),
-            Value::Text(
-                manifests
-                    .iter()
-                    .map(ToString::to_string)
-                    .collect::<Vec<_>>()
-                    .join("\n"),
+        env: vec![
+            (
+                "VELNOR_CACHE_MANIFESTS".to_owned(),
+                Value::Text(
+                    manifests
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join("\n"),
+                ),
             ),
-        )],
+            (
+                "VELNOR_CACHE_BUDGET_BYTES".to_owned(),
+                Value::Text(budget_bytes.to_string()),
+            ),
+        ],
         run: Some(format!(
             "velnor-ci cache decide --target-dir {}{}",
             shell_word(target.as_str()),
@@ -105,18 +112,19 @@ pub(crate) fn cache_trim(lane: &JobId, family: TrimFamily) -> RenderedStep {
             SOURCES_PREFIX_OUTPUT,
         ),
     };
+    let env = vec![
+        (
+            "CACHE_PREFIX".to_owned(),
+            Value::Expr(format!("${{{{ needs.{lane}.outputs.{output} }}}}")),
+        ),
+        (
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        ),
+    ];
     RenderedStep {
         name,
-        env: vec![
-            (
-                "CACHE_PREFIX".to_owned(),
-                Value::Expr(format!("${{{{ needs.{lane}.outputs.{output} }}}}")),
-            ),
-            (
-                "GITHUB_TOKEN".to_owned(),
-                Value::Expr("${{ github.token }}".to_owned()),
-            ),
-        ],
+        env,
         run: Some("velnor-ci cache trim --prefix \"$CACHE_PREFIX\"".to_owned()),
         ..RenderedStep::default()
     }
@@ -185,30 +193,50 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
     job.steps
         .iter()
         .filter_map(|step| match &step.kind {
-            StepKind::SourcesFetch { position, .. } => Some(*position),
+            StepKind::SourcesFetch { position, .. } => {
+                Some((*position, crate::gate::sources_fetch_step(*position)))
+            }
+            StepKind::SourcesFetchAll { .. } => {
+                Some((0, crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()))
+            }
             _ => None,
         })
-        .max()
-        .map(|last| {
-            format!(
-                "${{{{ steps.{}.outcome == 'success' }}}}",
-                crate::gate::sources_fetch_step(last)
-            )
-        })
+        .max_by_key(|(position, _)| *position)
+        .map(|(_, id)| format!("${{{{ steps.{id}.outcome == 'success' }}}}"))
 }
 
-pub(crate) fn sources_fetch(position: usize, cache_debug: bool) -> RenderedStep {
+pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
+    let roots: Vec<String> = manifests
+        .iter()
+        .map(|manifest| {
+            manifest.parent().map_or_else(
+                || ".".to_owned(),
+                |directory| crate::release_steps::shell_word(&format!("./{directory}")),
+            )
+        })
+        .collect();
     RenderedStep {
         env: cache_debug
             .then(crate::cargo::cache_debug_env)
             .into_iter()
             .collect(),
-        id: Some(crate::gate::sources_fetch_step(position)),
-        name: format!("Fetch the sources of root {position}"),
+        id: Some(crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()),
+        name: "Fetch the sources of every root".to_owned(),
         continue_on_error: true,
-        run: Some(format!("{} cargo fetch --locked", crate::steps::RUN)),
+        run: Some(format!(
+            "velnor-ci sources fetch --roots {}",
+            roots.join(" ")
+        )),
         ..RenderedStep::default()
     }
+}
+
+pub(crate) fn sources_fetch(position: usize, lane: crate::cargo::CargoLane) -> RenderedStep {
+    let mut fetch = crate::cargo::cargo_fetch(lane);
+    fetch.id = Some(crate::gate::sources_fetch_step(position));
+    fetch.name = format!("Fetch the sources of root {position}");
+    fetch.continue_on_error = true;
+    fetch
 }
 
 pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
@@ -226,12 +254,13 @@ pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {
 }
 
 pub(crate) fn cache_budget(bytes: u64) -> RenderedStep {
+    let env = vec![(
+        "GITHUB_TOKEN".to_owned(),
+        Value::Expr("${{ github.token }}".to_owned()),
+    )];
     RenderedStep {
         name: "Enforce the repository cache budget".to_owned(),
-        env: vec![(
-            "GITHUB_TOKEN".to_owned(),
-            Value::Expr("${{ github.token }}".to_owned()),
-        )],
+        env,
         run: Some(format!("velnor-ci cache budget --budget-bytes {bytes}")),
         ..RenderedStep::default()
     }

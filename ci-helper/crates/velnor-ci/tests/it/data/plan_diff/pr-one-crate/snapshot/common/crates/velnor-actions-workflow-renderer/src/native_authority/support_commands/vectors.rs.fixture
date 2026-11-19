@@ -1,0 +1,4 @@
+            pub const $spec_const: &str = concat!(
+                "http:", $name, "[url=", $url, ",checksum=sha256:", $sha256, "]"
+            );
+        )+
