@@ -11,7 +11,9 @@ import unittest
 
 
 ACTION = Path(__file__).resolve().parent.parent / "actions" / "setup-velnor" / "action.yml"
-RELEASE_URL = "https://github.com/tailrocks/velnor-new/releases/download/rust-ci-v0.1.79/velnor-ci-linux-x64"
+RELEASES = "https://github.com/tailrocks/velnor-new/releases/download"
+RELEASE_URL = f"{RELEASES}/tools-v0.1.79/velnor-ci-linux-x64"
+LEGACY_RELEASE_URL = f"{RELEASES}/rust-ci-v0.1.79/velnor-ci-linux-x64"
 PAYLOAD = b"the released velnor-ci binary\n"
 DIGEST_TOOLS = ("sha256sum", "shasum")
 SCRIPT_TOOLS = ("bash", "cut", "tr", "mktemp", "rm", "cp", "mkdir", "chmod", "mv", "wc")
@@ -20,6 +22,10 @@ STUB_CURL = """#!/bin/sh
 printf '%s\\n' "$*" >> "$STUB_LOG"
 out=
 max=
+for last; do :; done
+for missing in $STUB_MISSING; do
+  case "$last" in */"$missing"/*) echo "curl: (22) The requested URL returned error: 404" >&2; exit 22 ;; esac
+done
 while [ $# -gt 0 ]; do
   if [ "$1" = "--output" ]; then out="$2"; fi
   if [ "$1" = "--max-filesize" ] && [ -z "$STUB_IGNORE_MAX" ]; then max="$2"; fi
@@ -169,6 +175,48 @@ class SetupVelnorInstallTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 1, result.output)
         self.assertIn("download is larger than 268435456 bytes", result.output)
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+        self.assertEqual(self.github_path.read_text(), "")
+
+    def test_the_tools_v_tag_is_tried_first_and_the_legacy_tag_is_not_touched_when_it_exists(self):
+        result = self.install(hashlib.sha256(PAYLOAD).hexdigest())
+        self.assertEqual(result.returncode, 0, result.output)
+        calls = self.curl_calls()
+        self.assertEqual(len(calls), 1, calls)
+        self.assertTrue(calls[0].endswith(RELEASE_URL), calls)
+
+    def test_a_release_with_only_the_legacy_rust_ci_v_tag_is_installed_after_the_tools_v_tag_is_missing(self):
+        result = self.install(
+            hashlib.sha256(PAYLOAD).hexdigest(), extra_env={"STUB_MISSING": "tools-v0.1.79"}
+        )
+        self.assertEqual(result.returncode, 0, result.output)
+        calls = self.curl_calls()
+        self.assertEqual(len(calls), 2, calls)
+        self.assertTrue(calls[0].endswith(RELEASE_URL), calls)
+        self.assertTrue(calls[1].endswith(LEGACY_RELEASE_URL), calls)
+        installed = self.tool_cache / "velnor-ci" / "0.1.79" / "x64" / "velnor-ci"
+        self.assertEqual(installed.read_bytes(), PAYLOAD)
+
+    def test_a_binary_from_the_legacy_tag_is_still_checked_against_the_pinned_sha256(self):
+        result = self.install(
+            hashlib.sha256(b"some other binary").hexdigest(),
+            extra_env={"STUB_MISSING": "tools-v0.1.79"},
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertIn("SHA-256 mismatch for velnor-ci 0.1.79 linux-x64", result.output)
+        self.assertEqual(installed_files(self.tool_cache), [], result.output)
+        self.assertEqual(self.github_path.read_text(), "")
+
+    def test_a_version_with_neither_tag_fails_naming_both(self):
+        result = self.install(
+            hashlib.sha256(PAYLOAD).hexdigest(),
+            extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"},
+        )
+        self.assertEqual(result.returncode, 1, result.output)
+        self.assertEqual(len(self.curl_calls()), 2, self.curl_calls())
+        self.assertIn("downloading velnor-ci 0.1.79 linux-x64 from the release tag", result.output)
+        self.assertIn("tools-v0.1.79", result.output)
+        self.assertIn("rust-ci-v0.1.79", result.output)
         self.assertEqual(installed_files(self.tool_cache), [], result.output)
         self.assertEqual(self.github_path.read_text(), "")
 
