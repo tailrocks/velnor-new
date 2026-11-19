@@ -181,6 +181,31 @@ impl Reason {
             _ => Ok(()),
         }
     }
+
+    fn fmt_inputs(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnmatchedExclude(glob) => {
+                write!(f, "exclude entry {glob} matches no tracked Cargo.toml")
+            }
+            Self::OverlappingRules { non_input, input } => write!(
+                f,
+                "non_inputs entry {non_input} overlaps inputs entry {input}; a path cannot select nothing and select packages"
+            ),
+            Self::UnknownInputPackage(package) => write!(
+                f,
+                "inputs names {package}, which is not a package of this repository"
+            ),
+            Self::AmbiguousNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which more than one test target declares"
+            ),
+            Self::UnknownNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which is not a test target with harness = false"
+            ),
+            _ => Ok(()),
+        }
+    }
 }
 
 impl fmt::Display for Reason {
@@ -198,26 +223,12 @@ impl fmt::Display for Reason {
                 min,
                 max,
             } => write!(f, "{key} must be between {min} and {max}, got {value}"),
-            Self::UnmatchedExclude(glob) => {
-                write!(f, "exclude entry {glob} matches no tracked Cargo.toml")
-            }
             Self::HelperLock(error) => error.fmt(f),
-            Self::OverlappingRules { non_input, input } => write!(
-                f,
-                "non_inputs entry {non_input} overlaps inputs entry {input}; a path cannot select nothing and select packages"
-            ),
-            Self::UnknownInputPackage(package) => write!(
-                f,
-                "inputs names {package}, which is not a package of this repository"
-            ),
-            Self::AmbiguousNextestHarness(entry) => write!(
-                f,
-                "nextest_harnesses names {entry}, which more than one test target declares"
-            ),
-            Self::UnknownNextestHarness(entry) => write!(
-                f,
-                "nextest_harnesses names {entry}, which is not a test target with harness = false"
-            ),
+            Self::UnmatchedExclude(_)
+            | Self::OverlappingRules { .. }
+            | Self::UnknownInputPackage(_)
+            | Self::AmbiguousNextestHarness(_)
+            | Self::UnknownNextestHarness(_) => self.fmt_inputs(f),
             Self::UntrackedManifest => f.write_str(
                 "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
             ),

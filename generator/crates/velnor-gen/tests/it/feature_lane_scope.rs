@@ -74,9 +74,10 @@ fn a_narrowed_run_without_a_lane_package_skips_the_lane_and_says_so() -> TestRes
 fn a_narrowed_run_with_a_lane_package_runs_the_lane_and_fails_without_tests() -> TestResult {
     let steps = lane_steps(LANE)?;
     let condition = text(&steps[0], "if")?;
-    for name in ["package-0"] {
-        assert!(condition.contains(&package(name)), "{name}: {condition}");
-    }
+    assert!(
+        condition.contains(&package("package-0")),
+        "package-0: {condition}"
+    );
     let run = text(&steps[0], "run")?;
     assert!(run.ends_with("--no-tests=fail"), "{run}");
     assert!(!run.contains("--no-tests=pass"), "{run}");
