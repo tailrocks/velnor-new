@@ -18,6 +18,11 @@ pub enum FamilyError {
     Unsupported {
         key: &'static str,
     },
+    AssetNameCollision {
+        first: String,
+        second: String,
+        file: String,
+    },
     NeedsFamilyTag {
         key: &'static str,
     },
@@ -54,6 +59,14 @@ impl fmt::Display for FamilyError {
             Self::BinaryReleasedByReleasePlz { package } => write!(
                 f,
                 ".velnor/release.toml: binary {package} is released by release-plz under its own tag; with family_tag set, give it a [[package]] with release = false in release-plz.toml so that the family tag is its only tag"
+            ),
+            Self::AssetNameCollision {
+                first,
+                second,
+                file,
+            } => write!(
+                f,
+                ".velnor/release.toml: with family_tag set, binaries {first} and {second} both publish the file {file:?} under one tag; give them different bin names or an asset_name that uses {{{{ bin }}}}"
             ),
             Self::Unsupported { key } => write!(
                 f,

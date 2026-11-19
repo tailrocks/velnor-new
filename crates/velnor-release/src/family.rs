@@ -5,6 +5,7 @@ use crate::asset_name::checked;
 use crate::bundle::check_targets;
 use crate::error::ReleaseError;
 use crate::error_family::FamilyError;
+use crate::family_assets::check_asset_names;
 use crate::family_options::FamilyTrigger;
 use crate::plan::{BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, manifest_of, plan_binaries};
 use crate::release_plz::RootConfig;
@@ -80,6 +81,7 @@ pub(crate) fn plan_family(
             tag_pattern: tag_pattern.clone(),
         });
     }
+    check_asset_names(&binaries)?;
     for configured in configs {
         let released = configured
             .packages
