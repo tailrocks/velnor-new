@@ -74,8 +74,10 @@ where
     T: Send + 'static,
     F: FnOnce() -> Result<T, HostError> + Send + 'static,
 {
-    let _ = deadline;
-    load()
+    match tokio::time::timeout_at(deadline, tokio::task::spawn_blocking(load)).await {
+        Ok(Ok(loaded)) => loaded,
+        Ok(Err(_)) | Err(_) => Err(HostError::Keychain),
+    }
 }
 
 fn parse_file(path: &str) -> Result<KeychainReference, HostError> {

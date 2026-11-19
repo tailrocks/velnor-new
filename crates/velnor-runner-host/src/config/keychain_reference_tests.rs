@@ -35,8 +35,8 @@ async fn the_controller_thread_keeps_running_while_a_credential_read_stalls() {
         Ok(())
     })
     .await;
-    let ticked = ticker.await.unwrap_or(STALL);
-    assert!(ticked < Duration::from_secs(1));
+    let elapsed = ticker.await.unwrap_or(STALL);
+    assert!(elapsed < Duration::from_secs(1));
 }
 
 #[tokio::test(flavor = "current_thread")]
