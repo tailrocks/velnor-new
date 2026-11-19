@@ -275,9 +275,8 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         && let Err(error) = super::delta_snapshot::record_inventory(&target)
     {
         super::delta_snapshot::forget_inventory(&target)?;
-        report.push_str(&format!(
-            "::notice::{error}; pull requests will read the whole restored base\n"
-        ));
+        report =
+            format!("{report}::notice::{error}; pull requests will read the whole restored base\n");
     }
     Ok(report)
 }

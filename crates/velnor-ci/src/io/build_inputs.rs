@@ -102,8 +102,12 @@ fn lossless(path: &Path) -> String {
     path.to_str().map_or_else(
         || {
             let bytes = std::os::unix::ffi::OsStrExt::as_bytes(path.as_os_str());
-            let hex: String = bytes.iter().map(|byte| format!("{byte:02x}")).collect();
-            format!("\0bytes:{hex}")
+            let mut text = String::from("\0bytes:");
+            for byte in bytes {
+                use std::fmt::Write as _;
+                let _ = write!(text, "{byte:02x}");
+            }
+            text
         },
         str::to_owned,
     )
