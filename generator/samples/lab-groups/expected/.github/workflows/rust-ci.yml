@@ -19,8 +19,11 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) }}'
+env:
+  MISE_AUTO_INSTALL: 'false'
+  RUSTUP_AUTO_INSTALL: '0'
 defaults:
   run:
     shell: 'bash -p {0}'
@@ -55,7 +58,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -75,7 +78,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -96,7 +99,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -115,11 +118,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -133,7 +136,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -177,9 +180,13 @@ jobs:
         run: '. "$VELNOR_EXEC" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || needs.rust-plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
@@ -208,18 +215,28 @@ jobs:
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p app '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p app --locked --message-format=json-render-diagnostics'
       - name: Check core alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p core '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p core --locked --message-format=json-render-diagnostics'
       - name: Check lib alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p lib '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p lib --locked --message-format=json-render-diagnostics'
       - name: Check macros alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p macros '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p macros --locked --message-format=json-render-diagnostics'
       - name: Check tool alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p tool '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p tool --locked --message-format=json-render-diagnostics'
       - id: report_cache_metrics
         name: Report cache telemetry
@@ -244,7 +261,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -268,7 +285,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -287,11 +304,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -305,7 +322,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -346,6 +363,8 @@ jobs:
         run: '. "$VELNOR_EXEC" plan --full'
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest archive --workspace --locked --cargo-message-format=json-render-diagnostics --archive-file ''nextest-archive.tar.zst'''
       - name: Upload the tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -356,6 +375,12 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           overwrite: true
+      - name: Doctests
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
+          DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
+        run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: '. "$VELNOR_EXEC" inputs save --target-dir target'
@@ -398,11 +423,6 @@ jobs:
         env:
           CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
-      - name: Doctests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
-        env:
-          DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
-        run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -427,7 +447,7 @@ jobs:
       - rust-plan
       - rust-inputs-audit
       - rust-test-root
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
       actions: read
       contents: read
@@ -451,7 +471,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -470,11 +490,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           cache: false
           install_args: 'aqua:nextest-rs/nextest/cargo-nextest'
       - name: Download the tests
@@ -511,7 +531,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -532,7 +552,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -551,11 +571,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         working-directory: lab
@@ -571,7 +591,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -619,10 +639,14 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/lab/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_lab_mode || needs.rust-plan.outputs.rust_lab_mode) != ''none'' && (steps.replan.outputs.rust_lab_docs || needs.rust-plan.outputs.rust_lab_docs) == ''run'' && (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args) != '''' }}'
         working-directory: lab
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/lab/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
@@ -653,6 +677,8 @@ jobs:
       - name: Check lab alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args)), '' -p lab '') || contains(format('' {0} '', (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args)), '' --workspace '')) }}'
         working-directory: lab
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/lab/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p lab --locked --message-format=json-render-diagnostics'
       - id: report_cache_metrics
         name: Report cache telemetry
@@ -677,7 +703,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -701,7 +727,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -720,11 +746,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         working-directory: lab
@@ -740,7 +766,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -784,6 +810,8 @@ jobs:
       - name: Build the tests
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/lab/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest archive --workspace --locked --cargo-message-format=json-render-diagnostics --archive-file ''nextest-archive.tar.zst'''
       - name: Upload the tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -861,7 +889,7 @@ jobs:
       - rust-plan
       - rust-inputs-audit
       - rust-test-lab
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'
     permissions:
       actions: read
       contents: read
@@ -885,7 +913,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -904,11 +932,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           cache: false
           install_args: 'aqua:nextest-rs/nextest/cargo-nextest'
       - name: Download the tests
@@ -961,7 +989,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -980,11 +1008,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -998,7 +1026,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -1064,10 +1092,14 @@ jobs:
         run: '. "$VELNOR_EXEC" plan --full'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: lab
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/lab/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: velnor-ci inputs audit
         run: '. "$VELNOR_EXEC" inputs audit'
@@ -1097,8 +1129,10 @@ jobs:
       - rust-test-root
       - rust-lint-lab
       - rust-test-lab
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (needs.rust-lint-root.outputs.base_save == ''true'' || needs.rust-test-root.outputs.base_save == ''true'' || (needs.rust-test-root.outputs.sources_saved == ''true'' || needs.rust-test-root.outputs.sources_key != '''') || needs.rust-lint-lab.outputs.base_save == ''true'' || needs.rust-test-lab.outputs.base_save == ''true'' || (needs.rust-test-lab.outputs.sources_saved == ''true'' || needs.rust-test-lab.outputs.sources_key != '''')) }}'
+      - rust-inputs-audit
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
     permissions:
+      pull-requests: read
       actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1108,7 +1142,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -1133,7 +1167,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-test-root sources entries
-        if: '${{ needs.rust-test-root.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-test-root.outputs.sources_prefix != '''' && (needs.rust-test-root.outputs.sources_saved == ''true'' || needs.rust-test-root.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-test-root.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1151,7 +1185,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-test-lab sources entries
-        if: '${{ needs.rust-test-lab.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-test-lab.outputs.sources_prefix != '''' && (needs.rust-test-lab.outputs.sources_saved == ''true'' || needs.rust-test-lab.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-test-lab.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1208,6 +1242,10 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-lint-root-target_key.outcome != ''failure'' && steps.verify-rust-test-root-target_key.outcome != ''failure'' && steps.verify-rust-test-root-sources_key.outcome != ''failure'' && steps.verify-rust-lint-lab-target_key.outcome != ''failure'' && steps.verify-rust-test-lab-target_key.outcome != ''failure'' && steps.verify-rust-test-lab-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+      - name: Enforce the repository cache budget
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
   required:
     name: Required
     needs:
@@ -1230,7 +1268,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386
@@ -1270,7 +1308,7 @@ jobs:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@1793cf84b5924e2542a03b0fb2580e7395b2f4cb  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: a82f2edacbd781debf2da851d3b3380e81fce9fdec216c1101ca5ce91afe7386

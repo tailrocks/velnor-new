@@ -149,6 +149,7 @@ fn workflow_request(
         version: version.to_owned(),
         hosted_label: hosted,
         scale_set,
+        scale_set_jobs: velnor_actions_contract::workflow::scale_set_control_jobs(config),
         workflows: execution.workflows.clone(),
         mbx_qualification,
         mise_pin_qualification,
@@ -157,5 +158,6 @@ fn workflow_request(
             .runner_image_family
             .as_ref()
             .and_then(|family| family.mac_qualification.clone()),
+        pr_ci: execution.pr_ci,
     })
 }

@@ -49,7 +49,11 @@ pub fn tagged_commits(
     Ok(lines)
 }
 
-fn tagged_commit(github: &dyn GitHub, repo: &Repo, tag: &PlainName) -> Result<String, CiError> {
+pub(crate) fn tagged_commit(
+    github: &dyn GitHub,
+    repo: &Repo,
+    tag: &PlainName,
+) -> Result<String, CiError> {
     let target: ApiTarget = parse(&github.get(&tag_ref_path(repo, tag.as_str()))?, "tag")?;
     let ApiObject { kind, sha } = target.object;
     match kind.as_str() {
@@ -72,7 +76,7 @@ fn not_a_commit(tag: &PlainName, kind: &str) -> CiError {
     CiError::new(format!("tag {tag} names a {kind}, not a commit"))
 }
 
-fn full_sha(what: &str, sha: &str) -> Result<String, CiError> {
+pub(crate) fn full_sha(what: &str, sha: &str) -> Result<String, CiError> {
     if sha.len() == 40
         && sha
             .bytes()
