@@ -70,8 +70,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::SaveToolsUnlessLocal
         | When::SaveToolsOnDefaultBranch => None,
     };
-    let advisory = (job.id == crate::plan::BUDGET_JOB).then_some(JobCondition::Advisory);
-    gate.into_iter().chain(when).chain(advisory).collect()
+    gate.into_iter().chain(when).collect()
 }
 
 pub(crate) fn spec(plan: JobId, jobs: &[Job]) -> VerdictSpec {

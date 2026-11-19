@@ -179,12 +179,12 @@ fn measure_population(budget: &SpeedBudget, history: &History, evaluation: &mut 
     let window = history.samples.len();
     let wall = median(history.samples.iter().map(|sample| sample.wall_seconds));
     let runner = median(history.samples.iter().map(|sample| sample.runner_seconds));
-    let setup = median(
-        history
-            .samples
-            .iter()
-            .filter_map(|sample| sample.setup_seconds),
-    );
+    let setup = history
+        .samples
+        .iter()
+        .map(|sample| sample.setup_seconds)
+        .collect::<Option<Vec<u64>>>()
+        .and_then(median);
     evaluation.medians.push(Medians {
         population: history.population,
         samples: window,
@@ -332,6 +332,22 @@ pub fn budget_text(budget: &SpeedBudget) -> String {
         });
     }
     parts.join(", ")
+}
+
+#[must_use]
+pub fn current_report(budget: &SpeedBudget, wall_seconds: u64, runner_seconds: u64) -> String {
+    let limit = |seconds: u64| {
+        if seconds == 0 {
+            "off".to_owned()
+        } else {
+            format!("{seconds}s")
+        }
+    };
+    format!(
+        "this run so far: wall {wall_seconds}s (default branch budget {}), runner {runner_seconds}s (budget {})\n",
+        limit(budget.main_wall_seconds),
+        limit(budget.runner_seconds)
+    )
 }
 
 #[must_use]

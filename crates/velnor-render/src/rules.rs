@@ -101,6 +101,7 @@ pub struct RenderedContainer {
 pub struct RenderedJob {
     pub id: String,
     pub name: Option<String>,
+    pub check_name: Option<String>,
     pub comment: Option<String>,
     pub needs: Vec<String>,
     pub condition: Option<String>,

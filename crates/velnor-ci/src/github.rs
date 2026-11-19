@@ -327,6 +327,22 @@ pub fn job_log_path(repo: &Repo, job_id: u64) -> String {
 }
 
 #[must_use]
+pub fn event_runs_path(
+    repo: &Repo,
+    workflow_file: &str,
+    event: &str,
+    branch: Option<&str>,
+    page: u32,
+) -> String {
+    let branch = branch.map_or_else(String::new, |branch| format!("&branch={}", encode(branch)));
+    format!(
+        "/repos/{repo}/actions/workflows/{}/runs?status=success&event={}{branch}&per_page=100&page={page}",
+        encode(workflow_file),
+        encode(event)
+    )
+}
+
+#[must_use]
 pub fn workflow_runs_path(repo: &Repo, workflow_file: &str, page: u32) -> String {
     format!(
         "/repos/{repo}/actions/workflows/{}/runs?status=success&per_page=100&page={page}",

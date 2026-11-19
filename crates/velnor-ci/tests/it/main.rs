@@ -10,6 +10,7 @@ mod audit;
 mod base_expiry;
 mod bench_compare;
 mod budget;
+mod budget_history;
 mod cache;
 mod cache_budget;
 mod cache_flow;

@@ -85,10 +85,20 @@ fn fetch_jobs(
     run_id: u64,
     attempt: u32,
 ) -> Result<Vec<ApiJob>, CiError> {
+    all_jobs(github, run_id, |page| {
+        jobs_path(repo, run_id, attempt, page)
+    })
+}
+
+pub(crate) fn all_jobs(
+    github: &dyn GitHub,
+    run_id: u64,
+    path: impl Fn(u32) -> String,
+) -> Result<Vec<ApiJob>, CiError> {
     let mut all = Vec::new();
     let mut page = 1;
     loop {
-        let body = github.get(&jobs_path(repo, run_id, attempt, page))?;
+        let body = github.get(&path(page))?;
         let ApiJobs { total_count, jobs } = parse(&body, "jobs")?;
         let empty = jobs.is_empty();
         all.extend(jobs);

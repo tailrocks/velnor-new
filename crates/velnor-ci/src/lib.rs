@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod budget;
+pub mod budget_history;
 pub mod cache;
 pub mod cargo_artifacts;
 pub mod cargo_package;
