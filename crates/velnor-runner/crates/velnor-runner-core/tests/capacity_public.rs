@@ -4,19 +4,17 @@
 use std::sync::{Arc, Mutex};
 use std::thread;
 
-use velnor_runner_core::{
-    Capacity, CleanupProof, Epoch, OwnedIds, StateError, WorkerId, WorkerState,
-};
+use velnor_runner_core::{Capacity, CleanupProof, Epoch, OwnedIds, StateError, WorkerState};
 
 #[cfg(test)]
 mod ids {
     use velnor_runner_core::{AcquireIntentId, WorkerId};
 
-    pub fn worker(raw: u64) -> WorkerId {
+    pub(crate) fn worker(raw: u64) -> WorkerId {
         WorkerId::new(raw).expect("nonzero worker")
     }
 
-    pub fn intent(raw: u64) -> AcquireIntentId {
+    pub(crate) fn intent(raw: u64) -> AcquireIntentId {
         AcquireIntentId::new(raw).expect("nonzero intent")
     }
 }
