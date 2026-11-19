@@ -19,7 +19,7 @@ use crate::lane::{
     Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
 };
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
-use crate::required_job::{expose_in_single, gate_outputs, has_gate};
+use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
 use crate::shape::decide_shape;
@@ -36,7 +36,6 @@ pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
 const BUDGET_RUNS: usize = 10;
 const BUDGET_TIMEOUT_MINUTES: u16 = 10;
-const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
 const IGNORED_COUNT_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 #[must_use]
@@ -76,19 +75,14 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     jobs.extend(crate::lint_jobs::lint_jobs(facts));
     let draft_guard = draft_guard(facts);
-    let gate = has_gate(facts);
     if single {
-        if gate {
-            expose_in_single(&mut jobs);
-        }
+        expose_in_single(&mut jobs);
         expose_read_outputs(&mut jobs, &RUST_JOB);
     } else {
         let mut used = used_outputs(&jobs);
-        if gate {
-            used.extend(gate_outputs(&jobs));
-            used.sort();
-            used.dedup();
-        }
+        used.extend(gate_outputs(&jobs));
+        used.sort();
+        used.dedup();
         jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
     }
     if let Some(root) = helper_root {
@@ -340,9 +334,7 @@ pub(crate) fn setup_roots(
             host: Host,
         })));
     }
-    if breaks_ties(facts) {
-        toolchain.extend(restore_file_times(roots));
-    }
+    toolchain.extend(restore_file_times(roots));
     toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
@@ -374,13 +366,6 @@ fn add_mbx_remote(jobs: &mut [Job]) {
             job.steps.insert(at + 1, cache);
         }
     }
-}
-
-fn breaks_ties(facts: &RepoFacts) -> bool {
-    facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least(TIE_BREAKING_HELPER))
 }
 
 fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {

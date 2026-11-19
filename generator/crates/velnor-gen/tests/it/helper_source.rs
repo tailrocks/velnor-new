@@ -187,9 +187,7 @@ fn a_single_root_with_the_helper_key_still_plans_in_a_job_with_the_released_help
     view.tracked_paths.insert(path(".velnor/rust-ci.lock")?);
     view.files.insert(
         path(".velnor/rust-ci.lock")?,
-        String::from_utf8(HELPER_LOCK.to_vec())?
-            .replace("0.1.79", "0.1.81")
-            .into_bytes(),
+        String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes(),
     );
     view.tracked_paths.insert(CONFIG_PATH);
     view.files.insert(
@@ -284,33 +282,16 @@ fn the_helper_key_takes_a_table_with_a_path_and_nothing_else() -> TestResult {
 }
 
 #[test]
-fn helper_source_requires_a_released_helper_with_restoration_and_tie_breaking() -> TestResult {
+fn helper_source_requires_a_pinned_helper() -> TestResult {
     let mut view = sample(None)?;
     let lock = path(".velnor/rust-ci.lock")?;
     let released = String::from_utf8(view.files.get(&lock).ok_or("no lock")?.clone())?;
-    for candidate in [None, Some(released.replace("0.1.81", "0.1.80"))] {
-        view.files.remove(&lock);
-        if let Some(candidate) = candidate {
-            view.files.insert(lock.clone(), candidate.into_bytes());
-        }
-        let error = expected_files(&view)
-            .err()
-            .ok_or("accepted helper.path without 0.1.81")?;
-        let message = error.to_string();
-        assert!(message.contains("helper.path"), "{message}");
-        assert!(message.contains("0.1.81"), "{message}");
-        assert!(message.contains("pin-helper"), "{message}");
-    }
+    view.files.remove(&lock);
+    let error = expected_files(&view)
+        .err()
+        .ok_or("accepted helper.path without a pinned helper")?;
+    assert!(error.to_string().contains("pin-helper"), "{error}");
     view.files.insert(lock, released.into_bytes());
-    assert!(expected_files(&view).is_ok());
-    view.files.insert(
-        CONFIG_PATH,
-        b"exclude = [\"fixtures/**\"]\nfull_run = \"off\"\n".to_vec(),
-    );
-    let lock = path(".velnor/rust-ci.lock")?;
-    let released = String::from_utf8(view.files.get(&lock).ok_or("no lock")?.clone())?;
-    view.files
-        .insert(lock, released.replace("0.1.81", "0.1.80").into_bytes());
     assert!(expected_files(&view).is_ok());
     Ok(())
 }

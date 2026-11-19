@@ -3,7 +3,6 @@
 
 use std::error::Error;
 
-use velnor_gen::expected_with_notes;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 use velnor_rust::LOCK_PATH;
 
@@ -19,7 +18,7 @@ const APP_SLUG: &str = "velnor-release";
 fn render_with(helper: &str, roots: &[Root], config: &str) -> Result<Node, Box<dyn Error>> {
     let mut view = release_view(roots, Some(config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", helper).into_bytes());
     let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
@@ -125,40 +124,6 @@ fn packages_with_a_binaries_entry_are_not_finalized() -> TestResult {
         job(&mixed, "tag")?.get("outputs").map(Node::keys),
         Some(vec!["tools", "app", "tools_commit"])
     );
-    Ok(())
-}
-
-#[test]
-fn a_helper_that_cannot_publish_an_assetless_release_gets_no_finalizer() -> TestResult {
-    let version = "0.1.80";
-    let tree = render_with(version, &[APP], "roots = [\".\"]\n")?;
-    assert!(tree.at(&["jobs", "finalize"]).is_none(), "{version}");
-    assert!(job(&tree, "tag")?.get("outputs").is_none(), "{version}");
-    Ok(())
-}
-
-fn notes_with(helper: &str, config: &str) -> Result<Vec<String>, Box<dyn Error>> {
-    let mut view = release_view(&[APP], Some(config))?;
-    view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
-    Ok(expected_with_notes(&view)?.1)
-}
-
-#[test]
-fn an_old_helper_with_an_assetless_package_warns_naming_the_version_to_pin() -> TestResult {
-    let version = "0.1.80";
-    let notes = notes_with(version, "roots = [\".\"]\n")?;
-    assert_eq!(notes.len(), 1, "{version}: {notes:?}");
-    assert!(notes[0].starts_with("WARNING: "), "{notes:?}");
-    assert!(notes[0].contains(version), "{notes:?}");
-    assert!(notes[0].contains("app"), "{notes:?}");
-    assert!(notes[0].contains("0.1.81"), "{notes:?}");
-    assert_eq!(
-        notes_with("0.1.81", "roots = [\".\"]\n")?,
-        Vec::<String>::new()
-    );
-    let binary = "roots = [\".\"]\n[[binaries]]\npackage = \"app\"\n";
-    assert_eq!(notes_with("0.1.80", binary)?, Vec::<String>::new());
     Ok(())
 }
 

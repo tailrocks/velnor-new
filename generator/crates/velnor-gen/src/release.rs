@@ -10,10 +10,10 @@ use velnor_model::{
 use velnor_release::{
     ReleaseFiles, ReleasePlan, check_publish_budget, ruleset_drift, ruleset_json,
 };
-use velnor_render::{Owner, owner_of, render_release, unfinalized_without_binary};
+use velnor_render::{Owner, owner_of, render_release};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
-use crate::{GenerateError, RELEASE_HELPER_MINIMUM};
+use crate::GenerateError;
 
 pub(crate) fn release_workflow(
     view: &RepoView,
@@ -23,9 +23,6 @@ pub(crate) fn release_workflow(
 ) -> Result<(BTreeMap<RepoPath, String>, Vec<String>), GenerateError> {
     if !view.files.contains_key(&RELEASE_CONFIG_PATH) {
         return Ok((BTreeMap::new(), Vec::new()));
-    }
-    if !helper.version().at_least(RELEASE_HELPER_MINIMUM) {
-        return Err(GenerateError::ReleaseHelperTooOld(helper.version().clone()));
     }
     if facts
         .toolchain
@@ -61,19 +58,9 @@ pub(crate) fn release_workflow(
             reject_release_credential_hooks(view, &detected.manifest)?;
         }
     }
-    let unfinalized = unfinalized_without_binary(&plan, helper);
-    let notes = if unfinalized.is_empty() {
-        Vec::new()
-    } else {
-        vec![format!(
-            "WARNING: helper {} cannot publish the draft release of {}, which has no [[binaries]] entry, so that release stays a draft; pin velnor-ci 0.1.81 or newer",
-            helper.version(),
-            unfinalized.into_iter().collect::<Vec<_>>().join(", ")
-        )]
-    };
     let files = render_release(&plan, helper, &facts.config.default_branch)
         .map_err(GenerateError::Rules)?;
-    Ok((files, notes))
+    Ok((files, Vec::new()))
 }
 
 fn read_plan(files: &ReleaseFiles) -> Result<ReleasePlan, GenerateError> {

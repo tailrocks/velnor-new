@@ -29,7 +29,7 @@ use velnor_rust::{
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
-pub const RELEASE_HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 80);
+pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
 pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
@@ -112,12 +112,8 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         .as_ref()
         .ok_or(GenerateError::HelperNotPinned)?;
     require_compatible(release.version())?;
-    if (facts.config.on_main == OnMain::Everything || facts.config.full_run != FullRun::Off)
-        && !release.version().at_least((0, 1, 81))
-    {
-        return Err(GenerateError::InputsBuildHelperTooOld(
-            release.version().clone(),
-        ));
+    if !release.version().at_least(HELPER_MINIMUM) {
+        return Err(GenerateError::HelperTooOld(release.version().clone()));
     }
     if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 82)) {
         return Err(GenerateError::TestGroupsHelperTooOld(

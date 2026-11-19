@@ -82,7 +82,6 @@ pub enum Reason {
     BuildExecutable,
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
-    HelperSourceRelease,
     MbxRemotePrivate(String),
     CargoCredentialProvider(String),
     LockedUrlCredentials(String),
@@ -187,9 +186,6 @@ impl Reason {
             ),
             Self::PrCiWithSkipDraft => f.write_str(
                 "pr_ci = \"label\" and skip_draft_pull_requests = true both decide what a draft pull request runs; remove skip_draft_pull_requests, because pr_ci = \"label\" already runs nothing on a draft",
-            ),
-            Self::HelperSourceRelease => f.write_str(
-                "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
             ),
             Self::MbxRemotePrivate(cause) => write!(
                 f,
@@ -305,7 +301,6 @@ impl fmt::Display for Reason {
             ),
             Self::UnpinnedTool(_)
             | Self::HelperBox(_)
-            | Self::HelperSourceRelease
             | Self::MbxRemotePrivate(_)
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
