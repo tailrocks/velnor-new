@@ -16,7 +16,7 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{
-    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, RepoFacts, RepoPath, RepoView,
+    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, RepoFacts, RepoPath, RepoView,
 };
 use velnor_render::render;
 use velnor_rust::{
@@ -107,6 +107,9 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
         return Err(GenerateError::InputsBuildHelperTooOld(
             release.version().clone(),
         ));
+    }
+    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
+        return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
     }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
