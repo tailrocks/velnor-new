@@ -1,0 +1,24 @@
+fn root_identity_comparison_accepts_sibling_churn_only_for_nonfinal_ancestors()
+-> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+
+    let parent = File::open(temp.path())?;
+    let nonfinal = File::open(&nonfinal_path)?;
+    let nonfinal_before = ufs::fstat(&nonfinal)?;
+    fs::create_dir(nonfinal_path.join("sibling"))?;
+    let nonfinal_after = ufs::statat(&parent, c"nonfinal", AtFlags::SYMLINK_NOFOLLOW)?;
+    assert!(
+        root_identity_matches(&nonfinal_before, &nonfinal_after, false),
+        "nonfinal ancestor rejected unrelated sibling churn"
+    let final_after = ufs::statat(&parent, c"final", AtFlags::SYMLINK_NOFOLLOW)?;
+    assert!(
+        !root_identity_matches(&final_before, &final_after, true),
+        "final checkout root accepted sibling churn"
+    let ancestor_after = ufs::statat(&parent, c"ancestor", AtFlags::SYMLINK_NOFOLLOW)?;
+    assert!(
+        !root_identity_matches(&ancestor_before, &ancestor_after, false),
+        "nonfinal ancestor replacement retained its identity"
+    let chmod_after = ufs::statat(&parent, c"chmod", AtFlags::SYMLINK_NOFOLLOW)?;
+    assert!(
+        !root_identity_matches(&chmod_before, &chmod_after, false),
+        "nonfinal ancestor accepted a mode change"

@@ -7,7 +7,7 @@ set -euo pipefail
 
 readonly image='velnor-resource-probe:linux-amd64'
 readonly archive='velnor-resource-probe-linux-amd64.tar'
-readonly target_dir="${CARGO_TARGET_DIR:-crates/velnor-runner/target}"
+readonly target_dir="${CARGO_TARGET_DIR:-target}"
 readonly source_sha="${VELNOR_SOURCE_SHA:?missing exact source SHA}"
 readonly authority_sha="${VELNOR_WORKFLOW_AUTHORITY_SHA:?missing workflow authority SHA}"
 
@@ -55,9 +55,9 @@ if docker image inspect --platform linux/amd64 velnor-runner:linux-amd64 >/dev/n
   && docker image inspect --platform linux/amd64 velnor-dind:linux-amd64 >/dev/null 2>&1; then
   if [[ ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-storage-init" || ! -x "$target_dir/x86_64-unknown-linux-musl/release/velnor-job-start-hook" ]]; then
     if [[ -n "${VELNOR_TOOL_RUST-}" ]] && command -v mise >/dev/null 2>&1; then
-      mise --no-config --no-env --no-hooks exec "rust@${VELNOR_TOOL_RUST}" -- cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+      mise --no-config --no-env --no-hooks exec "rust@${VELNOR_TOOL_RUST}" -- cargo build --manifest-path Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
     else
-      cargo build --manifest-path crates/velnor-runner/Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
+      cargo build --manifest-path Cargo.toml --locked --release --target x86_64-unknown-linux-musl -p velnor-resource-probe --bin velnor-storage-init --bin velnor-job-start-hook
     fi
   fi
   stage_root="$workdir/stages"

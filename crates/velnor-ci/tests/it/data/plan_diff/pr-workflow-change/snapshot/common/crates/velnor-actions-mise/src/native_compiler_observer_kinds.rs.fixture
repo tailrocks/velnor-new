@@ -1,0 +1,4 @@
+    if value.is_empty() || value.contains('\0') || value.contains("..") {
+        return Err(reject(field, value));
+    }
+    Ok(())

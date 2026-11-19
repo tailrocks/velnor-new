@@ -1,0 +1,5 @@
+const OUTPUT: &[u8] = include_bytes!("fixtures/reusable_attestation/gh-output.json");
+const SUBJECT: &[u8] = include_bytes!("fixtures/reusable_attestation/subject.json");
+const REVISION: &str = "ff0f3ce3e7f87c172dbfc3b4ff9640f82c5a6905";
+
+fn expected() -> ReusableAttestationBinding {

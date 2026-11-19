@@ -1,0 +1,17 @@
+#[path = "homebrew_authority/context.rs"]
+mod context;
+pub(crate) use context::verify_merge_group_checkout;
+#[cfg(test)]
+#[path = "homebrew_authority/source.rs"]
+mod source;
+use source::{SourceProjection, load_source_projection, protected_locator};
+#[path = "homebrew_authority/applicability.rs"]
+mod applicability;
+#[path = "homebrew_authority/cutover.rs"]
+mod cutover;
+pub(crate) use cutover::load_cutover_replay_authority;
+
+            .all(|part| !part.is_empty() && part != "." && part != "..")
+}
+
+fn admit_pull_request_context(

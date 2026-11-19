@@ -1,0 +1,20 @@
+            .current_dir(root.path())
+            .status()?
+            .success()
+    );
+            .current_dir(root.path())
+            .status()?
+            .success()
+    );
+        .current_dir(root.path())
+        .output()?;
+    assert!(output.status.success());
+    let known: BTreeSet<String> = output
+        "nested/../nested/member/Cargo.toml"
+    ));
+    assert!(!tracked_manifest_in_source(
+        root.path(),
+        .current_dir(&real)
+        .output()?;
+    assert!(output.status.success());
+    let json = String::from_utf8(output.stdout)?;

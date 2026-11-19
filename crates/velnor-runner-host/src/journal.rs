@@ -1,0 +1,118 @@
+// SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+// SPDX-License-Identifier: Apache-2.0
+
+pub(crate) mod capacity_header;
+#[path = "journal_completion.rs"]
+mod completion;
+mod connection;
+mod doctor_probe;
+pub(crate) mod execution_authorization;
+mod file_identity;
+mod unbound_observation;
+mod unbound_ownership;
+pub(crate) use crate::launch::bootstrap::UnboundCreationObservation;
+pub(crate) mod header_authority;
+mod image_import;
+mod launch;
+pub(crate) mod pr_source_transition;
+mod read;
+pub(in crate::journal) mod request_lifecycle;
+#[cfg(test)]
+pub(crate) use request_lifecycle::RunnerJitClaim;
+
+mod resource_probe;
+mod scale_set_create;
+mod schema;
+mod session_refresh;
+mod source_authorization;
+mod sql;
+#[cfg(test)]
+mod test_template;
+mod transaction;
+mod worker_volume;
+
+use sql::{intent_row, one_row, same_ids, token_rejected};
+
+#[path = "journal/file_backed.rs"]
+mod file_backed;
+use file_backed::live_id;
+pub use file_backed::{IntentState, Journal, Outcome};
+
+pub(crate) use capacity_header::{HeaderAllocation, HeaderDeleteAttempt, HeaderPollAttempt};
+pub(crate) use completion::{
+    CleanupClaim, CompletedLaunch, CompletionIdentity, MAX_COMPLETION_BODY_BYTES,
+    MAX_COMPLETION_INBOX_SCAN,
+};
+pub(crate) use connection::JitConflictRecoveryClaim;
+pub(crate) use connection::JobFactsPublicationClaim;
+pub(crate) use connection::ListenerDeliveryClaim;
+pub(crate) use connection::NativeCompletionReservation;
+pub(crate) use connection::PreJitCleanupSettlementResult;
+pub(crate) use connection::TerminalReplayBinding;
+#[cfg(test)]
+pub(crate) use connection::reservation_release_ready;
+pub(crate) use connection::{
+    LocalWorkerExitDisposition, LocalWorkerExitKind, LocalWorkerExitObservation,
+    LocalWorkerHealthCandidate,
+};
+pub(crate) use connection::{
+    PhysicalRunnerJitState, PhysicalRunnerOwnership, PhysicalRunnerReservation,
+    ReadinessCapacityUsage, ReservationState,
+};
+pub(crate) use connection::{
+    PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
+};
+pub(crate) use connection::{
+    ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode, ScaleSetDeleteRecord,
+    ScaleSetDeleteTarget, ScaleSetDeleted,
+};
+pub(crate) use connection::{
+    UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
+    UnboundRetirementPhase,
+};
+
+pub(crate) use connection::{
+    AssignmentIdentity, AssignmentKey, BootstrapContainerCreateClaim, BootstrapStartClaim,
+    BoundJobFactsSnapshot, CapacityLimits, ConnectionCompletionInboxEntry, ConnectionJournal,
+    CreateInterruptionOutcome, EngineContext, MetadataSettlementResult, OperationalCapacityLimits,
+    PhysicalSuccessorReservationResult, PreJitBootstrapContainer, PreJitCapacityProbeClaim,
+    PreJitCleanupClaim, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
+    PreJitNetworkIdentity, PreJitStorageObject, RecordedStorageNetwork,
+    RequestPhysicalReservationResult, ReservationRequest, SessionCreateState, SessionRefreshClaim,
+    SourceAuthorizationBinding, StorageAdmissionSample, StorageCleanupIdentity,
+    StorageCleanupObserverWitness, StorageFilesystemKind, StorageInitializationClaim,
+    StorageInodePolicy, StorageMedium, StorageMetadataSettlementClaim, StorageNetworkCreateClaim,
+    StorageNetworkRecoveryIdentity, StorageNetworkRemovalClaim, StorageObjectCreateClaim,
+    StorageObserver, StoragePoolLimit, StoragePoolObservation, StoragePoolObservationInput,
+    StorageProfile, StorageProvisioningAdmission, StorageProvisioningMemoryObservation,
+    StorageProvisioningPlan, StorageProvisioningRole, StorageRole, StorageRoleLimit,
+    StorageSampleIdentity, VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
+};
+
+pub(crate) use doctor_probe::{
+    DoctorProbeOutcome, DoctorProbePrepareResult, DoctorProbeStartResult, DoctorProbeState,
+    DoctorProbeTicket,
+};
+pub(crate) use image_import::registry::{
+    RegistryImageIdentity, RegistryImageInspection, RegistryImageObservation, RegistryImageRecord,
+};
+pub(crate) use image_import::{
+    ImageImportIdentity, ImageImportObservation, ImageImportRequest, ImageImportState,
+};
+pub(crate) use scale_set_create::{
+    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim,
+    ScaleSetCreateNoEffect, ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
+};
+pub(crate) use source_authorization::AssignedAcquireResult;
+pub(crate) use source_authorization::SourceAuthorizationResult;
+
+pub(crate) use request_lifecycle::{
+    AcquiredRecoveryCandidate, AuthorizedOffer, RequestAcquireState,
+};
+
+pub(crate) use resource_probe::capacity_request_sha256;
+pub(crate) use resource_probe::{
+    ExecutionPublicationContext, ExecutionPublicationParent, ExecutionPublicationRecoveryRecord,
+    ExecutionPublicationSeed, HostHelperRole, PreparedCleanupObserverProbe, ProbePhase, ProbeRow,
+    ProbeSeed, ProbeWork, PublicationKind, ResourceProbePurpose,
+};

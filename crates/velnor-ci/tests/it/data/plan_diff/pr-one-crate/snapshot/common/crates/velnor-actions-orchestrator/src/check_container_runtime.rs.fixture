@@ -1,0 +1,29 @@
+#[path = "check_container_runtime_context.rs"]
+mod context;
+#[path = "check_container_runtime_inventory.rs"]
+mod inventory;
+#[path = "check_container_runtime_socket_paths.rs"]
+mod socket_paths;
+use context::{context_config_bytes, context_metadata_bytes, validate_owned_context};
+pub(crate) use inventory::{RuntimeObservation, RuntimeRootEvidence, SocketEvidence};
+            if socket_path.parent() != Some(directory.as_path()) {
+                return Err(internal("orbstack_socket_parent"));
+            }
+            let link = home.join(".orbstack").join("run");
+            let parent = link
+                .parent()
+                .ok_or_else(|| internal("orbstack_runtime_link_parent"))?;
+            check_ancestors(parent)?;
+            require_directory(parent, "orbstack_runtime_link_parent")?;
+            let target = fs::read_link(link).map_err(|e| io(link, e))?;
+            if target != *directory {
+                return Err(internal("orbstack_runtime_link_changed"));
+    check_ancestors(path)?;
+    let canonical = path.canonicalize().map_err(|e| io(path, e))?;
+    if canonical != path {
+        return Err(internal(&format!("{field}_not_canonical")));
+fn check_ancestors(path: &Path) -> Result<(), OrchestratorError> {
+    for ancestor in path.ancestors() {
+        let metadata = fs::symlink_metadata(ancestor).map_err(|e| io(ancestor, e))?;
+        if metadata.file_type().is_symlink() {
+            return Err(internal("container_path_symlink_ancestor"));

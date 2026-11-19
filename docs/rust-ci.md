@@ -19,7 +19,7 @@ The first step of a run is `velnor-ci plan`. It lists the changed files, finds t
 
 ### One job by default
 
-The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots and test groups only. A second job costs start-up time, so the generator adds one only when it pays (`generator/crates/velnor-rust/src/shape.rs`).
+The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots and test groups only. A second job costs start-up time, so the generator adds one only when it pays (`crates/velnor-rust/src/shape.rs`).
 
 | `shape` | Jobs | Chosen when |
 |---|---|---|
@@ -48,7 +48,7 @@ The tests are built once and handed on as a nextest archive. `rust-test-default`
 
 ## Caches
 
-Three families hold the work between runs. Each key is built from one typed value in `generator/crates/velnor-model/src/cache.rs`, never from a hand-written string.
+Three families hold the work between runs. Each key is built from one typed value in `crates/velnor-model/src/cache.rs`, never from a hand-written string.
 
 | Family | Key holds | Restored from | Saved by |
 |---|---|---|---|
@@ -65,6 +65,8 @@ Three families hold the work between runs. Each key is built from one typed valu
 - On the default branch, a restored Target older than seven days is dropped. The run builds cold and selects everything.
 
 **What can write.** Only `push`, `schedule` and `workflow_dispatch` runs on the default branch save a cache. A pull request, a merge queue run and a fork pull request only restore. A save needs at least one compiled, checked or documented crate, and incremental directories are removed first. When `Cargo.lock` holds a dependency that is not proven public, no Target or Sources entry is saved. The two newest entries of a group are kept. `Cache maintenance` keeps the repository under `cache_budget_bytes` (default and maximum 8 GB of GitHub's 10 GB).
+
+**PR delta cache (helper 0.1.95 or later).** A pull request from this repository restores the Target entry, then a small per-pull-request delta layer (`velnor-dlt-` keys) on top of it. After the last compiling step the lane stages what the pull request changed in `target.velnor-delta` and saves it, so the next push to the same pull request starts from that work instead of the default branch's Target. A `Rust CI` cleanup workflow trims the deltas of a finished pull request. The lanes get these steps only when the lock pins `velnor-ci` 0.1.95 or later. An older helper (0.1.81 to 0.1.94) is not refused: the generator silently leaves the delta steps out and the output is what it was without the layer.
 
 **MBX store.** MBX (Mr. Boxington) is a cargo wrapper that a project pins in `mise.toml`; it keeps a store of compiler results. Two settings feed that store:
 
@@ -140,7 +142,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
-| `crates_mirror` | none | a crates mirror for a self-hosted runner |
+| `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93) |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `fork_runner` | `"ubuntu-latest"` | the hosted runner for fork pull requests when `runner` is self-hosted |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |

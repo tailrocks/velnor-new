@@ -1,0 +1,4 @@
+        let script = concat!(
+            "(touch \"$1\"; attempt=0; while [ \"$attempt\" -lt 400 ]; do ",
+            "[ -f \"$2\" ] && break; sleep 0.01; attempt=$((attempt + 1)); ",
+            "done; [ -f \"$2\" ] || exit 1; touch \"$3\") & ",

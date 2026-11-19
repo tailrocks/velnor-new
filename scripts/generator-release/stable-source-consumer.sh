@@ -35,7 +35,5 @@ rm -rf -- "$stage"
 mkdir -p "$RUNNER_TEMP/source-qualification-artifacts/logs"
 export VELNOR_SOURCE_ARTIFACT_ADMITTED="$admitted"
 bash scripts/generator-release/source-qualification.sh prefetch-locked-sources-for-qualification-workspaces
-for manifest in Cargo.toml crates/velnor-runner/Cargo.toml; do
-  mise --no-config --no-env --no-hooks exec "rust@$VELNOR_RUST_VERSION" -- cargo metadata --locked --offline --all-features --format-version=1 --manifest-path "$GITHUB_WORKSPACE/$manifest" > /dev/null
-done
+mise --no-config --no-env --no-hooks exec "rust@$VELNOR_RUST_VERSION" -- cargo metadata --locked --offline --all-features --format-version=1 --manifest-path "$GITHUB_WORKSPACE/Cargo.toml" > /dev/null
 printf 'CARGO_HOME=%s\n' "$CARGO_HOME" >> "$GITHUB_ENV"

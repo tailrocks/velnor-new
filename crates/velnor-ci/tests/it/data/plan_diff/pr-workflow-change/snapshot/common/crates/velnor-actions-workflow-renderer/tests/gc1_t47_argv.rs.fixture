@@ -1,0 +1,28 @@
+            "include_str!(\"job_image_authority_identity.py\")",
+        ),
+        (
+            "registry fragment",
+            "include_str!(\"job_image_authority_registry.py\")",
+        ),
+        (
+            "publication fragment",
+            "include_str!(\"job_image_authority_publish.py\")",
+        ),
+        (
+            "record fragment",
+            "include_str!(\"job_image_authority_record.py\")",
+        ),
+        (
+            "oci fragment",
+            "include_str!(\"job_image_authority_oci.py\")",
+        ),
+        (
+            "tar fragment",
+            "include_str!(\"job_image_authority_tar.py\")",
+        ),
+    ] {
+        require(AUTHORITY_MODULE, fragment, name)?;
+    require_count(AUTHORITY_MODULE, "include_str!", 6, "authority body")?;
+    require(AUTHORITY_MODULE, "fn materialize_step()", "authority body")?;
+    for marker in [
+        "Materialize fixed image authority implementation",

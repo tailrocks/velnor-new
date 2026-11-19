@@ -1,0 +1,18 @@
+const RECORD_SOURCE: &str = include_str!("../src/job_image_authority_record.py");
+const OCI_SOURCE: &str = include_str!("../src/job_image_authority_oci.py");
+const TAR_SOURCE: &str = include_str!("../src/job_image_authority_tar.py");
+
+const RECORD_FILE: &str = "job_image_authority_record.py";
+const OCI_FILE: &str = "job_image_authority_oci.py";
+#[path = "gc1_t45_accept.rs"]
+mod gc1_t45_accept;
+#[path = "gc1_t45_archive.rs"]
+mod gc1_t45_archive;
+#[path = "gc1_t45_inputs.rs"]
+mod gc1_t45_inputs;
+#[path = "gc1_t45_reject_a.rs"]
+mod gc1_t45_reject_a;
+#[path = "gc1_t45_reject_b.rs"]
+mod gc1_t45_reject_b;
+pub(crate) use gc1_t45_accept::*;
+pub(crate) use gc1_t45_archive::*;

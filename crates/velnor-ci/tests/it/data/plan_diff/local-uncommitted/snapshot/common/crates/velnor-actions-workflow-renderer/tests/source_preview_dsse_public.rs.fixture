@@ -1,0 +1,4 @@
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let output =
+        Command::new("python3")
+            .env("PYTHONDONTWRITEBYTECODE", "1")

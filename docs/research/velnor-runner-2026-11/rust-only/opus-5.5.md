@@ -71,7 +71,7 @@ queue, a download or a cold cache. Section 9 takes each remaining term to its fl
 ## 2b. Duplicate-work audit
 
 I read every workflow in `.github/workflows/`, velnor-gen's release renderer
-(`generator/crates/velnor-render/src/release_binaries.rs`) and its samples, and the `ci-helper` gate.
+(`crates/velnor-render/src/release_binaries.rs`) and its samples, and the `ci-helper` gate.
 Costs are runner-minutes (job wall time) [M] unless marked: §A of the evidence, my earlier 10-run
 samples, and 8-run job reads made this round for the release, source-preview and state seal workflows.
 A design "sandbox-minute" is the same unit: the wall time a sandbox exists.
@@ -121,7 +121,7 @@ The design keeps two duplicates on purpose. **The twin** (row 12) costs zero wal
 about 0.5 sandbox-min per verification, because it repeats only the changed obligations. **The tip
 audit** (row 29) is the detector that cross-tree reuse requires. Release bytes are built exactly once,
 in the release PR's group, because `VELNOR_COMMIT` is embedded through `option_env!`
-(`ci-helper/crates/velnor-ci/src/io/mod.rs:78`) and only the group's SHA becomes `main`'s (§6.6).
+(`crates/velnor-ci/src/io/mod.rs:78`) and only the group's SHA becomes `main`'s (§6.6).
 
 | Per merged PR | Today, runner-min [E from M] | Design, sandbox-min [E] |
 |---|---|---|
@@ -543,7 +543,7 @@ run, and the tip audit is today's push run.
 ### 6.6 The profile tension: debug tests, optimised releases
 
 The shipped `velnor-ci` and `velnor-gen` use `opt-level = "s"`, thin LTO, `panic = "abort"`, strip
-and musl (`[profile.release]` in `ci-helper/Cargo.toml` and `generator/Cargo.toml`). Tests use the
+and musl (`[profile.release]` in `Cargo.toml` and `Cargo.toml`). Tests use the
 dev profile, with debug assertions and overflow checks on.
 
 - **Testing the release build: rejected.** Cargo ignores `panic` for test targets, because the
@@ -767,7 +767,7 @@ shadow.
 ### 8.6 The `Required` check and the release-gate constraints
 
 **Today's gate.** `velnor-ci release-gate` accepts `Required` only from GitHub Actions, and only from
-`push` runs on the exact SHA (`ci-helper/crates/velnor-ci/src/gate.rs:15,137`).
+`push` runs on the exact SHA (`crates/velnor-ci/src/gate.rs:15,137`).
 `product-release.yml` verifies "main and latest Required CI".
 
 **The change.** Work item 4 changes both in one PR. The gate accepts the App's `Required` on the

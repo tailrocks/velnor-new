@@ -1,0 +1,12 @@
+        Row::ParentTraversal => archive.file("state/../escape", b"must never land")?,
+        Row::SymlinkWriteThrough => {
+            archive.symlink("state/lnk", &outside.display().to_string())?;
+            archive.file("state/lnk/pwn", b"must never land")?;
+    std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+    match row {
+        Row::NestedGzipInZstd | Row::NestedZstdInZstd | Row::PolyglotSkippable => {
+            build_wrapped(row, scene)
+    std::fs::create_dir_all(scene.payload().parent().ok_or_else(|| fail("no parent"))?)?;
+    let names = [
+        "state/cas/2026-01-01 00:00 x",
+        "state/cas/with space",

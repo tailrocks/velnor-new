@@ -1,0 +1,4 @@
+            .any(|part| part.is_empty() || matches!(part, "." | ".."))
+}
+
+fn valid_git_sha(value: &str) -> bool {

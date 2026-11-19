@@ -1,0 +1,4 @@
+        .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("tests"))
+        .args(["-p", "premerge_event_probe_test.py"])
+        .env("VELNOR_PREMERGE_TEST_SOURCE", source)
+        .env("VELNOR_PREMERGE_TEST_LOADER", loader)

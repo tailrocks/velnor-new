@@ -1,0 +1,8 @@
+            include_bytes!("../../tests/fixtures/duplicate_zip/receipt-single.zip").as_slice(),
+            "8fcab496f1fac2958859a3e0260078b7460330a7681ce33b682ab00bd306e227",
+            169,
+        ),
+            include_bytes!("../../tests/fixtures/duplicate_zip/receipt-duplicate.zip").as_slice(),
+            "129ffaaa2a18232a3c030e7307288e307b51d6bcf86cd9a9d17956fafc363d28",
+            316,
+        ),

@@ -156,7 +156,7 @@ Deliberately **not** compatible: legacy pipelines transport (AES-wrapped `Pipeli
 Crate layout follows the owner's in-flight move to one root workspace `crates/velnor-*` (brief, decided). New/changed crates only; generator crates are out of scope except where noted.
 
 ```text
-crates/velnor-runner/                  (exists; keep journal/ownership discipline)
+crates/velnor-runner-*/                  (exists; keep journal/ownership discipline)
   velnor-runner-core        ids, capacity, lifecycle, CleanupProof      [reuse as-is]
   velnor-runner-github      scale-set wire types/paths, no HTTP         [reuse, extend]
   velnor-runner-host        controller: sessions, admission, placement  [evolve: add K8s runtime]

@@ -1,0 +1,5 @@
+    let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples");
+    let mut checked = 0;
+    for sample in fs::read_dir(samples)? {
+        let workflows = sample?.path().join("expected/.github/workflows");
+// base

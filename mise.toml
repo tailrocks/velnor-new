@@ -174,22 +174,6 @@ TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
 printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
-(
-  cd "$ROOT/crates/velnor-runner"
-  cargo fetch --locked
-)
-(
-  cd "$ROOT/ci-helper"
-  cargo fetch --locked
-)
-(
-  cd "$ROOT/generator"
-  cargo fetch --locked
-)
-(
-  cd "$ROOT/local"
-  cargo fetch --locked
-)
 for package in velnor-freshness velnor-archive-guard; do
   printf "maintenance-phase: %s\n" "$package"
   case " $TEST_MEMBERS " in

@@ -1,0 +1,34 @@
+        "../escape",
+        "a/../escape",
+        "./dotted",
+        "a/./dotted",
+        "back\\slash",
+    for target in ["", ".", "a/..", "/absolute", "nul\0byte"] {
+        reject_link(target)?;
+    }
+    let root = Path::new("/checkout");
+    validate_link_target_in_root(root, "config/link", "../shared/target")?;
+    for (link, target) in [
+        ("config/link", "../../escape"),
+        ("top/link", "../../escape"),
+        ("config/link", "/absolute"),
+        ("config/link", "../shared/../../escape"),
+    ] {
+        if validate_link_target_in_root(root, link, target).is_ok() {
+            return Err(io::Error::other(format!("escaping link admitted: {target}")).into());
+    let mut link_without_target = link_entry("config/link", "../shared/target");
+    link_without_target.link_target = None;
+    if link_without_target.validate().is_ok() {
+        return Err(io::Error::other("link without target accepted").into());
+    let escaping = link_entry("config/link", "../../escape");
+    if authenticate_entry(&checkout, &escaping).is_ok() {
+        return Err(io::Error::other("escaping declared link admitted").into());
+    }
+    let diverted = link_entry("config/diverted", "../shared/target");
+    let diverted_link = checkout.join("config/diverted");
+    fs::create_dir_all(checkout.join("config"))?;
+    #[cfg(unix)]
+    std::os::unix::fs::symlink("../other", &diverted_link)?;
+    if authenticate_entry(&checkout, &diverted)? != CheckoutState::Changed {
+        return Err(io::Error::other("diverted link missed").into());
+    }

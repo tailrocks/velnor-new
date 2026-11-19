@@ -1,0 +1,8 @@
+        || id == ".."
+        || id
+            .bytes()
+            .any(|byte| byte == b'/' || byte == b'\\' || byte == 0)
+        .parent()
+        .ok_or_else(|| invalid("qualified_acquisition", "shared_temp_required"))?;
+    let shared = temp
+        .join(QUALIFIED_SHARED_ROOT_DIR)

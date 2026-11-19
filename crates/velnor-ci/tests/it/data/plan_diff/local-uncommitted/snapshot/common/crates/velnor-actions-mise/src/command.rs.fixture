@@ -1,0 +1,60 @@
+#[path = "command_cancellable.rs"]
+mod cancellable;
+pub use cancellable::run_command_bounded;
+#[path = "check_command.rs"]
+mod check;
+#[path = "command_credential.rs"]
+mod credential;
+#[path = "command_env.rs"]
+mod env;
+#[path = "command_git.rs"]
+mod git;
+#[path = "command_output.rs"]
+mod output;
+#[path = "command_private_fetch.rs"]
+mod private_fetch;
+#[cfg(unix)]
+#[path = "command_process_group.rs"]
+mod process_group;
+#[path = "command_progress.rs"]
+mod progress;
+#[path = "qualified_acquisition.rs"]
+mod qualified_acquisition;
+#[path = "command_release_signer.rs"]
+mod release_signer;
+#[path = "command_stream.rs"]
+mod stream;
+#[path = "command_tofu.rs"]
+mod tofu;
+pub use check::resolve_program as resolve_check_program;
+pub use credential::is_safe_credential_value;
+    parent: &[(OsString, OsString)],
+) -> Vec<(OsString, OsString)> {
+    match policy {
+        EnvPolicy::GitHubToken => {
+            let mut env: Vec<_> = parent
+                .iter()
+                .filter(|(key, _)| key == "PATH" || key == "HOME")
+                .cloned()
+                parent
+                    .iter()
+                    .rfind(|(key, _)| key == name)
+                    .map(|(_, value)| value.clone())
+        policy if policy.allows_proxy_passthrough() => proxy_passthrough(parent),
+        _ => Vec::new(),
+    }
+}
+    pub fn spawn_env(&self, parent: &[(OsString, OsString)]) -> Vec<(OsString, OsString)> {
+        let mut env = self.policy.child_env(parent, &self.full_env());
+        if self.operator_guarded {
+            env.retain(|(key, _)| !is_mbx_shim_env(key));
+        }
+            let parent: Vec<(OsString, OsString)> = std::env::vars_os().collect();
+            command.envs(cleared_parent_passthrough(self.policy, &parent));
+        }
+        for (key, value) in self.full_env() {
+            command.env(key, value);
+            command.current_dir(cwd);
+        }
+        command.stdin(Stdio::null());
+        command

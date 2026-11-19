@@ -1,0 +1,5 @@
+const INSTALLS_VERIFY_SCRIPT: &str = include_str!("../src/cache_steps_tools_installs_verify.sh");
+const RESTORE_COMPOSITION: &str = include_str!("../src/cache_steps_tools_restore.rs");
+
+fn ordered(first: &str, second: &str, label: &str, script: &str) -> Result<(), Box<dyn Error>> {
+    let before = script

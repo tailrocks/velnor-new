@@ -1,0 +1,18 @@
+        let temp_parent = fs::canonicalize("/tmp")?;
+        let temp = Builder::new()
+            .prefix("golden collector [paths]*.")
+            .tempdir_in(temp_parent)?;
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        let root = manifest
+            .parent()
+            .and_then(Path::parent)
+            .ok_or("archive guard crate has no repository root")?
+            .to_path_buf();
+        let root = fs::canonicalize(root)?;
+    let parent = destination
+        .parent()
+        .ok_or("fingerprint input has no parent")?;
+    fs::create_dir_all(parent)?;
+    fs::copy(source, destination)?;
+    Ok(())
+}

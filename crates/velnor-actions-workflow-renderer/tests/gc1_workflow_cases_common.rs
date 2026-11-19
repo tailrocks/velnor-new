@@ -26,14 +26,6 @@ pub(crate) fn require(haystack: &str, needle: &str, label: &str) -> Result<(), B
     }
 }
 
-pub(crate) fn forbid(haystack: &str, needle: &str, label: &str) -> Result<(), Box<dyn Error>> {
-    if haystack.contains(needle) {
-        Err(fail(&format!("{label} kept:{needle}")))
-    } else {
-        Ok(())
-    }
-}
-
 pub(crate) fn shell_step(name: &str) -> Step {
     Step {
         name: name.to_owned(),

@@ -1,0 +1,12 @@
+            "app/src/../../shared/a.txt",
+        ]
+    );
+    let output = "cargo:rerun-if-changed=build.rs\n\
+    assert_eq!(rerun_if_changed(output), ["build.rs", "../shared/a b.txt"]);
+}
+
+fn locked(facts: &mut RepoFacts, entries: &[(&str, &str)]) {
+        ("../a.txt\tapp\n", Reason::LockLine(1)),
+        (
+            "README.md\tapplication\n",
+            Reason::UnknownLockedPackage("application".to_owned()),

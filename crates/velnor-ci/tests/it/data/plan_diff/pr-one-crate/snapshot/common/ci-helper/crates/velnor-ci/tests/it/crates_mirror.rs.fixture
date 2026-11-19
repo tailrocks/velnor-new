@@ -1,0 +1,33 @@
+        child_fetches_with_path(repo, wrapper, config, Path::new("../native"), None)
+    })
+}
+
+            Path::new("../native"),
+            wrapper.parent().ok_or("wrapper parent")?,
+        ];
+        let output = Command::new(wrapper)
+            .args(["build", "--manifest-path"])
+            .current_dir(root.join("outer"))
+            .env_remove("RUSTUP_TOOLCHAIN")
+            .env_remove("RUSTC_WRAPPER")
+            .env_remove("RUSTC_WORKSPACE_WRAPPER")
+            .current_dir(root.join(&project))
+            .env("PATH", std::env::join_paths(paths)?)
+            .env("CARGO_HOME", root.join(format!("different-home-{index}")))
+            .env("VELNOR_CARGO_CONFIG", config)
+                    .current_dir(std::env::temp_dir()).output().unwrap();
+                assert!(selected.status.success());
+                assert_eq!(String::from_utf8(selected.stdout).unwrap(), format!("{expected} (overridden by environment variable RUSTUP_TOOLCHAIN)\n"));
+            }
+                .current_dir(std::env::temp_dir()).status().unwrap();
+            assert!(status.success());
+        }
+    }"#);
+        wrapper.parent().ok_or("wrapper parent")?.to_path_buf(),
+        root.join("shadow"),
+        std::path::PathBuf::from(std::env::var_os("HOME").ok_or("HOME")?).join(".cargo/bin"),
+    ]
+        .current_dir(root.join("outer"))
+        .arg(root.join("outer/Cargo.toml"))
+        .env_remove("RUSTC_WRAPPER")
+        .env_remove("RUSTC_WORKSPACE_WRAPPER")

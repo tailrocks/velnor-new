@@ -1,0 +1,30 @@
+const IDENTITY_SOURCE: &str = include_str!("../src/job_image_authority_identity.py");
+const REGISTRY_SOURCE: &str = include_str!("../src/job_image_authority_registry.py");
+const PUBLISH_SOURCE: &str = include_str!("../src/job_image_authority_publish.py");
+
+const IDENTITY_FILE: &str = "job_image_authority_identity.py";
+const REGISTRY_FILE: &str = "job_image_authority_registry.py";
+#[path = "gc1_t46_accept_a.rs"]
+mod gc1_t46_accept_a;
+#[path = "gc1_t46_accept_b.rs"]
+mod gc1_t46_accept_b;
+#[path = "gc1_t46_driver_a.rs"]
+mod gc1_t46_driver_a;
+#[path = "gc1_t46_driver_b.rs"]
+mod gc1_t46_driver_b;
+#[path = "gc1_t46_envelopes.rs"]
+mod gc1_t46_envelopes;
+#[path = "gc1_t46_inputs.rs"]
+mod gc1_t46_inputs;
+#[path = "gc1_t46_real_attestation.rs"]
+mod gc1_t46_real_attestation;
+#[path = "gc1_t46_reject_a.rs"]
+mod gc1_t46_reject_a;
+#[path = "gc1_t46_reject_b.rs"]
+mod gc1_t46_reject_b;
+#[path = "gc1_t46_reject_c.rs"]
+mod gc1_t46_reject_c;
+#[path = "gc1_t46_source.rs"]
+mod gc1_t46_source;
+pub(crate) use gc1_t46_accept_a::*;
+pub(crate) use gc1_t46_accept_b::*;
