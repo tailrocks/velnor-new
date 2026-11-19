@@ -1,5 +1,6 @@
 {
   "description": "The needs-result probe of the lab: one dispatch on the default branch.",
+  "not_modelled": "job cancellation: the canceller's gh run cancel is not in the runner image and the stand-in does not cancel a run that cancels itself, so the sleeper never ends",
   "steps": [
     {
       "workflow_dispatch": {

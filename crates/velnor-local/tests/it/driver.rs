@@ -388,3 +388,13 @@ fn a_pull_request_from_a_fork_names_the_fork_as_its_head_repository() {
             .has_fork()
     );
 }
+
+#[test]
+fn the_needs_result_probe_is_refused_as_not_modelled_locally() {
+    let probe = Scenario::parse(&read("scenarios/probe-needs-result.json"))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let refusal = probe
+        .refuse_unmodelled()
+        .expect_err("the probe waits for a cancellation the stand-in does not deliver");
+    assert!(refusal.contains("not modelled locally"), "{refusal}");
+}

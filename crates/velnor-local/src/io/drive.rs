@@ -116,6 +116,7 @@ async fn load_scenario(args: &RunArgs, scenario: &str) -> io::Result<Scenario> {
         .map_err(io::Error::other)?;
     refuse_fork_branches(&scenario.steps, &args.environment.default_branch)
         .map_err(io::Error::other)?;
+    scenario.refuse_unmodelled().map_err(io::Error::other)?;
     Ok(scenario)
 }
 
