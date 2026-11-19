@@ -167,7 +167,7 @@ fn tag_job(plan: &ReleasePlan, family: &FamilyPlan, helper: &HelperRelease) -> R
 }
 
 fn build(binary: &BinaryPlan, platform: velnor_model::Platform) -> RenderedJob {
-    let (runner, _) = target(platform, binary.format);
+    let (runner, _) = target(platform, binary);
     let source = format!("refs/tags/${{{{ {TAG_OUTPUT} }}}}");
     let check = RenderedStep {
         env: variables(&[
