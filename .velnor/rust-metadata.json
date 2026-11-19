@@ -3078,6 +3078,11 @@
               "name": "velnor-release",
               "kind": "normal",
               "manifest": "generator/crates/velnor-release/Cargo.toml"
+            },
+            {
+              "name": "velnor-workflows",
+              "kind": "normal",
+              "manifest": "generator/crates/velnor-workflows/Cargo.toml"
             }
           ],
           "targets": [
@@ -3146,6 +3151,43 @@
           ]
         },
         {
+          "name": "velnor-workflows",
+          "version": "0.0.0",
+          "manifest": "generator/crates/velnor-workflows/Cargo.toml",
+          "dependencies": [
+            {
+              "name": "serde",
+              "kind": "normal",
+              "manifest": null,
+              "features": [
+                "derive"
+              ]
+            },
+            {
+              "name": "toml",
+              "kind": "normal",
+              "manifest": null
+            },
+            {
+              "name": "velnor-model",
+              "kind": "normal",
+              "manifest": "generator/crates/velnor-model/Cargo.toml"
+            }
+          ],
+          "targets": [
+            {
+              "name": "velnor_workflows",
+              "kinds": [
+                "lib"
+              ],
+              "tests": false,
+              "doctest": false,
+              "source": "generator/crates/velnor-workflows/src/lib.rs",
+              "requires_features": false
+            }
+          ]
+        },
+        {
           "name": "velnor-gen",
           "version": "0.1.87",
           "manifest": "generator/crates/velnor-gen/Cargo.toml",
@@ -3188,6 +3230,11 @@
               "name": "velnor-rust",
               "kind": "normal",
               "manifest": "generator/crates/velnor-rust/Cargo.toml"
+            },
+            {
+              "name": "velnor-workflows",
+              "kind": "normal",
+              "manifest": "generator/crates/velnor-workflows/Cargo.toml"
             },
             {
               "name": "similar",
@@ -3462,15 +3509,16 @@
     "crates/velnor-runner/crates/velnor-runner-host/Cargo.toml": "bc8ecfa029f3259d01f4b41ced2f3ad5a29fe714927b70de56c97be7dfe4950f",
     "crates/velnor-runner/crates/velnor-runner-image-manifest/Cargo.toml": "f8f503f4151c7e7deb2d585a31232817f48f7903ae97128c3eb9caaa7bc672eb",
     "crates/velnor-runner/crates/velnor-runner-qualification/Cargo.toml": "ac2f641b6402e0df436994867b2496595530a49888bb0b6cafcfee8aec843c54",
-    "generator/Cargo.toml": "89e73dd83e3f8522f5ab1dd3b62e8ff822b4715df596009532e2b6b570476858",
-    "generator/crates/velnor-gen/Cargo.toml": "6a370ddcb8eade63f86a269e06623ce880bd5664463b12ff394d5c5611696734",
+    "generator/Cargo.toml": "9a4552d673cb1dee583e4ec1466da64d0a9807ec39e588a3f9c181e02470cbe5",
+    "generator/crates/velnor-gen/Cargo.toml": "cca8aa6cbb29c4617804402d4078f5130c3db44edf266719b39de621e2eb2e94",
     "generator/crates/velnor-model/Cargo.toml": "74cfd259bc6cf0eee2c5937c96ec1e4a8943195c214cad082ebee84ef8903314",
     "generator/crates/velnor-release/Cargo.toml": "9170b35b88c5283ccdb02f70e89129370405ff11a4d35693538341e4808f84ae",
-    "generator/crates/velnor-render/Cargo.toml": "62f50f997499ddb3b72cb0bf312ef06c5d832347c699a105e81ea45cff41add5",
+    "generator/crates/velnor-render/Cargo.toml": "36f41cbb7a740ae06e74933b50c3767774826feff20733caf9f8cb0b9d79f71f",
     "generator/crates/velnor-rust/Cargo.toml": "045ecdb81a82213da85f70eed353ece26939f117ec8055b8472ff960e37830e4",
+    "generator/crates/velnor-workflows/Cargo.toml": "aba8d5129a681b5953e17129bfc73116de30ad20cddb29097f1e44a8a29952e0",
     "local/Cargo.toml": "bd6ac606771cf64a687785d9f2174c07f3a2539ba18e103ae77813158355eb48",
     "local/crates/velnor-cache-rules/Cargo.toml": "f3c549575677f1bb0241725787ea1458f5754cf0e36fa0dedc6ed18ece9996aa",
     "local/crates/velnor-local/Cargo.toml": "d6c37d4efee766f87f78e45ec36d93cc4d1d845ecb4117f0ec8b53d6eed51724"
   },
-  "layout": "ce317371c517234d47dba988ad27ac0fb3116ee52eab831abd4e0ea27402b68e"
+  "layout": "bd03830d2e48b0e5371dd96614dcc390fb51b06adf33026cc3b970c9ebee2030"
 }
