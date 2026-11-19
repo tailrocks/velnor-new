@@ -95,3 +95,34 @@ fn a_key_on_one_side_only_is_a_difference_and_a_run_with_no_observation_reproduc
     assert_eq!(lines, Vec::<String>::new());
     assert!(!reproduced);
 }
+
+const PLAIN: &str = r#"[probe / observe] Running: Run ./.github/actions/probe
+{
+  "legs": {
+    "default-branch": {
+      "hit": "true",
+      "matched": "lab-probe-<tag>-a"
+    }
+  },
+  "probe": "cache-keys"
+}
+[probe / other] Running: Run sleep 1
+"#;
+
+#[test]
+fn an_unprefixed_probe_observation_in_a_job_log_is_read() {
+    assert_eq!(
+        observations(PLAIN),
+        [
+            json!({"legs": {"default-branch": {"hit": "true", "matched": "lab-probe-<tag>-a"}}, "probe": "cache-keys"})
+        ]
+    );
+    let single = r#"{"legs": {"default-branch": {"hit": "true"}}, "probe": "cache-keys"}"#;
+    assert_eq!(observations(single).len(), 1);
+}
+
+#[test]
+fn ordinary_json_without_the_probe_key_is_not_an_observation() {
+    let log = "{\n  \"name\": \"velnor\",\n  \"legs\": {}\n}\n{\"items\": [1, 2]}\n";
+    assert_eq!(observations(log), Vec::<serde_json::Value>::new());
+}

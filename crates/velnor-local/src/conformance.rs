@@ -7,6 +7,12 @@ use serde_json::Value;
 
 #[must_use]
 pub fn observations(log: &str) -> Vec<Value> {
+    let mut found = prefixed(log);
+    found.extend(plain(log));
+    found
+}
+
+fn prefixed(log: &str) -> Vec<Value> {
     let lines: Vec<Option<&str>> = log.lines().map(|line| line.strip_prefix("| ")).collect();
     let mut found = Vec::new();
     let mut at = 0;
@@ -16,17 +22,37 @@ pub fn observations(log: &str) -> Vec<Value> {
                 .find(|&index| lines[index] == Some("}"))
                 .unwrap_or(lines.len() - 1);
             let text: Vec<&str> = lines[at..=end].iter().flatten().copied().collect();
-            if let Ok(document) = serde_json::from_str::<Value>(&text.join("\n"))
-                && document["probe"].is_string()
-                && document["legs"].is_object()
-            {
-                found.push(document);
-            }
+            found.extend(observation(&text.join("\n")));
             at = end;
         }
         at += 1;
     }
     found
+}
+
+fn plain(log: &str) -> Vec<Value> {
+    let lines: Vec<&str> = log.lines().collect();
+    let mut found = Vec::new();
+    for (at, line) in lines.iter().enumerate() {
+        if !line.starts_with('{') {
+            continue;
+        }
+        let block = if *line == "{" {
+            lines[at..]
+                .iter()
+                .position(|line| *line == "}")
+                .map_or(&lines[at..at], |end| &lines[at..=at + end])
+        } else {
+            &lines[at..=at]
+        };
+        found.extend(observation(&block.join("\n")));
+    }
+    found
+}
+
+fn observation(text: &str) -> Option<Value> {
+    let document = serde_json::from_str::<Value>(text).ok()?;
+    (document["probe"].is_string() && document["legs"].is_object()).then_some(document)
 }
 
 #[must_use]
