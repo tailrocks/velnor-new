@@ -14,6 +14,7 @@ use crate::base_steps::{
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
+use crate::checkout_step::checkout_step;
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
     sources_step, verdict_step,
@@ -377,26 +378,6 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
         name: format!("Install velnor-ci {version}"),
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
         uses_comment: Some(version.release_tag()),
-        with,
-        ..RenderedStep::default()
-    }
-}
-
-fn checkout_step(depth: u32, sparse: Option<&[String]>) -> RenderedStep {
-    let mut with = vec![
-        ("fetch-depth".to_owned(), Value::Int(u64::from(depth))),
-        ("persist-credentials".to_owned(), Value::Bool(false)),
-    ];
-    if let Some(paths) = sparse {
-        with.push((
-            "sparse-checkout".to_owned(),
-            Value::Text(format!("{}\n", paths.join("\n"))),
-        ));
-        with.push(("sparse-checkout-cone-mode".to_owned(), Value::Bool(false)));
-    }
-    RenderedStep {
-        name: "Check out".to_owned(),
-        uses: Some(CHECKOUT.to_owned()),
         with,
         ..RenderedStep::default()
     }

@@ -14,6 +14,7 @@ mod compat;
 mod config;
 mod config_fork;
 mod config_helper;
+mod config_keys;
 mod config_mirror;
 mod config_test_setup;
 mod credentials;

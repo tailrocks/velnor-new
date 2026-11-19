@@ -7,36 +7,12 @@ use velnor_model::{
     RepoPath, RunnerLabel, RustCiConfig, Shape, TargetName,
 };
 
+use crate::config_keys::KEYS;
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 23] = [
-    "sparse_checkout",
-    "cache_check_blocks",
-    "cache_debug",
-    "runner",
-    "fork_runner",
-    "crates_mirror",
-    "mbx_shared_store",
-    "timeout_minutes",
-    "exclude",
-    "non_inputs",
-    "inputs",
-    "default_ignores",
-    "shape",
-    "required_check",
-    "nextest_harnesses",
-    "default_branch",
-    "skip_draft_pull_requests",
-    "on_main",
-    "full_run",
-    "helper",
-    "ci_debuginfo",
-    "cache_budget_bytes",
-    "test_setup",
-];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
 #[derive(Deserialize)]
