@@ -147,10 +147,10 @@ CPU s for `Journal::open` in #1333. Use those results to choose experiments. The
 - Pack observations show zero MBX remote transfer, no Rust toolchain *restore* in 58 logs, and 3,636 skipped snapshot
   restores. The cluster image already seeds tools. A missing Rust restore is therefore evidence about the cache path
   and says little by itself about network download time. The actual pin-tool steps are in the table. The 18 recent
-  state-seal runs include 6 generator and 4 CI helper seals, with zero root, local and runner seals. Tip advancement
+  state seal runs include 6 generator and 4 CI helper seals, with zero root, local and runner seals. Tip advancement
   and producer test or clippy failures both occur. The workflow-level green result alone does not establish a usable
   seal. `evidence.md:323–385`.
-  [State-seal trace and compatibility keys](https://github.com/tailrocks/velnor-new/issues/1305#issuecomment-6980735625).
+  [State seal trace and compatibility keys](https://github.com/tailrocks/velnor-new/issues/1305#issuecomment-6980735625).
 - I recomputed that 120 of 159 successful merge groups had a push CI run on the same SHA, or 75.5%. The pack's smaller
   comparison found 7 of 45 identical PR-head and merge-group trees, using PR heads read later. This is an upper-level
   check on source duplication. It cannot show identical event inputs or identify the tree actually checked out by a

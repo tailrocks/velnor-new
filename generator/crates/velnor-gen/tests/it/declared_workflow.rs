@@ -49,8 +49,8 @@ if = "needs.source.result == 'success'"
 env = { ARTIFACT_ID = "${{ needs.source.outputs.artifact_id }}" }
 
 [[workflow.job.step]]
-name = "Show the id"
-run = "velnor-ci show-id"
+name = "Validate the id again"
+run = "velnor-ci validate-artifact-id"
 "#;
 
 fn rendered(config: &str) -> Result<Node, Box<dyn Error>> {
@@ -114,9 +114,12 @@ fn a_declared_workflow_renders_environment_permissions_conditions_and_steps() ->
         validate.get("run").and_then(Node::text),
         Some(". \"$VELNOR_EXEC\" validate-artifact-id")
     );
-    assert!(
+    assert_eq!(
         all.iter()
-            .any(|step| step.get("run").and_then(Node::text) == Some(". \"$VELNOR_EXEC\" show-id"))
+            .filter(|step| step.get("run").and_then(Node::text)
+                == Some(". \"$VELNOR_EXEC\" validate-artifact-id"))
+            .count(),
+        2
     );
     let source = job(&tree, "source")?;
     let upload = steps(source);
@@ -150,7 +153,7 @@ fn a_run_step_still_obeys_the_run_rules() -> TestResult {
         ("echo ${{ github.sha }}", "expression"),
         ("echo a\\necho b", "more than one line"),
     ] {
-        let config = TWO_JOBS.replace("velnor-ci show-id", run);
+        let config = TWO_JOBS.replace("velnor-ci validate-artifact-id", run);
         assert!(refusal(&config)?.contains(needle), "{run}");
     }
     Ok(())
@@ -163,7 +166,7 @@ fn a_step_must_be_exactly_one_of_run_uses_and_helper() -> TestResult {
         "helper = \"validate-artifact-id\"\nrun = \"velnor-ci x\"",
     );
     assert!(refusal(&both)?.contains("exactly one"));
-    let none = TWO_JOBS.replace("run = \"velnor-ci show-id\"", "");
+    let none = TWO_JOBS.replace("run = \"velnor-ci validate-artifact-id\"", "");
     assert!(refusal(&none)?.contains("exactly one"));
     Ok(())
 }

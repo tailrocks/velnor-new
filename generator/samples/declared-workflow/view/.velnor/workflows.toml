@@ -33,5 +33,5 @@ if = "needs.source.result == 'success'"
 env = { ARTIFACT_ID = "${{ needs.source.outputs.artifact_id }}" }
 
 [[workflow.job.step]]
-name = "Show the id"
-run = "velnor-ci show-id"
+name = "Validate the id again"
+run = "velnor-ci validate-artifact-id"

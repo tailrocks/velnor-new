@@ -91,7 +91,7 @@ everything else is judged against the pack.
 - **Bug 1's second mechanism is redundant and unverified.** H claims both
   velnor's `compat` hash and `@actions/cache`'s path-version hash cause the
   sources miss. The `compat` construction is real [verified:
-  `ci.yml:329` / `state-seal.yml:152` hash absolute `$RUNNER_TEMP/...` lines
+  `ci.yml:329` / the State seal workflow hash absolute `$RUNNER_TEMP/...` lines
   into `sources-compat`], so *if* `RUNNER_TEMP` differs across lanes the key
   differs. But H never prints `RUNNER_TEMP` or either computed key from an
   actual hosted and scale-set log of the same run. D claims the missing key
@@ -163,7 +163,7 @@ everything else is judged against the pack.
   it explains a failure class the pack left at "9 at Clippy/Wait".
 - **Bug 2's compat-drift analysis**: `ImageOS`, `store` and `checkout`
   absolute paths hashed into state `compat` [verified at
-  `state-seal.yml:152` construction and `ci.yml:707`], with scale-set
+  the State seal workflow construction and `ci.yml:707`], with scale-set
   `ImageOS=velnor-arc-ubuntu24` (`evidence.md:553`). Whatever the final
   cache design, "never hash lane-specific absolute paths or image identity
   into portable keys" should be a hard rule, with a test that computes keys
@@ -172,7 +172,7 @@ everything else is judged against the pack.
   read-only pre-verified toolchain seed. All three proposals converge here;
   H's costing (set-up-job action downloads, 706 sample runner-minutes for
   `Prepare pinned tools`, T9b) is the clearest.
-- **Retiring `state-seal.yml`** in favour of node/site mbx rather than
+- **Retiring the State seal workflow** in favour of node/site mbx rather than
   repairing the GitHub-cache bundle path (65–107 s transfers, 10 GB cap,
   tip races). Shared with C and D; H states the <15 s push-skip rule most
   operationally.
@@ -320,7 +320,7 @@ under ~4 minutes for an affected PR is arithmetic, not engineering.
   designs, and only D names it.
 - **Trusted-builder write race.** "On each main advance, builds main into
   the trusted mbx namespace" reintroduces, in milder form, the tip race that
-  killed state-seal (7/16 at `Check state tip`) unless publication is keyed
+  killed state seal (7/16 at `Check state tip`) unless publication is keyed
   purely by content with no "latest" pointer. C §4 GC note says
   content-addressed keys avoid the race, but the builder's trigger,
   fencing and partial-publication behaviour are never specified.
@@ -575,7 +575,7 @@ cluster capacity is the correct first move in every proposal. The caches
 are dead as built: sources restore misses on cluster lanes, no restored
 toolchain in 58/58 applicable logs (D §1; T9a), all 3,636 sampled state
 restores skipped, mbx remote unset everywhere. All three retire the
-state-seal GitHub-cache bundle path (65–107 s transfers at 13.6–22.4 MB/s,
+state seal GitHub-cache bundle path (65–107 s transfers at 13.6–22.4 MB/s,
 10 GB cap, tip races) in favour of node/site persistence, pre-stage tools
 and actions so jobs download ~nothing, and treat the push-after-merge_group
 run on an identical SHA (120/159, `evidence.md:207`) as the safest dedup.

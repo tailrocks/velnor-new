@@ -8,8 +8,7 @@ use crate::error::HostError;
 use super::{family, image_identity, receipt};
 
 fn valid_socket(value: &str) -> bool {
-    let path = value.strip_prefix("unix://").unwrap_or(value);
-    path.starts_with('/') && path.len() > 1 && !path.chars().any(char::is_control)
+    crate::docker_client::unix_socket_path(value).is_ok()
 }
 
 pub(in super::super) async fn qualify_archives(
