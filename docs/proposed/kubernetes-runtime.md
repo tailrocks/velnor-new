@@ -29,13 +29,13 @@ There is no trait today. Call frequency in `velnor-runner-host/src`:
 |---|---|---|
 | `info` | 30 | engine identity capture (`SelectedEngineContext::capture`), cleanup and recovery gates |
 | `inspect_container` | 18 | `launch/inspect.rs` (`container_running`, `classify_inspect`), reconcile gate, recovery |
-| `remove_container` / `stop_container` | 14 / 11 | `launch/retirement.rs`, `bootstrap/cleanup`, `local/remove.rs` |
+| `remove_container` / `stop_container` | 14 / 11 | `launch/retirement.rs`, `bootstrap/cleanup`, `crates/velnor-runner-host/src/local/remove.rs` |
 | `inspect_volume` / `create_volume` / `remove_volume` | 11 / 3 / 5 | `bootstrap/containers/storage_object*`, `cleanup_witness/volumes.rs` |
 | `inspect_image` | 7 | `verified_images.rs`, qualification `docker.rs` |
 | `wait_container`, `start_container` | 6, 6 | `containers/pair/production*`, `completion` |
 | `create_container` | 5 | `containers/pair/{spec,config}.rs`, local pair |
 | `attach_container`, `create/start/inspect_exec` | 5, 4/3/5 | worker helper protocol (`storage/observation.rs`), resource probe |
-| `logs` | 2 sites x4 files | `resource_probe/ops.rs`, `publication/execute/*`, `local/channel.rs` |
+| `logs` | 2 sites x4 files | `resource_probe/ops.rs`, `publication/execute/*`, `crates/velnor-runner-host/src/local/channel.rs` |
 | `*_network` | 3 each | `containers/network/{create,remove}.rs` |
 | `upload_to_container` | 2 | seeding files into the pair |
 | `list_containers` | 2 | owned listing for reconcile and local remove |
@@ -63,7 +63,7 @@ Other coupling that is not a bollard call:
   `resource_dind.rs`, `host_config.rs`) inspects images and runs probe
   containers; `velnor-resource-probe` runs inside the pair and reads cgroups and
   mountinfo.
-- **Local mode.** `local/` (`pair.rs`, `remove.rs`, `channel.rs`, `storage.rs`)
+- **Local mode.** `crates/velnor-runner-host/src/local/` (`pair.rs`, `remove.rs`, `channel.rs`, `storage.rs`)
   uses the same `connect_unix` engine and the same pair plan for developer
   machines. It must stay Docker-only and must keep compiling against the trait.
 
@@ -225,8 +225,8 @@ requirement, not assumed.
 | `upload_to_container` | `deliver` |
 | `attach_container`, `create/start/inspect_exec` (`storage/observation.rs`, `pair/production/attach.rs`) | `exec_helper`, `wait` |
 | `wait_container` (`completion`, `drive`) | `wait` |
-| `logs` (`resource_probe/ops.rs`, `publication/execute/*`, `local/channel.rs`) | `logs` |
-| `stop_container`, `remove_container` (`retirement.rs`, `completion/cleanup.rs`, `local/remove.rs`) | `stop`, `delete` |
+| `logs` (`resource_probe/ops.rs`, `publication/execute/*`, `crates/velnor-runner-host/src/local/channel.rs`) | `logs` |
+| `stop_container`, `remove_container` (`retirement.rs`, `completion/cleanup.rs`, `crates/velnor-runner-host/src/local/remove.rs`) | `stop`, `delete` |
 | `inspect_container` (`launch/inspect.rs`, `gate.rs`, `pre_jit_recovery`, `unbound_retirement`) | `inspect`, `prove_owned` |
 | `list_containers` (reconcile, local remove) | `list_owned` |
 | `remove_volume` (`cleanup`) | `delete_storage` |
@@ -235,7 +235,7 @@ requirement, not assumed.
 | `ContainerPlan`, `audit_plan`, `HOST_NEEDLES` | runtime-neutral `audit_spec(&WorkerSpec)`, plus runtime-specific lowering audit |
 | `RUNNER_CAPABILITIES`, `runner_security_opt` | `CapabilitySet`, `SeccompProfile` in the spec |
 | `HostConfig.docker` | `HostConfig.runtime` (section 6) |
-| `local/*` | stays on `DockerRuntime` via the trait; no k8s |
+| `crates/velnor-runner-host/src/local/*` | stays on `DockerRuntime` via the trait; no k8s |
 
 ## 4. Kubernetes mapping
 
@@ -297,7 +297,7 @@ journal's `absent_volumes`. The journal records the cache PVC UID with a
 
 Concurrency: with `ReadWriteOncePod` only one job uses a cache at a time. For
 N concurrent jobs per node, shard into K cache slots per node (slot index is a
-label; slot selection is a pure function, like `local/slot.rs`). Cache
+label; slot selection is a pure function, like `crates/velnor-runner-host/src/local/slot.rs`). Cache
 isolation across trust scopes follows the existing cache contract: one cache
 slot family per trust scope, `pr`-scope never writes trusted caches
 (`cache-contract.md`).

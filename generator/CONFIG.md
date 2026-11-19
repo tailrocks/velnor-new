@@ -138,7 +138,7 @@ A test that needs a fixture, such as a built example executable or a provisioned
 [[test_setup]]
 root = "."
 name = "Prepare the fixtures"
-run = "bash scripts/ci-fixtures.sh"
+run = "bash scripts/prepare-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
@@ -397,7 +397,7 @@ The placeholders are `{{ bin }}`, `{{ platform }}` (`linux-x64`), `{{ target }}`
 
 ### Raw binary keys
 
-Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
+Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` (now `release.yml`) did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
 
 ```toml
 [[binaries]]
@@ -419,7 +419,7 @@ A repository that must pass its own checks before a release publishes declares o
 ```toml
 [[checks]]
 name = "Qualify linux"
-run = "bash scripts/qualify-linux.sh"
+run = "bash scripts/qualify.sh"
 before = "publish"
 artifacts = ["app-linux-x64"]
 needs = ["Verify release inputs"]
