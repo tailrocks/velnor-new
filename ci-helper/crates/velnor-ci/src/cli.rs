@@ -117,6 +117,8 @@ pub enum Command {
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(crate::cli_cache::RestoredArgs),
+    #[command(subcommand, about = "Check job image candidates")]
+    Image(ImageCommand),
     #[command(
         subcommand,
         about = "Decide whether the run saves the build directory, and delete the older entries of its family"
@@ -498,4 +500,26 @@ pub struct CratesMirrorArgs {
     pub registry: String,
     #[arg(long)]
     pub cainfo: PathBuf,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum ImageCommand {
+    #[command(
+        about = "Check a job image candidate: exit 1 unless the OCI archive is a bounded linux/amd64 image whose blobs, layer DiffIDs and graph match the candidate record, the record's archive hash and size match the archive bytes, the build inputs under --root hash to the recorded values, and the record's source commit, ref and workflow identity equal the current GITHUB_* environment and its Buildx version equals buildx_version in .velnor/runner.lock. Prints PASS on success"
+    )]
+    VerifyCandidate(VerifyCandidateArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct VerifyCandidateArgs {
+    #[arg(
+        long,
+        default_value = ".",
+        help = "Source checkout the record's inputs hash against"
+    )]
+    pub root: PathBuf,
+    #[arg(long, help = "The candidate OCI archive")]
+    pub archive: PathBuf,
+    #[arg(long, help = "The candidate record JSON")]
+    pub record: PathBuf,
 }
