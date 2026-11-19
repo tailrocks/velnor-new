@@ -164,9 +164,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-
             velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         run: '. "$VELNOR_EXEC" inputs restore --target-dir target'
@@ -213,12 +213,12 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
       - id: target_key
         name: Record the target cache key
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'') && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          CACHE_KEY: 'velnor-tgt-rust-lint-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - name: Check app alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p app '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
@@ -364,9 +364,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-
             velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         run: '. "$VELNOR_EXEC" inputs restore --target-dir target'
@@ -418,12 +418,12 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
       - id: target_key
         name: Record the target cache key
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'') && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          CACHE_KEY: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: sources_fetch_0
         name: Fetch the sources of root 0
@@ -566,9 +566,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: lab/target
-          key: 'velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('lab/Cargo.lock') }}-
+            velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-
             velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         working-directory: lab
@@ -620,12 +620,12 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: lab/target
-          key: 'velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-${{ github.sha }}-${{ github.run_id }}'
       - id: target_key
         name: Record the target cache key
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'') && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          CACHE_KEY: 'velnor-tgt-rust-lint-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - name: Check lab alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args)), '' -p lab '') || contains(format('' {0} '', (steps.replan.outputs.rust_lab_package_args || needs.rust-plan.outputs.rust_lab_package_args)), '' --workspace '')) }}'
@@ -755,9 +755,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: lab/target
-          key: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('lab/Cargo.lock') }}-
+            velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-
             velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         working-directory: lab
@@ -807,12 +807,12 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: lab/target
-          key: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-${{ github.sha }}-${{ github.run_id }}'
       - id: target_key
         name: Record the target cache key
         if: '${{ (!cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'') && (steps.restored.outputs.expired != ''true'' || needs.rust-inputs-audit.result == ''success'') }}'
         env:
-          CACHE_KEY: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          CACHE_KEY: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: sources_fetch_0
         name: Fetch the sources of root 0
@@ -945,9 +945,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-
             velnor-tgt-rust-test-root.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci check-metadata
         working-directory: lab
@@ -957,9 +957,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: lab/target
-          key: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''lab/Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('lab/Cargo.lock') }}-
+            velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_lab }}-
             velnor-tgt-rust-test-lab.lab.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         run: '. "$VELNOR_EXEC" inputs restore --target-dir target'

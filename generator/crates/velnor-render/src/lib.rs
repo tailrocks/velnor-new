@@ -26,6 +26,8 @@ mod release_outputs;
 mod release_raw;
 mod release_steps;
 mod release_verify;
+mod reusable;
+mod reusable_on;
 mod rules;
 mod steps;
 mod workflow;
@@ -43,10 +45,11 @@ pub use crate::pinned_actions::{
 };
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
+pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,
-    MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
+    MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;

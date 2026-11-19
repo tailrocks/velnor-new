@@ -21,12 +21,14 @@ mod config_test_setup;
 mod credentials;
 mod detect;
 mod doc_steps;
+mod embedded;
 mod error;
 mod external_config;
 mod harness;
 mod lane;
 mod lock;
 mod lock_affected;
+mod lock_key;
 mod manifest_diff;
 mod metadata;
 mod metadata_file;
@@ -70,6 +72,7 @@ pub use config::{CONFIG_PATH, ci_debuginfo};
 pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{member_sources, optional_steps, root_sources};
+pub use embedded::is_plain_source;
 pub use error::{DetectError, Reason};
 pub use external_config::external_config_profile;
 pub use lock::{
@@ -77,10 +80,11 @@ pub use lock::{
     release_version, sums_url,
 };
 pub use lock_affected::lock_affected;
+pub use lock_key::lock_key;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
-    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
-    recorded_roots, recorded_target_dirs,
+    METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_members,
+    recorded_metadata, recorded_roots, recorded_target_dirs,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};
