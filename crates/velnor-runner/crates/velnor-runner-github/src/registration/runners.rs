@@ -28,6 +28,52 @@ where
     decode_runner_page(&exchange.body, runner_name).map(|(runner, _, _)| runner)
 }
 
+/// Lists the runners GitHub currently reports for one scale set.
+///
+/// A page whose `count` disagrees with its `value` length is treated as
+/// incomplete and rejected, so callers never mistake a truncated listing for
+/// proof that a runner is gone.
+pub fn list_scale_set_runners<T>(
+    transport: &mut T,
+    scale_set_id: i64,
+    admin_token: &str,
+) -> Result<Vec<RunnerReference>, SessionError>
+where
+    T: Transport + ?Sized,
+{
+    if scale_set_id <= 0 {
+        return Err(WireError::RegistrationRejected.into());
+    }
+    let request = SessionRequest {
+        method: Method::Get,
+        path: RUNNER_ENDPOINT.to_owned(),
+        query: Some(API_QUERY.to_owned()),
+        headers: admin_headers(admin_token)?,
+        body: Vec::new(),
+    };
+    let exchange = execute(transport, &request)?;
+    if exchange.status != 200 {
+        return Err(runner_status_error(exchange.status));
+    }
+    let page: RunnerReferencePage =
+        serde_json::from_slice(&exchange.body).map_err(|_| WireError::Malformed)?;
+    if usize::try_from(page.count).ok() != Some(page.value.len()) {
+        return Err(WireError::Malformed.into());
+    }
+    if page
+        .value
+        .iter()
+        .any(|runner| runner.id <= 0 || runner.name.is_empty())
+    {
+        return Err(WireError::Malformed.into());
+    }
+    Ok(page
+        .value
+        .into_iter()
+        .filter(|runner| runner.runner_scale_set_id == scale_set_id)
+        .collect())
+}
+
 pub fn observe_runner_by_name<T>(
     transport: &mut T,
     runner_name: &str,

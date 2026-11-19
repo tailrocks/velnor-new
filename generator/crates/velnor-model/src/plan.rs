@@ -13,6 +13,7 @@ pub const TEST_STEP: &str = "Test";
 pub const BUILD_TESTS_STEP: &str = "Build the tests";
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
+pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -91,6 +92,7 @@ pub struct Job {
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
+    pub reports_ignored: bool,
     pub steps: Vec<Step>,
 }
 
@@ -98,6 +100,7 @@ pub struct Job {
 pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
+    pub target_dir: Option<RepoPath>,
     pub when: When,
     pub pr: PrRun,
     pub gate: Option<Gate>,
@@ -267,6 +270,14 @@ pub enum CargoCommand {
 }
 
 impl CargoCommand {
+    #[must_use]
+    pub fn builds(&self) -> bool {
+        !matches!(
+            self,
+            Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {

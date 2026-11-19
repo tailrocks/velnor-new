@@ -4,15 +4,26 @@
 use super::SourceQualificationPlan;
 use crate::{RenderError, yaml::Yaml};
 
-pub(super) fn plan_job(plan: &SourceQualificationPlan) -> Result<Yaml, RenderError> {
+pub(super) fn plan_job(
+    plan: &SourceQualificationPlan,
+    runner: &super::super::RunnerSpec,
+) -> Result<Yaml, RenderError> {
     let mut job = plan.job.clone();
     let Yaml::Map(fields) = &mut job else {
         return Err(invalid());
     };
     fields.push((
         "if".to_owned(),
-        Yaml::str("github.event_name == 'pull_request'"),
+        Yaml::str(
+            runner
+                .fence(Some("github.event_name == 'pull_request'"))
+                .unwrap_or_else(|| "github.event_name == 'pull_request'".to_owned()),
+        ),
     ));
+    if let Some((_, runs_on)) = fields.iter_mut().find(|(key, _)| key == "runs-on") {
+        *runs_on = runner.runs_on.clone();
+    }
+    runner.push_default_shell(fields, false);
     let Some((_, Yaml::Map(outputs))) = fields.iter_mut().find(|(key, _)| key == "outputs") else {
         return Err(invalid());
     };
@@ -124,6 +135,7 @@ pub(super) fn selection_job(
         )]),
     ));
     fields.push(("steps".to_owned(), Yaml::Seq(steps)));
+    runner.push_default_shell(&mut fields, false);
     Ok(Yaml::Map(fields))
 }
 

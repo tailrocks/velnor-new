@@ -204,7 +204,11 @@ fn pr_parts(pr: PrRun) -> Vec<String> {
 }
 
 pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun) -> String {
-    match condition(when, gate, Setup::Before, pr, &[]) {
+    let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
+        Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
+        _ => Vec::new(),
+    };
+    match condition(when, gate, Setup::Before, pr, &plan_succeeded) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")

@@ -1,5 +1,5 @@
 version = "0.1.81"
-commit = "1793cf84b5924e2542a03b0fb2580e7395b2f4cb"
+commit = "a87c35aed5b68dd3e82b36df3e8d7364311abba8"
 
 [velnor-ci]
 linux-arm64 = "05b16546fa0d95c67b61bd041e59dfbcda527ca89f9350ae75d5be3219eaf98b"

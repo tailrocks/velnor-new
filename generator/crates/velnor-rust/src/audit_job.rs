@@ -30,7 +30,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         facts
             .rust_roots
             .iter()
-            .map(|root| lane.cargo(CargoCommand::BuildAll, root.manifest.parent())),
+            .map(|root| lane.cargo(CargoCommand::BuildAll, Some(root))),
     );
     steps.push(step(StepKind::Helper(HelperCommand::InputsAudit)));
     Some(Job {

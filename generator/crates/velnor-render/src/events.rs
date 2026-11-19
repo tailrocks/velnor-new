@@ -5,15 +5,17 @@ use velnor_model::{Concurrency, PullRequestType, Triggers};
 
 use crate::yaml::{Yaml, entry, text};
 
-const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && github.event.pull_request.number || github.run_id }}";
 const IGNORED_EVENT_SUFFIX: &str = "${{ ((github.event.action == 'labeled' && github.event.label.name != 'ci:run' && github.event.label.name != 'ci:auto') || (github.event.action == 'edited' && github.event.changes.base == null)) && format('-ignored-{0}', github.run_id) || '' }}";
+const PULL_REQUEST_GROUP: &str = "ci-${{ github.workflow_ref }}-${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base == null) && github.event.pull_request.number || github.run_id }}";
 const CANCEL_PULL_REQUEST_RUNS: &str = "${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' }}";
+const CANCEL_PULL_REQUEST_RUNS_EXCEPT_EDITS: &str = "${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' && !(github.event.action == 'edited' && github.event.changes.base == null) }}";
 
 pub(crate) fn concurrency(concurrency: Concurrency) -> Yaml {
     let (group, cancel) = match concurrency {
-        Concurrency::CancelOlderPullRequestRuns => {
-            (PULL_REQUEST_GROUP.to_owned(), CANCEL_PULL_REQUEST_RUNS)
-        }
+        Concurrency::CancelOlderPullRequestRuns => (
+            PULL_REQUEST_GROUP.to_owned(),
+            CANCEL_PULL_REQUEST_RUNS_EXCEPT_EDITS,
+        ),
         Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels => (
             format!("{PULL_REQUEST_GROUP}{IGNORED_EVENT_SUFFIX}"),
             CANCEL_PULL_REQUEST_RUNS,

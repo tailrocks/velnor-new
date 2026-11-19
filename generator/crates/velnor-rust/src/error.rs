@@ -61,6 +61,7 @@ pub enum Reason {
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
+    MiseTemplate,
     OtherMiseConfig,
     CapLints,
     CargoEnv(String),
@@ -117,9 +118,6 @@ impl Reason {
             Self::PrCiWithSkipDraft => f.write_str(
                 "pr_ci = \"label\" and skip_draft_pull_requests = true both decide what a draft pull request runs; remove skip_draft_pull_requests, because pr_ci = \"label\" already runs nothing on a draft",
             ),
-            Self::OtherMiseConfig => f.write_str(
-                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
-            ),
             Self::HelperSourceRelease => f.write_str(
                 "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
             ),
@@ -146,7 +144,7 @@ impl Reason {
             Self::TargetDirOverlap(value) => write!(f, "build.target-dir {value:?} overlaps tracked checkout content or repository control paths; use an untracked build directory"),
             Self::RuntimeTargetDir { used, rendered } => write!(
                 f,
-                "puts the target directory at {used}, but the generated workflow caches {rendered}; this file was not part of generation, so cargo would write outside the cached target path: remove it, or commit it and regenerate"
+                "puts the target directory at {used}, but the generated workflow caches {rendered}, so cargo would write outside the cached target path: restore the generated target directory, or commit the change and regenerate"
             ),
             Self::BuildDirKey(key) => write!(
                 f,
@@ -157,6 +155,22 @@ impl Reason {
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    fn fmt_mise(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MiseOverridesFlags(name) => write!(
+                f,
+                "{name} is not supported: mise-action installs tools and exports this configuration's environment to every step, where plugins or variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::MiseTemplate => f.write_str(
+                "templates are not supported: mise evaluates them while installing tools and can execute commands that replace or weaken a check; use literal configuration values"
+            ),
+            Self::OtherMiseConfig => f.write_str(
+                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
             _ => Ok(()),
         }
@@ -214,10 +228,9 @@ impl fmt::Display for Reason {
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
-            Self::MiseOverridesFlags(name) => write!(
-                f,
-                "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
-            ),
+            Self::MiseOverridesFlags(_) | Self::MiseTemplate | Self::OtherMiseConfig => {
+                self.fmt_mise(f)
+            }
             Self::UndeclaredTarget(_) | Self::HostTupleVersion(_) => self.fmt_build_target(f),
             Self::CargoEnv(name) => write!(
                 f,
@@ -226,8 +239,7 @@ impl fmt::Display for Reason {
             Self::UnpinnedTool(_)
             | Self::HelperBox(_)
             | Self::HelperSourceRelease
-            | Self::PrCiWithSkipDraft
-            | Self::OtherMiseConfig => self.fmt_setup(f),
+            | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
