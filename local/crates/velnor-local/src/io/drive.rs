@@ -133,7 +133,14 @@ async fn run_one(
         ));
     }
     let repo = env.dir.join("repo");
-    copy_checkout(&args.repo, &repo, &args.environment.default_branch, tag).await?;
+    copy_checkout(
+        &args.repo,
+        &repo,
+        &args.environment.default_branch,
+        tag,
+        &args.repository,
+    )
+    .await?;
     super::local_ci::pin_workflows(&args.environment, &repo, tag).await?;
     env.reset(scenario.keeps_cache(args.fresh_cache)).await?;
     let mut environment = args.environment.clone();

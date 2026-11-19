@@ -17,6 +17,7 @@ fn plain(dir: &std::path::Path) -> EnvironmentArgs {
         velnor_host: Some("velnor-host".into()),
         policy: None,
         label: Vec::new(),
+        ..EnvironmentArgs::default()
     }
 }
 
