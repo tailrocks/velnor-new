@@ -19,6 +19,7 @@ mod pinned_actions;
 mod private_steps;
 mod release;
 mod release_assets;
+mod release_attest;
 mod release_binaries;
 mod release_checks;
 mod release_family;
