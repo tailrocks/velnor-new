@@ -56,10 +56,16 @@ fn fetch(manifests: &[RepoPath]) -> RenderedStep {
         .collect();
     RenderedStep {
         name: "Fetch the dependencies, then drop the token".to_owned(),
-        env: vec![(
-            "VELNOR_PRIVATE_TOKEN".to_owned(),
-            Value::Expr(format!("${{{{ steps.{TOKEN_STEP}.outputs.token }}}}")),
-        )],
+        env: vec![
+            (
+                "VELNOR_PRIVATE_TOKEN".to_owned(),
+                Value::Expr(format!("${{{{ steps.{TOKEN_STEP}.outputs.token }}}}")),
+            ),
+            (
+                "VELNOR_API_URL".to_owned(),
+                Value::Expr("${{ github.api_url }}".to_owned()),
+            ),
+        ],
         run: Some(format!("velnor-ci fetch {}", arguments.join(" "))),
         ..RenderedStep::default()
     }

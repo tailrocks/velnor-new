@@ -84,6 +84,7 @@ fn assert_phase(
         fetch_step["env"]["VELNOR_PRIVATE_TOKEN"],
         "${{ steps.private-token.outputs.token }}"
     );
+    assert_eq!(fetch_step["env"]["VELNOR_API_URL"], "${{ github.api_url }}");
     let run = fetch_step["run"].as_str().ok_or("fetch run missing")?;
     assert!(
         run.contains("--manifest-path ") && run.contains("Cargo.toml"),
