@@ -27,7 +27,7 @@ else:
     print("OK", selected["run_id"], selected["run_attempt"])
 "#;
 
-fn run(id: u64, number: u64, status: &str, conclusion: Value) -> Value {
+fn run(id: u64, number: u64, status: &str, conclusion: &Value) -> Value {
     json!({
         "id": id,
         "run_number": number,
@@ -43,7 +43,7 @@ fn run(id: u64, number: u64, status: &str, conclusion: Value) -> Value {
 }
 
 fn green(id: u64, number: u64) -> Value {
-    run(id, number, "completed", json!("success"))
+    run(id, number, "completed", &json!("success"))
 }
 
 fn runs(entries: &[Value]) -> Value {
@@ -66,7 +66,7 @@ fn jobs(entries: &[Value]) -> Value {
     json!([{"jobs": entries}])
 }
 
-fn decide(runs: Value, jobs: Value, recheck: Value) -> Result<String, Box<dyn Error>> {
+fn decide(runs: &Value, jobs: &Value, recheck: &Value) -> Result<String, Box<dyn Error>> {
     let dir = tempfile::tempdir()?;
     std::fs::write(
         dir.path().join("job_image_authority_identity.py"),
@@ -111,21 +111,18 @@ fn good_jobs() -> Value {
 fn image_publication_needs_a_green_rust_required_job_on_the_same_source()
 -> Result<(), Box<dyn Error>> {
     let latest = runs(&[green(102, 7)]);
-    assert_eq!(
-        decide(latest.clone(), good_jobs(), latest.clone())?,
-        "OK 102 1"
-    );
+    assert_eq!(decide(&latest, &good_jobs(), &latest)?, "OK 102 1");
     let older_and_newer = runs(&[green(90, 6), green(102, 7)]);
     assert_eq!(
-        decide(older_and_newer.clone(), good_jobs(), older_and_newer)?,
+        decide(&older_and_newer, &good_jobs(), &older_and_newer)?,
         "OK 102 1"
     );
 
-    let pending = runs(&[run(102, 7, "in_progress", Value::Null)]);
-    let cancelled = runs(&[run(102, 7, "completed", json!("cancelled"))]);
-    let red = runs(&[run(102, 7, "completed", json!("failure"))]);
+    let pending = runs(&[run(102, 7, "in_progress", &Value::Null)]);
+    let cancelled = runs(&[run(102, 7, "completed", &json!("cancelled"))]);
+    let red = runs(&[run(102, 7, "completed", &json!("failure"))]);
     let tie = runs(&[green(102, 7), green(103, 7)]);
-    let superseded_red = runs(&[green(101, 6), run(102, 7, "completed", json!("failure"))]);
+    let superseded_red = runs(&[green(101, 6), run(102, 7, "completed", &json!("failure"))]);
     for (label, listing, reason) in [
         ("missing", runs(&[]), "No canonical main Rust CI push run"),
         ("pending", pending, "no `success` conclusion"),
@@ -138,7 +135,7 @@ fn image_publication_needs_a_green_rust_required_job_on_the_same_source()
             "no `success` conclusion",
         ),
     ] {
-        let verdict = decide(listing.clone(), good_jobs(), listing)?;
+        let verdict = decide(&listing, &good_jobs(), &listing)?;
         assert!(
             verdict.starts_with("REJECTED") && verdict.contains(reason),
             "{label}: {verdict}"
@@ -160,7 +157,7 @@ fn image_publication_ignores_a_skipped_rust_required_job() -> Result<(), Box<dyn
             vec![job(&gate(), 102, "skipped"), job(&gate(), 102, "success")],
         ),
     ] {
-        let verdict = decide(latest.clone(), jobs(&entries), latest.clone())?;
+        let verdict = decide(&latest, &jobs(&entries), &latest)?;
         assert_eq!(verdict, "OK 102 1", "{label}");
     }
     for (label, entries, reason) in [
@@ -185,7 +182,7 @@ fn image_publication_ignores_a_skipped_rust_required_job() -> Result<(), Box<dyn
             "has no `success` conclusion",
         ),
     ] {
-        let verdict = decide(latest.clone(), jobs(&entries), latest.clone())?;
+        let verdict = decide(&latest, &jobs(&entries), &latest)?;
         assert!(
             verdict.starts_with("REJECTED") && verdict.contains(reason),
             "{label}: {verdict}"
@@ -221,7 +218,7 @@ fn image_publication_rejects_an_ambiguous_or_shifting_rust_required_job()
         ),
         ("malformed", json!({"jobs": []}), "incorrect format"),
     ] {
-        let verdict = decide(latest.clone(), jobs, latest.clone())?;
+        let verdict = decide(&latest, &jobs, &latest)?;
         assert!(
             verdict.starts_with("REJECTED") && verdict.contains(reason),
             "{label}: {verdict}"
@@ -231,20 +228,20 @@ fn image_publication_rejects_an_ambiguous_or_shifting_rust_required_job()
         ("newer run", runs(&[green(102, 7), green(103, 8)])),
         (
             "restarted",
-            runs(&[run(102, 7, "in_progress", Value::Null)]),
+            runs(&[run(102, 7, "in_progress", &Value::Null)]),
         ),
         ("emptied", runs(&[])),
     ] {
-        let verdict = decide(latest.clone(), good_jobs(), recheck)?;
+        let verdict = decide(&latest, &good_jobs(), &recheck)?;
         assert!(
             verdict.starts_with("REJECTED"),
             "recheck {label}: {verdict}"
         );
     }
     let verdict = decide(
-        latest.clone(),
-        good_jobs(),
-        runs(&[green(102, 7), green(103, 8)]),
+        &latest,
+        &good_jobs(),
+        &runs(&[green(102, 7), green(103, 8)]),
     )?;
     assert!(verdict.contains("changed during the check"), "{verdict}");
     Ok(())
