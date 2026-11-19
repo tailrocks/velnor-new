@@ -19,7 +19,7 @@ use crate::support::fresh_dir;
 
 fn renderer() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../../../crates/velnor-actions-workflow-renderer/src")
+        .join("../velnor-actions-workflow-renderer/src")
 }
 
 fn python_ready() -> bool {
