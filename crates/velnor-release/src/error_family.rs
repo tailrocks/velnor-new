@@ -39,6 +39,8 @@ pub enum FamilyError {
     TagPushWithReleasedPackage {
         package: String,
     },
+    RequiredChecksNeedTagPush,
+    RequiredChecksOffWithPrOnlyChecks,
 }
 
 impl fmt::Display for FamilyError {
@@ -87,6 +89,14 @@ impl fmt::Display for FamilyError {
             Self::ChecksumsNeedArchives { package } => write!(
                 f,
                 ".velnor/release.toml: checksums_file digests the binaries inside archives, but binary {package} is raw; use format = \"archive\" or remove checksums_file"
+            ),
+            Self::RequiredChecksNeedTagPush => write!(
+                f,
+                ".velnor/release.toml: family_required_checks applies only to family_trigger = \"tag_push\""
+            ),
+            Self::RequiredChecksOffWithPrOnlyChecks => write!(
+                f,
+                ".velnor/release.toml: family_required_checks = false skips the required-checks gate, so pr_only_checks has nothing to apply to; remove one of them"
             ),
             Self::TagPushWithReleasedPackage { package } => write!(
                 f,

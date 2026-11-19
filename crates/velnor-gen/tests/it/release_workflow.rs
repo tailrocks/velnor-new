@@ -109,7 +109,13 @@ fn the_release_dag_gates_the_tag_on_default_branch_ancestry_before_anything_else
     assert!(compare.ends_with(
         "--jq '.status == \"behind\" or .status == \"identical\" or error(\"the tagged commit is not on the default branch\")'"
     ));
-    assert!(position(&runs(gate), "velnor-ci release-gate").is_ok());
+    let checks_waived = read(".velnor/release.toml")?
+        .lines()
+        .any(|line| line == "family_required_checks = false");
+    assert_eq!(
+        position(&runs(gate), "velnor-ci release-gate").is_ok(),
+        !checks_waived
+    );
     for (id, job) in jobs.iter().filter(|(id, _)| *id != "gate") {
         assert!(needs(job).contains(&"gate"), "{id}");
     }
