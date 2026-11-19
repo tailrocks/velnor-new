@@ -112,11 +112,11 @@ fn a_declared_workflow_renders_environment_permissions_conditions_and_steps() ->
     );
     assert_eq!(
         validate.get("run").and_then(Node::text),
-        Some("velnor-ci validate-artifact-id")
+        Some(". \"$VELNOR_EXEC\" validate-artifact-id")
     );
     assert!(
         all.iter()
-            .any(|step| step.get("run").and_then(Node::text) == Some("velnor-ci show-id"))
+            .any(|step| step.get("run").and_then(Node::text) == Some(". \"$VELNOR_EXEC\" show-id"))
     );
     let source = job(&tree, "source")?;
     let upload = steps(source);

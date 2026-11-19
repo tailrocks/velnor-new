@@ -49,6 +49,10 @@ fn render_one(
         entry("on", on(&workflow.triggers)),
         entry("permissions", Yaml::Map(Vec::new())),
     ];
+    document.extend(
+        crate::helper_integrity::defaults(&rendered.jobs)
+            .map(|defaults| entry("defaults", defaults)),
+    );
     document.extend(workflow.concurrency.as_ref().map(|concurrency| {
         entry(
             "concurrency",
@@ -121,10 +125,15 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
         }),
         runs_on,
         timeout_minutes: job.timeout_minutes,
-        steps: installs
-            .into_iter()
-            .chain(job.steps.iter().map(rendered_step))
-            .collect(),
+        steps: match installs {
+            Some(install) => crate::helper_integrity::secure_with(
+                helper,
+                std::iter::once(install)
+                    .chain(job.steps.iter().map(rendered_step))
+                    .collect(),
+            ),
+            None => job.steps.iter().map(rendered_step).collect(),
+        },
         ..RenderedJob::default()
     }
 }

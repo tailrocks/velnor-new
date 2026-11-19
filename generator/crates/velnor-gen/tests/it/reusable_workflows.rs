@@ -143,7 +143,7 @@ fn a_step_can_continue_on_error_and_only_that_step() -> TestResult {
         .1;
     let flags: Vec<Option<&str>> = steps(check)
         .iter()
-        .skip(1)
+        .skip(3)
         .map(|step| step.get("continue-on-error").and_then(Node::text))
         .collect();
     assert_eq!(flags, [Some("true"), None]);

@@ -38,6 +38,11 @@ pub(crate) fn step(
                     "job {job} runs velnor-ci, so it needs helper = true"
                 ));
             }
+            if calls_velnor_ci(&run) && !run.starts_with("velnor-ci ") {
+                return refuse(format!(
+                    "job {job} calls velnor-ci, which must start with velnor-ci as the command word"
+                ));
+            }
             (String::new(), Body::Run(run))
         }
         (None, Some(name), None) => {
