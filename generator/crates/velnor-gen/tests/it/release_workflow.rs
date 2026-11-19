@@ -202,8 +202,8 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
     assert_eq!(
         tag_checks,
         [
-            "dist/velnor-ci-\"$SUFFIX\" check-tag \"$GITHUB_REF_NAME\"",
-            "dist/velnor-gen-\"$SUFFIX\" check-tag \"$GITHUB_REF_NAME\""
+            "stage/velnor-ci check-tag \"$GITHUB_REF_NAME\"",
+            "stage/velnor-gen check-tag \"$GITHUB_REF_NAME\""
         ]
     );
     let writer = &release_jobs[WRITER];
@@ -219,7 +219,7 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
     assert!(verify < publish);
     assert!(runs[publish].contains(" --prerelease "));
     let published = runs[publish].matches(" dist/").count();
-    assert_eq!(published, 8);
+    assert_eq!(published, 9);
     assert!(runs[publish].contains(" dist/COMMIT "));
     assert!(
         !runs
