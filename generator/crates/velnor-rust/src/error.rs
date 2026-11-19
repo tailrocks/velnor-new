@@ -59,6 +59,7 @@ pub enum Reason {
     UnknownTestSetupRoot(String),
     UnknownTestLaneRoot(String),
     TestLaneWithoutNextest(String),
+    UnknownTestLanePackage(String),
     MissingDenyConfig(RepoPath),
     RustdocflagsString,
     CargoConfigInclude,
@@ -105,6 +106,10 @@ impl Reason {
             Self::TestLaneWithoutNextest(root) => write!(
                 f,
                 "test_lane names the root {root}, which runs no nextest tests; remove the lane or give the root a test the lane can run"
+            ),
+            Self::UnknownTestLanePackage(package) => write!(
+                f,
+                "test_lane.packages names {package}, which is not a package of the lane's root; name the packages that hold the lane's tests"
             ),
             Self::MissingDenyConfig(path) => write!(
                 f,
@@ -228,6 +233,7 @@ impl fmt::Display for Reason {
             Self::UnknownTestSetupRoot(_)
             | Self::UnknownTestLaneRoot(_)
             | Self::TestLaneWithoutNextest(_)
+            | Self::UnknownTestLanePackage(_)
             | Self::MissingDenyConfig(_) => self.fmt_test_config(f),
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",

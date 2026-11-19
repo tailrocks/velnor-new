@@ -113,7 +113,12 @@ pub struct Gate {
     pub slug: RootSlug,
     pub need: GateNeed,
     pub from: PlanFrom,
-    pub package: Option<PackageName>,
+    /// A gate on packages passes when the plan selects any of them or the
+    /// whole workspace. Empty means no package condition.
+    pub packages: Vec<PackageName>,
+    /// Passes exactly when the plan selects a package of the root but none
+    /// of `packages`, so a notice can say why the guarded step was skipped.
+    pub unselected: bool,
 }
 
 impl Gate {
@@ -129,6 +134,9 @@ impl Gate {
             ],
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::PackageArgs if self.unselected => {
+                vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
+            }
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
             GateNeed::TestFilter
             | GateNeed::PackageArgs
@@ -229,6 +237,7 @@ pub enum CargoCommand {
     },
     NextestFeatures {
         features: Vec<String>,
+        packages: Vec<PackageName>,
         filter: FilterRef,
         ci_profile: bool,
     },
