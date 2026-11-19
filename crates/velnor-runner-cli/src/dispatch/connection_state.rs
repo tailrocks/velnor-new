@@ -111,6 +111,12 @@ pub(super) fn connection_drain_proof(state: &Path, connection_id: &ConnectionId)
         .join(format!("{}~drained", connection_id.as_str()))
 }
 
+pub(super) fn connection_absence_record(state: &Path, connection_id: &ConnectionId) -> PathBuf {
+    state
+        .join("connection-drain")
+        .join(format!("{}~github-absent", connection_id.as_str()))
+}
+
 pub(super) fn write_reactivation_proof(
     state: &Path,
     connection: &RepositoryConnection,
