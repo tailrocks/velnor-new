@@ -112,11 +112,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
-        checkout: if raw.sparse_checkout.unwrap_or(false) {
-            CheckoutScope::Sparse
-        } else {
-            CheckoutScope::Full
-        },
+        checkout: checkout_scope(raw.sparse_checkout),
         lint,
         test_groups,
         test_lanes,
@@ -152,6 +148,14 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         timeout_minutes,
         exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn checkout_scope(sparse: Option<bool>) -> CheckoutScope {
+    if sparse.unwrap_or(false) {
+        CheckoutScope::Sparse
+    } else {
+        CheckoutScope::Full
+    }
 }
 
 fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {

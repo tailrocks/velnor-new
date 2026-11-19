@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fmt::Write as _;
+
 use crate::declared_fixture::{JOB, TestResult, refusal, rendered, rendered_file, workflow};
 
 const PUSH: &str = "[workflow.on.push]\nbranches = [\"main\"]\n";
@@ -17,9 +19,11 @@ fn chain(length: usize) -> String {
             1 => String::new(),
             _ => format!("uses = \"level-{}\"\n", level - 1),
         };
-        config.push_str(&format!(
+        write!(
+            config,
             "[[workflow]]\nfile = \"level-{level}\"\nname = \"Level {level}\"\n\n[[workflow.job]]\nid = \"run\"\n{uses}\n{job}\n\n"
-        ));
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
     }
     config
 }
@@ -193,9 +197,11 @@ fn followers(count: usize) -> String {
                 level - 1
             ),
         };
-        config.push_str(&format!(
+        write!(
+            config,
             "[[workflow]]\nfile = \"stage-{level}\"\nname = \"Stage {level}\"\n{on}\n{JOB}\n"
-        ));
+        )
+        .unwrap_or_else(|e| unreachable!("{e}"));
     }
     config
 }

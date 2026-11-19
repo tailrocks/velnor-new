@@ -39,7 +39,6 @@ pub async fn dispatch<E: Engine + Copy + Send>(
         },
         authority: Proxy::authorized(server, token),
         repo: env.dir.join("repo"),
-        pin: None,
         pushed: BTreeMap::new(),
         pulls: Vec::new(),
         events: 0,

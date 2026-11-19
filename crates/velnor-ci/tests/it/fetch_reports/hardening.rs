@@ -68,7 +68,7 @@ fn one_extraction_budget_is_shared_by_every_artifact() {
         message.contains(" of 31 ") && message.contains("extraction budget"),
         "{message}"
     );
-    assert!(extracted_bytes(&dir) <= total - 1);
+    assert!(extracted_bytes(&dir) < total);
     assert!(fetched(&dir).len() < 31);
 }
 

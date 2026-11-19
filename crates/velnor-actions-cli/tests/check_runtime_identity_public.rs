@@ -26,9 +26,6 @@ const UNQUALIFIED_MISE: &[u8] = b"unqualified-runtime\n";
 mod identity_support;
 use identity_support::{git, git_output};
 
-#[path = "check_runtime_identity_progress.rs"]
-mod progress;
-
 #[cfg_attr(
     all(target_os = "linux", target_arch = "aarch64"),
     ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"

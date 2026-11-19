@@ -2628,7 +2628,7 @@
         },
         {
           "name": "velnor-ci",
-          "version": "0.1.92",
+          "version": "0.1.94",
           "manifest": "crates/velnor-ci/Cargo.toml",
           "dependencies": [
             {
@@ -2802,7 +2802,7 @@
         },
         {
           "name": "velnor-gen",
-          "version": "0.1.92",
+          "version": "0.1.94",
           "manifest": "crates/velnor-gen/Cargo.toml",
           "dependencies": [
             {
@@ -3527,9 +3527,9 @@
     "crates/velnor-actions-workflow-renderer/Cargo.toml": "04ab2b2d2671bb359ef828b7ee562780063b089b537ed78c02a620aefd233565",
     "crates/velnor-archive-guard/Cargo.toml": "11b400a4b66667dd198d30db59b8c744d1783a950ca701837943e5ea1a1bb572",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "67549a503da22d8983fa1cd0214e27b035a14cdbeeddcd0188c008d31992b08c",
+    "crates/velnor-ci/Cargo.toml": "564c69339346e1ef8aa5d2db4088a0ec42facb1c223bdff9dc65fe33bd2edbbe",
     "crates/velnor-freshness/Cargo.toml": "0a04d78275fd4e4ab05fea8f272f51fb905c9bdce4c0395448c4da34cfe3ea0e",
-    "crates/velnor-gen/Cargo.toml": "370c614017511f8025ab0a50007891bc15e89fb54b1df8b1a962e474e9877f6b",
+    "crates/velnor-gen/Cargo.toml": "ab734c7c52d61586b7ba2d0407e18505f5c47ce41687d4bfd59b878c4970a39d",
     "crates/velnor-local/Cargo.toml": "f5f297cde8406f2449b3eb796b67633ce63d862b7238d14eee521037534bd294",
     "crates/velnor-model/Cargo.toml": "81beeea9d092277193e6261630bac58c9e1cf354c97983761fdc74776a3486ef",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
@@ -3545,5 +3545,5 @@
     "crates/velnor-rust/Cargo.toml": "e94a06ddc959217f1d0e955626704344b1bde461c09dcf242505116b5990aa6b",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "c2045f40f4e554116b62d76bfb4439069b2398b943320cd4067024c6e2603af9"
+  "layout": "26d4d2acc8628ae46e1e8ad67803b75fe5a07db5c376cd4912436ac9b33696c2"
 }

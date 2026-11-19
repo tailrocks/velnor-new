@@ -4,6 +4,7 @@
 pub mod cli;
 mod drifts;
 mod error;
+mod helper_gate;
 pub mod io;
 mod release;
 mod reusable;
@@ -12,15 +13,14 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
+use helper_gate::check_helper;
+pub use helper_gate::require_compatible;
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{
-    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, PushAfterMergeGroup, RepoFacts,
-    RepoPath, RepoView,
-};
+use velnor_model::{FullRun, OnMain, RepoPath, RepoView};
 use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
@@ -104,59 +104,6 @@ pub fn plan_generate(
     }
     let drifts = drift(&expected, on_disk, engine_configured);
     Ok((expected, drifts))
-}
-
-fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
-    let release = facts
-        .helper
-        .as_ref()
-        .ok_or(GenerateError::HelperNotPinned)?;
-    require_compatible(release.version())?;
-    if !release.version().at_least(HELPER_MINIMUM) {
-        return Err(GenerateError::HelperTooOld(release.version().clone()));
-    }
-    if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 82)) {
-        return Err(GenerateError::TestGroupsHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
-        return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
-    }
-    if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 93)) {
-        return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
-    }
-    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
-        return Err(GenerateError::PrivateSourcesHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
-        && !release.version().at_least((0, 1, 82))
-    {
-        return Err(GenerateError::MergeGroupHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    if facts.config.budget.is_some_and(|budget| budget.enabled())
-        && !release.version().at_least(BUDGET_HELPER)
-    {
-        return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
-    }
-    if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
-        return Err(GenerateError::MbxStoreHelperTooOld(
-            release.version().clone(),
-        ));
-    }
-    Ok(release)
-}
-
-pub fn require_compatible(version: &HelperVersion) -> Result<(), GenerateError> {
-    if version.series() == Some(COMPATIBLE_HELPER_SERIES) {
-        Ok(())
-    } else {
-        Err(GenerateError::IncompatibleHelper(version.clone()))
-    }
 }
 
 pub fn check_tag(version: &str, tag: &str) -> Result<String, String> {
