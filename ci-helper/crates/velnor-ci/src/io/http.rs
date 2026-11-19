@@ -8,6 +8,7 @@ use ureq::http::Response;
 
 use crate::error::CiError;
 use crate::github::{GitHub, GitHubWrite};
+use crate::release_family::GitHubPost;
 
 pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
@@ -60,6 +61,18 @@ impl GitHub for HttpGitHub {
         body(
             &format!("GET {path}"),
             self.signed(self.agent.get(&url)).call(),
+        )
+    }
+}
+
+impl GitHubPost for HttpGitHub {
+    fn post(&self, path: &str, json: &str) -> Result<String, CiError> {
+        let url = format!("{}{path}", self.api);
+        body(
+            &format!("POST {path}"),
+            self.signed(self.agent.post(&url))
+                .header("Content-Type", "application/json")
+                .send(json),
         )
     }
 }
