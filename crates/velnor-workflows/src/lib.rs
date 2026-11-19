@@ -27,8 +27,9 @@ mod workflow_run;
 pub use cache_mode::CacheMode;
 pub use error::WorkflowsError;
 pub use helper_call::HELPER_COMMANDS;
+pub use matrix_runner::MatrixRunner;
 pub use plan::{
     Action, Body, Call, CallTarget, CallValue, Concurrency, Container, Env, Input, InputKind, Job,
-    LocalAction, Matrix, MatrixRunner, MatrixSource, Output, PullRequest, Push, Service, Step,
-    Triggers, Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
+    LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
+    Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };

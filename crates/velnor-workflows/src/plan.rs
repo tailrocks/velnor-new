@@ -4,6 +4,7 @@
 use crate::cache_mode::CacheMode;
 use crate::check::workflow;
 use crate::error::{WorkflowsError, refuse};
+use crate::matrix_runner::MatrixRunner;
 use crate::raw::RawFile;
 
 pub(crate) const DEFAULT_RUNNER: &str = "ubuntu-latest";
@@ -159,13 +160,6 @@ pub struct Job {
     pub services: Vec<Service>,
     pub steps: Vec<Step>,
     pub call: Option<Call>,
-}
-
-/// A job whose `runs-on` is `${{ matrix.<axis> }}`: each value of the axis and whether it is hosted.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MatrixRunner {
-    pub axis: String,
-    pub labels: Vec<(String, bool)>,
 }
 
 /// A job that calls a reusable workflow instead of running steps.

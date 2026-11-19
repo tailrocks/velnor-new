@@ -5,8 +5,9 @@ use velnor_model::looks_github_hosted;
 
 use crate::check::{Context, runner_label_of};
 use crate::error::{WorkflowsError, refuse};
+use crate::matrix_runner::MatrixRunner;
 use crate::matrix_runner::matrix_runner;
-use crate::plan::{Matrix, MatrixRunner};
+use crate::plan::Matrix;
 use crate::raw::RawJob;
 
 /// Whether `label` is open to pull requests from forks. Only `hosted = true` opens it.

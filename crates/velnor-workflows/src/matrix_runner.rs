@@ -3,8 +3,15 @@
 
 use crate::check::runner_label_of;
 use crate::error::{WorkflowsError, refuse};
-use crate::plan::{Matrix, MatrixRunner, MatrixSource};
+use crate::plan::{Matrix, MatrixSource};
 use crate::raw::RawJob;
+
+/// A job whose `runs-on` is `${{ matrix.<axis> }}`: each value of the axis and whether it is hosted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatrixRunner {
+    pub axis: String,
+    pub labels: Vec<(String, bool)>,
+}
 
 /// `runner = "${{ matrix.<axis> }}"`. Every value of the axis must be declared in
 /// `runner_labels`, because the generator never decides from a label whether a runner is
@@ -73,10 +80,10 @@ fn axis_of(expression: &str) -> Option<&str> {
 
 fn axis_values<'a>(
     axis: &str,
-    axes: &'a [(String, Vec<String>)],
+    listed: &'a [(String, Vec<String>)],
     include: &'a [Vec<(String, String)>],
 ) -> Vec<&'a str> {
-    let mut values: Vec<&str> = axes
+    let mut values: Vec<&str> = listed
         .iter()
         .filter(|(name, _)| name == axis)
         .flat_map(|(_, values)| values.iter().map(String::as_str))
