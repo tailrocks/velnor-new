@@ -24,6 +24,7 @@ struct Declared {
     registries: BTreeSet<String>,
     crates_io: bool,
     global: bool,
+    too_deep: bool,
     seen: BTreeSet<PathBuf>,
 }
 
@@ -39,6 +40,11 @@ pub(super) fn neutralise(directory: &Path, cargo_home: &Path) -> Result<Neutrali
         }
     }
     declared.scan_directory(cargo_home);
+    if declared.too_deep {
+        return Err(CiError::new(format!(
+            "a Cargo config include chain is deeper than {MAX_INCLUDE_DEPTH} files, so its credential providers cannot all be found; refusing to run with the token"
+        )));
+    }
     let mut neutralised = Neutralised::default();
     if declared.global {
         neutralised.config.push(GLOBAL_LAST);
@@ -80,7 +86,7 @@ impl Declared {
     }
 
     fn scan(&mut self, path: &Path, depth: usize) {
-        if depth > MAX_INCLUDE_DEPTH || !self.seen.insert(path.to_path_buf()) {
+        if !self.seen.insert(path.to_path_buf()) {
             return;
         }
         let Ok(text) = std::fs::read_to_string(path) else {
@@ -103,6 +109,10 @@ impl Declared {
                 .as_str()
                 .or_else(|| include.get("path").and_then(toml::Value::as_str));
             if let Some(target) = target {
+                if depth >= MAX_INCLUDE_DEPTH {
+                    self.too_deep = true;
+                    return;
+                }
                 self.scan(&base.join(target), depth + 1);
             }
         }

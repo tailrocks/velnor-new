@@ -380,3 +380,21 @@ fn test_binaries_built_with_private_sources_are_never_uploaded_as_an_artifact() 
     assert!(text.contains("private-token"), "{text}");
     Ok(())
 }
+
+#[test]
+fn a_cargo_config_include_is_refused_so_no_included_source_can_hide_the_private_dependencies()
+-> TestResult {
+    for config in ["", "[build]\njobs = 2\n"] {
+        let mut repo = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
+        repo.files.insert(
+            path(".cargo/config.toml")?,
+            format!("include = [\"private.toml\"]\n{config}").into_bytes(),
+        );
+        let message = workflow(&repo).err().map(|e| e.to_string());
+        assert!(
+            message.as_deref().is_some_and(|m| m.contains("include")),
+            "{message:?}"
+        );
+    }
+    Ok(())
+}

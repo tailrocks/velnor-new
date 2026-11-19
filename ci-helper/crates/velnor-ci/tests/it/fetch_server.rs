@@ -123,3 +123,34 @@ fn a_server_url_that_is_not_a_plain_https_host_runs_nothing_and_still_revokes() 
     }
     Ok(())
 }
+
+#[test]
+fn an_include_chain_deeper_than_the_scanner_reads_runs_nothing_and_still_revokes() -> TestResult {
+    let fixture = Fixture::new("fetch-deep-include", 0)?;
+    for level in 0..12 {
+        let (name, next) = if level == 0 {
+            (".cargo/config.toml".to_owned(), "c1.toml".to_owned())
+        } else {
+            (
+                format!(".cargo/c{level}.toml"),
+                format!("c{}.toml", level + 1),
+            )
+        };
+        let body = if level == 11 {
+            "[registries.deep]\nindex = \"sparse+https://deep.invalid/\"\ncredential-provider = \"/bin/false\"\n".to_owned()
+        } else {
+            format!("include = [\"{next}\"]\n")
+        };
+        fixture.repo.write_unstaged(&name, &body);
+    }
+    let api = serve(204)?;
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &[]);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("include"),
+        "{output:?}"
+    );
+    assert_eq!(fixture.log("cargo.args"), "");
+    assert_eq!(api.requests.lock().map_err(|e| e.to_string())?.len(), 1);
+    Ok(())
+}
