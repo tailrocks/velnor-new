@@ -17,8 +17,8 @@ const PAIR: &str = "velnor-runner-host::local_pair_public";
 const LIST_ARGS: &str =
     "nextest list --workspace --locked --ignore-default-filter --message-format json";
 
-type Case = (&'static str, bool, bool);
-type Suite<'a> = (&'a str, &'a str, &'a [Case]);
+pub(crate) type Case = (&'static str, bool, bool);
+pub(crate) type Suite<'a> = (&'a str, &'a str, &'a [Case]);
 
 fn fixture(name: &str) -> Repo {
     let repo = Repo::new(name);
@@ -49,7 +49,7 @@ fi
     repo
 }
 
-fn listing(suites: &[Suite<'_>]) -> String {
+pub(crate) fn listing(suites: &[Suite<'_>]) -> String {
     let mut rust_suites = Map::new();
     for (id, status, cases) in suites {
         let mut testcases = Map::new();
@@ -98,7 +98,7 @@ fn calls(repo: &Repo) -> String {
     fs::read_to_string(repo.root().join("calls")).unwrap_or_default()
 }
 
-fn text(bytes: &[u8]) -> String {
+pub(crate) fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
