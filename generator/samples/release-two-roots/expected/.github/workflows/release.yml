@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -65,7 +65,7 @@ jobs:
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -156,7 +156,7 @@ jobs:
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -254,7 +254,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the x86_64-unknown-linux-musl target
@@ -299,7 +299,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the aarch64-unknown-linux-musl target
@@ -342,7 +342,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the aarch64-apple-darwin target
@@ -412,7 +412,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -471,7 +471,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the x86_64-unknown-linux-musl target
@@ -514,7 +514,7 @@ jobs:
       - name: Install rust
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.10'
           install_args: rust
           cache: false
       - name: Add the aarch64-apple-darwin target
@@ -578,7 +578,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install velnor-ci 0.1.81
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.81
+        uses: tailrocks/velnor-new/actions/setup-velnor@a87c35aed5b68dd3e82b36df3e8d7364311abba8  # rust-ci-v0.1.81
         with:
           version: '0.1.81'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'

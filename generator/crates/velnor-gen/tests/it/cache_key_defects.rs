@@ -188,3 +188,18 @@ fn a_target_dir_outside_the_repository_fails_generation() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn brace_paths_are_encoded_outside_hash_files_literals() -> TestResult {
+    for (manifest, encoded) in [
+        ("a{b/Cargo.toml", "fromJSON('\"\\u007b\"')"),
+        ("a}b/Cargo.toml", "fromJSON('\"\\u007d\"')"),
+    ] {
+        let key = sources_key(manifest)?;
+        assert!(key.contains("hashFiles(format("), "{key}");
+        assert!(key.contains(encoded), "{key}");
+        assert!(!key.contains("hashFiles('a{"), "{key}");
+        assert!(!key.contains("hashFiles('a}"), "{key}");
+    }
+    Ok(())
+}

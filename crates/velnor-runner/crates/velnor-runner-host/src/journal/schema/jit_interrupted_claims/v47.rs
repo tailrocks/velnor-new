@@ -36,7 +36,6 @@ pub(super) fn cleanup_sql(sql: &str) -> Result<String, HostError> {
 }
 
 pub(in crate::journal::schema) async fn migrate(conn: &turso::Connection) -> Result<(), HostError> {
-    super::super::validate_persisted_schema_v46(conn).await?;
     for (kind, name, sql) in super::super::jit_conflict_settlement::schema_objects() {
         let current = super::recovery_sql(sql);
         let next = cleanup_sql(sql)?;

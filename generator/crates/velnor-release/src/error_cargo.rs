@@ -140,6 +140,11 @@ impl ReleaseError {
                 f,
                 "{root}/release-plz.toml: release root {root} is not the git root, and release-plz 0.4.3 cannot update or open a release PR from a root below the git root (it fails with \"failed to open repository\" because it looks for the git repository in the manifest directory, whatever git_only or publish say); fold the packages of {root} into the git-root Cargo workspace and release them from the root release-plz.toml with one [[package]] entry and git_tag_name per package"
             ),
+            Self::InvalidProfile(package, profile) => write!(
+                f,
+                ".velnor/release.toml: binary {package} names profile {profile:?}, which is not a Cargo profile this generator can build with (use letters, digits, `-` and `_`, starting with a letter or `_`, and not dev, test, bench, debug, doc, build-override, package, deps, examples, build or incremental)"
+            ),
+            Self::Family(error) => write!(f, "{error}"),
             _ => Ok(()),
         }
     }
