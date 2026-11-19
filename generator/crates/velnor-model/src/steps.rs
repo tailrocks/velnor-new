@@ -60,6 +60,17 @@ pub enum StepKind {
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
+    PrivateCheck {
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateToken {
+        sources: crate::repo::PrivateSources,
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateFetch {
+        manifests: Vec<RepoPath>,
+        cached: Vec<crate::ids::RootSlug>,
+    },
     MbxRemote,
     MbxStore,
     MbxSeed,

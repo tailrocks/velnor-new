@@ -281,7 +281,7 @@ impl RootJobs<'_> {
             pr: crate::plan::quick(self.facts),
             ..self.lane_job(lint_id, steps)
         }];
-        if archive && self.nextest {
+        if archive && self.nextest && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());
         } else if !tests.is_empty() {
             let test_id = self.id(TEST_JOB);

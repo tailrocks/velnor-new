@@ -73,6 +73,7 @@ pub enum Reason {
     HelperSourceRelease,
     MbxRemotePrivate(String),
     CargoCredentialProvider(String),
+    LockedUrlCredentials(String),
     TargetDirOutside(String),
     TargetDirOverlap(String),
     BuildDirKey(&'static str),
@@ -138,6 +139,10 @@ impl Reason {
             Self::CargoCredentialProvider(key) => write!(
                 f,
                 "{key} names a program or alias that cargo runs when it publishes, with the release token in its environment; remove it, or use one of cargo:token, cargo:wincred, cargo:macos-keychain or cargo:libsecret"
+            ),
+            Self::LockedUrlCredentials(name) => write!(
+                f,
+                "{name} is locked from an https URL with credentials in it, which the private_sources token cannot replace, so git could not fetch it; lock it from a plain https URL (the token supplies the credentials) or an ssh URL"
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
@@ -248,6 +253,7 @@ impl fmt::Display for Reason {
             | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
+            | Self::LockedUrlCredentials(_)
             | Self::CapLints
             | Self::TargetDirOutside(_)
             | Self::TargetDirOverlap(_)
@@ -255,12 +261,10 @@ impl fmt::Display for Reason {
             | Self::RuntimeTargetDir { .. }
             | Self::RustdocflagsString
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
-            Self::InvalidPatch(key) => {
-                write!(
-                    f,
-                    "{key} must be a table whose path is a folder in the repository"
-                )
-            }
+            Self::InvalidPatch(key) => write!(
+                f,
+                "{key} must be a table whose path is a folder in the repository"
+            ),
         }
     }
 }

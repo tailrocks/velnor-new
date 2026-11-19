@@ -17,7 +17,10 @@ mod configurations;
 mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
+mod fetch;
+mod fetch_credentials;
 mod fetch_reports;
+mod fetch_toolchain;
 mod git;
 mod git_witness;
 mod http;
@@ -26,6 +29,7 @@ mod manifests;
 mod merge_group;
 mod plan;
 pub mod preview;
+mod private_check;
 pub mod pump;
 mod recording;
 mod registry;
@@ -200,6 +204,8 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::Fetch(args) => fetch::fetch(&args),
+        Command::PrivateTokenAllowed => private_check::run(),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::MbxSeed => crate::mbx_seed::setup(),
         Command::Prepare => setup::prepare(),

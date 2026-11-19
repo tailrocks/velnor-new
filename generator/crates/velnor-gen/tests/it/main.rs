@@ -75,6 +75,7 @@ mod job_setup;
 mod job_setup_env;
 mod mise_safety;
 
+mod detect_private;
 mod job_shape;
 mod job_target_dir;
 mod job_trust_boundary;
@@ -98,6 +99,8 @@ mod policy_exceptions;
 mod pr_ci;
 mod pr_ci_labels;
 mod pr_ci_sim;
+mod private_sources;
+mod private_sources_phase;
 mod release_branch_prefix;
 mod release_cargo_include;
 mod release_declared_after;

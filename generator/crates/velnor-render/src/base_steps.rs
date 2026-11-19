@@ -223,18 +223,12 @@ pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> Re
     }
 }
 
-pub(crate) fn sources_fetch(position: usize, cache_debug: bool) -> RenderedStep {
-    RenderedStep {
-        env: cache_debug
-            .then(crate::cargo::cache_debug_env)
-            .into_iter()
-            .collect(),
-        id: Some(crate::gate::sources_fetch_step(position)),
-        name: format!("Fetch the sources of root {position}"),
-        continue_on_error: true,
-        run: Some(format!("{} cargo fetch --locked", crate::steps::RUN)),
-        ..RenderedStep::default()
-    }
+pub(crate) fn sources_fetch(position: usize, lane: crate::cargo::CargoLane) -> RenderedStep {
+    let mut fetch = crate::cargo::cargo_fetch(lane);
+    fetch.id = Some(crate::gate::sources_fetch_step(position));
+    fetch.name = format!("Fetch the sources of root {position}");
+    fetch.continue_on_error = true;
+    fetch
 }
 
 pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {

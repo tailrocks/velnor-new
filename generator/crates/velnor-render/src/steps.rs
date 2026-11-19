@@ -14,7 +14,7 @@ use crate::base_steps::{
 
 };
 use crate::cache::{path_text, render_key};
-use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
+use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
     plan_source, sources_step, verdict_step,
@@ -51,27 +51,7 @@ const A_NEED_FAILED: &str =
 
 pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
-    let artifacts = job
-        .steps
-        .iter()
-        .find_map(|step| match step.kind {
-            StepKind::ReportCaches {
-                nextest_artifacts, ..
-            } => Some(if nextest_artifacts {
-                ArtifactFormat::All
-            } else {
-                ArtifactFormat::CargoOnly
-            }),
-            _ => None,
-        })
-        .unwrap_or(ArtifactFormat::Disabled);
-    let lane = CargoLane {
-        artifacts,
-        cache_debug: job
-            .steps
-            .iter()
-            .any(|step| step.kind == StepKind::UploadCargoLog),
-    };
+    let lane = crate::cargo::cargo_lane(job);
     let tests = job
         .steps
         .iter()
@@ -206,13 +186,7 @@ fn rendered_steps(
         );
         body.condition = all_conditions(
             body.condition.take(),
-            condition(
-                step.when,
-                step.gate.as_ref(),
-                setup,
-                step.pr,
-                &extra,
-            ),
+            condition(step.when, step.gate.as_ref(), setup, step.pr, &extra),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }
@@ -280,7 +254,7 @@ fn step_body(
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
         StepKind::RustComponents(components) => rustup_add("component", components),
         StepKind::RustTargets(targets) => rustup_add("target", targets),
-        StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane.cache_debug),
+        StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
         StepKind::SourcesFetchAll { manifests, .. } => {
             sources_fetch_all(manifests, lane.cache_debug)
         }
@@ -293,6 +267,9 @@ fn step_body(
         StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::PrivateCheck { .. }
+        | StepKind::PrivateToken { .. }
+        | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
         StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),

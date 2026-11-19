@@ -84,8 +84,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root));
     }
     if facts.config.cache_debug == CacheDebug::On {
-        upload_cargo_logs(&mut jobs);
+        crate::cargo_log::upload(&mut jobs);
     }
+    crate::private_fetch::insert(facts.config.private_sources.as_ref(), &mut jobs);
     if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
         add_mbx_remote(&mut jobs);
     }
@@ -340,33 +341,6 @@ fn add_mbx_remote(jobs: &mut [Job]) {
                 ..step(StepKind::MbxRemote)
             };
             job.steps.insert(at + 1, cache);
-        }
-    }
-}
-
-fn upload_cargo_logs(jobs: &mut [Job]) {
-    for job in jobs {
-        if job
-            .steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
-        {
-            let gate = job
-                .steps
-                .iter()
-                .find(|step| {
-                    matches!(
-                        step.kind,
-                        StepKind::Helper(HelperCommand::Restored(..))
-                            | StepKind::RestoredTargets { .. }
-                    )
-                })
-                .and_then(|step| step.gate.clone());
-            job.steps.push(Step {
-                when: When::CacheDebug,
-                gate,
-                ..step(StepKind::UploadCargoLog)
-            });
         }
     }
 }

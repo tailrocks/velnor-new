@@ -16,6 +16,7 @@ use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::os_pins::pinned_for_runner;
 use crate::policy::DENY_CONFIG;
+use crate::private_sources::{private_suggestion, refuse_locked_credentials};
 use crate::reads::INPUTS_LOCK;
 use crate::roots::{CARGO_LOCK, is_cargo_config, is_cargo_lock, rust_roots};
 use crate::timings::{TIMINGS_PATH, usable_timings};
@@ -157,6 +158,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             Reason::HelperSourceRelease,
         ));
     }
+    refuse_locked_credentials(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let policy = policy_tools(view, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
@@ -174,6 +176,8 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         timings,
         timings_notes,
         private_sources,
+        private_suggestion: private_suggestion(view, &config, &rust_roots),
+        weakenings,
         rust_roots,
         toolchain,
         tools,
@@ -181,7 +185,6 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
-        weakenings,
     })
 }
 

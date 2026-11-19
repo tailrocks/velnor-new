@@ -32,16 +32,16 @@ pub use ids::{
 pub use plan::{
     Access, BUILD_TESTS_STEP, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency, FilterRef,
     Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
-    Permissions, PlanFrom, PlanRef, PrRun,
-    PullRequestType, Shape, ShapeDecision, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
+    Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Shape, ShapeDecision, Step, TEST_STEP,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
+    When, WorkflowPlan,
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
     InputRule, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools, PrCi,
-    PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
-    RustMetadata, RustPackage, RustRoot, Target, TargetKind, TestSetup, Timings, ToolPin, ToolPins,
-    Toolchain, UnownedPackage, Unread, Weakening,
+    PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig,
+    RustMember, RustMetadata, RustPackage, RustRoot, Target, TargetKind, TestSetup, Timings,
+    ToolPin, ToolPins, Toolchain, UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

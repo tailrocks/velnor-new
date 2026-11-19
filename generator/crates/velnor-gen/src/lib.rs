@@ -80,6 +80,7 @@ pub fn expected_with_notes(
     files.extend(release);
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
+    notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     Ok((files, notes))
 }
@@ -116,6 +117,11 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
+    }
+    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
+        return Err(GenerateError::PrivateSourcesHelperTooOld(
+            release.version().clone(),
+        ));
     }
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
         && !release.version().at_least((0, 1, 82))

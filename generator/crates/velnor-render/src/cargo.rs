@@ -19,6 +19,7 @@ const DOC_RUN: &str =
 pub(crate) struct CargoLane {
     pub(crate) artifacts: ArtifactFormat,
     pub(crate) cache_debug: bool,
+    pub(crate) offline: bool,
 }
 
 #[derive(Clone, Copy)]
@@ -44,8 +45,41 @@ impl ArtifactFormat {
     }
 }
 
+pub(crate) fn cargo_lane(job: &Job) -> CargoLane {
+    let artifacts = job
+        .steps
+        .iter()
+        .find_map(|step| match step.kind {
+            StepKind::ReportCaches {
+                nextest_artifacts, ..
+            } => Some(if nextest_artifacts {
+                ArtifactFormat::All
+            } else {
+                ArtifactFormat::CargoOnly
+            }),
+            _ => None,
+        })
+        .unwrap_or(ArtifactFormat::Disabled);
+    CargoLane {
+        artifacts,
+        cache_debug: job
+            .steps
+            .iter()
+            .any(|step| step.kind == StepKind::UploadCargoLog),
+        offline: job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
+    }
+}
+
 pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -> RenderedStep {
     let (name, run, env) = cargo_command(command, lane.artifacts);
+    let run = if lane.offline {
+        run.replacen(" --locked", " --locked --offline", 1)
+    } else {
+        run
+    };
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
     } else {
@@ -57,6 +91,7 @@ pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -
         env: env
             .into_iter()
             .chain(lane.cache_debug.then(cache_debug_env))
+            .chain(lane.offline.then(offline_env))
             .collect(),
         run: Some(format!(
             "{prefix} {}{run}",
@@ -168,6 +203,27 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
         .collect::<Vec<_>>()
         .join(" "),
         vec![],
+    )
+}
+
+pub(crate) fn cargo_fetch(lane: CargoLane) -> RenderedStep {
+    let offline = if lane.offline { " --offline" } else { "" };
+    RenderedStep {
+        env: lane
+            .cache_debug
+            .then(cache_debug_env)
+            .into_iter()
+            .chain(lane.offline.then(offline_env))
+            .collect(),
+        run: Some(format!("{RUN} cargo fetch --locked{offline}")),
+        ..RenderedStep::default()
+    }
+}
+
+fn offline_env() -> (String, Value) {
+    (
+        "CARGO_NET_OFFLINE".to_owned(),
+        Value::Text("true".to_owned()),
     )
 }
 
