@@ -4,7 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    OUTER_ENTRY_HEADER_BYTES, TAR_BLOCK_BYTES, TAR_END_OF_ARCHIVE_BYTES, TAR_RECORD_BYTES,
+    COMPLETE_STATE_TRANSPORT_EXPR, OUTER_ENTRY_HEADER_BYTES, TAR_BLOCK_BYTES,
+    TAR_END_OF_ARCHIVE_BYTES, TAR_RECORD_BYTES,
 };
 use velnor_actions_contract::workflow::state_seal::{
     STATE_SEAL_ADMITTED_OUTPUT, STATE_SEAL_ARTIFACT_ENV, STATE_SEAL_BUDGET_BYTES,
@@ -22,7 +23,7 @@ const TOKEN_EXPR: &str = "${{ github.token }}";
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
 const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
-const PAYLOAD: &str = "$RUNNER_TEMP/velnor-gc1/transport/state/payload.tar.zst";
+const PAYLOAD: &str = COMPLETE_STATE_TRANSPORT_EXPR;
 const ZSTD_SMALL_INPUT_BYTES: u64 = 128 << 10;
 const ZSTD_MARGIN_SHIFT_DIVISOR: u64 = 1 << 11;
 

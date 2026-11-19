@@ -5,12 +5,16 @@ mod cargo_allowlist;
 mod collisions;
 mod error;
 mod error_cargo;
+mod error_family;
+mod family;
 mod git_ref;
 mod hazards;
 mod lock_version;
 mod members;
 mod mise;
+mod nested;
 mod plan;
+mod reality;
 mod registry;
 mod release_plz;
 mod ruleset;
@@ -21,6 +25,8 @@ mod velnor_config;
 mod versions;
 
 pub use error::ReleaseError;
+pub use error_family::FamilyError;
+pub use family::FamilyPlan;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,
 };
@@ -35,4 +41,4 @@ pub use ruleset::{
 };
 pub use tag::{TagPattern, is_tag_name};
 pub use timeout::TAG_JOB_BASE_MINUTES;
-pub use versions::{Versions, check_release_versions};
+pub use versions::{ExpectedRelease, Versions, check_release_versions, expected_releases};

@@ -5,6 +5,10 @@ use std::{error::Error, fs};
 
 use super::fixture;
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn unguarded_cli_fixture_qualifies_before_guard_tests() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -42,6 +46,10 @@ fn unguarded_cli_fixture_qualifies_before_guard_tests() -> Result<(), Box<dyn Er
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn guarded_generate_and_plan_succeed_and_denial_writes_nothing() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -79,6 +87,10 @@ fn guarded_generate_and_plan_succeed_and_denial_writes_nothing() -> Result<(), B
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn guarded_generate_keeps_guard_for_release_rendering() -> Result<(), Box<dyn Error>> {
     for (registry, outputs) in [
@@ -139,6 +151,10 @@ fn guarded_generate_keeps_guard_for_release_rendering() -> Result<(), Box<dyn Er
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn source_policy_export_and_check_use_guard_and_preserve_policy() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -180,6 +196,10 @@ fn source_policy_export_and_check_use_guard_and_preserve_policy() -> Result<(), 
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn invalid_or_unsupported_guard_is_rejected_before_output_writes() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;

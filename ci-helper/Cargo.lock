@@ -898,9 +898,9 @@ checksum = "009dbb7700f11c55ef83aebbe4c0e9cf1f1ac0844bd8d6f00dc38f302026e13a"
 
 [[package]]
 name = "typed-path"
-version = "0.12.4"
+version = "0.12.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54ec2755506471f54baf5e4bb5499d8e510cc1caf271270e778a736bd2d7336c"
+checksum = "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e"
 
 [[package]]
 name = "typenum"
@@ -995,18 +995,21 @@ checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 
 [[package]]
 name = "velnor-ci"
-version = "0.1.84"
+version = "0.1.85"
 dependencies = [
+ "base64",
  "blake3",
  "clap",
  "flate2",
  "libc",
+ "miniz_oxide",
  "nix",
  "ring",
  "serde",
  "serde_json",
  "sha2",
  "signal-hook",
+ "toml",
  "ureq",
  "velnor-gen",
  "velnor-model",
@@ -1017,7 +1020,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.84"
+version = "0.1.85"
 dependencies = [
  "clap",
  "serde-saphyr",
