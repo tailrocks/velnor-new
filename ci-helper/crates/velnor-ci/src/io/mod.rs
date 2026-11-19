@@ -22,6 +22,7 @@ mod inputs;
 mod manifests;
 mod plan;
 pub mod pump;
+mod qualification;
 mod recording;
 mod release;
 mod report;
@@ -48,7 +49,7 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
+    DecideArgs, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -177,6 +178,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::Qualification(QualificationCommand::Compare(args)) => {
+            qualification::run_compare(&args)
+        }
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::MbxStore => crate::mbx_store::setup(),

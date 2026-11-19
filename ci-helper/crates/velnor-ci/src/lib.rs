@@ -27,6 +27,7 @@ pub mod plan;
 pub mod platform;
 pub mod progress_evidence;
 pub mod publish;
+pub mod qualification;
 pub mod release;
 pub mod release_commit;
 pub mod release_preflight;
