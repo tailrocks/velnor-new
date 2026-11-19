@@ -11,6 +11,7 @@ mod plan;
 mod repo;
 mod selection;
 mod steps;
+mod test_group;
 mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host};
