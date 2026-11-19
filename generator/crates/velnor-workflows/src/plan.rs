@@ -115,6 +115,7 @@ pub struct Output {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Job {
     pub id: String,
+    pub name: Option<String>,
     pub needs: Vec<String>,
     pub condition: Option<String>,
     pub helper: bool,

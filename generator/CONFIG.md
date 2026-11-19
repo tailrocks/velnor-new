@@ -260,6 +260,14 @@ Every workflow lists its events under `[workflow.on]`. The generator writes them
 - A matrix has one source. `from_output = "<job>.<output>"` renders `fromJSON(needs.<job>.outputs.<output>)`; that job must be in `needs` and declare the output. `axes = { os = ["a", "b"], ... }` renders a static matrix of up to 256 combinations, and `matrix.<axis>` is then the only matrix key a value may read. `fail_fast` and `max_parallel` are optional.
 - `uses = "<workflow>"` makes the job call a reusable workflow, and then the job has no steps, `runner`, `timeout_minutes`, `environment`, `helper` or `outputs`. `<workflow>` is one of: the `file` of a workflow declared earlier in this file (its inputs are checked, its `boolean` and `number` inputs are written as such, and the job must hold every permission the called jobs ask for); `./.github/workflows/<name>.yml`; or `owner/repo/.github/workflows/<name>.yml@<full commit SHA>` (exactly 40 lower case hex digits). A `./.github/workflows` or pinned callee is not read, so its jobs get no fork fence and its permissions are not checked: a workflow that a `pull_request` or `merge_group` event starts is refused if it calls one, or calls a declared workflow that calls one. Such a call is allowed from `push`, `schedule`, `workflow_dispatch`, `workflow_call` and `workflow_run`. `with` passes inputs, each plain text or exactly one expression. No `secrets` are passed, ever. A later job reads `needs.<job>.outputs.<name>` for the outputs of a declared workflow.
 
+### Cases
+
+A `[[workflow.case]]` is one qualification case that runs on a hosted runner and on a scale-set runner. The generator writes two jobs from it, `<id>-hosted` and `<id>-scale-set`, with the same steps, named `<title> / GitHub hosted` and `<title> / Velnor Scale Set`, and runs them in parallel.
+
+- The workflow needs a `workflow_dispatch` input `mode` of type `choice`, and `hosted_runner` (GitHub-hosted) and `scale_set_runner` (not GitHub-hosted). The scale-set job gets the fork fence of its runner like any other job.
+- `modes` lists the `mode` options that run the case, and defaults to the case `id`. Each job gets `if: inputs.mode == '<mode>'` joined with `||`; a case `if` is joined to it with `&&`.
+- `title` defaults to the `id`. `timeout_minutes` and the `[[workflow.case.step]]` tables follow the job rules above. A case has no `needs`, `permissions`, `environment` or `outputs`; declare a job for those.
+
 ### Steps
 
 - A step is exactly one of `run`, `uses` and `helper`. A name is optional for `uses` and `helper` steps. `continue_on_error = true` renders `continue-on-error: true` on that step only.

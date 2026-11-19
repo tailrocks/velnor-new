@@ -93,6 +93,7 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
     let runs_on = job.runner.as_ref().unwrap_or(&workflow.runner).clone();
     RenderedJob {
         id: job.id.clone(),
+        name: job.name.clone(),
         needs: job.needs.clone(),
         condition: call_fence(
             job,
