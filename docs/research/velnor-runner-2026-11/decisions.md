@@ -301,6 +301,10 @@ in the design review. "Same as" marks a merged duplicate.
 | N80 | The landed merge group's build output becomes the next generation; it is trusted when audit A1's cold rebuild of the same commit gives equal digests. | Claude Fable 5.2 | — | Adopted (v3) | Removes the builder's separate compile of every `main` advance (v2 compiled each change three times: PR, group and builder). |
 | N81 | Audit A2: nightly runs with the clock shifted 8 and 30 days ahead through a shim. | Claude Fable 5.2 | — | Adopted (v3) | Finds time-dependent failures before the date arrives; receipts of wall-clock tests already expire in 24 h. |
 | N82 | The harness is tested by mutants (at least 95% of about 30 killed), a protocol surface diff of about 40 files runs per official release, and a production-path canary runs every 10 min per site. | Claude Fable 5.2 | — | Adopted (v3) | Ten planted differences (v2) were too few to trust a green comparison; the canary reads every effect back through the API, and three failures in a row page the owner. |
+| N83 | Compile reuse with per-unit provenance: sampled compile units are rebuilt from empty and compared, beside A1. | GPT-6.2-Astra (Rust-only round) | — | Adopted (v3) | A stale `OUT_DIR`, proc-macro output or cargo timestamp could turn a bad edit green; sampling units catches it faster than whole cold builds alone. |
+| N84 | The first reused pass whose cold run fails revokes its class at once and transitively blocks open heads, queue entries and releases that relied on it. | GPT-6.2-Astra | — | Adopted (v3) | "Statistics discover defects. They never license a suspected false green." |
+| N85 | No credential-bearing step runs before the job lease's first renewal succeeds; `lockedUntil` becomes a conservative monotonic deadline. | GPT-6.2-Astra | — | Adopted (v3) | A lease lost before the first renewal cannot leave credentials in use by a job GitHub has reassigned. |
+| N86 | Idempotent publication with read-back; crates.io receives the exact packaged `.crate` bytes. | GPT-6.2-Astra, GPT-6.2-Sol | — | Adopted (v3) | A retried release cannot publish twice or publish bytes other than the verified ones. |
 
 
 ## Load-bearing decisions
@@ -636,6 +640,21 @@ default, marked "pending ruling" in the design.
 | Hedged test shards past P95 | Adopted as a duplicate kept for speed | First result wins, at batch cost |
 | `Velnor / Required` behind a skipped reusable-workflow caller, plus a second App check | Not adopted: pending ruling Q1; the App check alone is the safe default | The caller pattern rests on observed, undocumented behaviour |
 | Two-slice executor cutover | Superseded by per-job-type migration (decision 16) | — |
+
+### Group 14: what v3 takes from GPT-6.2-Astra
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| Per-unit provenance for compile reuse; units reconstructed from empty | Adopted as detection (N83) | Stale build-script or proc-macro outputs are the realistic false green of a warm cache |
+| First reused-pass, cold-fail revokes the class and blocks dependants | Adopted (N84) | Zero tolerance for false greens means revocation before statistics |
+| First lease renewal before credential-bearing steps; a monotonic deadline | Adopted (N85) | Closes a window where a reassigned job's credentials are in use |
+| Idempotent publication with read-back; exact `.crate` bytes | Adopted (N86) | Release retries stay safe |
+| Zero secret leaks as a pass criterion | Adopted in the harness's gate | Masking is part of conformance |
+| Observed read sets cannot prove completeness | Adopted as the reason the read audit only demotes (N75) | — |
+| Revoke an existing green when the label is removed | Not adopted | The owner's flow makes the label start verification, never the gate; a verdict describes its tree |
+| PR-scoped admission witness through the required-reviewer rule | Recorded: an alternative under pending ruling Q9 | The safe default keeps the check pending while a peer at the same SHA lacks the label |
+| Distinct required samples instead of repeated runs | Recorded under pending ruling Q12 | Two parallel executions are today's count |
+| Latest official runner v2.338.2, not the source checkout's v2.338.0 | Recorded under Q15; the harness tracks the release API | — |
 
 ## Design review
 

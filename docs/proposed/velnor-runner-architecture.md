@@ -410,9 +410,10 @@ compares; velnor-new's `qualification.yml` is its seed.
 - **Pass criteria.** After normalisation, exact equality of step outcomes and conclusions, outputs,
   contexts and env, expression results, annotations and summaries, cache and artifact effects,
   post-step order and results, and cancellation and timeout outcomes. Any other difference fails the
-  case unless an owner-signed allow-list entry covers it. The gate is 100% per backend. The harness
-  is itself tested: it must kill at least 95% of about 30 executor mutants (a swapped post-step
-  order, a dropped masker encoder, a changed shell flag) before its green counts.
+  case unless an owner-signed allow-list entry covers it. The gate is 100% per backend, with zero
+  secret leaks. The harness is itself tested: it must kill at least 95% of about 30 executor mutants
+  (a swapped post-step order, a dropped masker encoder, a changed shell flag) before its green
+  counts.
 - **When.** On every change to an executor, a native action or the protocol code, as a blocking
   check; nightly; within hours of each official release (Velnor reports as its runner version the
   newest official release it has passed, so GitHub's 63-day version window becomes a conformance
@@ -448,11 +449,12 @@ one integration in the ruleset (N12).
 
 - **Journal discipline:** persist the intent, make the call, record the outcome; unknown is never
   absent. The executor journals the plan id, job id, run-service URL, job token and environment id
-  before acting, renews the lease every 60 s from `lockedUntil` with a loop written fresh (the
-  upstream overload dereferences a null request when renewal fails, `JobDispatcher.cs:748-852`), and
-  after a crash resumes or fails the job with its own token, never twice. The ledger persists an
-  execution's intent (key, node, epoch) before a sandbox starts, and results land by
-  compare-and-swap on that epoch.
+  before acting, runs no credential-bearing step before its first renewal succeeds, renews the lease
+  every 60 s from `lockedUntil` (converted to a conservative monotonic deadline) with a loop written
+  fresh (the upstream overload dereferences a null request when renewal fails,
+  `JobDispatcher.cs:748-852`), and after a crash resumes or fails the job with its own token, never
+  twice. The ledger persists an execution's intent (key, node, epoch) before a sandbox starts, and
+  results land by compare-and-swap on that epoch.
 - **Fault injection** before each job type moves: crashes around every remote call, journal write
   and step boundary, a lost lease, duplicate and reordered webhooks, a ledger partition, a lost
   node, the control plane and a whole site.
@@ -540,7 +542,7 @@ not, how that is detected, and the automatic fallback.
 | Per-package receipt | Closure trees, all manifests, spawned-executable digests | Feature unification or a spawned binary outside the closure | Shadow at 100% until about 3,000 clean; read audit; A1 | The kind drops to per-root keys |
 | Candidate receipt reused across pushes and PRs | Same key, Velnor-observed, signed | A PR sandbox leaked state into a result | Sampled re-execution; trusted only after A1 | Candidate reuse off for that class |
 | `velnor verify` before the push | Same sealed Linux sandbox and key as CI | A developer machine's result | Only Velnor-executed results count; Mac runs never do | Runs in CI |
-| Warm compile snapshot | Cargo fingerprints plus the time rule: unchanged files keep the snapshot's times, others are newer than every output | A changed file carrying an older time; a file cargo did not read last time | A1 cold rebuild with digest comparison; lineage restarts daily | Retire the generation; build cold |
+| Warm compile snapshot | Cargo fingerprints plus the time rule: unchanged files keep the snapshot's times, others are newer than every output | A changed file carrying an older time; a stale `OUT_DIR` or proc-macro output | A1 cold rebuild with digest comparison; sampled compile units rebuilt from empty and compared; lineage restarts daily | Retire the generation; build cold |
 | `mbx-cache` units for a cold or mismatched node | mbx's per-crate keys | A missed input in mbx's key | A1; the builder's cold rebuilds | Server retired; plain cargo |
 | `actions/cache` entries | The user's key, with GitHub's scope rules, enforced by Velnor | A user key that omits an input (as on GitHub) | Conformance against the official runner; content hash on every read | The entry is treated as a miss |
 | Artifacts and test binaries by digest | Content address | Corruption | Hash verified on read | Refetch or rebuild |
@@ -555,7 +557,9 @@ not, how that is detected, and the automatic fallback.
   before it counts a receipt.
 - **Revocation.** Every verdict carries its policy epoch. Revoking a signer or a reuse class raises
   the epoch: older verdicts are re-checked, queue entries pause, and landed commits that relied on
-  them are listed.
+  them are listed. The first reused pass whose cold run fails revokes its class at once and blocks
+  every open head, queue entry and release that relied on it, before any statistics: sampling finds
+  defects, but never licenses a suspected false green.
 - **Audit A1.** Every landed commit is rebuilt cold at batch priority and its changed obligations
   re-run, comparing results and test-binary digests with the warm path, within 2 h of landing at P90
   [T]; a stale generation can therefore serve only the merges inside that window. Then 2% sampled
@@ -762,12 +766,13 @@ Where release bytes are built is pending ruling Q6; the safe default: tests stay
 profile, and release-profile bytes are built once per closure key in the merge group, qualified once
 on the exact bytes (`--version`, `check-tag`, the black-box suites that today run only after the
 merge), packed deterministically with `SHA256SUMS`, and attested once. A tag runs one job: gate,
-fetch by digest, re-hash, `gh attestation verify`, publish: about 15 s instead of 190–434 s for the
-tools and 4,105–6,238 s for a product release [M]. `option_env!("VELNOR_COMMIT")` makes every commit
-a new compile input; with the commit patched after link into a fixed-size section, release bytes
-recompile only when their closure changes, about half of all merges (also pending Q6). The macOS
-legs are paused (decision 9); `aarch64-unknown-linux-musl` is cross-compiled and smoke-run under
-user-mode qemu.
+fetch by digest, re-hash, `gh attestation verify`, publish (idempotent, with a read-back of what was
+published, and crates.io receiving the exact packaged `.crate` bytes): about 15 s instead of 190–434
+s for the tools and 4,105–6,238 s for a product release [M]. `option_env!("VELNOR_COMMIT")` makes
+every commit a new compile input; with the commit patched after link into a fixed-size section,
+release bytes recompile only when their closure changes, about half of all merges (also pending Q6).
+The macOS legs are paused (decision 9); `aarch64-unknown-linux-musl` is cross-compiled and smoke-run
+under user-mode qemu.
 
 ### 8.5 Tests and the floor
 
