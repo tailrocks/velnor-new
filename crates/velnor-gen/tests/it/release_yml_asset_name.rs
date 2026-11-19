@@ -44,7 +44,7 @@ fn an_asset_name_with_version_and_target_names_every_file_after_the_tag_version(
     let build_runs = runs(build);
     assert!(build_runs.contains(&version), "{build_runs:?}");
     let pack = format!(
-        "tar -czf \"$RUNNER_TEMP/stage/{linux}\" -C target/x86_64-unknown-linux-musl/release app"
+        "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf \"$RUNNER_TEMP/stage/{linux}\" -C target/x86_64-unknown-linux-musl/release app"
     );
     assert!(build_runs.contains(&pack.as_str()), "{build_runs:?}");
     let reader = steps(build)

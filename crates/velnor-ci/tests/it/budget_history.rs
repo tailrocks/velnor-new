@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_ci::budget::Population;
-use velnor_ci::budget_history::{gather, sample};
-use velnor_ci::github::{Repo, event_runs_path, jobs_path, run_path};
+use velnor_ci::budget::{Population, evaluate};
+use velnor_ci::budget_history::{Current, current, gather, sample};
+use velnor_ci::github::{Repo, event_runs_path, jobs_path, run_jobs_path, run_path};
 use velnor_model::WORKFLOW_PATH;
 
+use crate::budget::budget;
 use crate::support::FakeGitHub;
 
 fn repo() -> Repo {
@@ -155,7 +156,7 @@ fn the_run_history_stops_paging_once_every_population_has_enough_runs() {
             &[job("only", Some("2026-11-01T10:01:10Z"))],
         );
     }
-    let histories = gather(&fake, &repo(), "main", 2).unwrap_or_else(|e| unreachable!("{e}"));
+    let histories = gather(&fake, &repo(), "main", 2, None).unwrap_or_else(|e| unreachable!("{e}"));
     let sizes: Vec<(Population, Vec<u64>)> = histories
         .iter()
         .map(|history| {
@@ -211,6 +212,165 @@ fn a_history_with_no_scheduled_runs_is_read_for_a_bounded_number_of_pages() {
             &full("schedule", "main", first),
         );
     }
-    let histories = gather(&fake, &repo(), "main", 2).unwrap_or_else(|e| unreachable!("{e}"));
+    let histories = gather(&fake, &repo(), "main", 2, None).unwrap_or_else(|e| unreachable!("{e}"));
     assert!(histories.is_empty(), "{histories:?}");
+}
+
+const SLOW: u64 = 44_612_356_020;
+const NORMAL: u64 = 44_610_215_475;
+const QUICK: u64 = 44_609_189_060;
+const REVERT: u64 = 44_613_446_455;
+/// 2026-11-01T10:00:00Z, the start of every recorded run below.
+const STARTED: i64 = 1_793_527_200;
+
+fn at(seconds: u64) -> String {
+    format!("2026-11-01T10:{:02}:{:02}Z", seconds / 60, seconds % 60)
+}
+
+fn recorded_run(fake: &mut FakeGitHub, id: u64, wall: u64) {
+    fake.respond(
+        run_path(&repo(), id),
+        &json!({
+            "name": "Rust CI", "status": "completed", "conclusion": "success",
+            "run_attempt": 1, "event": "push", "head_sha": "a".repeat(40),
+            "created_at": at(0), "run_started_at": at(0), "updated_at": at(wall)
+        })
+        .to_string(),
+    );
+    jobs(fake, id, 1, 1, &[job("rust", Some(&at(wall)))]);
+}
+
+/// The lab's default-branch pushes, newest first, as `(run, wall, conclusion)`.
+fn pushes(fake: &mut FakeGitHub, runs: &[(u64, u64, &str)]) {
+    let listed: Vec<Value> = runs
+        .iter()
+        .map(|(id, _, conclusion)| {
+            let mut run = listed(*id, "push", "main");
+            run["conclusion"] = json!(conclusion);
+            run
+        })
+        .collect();
+    listing(fake, "push", Some("main"), 1, &listed);
+    listing(fake, "pull_request", None, 1, &[]);
+    listing(fake, "schedule", None, 1, &[]);
+    for (id, wall, _) in runs {
+        recorded_run(fake, *id, *wall);
+    }
+}
+
+/// The run that executes the budget job: still in progress, `wall` seconds old.
+fn executing(fake: &mut FakeGitHub, id: u64, event: &str, wall: u64) -> Current {
+    fake.respond(
+        run_path(&repo(), id),
+        &json!({
+            "name": "Rust CI", "status": "in_progress", "conclusion": null,
+            "run_attempt": 1, "event": event, "head_sha": "a".repeat(40),
+            "created_at": at(0), "run_started_at": at(0), "updated_at": at(wall)
+        })
+        .to_string(),
+    );
+    let mut rust = job("rust", Some(&at(wall - 3)));
+    rust["conclusion"] = json!("success");
+    let mut budget = job("Speed budget", None);
+    budget["conclusion"] = Value::Null;
+    budget["started_at"] = json!(at(wall - 2));
+    fake.respond(
+        run_jobs_path(&repo(), id, 1),
+        &json!({ "total_count": 2, "jobs": [rust, budget] }).to_string(),
+    );
+    let now = STARTED + i64::try_from(wall).unwrap_or_default();
+    current(fake, &repo(), id, now).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn judged(fake: &FakeGitHub, running: &Current) -> velnor_ci::budget::Evaluation {
+    let histories =
+        gather(fake, &repo(), "main", 10, Some(running)).unwrap_or_else(|e| unreachable!("{e}"));
+    evaluate(&budget(0, 125, 0, 0), &histories)
+}
+
+#[test]
+fn a_slow_run_is_judged_by_its_own_wall_time_not_by_the_run_before_it() {
+    let mut fake = FakeGitHub::default();
+    pushes(
+        &mut fake,
+        &[(NORMAL, 115, "success"), (QUICK, 99, "success")],
+    );
+    let running = executing(&mut fake, SLOW, "push", 226);
+    let evaluation = judged(&fake, &running);
+    assert!(!evaluation.passed(), "{evaluation:?}");
+    assert_eq!(evaluation.breaches.len(), 1, "{:?}", evaluation.breaches);
+    assert_eq!(evaluation.breaches[0].value, 226);
+    assert_eq!(evaluation.breaches[0].population, Population::MainPush);
+}
+
+#[test]
+fn the_run_after_a_breach_passes_when_it_is_back_to_normal() {
+    let mut fake = FakeGitHub::default();
+    // The slow run passed the old check, so it is listed as a success.
+    pushes(
+        &mut fake,
+        &[
+            (SLOW, 226, "success"),
+            (NORMAL, 115, "success"),
+            (QUICK, 99, "success"),
+        ],
+    );
+    let running = executing(&mut fake, REVERT, "push", 93);
+    let evaluation = judged(&fake, &running);
+    assert!(evaluation.passed(), "{evaluation:?}");
+}
+
+#[test]
+fn a_run_that_failed_the_budget_is_not_a_sample_for_the_next_run() {
+    let mut fake = FakeGitHub::default();
+    pushes(
+        &mut fake,
+        &[
+            (SLOW, 226, "failure"),
+            (NORMAL, 115, "success"),
+            (QUICK, 99, "success"),
+        ],
+    );
+    let running = executing(&mut fake, REVERT, "push", 93);
+    let histories =
+        gather(&fake, &repo(), "main", 10, Some(&running)).unwrap_or_else(|e| unreachable!("{e}"));
+    let ids: Vec<u64> = histories[0].samples.iter().map(|s| s.run_id).collect();
+    assert_eq!(ids, [REVERT, NORMAL, QUICK]);
+    assert!(judged(&fake, &running).passed());
+}
+
+#[test]
+fn the_running_run_is_never_counted_twice_and_the_window_stays_at_the_last_runs() {
+    let mut fake = FakeGitHub::default();
+    pushes(
+        &mut fake,
+        &[
+            (REVERT, 93, "success"),
+            (NORMAL, 115, "success"),
+            (QUICK, 99, "success"),
+        ],
+    );
+    let running = executing(&mut fake, REVERT, "push", 93);
+    let histories =
+        gather(&fake, &repo(), "main", 2, Some(&running)).unwrap_or_else(|e| unreachable!("{e}"));
+    let ids: Vec<u64> = histories[0].samples.iter().map(|s| s.run_id).collect();
+    assert_eq!(ids, [REVERT, NORMAL]);
+}
+
+#[test]
+fn a_manual_run_has_no_population_so_only_the_recorded_runs_are_judged() {
+    let mut fake = FakeGitHub::default();
+    pushes(
+        &mut fake,
+        &[(NORMAL, 115, "success"), (QUICK, 99, "success")],
+    );
+    let running = executing(&mut fake, SLOW, "workflow_dispatch", 226);
+    assert_eq!(running.population, None);
+    let ids: Vec<u64> = gather(&fake, &repo(), "main", 10, Some(&running))
+        .unwrap_or_else(|e| unreachable!("{e}"))[0]
+        .samples
+        .iter()
+        .map(|s| s.run_id)
+        .collect();
+    assert_eq!(ids, [NORMAL, QUICK]);
 }

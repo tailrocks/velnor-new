@@ -12,7 +12,7 @@ The first step of a run is `velnor-ci plan`. It lists the changed files, finds t
 
 - A pull request is judged by its diff. A push to the default branch and a merge queue run are judged by their diff when `on_main = "affected"` (the default), and select everything when `on_main = "everything"`.
 - A scheduled run and a manual run select everything. `full_run` sets the schedule: `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a cron expression. For the built-in schedules `"hourly"`, `"nightly"` and `"weekly"`, the minute, hour and weekday come from a hash of the repository name, so projects do not start together. A cron expression runs as written.
-- These changes select everything: a toolchain file, a Cargo config, a root `Cargo.toml` (unless only workspace dependency versions changed together with the lock), `mise.toml`, `mise.lock`, `.velnor/rust-ci.toml`, the generated workflow, and any file the plan cannot place. A changed `Cargo.lock` selects the packages that reach a changed entry, and everything when that cannot be told.
+- These changes select everything: a toolchain file, a Cargo config, a root `Cargo.toml` (unless only workspace dependency versions changed together with the lock), `mise.toml`, `mise.lock`, `.velnor/rust-ci.toml`, the generated Rust CI workflow `rust-ci.yml`, and any file the plan cannot place. The generated cache cleanup `rust-cache-trim.yml` selects nothing. A changed `Cargo.lock` selects the packages that reach a changed entry, and everything when that cannot be told.
 - `docs/`, `LICENSES/`, `NOTICE`, `CODEOWNERS`, `LICENSE*` and root-level `*.md` files select nothing (`default_ignores = true`), except a file inside a package directory or inside a Cargo root below the repository top, because the build can read it. `inputs` and `non_inputs` map other files to packages or to nothing.
 - Documentation and doctest steps run only when the project has doc comments or doctests. On a full run they always run. They also always run when a procedural macro or build script generates code, or a dependency comes from outside the repository, because the generator cannot see every doc comment then.
 
@@ -104,7 +104,7 @@ The numbers in [`goals.md`](goals.md) section "Targets" are the budget: a run th
 - `Cache` fails on compiled-but-cached crates and failed saves. `Cache maintenance` enforces `cache_budget_bytes`.
 - `velnor-ci bench collect` turns a run into a metrics file, and `velnor-ci bench compare` prints a table for two of them. Use them to compare runs before and after a change.
 
-Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the median and the latest of the last successful runs with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, and never fails the required check.
+Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the run that executes it, and the median of that run and the last successful runs before it, with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, also when a job before it was skipped and only when the required check succeeded, and never fails the required check. A run that failed is not a sample, so a breach ends with the next run that is fast again.
 
 ## Settings
 

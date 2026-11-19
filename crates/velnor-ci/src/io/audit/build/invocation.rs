@@ -149,6 +149,7 @@ impl Invocation {
         directory: &Path,
         workspaces: &[Workspace],
         standalone: &[bool],
+        inherit: &[bool],
         groups: &[PathBuf],
     ) -> Result<(), CiError> {
         if !self.cargo {
@@ -177,9 +178,9 @@ impl Invocation {
             arguments: &self.globals,
             directory,
         };
-        for (expected, alone) in workspaces.iter().zip(standalone) {
+        for ((expected, alone), inherit) in workspaces.iter().zip(standalone).zip(inherit) {
             let manifest = expected.workspace_root.join("Cargo.toml");
-            let actual = root_workspace(&manifest, Some(&invocation), *alone, groups)?;
+            let actual = root_workspace(&manifest, Some(&invocation), *inherit, *alone, groups)?;
             if actual.workspace_root != expected.workspace_root
                 || actual.target_directory != expected.target_directory
             {

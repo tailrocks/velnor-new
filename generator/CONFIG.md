@@ -182,7 +182,7 @@ The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key 
 The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool.
 ## Optional speed budget
 
-The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request. It runs after the required check has ended, which does not wait for it, so its failure never fails the required check.
+The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request. It runs after the required check has ended, also when a job before it was skipped, and only when the required check succeeded. The required check does not wait for it, so its failure never fails the required check. A run that failed the budget is not a sample for the next run, so a breach clears with the next run that is fast again.
 
 ```toml
 [budget]
@@ -192,7 +192,7 @@ runner_seconds = 0
 setup_seconds = 0
 ```
 
-`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it collects the last ten successful first attempts of the generated workflow for each kind of event, compares the medians of that window and the latest run of each kind with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
+`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it measures the run that executes it so far, collects the successful first attempts of the generated workflow before it for each kind of event (ten runs in the window with the running one), compares the median of that window and the running run with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
 
 The check fails closed. A budget for a kind of run there is none of is a failure, not a pass, and so is a budget whose runs do not carry a measurement it needs. The report is printed before the check fails, so that the breach is read next to the medians it broke.
 
