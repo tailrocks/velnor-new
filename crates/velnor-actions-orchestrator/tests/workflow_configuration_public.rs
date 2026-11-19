@@ -284,6 +284,8 @@ mod source_qualification_both;
 
 #[path = "workflow_configuration_public/oracle_input_selection.rs"]
 mod oracle_input_selection;
+#[path = "workflow_configuration_public/source_qualification_scale_set.rs"]
+mod source_qualification_scale_set;
 #[path = "workflow_configuration_public/source_qualification_selection.rs"]
 mod source_qualification_selection;
 

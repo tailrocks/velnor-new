@@ -63,7 +63,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: e52d4ae57719b9cc8e65cccba80d1bb4014147283d377f5346ac9509c52ddf25
+          d: 4c12bb75ab5566b7aafa0e3a0373f22f0645936e70ce2cb60ca54c1c7c446a73
       - name: Restore Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -80,7 +80,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.152
+        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.151
       - name: Verify jactionlint
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
       - name: Verify Rust channel manifest
@@ -198,8 +198,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-94dba95c:
-    name: Tools producer / 94dba95c
+  tools-producer-36dc5056:
+    name: Tools producer / 36dc5056
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -239,7 +239,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 94dba95c0019455dacd47007926135db52a210bb8ca8959a113c4a3290525f3e
+          d: 36dc505668ecab5cc7f5b51a7730e45e805a2393225cdfd08b30ff1d931a4374
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -260,7 +260,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.152
+        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.151
       - name: Verify jactionlint
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]
@@ -296,8 +296,8 @@ jobs:
       - name: Report optional cache save failure
         if: always() && !cancelled() && steps.velnor-optional-tools-save.outcome == 'failure'
         run: "printf '%s\\n' '::warning::cache_unavailable: optional save failed or timed out'"
-  tools-producer-e52d4ae5:
-    name: Tools producer / e52d4ae5
+  tools-producer-4c12bb75:
+    name: Tools producer / 4c12bb75
     runs-on: ubuntu-26.04
     timeout-minutes: 5
     continue-on-error: true
@@ -338,7 +338,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: e52d4ae57719b9cc8e65cccba80d1bb4014147283d377f5346ac9509c52ddf25
+          d: 4c12bb75ab5566b7aafa0e3a0373f22f0645936e70ce2cb60ca54c1c7c446a73
       - name: Probe Mise tools
         id: tools-restore
         if: steps.v2.outputs.enabled == 'true'
@@ -359,7 +359,7 @@ jobs:
           MISE_CARGO_HOME: ${{ runner.temp }}/velnor/cargo
           MISE_RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
           RUSTUP_HOME: ${{ runner.temp }}/velnor/rustup
-        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.152
+        run: mise --no-config --no-env --no-hooks install 'rust[profile=minimal]@1.99.1' jactionlint@2.4.0 shellcheck@0.11.0 aqua:nextest-rs/nextest/cargo-nextest@0.9.151
       - name: Verify jactionlint
         if: steps.v2.outputs.enabled == 'true' && steps.tools-restore.outputs.cache-hit != 'true'
         uses: ./.github/actions/velnor-verify-jactionlint # zizmor: ignore[self-repository]

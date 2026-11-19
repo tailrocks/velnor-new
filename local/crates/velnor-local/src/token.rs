@@ -16,6 +16,7 @@ pub struct Claims {
     pub git_ref: String,
     #[serde(rename = "defaultRef")]
     pub default_ref: String,
+    pub nbf: u64,
     pub exp: u64,
     pub scp: String,
 }
@@ -27,6 +28,9 @@ struct Header {
 
 pub fn verify(token: &str, public_key_der: &[u8], now: u64) -> Result<Claims, String> {
     let claims: Claims = signed_claims(token, public_key_der)?;
+    if now < claims.nbf {
+        return Err("the runtime token is not valid yet".to_owned());
+    }
     if claims.exp <= now {
         return Err("the runtime token has expired".to_owned());
     }
