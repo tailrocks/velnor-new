@@ -4,6 +4,7 @@
 use std::io::{Error, ErrorKind, Read, Write};
 use std::sync::Mutex;
 
+use super::early_list::EarlyList;
 use crate::cargo_artifacts::{ArtifactBatch, ArtifactTap};
 use crate::setup::DoctestCount;
 use crate::tests_run::{SummaryTap, TestCounts};
@@ -30,7 +31,7 @@ impl Capture {
 
 pub fn pump<L: Write>(from: impl Read, to: impl Write, log: &Mutex<L>) -> Option<Error> {
     let capture = Mutex::new(Capture::default());
-    pump_counted(from, to, log, None, &capture);
+    pump_counted(from, to, log, None, None, &capture);
     capture
         .into_inner()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -42,6 +43,7 @@ pub(super) fn pump_counted<L: Write>(
     mut to: impl Write,
     log: &Mutex<L>,
     count: Option<&Mutex<DoctestCount>>,
+    early: Option<&EarlyList>,
     capture: &Mutex<Capture>,
 ) -> bool {
     let mut tap = SummaryTap::default();
@@ -69,6 +71,11 @@ pub(super) fn pump_counted<L: Write>(
         };
         let chunk = &buffer[..read];
         tap.feed(chunk);
+        if tap.started()
+            && let Some(early) = early
+        {
+            early.start();
+        }
         artifacts.feed(chunk);
         capture
             .lock()

@@ -25,6 +25,7 @@ mod delta_snapshot;
 mod delta_source;
 mod delta_tree;
 mod delta_trim;
+mod early_list;
 mod fetch;
 mod fetch_credentials;
 mod fetch_reports;
