@@ -12,6 +12,7 @@ pub(crate) struct Binary {
     pub(crate) package: String,
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
+    pub(crate) profile: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,6 +21,7 @@ pub(crate) struct VelnorConfig {
     pub(crate) after: Vec<String>,
     pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
+    pub(crate) family_tag: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -28,6 +30,7 @@ struct RawBinary {
     package: String,
     bin: Option<String>,
     platforms: Option<Vec<String>>,
+    profile: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -39,6 +42,7 @@ struct Raw {
     pr_only_checks: Vec<String>,
     #[serde(default)]
     binaries: Vec<RawBinary>,
+    family_tag: Option<String>,
 }
 
 fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
@@ -62,10 +66,24 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             after: None,
             pr_only_checks: Vec::new(),
             binaries: Vec::new(),
+            family_tag: None,
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
     refuse_expressions("pr_only_checks", &text_refs(&raw.pr_only_checks))?;
+    for (index, name) in raw.pr_only_checks.iter().enumerate() {
+        let problem = if name.trim().is_empty() {
+            "is blank; name a required check or remove the entry"
+        } else if raw.pr_only_checks[..index].contains(name) {
+            "repeats an earlier entry; remove the duplicate"
+        } else {
+            continue;
+        };
+        return Err(ReleaseError::InvalidToml {
+            file: ".velnor/release.toml".to_owned(),
+            message: format!("pr_only_checks[{index}] {problem}"),
+        });
+    }
     refuse_expressions("after", &text_refs(&after))?;
     if after.is_empty() || after.iter().any(|name| name.trim().is_empty()) {
         return Err(ReleaseError::EmptyAfter);
@@ -83,6 +101,13 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     }) {
         return Err(ReleaseError::UnsafeRoot { root: root.clone() });
     }
+    refuse_expressions(
+        "family_tag",
+        &raw.family_tag
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    )?;
     let binaries = raw
         .binaries
         .into_iter()
@@ -103,11 +128,40 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         after,
         pr_only_checks: raw.pr_only_checks,
         binaries,
+        family_tag: raw.family_tag,
     })
 }
 
 fn text_refs(values: &[String]) -> Vec<&str> {
     values.iter().map(String::as_str).collect()
+}
+
+/// Names Cargo reserves, or that would build into a directory another profile or
+/// Cargo itself owns. `dev`, `test` and `bench` land in `target/debug`; the rest are
+/// refused by Cargo or collide with its own `target` subdirectories.
+const RESERVED_PROFILES: [&str; 11] = [
+    "dev",
+    "test",
+    "bench",
+    "debug",
+    "doc",
+    "build-override",
+    "package",
+    "deps",
+    "examples",
+    "build",
+    "incremental",
+];
+
+fn profile(package: &str, name: Option<String>) -> Result<Option<String>, ReleaseError> {
+    let Some(name) = name else {
+        return Ok(None);
+    };
+    refuse_expressions("binaries.profile", &[&name])?;
+    if !valid_package_name(&name) || RESERVED_PROFILES.contains(&name.as_str()) {
+        return Err(ReleaseError::InvalidProfile(package.to_owned(), name));
+    }
+    Ok(Some(name))
 }
 
 fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
@@ -120,6 +174,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             bin,
         });
     }
+    let profile = profile(&raw.package, raw.profile)?;
     let platforms = match raw.platforms {
         None => Platform::ALL.to_vec(),
         Some(names) if names.is_empty() => {
@@ -148,5 +203,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         package: raw.package,
         bin,
         platforms,
+        profile,
     })
 }

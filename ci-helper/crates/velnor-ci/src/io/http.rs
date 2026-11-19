@@ -8,6 +8,7 @@ use ureq::http::Response;
 
 use crate::error::CiError;
 use crate::github::{GitHub, GitHubWrite};
+use crate::release_family::GitHubPost;
 
 pub(super) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(300);
 const BODY_LIMIT: u64 = 512 * 1024 * 1024;
@@ -64,6 +65,18 @@ impl GitHub for HttpGitHub {
     }
 }
 
+impl GitHubPost for HttpGitHub {
+    fn post(&self, path: &str, json: &str) -> Result<String, CiError> {
+        let url = format!("{}{path}", self.api);
+        body(
+            &format!("POST {path}"),
+            self.signed(self.agent.post(&url))
+                .header("Content-Type", "application/json")
+                .send(json),
+        )
+    }
+}
+
 impl GitHubWrite for HttpGitHub {
     fn wait(&self, duration: Duration) {
         std::thread::sleep(duration);
@@ -95,5 +108,14 @@ impl GitHubWrite for HttpGitHub {
             self.signed(self.agent.delete(&url)).call(),
         )
         .map(drop)
+    }
+}
+
+impl HttpGitHub {
+    /// The body of a GET of `path`, `None` on any failure or a body over `limit` bytes.
+    pub(super) fn get_bytes(&self, path: &str, limit: u64) -> Option<Vec<u8>> {
+        let url = format!("{}{path}", self.api);
+        let mut response = self.signed(self.agent.get(&url)).call().ok()?;
+        super::read_limited(response.body_mut().as_reader(), limit).ok()
     }
 }

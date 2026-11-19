@@ -152,7 +152,10 @@ fn run_appends_the_number_of_tests_nextest_ran_to_the_step_output() {
     let seven = listed(&[("kept", &["a", "b", "c", "d", "e", "f", "g"])]);
     let (output, written, _) = run_with_output("tests-run-split", &split, &seven, &NEXTEST_RUN);
     assert!(output.status.success(), "{output:?}");
-    assert_eq!(written, "existing=1\ntests_run=7\ntests_listed=7\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=7\ntests_listed=7\ntests_ignored=0\n"
+    );
 }
 
 #[test]
@@ -163,7 +166,10 @@ fn run_counts_failed_tests_and_keeps_the_exit_code_of_nextest() {
     let five = listed(&[("kept", &["a", "b", "c", "d", "e"])]);
     let (output, written, _) = run_with_output("tests-run-failed", &script, &five, &NEXTEST_RUN);
     assert_eq!(output.status.code(), Some(100));
-    assert_eq!(written, "existing=1\ntests_run=5\ntests_listed=5\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=5\ntests_listed=5\ntests_ignored=0\n"
+    );
 }
 
 #[test]
@@ -174,7 +180,7 @@ fn run_reports_a_run_without_tests_as_zero() {
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=0\ntests_by_package=\n"
+        "existing=1\ntests_run=0\ntests_listed=0\ntests_ignored=0\ntests_by_package=\n"
     );
 }
 
@@ -189,7 +195,7 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=0\ntests_listed=1\ntests_by_package=gone=0/1\n"
+        "existing=1\ntests_run=0\ntests_listed=1\ntests_ignored=0\ntests_by_package=gone=0/1\n"
     );
 }
 
@@ -204,7 +210,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-no-counter", script, &two, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_by_package=kept=2/2\n"
+        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
     );
 }
 
@@ -221,7 +227,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-retry", script, &two, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=2\ntests_listed=2\ntests_by_package=kept=2/2\n"
+        "existing=1\ntests_run=2\ntests_listed=2\ntests_ignored=0\ntests_by_package=kept=2/2\n"
     );
 }
 
@@ -235,7 +241,7 @@ END";
     let (_, written, _) = run_with_output("tests-run-unicode", script, &one, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=café=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=café=1/1\n"
     );
 }
 
@@ -249,7 +255,7 @@ fn run_counts_a_status_line_longer_than_the_line_limit() {
     let (_, written, _) = run_with_output("tests-run-long", &script, &one, &NEXTEST_RUN);
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=kept=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
 }
 
@@ -258,10 +264,16 @@ fn run_counts_runnable_tests_when_the_log_has_no_status_lines() {
     let mixed = "echo '     Summary [   0.5s] 3 tests run: 2 passed, 1 failed, 5 skipped' >&2";
     let three = listed(&[("kept", &["a", "b", "c"])]);
     let (_, written, _) = run_with_output("tests-run-mixed", mixed, &three, &NEXTEST_RUN);
-    assert_eq!(written, "existing=1\ntests_run=3\ntests_listed=3\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
+    );
     let bare = "echo '     Summary [   0.5s] 3 tests run: 3 passed' >&2";
     let (_, written, _) = run_with_output("tests-run-bare", bare, &three, &NEXTEST_RUN);
-    assert_eq!(written, "existing=1\ntests_run=3\ntests_listed=3\n");
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=3\ntests_listed=3\ntests_ignored=0\n"
+    );
 }
 
 #[test]
@@ -309,6 +321,6 @@ END";
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=kept=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
 }

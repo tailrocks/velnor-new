@@ -14,6 +14,10 @@ use velnor_actions_orchestrator::{
     prepare_with_operator_guard,
 };
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "the old engine's test fixture builds a release manifest for linux-x86_64 and macOS hosts only (tests/support/consumer_manifest.rs); P4 runs velnor-gen workflows"
+)]
 #[test]
 fn public_plan_identity_uses_effective_runtime_for_runner_target() -> Result<(), Box<dyn Error>> {
     let temp = super::super::fixture(Some(super::super::BASE_APPROVALS), super::super::BASE_LOCK)?;
