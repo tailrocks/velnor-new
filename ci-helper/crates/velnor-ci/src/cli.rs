@@ -6,8 +6,10 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use velnor_model::{InvalidId, RepoPath};
 
+mod fetch_reports;
 mod gate;
 mod report;
+pub use fetch_reports::FetchReportsArgs;
 pub use gate::GateArgs;
 pub use report::ReportArgs;
 
@@ -42,6 +44,10 @@ pub enum Command {
         about = "The required check: read the needs context from NEEDS_JSON, and the spec in the variable --spec-env names, and the plan outputs of the plan job the spec names, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and every package that listed tests in a selected test job ran at least one. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
     )]
     Gate(GateArgs),
+    #[command(
+        about = "Download every report artifact the plan expects, all at once from one listing of the run: read the artifact names from matrix.include[].artifact_id of <run-dir>/plan.json, list the run's artifacts, download each expected one over --connections connections (three attempts each) and extract it to <run-dir>/reports/<artifact name>. Every expected artifact is attempted before the command fails; exit 1 names each one that was never uploaded, expired or could not be downloaded, and a missing or malformed plan.json. Reads GITHUB_TOKEN, which needs actions: read"
+    )]
+    FetchReports(FetchReportsArgs),
     #[command(
         about = "Exit 1 unless the tag is rust-ci-v or tools-v followed by the version of this program"
     )]

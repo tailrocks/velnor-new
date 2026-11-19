@@ -3,6 +3,8 @@
 
 mod activity;
 mod archive_witness;
+mod artifact_api;
+mod artifact_unzip;
 mod audit;
 mod build_inputs;
 mod cache;
@@ -15,6 +17,7 @@ mod configurations;
 mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
+mod fetch_reports;
 mod git;
 mod git_witness;
 mod http;
@@ -177,6 +180,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::MbxStore => crate::mbx_store::setup(),
