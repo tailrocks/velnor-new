@@ -84,7 +84,9 @@ fn slug(id: &str) -> String {
     }
     let slug = slug.trim_matches('-');
     if slug.is_empty() || slug.starts_with(|c: char| c.is_ascii_digit()) {
-        format!("{FALLBACK_SLUG}-{slug}").trim_end_matches('-').to_owned()
+        format!("{FALLBACK_SLUG}-{slug}")
+            .trim_end_matches('-')
+            .to_owned()
     } else {
         slug.to_owned()
     }

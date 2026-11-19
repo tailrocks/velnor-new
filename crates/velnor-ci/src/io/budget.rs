@@ -19,6 +19,9 @@ use crate::github::{
 use crate::time::seconds_between;
 
 const PAGE_SIZE: usize = 100;
+/// Runs come newest first, so a window older than this many pages of successful
+/// runs is not a recent measurement.
+const MAX_PAGES: u32 = 10;
 const REPOSITORY_VARIABLE: &str = "GITHUB_REPOSITORY";
 const SUMMARY_VARIABLE: &str = "GITHUB_STEP_SUMMARY";
 const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
@@ -110,7 +113,8 @@ fn gather(
     let path = WORKFLOW_PATH;
     let workflow = path.as_str().rsplit('/').next().unwrap_or_default();
     let mut listed: Vec<(Population, u64)> = Vec::new();
-    for page in 1_u32.. {
+    let mut counts: BTreeMap<Population, usize> = BTreeMap::new();
+    for page in 1..=MAX_PAGES {
         let body = github.get(&workflow_runs_path(repo, workflow, page))?;
         let runs: ApiPage<ApiListedRun> = parse(&body, "workflow runs")?;
         let last_page = runs.items.len() < PAGE_SIZE;
@@ -119,10 +123,18 @@ fn gather(
                 continue;
             }
             if let Some(population) = classify(&run, default_branch) {
+                *counts.entry(population).or_default() += 1;
                 listed.push((population, run.id));
             }
         }
-        if last_page {
+        let enough = [
+            Population::PullRequest,
+            Population::MainPush,
+            Population::Schedule,
+        ]
+        .iter()
+        .all(|population| counts.get(population).is_some_and(|count| *count >= last));
+        if last_page || enough {
             break;
         }
     }

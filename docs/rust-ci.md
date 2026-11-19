@@ -111,7 +111,7 @@ The numbers in [`goals.md`](goals.md) section "Targets" are the budget: a run th
 - `Cache` fails on compiled-but-cached crates and failed saves. `Cache maintenance` enforces `cache_budget_bytes`.
 - `velnor-ci bench collect` turns a run into a metrics file, and `velnor-ci bench compare` prints a table for two of them. Use them to compare runs before and after a change.
 
-No merged check compares wall time with a limit yet.
+Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the median and the latest of the last successful runs with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, and never fails the required check.
 
 ## Settings
 

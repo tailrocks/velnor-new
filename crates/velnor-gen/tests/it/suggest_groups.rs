@@ -167,12 +167,24 @@ fn names_collide_without_regard_to_case_and_ids_without_a_usable_slug_still_get_
         ),
         (
             "",
-            &[("\u{65e5}\u{672c}", 40), ("\u{4e2d}\u{6587}", 40), ("x", 10)][..],
+            &[
+                ("\u{65e5}\u{672c}", 40),
+                ("\u{4e2d}\u{6587}", 40),
+                ("x", 10),
+            ][..],
             &["name = \"binary\"", "name = \"binary-2\""][..],
         ),
-        ("", &[("2fa", 50), ("x", 10)][..], &["name = \"binary-2fa\""][..]),
+        (
+            "",
+            &[("2fa", 50), ("x", 10)][..],
+            &["name = \"binary-2fa\""][..],
+        ),
     ] {
-        let (text, _) = suggested(&["Cargo.toml"], config, &timings(&[("Cargo.toml", binaries)]))?;
+        let (text, _) = suggested(
+            &["Cargo.toml"],
+            config,
+            &timings(&[("Cargo.toml", binaries)]),
+        )?;
         let names: Vec<&str> = text.lines().filter(|l| l.starts_with("name")).collect();
         assert_eq!(names, expected, "{text}");
         let facts = detect(&timed(&["Cargo.toml"], &format!("{config}{text}"), "")?)?;

@@ -3,7 +3,9 @@
 
 use velnor_model::{HelperRelease, HelperVersion, MbxStore, PrCi, PushAfterMergeGroup, RepoFacts};
 
-use crate::{BUDGET_HELPER, TEST_LANE_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
+use crate::{
+    BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
+};
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
