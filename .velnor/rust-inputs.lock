@@ -462,8 +462,6 @@ crates/velnor-test-support/generator_074.lock	velnor-actions-orchestrator
 crates/velnor-test-support/generator_078.lock	velnor-actions-orchestrator
 crates/velnor-test-support/root_cargo_lock.rs	velnor-actions-cli
 crates/velnor-test-support/root_cargo_lock.rs	velnor-actions-orchestrator
-fixtures/bun-install-lifecycle-runtime/legacy-install-step.sh	velnor-actions-orchestrator
-fixtures/bun-workspace-suites/input/.velnor/config.toml	velnor-actions-orchestrator
 generator/CONFIG.md	velnor-gen
 generator/samples/helper-lock/view/.velnor/rust-ci.lock	velnor-ci
 generator/samples/helper-lock/view/.velnor/rust-ci.lock	velnor-gen
@@ -489,4 +487,3 @@ scripts/generator-release/preflight-release-tag.sh	velnor-actions-workflow-rende
 scripts/generator-release/source-qualification-validator-recipes.json	velnor-actions-orchestrator
 scripts/resolve-runner-family-publication.sh	velnor-actions-workflow-renderer
 scripts/runner-family-discovery.sh	velnor-actions-workflow-renderer
-scripts/upgrades/bump-gradle-catalog.py	velnor-actions-workflow-renderer
