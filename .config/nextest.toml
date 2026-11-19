@@ -116,5 +116,13 @@ filter = "package(=velnor-ci)"
 test-group = "velnor-ci-serial"
 
 [[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(=audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget) | test(=audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs) | test(=release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root) | test(=resolve_qualification::every_recorded_case_matches_the_legacy_op))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(=audit::freshness::distinct_declared_trees_cannot_exceed_the_audit_scan_budget) | test(=audit::freshness::repeated_directory_declarations_share_the_audit_scan_budget) | test(=audit::inventory::directly_named_files_do_not_consume_the_directory_walk_budget) | test(=io_plan_docs::plan_treats_sources_over_the_total_size_bound_as_possibly_holding_docs) | test(=release_manifests::an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root) | test(=resolve_qualification::every_recorded_case_matches_the_legacy_op))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
 slow-timeout = { period = "2s", terminate-after = 1 }

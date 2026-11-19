@@ -30,6 +30,11 @@ async fn journal_with_wal() -> Result<Journal, Box<dyn std::error::Error>> {
     )
     .await?;
     conn.execute(
+        "CREATE TABLE connection_intents (id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL, subject TEXT NOT NULL, state TEXT NOT NULL, cleanup_proven INTEGER NOT NULL DEFAULT 0)",
+        (),
+    )
+    .await?;
+    conn.execute(
         "INSERT INTO intents (kind, subject, state, cleanup_proven) VALUES ('launch', 's', 'done', 1)",
         (),
     )

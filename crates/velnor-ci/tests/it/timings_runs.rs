@@ -84,6 +84,7 @@ fn split_lab_jobs(lint_conclusion: &str) -> FakeGitHub {
         }
         list[at]["name"] = "rust-test-lab".into();
         list.push(first_job);
+        jobs["total_count"] = jobs["jobs"].as_array().map_or(0, Vec::len).into();
         fake.respond(path, &jobs.to_string());
         let log = velnor_ci::github::job_log_path(&lab(), 9_000 + index as u64);
         fake.respond(log, "");

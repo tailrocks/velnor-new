@@ -2,8 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 //! The repository's own `release-plz.toml` follows the group-prefixed tag
-//! scheme of #1429: `tools-v` for velnor-ci and velnor-gen, `runner-v` for the
-//! runner, and never a bare `v<version>`.
+//! scheme of #1429: `tools-v` for velnor-ci and velnor-gen (released by the
+//! family of `.velnor/release.toml`), `runner-v` for the runner, and never a
+//! bare `v<version>`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -60,10 +61,21 @@ fn set(items: &[&str]) -> BTreeSet<String> {
 }
 
 #[test]
-fn the_tools_group_is_velnor_ci_and_velnor_gen_with_tools_v() -> TestResult {
-    let (members, patterns) = group("tools")?;
-    assert_eq!(members, set(&["velnor-ci", "velnor-gen"]));
-    assert_eq!(patterns, set(&["tools-v{{ version }}"]));
+fn the_tools_are_released_by_the_family_tag_and_not_by_release_plz() -> TestResult {
+    for name in ["velnor-ci", "velnor-gen"] {
+        let entry = entries()?.remove(name).ok_or("no entry")?;
+        assert_eq!(
+            entry.get("release").and_then(toml::Value::as_bool),
+            Some(false),
+            "{name}"
+        );
+    }
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.velnor/release.toml");
+    let release: toml::Table = std::fs::read_to_string(path)?.parse()?;
+    assert_eq!(
+        release.get("family_tag").and_then(toml::Value::as_str),
+        Some("tools-v{{ version }}")
+    );
     Ok(())
 }
 
@@ -79,7 +91,7 @@ fn the_runner_group_tags_with_runner_v() -> TestResult {
 /// other members keep its `git_tag_name` and turn their own tag off.
 #[test]
 fn every_group_has_one_lead_that_owns_the_tag() -> TestResult {
-    for name in ["tools", "runner"] {
+    for name in ["runner"] {
         let mut leads = 0;
         for (package, entry) in entries()? {
             if str_field(&entry, "version_group") != Some(name) {
@@ -91,8 +103,8 @@ fn every_group_has_one_lead_that_owns_the_tag() -> TestResult {
             }
             assert_eq!(
                 entry.get("release").and_then(toml::Value::as_bool),
-                Some(true),
-                "{package}: a group member must release"
+                Some(false),
+                "{package}: a package of the tag-push root is not released by release-plz"
             );
         }
         assert_eq!(leads, 1, "group {name}: expected exactly one lead");
