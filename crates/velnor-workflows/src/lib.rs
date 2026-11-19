@@ -18,6 +18,6 @@ mod triggers;
 pub use error::WorkflowsError;
 pub use plan::{
     Action, Body, Call, CallTarget, CallValue, Concurrency, Container, Env, Input, InputKind, Job,
-    Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers, Workflow,
-    WorkflowCall, WorkflowRun, WorkflowsPlan,
+    LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
+    Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };

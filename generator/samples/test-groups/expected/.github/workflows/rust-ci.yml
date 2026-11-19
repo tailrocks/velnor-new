@@ -365,6 +365,8 @@ jobs:
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest archive --workspace --locked --cargo-message-format=json-render-diagnostics --archive-file ''nextest-archive.tar.zst'''
+      - name: velnor-ci test-groups check
+        run: '. "$VELNOR_EXEC" test-groups check --group ''database=package(app) and test(/^db_/)'' --group ''shell=package(tool) and test(~cargo_)'''
       - name: Upload the tests
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:

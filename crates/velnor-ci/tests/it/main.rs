@@ -134,6 +134,7 @@ mod sources_fetch;
 mod sources_fetch_contract;
 mod support;
 mod telemetry;
+mod test_groups;
 mod ties;
 mod time;
 mod timings;

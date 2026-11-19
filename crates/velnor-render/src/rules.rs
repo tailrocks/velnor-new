@@ -370,6 +370,12 @@ fn has_word(run: &str, word: &str) -> bool {
 }
 
 fn action_rules(uses: &str, rules: &mut Vec<Rule>) {
+    if uses.starts_with("./") {
+        if velnor_workflows::LocalAction::parse(uses).is_none() {
+            rules.push(Rule::ActionNotAllowed(uses.to_owned()));
+        }
+        return;
+    }
     let (action, reference) = uses.split_once('@').unwrap_or((uses, ""));
     if !ALLOWED_ACTIONS.contains(&action) {
         rules.push(Rule::ActionNotAllowed(action.to_owned()));

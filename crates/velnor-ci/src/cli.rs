@@ -118,6 +118,11 @@ pub enum Command {
     )]
     LaneGuard(LaneGuardArgs),
     #[command(
+        subcommand,
+        about = "Check the [[test_groups]] of .velnor/rust-ci.toml against the tests cargo-nextest lists"
+    )]
+    TestGroups(TestGroupsCommand),
+    #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(crate::cli_cache::RestoredArgs),
@@ -302,6 +307,44 @@ pub struct LaneGuardArgs {
         help = "Nextest binary id the lane never lists; repeatable"
     )]
     pub except_binary: Vec<String>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum TestGroupsCommand {
+    #[command(
+        about = "Run in the directory of a Cargo root after the tests are built: exit 1 and name every test that two or more groups select. Lists the workspace once per group with cargo-nextest, under the group's filter unchanged, so the filter means what the group job runs; ignored tests are exempt, and a listing error fails the check"
+    )]
+    Check(TestGroupsCheckArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct TestGroupsCheckArgs {
+    #[arg(
+        long = "group",
+        required = true,
+        value_name = "NAME=FILTER",
+        value_parser = group_filter,
+        help = "A group's name, an equals sign and its nextest filter; repeat for each group"
+    )]
+    pub groups: Vec<GroupFilter>,
+}
+
+#[derive(Debug, Clone)]
+pub struct GroupFilter {
+    pub name: String,
+    pub filter: String,
+}
+
+fn group_filter(text: &str) -> Result<GroupFilter, String> {
+    match text.split_once('=') {
+        Some((name, filter)) if !name.trim().is_empty() && !filter.trim().is_empty() => {
+            Ok(GroupFilter {
+                name: name.to_owned(),
+                filter: filter.to_owned(),
+            })
+        }
+        _ => Err("expected NAME=FILTER with a name and a filter".to_owned()),
+    }
 }
 
 #[derive(Debug, Args)]

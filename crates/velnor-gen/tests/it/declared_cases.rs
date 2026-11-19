@@ -232,3 +232,36 @@ fn case_ids_cannot_repeat_or_collide_with_a_job() -> TestResult {
     assert!(message.contains("js"), "{message}");
     Ok(())
 }
+
+#[test]
+fn a_case_holds_its_permissions_and_a_plain_job_can_need_its_jobs() -> TestResult {
+    let permitted = CASES.replace(
+        "title = \"JavaScript actions\"",
+        "title = \"JavaScript actions\"\npermissions = { contents = \"read\" }",
+    );
+    let after = "\n[[workflow.job]]\nid = \"after\"\nneeds = [\"js-hosted\", \"js-scale-set\"]\n\n[[workflow.job.step]]\nname = \"After\"\nrun = \"echo after\"\n";
+    let tree = qualification(&format!("{MODES}{permitted}{after}"))?;
+    for id in ["js-hosted", "js-scale-set"] {
+        assert_eq!(
+            job(&tree, id)?
+                .at(&["permissions", "contents"])
+                .and_then(Node::text),
+            Some("read")
+        );
+    }
+    assert_eq!(
+        job(&tree, "mask-hosted")?.get("permissions"),
+        Some(&Node::Map(Vec::new()))
+    );
+    assert_eq!(
+        job(&tree, "after")?
+            .get("needs")
+            .map(|needs| needs.texts())
+            .ok_or("no needs")?,
+        ["js-hosted", "js-scale-set"]
+    );
+    let refused = permitted.replace("contents = \"read\"", "contents = \"admin\"");
+    let message = refusal(&format!("{MODES}{refused}"))?;
+    assert!(message.contains("contents"), "{message}");
+    Ok(())
+}

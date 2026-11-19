@@ -220,3 +220,59 @@ fn a_generated_run_is_one_command_with_no_shell_syntax_in_any_group_job() -> Tes
     }
     Ok(())
 }
+
+#[test]
+fn the_build_job_checks_that_no_test_is_in_two_groups_before_it_uploads_the_archive() -> TestResult
+{
+    let workflow = rendered(&format!("{DATABASE}\n{SHELL}"))?;
+    let build = job(&workflow, "rust-test")?;
+    let all = names(build);
+    let position = |name: &str| {
+        all.iter()
+            .position(|found| *found == name)
+            .ok_or_else(|| format!("no step {name} in {all:?}"))
+    };
+    let archive = position("Build the tests")?;
+    let check = position("velnor-ci test-groups check")?;
+    assert!(
+        archive < check && check < position("Upload the tests")?,
+        "{all:?}"
+    );
+    assert_eq!(
+        run_of(build, "velnor-ci test-groups check")?,
+        ". \"$VELNOR_EXEC\" test-groups check --group 'database=package(package-0) and test(/^db_/)' --group 'shell=binary(it) and test(~cargo_)'"
+    );
+    for id in ["rust-test-default", "rust-test-database", "rust-test-shell"] {
+        assert!(
+            !names(job(&workflow, id)?).contains(&"velnor-ci test-groups check"),
+            "{id}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn one_group_in_a_root_has_nothing_to_overlap_with_and_adds_no_check() -> TestResult {
+    let workflow = rendered(DATABASE)?;
+    assert!(!names(job(&workflow, "rust-test")?).contains(&"velnor-ci test-groups check"));
+    Ok(())
+}
+
+#[test]
+fn the_check_runs_in_the_root_of_the_groups_it_compares() -> TestResult {
+    let config = "[[test_groups]]\nname = 'a'\nroot = 'lab'\nfilter = 'package(x)'\n\n[[test_groups]]\nname = 'b'\nroot = 'lab'\nfilter = 'package(y)'\n\n[[test_groups]]\nname = 'c'\nroot = '.'\nfilter = 'package(z)'\n";
+    let text = workflow(&view_with(
+        &["Cargo.toml", "lab/Cargo.toml"],
+        config,
+        "0.1.82",
+    )?)?;
+    let tree = document(&text)?;
+    let lab = step(job(&tree, "rust-test-lab")?, "velnor-ci test-groups check")?;
+    assert_eq!(lab["working-directory"], "lab");
+    assert_eq!(
+        lab["run"],
+        ". \"$VELNOR_EXEC\" test-groups check --group 'a=package(x)' --group 'b=package(y)'"
+    );
+    assert!(!names(job(&tree, "rust-test-root")?).contains(&"velnor-ci test-groups check"));
+    Ok(())
+}
