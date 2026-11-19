@@ -311,7 +311,11 @@ pub(crate) fn check_final_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Rende
         if final_job.display_name != FINAL_DISPLAY_NAME {
             return Err(RenderError::InvalidWorkflow("bad_final_name".to_owned()));
         }
-        if final_job.condition.as_deref() != Some(FINAL_CONDITION) {
+        let fenced =
+            velnor_actions_contract::workflow::fork_fenced_condition(Some(FINAL_CONDITION));
+        if final_job.condition.as_deref() != Some(FINAL_CONDITION)
+            && final_job.condition.as_deref() != Some(fenced.as_str())
+        {
             return Err(RenderError::InvalidWorkflow(
                 "bad_final_condition".to_owned(),
             ));

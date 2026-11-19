@@ -22,6 +22,10 @@ pub(crate) use filesystem::canonical_journal_path;
 use filesystem::{ensure_regular_or_missing, open_lock, private_directory};
 pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
+#[cfg(test)]
+#[path = "daemon_lock/tests.rs"]
+mod tests;
+
 const ANCHOR_VERSION: u8 = 1;
 const MAX_ANCHOR_BYTES: u64 = 16 * 1024;
 const ANCHOR_DIR: &str = "runner-lineage";
@@ -58,7 +62,17 @@ impl DaemonLock {
 
     #[must_use]
     pub fn is_held(&self) -> bool {
-        self.file.metadata().is_ok()
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            self.file
+                .metadata()
+                .is_ok_and(|metadata| metadata.nlink() > 0)
+        }
+        #[cfg(not(unix))]
+        {
+            false
+        }
     }
 
     #[must_use]
@@ -230,14 +244,22 @@ impl EngineLineageGuard {
                 Err(HostError::Journal)
             };
         }
-        if current.revision.checked_add(1) != Some(revision)
-            || read_anchor(&self.inner.anchor_path)?.as_ref() != Some(current)
-        {
+        if current.revision.checked_add(1) != Some(revision) {
             return Err(HostError::Journal);
         }
         let mut next = current.clone();
         next.revision = revision;
-        write_anchor(&self.inner.anchor_path, &next)?;
+        let on_disk = read_anchor(&self.inner.anchor_path)?;
+        if on_disk.as_ref() == Some(&next) {
+            // A previous advance renamed this exact record into place but
+            // failed to sync the directory. Retry the sync instead of
+            // rejecting a revision that is already published.
+            sync_parent(&self.inner.anchor_path)?;
+        } else if on_disk.as_ref() == Some(current) {
+            write_anchor(&self.inner.anchor_path, &next)?;
+        } else {
+            return Err(HostError::Journal);
+        }
         *state = Some(next);
         Ok(())
     }
@@ -325,6 +347,15 @@ fn write_anchor(path: &Path, anchor: &Anchor) -> Result<(), HostError> {
     file.sync_all().map_err(|_| HostError::Journal)?;
     drop(file);
     fs::rename(&temporary, path).map_err(|_| HostError::Journal)?;
+    sync_parent(path)
+}
+
+fn sync_parent(path: &Path) -> Result<(), HostError> {
+    let parent = path.parent().ok_or(HostError::Path)?;
+    #[cfg(test)]
+    if tests::take_directory_sync_failure() {
+        return Err(HostError::Journal);
+    }
     File::open(parent)
         .and_then(|directory| directory.sync_all())
         .map_err(|_| HostError::Journal)

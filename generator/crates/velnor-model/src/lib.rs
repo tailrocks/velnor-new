@@ -27,7 +27,7 @@ pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
-    RunnerLabel, Sha256, TargetName,
+    RunnerLabel, Sha256, TargetName, github_hosted,
 };
 pub use mise::MisePlatform;
 pub use plan::{
@@ -38,9 +38,9 @@ pub use plan::{
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
-    InputRule, MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
-    TargetKind, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
+    InputRule, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts,
+    RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot,
+    Target, TargetKind, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest, Toolchain,
     UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
