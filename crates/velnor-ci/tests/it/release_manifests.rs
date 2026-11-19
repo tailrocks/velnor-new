@@ -125,22 +125,11 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
     let checkout = Checkout::new("excluded ' quote");
     let marker = checkout.0.join("wrapper-ran");
     checkout.write("shadow/cargo", "#!/bin/sh\nexit 99\n");
-    let wrapper = std::env::var_os("VELNOR_CARGO_WRAPPER").map(std::path::PathBuf::from);
-    let search = std::env::join_paths(
-        std::iter::once(checkout.0.join("shadow")).chain(
-            std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default())
-                .filter(|dir| wrapper.as_deref() != Some(dir.join("cargo").as_path())),
-        ),
-    )
+    let search = std::env::join_paths(std::iter::once(checkout.0.join("shadow")).chain(
+        std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
+    ))
     .unwrap_or_else(|e| unreachable!("{e}"));
-    let cargo = std::env::split_paths(&search)
-        .map(|dir| dir.join("cargo"))
-        .find(|path| {
-            path.metadata().is_ok_and(|metadata| {
-                metadata.is_file() && metadata.permissions().mode() & 0o111 != 0
-            })
-        })
-        .unwrap_or_else(|| unreachable!("cargo is not on PATH"));
+    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| env!("CARGO").into());
     let stub = checkout.0.join("bin/cargo");
     checkout
         .write(
