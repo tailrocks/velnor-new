@@ -165,15 +165,18 @@ fn a_release_plz_that_cannot_fetch_without_persisted_credentials_is_refused() {
     ] {
         let mut files = files();
         files.mise_tomls = vec![format!("[tools]\nrelease-plz = \"{version}\"\n")];
-        files.mise_lock = locked("release-plz", version);
+        files.mise_lock = locked("release-plz", version)
+            .replace("release-plz-v0.4.3", &format!("release-plz-v{version}"));
+        let error = refusal(&files);
         assert_eq!(
             matches!(
-                refusal(&files),
+                &error,
                 Some(ReleaseError::ReleasePlzVersionTooOld { minimum, .. }) if minimum == "0.3.168"
             ),
             refused,
-            "{version}"
+            "{version}: {error:?}"
         );
+        assert_eq!(error.is_none(), !refused, "{version}: {error:?}");
     }
 }
 
