@@ -23,6 +23,7 @@ pub(crate) fn split_state_seal(
     ir: &WorkflowIr,
     shared: &mut LaneShare,
     jobs: &mut BTreeMap<String, Job>,
+    hosted_runs_on: &str,
 ) -> Result<Option<StateSealWorkflow>, RenderError> {
     let producers: BTreeSet<String> = shared
         .jobs
@@ -36,10 +37,13 @@ pub(crate) fn split_state_seal(
     if producers.is_empty() {
         return Ok(None);
     }
-    let plan = jobs
+    let mut plan = jobs
         .get(PLAN_JOB_ID)
         .cloned()
         .ok_or_else(|| invalid("plan_missing"))?;
+    // state-seal stays hosted and unfenced even when the CI plan moved to the scale set.
+    hosted_runs_on.clone_into(&mut plan.runs_on);
+    plan.condition = None;
     let mut sealed = shared.split_off(&producers);
     sealed.jobs.insert(PLAN_JOB_ID.to_owned(), plan.clone());
     let mut sealed_jobs = BTreeMap::from([(PLAN_JOB_ID.to_owned(), plan)]);

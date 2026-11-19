@@ -3,7 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_model::{
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+};
 use velnor_rust::{PackageCounts, encode_package_counts};
 
 use crate::logscan::{nextest_summary, strip_ansi};
@@ -17,7 +19,7 @@ mod status;
 #[cfg(test)]
 mod statuses;
 
-pub(crate) use listed::runnable_matches;
+pub(crate) use listed::{Listing, runnable_matches};
 
 const LINE_LIMIT: usize = 4096;
 const RUN_FLAGS: &[&str] = &[
@@ -78,6 +80,7 @@ pub fn runs_nextest(command: &[String]) -> bool {
 pub struct TestCounts {
     pub run: u64,
     pub listed: Option<u64>,
+    pub ignored: Option<u64>,
     pub by_package: Option<BTreeMap<String, PackageCounts>>,
     runs: Option<BTreeMap<String, u64>>,
 }
@@ -87,6 +90,9 @@ pub fn output_lines(counts: TestCounts) -> String {
     let mut lines = vec![format!("{TESTS_RUN_OUTPUT}={}", counts.run)];
     if let Some(listed) = counts.listed {
         lines.push(format!("{TESTS_LISTED_OUTPUT}={listed}"));
+    }
+    if let Some(ignored) = counts.ignored {
+        lines.push(format!("{TESTS_IGNORED_OUTPUT}={ignored}"));
     }
     if let Some(packages) = counts.by_package
         && let Some(encoded) = encode_package_counts(&packages)
@@ -154,11 +160,12 @@ fn drop_run_only(run: &[String], index: &mut usize) -> bool {
 }
 
 #[must_use]
-pub(crate) fn apply_runnable(
-    mut counts: TestCounts,
-    matches: Option<BTreeMap<String, u64>>,
-) -> TestCounts {
-    let Some(matches) = matches else {
+pub(crate) fn apply_runnable(mut counts: TestCounts, listing: Option<Listing>) -> TestCounts {
+    let Some(Listing {
+        packages: matches,
+        ignored,
+    }) = listing
+    else {
         counts.by_package = None;
         return counts;
     };
@@ -170,6 +177,7 @@ pub(crate) fn apply_runnable(
         return counts;
     };
     counts.listed = Some(total);
+    counts.ignored = Some(ignored);
     counts.by_package = counts
         .runs
         .as_ref()
@@ -282,6 +290,7 @@ impl SummaryTap {
             self.counts = Some(TestCounts {
                 run: summary.tests_run,
                 listed: skipped(trimmed).and_then(|skipped| skipped.checked_add(summary.tests_run)),
+                ignored: None,
                 by_package: None,
                 runs,
             });

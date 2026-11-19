@@ -17,6 +17,7 @@ struct State {
     stop_new: bool,
     journal_path: Option<PathBuf>,
     delete_snapshot: Option<Value>,
+    swap_volume_after_get: Option<Value>,
 }
 
 fn reply(mut stream: &UnixStream, status: &str, value: Value) {
@@ -123,8 +124,14 @@ fn serve(mut stream: UnixStream, state: Arc<Mutex<State>>) {
             .unwrap();
         let mut locked = state.lock().unwrap();
         if method == "GET" {
-            return match locked.resources.get(name) {
-                Some(volume) => reply(&stream, "200 OK", volume.clone()),
+            let found = locked.resources.get(name).cloned();
+            if found.is_some()
+                && let Some(replacement) = locked.swap_volume_after_get.take()
+            {
+                locked.resources.insert(name.to_owned(), replacement);
+            }
+            return match found {
+                Some(volume) => reply(&stream, "200 OK", volume),
                 None => reply(&stream, "404 Not Found", json!({"message":"missing"})),
             };
         }
