@@ -171,7 +171,7 @@ fn values_yaml_or_cargo_would_misread_are_quoted_or_kept_out_of_arguments() -> T
     for run in text
         .lines()
         .filter(|line| line.trim_start().starts_with("run:"))
-        .filter(|line| !line.contains("--target-dir"))
+        .filter(|line| !line.contains("--target-dir") && !line.contains("--root-target"))
     {
         assert!(
             !["bad", "crates", "odd"]

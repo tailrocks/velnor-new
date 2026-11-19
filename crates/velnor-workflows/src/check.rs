@@ -271,6 +271,12 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
     if !raw.with.is_empty() {
         return refuse(format!("job {} sets with without uses", job.id));
     }
+    if job.matrix.is_some() && !raw.outputs.is_empty() {
+        return refuse(format!(
+            "job {} sets outputs on a matrix job; every matrix child would write the same output name and the last to finish would win, so outputs are not allowed there",
+            job.id
+        ));
+    }
     scope.level = Level::Step;
     fill_steps(&mut job, raw.step, raw.outputs, &mut scope)?;
     Ok(job)
