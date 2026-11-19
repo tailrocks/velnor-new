@@ -45,8 +45,8 @@ pub use repo::{
     DependencyKind, DocsRun, FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
     PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
     RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget,
-    Target, TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
-    Weakening,
+    Target, TargetKind, TestLane, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage,
+    Unread, Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

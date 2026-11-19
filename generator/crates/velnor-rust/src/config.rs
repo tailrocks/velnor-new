@@ -58,6 +58,8 @@ struct RawConfig {
     lint: Vec<crate::config_lint::RawLint>,
     #[serde(default)]
     test_groups: Vec<crate::config_test_groups::RawTestGroup>,
+    #[serde(default)]
+    test_lane: Vec<crate::config_test_lane::RawTestLane>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +104,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
+    let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
@@ -109,13 +112,10 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
-        checkout: if raw.sparse_checkout.unwrap_or(false) {
-            CheckoutScope::Sparse
-        } else {
-            CheckoutScope::Full
-        },
+        checkout: checkout_scope(raw.sparse_checkout),
         lint,
         test_groups,
+        test_lanes,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         mbx_remote: crate::config_cache::mbx_remote(raw.cache).map_err(invalid)?,
@@ -148,6 +148,14 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         timeout_minutes,
         exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
+}
+
+fn checkout_scope(sparse: Option<bool>) -> CheckoutScope {
+    if sparse.unwrap_or(false) {
+        CheckoutScope::Sparse
+    } else {
+        CheckoutScope::Full
+    }
 }
 
 fn timeout(configured: Option<u16>, default: u16) -> Result<u16, Reason> {

@@ -160,7 +160,7 @@ fn incomplete_listings_delete_nothing_and_deletion_errors_reach_the_caller() {
 #[test]
 fn trim_uses_the_same_complete_listing_and_propagates_delete_failure() {
     let api = Api::new();
-    trim(&api, &repo(), "refs/heads/main", "velnor-dlt-", 2)
+    trim(&api, &repo(), "refs/heads/main", "velnor-dlt-", 2, 0)
         .unwrap_or_else(|e| unreachable!("{e}"));
     let ids: Vec<_> = api
         .entries
@@ -171,7 +171,7 @@ fn trim_uses_the_same_complete_listing_and_propagates_delete_failure() {
     assert_eq!(ids, [100, 101]);
     let mut api = Api::new();
     api.fail_delete = true;
-    assert!(trim(&api, &repo(), "refs/heads/main", "velnor-dlt-", 2).is_err());
+    assert!(trim(&api, &repo(), "refs/heads/main", "velnor-dlt-", 2, 0).is_err());
 }
 
 #[test]
@@ -230,7 +230,7 @@ fn concurrent_cache_removal_does_not_stop_trim_or_budget() {
             api.entries.borrow_mut().truncate(2);
             api.delete_status = Some(status);
             let result = if trimming {
-                trim(&api, &repo(), "refs/pull/101/merge", "velnor-dlt-", 0)
+                trim(&api, &repo(), "refs/pull/101/merge", "velnor-dlt-", 0, 0)
             } else {
                 budget(&api, &repo(), 0, 0, false)
             };
@@ -285,7 +285,7 @@ fn bounded_trim_leaves_later_pages_but_repository_budget_requires_and_uses_them(
     for count in [2000, 2001] {
         let api = large();
         api.entries.borrow_mut().truncate(count);
-        let report = trim(&api, &repo(), "refs/heads/main", "velnor-dlt-", 2)
+        let report = trim(&api, &repo(), "refs/heads/main", "velnor-dlt-", 2, 0)
             .unwrap_or_else(|e| unreachable!("{e}"));
         let ids: Vec<_> = api
             .entries
@@ -304,4 +304,43 @@ fn bounded_trim_leaves_later_pages_but_repository_budget_requires_and_uses_them(
     api.fail = Some("caches?&per_page=100&page=21".to_owned());
     assert!(budget(&api, &repo(), 0, 0, false).is_err());
     assert_eq!(api.entries.borrow().len(), 2001);
+}
+
+#[test]
+fn the_budget_deletes_an_older_target_family_and_keeps_a_recently_restored_sources_lock() {
+    let host = "Linux-X64";
+    let lock = |id: u64| format!("velnor-src-{host}-all.roots-{id:064x}");
+    let target = |compat: char, id: u64| {
+        format!(
+            "velnor-tgt-rust-lint.lab.{host}-{}-{id:064x}-{}-{id}",
+            compat.to_string().repeat(16),
+            "c".repeat(40)
+        )
+    };
+    let row = |id: u64, key: String, accessed: &str| json!({"id":id,"key":key,"ref":"refs/heads/main","created_at":format!("2026-11-17T00:00:{id:02}Z"),"last_accessed_at":accessed,"size_in_bytes":10});
+    let build = |restored: &str| {
+        let api = Api::new();
+        *api.entries.borrow_mut() = vec![
+            row(1, lock(1), restored),
+            row(2, lock(2), "2026-11-17T00:00:00Z"),
+            row(3, lock(3), "2026-11-17T00:00:00Z"),
+            row(4, target('a', 4), "2026-11-17T00:00:00Z"),
+            row(5, target('b', 5), "2026-11-17T00:00:00Z"),
+        ];
+        api
+    };
+    let ids = |api: &Api| -> Vec<u64> {
+        api.entries
+            .borrow()
+            .iter()
+            .filter_map(|entry| entry["id"].as_u64())
+            .collect()
+    };
+    let now = velnor_ci::time::parse_utc("2026-11-17T12:00:00Z").unwrap_or(0);
+    let api = build("2026-11-17T06:00:00Z");
+    budget(&api, &repo(), now, 0, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(ids(&api), [1, 2, 3, 5]);
+    let api = build("2026-11-15T06:00:00Z");
+    budget(&api, &repo(), now, 0, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(ids(&api), [2, 3, 5]);
 }

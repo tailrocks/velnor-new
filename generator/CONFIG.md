@@ -51,9 +51,9 @@ registry = "sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/"
 cainfo = "/opt/velnor/crates-mirror/ca-bundle.pem"
 ```
 
-The registry must use sparse HTTPS and end with `/`. The CA bundle must have an absolute path and already exist on the runner. The runner's image supplies it. The generator requires a pinned `velnor-ci` release of at least `0.1.81` when this table is present, including when the helper is built from source. The released helper configures Cargo before that bootstrap build.
+The registry must use sparse HTTPS and end with `/`. The CA bundle must have an absolute path and already exist on the runner. The runner's image supplies it. The generator requires a pinned `velnor-ci` release of at least `0.1.82` when this table is present, including when the helper is built from source. The released helper configures Cargo before that bootstrap build.
 
-Each opted-in job runs `velnor-ci crates-mirror` before Cargo or tool installation. It writes `$RUNNER_TEMP/velnor-cargo/config.toml` with `source.crates-io.replace-with = "velnor-crates-mirror"`, the sparse registry and `http.cainfo`. It leaves `$HOME/.cargo` and `$CARGO_HOME` untouched and refuses an existing job configuration that it does not own. Repeated setup replaces the owned configuration. Generation requires a valid HTTPS registry URL with a host. Cargo reports registry or CA failures as failures; it does not silently switch to public crates.io.
+Each opted-in job runs `velnor-ci crates-mirror` before Cargo or tool installation. It writes `$RUNNER_TEMP/velnor-cargo/config.toml` with `source.crates-io.replace-with = "velnor-crates-mirror"`, the sparse registry and `http.cainfo`. It leaves `$HOME/.cargo` and `$CARGO_HOME` untouched and refuses an existing job configuration that it does not own. Repeated setup replaces the owned configuration. Generation requires a valid HTTPS registry URL with a host. Cargo reports registry or CA failures as failures; it does not silently switch to public crates.io. When the runner's environment sets `VELNOR_CRATES_MIRROR=off`, the step prints that the mirror is disabled and returns before it reads the CA bundle, writes the configuration, installs the wrapper or exports anything, so Cargo keeps its normal sources. `velnor-local` sets it on every runner it starts, because neither the mirror nor its CA bundle exists on a developer machine. Any other non-empty value fails the step, so a typo cannot disable the mirror silently. Production runners never set it, and a missing CA bundle or an unreachable mirror still fails the job.
 
 A Cargo wrapper on `PATH`, also exported as `CARGO`, passes the absolute configuration with Cargo's `--config` option. It runs a per-toolchain hard link of Cargo under a distinct executable name so Cargo preserves the wrapper in `CARGO` for build scripts and tests. When a hard link is unavailable, it installs a copy once. This keeps the mirror when a child command changes `CARGO_HOME` or runs from a temporary directory, and supports `cargo +toolchain`. Rustup selections from `rust-toolchain.toml`, directory overrides, or `+toolchain` remain in effect for child commands run from temporary directories. Calling a toolchain's Cargo by an unrelated absolute path bypasses `PATH` and `CARGO` and is outside this invocation contract.
 
@@ -109,6 +109,40 @@ run = "bash scripts/ci-fixtures.sh"
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
 
+## Feature test lanes
+
+A package may have tests that exist only under a Cargo feature. A `[[test_lane]]` entry adds one nextest step to the root's test job. The step runs the selected tests again with the features on.
+
+```toml
+[[test_lane]]
+root = "crates/velnor-runner"
+features = ["local-mode"]
+packages = ["velnor-runner-host"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
+```
+
+`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+
+`packages` names the packages of the root whose tests the lane selects. It is required with `filter` and optional without it. The plan narrows a pull request to the changed packages, so a lane whose filter matches nothing there is not broken. When the plan selects none of `packages`, and not the whole workspace, the lane step is skipped and a step named `Skip test lane (features: ...)` prints `skipped: no selected packages`. Otherwise the lane runs with `--no-tests=fail`, so a filter that matches nothing fails the job instead of passing with zero tests. A lane without `filter` runs whenever the plan selects the root.
+
+`filter` is optional. It is a nextest filterset that the generator joins to the plan's selection with `and`, so a lane never runs a test the plan did not select. Without it the lane re-runs the whole selected set with the features. Every generated `run:` value is one command with no shell syntax, so the filterset is one quoted argument and must not contain `|`, `&`, `;`, `<`, a quote, `$`, a backtick, a backslash, a line break or one of the words `if`, `for`, `while`, `case` and `coproc`. Write the nextest operators as words: `or` for `|`, `and` for `&` and `not` for `!`. Binaries that run with `cargo test` because their harness is off stay out of the lane, as they stay out of the default step.
+
+`lint` and `doc` are optional booleans, `false` by default. A lane without them renders exactly as before. `lint = true` adds a clippy step named `Lint (features: local-mode)` and `doc = true` adds a rustdoc step named `Documentation (features: local-mode)`. Each runs the root's default command with `--features '<features>'` added, so clippy keeps `--workspace --all-targets --locked ... -- -D warnings` and rustdoc keeps `--workspace --no-deps --locked` with `-D warnings` for rustdoc. The steps follow the lane's test step in the same job, in the same folder and with the same target directory, so the build cache is shared. They are steps of a job that the `required` job already needs, so a failure there fails the gate. Format checks need no features and stay in the default lint step.
+
+```toml
+[[test_lane]]
+root = "crates/velnor-runner"
+features = ["local-mode"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
+lint = true
+doc = true
+```
+
+The generator does not check that `filter` selects every test that exists only under the features. A new feature-only test whose name falls outside the filter is skipped without an error. Keep the filter to a naming rule that new feature-only tests follow.
+
+## Unused dependencies
+
+The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool.
 ## Optional speed budget
 
 The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request, and its failure never fails the required check.
@@ -121,7 +155,7 @@ runner_seconds = 0
 setup_seconds = 0
 ```
 
-`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it collects the last ten successful first attempts of the generated workflow for each kind of event, compares the medians of that window and the latest run of each kind with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.91` when the table holds a budget.
+`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it collects the last ten successful first attempts of the generated workflow for each kind of event, compares the medians of that window and the latest run of each kind with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
 
 The check fails closed. A budget for a kind of run there is none of is a failure, not a pass, and so is a budget whose runs do not carry a measurement it needs. The report is printed before the check fails, so that the breach is read next to the medians it broke.
 
@@ -228,7 +262,7 @@ A repository with any `[[test_groups]]` splits each root that has a group into t
 
 ## Optional extra binaries and files in a release asset
 
-A `[[binaries]]` entry in `.velnor/release.toml` packs one binary per platform by default: `<bin>-<platform>.tar.gz` holds only the file `<bin>`. Two opt-in keys put more in the same asset.
+A `[[binaries]]` entry in `.velnor/release.toml` packs one binary per platform by default: `<bin>-<target-triple>.tar.gz` holds only the file `<bin>`, as the archives of uv, ripgrep and bat do. Two opt-in keys put more in the same asset.
 
 ```toml
 [[binaries]]
@@ -242,13 +276,25 @@ include = ["LICENSE", "NOTICE"]
 
 Every entry lands at the top level of the asset, flat and by its file name: the main binary, then `bins` in the order written, then `include` in the order written. This is the layout of the old engine's `velnor-host` release. A `bin` or file name that appears twice, an `include` path that is absolute, starts with `-`, contains `..` or a character other than letters, digits, `.`, `_`, `-` and `/`, a `bin` that no package of the root builds, and an expression in any value are refused at generation. A listed file that is missing from the checkout fails the build job, not generation.
 
-Both keys are absent by default, and then the generated workflow is byte-identical to one generated without this feature. The `SHA256SUMS` file still covers the archives, not their members.
+Both keys are absent by default, and then the generated workflow is byte-identical to one generated without this feature. The `SHA256SUMS` file still covers the archives, not their members. With `attest = true` each archive is its own attestation subject, so the binary, the helper, `LICENSE` and `NOTICE` travel in one verified file.
 
 ## Release binary asset format
 
-`format` in a `[[binaries]]` table of `.velnor/release.toml` selects what the release job uploads for that binary. It is `"archive"` by default, and then the output is unchanged: one musl `<bin>-<platform>.tar.gz` for each platform plus the `SHA256SUMS` file.
+`format` in a `[[binaries]]` table of `.velnor/release.toml` selects what the release job uploads for that binary. It is `"archive"` by default: one `<bin>-<target-triple>.tar.gz` for each platform plus the `SHA256SUMS` file.
 
-`format = "raw"` publishes the bare executable instead, built for the gnu target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`), so a consumer can download it by its exact name. For each platform (`linux-x64`, `linux-arm64`, `macos-arm64`) the release holds three assets:
+| Platform | Archive asset (default, musl) | Runner |
+|---|---|---|
+| `linux-x64` | `<bin>-x86_64-unknown-linux-musl.tar.gz` | `ubuntu-24.04` |
+| `linux-arm64` | `<bin>-aarch64-unknown-linux-musl.tar.gz` | `ubuntu-24.04-arm` |
+| `macos-arm64` | `<bin>-aarch64-apple-darwin.tar.gz` | `macos-15` |
+
+`target = "gnu"` builds the linux platforms for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu` and names the archives after those triples. The macOS archive does not change.
+
+`checksum_files = "sha256"` adds a `<archive>.sha256` file next to each archive. It holds one line, `<sha256>  <archive>`, as `sha256sum --check` reads it. `SHA256SUMS` lists the sidecars too, because `velnor-ci release publish` checks every file it uploads against it, and an attested release attests and verifies them. It is off by default, and refused with `format = "raw"`, which always publishes its sidecar.
+
+`member_digests = "sha256"` adds a `BINARY-SHA256SUMS` asset that lists the digest of each executable inside each archive, one `<sha256>  <archive>/<member>` line per archive and per `bin` or `bins` entry. The `sums-<package>` job unpacks the archives it downloaded and hashes the members, so a digest never comes from a consumer. It writes the file before `SHA256SUMS`, so `SHA256SUMS` lists it, an attested release attests and verifies it, and `velnor-ci release publish` uploads it. `velnor-gen pin-helper` downloads it when `SHA256SUMS` lists it, checks it against that listing, and records both digests in `.velnor/rust-ci.lock`: the archive digests under `[velnor-ci]`, which `actions/setup-velnor` checks before it unpacks anything, and the executable digests under `[velnor-ci-binary]`, which the generated launcher checks before every run. A lock without `[velnor-ci-binary]` still works, and then both checks use the `[velnor-ci]` digest. It is off by default, and refused with `format = "raw"`.
+
+`format = "raw"` publishes the bare executable instead, built for the gnu target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`) unless `target = "musl"` says otherwise, so a consumer can download it by its exact name. For each platform (`linux-x64`, `linux-arm64`, `macos-arm64`) the release holds three assets:
 
 - `<bin>-<platform>`: the executable, for example `velnor-ci-linux-x64`
 - `<bin>-<platform>.sha256`: one line, `<sha256>  <bin>-<platform>`, as `sha256sum --check` reads it
@@ -266,7 +312,7 @@ With `bins`, each extra binary is published the same way, as its own `<bin>-<pla
 
 ## Optional release asset names
 
-A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<platform>.tar.gz` by default, for example `app-linux-x64.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional, and an entry without it generates the same workflow as before.
+A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<target-triple>.tar.gz` by default, for example `app-x86_64-unknown-linux-musl.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional, and an entry without it generates the same workflow as before.
 
 ```toml
 [[binaries]]
@@ -280,6 +326,23 @@ The placeholders are `{{ bin }}`, `{{ platform }}` (`linux-x64`), `{{ target }}`
 `{{ version }}` is the version in the released tag. The build, `SHA256SUMS` and publish jobs each read it from the tag with a step that sets `VERSION` through `$GITHUB_ENV`, and the build job packs into a `stage` folder that it uploads. The tag name must end in the version, as the default `{{ package }}-v{{ version }}` does. A template without `{{ version }}` adds no step and no folder.
 
 `asset_name` applies to `format = "raw"` too: the template names the executable, and the `.sha256` and `.provenance.json` files take the same name. With `bins` on a raw binary, each extra binary is named by the same template with its own `{{ bin }}`, so the template must contain `{{ bin }}` or the assets would collide, and a template without it is refused. In an archive, `{{ bin }}` is the main binary.
+
+### Raw binary keys
+
+Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
+
+```toml
+[[binaries]]
+package = "velnor-ci"
+format = "raw"
+target = "musl"
+smoke = true
+commit_file = true
+```
+
+- `target = "musl"` builds `<arch>-unknown-linux-musl` for the linux platforms of a raw binary, with the musl C compiler installed, so the executable is static. `macos-arm64` keeps `aarch64-apple-darwin`. The default for raw stays `"gnu"`. `target = "musl"` is refused without a linux platform. The archive format accepts `target` too and defaults to musl.
+- `smoke = true` adds two steps to each build job after packing, for the main binary of each platform: `./<asset> --version`, then `./<asset> check-tag "$TAG"`, where `TAG` is the tag the release records for the package. The binary must implement `check-tag <tag>`, which fails when the tag does not name the version of the binary. `smoke` is refused with the archive format.
+- `commit_file = true` adds a `COMMIT` asset holding the commit the tag is on. The `sums-<package>` job writes it before `SHA256SUMS`, so `SHA256SUMS` lists it, an attested release attests and verifies it, and `velnor-ci release publish` uploads it.
 
 ## Release checks
 
@@ -439,7 +502,8 @@ A `[[workflow.case]]` is one qualification case that runs on a hosted runner and
 - `uses` also names a local action, and only these three paths are allowed: `./qualification/actions/post-fail`, `./qualification/actions/docker` and `./qualification/actions/composite`. They take no `with`. Any other local path, such as `./.github/actions/x`, fails generation, so a repository action cannot reach a job by accident. The generator writes the `# zizmor: ignore[self-repository]` note after each one.
 - Locked inputs: `checkout` always has `persist-credentials: false`; `mise` always has `cache: false` and `cache_save: false`; `attest` always has `push-to-registry: false`. Setting one to anything but `false` is refused, and setting it to `false` is accepted and written once. `attest` is refused unless its job has `id-token = "write"` and `attestations = "write"`.
 - An `if` on a step may read `needs.<needed job>.result`, `steps.<earlier step id>.outcome` and `github.*`, besides what a value may read. An `if` on a job may read `needs`, `inputs` and `github.*` only.
-- An `env` or `with` value is plain text or exactly one expression. The allowed expressions are `github.token`, `github.repository`, `github.sha`, `inputs.<declared input>`, `matrix.<key>` in a matrix job, `steps.<earlier step id>.outputs.<name>` and `needs.<needed job>.outputs.<declared output>`. Anything else (including `secrets` and `github.event.*`), and any `needs` on a job declared later, is refused with the path of the problem. This holds for a `workflow_run` workflow on a self-hosted runner as well, so the head branch, SHA and commit message of the run it follows (`github.event.workflow_run.*`), which an author of a pull request controls, reach a step only through an `if`.
+- An `env` or `with` value is plain text or exactly one expression. The allowed expressions are `github.token`, `github.repository`, `github.sha`, `inputs.<declared input>`, `matrix.<key>` in a matrix job, `steps.<earlier step id>.outputs.<name>` and `needs.<needed job>.outputs.<declared output>`. Anything else (including `github.event.*`), and any `needs` on a job declared later, is refused with the path of the problem. `secrets` is refused too, except in the one case below. This holds for a `workflow_run` workflow on a self-hosted runner as well, so the head branch, SHA and commit message of the run it follows (`github.event.workflow_run.*`), which an author of a pull request controls, reach a step only through an `if`.
+- A secret is read as `${{ secrets.<NAME> }}`, and only as the whole value of a step `env` entry, in a workflow whose `[workflow.on]` holds `workflow_dispatch` and no other event. `<NAME>` is an upper case letter followed by upper case letters, digits and underscores, and the value is exactly `secrets.<NAME>`: no `||`, no comparison, no `toJSON(secrets)`, no `secrets['NAME']`. Step `with`, `run` and `if`, a job `if`, a container or service `env`, a call `with` and a concurrency group never read a secret, and neither does any workflow that a `push`, `pull_request`, `schedule`, `merge_group`, `workflow_run` or `workflow_call` event can start, because those events run for code that an author of a pull request or a caller of the workflow controls. A job has no `env` key. The error names the place and the event.
 
 ### Later
 
@@ -518,4 +582,4 @@ Each binary package must be listed in its `release-plz.toml` with `release = fal
 
 A `family` job binds the tag to the commit that the gate verified. It uses `velnor-ci release family-tag`, which needs a helper release of `0.1.83` or later. It creates the tag on that commit, and it refuses the release unless the tag resolves to that commit itself. A published release of the tag on an earlier ancestor commit releases nothing. The build jobs check out the tag, refuse any other commit, and share one `sums-family` and one `publish-family` job, so all binaries of a release share one tag, one commit, one `SHA256SUMS` and one release.
 
-`family_tag` does not combine with `bins`, `include`, `asset_name`, `attest` or `[[checks]]` yet: generation refuses the combination.
+`family_tag` does not combine with `bins`, `include`, `asset_name`, `attest`, `smoke`, `commit_file`, `checksum_files` or `[[checks]]` yet: generation refuses the combination.

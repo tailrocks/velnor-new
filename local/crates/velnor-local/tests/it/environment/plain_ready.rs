@@ -36,7 +36,7 @@ async fn runner_service(
                 "HTTP/1.1 200 OK\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
                 body.len()
             );
-            let _ = stream.write_all(reply.as_bytes()).await;
+            stream.write_all(reply.as_bytes()).await.ok();
         }
     });
     address.to_string()

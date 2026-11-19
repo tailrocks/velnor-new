@@ -48,7 +48,7 @@ fn raw_format_publishes_the_bare_binary_with_a_checksum_and_provenance_per_platf
         ])
     );
     assert!(!text.contains("musl"));
-    assert!(!text.contains("rg-linux-x64.tar.gz"));
+    assert!(!text.contains("rg-x86_64-unknown-linux-gnu.tar.gz"));
 
     let linux = job(&tree, "build-app-linux-x64")?;
     assert_eq!(
@@ -136,7 +136,7 @@ fn archive_format_stays_the_default_and_can_be_named() -> TestResult {
         Some("[[binaries]]\npackage = \"app\"\nbin = \"rg\"\nformat = \"archive\"\n"),
     )?;
     assert_eq!(default_text, named_text);
-    assert!(default_text.contains("rg-linux-x64.tar.gz"));
+    assert!(default_text.contains("rg-x86_64-unknown-linux-musl.tar.gz"));
     Ok(())
 }
 

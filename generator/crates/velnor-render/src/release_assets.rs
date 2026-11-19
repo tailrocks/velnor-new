@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::Platform;
-use velnor_release::{BinaryFormat, BinaryPlan, asset_name_uses_version, expand_asset_name};
+use velnor_release::{
+    BinaryFormat, BinaryPlan, Checksum, asset_name_uses_version, expand_asset_name,
+};
 
 use crate::release_binaries::{command, target};
+use crate::release_binary_sums::BINARY_SUMS_FILE;
 use crate::release_raw::bin_names;
 use crate::release_steps::{shell_word, variables};
 use crate::rules::{RenderedStep, Value};
@@ -22,12 +25,15 @@ pub(crate) fn versioned(binary: &BinaryPlan) -> bool {
 
 pub(crate) fn stem(binary: &BinaryPlan, bin: &str, platform: Platform) -> String {
     match &binary.asset_name {
-        None => format!("{bin}-{}", platform.file_suffix()),
+        None => match binary.format {
+            BinaryFormat::Archive => format!("{bin}-{}", target(platform, binary).1),
+            BinaryFormat::Raw => format!("{bin}-{}", platform.file_suffix()),
+        },
         Some(template) => expand_asset_name(
             template,
             bin,
             platform.file_suffix(),
-            target(platform, binary.format).1,
+            target(platform, binary).1,
             VERSION_REFERENCE,
         ),
     }
@@ -43,7 +49,15 @@ pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
 
 pub(crate) fn published_files(binary: &BinaryPlan, platform: Platform) -> Vec<String> {
     match binary.format {
-        BinaryFormat::Archive => vec![asset(binary, platform)],
+        BinaryFormat::Archive => {
+            let archive = asset(binary, platform);
+            let sidecar = format!("{archive}.sha256");
+            if binary.checksum_files.is_some() {
+                vec![archive, sidecar]
+            } else {
+                vec![archive]
+            }
+        }
         BinaryFormat::Raw => bin_names(binary)
             .flat_map(|bin| {
                 let name = stem(binary, bin, platform);
@@ -111,6 +125,35 @@ pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String
     }
 }
 
+pub(crate) fn archive_packaging(
+    binary: &BinaryPlan,
+    platform: Platform,
+    file: &str,
+    release_dir: &str,
+) -> Vec<RenderedStep> {
+    let mut steps = vec![command(
+        format!("Pack {file}"),
+        pack(binary, file, release_dir),
+    )];
+    steps.extend(binary.checksum_files.map(|Checksum::Sha256| {
+        let checksum = if platform == Platform::MacosArm64 {
+            "shasum -a 256"
+        } else {
+            "sha256sum"
+        };
+        let name = word(binary, file);
+        let sidecar = word(binary, &format!("{file}.sha256"));
+        RenderedStep {
+            working_directory: versioned(binary).then(|| STAGE.to_owned()),
+            ..command(
+                format!("Checksum {file}"),
+                format!("{checksum} {name} > {sidecar}"),
+            )
+        }
+    }));
+    steps
+}
+
 pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {
     if versioned(binary) && binary.format == BinaryFormat::Raw {
         format!("{STAGE}/*\n!{STAGE}/*.rustc")
@@ -121,11 +164,15 @@ pub(crate) fn uploaded(binary: &BinaryPlan, platform: Platform) -> String {
     }
 }
 
+pub(crate) const COMMIT_FILE: &str = "COMMIT";
+
 pub(crate) fn assets(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
         .flat_map(|platform| published_files(binary, *platform))
+        .chain(binary.commit_file.then(|| COMMIT_FILE.to_owned()))
+        .chain(binary.member_digests.map(|_| BINARY_SUMS_FILE.to_owned()))
         .collect()
 }
 

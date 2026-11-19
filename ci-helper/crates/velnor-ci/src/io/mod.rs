@@ -38,6 +38,7 @@ mod qualification;
 mod recording;
 mod registry;
 mod release;
+mod release_align;
 mod report;
 mod report_checkout;
 mod report_inputs;
@@ -148,6 +149,17 @@ pub fn main() -> ExitCode {
     }
 }
 
+fn budget_limit() -> Result<Option<u64>, CiError> {
+    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
+        Ok(text) if !text.trim().is_empty() => text
+            .trim()
+            .parse()
+            .map(Some)
+            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
+        _ => Ok(None),
+    }
+}
+
 fn run_decide(args: DecideArgs) -> Result<String, CiError> {
     let temp = std::env::var_os("RUNNER_TEMP")
         .filter(|dir| !dir.is_empty())
@@ -169,7 +181,13 @@ fn run_decide(args: DecideArgs) -> Result<String, CiError> {
     } else {
         let counts = activity::activity()?
             .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
-        cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
+        cache::decide_counts(
+            &counts,
+            &target,
+            args.archive.as_deref(),
+            now_seconds(),
+            budget_limit()?,
+        )?
     };
     append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
     Ok(decision.report)
@@ -207,6 +225,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
+        Command::Release(ReleaseCommand::Align(args)) => release_align::run_align(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::WriteRequest(args) => write_request::run(&args),

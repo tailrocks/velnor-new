@@ -11,6 +11,8 @@ use serde_json::Value;
 use crate::declared_fixture::{TestResult, rendered_text};
 use crate::yaml_tree::document;
 
+mod lists;
+mod scripted;
 mod shapes;
 
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
@@ -23,62 +25,6 @@ const PIPE_REPLACED: [(&str, [&str; 2]); 1] = [(
         "grep -qx path-ok \"$RUNNER_TEMP/g4-path-out\"",
     ],
 )];
-
-const CHAINS: [&str; 21] = [
-    "bind-hosted",
-    "bind-scale-set",
-    "buildx-hosted",
-    "buildx-scale-set",
-    "compose-hosted",
-    "compose-scale-set",
-    "expect-fail-hosted",
-    "expect-fail-scale-set",
-    "mask-hosted",
-    "mask-scale-set",
-    "pressure-a-hosted",
-    "pressure-a-scale-set",
-    "pressure-b-hosted",
-    "pressure-b-scale-set",
-    "pressure-c-hosted",
-    "pressure-c-scale-set",
-    "submodule-hosted",
-    "submodule-scale-set",
-    "testcontainers-hosted",
-    "testcontainers-scale-set",
-    "outputs-scale-set",
-];
-
-const NARROWER: [&str; 29] = [
-    "bind-hosted",
-    "bind-scale-set",
-    "buildx-hosted",
-    "buildx-scale-set",
-    "cancel-hosted",
-    "cancel-scale-set",
-    "cancel-service-hosted",
-    "cancel-service-scale-set",
-    "container-hosted",
-    "container-scale-set",
-    "js-pin-hosted",
-    "js-pin-scale-set",
-    "expect-fail-hosted",
-    "expect-fail-scale-set",
-    "mask-hosted",
-    "mask-scale-set",
-    "pressure-a-hosted",
-    "pressure-a-scale-set",
-    "pressure-b-hosted",
-    "pressure-b-scale-set",
-    "pressure-c-hosted",
-    "pressure-c-scale-set",
-    "services-hosted",
-    "services-scale-set",
-    "compare",
-    "outputs-hosted",
-    "outputs-scale-set",
-    "verify-hosted",
-    "verify-scale-set",
-];
 
 fn set(ids: &[&str]) -> BTreeSet<String> {
     ids.iter().map(|id| (*id).to_owned()).collect()
@@ -289,6 +235,11 @@ fn compare(
             ));
         }
     }
+    if scripted::SCRIPTED.contains(&id) {
+        note("a script replaces inline commands");
+        scripted::scripted_steps(id, engine, generated, unexpected);
+        return;
+    }
     let (chains, flat) = engine_steps(engine);
     let (flat, piped) = replace_pipes(flat);
     if flat != gen_steps(generated) {
@@ -377,8 +328,15 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         listed("a pipe is written as two steps"),
         BTreeSet::from(["outputs-scale-set".to_owned()])
     );
-    assert_eq!(listed("an && chain is written as steps"), set(&CHAINS));
-    assert_eq!(listed("permissions are narrower"), set(&NARROWER));
+    assert_eq!(
+        listed("a script replaces inline commands"),
+        set(&scripted::SCRIPTED)
+    );
+    assert_eq!(
+        listed("an && chain is written as steps"),
+        set(&lists::CHAINS)
+    );
+    assert_eq!(listed("permissions are narrower"), set(&lists::NARROWER));
     Ok(())
 }
 

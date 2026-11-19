@@ -322,7 +322,7 @@ async fn service_up_after(delay: std::time::Duration) -> String {
                 return;
             };
             let mut buffer = [0_u8; 2048];
-            let _ = stream.read(&mut buffer).await;
+            drop(stream.read(&mut buffer).await);
             let status = if tokio::time::Instant::now() >= ready {
                 "200 OK"
             } else {
@@ -330,7 +330,7 @@ async fn service_up_after(delay: std::time::Duration) -> String {
             };
             let reply =
                 format!("HTTP/1.1 {status}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
-            let _ = stream.write_all(reply.as_bytes()).await;
+            stream.write_all(reply.as_bytes()).await.ok();
         }
     });
     address.to_string()
@@ -367,7 +367,7 @@ async fn stalling_service() -> String {
         let mut held = Vec::new();
         while let Ok((mut stream, _)) = listener.accept().await {
             let mut buffer = [0_u8; 2048];
-            let _ = stream.read(&mut buffer).await;
+            drop(stream.read(&mut buffer).await);
             held.push(stream);
         }
     });

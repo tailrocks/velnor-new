@@ -29,7 +29,7 @@ fn mirrored_repo(
     let lock = path(".velnor/rust-ci.lock")?;
     let old = String::from_utf8(repo.files[&lock].clone())?;
     repo.files
-        .insert(lock, old.replace("0.1.79", "0.1.81").into_bytes());
+        .insert(lock, old.replace("0.1.81", "0.1.82").into_bytes());
     Ok(repo)
 }
 
@@ -93,8 +93,10 @@ fn mirror_is_explicit_scoped_and_precedes_every_job_tools() -> TestResult {
                 assert!(saw_mise);
             }
             repo.files
-                .insert(lock, old.replace("0.1.81", "0.1.80").into_bytes());
-            assert!(workflow(&repo).is_err_and(|error| error.to_string().contains("0.1.81")));
+                .insert(lock, old.replace("0.1.82", "0.1.81").into_bytes());
+            assert!(
+                workflow(&repo).is_err_and(|error| error.to_string().contains("pin-helper 0.1.82"))
+            );
             repo.files.insert(
                 path(".velnor/rust-ci.toml")?,
                 b"full_run = \"off\"\n".to_vec(),
@@ -167,7 +169,7 @@ fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
             .get_mut(&path(".velnor/rust-ci.lock")?)
             .ok_or("helper lock missing")?;
         *lock = String::from_utf8(lock.clone())?
-            .replace("0.1.79", "0.1.81")
+            .replace("0.1.81", "0.1.82")
             .into_bytes();
         let yaml: serde_json::Value = crate::yaml_tree::document(&workflow(&repo)?)?;
         let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
@@ -293,7 +295,7 @@ fn invalid_mirror_settings_fail_generation() -> TestResult {
         let lock = path(".velnor/rust-ci.lock")?;
         let old = String::from_utf8(repo.files[&lock].clone())?;
         repo.files
-            .insert(lock, old.replace("0.1.79", "0.1.81").into_bytes());
+            .insert(lock, old.replace("0.1.81", "0.1.82").into_bytes());
         let error = workflow(&repo)
             .err()
             .ok_or_else(|| format!("invalid mirror accepted: {config}"))?
@@ -319,7 +321,7 @@ fn valid_mirror_registry_hosts_preserve_the_configured_url() -> TestResult {
         let lock = path(".velnor/rust-ci.lock")?;
         let old = String::from_utf8(repo.files[&lock].clone())?;
         repo.files
-            .insert(lock, old.replace("0.1.79", "0.1.81").into_bytes());
+            .insert(lock, old.replace("0.1.81", "0.1.82").into_bytes());
         let text = workflow(&repo)?;
         assert!(
             text.contains(&format!("sparse+https://{host}/index/")),

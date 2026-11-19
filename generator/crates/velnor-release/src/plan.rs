@@ -24,7 +24,7 @@ use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES, publish_budget};
-use crate::velnor_config::{BinaryFormat, VelnorConfig, parse};
+use crate::velnor_config::{BinaryFormat, Checksum, Libc, VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
 pub struct ReleaseFiles {
@@ -63,7 +63,12 @@ pub struct BinaryPlan {
     pub extra_bins: Vec<ExtraBin>,
     pub include: Vec<String>,
     pub format: BinaryFormat,
+    pub libc: Libc,
     pub attest: bool,
+    pub smoke: bool,
+    pub commit_file: bool,
+    pub checksum_files: Option<Checksum>,
+    pub member_digests: Option<Checksum>,
     pub profile: Option<String>,
     pub asset_name: Option<String>,
     pub tag_pattern: TagPattern,
@@ -240,7 +245,12 @@ pub(crate) fn plan_binaries(
             extra_bins: binary.bins.clone(),
             include: binary.include.clone(),
             format: binary.format,
+            libc: binary.libc,
             attest: binary.attest,
+            smoke: binary.smoke,
+            commit_file: binary.commit_file,
+            checksum_files: binary.checksum_files,
+            member_digests: binary.member_digests,
             profile: binary.profile.clone(),
             asset_name: crate::asset_name::checked(binary, &tag_pattern)?,
             tag_pattern,

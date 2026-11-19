@@ -285,6 +285,22 @@ async fn local_pair_start_failure_removes_everything_it_created() -> TestResult<
     Ok(())
 }
 
+fn local_ci_refusals(valid: &LocalPairRequest) -> Vec<LocalPairRequest> {
+    [
+        ("untrusted", "/x/velnor-ci"),
+        ("trusted", "velnor-ci"),
+        ("trusted", ""),
+        ("trusted", "/x/\0/velnor-ci"),
+    ]
+    .into_iter()
+    .map(|(side, path)| LocalPairRequest {
+        side: side.to_owned(),
+        local_ci: Some(path.to_owned()),
+        ..valid.clone()
+    })
+    .collect()
+}
+
 #[tokio::test]
 async fn local_pair_refuses_unsafe_requests_without_a_docker_daemon() -> TestResult<()> {
     let directory = tempfile::tempdir()?;
@@ -337,6 +353,7 @@ async fn local_pair_refuses_unsafe_requests_without_a_docker_daemon() -> TestRes
         sequence: 0,
         ..valid.clone()
     });
+    refused.extend(local_ci_refusals(&valid));
     for budget in 0..4 {
         let mut zero = valid.clone();
         match budget {
