@@ -23,7 +23,7 @@ mod identity;
 use anchor_io::write_anchor_with;
 use anchor_io::{read_anchor, remove_stale_anchor_temporaries, sync_parent, write_anchor};
 pub(crate) use filesystem::canonical_journal_path;
-use filesystem::{open_lock, private_directory};
+use filesystem::{lock_directory, open_lock, private_directory};
 pub(super) use identity::{engine_id_valid, engine_key, instance_id_valid};
 
 #[cfg(test)]
@@ -40,13 +40,23 @@ const ANCHOR_DIR: &str = "runner-lineage";
 #[derive(Debug)]
 pub struct DaemonLock {
     file: File,
+    state_directory: Option<File>,
     device: u64,
     inode: u64,
     controller_running: AtomicBool,
 }
 
 impl DaemonLock {
+    pub fn try_acquire_daemon(state: &Path) -> Result<Self, HostError> {
+        let directory = lock_directory(state)?;
+        Self::acquire(&state.join("daemon.lock"), Some(directory))
+    }
+
     pub fn try_acquire(path: &Path) -> Result<Self, HostError> {
+        Self::acquire(path, None)
+    }
+
+    fn acquire(path: &Path, state_directory: Option<File>) -> Result<Self, HostError> {
         let file = open_lock(path)?;
         file.try_lock().map_err(|_| HostError::Lock)?;
         let metadata = file.metadata().map_err(|_| HostError::Lock)?;
@@ -55,6 +65,7 @@ impl DaemonLock {
             use std::os::unix::fs::MetadataExt;
             Ok(Self {
                 file,
+                state_directory,
                 device: metadata.dev(),
                 inode: metadata.ino(),
                 controller_running: AtomicBool::new(false),
@@ -67,14 +78,19 @@ impl DaemonLock {
         }
     }
 
+    /// A daemon lock stays held for as long as this value lives, because the
+    /// state-directory flock outlives an unlinked `daemon.lock`. A plain lock
+    /// is held only while its file is still linked.
     #[must_use]
     pub fn is_held(&self) -> bool {
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
-            self.file
-                .metadata()
-                .is_ok_and(|metadata| metadata.nlink() > 0)
+            self.state_directory.is_some()
+                || self
+                    .file
+                    .metadata()
+                    .is_ok_and(|metadata| metadata.nlink() > 0)
         }
         #[cfg(not(unix))]
         {
