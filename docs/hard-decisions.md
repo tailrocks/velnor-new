@@ -487,10 +487,8 @@ publication and manual stable version/tag authority are recorded in
 
 **Decision.** In generated Rust CI (velnor-gen), lint, the test build, the
 nextest archive, doctests and `cargo doc` run with `--workspace` instead of
-`-p` for the selected packages. Tests still run only the selected packages.
-Nextest runs are filtered with `-E`. A custom harness target runs
-`cargo test -p <package> --locked` with its `--lib`, `--bin=`, or `--test=`
-selector and no `-E`. Alone-checks, docs and doctests are still planned from the
+`-p` for the selected packages. Tests still run only the selected packages,
+filtered with `-E`. Alone-checks, docs and doctests are still planned from the
 selection.
 
 **Cause.** Cargo unifies features only over the selected packages. A `-p` run
