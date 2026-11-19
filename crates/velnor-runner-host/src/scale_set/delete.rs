@@ -71,7 +71,9 @@ pub(crate) async fn finish_recovered_delete(
     binding: &RepositoryConnection,
     recovered: Option<ScaleSetDeleteOutcome>,
 ) -> Result<(), HostError> {
-    let _ = (journal, binding, recovered);
+    if recovered == Some(ScaleSetDeleteOutcome::Deleted) {
+        journal.reactivate_if_drained(binding).await?;
+    }
     Ok(())
 }
 
