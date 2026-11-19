@@ -43,8 +43,9 @@ def tar_of(members, fmt=tarfile.PAX_FORMAT, end=True):
                 info.pax_headers = rest[0]
             info.size = len(data)
             archive.addfile(info, io.BytesIO(data))
+        members_only = buffer.getvalue()
     raw = buffer.getvalue()
-    return raw if end else raw[:-10240] if len(raw) > 10240 else raw
+    return raw if end else members_only
 
 
 def oci(layers, diff_ids=None, platform=None, config_extra=None, manifest_extra=None, layout=None, index_extra=None, entries_extra=()):

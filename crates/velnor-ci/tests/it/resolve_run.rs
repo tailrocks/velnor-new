@@ -4,14 +4,15 @@
 //! Runs one world through `velnor-ci resolve-qualification` against a local fake API, or through
 //! the legacy engine against a fake `mise` that answers `gh api` from the same recorded answers.
 
+use std::collections::BTreeMap;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::sync::{Arc, Mutex, Weak};
+use std::time::{Duration, Instant};
 
 use crate::resolve_world::{Quirk, World, copy_repo, data_dir, sha256};
 use crate::support::fresh_dir;
@@ -140,56 +141,76 @@ fn context_env(world: &World, command: &mut Command) {
 type Log = Arc<Mutex<Vec<String>>>;
 
 /// A local HTTP server answering GETs from the world's API answers; every path asked for is
-/// logged. It answers 404 for a route the world does not hold.
+/// logged. It answers 404 for a route the world does not hold. It stops listening once no caller
+/// holds the log, so its listener and thread end with the run that started them.
 fn serve(world: &World) -> (String, Log) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
+    listener
+        .set_nonblocking(true)
+        .unwrap_or_else(|e| unreachable!("{e}"));
     let address = listener
         .local_addr()
         .unwrap_or_else(|e| unreachable!("{e}"));
     let answers = world.api.clone();
     let log: Log = Arc::default();
-    let seen = Arc::clone(&log);
+    let seen = Arc::downgrade(&log);
     std::thread::spawn(move || {
-        for stream in listener.incoming().flatten() {
-            let mut reader = BufReader::new(&stream);
-            let mut line = String::new();
-            if reader.read_line(&mut line).is_err() {
-                continue;
-            }
-            loop {
-                let mut header = String::new();
-                if reader.read_line(&mut header).unwrap_or(0) <= 2 {
-                    break;
+        while seen.strong_count() > 0 {
+            match listener.accept() {
+                Ok((stream, _)) => {
+                    if stream.set_nonblocking(false).is_ok() {
+                        answer(&stream, &answers, &seen);
+                    }
                 }
+                Err(_) => std::thread::sleep(Duration::from_millis(5)),
             }
-            let path = line
-                .split_whitespace()
-                .nth(1)
-                .unwrap_or("")
-                .trim_start_matches('/')
-                .to_owned();
-            seen.lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .push(path.clone());
-            let mut stream = &stream;
-            let reply = match answers.get(&path) {
-                Some(body) => {
-                    let head = format!(
-                        "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
-                        body.len()
-                    );
-                    stream
-                        .write_all(head.as_bytes())
-                        .and_then(|()| stream.write_all(body))
-                }
-                None => stream.write_all(
-                    b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
-                ),
-            };
-            drop(reply);
         }
     });
     (format!("http://{address}"), log)
+}
+
+fn answer(
+    stream: &TcpStream,
+    answers: &BTreeMap<String, Vec<u8>>,
+    seen: &Weak<Mutex<Vec<String>>>,
+) {
+    let mut reader = BufReader::new(stream);
+    let mut line = String::new();
+    if reader.read_line(&mut line).is_err() {
+        return;
+    }
+    loop {
+        let mut header = String::new();
+        if reader.read_line(&mut header).unwrap_or(0) <= 2 {
+            break;
+        }
+    }
+    let path = line
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("")
+        .trim_start_matches('/')
+        .to_owned();
+    if let Some(log) = seen.upgrade() {
+        log.lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(path.clone());
+    }
+    let mut writer = stream;
+    let reply = match answers.get(&path) {
+        Some(body) => {
+            let head = format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+                body.len()
+            );
+            writer
+                .write_all(head.as_bytes())
+                .and_then(|()| writer.write_all(body))
+        }
+        None => writer
+            .write_all(b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"),
+    };
+    drop(reply);
 }
 
 pub(crate) fn run_helper(world: &mut World, bin: &str) -> Outcome {
@@ -302,4 +323,19 @@ pub(crate) fn run_legacy(world: &mut World, engine: &str) -> Outcome {
     };
     fs::remove_dir_all(&laid.root).unwrap_or_else(|e| unreachable!("{e}"));
     outcome
+}
+
+#[test]
+fn the_answer_server_stops_listening_once_nobody_holds_its_log() {
+    let (url, log) = serve(&World::new("warm"));
+    drop(log);
+    let address = url.trim_start_matches("http://");
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while TcpStream::connect(address).is_ok() {
+        assert!(
+            Instant::now() < deadline,
+            "{url} still accepts connections after its log was dropped"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
 }
