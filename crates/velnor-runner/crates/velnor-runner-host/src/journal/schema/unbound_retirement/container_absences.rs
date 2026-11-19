@@ -56,7 +56,16 @@ fn objects() -> Vec<(&'static str, String, String)> {
 
 pub(super) async fn migrate(conn: &turso::Connection) -> Result<(), HostError> {
     super::validate(conn).await?;
-    for (_, _, sql) in objects() {
+    let objects = objects();
+    for (kind, name, _) in objects.iter().rev() {
+        conn.execute(
+            &format!("DROP {} IF EXISTS {name}", kind.to_uppercase()),
+            (),
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    }
+    for (_, _, sql) in objects {
         conn.execute(&sql, ())
             .await
             .map_err(|_| HostError::Journal)?;
