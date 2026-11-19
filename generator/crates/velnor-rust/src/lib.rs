@@ -29,6 +29,7 @@ mod config_test_groups;
 
 mod config_pr_ci;
 mod config_private;
+mod config_test_lane;
 mod config_test_setup;
 mod credentials;
 mod detect;
@@ -37,6 +38,7 @@ mod docs_post_merge;
 mod embedded;
 mod error;
 mod error_config;
+mod error_lane;
 mod external_config;
 mod group_runs;
 mod harness;

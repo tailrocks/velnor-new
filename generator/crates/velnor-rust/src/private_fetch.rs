@@ -81,7 +81,8 @@ fn shared_gate<'a>(steps: impl Iterator<Item = &'a Step>) -> Option<Gate> {
         }
         shared = Gate {
             need: GateNeed::Selected,
-            package: None,
+            packages: Vec::new(),
+            unselected: false,
             ..shared
         };
     }

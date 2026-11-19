@@ -37,6 +37,7 @@ pub struct RustCiConfig {
     pub mbx_remote: MbxRemote,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub test_lanes: Vec<TestLane>,
     pub budget: Option<SpeedBudget>,
     pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
@@ -68,6 +69,14 @@ impl SpeedBudget {
             self.main_wall_seconds
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestLane {
+    pub root: Option<RepoPath>,
+    pub features: Vec<String>,
+    pub filter: Option<String>,
+    pub packages: Vec<PackageName>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -194,6 +203,7 @@ impl Default for RustCiConfig {
             mbx_remote: MbxRemote::Off,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            test_lanes: Vec::new(),
             budget: None,
             lint: Vec::new(),
             test_groups: Vec::new(),

@@ -137,7 +137,12 @@ pub struct Gate {
     pub slug: RootSlug,
     pub need: GateNeed,
     pub from: PlanFrom,
-    pub package: Option<PackageName>,
+    /// A gate on packages passes when the plan selects any of them or the
+    /// whole workspace. Empty means no package condition.
+    pub packages: Vec<PackageName>,
+    /// Passes exactly when the plan selects a package of the root but none
+    /// of `packages`, so a notice can say why the guarded step was skipped.
+    pub unselected: bool,
     pub group: Option<JobId>,
 }
 
@@ -154,6 +159,9 @@ impl Gate {
             ],
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
+            GateNeed::PackageArgs if self.unselected => {
+                vec![own(GateNeed::Selected), own(GateNeed::PackageArgs)]
+            }
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
             GateNeed::TestFilter
             | GateNeed::PackageArgs
@@ -265,6 +273,12 @@ pub enum CargoCommand {
         filter: FilterRef,
         ci_profile: bool,
     },
+    NextestFeatures {
+        features: Vec<String>,
+        packages: Vec<PackageName>,
+        filter: FilterRef,
+        ci_profile: bool,
+    },
     NextestArchive {
         file: RepoPath,
     },
@@ -301,7 +315,9 @@ impl CargoCommand {
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
-            Self::NextestRun { .. } | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
+            Self::NextestRun { .. }
+            | Self::NextestFeatures { .. }
+            | Self::NextestRunArchive { .. } => &[GateNeed::TestFilter],
             Self::Doctest => &[GateNeed::DoctestsKnown],
             _ => &[],
         }
@@ -312,6 +328,10 @@ impl CargoCommand {
 pub enum FilterRef {
     All,
     AllExcept(Vec<String>),
+    Expr {
+        expr: String,
+        except: Vec<String>,
+    },
     Group {
         include: Option<String>,
         exclude: Vec<String>,
