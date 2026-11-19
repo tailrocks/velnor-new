@@ -163,6 +163,7 @@ mod single_fetch;
 mod skip_push;
 mod source_roots_limit;
 mod step_target_dir;
+mod suggest_groups;
 mod test_groups;
 mod test_groups_harness;
 mod test_groups_jobs;
