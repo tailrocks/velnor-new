@@ -35,7 +35,7 @@ from the problem statement:
 | CI runs twice per merge | Full 39-job `ci.yml` runs **three times** per merge: on `pull_request` (median `3.0` runs per branch, `45%` cancelled), on `merge_group`, and on `push` to `main`, where **120 of 159 (75.5%)** successful `merge_group` commits re-ran all 39 jobs on the identical commit SHA (evidence pack T7). In addition, ruleset `24396608` (`gh api repos/tailrocks/velnor-new/rulesets/24396608`) enforces `min_entries_to_merge_wait_minutes: 5` and `max_entries_to_build: 2`, adding 5.0 dead minutes before an unbatched PR even starts `merge_group`. | Understated: three full runs plus a 5 min merge-queue timer. |
 | ~73 runner-min per run | Scale-set medians are **52.9 runner-min** on `pull_request` (`p90 63.9`), **64.6** on `merge_group` (`p90 81.0`), and **62.0** on `push` (`p90 74.3`, evidence pack T2). Across all three events, one merged PR consumes **179.5 median runner-min** (estimated sum of event medians, excluding cancelled PR runs and `source-qualification.yml`). | 73 sits between `merge_group` median and p90; per-merge cost is ~180 runner-min. |
 | Cluster sat at 18% to 29% CPU | Utilisation swings from **0% when blocked on hosted gates** to **92% to 95% during bursts** (evidence pack B.2.1). At `2026-11-18T17:27Z` (measured live via `kubectl top nodes` and `gh api .../actions/runs`), all five 96-thread EPYC workers sat at **0.06% CPU (`40m` to `79m` of `96,000m`) and 0% to 2% RAM** while `merge_group` run `44357962729`, `push` run `44357950423`, and `pull_request` run `44354764249` waited on hosted `ubuntu-26.04` gates. | Confirmed idle during hosted stalls, burst-contended during fan-out. |
-| State seal never succeeded because merge queue advances `main` | `state-seal.yml` **did** succeed on `11-18` for `generator` (`6/18` runs, 131 MB entry `58c2291a`) and `ci-helper` (`4/18` runs, 163 MB entry `31c...`, evidence pack T9c, T9d), while failing `16/18` on `root` and `velnor-runner` (`7` at `Check state tip`, `9` at `Clippy`/checks). Yet scale-set jobs still skipped `Restore state snapshot` **3,636 of 3,636 times** due to a `StateCompat` environment mismatch proved below. | Partly refuted: tip-race breaks `root`/`runner`, while a key mismatch breaks 100% of restores. |
+| State seal never succeeded because merge queue advances `main` | the State seal workflow **did** succeed on `11-18` for `generator` (`6/18` runs, 131 MB entry `58c2291a`) and `ci-helper` (`4/18` runs, 163 MB entry `31c...`, evidence pack T9c, T9d), while failing `16/18` on `root` and `velnor-runner` (`7` at `Check state tip`, `9` at `Clippy`/checks). Yet scale-set jobs still skipped `Restore state snapshot` **3,636 of 3,636 times** due to a `StateCompat` environment mismatch proved below. | Partly refuted: tip-race breaks `root`/`runner`, while a key mismatch breaks 100% of restores. |
 
 Combining the stages above, honest push-to-merge wall time today is **33.8 min** on a quiet day
 (`16.0` PR + `5.0` merge-queue wait + `12.8` `merge_group`, sum of `11-17` medians from evidence pack
@@ -59,7 +59,7 @@ Both cache failures stem from one architectural split:
 [crates/velnor-actions-contract/src/workflow/lanes_placement.rs:27-29](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-contract/src/workflow/lanes_placement.rs#L27-L29)
 and
 [crates/velnor-actions-workflow-renderer/src/render_state_seal.rs:278-311](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-workflow-renderer/src/render_state_seal.rs#L278-L311)
-force `Plan` and all 17 `state-seal.yml` producer/sealer jobs onto hosted `ubuntu-26.04`
+force `Plan` and all 17 the State seal workflow producer/sealer jobs onto hosted `ubuntu-26.04`
 (`RUNNER_TEMP=/home/runner/work/_temp`, `GITHUB_WORKSPACE=/home/runner/work/velnor-new/velnor-new`,
 `ImageOS=ubuntu26`), whereas verification jobs run on `[velnor, ubuntu-26.04-scale-set]`
 (`RUNNER_TEMP=/home/runner/_work/_temp` using `_work` instead of `work`,
@@ -79,9 +79,9 @@ force `Plan` and all 17 `state-seal.yml` producer/sealer jobs onto hosted `ubunt
    Because none starts with `$`,
    [crates/velnor-actions-workflow-renderer/src/state_fragments.rs:15-21](file:///Users/donbeave/Projects/tailrocks/velnor-new/crates/velnor-actions-workflow-renderer/src/state_fragments.rs#L15-L21)
    wraps them in double quotes so the shell expands them into `StateCompat`. Even when
-   `state-seal.yml` succeeded for `generator` and `ci-helper` on `11-18`, scale-set jobs computed a
+   the State seal workflow succeeded for `generator` and `ci-helper` on `11-18`, scale-set jobs computed a
    different `compat` hash from hosted `Plan`, matched zero attested keys, and skipped restore. Note
-   that open PR `#1332` moves `ci.yml` gates to the scale set while keeping `state-seal.yml` hosted,
+   that open PR `#1332` moves `ci.yml` gates to the scale set while keeping the State seal workflow hosted,
    which leaves this 100% miss intact until `velnor-gen` replaces both workflows.
 
 ## 2. Evaluation of the hypotheses
@@ -338,7 +338,7 @@ pub struct JobDispatchSpec {
     `turso`). Replace with a `<1,500`-line `schemalane`-managed journal tracking only in-flight
     `SlotLease` and sandbox UIDs.
   - `velnor-actions` (`crates/velnor-actions-*`, `322k` LOC): 1-job-per-crate YAML, `$RUNNER_TEMP`
-    cache paths, `ImageOS` gates, and `state-seal.yml`.
+    cache paths, `ImageOS` gates, and the State seal workflow.
 - **Take from `velnor-legacy` (and lessons from its archive).**
   - `velnor-legacy` (`804k` LOC, archived `2026-10-17` after `velnor-new` took over workflow
     generation) hit severe operational incidents: wedged inert slot children (`#389`), `600% to 700%`
@@ -450,7 +450,7 @@ immutable directories (`0555`)**, and each job receives an isolated writable wor
     `(OS, arch, distro_id, rustc_commit_hash, cargo_profile_flags, relative_workspace)` and **never**
     `$RUNNER_TEMP` or `ImageOS`.
   - Any `push` to `main` proven reachable from `refs/heads/main` (`ancestor-or-equal`, eliminating
-    `state-seal.yml`'s `head == tip` race in `#1305` comment `6980735625`) promotes a `0555` read-only
+    the State seal workflow's `head == tip` race in `#1305` comment `6980735625`) promotes a `0555` read-only
     `main` snapshot once compilation succeeds, even if a test step later fails.
   - Same-repo `pull_request` builds read `pr-<N>` then `main`, and write **only** to `pr-<N>` (1
     generation retained per open PR, deleted on PR close or 48 h TTL). `merge_group` reads `main` only
@@ -625,7 +625,7 @@ all 9 `mbx` configurations (`v1.29.2` and `v1.30.0`):
   `mbx` variant recompiled `10 to 68` crates** (`V8` `MBX_SHARE_OUT_DIR=0` best at `10`, default `14`,
   caused by external `OUT_DIR` paths triggering `21 StaleDepFingerprint` cascades plus unnormalized
   checkout mtimes), and `mbx` compile counts agreed with Cargo's log in only **1 of 163 runs**.
-- **Recommendation.** Retire `mbx cache export/import` bundles (`state-seal.yml`) and run **plain
+- **Recommendation.** Retire `mbx cache export/import` bundles (the State seal workflow) and run **plain
   `cargo` directly over node-local XFS CoW `target/` clones + `velnor-ci inputs restore`** (matching
   `velnor-gen`
   [generator/crates/velnor-rust/src/compat.rs:9](file:///Users/donbeave/Projects/tailrocks/velnor-new/generator/crates/velnor-rust/src/compat.rs#L9)).
@@ -793,7 +793,7 @@ standalone measurable win on `velnor-new`.
 | Phase | Scope summary | PR wall median / p90 target | Push-to-merge median target | Runner-min / merge target | Warm `target/` hit target |
 |---|---|---:|---:|---:|---:|
 | **Baseline today** | `velnor-actions` 0.1.80, 8 hosted gates, DinD everywhere, broken caches, 3x 39-job runs | `26.7m / 92.3m` (`74.7m` on `11-18`) | `33.8m` quiet / `141.2m` contended | `179.5` | `0%` (`0/3,636`) |
-| **Phase 1 (Week 1)** | Move all CI gates to cluster; split `velnor-fast` (no DinD) vs `velnor-docker` (`periodSeconds: 1`); cut over to `velnor-gen` (`#1290`); bake `rust 1.99.1` + `mold`; wire `crates-mirror`; `min_wait = 0`; skip `push` re-test after `merge_group`; filter `local-mode`; land `#1333`, `#1349`, mock-sleep fix, delete `state-seal.yml` & `maintenance-helpers` `--jobs 2` | **<= 4.5m / 7.0m** | **<= 9.0 min** | **<= 38** | **>= 80%** |
+| **Phase 1 (Week 1)** | Move all CI gates to cluster; split `velnor-fast` (no DinD) vs `velnor-docker` (`periodSeconds: 1`); cut over to `velnor-gen` (`#1290`); bake `rust 1.99.1` + `mold`; wire `crates-mirror`; `min_wait = 0`; skip `push` re-test after `merge_group`; filter `local-mode`; land `#1333`, `#1349`, mock-sleep fix, delete the State seal workflow & `maintenance-helpers` `--jobs 2` | **<= 4.5m / 7.0m** | **<= 9.0 min** | **<= 38** | **>= 80%** |
 | **Phase 2 (Weeks 2-3)** | Finish 1-workspace `crates/velnor-*` (`527` unique deps); `[profile.ci]` (`debug=0` deps); Rank 1-5 host/k3s CCD & XFS tuning; site-local Twirp `CacheService` v2 + XFS CoW `target/` seeding; LPT 6-way test sharding; affected-only `merge_group` + nightly full run | **<= 1.5m (typical) / 2.2m (full)** | **<= 2.5 min** | **<= 14 (typical) / 26 (full)** | **>= 92%** (`0` crates on warm) |
 | **Phase 3 (Weeks 4-6)** | Ship `velnor-coordinator` + `velnor-node` (`schemalane` journal, retire 171k-LOC `velnor-runner-host` & ARC); warm `RootlessNamespace` (`<50 ms`) + snapshot-restored KVM `MicroVm` (`~100 ms`); PR-sticky `pr-<N>` CoW overlays + 5-node async `main` sync; striped LVM on `240`/`105`; tree-equal `merge_group` fast-pass | **<= 50s (typical) / 85s (full)** | **<= 75 to 105 s** | **<= 6.0** | **>= 95%** (1st push) / **>= 97%** (2nd+ push) |
 | **Phase 4 (Weeks 7-9)** | Ship static `velnor-worker` (`~10k` LOC: lifted `expression/` + `MemoryCounter`, `RunService`, streaming `AppendBlob` `Results`, parallel `hashFiles`, in-sandbox `node24`), proven on `velnor-local` differential suite with `OfficialRunner` fallback kept live | **<= 30 to 38s (typical) / 65s (full)** | **<= 45 to 75 s** | **<= 4.5** | **>= 96%** (1st push) / **>= 98%** (2nd+ push) |

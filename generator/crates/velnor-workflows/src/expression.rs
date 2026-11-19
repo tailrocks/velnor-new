@@ -199,9 +199,9 @@ fn check_in(value: &str, scope: &Scope<'_>, in_env: bool) -> Result<(), Workflow
 }
 
 pub(crate) fn check_condition(value: &str, scope: &Scope<'_>) -> Result<String, WorkflowsError> {
-    if value.contains(char::is_control) {
+    if value.contains(|c: char| c.is_control() || matches!(c, '\u{2028}' | '\u{2029}')) {
         return refuse(format!(
-            "the condition {value:?} must be one line; a line break or control character is refused"
+            "the condition {value:?} must be one line; a line break, line or paragraph separator or control character is refused"
         ));
     }
     let inner = bare(value);

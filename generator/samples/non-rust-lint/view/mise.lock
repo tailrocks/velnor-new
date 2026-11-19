@@ -54,6 +54,53 @@ version = "1.99.1"
 backend = "core:rust"
 specifiers = ["1.99.1"]
 
+[[tools."github:asamarts/alint"]]
+version = "0.22.1"
+backend = "github:asamarts/alint"
+specifiers = ["0.22.1"]
+
+[tools."github:asamarts/alint"."platforms.linux-arm64"]
+checksum = "sha256:56164a05e0c798ff6ff551c232d92ebadaf732bd4371ac73bfc9e9a0cb98ac08"
+url = "https://github.com/asamarts/alint/releases/download/v0.22.1/alint-v0.22.1-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/736833608"
+provenance = "github-attestations"
+
+[tools."github:asamarts/alint"."platforms.linux-arm64-musl"]
+checksum = "sha256:56164a05e0c798ff6ff551c232d92ebadaf732bd4371ac73bfc9e9a0cb98ac08"
+url = "https://github.com/asamarts/alint/releases/download/v0.22.1/alint-v0.22.1-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/736833608"
+provenance = "github-attestations"
+
+[tools."github:asamarts/alint"."platforms.linux-x64"]
+checksum = "sha256:be0fb8cfefb07b47fe7ee76d571ed9731d20037d3a421cdd9d285b01d79f9489"
+url = "https://github.com/asamarts/alint/releases/download/v0.22.1/alint-v0.22.1-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/736833671"
+provenance = "github-attestations"
+
+[tools."github:asamarts/alint"."platforms.linux-x64-musl"]
+checksum = "sha256:be0fb8cfefb07b47fe7ee76d571ed9731d20037d3a421cdd9d285b01d79f9489"
+url = "https://github.com/asamarts/alint/releases/download/v0.22.1/alint-v0.22.1-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/736833671"
+provenance = "github-attestations"
+
+[tools."github:asamarts/alint"."platforms.macos-arm64"]
+checksum = "sha256:f5c3ac8dd319dcb39a6b697eae95b0dc59079d819fe8d3d560f4eccbf193e609"
+url = "https://github.com/asamarts/alint/releases/download/v0.22.1/alint-v0.22.1-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/736833603"
+provenance = "github-attestations"
+
+[tools."github:asamarts/alint"."platforms.macos-x64"]
+checksum = "sha256:f5b2248abd61d78ff4b68771629c1f220e8a05a46d586bf0596a74621c8103eb"
+url = "https://github.com/asamarts/alint/releases/download/v0.22.1/alint-v0.22.1-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/736833609"
+provenance = "github-attestations"
+
+[tools."github:asamarts/alint"."platforms.windows-x64"]
+checksum = "sha256:91fafae19acfea25e7b7136a7e45cb0b4bef20ffc010c82b018b009240ffc662"
+url = "https://github.com/asamarts/alint/releases/download/v0.22.1/alint-v0.22.1-x86_64-pc-windows-msvc.tar.gz"
+url_api = "https://api.github.com/repos/asamarts/alint/releases/assets/736833616"
+provenance = "github-attestations"
+
 [[tools.jactionlint]]
 version = "2.4.0"
 backend = "github:jdx/jactionlint"

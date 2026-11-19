@@ -71,7 +71,7 @@ impl Driver<'_> {
 
     pub(super) async fn schedule(&mut self, cron: &str) -> io::Result<()> {
         let branch = self.args.environment.default_branch.clone();
-        self.git(&["switch", "-q", &branch]).await?;
+        self.switch(&branch).await?;
         let sha = self.git(&["rev-parse", "HEAD"]).await?;
         let workflow = self.args.workflow.as_deref().unwrap_or_default();
         let payload = self.repository().schedule(cron, workflow);
@@ -84,7 +84,7 @@ impl Driver<'_> {
         branch: &str,
         inputs: &BTreeMap<String, serde_json::Value>,
     ) -> io::Result<()> {
-        self.git(&["switch", "-q", branch]).await?;
+        self.switch(branch).await?;
         let sha = self.git(&["rev-parse", "HEAD"]).await?;
         let workflow = self.args.workflow.as_deref().ok_or_else(|| {
             io::Error::other(

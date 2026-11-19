@@ -63,7 +63,7 @@ pub struct EnvironmentArgs {
     pub label: Vec<String>,
     #[arg(
         long,
-        help = "Start the API stub with --job-cache-admin: every job can list and delete the cache entries of every scope through the GitHub cache API, whatever its permissions and event. Off by default: a job then needs `actions: write` on an event that is not a pull request, as on GitHub, and gets 403 otherwise"
+        help = "Start the API stub with --job-cache-admin: every job can list and delete the cache entries of every scope through the GitHub cache API, whatever its permissions and event. Off by default: a job then needs `actions: read` to list and `actions: write` to delete, on an event that is not a pull request, as on GitHub, and gets 403 otherwise"
     )]
     pub job_cache_admin: bool,
 }

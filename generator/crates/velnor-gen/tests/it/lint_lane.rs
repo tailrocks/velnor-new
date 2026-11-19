@@ -8,7 +8,7 @@ use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
-const MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\nshellcheck = \"0.11.0\"\n";
+pub(crate) const MISE: &str = "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\njactionlint = \"2.4.0\"\nshellcheck = \"0.11.0\"\n\"github:asamarts/alint\" = \"0.22.1\"\n\n[tasks.lint-generator-samples]\nrun = \"jactionlint\"\n\n[tasks.check]\nrun = \"true\"\n";
 pub(crate) const LINT: &str = "[[lint]]\nkind = 'jactionlint'\nconfig = '.github/jactionlint.yaml'\n\n[[lint]]\nkind = 'alint'\nconfig = '.alint.yml'\nprobe = 'scripts/alint-line-cap-probe.sh'\n\n[[lint]]\nkind = 'mise-task'\ntask = 'lint-generator-samples'\ntools = ['jactionlint']\ntimeout_minutes = 5\n";
 pub(crate) const IDS: [&str; 3] = [
     "lint-jactionlint",
@@ -40,7 +40,7 @@ pub(crate) fn runs(job: &Value) -> Vec<String> {
         .collect()
 }
 
-fn uses(job: &Value) -> Vec<String> {
+pub(crate) fn uses(job: &Value) -> Vec<String> {
     job["steps"]
         .as_array()
         .into_iter()
@@ -106,19 +106,18 @@ fn each_lint_job_runs_its_tool_as_one_command_or_one_pinned_action() -> TestResu
     assert_eq!(install["with"]["install_args"], "jactionlint shellcheck");
     assert_eq!(
         runs(&jobs["lint-alint"]),
-        ["bash scripts/alint-line-cap-probe.sh"]
+        [
+            "alint --format github --config .alint.yml --fail-on-warning check .",
+            "bash scripts/alint-line-cap-probe.sh"
+        ]
     );
-    let alint = &jobs["lint-alint"]["steps"][1];
-    assert_eq!(alint["with"]["config"], ".alint.yml");
-    assert_eq!(alint["with"]["fail-on-warning"], true);
-    assert!(
-        alint["uses"]
-            .as_str()
-            .is_some_and(|uses| uses.starts_with("asamarts/alint@"))
+    assert_eq!(
+        jobs["lint-alint"]["steps"][1]["with"]["install_args"],
+        "github:asamarts/alint"
     );
     assert_eq!(
         runs(&jobs["lint-lint-generator-samples"]),
-        ["mise run --skip-tools lint-generator-samples"]
+        ["mise run --force --skip-tools lint-generator-samples"]
     );
     let install = &jobs["lint-lint-generator-samples"]["steps"][1];
     assert_eq!(install["with"]["install_args"], "jactionlint");
@@ -155,11 +154,11 @@ fn the_alint_job_checks_the_repo_then_proves_the_line_cap_rejects_a_seeded_file(
         .ok_or("alint job has no steps")?;
     let order: Vec<&str> = steps
         .iter()
-        .filter_map(|step| step["uses"].as_str().or(step["run"].as_str()))
+        .filter_map(|step| step["run"].as_str())
         .collect();
-    assert!(order.len() == 3 && order[2] == "bash scripts/alint-line-cap-probe.sh");
-    assert!(order[1].starts_with("asamarts/alint@"));
-    assert_eq!(steps[1]["with"]["fail-on-warning"], true);
+    assert_eq!(order.len(), 2);
+    assert!(order[0].ends_with("--fail-on-warning check ."));
+    assert_eq!(order[1], "bash scripts/alint-line-cap-probe.sh");
     Ok(())
 }
 
