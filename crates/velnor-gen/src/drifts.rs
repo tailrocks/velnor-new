@@ -65,9 +65,7 @@ pub fn drift(
             (Some(want), Some(have)) => match owner_of(have) {
                 Owner::VelnorGen if want.as_bytes() == lf_normalized(have).as_ref() => None,
                 Owner::VelnorGen => Some(Drift::Changed(path.clone())),
-                Owner::Forged | Owner::Engine | Owner::Nobody => {
-                    Some(Drift::Foreign(path.clone()))
-                }
+                Owner::Forged | Owner::Engine | Owner::Nobody => Some(Drift::Foreign(path.clone())),
             },
             (Some(_), None) => Some(Drift::Missing(path.clone())),
             (None, Some(have)) => match owner_of(have) {

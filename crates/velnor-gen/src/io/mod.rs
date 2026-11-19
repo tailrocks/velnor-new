@@ -13,8 +13,8 @@ pub use std::process::ExitCode as Exit;
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
 use velnor_rust::{
-    METADATA_PATH, build_script_sources, is_rust_source, manifests, metadata_roots, reduce_metadata,
-    wanted_files,
+    METADATA_PATH, build_script_sources, is_rust_source, manifests, metadata_roots,
+    reduce_metadata, wanted_files,
 };
 
 mod check;

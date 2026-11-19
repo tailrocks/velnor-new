@@ -101,8 +101,15 @@ fn a_sample_that_records_a_symlinked_rust_source_loads_like_the_live_checkout() 
     let copy = Copy::of("release-bin", "symlinked-source")?;
     fs::write(copy.0.join("symlinks.txt"), "crates/app/src/shared.rs\n")?;
     let view = load(&copy.0)?;
-    assert!(view.symlinks.contains(&RepoPath::new("crates/app/src/shared.rs")?));
-    assert!(!view.files.contains_key(&RepoPath::new("crates/app/src/shared.rs")?));
+    assert!(
+        view.symlinks
+            .contains(&RepoPath::new("crates/app/src/shared.rs")?)
+    );
+    assert!(
+        !view
+            .files
+            .contains_key(&RepoPath::new("crates/app/src/shared.rs")?)
+    );
     Ok(())
 }
 
