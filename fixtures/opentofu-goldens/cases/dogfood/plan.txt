@@ -7,7 +7,7 @@ Detected stacks
     evidence: mise-tool:opentofu
   Mise check maintenance-helpers: test-maintenance-helpers (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
   Mise check generator-samples: lint-generator-samples (runner: ubuntu-26.04, target: x86_64-unknown-linux-gnu)
-  Workspace crates: 30
+  Workspace crates: 31
     - velnor-actions-actionlint (crates/velnor-actions-actionlint/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-ansible (crates/velnor-actions-ansible/Cargo.toml) [lib; depends on velnor-actions-contract]
     - velnor-actions-bun (crates/velnor-actions-bun/Cargo.toml) [lib; depends on velnor-actions-contract]
@@ -24,11 +24,11 @@ Detected stacks
     - velnor-archive-guard (crates/velnor-archive-guard/Cargo.toml) [bin, example, lib, test; depends on velnor-actions-mise]
     - velnor-cache-rules (local/crates/velnor-cache-rules/Cargo.toml) [lib, test]
     - velnor-ci (ci-helper/crates/velnor-ci/Cargo.toml) [bin, lib, test]
-    - velnor-gen (generator/crates/velnor-gen/Cargo.toml) [bin, lib, test; depends on velnor-model, velnor-release, velnor-render, velnor-rust]
+    - velnor-gen (generator/crates/velnor-gen/Cargo.toml) [bin, lib, test; depends on velnor-model, velnor-release, velnor-render, velnor-rust, velnor-workflows]
     - velnor-local (local/crates/velnor-local/Cargo.toml) [bin, lib, test; depends on velnor-cache-rules]
     - velnor-model (generator/crates/velnor-model/Cargo.toml) [lib]
     - velnor-release (generator/crates/velnor-release/Cargo.toml) [lib, test; depends on velnor-model]
-    - velnor-render (generator/crates/velnor-render/Cargo.toml) [lib; depends on velnor-model, velnor-release]
+    - velnor-render (generator/crates/velnor-render/Cargo.toml) [lib; depends on velnor-model, velnor-release, velnor-workflows]
     - velnor-resource-probe (crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml) [bin, lib, test]
     - velnor-runner-attestation (crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml) [bin]
     - velnor-runner-cli (crates/velnor-runner/crates/velnor-runner-cli/Cargo.toml) [bin, lib; depends on velnor-runner-core, velnor-runner-host]
@@ -38,6 +38,7 @@ Detected stacks
     - velnor-runner-image-manifest (crates/velnor-runner/crates/velnor-runner-image-manifest/Cargo.toml) [lib, test]
     - velnor-runner-qualification (crates/velnor-runner/crates/velnor-runner-qualification/Cargo.toml) [lib, test]
     - velnor-rust (generator/crates/velnor-rust/Cargo.toml) [lib; depends on velnor-model]
+    - velnor-workflows (generator/crates/velnor-workflows/Cargo.toml) [lib; depends on velnor-model]
   Profile .: mbx compile driver (declared), cargo_nextest test runner (declared)
   Nextest profile .: ci (.config/nextest.toml)
     evidence .config/nextest.toml:7 [profile.ci] [durable]
@@ -121,10 +122,11 @@ Workflow to generate
     - rust-velnor-runner-image-manifest (29 steps)
     - rust-velnor-runner-qualification (29 steps)
     - rust-velnor-rust (28 steps)
+    - rust-velnor-workflows (28 steps)
     - sources-producer (15 steps)
     - state-producer-ci-helper (35 steps)
     - state-producer-crates-velnor-runner (83 steps)
-    - state-producer-generator (59 steps)
+    - state-producer-generator (65 steps)
     - state-producer-local (41 steps)
     - state-producer-root (101 steps)
     - state-seal-ci-helper (9 steps)
@@ -134,7 +136,7 @@ Workflow to generate
     - state-seal-root (9 steps)
     - tools-producer-06f9acb0 (8 steps)
     - tools-producer-c957c0bd (8 steps)
-    - 29 Rust crate jobs
+    - 30 Rust crate jobs
       Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
       Entries:
@@ -167,6 +169,7 @@ Workflow to generate
         - rust-velnor-runner-image-manifest
         - rust-velnor-runner-qualification
         - rust-velnor-rust
+        - rust-velnor-workflows
       Obligations:
         - stack/rust/ci-helper/crates/velnor-ci/build/default
         - stack/rust/ci-helper/crates/velnor-ci/clippy/default
@@ -292,6 +295,10 @@ Workflow to generate
         - stack/rust/generator/crates/velnor-rust/clippy/default
         - stack/rust/generator/crates/velnor-rust/doc/default
         - stack/rust/generator/crates/velnor-rust/fmt/default
+        - stack/rust/generator/crates/velnor-workflows/build/default
+        - stack/rust/generator/crates/velnor-workflows/clippy/default
+        - stack/rust/generator/crates/velnor-workflows/doc/default
+        - stack/rust/generator/crates/velnor-workflows/fmt/default
         - stack/rust/local/crates/velnor-cache-rules/build/default
         - stack/rust/local/crates/velnor-cache-rules/clippy/default
         - stack/rust/local/crates/velnor-cache-rules/doc/default
@@ -302,7 +309,7 @@ Workflow to generate
         - stack/rust/local/crates/velnor-local/doc/default
         - stack/rust/local/crates/velnor-local/fmt/default
         - stack/rust/local/crates/velnor-local/nextest/default
-  Parallel: 29 execution jobs; dependencies preserved; no matrix fan-out
+  Parallel: 30 execution jobs; dependencies preserved; no matrix fan-out
   Critical path: stack/rust/ci-helper/crates/velnor-ci/build/default -> stack/rust/ci-helper/crates/velnor-ci/nextest/default (2 tasks)
   Clippy memory groups: 2; barriers: 1
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
@@ -355,6 +362,8 @@ Workflow to generate
   Ineligible: stack/rust/generator/crates/velnor-render/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-rust/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/generator/crates/velnor-rust/nextest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/generator/crates/velnor-workflows/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/generator/crates/velnor-workflows/nextest/default has no test targets; no test command emitted
   Ineligible: stack/rust/local/crates/velnor-cache-rules/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/local/crates/velnor-local/doctest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
