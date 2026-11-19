@@ -7,6 +7,7 @@ use std::os::unix::fs::{DirBuilderExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+use nix::sys::signal::{SigSet, SigmaskHow, Signal, pthread_sigmask};
 use nix::unistd::geteuid;
 
 use crate::error::CiError;
@@ -37,6 +38,27 @@ fn rename_exclusive(from: &Path, to: &Path) -> Res<()> {
         drop(fs::remove_dir(to));
         error("rename")
     })
+}
+
+struct HeldSignals(SigSet);
+
+impl HeldSignals {
+    fn hold() -> Res<Self> {
+        let mut held = SigSet::empty();
+        for signal in [Signal::SIGINT, Signal::SIGTERM, Signal::SIGALRM] {
+            held.add(signal);
+        }
+        let mut previous = SigSet::empty();
+        pthread_sigmask(SigmaskHow::SIG_BLOCK, Some(&held), Some(&mut previous))
+            .map_err(|_| error("signals"))?;
+        Ok(Self(previous))
+    }
+}
+
+impl Drop for HeldSignals {
+    fn drop(&mut self) {
+        pthread_sigmask(SigmaskHow::SIG_SETMASK, Some(&self.0), None).unwrap_or_default();
+    }
 }
 
 pub(super) fn random_name() -> Res<String> {
@@ -96,6 +118,7 @@ pub fn install(
     let created = fs::symlink_metadata(&temporary).map_err(|_| error("mkdir"))?;
     let committed = root.join(FINAL_NAME);
     let mut current = temporary.clone();
+    let mut held = None;
     let result = (|| -> Res<()> {
         let files: [(&str, &[u8]); 4] = [
             ("linux", &verified.release.linux),
@@ -111,6 +134,7 @@ pub fn install(
             .and_then(|d| d.sync_all())
             .map_err(|_| error("sync"))?;
         require(Instant::now() < deadline)?;
+        held = Some(HeldSignals::hold()?);
         rename_exclusive(&temporary, &committed)?;
         current.clone_from(&committed);
         require(Instant::now() < deadline)?;
@@ -122,5 +146,6 @@ pub fn install(
             drop(fs::remove_dir_all(&current));
         }
     }
+    drop(held);
     result.map(|()| committed)
 }

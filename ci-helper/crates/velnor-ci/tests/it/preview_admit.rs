@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 use serde_json::json;
 use velnor_ci::io::preview::admit::publish;
@@ -48,6 +49,10 @@ pub(crate) fn tree(root: &Path) -> BTreeMap<String, (Vec<u8>, u32)> {
             )
         })
         .collect()
+}
+
+pub(crate) fn far() -> Instant {
+    Instant::now() + Duration::from_secs(60)
 }
 
 fn directory(name: &str) -> PathBuf {
@@ -135,7 +140,7 @@ fn published(name: &str) -> (PathBuf, PathBuf, Res<()>) {
     let admission = helper(&AdmitWorld::new())
         .0
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let result = publish(&temp, &output, &admission);
+    let result = publish(&temp, &output, &admission, far());
     (temp, output, result)
 }
 
@@ -188,7 +193,7 @@ fn nothing_is_replaced_and_a_failed_write_leaves_no_payload() {
             .0
             .unwrap_or_else(|e| unreachable!("{e}"));
         assert!(
-            publish(&temp, &root.join("output"), &admission).is_err(),
+            publish(&temp, &root.join("output"), &admission, far()).is_err(),
             "{name}"
         );
         assert_eq!(tree(&temp).keys().collect::<Vec<_>>(), [existing], "{name}");

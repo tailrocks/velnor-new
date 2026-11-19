@@ -13,7 +13,7 @@ use velnor_ci::io::preview::admit::publish;
 
 use crate::admit_cases::all;
 use crate::admit_world::{AdmitWorld, world_json};
-use crate::preview_admit::{helper, tree};
+use crate::preview_admit::{far, helper, tree};
 use crate::preview_login::owned_by;
 use crate::support::fresh_dir;
 
@@ -118,7 +118,7 @@ fn current(base: &Path, world: &AdmitWorld, name: &str, existing: &[&str]) -> Ou
     let root = temp_with(base, &format!("rs-{name}"), existing);
     let (result, calls) = helper(world);
     let ok = result
-        .and_then(|admission| publish(&root.join("temp"), &root.join("output"), &admission))
+        .and_then(|admission| publish(&root.join("temp"), &root.join("output"), &admission, far()))
         .is_ok();
     outcome(&root, ok, calls)
 }
