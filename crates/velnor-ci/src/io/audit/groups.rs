@@ -95,19 +95,59 @@ pub(super) fn root_workspace(
     Ok(found)
 }
 
+/// Which Cargo roots take the build's inherited `CARGO_TARGET_DIR`.
+///
+/// A build runs in one Cargo root, so the variable names that root's target
+/// directory and says nothing about a standalone root the build does not touch.
+/// Every grouped root keeps inheriting it because a group shares one directory.
+pub(super) fn inheriting(
+    facts: &RepoFacts,
+    repository: &Path,
+    location: Option<&Path>,
+) -> Vec<bool> {
+    let location = location.map(resolved);
+    let depth = |root: &velnor_model::RustRoot| {
+        let directory = root
+            .manifest
+            .as_str()
+            .rsplit_once('/')
+            .map_or("", |(parent, _)| parent);
+        let directory = resolved(&repository.join(directory));
+        location
+            .as_ref()
+            .filter(|location| location.starts_with(&directory))
+            .map(|_| directory.components().count())
+    };
+    let building = facts
+        .rust_roots
+        .iter()
+        .zip(standalone(facts))
+        .filter(|(_, alone)| *alone)
+        .filter_map(|(root, _)| depth(root))
+        .max();
+    facts
+        .rust_roots
+        .iter()
+        .zip(standalone(facts))
+        .map(|(root, alone)| !alone || building.is_none() || depth(root) == building)
+        .collect()
+}
+
 pub(super) fn workspaces(
     facts: &RepoFacts,
     repository: &Path,
     inherit_target_dir: bool,
+    inheriting: &[bool],
 ) -> Result<Vec<Workspace>, CiError> {
     let groups = group_dirs(facts, repository);
     facts
         .rust_roots
         .iter()
         .zip(standalone(facts))
-        .map(|(root, alone)| {
+        .zip(inheriting)
+        .map(|((root, alone), inherits)| {
             let manifest = repository.join(root.manifest.as_str());
-            if !inherit_target_dir {
+            if !inherit_target_dir || !inherits {
                 return own_workspace(&manifest, None);
             }
             root_workspace(&manifest, None, alone, &groups)

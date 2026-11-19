@@ -17,7 +17,7 @@ use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
 use super::super::units::{UnitFile, Workspace, apart, unit_files};
-use super::groups::{group_dirs, scan_dirs, shared_groups, standalone, workspaces};
+use super::groups::{group_dirs, inheriting, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
@@ -43,14 +43,18 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
     let standalone = standalone(&facts);
-    let workspaces = workspaces(&facts, &checkout.root, true)?;
+    let invocation = Invocation::new(&args.command);
+    let location = fs::canonicalize(invocation.location(directory))
+        .map_err(|e| CiError::new(e.to_string()))?;
+    let inheriting = inheriting(&facts, &checkout.root, Some(&location));
+    let workspaces = workspaces(&facts, &checkout.root, true, &inheriting)?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
-    let invocation = Invocation::new(&args.command);
     invocation.validate_targets(
         directory,
         &workspaces,
         &standalone,
+        &inheriting,
         &group_dirs(&facts, &checkout.root),
     )?;
     let mut roots = BTreeSet::from([checkout.root.clone()]);
@@ -64,8 +68,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         directories,
         roots,
         declared: BTreeSet::new(),
-        location: fs::canonicalize(invocation.location(directory))
-            .map_err(|e| CiError::new(e.to_string()))?,
+        location,
     };
     if let Some(preflight) = &invocation.preflight {
         builder.stabilize(preflight, true, true)?;
