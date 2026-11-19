@@ -73,7 +73,7 @@ pub use lock_affected::lock_affected;
 pub use metadata::{MetadataError, reduce_metadata};
 pub use metadata_file::{
     METADATA_PATH, MetadataFileError, VERSIONS_HELPER, metadata_file, recorded_metadata,
-    recorded_roots,
+    recorded_roots, recorded_target_dirs,
 };
 pub use mise::{MISE_CONFIGS, MISE_LOCK, check_tools, mise_files, tool_pins};
 pub use owners::{Owner, Owners, add_reads};

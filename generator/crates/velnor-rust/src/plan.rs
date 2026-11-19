@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RunnerLabel, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
-    When, WorkflowPlan,
+    JobId, MbxStore, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts,
+    RootSlug, RunnerLabel, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain,
+    Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -160,6 +160,9 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
+    if facts.config.mbx_store == MbxStore::Shared {
+        steps.push(step(StepKind::MbxStore));
+    }
     steps
 }
 
