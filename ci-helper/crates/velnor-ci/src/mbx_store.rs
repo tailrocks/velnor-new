@@ -3,7 +3,7 @@
 
 use std::fs;
 use std::io::Write;
-use std::os::unix::fs::DirBuilderExt;
+use std::os::unix::fs::{DirBuilderExt, MetadataExt, PermissionsExt};
 use std::path::{Component, Path, PathBuf};
 
 use crate::error::CiError;
@@ -115,7 +115,16 @@ fn private_shims(runner_temp: &Path) -> Result<PathBuf, &'static str> {
     }
     let shims = runner_temp.join(SHIMS_DIR_NAME);
     match fs::symlink_metadata(&shims) {
-        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => Ok(shims),
+        Ok(metadata) if metadata.is_dir() && !metadata.file_type().is_symlink() => {
+            if metadata.uid() != current_uid(runner_temp)? {
+                return Err("shims directory is not owned by this user");
+            }
+            if metadata.mode() & 0o7777 != 0o700 {
+                fs::set_permissions(&shims, fs::Permissions::from_mode(0o700))
+                    .map_err(|_| "cannot secure the shims directory")?;
+            }
+            Ok(shims)
+        }
         Ok(_) => Err("shims path is not a directory"),
         Err(_) => fs::DirBuilder::new()
             .mode(0o700)
@@ -123,6 +132,27 @@ fn private_shims(runner_temp: &Path) -> Result<PathBuf, &'static str> {
             .map(|()| shims)
             .map_err(|_| "cannot create the shims directory"),
     }
+}
+
+fn current_uid(runner_temp: &Path) -> Result<u32, &'static str> {
+    for _ in 0..8 {
+        let probe = runner_temp.join(format!(".velnor-uid-{:016x}", random_u64()));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)
+        {
+            Ok(file) => {
+                let uid = file.metadata().map(|metadata| metadata.uid());
+                drop(file);
+                let _ = fs::remove_file(&probe);
+                return uid.map_err(|_| "cannot determine the current user");
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(_) => return Err("cannot determine the current user"),
+        }
+    }
+    Err("cannot determine the current user")
 }
 
 #[must_use]

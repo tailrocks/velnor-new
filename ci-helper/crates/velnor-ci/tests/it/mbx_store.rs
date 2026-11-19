@@ -149,6 +149,11 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
     fs::create_dir_all(root.join("ro")).unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(root.join("ro"), fs::Permissions::from_mode(0o555))
         .unwrap_or_else(|e| unreachable!("{e}"));
+    let root_user = fs::File::create(root.join("ro").join("probe")).is_ok();
+    if root_user {
+        let _ = fs::remove_file(root.join("ro").join("probe"));
+        return;
+    }
     let cases: [(PathBuf, &str); 7] = [
         (PathBuf::from("relative/dir"), "not absolute"),
         (root.join("missing"), "does not exist"),
@@ -160,9 +165,6 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
     ];
     for (dir, reason) in cases {
         let outcome = run(&host, "push", "refs/heads/main", Some(&dir));
-        if reason == "not writable" && fs::File::create(dir.join("probe")).is_ok() {
-            continue; // running as root: permission bits do not bind
-        }
         assert_eq!(
             outcome,
             Outcome::Rejected(reason_static(reason)),
@@ -188,4 +190,28 @@ fn reason_static(reason: &str) -> &'static str {
     .into_iter()
     .find(|candidate| *candidate == reason)
     .unwrap_or("")
+}
+
+#[test]
+fn an_existing_shims_directory_is_secured_or_refused() {
+    let host = host("mbx-store-shims");
+    let shared = host.root.join("shared");
+    let shims = host.root.join("temp/velnor-mbx-shims");
+    fs::create_dir(&shims).unwrap_or_else(|e| unreachable!("{e}"));
+    fs::set_permissions(&shims, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
+    assert!(matches!(outcome, Outcome::Shared { .. }), "{outcome:?}");
+    let mode = fs::metadata(&shims)
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .permissions()
+        .mode();
+    assert_eq!(mode & 0o7777, 0o700);
+
+    fs::remove_dir(&shims).unwrap_or_else(|e| unreachable!("{e}"));
+    let target = host.root.join("elsewhere");
+    fs::create_dir(&target).unwrap_or_else(|e| unreachable!("{e}"));
+    symlink(&target, &shims).unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
+    assert_eq!(outcome, Outcome::Rejected("shims path is not a directory"));
 }
