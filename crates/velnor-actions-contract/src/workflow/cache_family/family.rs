@@ -21,10 +21,12 @@ pub const SOURCE_SUBSET: [&str; 3] = ["registry/index", "registry/cache", "git/d
 
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
 
+pub const SOURCES_CACHE_HOME: &str = "/home/runner/work/_temp/velnor/cargo";
+
 const SOURCES_PATHS: [&str; 3] = [
-    "${{ runner.temp }}/velnor/cargo/registry/index",
-    "${{ runner.temp }}/velnor/cargo/registry/cache",
-    "${{ runner.temp }}/velnor/cargo/git/db",
+    "/home/runner/work/_temp/velnor/cargo/registry/index",
+    "/home/runner/work/_temp/velnor/cargo/registry/cache",
+    "/home/runner/work/_temp/velnor/cargo/git/db",
 ];
 const TOFU_PROVIDERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/tofu-cache/{root}"];
 const BUN_INSTALL_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/bun-cache"];
