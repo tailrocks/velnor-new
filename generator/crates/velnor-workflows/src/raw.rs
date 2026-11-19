@@ -137,6 +137,9 @@ pub(crate) struct RawJob {
     #[serde(default)]
     pub(crate) outputs: BTreeMap<String, String>,
     pub(crate) matrix: Option<RawMatrix>,
+    pub(crate) container: Option<RawContainer>,
+    #[serde(default)]
+    pub(crate) service: Vec<RawService>,
     pub(crate) uses: Option<String>,
     #[serde(default)]
     pub(crate) with: BTreeMap<String, toml::Value>,
@@ -167,6 +170,27 @@ pub(crate) struct RawStep {
     pub(crate) with: BTreeMap<String, String>,
     #[serde(default)]
     pub(crate) continue_on_error: bool,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawContainer {
+    pub(crate) image: String,
+    pub(crate) options: Option<String>,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawService {
+    pub(crate) name: String,
+    pub(crate) image: String,
+    #[serde(default)]
+    pub(crate) ports: Vec<String>,
+    pub(crate) options: Option<String>,
     #[serde(default)]
     pub(crate) env: BTreeMap<String, String>,
 }

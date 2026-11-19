@@ -22,7 +22,14 @@ pub(super) fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
             }
             terms
         }
+        StepKind::SourcesFetchAll { lane, .. } => vec![format!(
+            "steps.{}.outputs.cache-hit != 'true'",
+            sources_step(lane)
+        )],
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
+        StepKind::PrivateCheck { cached }
+        | StepKind::PrivateToken { cached, .. }
+        | StepKind::PrivateFetch { cached, .. } => crate::private_steps::unless_hit(cached),
         _ => Vec::new(),
     }
 }

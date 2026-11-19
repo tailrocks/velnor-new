@@ -86,6 +86,14 @@ pub enum Command {
     )]
     CratesMirror(CratesMirrorArgs),
     #[command(
+        about = "Run cargo fetch --locked for each manifest with the token in VELNOR_PRIVATE_TOKEN given to git for that command only, then revoke the token with DELETE /installation/token on the API in VELNOR_API_URL. Starts cargo and git by absolute path from the tool directories the runner installed, with an environment it builds itself, so that the checkout's configuration cannot redirect the token. Without a token it runs cargo fetch --locked --offline and fails when the restored caches lack a dependency"
+    )]
+    Fetch(FetchArgs),
+    #[command(
+        about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY, its author's login does not end in [bot] and its head sha is the queue entry's sha, and when the live queue ref of that entry still points at $GITHUB_SHA, the commit this run checked out. Every other queue entry of the same base whose commit is in that checkout (one GET /repos/$GITHUB_REPOSITORY/compare/<base>...$GITHUB_SHA, at most three pages of 100 commits) must pass the same pull request checks; a queue of 100 entries or more fails. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork or bot entry, a sha mismatch, a queue that was rebuilt, a bound that is exceeded or anything else, so that no token is created"
+    )]
+    PrivateTokenAllowed,
+    #[command(
         about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
     )]
     MbxStore,
@@ -118,6 +126,8 @@ pub enum Command {
         about = "Run a command, stream its output unchanged, append it to velnor-run.log in $RUNNER_TEMP, and exit with its exit code"
     )]
     Run(RunArgs),
+    #[command(subcommand, about = "Work on the shared Sources cache")]
+    Sources(SourcesCommand),
     #[command(
         about = "Verify the source preview runtime SDK that .velnor/generator.lock at PUBLIC_SOURCE pins (run PUBLIC_RUN_ID attempt PUBLIC_RUN_ATTEMPT of the image workflow): the lock change was approved by the parent commit, the preview's runs, jobs, annotated tag, immutable release, digests and Sigstore attestation (gh attestation verify with the pinned gh, signer pinned to the publication workflow commit) all match. Then install the SDK under $RUNNER_TEMP/source-preview-runtime (linux, darwin, receipt.json, bundle.json, identity.json) and write linux_sha256 and darwin_sha256 to $GITHUB_OUTPUT, which must be empty. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT; exits 1 on any failed check"
     )]
@@ -173,6 +183,42 @@ pub struct CheckConfigurationsArgs {
         help = "JSON array of named feature configurations; without a file, check the default configuration"
     )]
     pub configurations: Option<PathBuf>,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum SourcesCommand {
+    #[command(
+        about = "Run cargo fetch --locked in each Cargo root, in order, as velnor-ci run does for one command, so the cache report sees every fetch. Refuses a missing or duplicate root before any fetch, and stops at the first failing fetch, naming its root and exiting with cargo's exit code"
+    )]
+    Fetch(SourcesFetchArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct SourcesFetchArgs {
+    #[arg(
+        long,
+        required = true,
+        num_args = 1..,
+        value_name = "DIR",
+        help = "Cargo root directories, relative to the working directory or absolute, fetched in the order given"
+    )]
+    pub roots: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct FetchArgs {
+    #[arg(
+        long,
+        required = true,
+        help = "Cargo manifest to fetch; repeat for each Cargo root"
+    )]
+    pub manifest_path: Vec<PathBuf>,
+    #[arg(
+        long,
+        hide = true,
+        help = "An extra absolute directory whose programs and CARGO_HOME count as installed by the runner"
+    )]
+    pub trusted_dir: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

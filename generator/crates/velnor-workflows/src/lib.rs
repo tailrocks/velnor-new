@@ -5,6 +5,7 @@ mod call;
 mod check;
 mod check_step;
 mod concurrency;
+mod containers;
 mod error;
 mod expression;
 mod helper_call;
@@ -15,7 +16,7 @@ mod triggers;
 
 pub use error::WorkflowsError;
 pub use plan::{
-    Action, Body, Call, CallTarget, CallValue, Concurrency, Env, Input, InputKind, Job, Matrix,
-    MatrixSource, Output, PullRequest, Push, Step, Triggers, Workflow, WorkflowCall, WorkflowRun,
-    WorkflowsPlan,
+    Action, Body, Call, CallTarget, CallValue, Concurrency, Container, Env, Input, InputKind, Job,
+    Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers, Workflow,
+    WorkflowCall, WorkflowRun, WorkflowsPlan,
 };

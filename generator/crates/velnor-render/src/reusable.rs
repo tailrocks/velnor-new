@@ -10,8 +10,8 @@ use velnor_workflows::{
 use crate::gate::all_conditions;
 use crate::reusable_on::on;
 use crate::rules::{
-    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource,
-    RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
+    RenderedMatrixSource, RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
 };
 use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
@@ -127,6 +127,27 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
             fail_fast: matrix.fail_fast,
             max_parallel: matrix.max_parallel,
         }),
+        container: job.container.as_ref().map(|container| RenderedContainer {
+            image: container.image.clone(),
+            ports: Vec::new(),
+            options: container.options.clone(),
+            env: container.env.clone(),
+        }),
+        services: job
+            .services
+            .iter()
+            .map(|service| {
+                (
+                    service.name.clone(),
+                    RenderedContainer {
+                        image: service.image.clone(),
+                        ports: service.ports.clone(),
+                        options: Some(service.options.clone()),
+                        env: service.env.clone(),
+                    },
+                )
+            })
+            .collect(),
         runs_on,
         timeout_minutes: job.timeout_minutes,
         steps: match installs {

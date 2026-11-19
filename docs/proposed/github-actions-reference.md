@@ -595,6 +595,8 @@ Use GitHub's [MergeQueueEntry schema](https://docs.github.com/en/enterprise-clou
 
 A cutover author check must bind the current queue entry's base and head to the authenticated merge-group context, then authenticate the associated pull request and its current author. A queue branch name alone is not author evidence. The pull-request test merge reference and an assumed two-parent queue commit are not substitutes for queue membership. Missing, stale, ambiguous or truncated membership must fail closed.
 
+The private-source token check (`velnor-ci private-token-allowed`) relies on a contract that GitHub does not document, so it is recorded here. GitHub creates one ref `gh-readonly-queue/<base>/pr-<number>-<sha>` per queue entry and deletes it when the entry merges or leaves the queue. The commit of an entry holds the commits of every entry ahead of it. The check lists the refs of the base, requires the live ref of its own entry to equal `GITHUB_SHA`, and authenticates each ref whose commit is among the commits `compare/<base>...<GITHUB_SHA>` reports. An entry without a ref cannot add code the check misses: if it merged, its commits are in the base branch and are not in that comparison, and if it left the queue, GitHub rebuilt the entries behind it, so the live ref no longer equals `GITHUB_SHA` and the check refuses. The comparison is read for at most three pages of 100 commits and a longer one is refused.
+
 ## Private Bun artifact admission
 
 GitHub documents that authenticated users with repository read access can

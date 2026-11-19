@@ -89,6 +89,15 @@ pub struct RenderedMatrix {
     pub max_parallel: Option<u16>,
 }
 
+/// A job `container:` or one service; `ports` is empty for a job container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedContainer {
+    pub image: String,
+    pub ports: Vec<String>,
+    pub options: Option<String>,
+    pub env: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -102,12 +111,15 @@ pub struct RenderedJob {
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<RenderedMatrix>,
+    pub container: Option<RenderedContainer>,
+    pub services: Vec<(String, RenderedContainer)>,
     /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
     pub uses: Option<String>,
     pub with: Vec<(String, Value)>,
     pub runs_on: String,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
+    pub env: Vec<(String, Value)>,
     pub steps: Vec<RenderedStep>,
 }
 
@@ -250,9 +262,11 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
 
 fn holds_app_token(job: &RenderedJob) -> bool {
     job.steps.iter().any(|step| {
-        step.uses
-            .as_deref()
-            .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+        step.id.as_deref() != Some(crate::private_steps::TOKEN_STEP)
+            && step
+                .uses
+                .as_deref()
+                .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
     })
 }
 

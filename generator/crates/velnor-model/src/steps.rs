@@ -26,6 +26,10 @@ pub enum StepKind {
         lane: RootSlug,
         position: usize,
     },
+    SourcesFetchAll {
+        lane: RootSlug,
+        manifests: Vec<RepoPath>,
+    },
     CacheDecide {
         manifests: Vec<RepoPath>,
         target: RepoPath,
@@ -56,6 +60,17 @@ pub enum StepKind {
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
+    PrivateCheck {
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateToken {
+        sources: crate::repo::PrivateSources,
+        cached: Vec<crate::ids::RootSlug>,
+    },
+    PrivateFetch {
+        manifests: Vec<RepoPath>,
+        cached: Vec<crate::ids::RootSlug>,
+    },
     MbxRemote,
     MbxStore,
     MbxSeed,

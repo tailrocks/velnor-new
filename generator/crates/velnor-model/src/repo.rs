@@ -102,6 +102,7 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
+    pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
     pub weakenings: Vec<Weakening>,
@@ -248,6 +249,7 @@ pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
+    pub private_sources: Option<PrivateSources>,
     pub mbx_store: MbxStore,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
@@ -368,6 +370,7 @@ impl Default for RustCiConfig {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
+            private_sources: None,
             mbx_store: MbxStore::Private,
             timeout_minutes: 30,
             exclude: Vec::new(),
@@ -400,4 +403,12 @@ pub struct CratesMirror {
     pub runner: RunnerLabel,
     pub registry: String,
     pub cainfo: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateSources {
+    pub app_id: String,
+    pub private_key: String,
+    pub owner: String,
+    pub repositories: Vec<String>,
 }
