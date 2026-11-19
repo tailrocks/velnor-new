@@ -31,6 +31,16 @@ pub(crate) fn unless_hit(cached: &[RootSlug]) -> Vec<String> {
     vec![format!("({})", misses.join(" || "))]
 }
 
+pub(crate) fn release_phase(sources: &PrivateSources, manifest: &str) -> [RenderedStep; 2] {
+    [
+        RenderedStep {
+            condition: None,
+            ..token(sources)
+        },
+        fetch_paths([manifest]),
+    ]
+}
+
 fn check() -> RenderedStep {
     RenderedStep {
         id: Some(CHECK_STEP.to_owned()),
@@ -86,9 +96,13 @@ fn token(sources: &PrivateSources) -> RenderedStep {
 }
 
 fn fetch(manifests: &[RepoPath]) -> RenderedStep {
+    fetch_paths(manifests.iter().map(RepoPath::as_str))
+}
+
+fn fetch_paths<'a>(manifests: impl IntoIterator<Item = &'a str>) -> RenderedStep {
     let arguments: Vec<String> = manifests
-        .iter()
-        .map(|manifest| format!("--manifest-path {}", shell_word(manifest.as_str())))
+        .into_iter()
+        .map(|manifest| format!("--manifest-path {}", shell_word(manifest)))
         .collect();
     RenderedStep {
         name: "Fetch the dependencies, then drop the token".to_owned(),

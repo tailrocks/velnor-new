@@ -14,7 +14,8 @@ use crate::rules::{RenderedStep, Value};
 
 const VERSION_REFERENCE: &str = "${VERSION}";
 const VERSION_STEP: &str = "version";
-pub(crate) const STAGE: &str = "stage";
+pub(crate) const STAGE: &str = "${{ runner.temp }}/stage";
+pub(crate) const STAGE_SHELL: &str = "$RUNNER_TEMP/stage";
 
 pub(crate) fn versioned(binary: &BinaryPlan) -> bool {
     binary
@@ -79,7 +80,7 @@ pub(crate) fn word(binary: &BinaryPlan, name: &str) -> String {
     }
 }
 
-pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
+pub(crate) fn read_version(binary: &BinaryPlan, tag: &str) -> Option<RenderedStep> {
     versioned(binary).then(|| {
         let pattern = binary
             .tag_pattern
@@ -88,10 +89,7 @@ pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
         let prefix = pattern.split("{{ version }}").next().unwrap_or_default();
         RenderedStep {
             id: Some(VERSION_STEP.to_owned()),
-            env: variables(&[(
-                "TAG",
-                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
-            )]),
+            env: variables(&[("TAG", tag)]),
             ..command(
                 "Read the version of the tag".to_owned(),
                 format!("echo \"version=${{TAG#{prefix}}}\" >> \"$GITHUB_OUTPUT\""),
@@ -100,7 +98,6 @@ pub(crate) fn read_version(binary: &BinaryPlan) -> Option<RenderedStep> {
     })
 }
 
-/// Hands the version to every step that names it, through that step's own `env`.
 pub(crate) fn bind_version(steps: &mut [RenderedStep]) {
     for step in steps {
         let reads = step
@@ -119,7 +116,7 @@ pub(crate) fn bind_version(steps: &mut [RenderedStep]) {
 pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
     let members = contents(binary);
     if versioned(binary) {
-        format!("tar -czf \"{STAGE}/{file}\" -C {release_dir}{members}")
+        format!("tar -czf \"{STAGE_SHELL}/{file}\" -C {release_dir}{members}")
     } else {
         format!("tar -czf {} -C {release_dir}{members}", shell_word(file))
     }

@@ -22,30 +22,70 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
     {
         return Ok(());
     }
-    let mut names = std::collections::BTreeMap::new();
+    let mut configs = std::collections::BTreeMap::new();
     for config in ["mise.toml", ".mise.toml"] {
-        let Some(bytes) = view.files.get(&path(config)?) else {
+        let config = path(config)?;
+        let Some(bytes) = view.files.get(&config) else {
             continue;
         };
-        let text = String::from_utf8_lossy(bytes);
-        let tools = text
-            .lines()
-            .skip_while(|line| line.trim() != "[tools]")
-            .skip(1)
-            .take_while(|line| !line.starts_with('['));
-        names.extend(
-            tools
-                .filter_map(|line| line.split_once(" = "))
-                .map(|(name, value)| (name.trim().trim_matches('"').to_owned(), requested(value))),
-        );
+        let Ok(text) = std::str::from_utf8(bytes) else {
+            continue;
+        };
+        let Ok(parsed) = text.parse::<toml::Table>() else {
+            continue;
+        };
+        let tools = parsed
+            .get("tools")
+            .cloned()
+            .unwrap_or_else(|| toml::Value::Table(toml::Table::new()));
+        let table = toml::Table::from_iter([("tools".to_owned(), tools)]);
+        configs.insert(config, toml::to_string(&table)?.into_bytes());
     }
+    let Ok(pins) = velnor_rust::tool_pins(&configs) else {
+        return Ok(());
+    };
     let mut lock = String::new();
-    for (name, version) in &names {
-        for platform in ["linux-x64", "macos-arm64"] {
+    for (name, pin) in pins.tools {
+        for request in pin
+            .requested
+            .into_iter()
+            .collect::<std::collections::BTreeSet<_>>()
+        {
+            let version = if matches!(
+                request.version.as_str(),
+                "latest" | "lts" | "stable" | "nightly" | "beta"
+            ) {
+                "1.0.0"
+            } else {
+                &request.version
+            };
             write!(
                 lock,
-                "[[tools.\"{name}\"]]\nversion = \"{version}\"\n\n[tools.\"{name}\".\"platforms.{platform}\"]\nurl = \"https://example.invalid/{name}\"\n\n"
+                "[[tools.{name:?}]]\nversion = {version:?}\nspecifiers = [{:?}]\n",
+                request.version
             )?;
+            if let Some(filters) = request.os {
+                writeln!(lock, "os = {filters:?}")?;
+            }
+            if !request.options.is_empty() {
+                writeln!(
+                    lock,
+                    "options = {}",
+                    toml::Value::Table(
+                        request
+                            .options
+                            .into_iter()
+                            .map(|(key, value)| (key, toml::Value::String(value)))
+                            .collect()
+                    )
+                )?;
+            }
+            for platform in ["linux-x64", "macos-arm64"] {
+                write!(
+                    lock,
+                    "[tools.{name:?}.\"platforms.{platform}\"]\nurl = \"https://example.invalid/{name}\"\n\n"
+                )?;
+            }
         }
     }
     if lock.is_empty() {
@@ -54,19 +94,6 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
     view.tracked_paths.insert(mise_lock.clone());
     view.files.insert(mise_lock, lock.into_bytes());
     Ok(())
-}
-
-fn requested(value: &str) -> String {
-    let quoted = |text: &str| {
-        text.strip_prefix('"')
-            .map(|rest| rest.split('"').next().unwrap_or("").to_owned())
-    };
-    value
-        .split("version = ")
-        .nth(1)
-        .and_then(|rest| quoted(rest.trim_start()))
-        .or_else(|| quoted(value.trim()))
-        .unwrap_or_else(|| "1".to_owned())
 }
 
 pub(crate) fn path(text: &str) -> Result<RepoPath, Box<dyn Error>> {

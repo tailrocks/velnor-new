@@ -187,6 +187,7 @@ rules:
     paths:
       include:
         - ".github/workflows/release-rust-ci-tools.yml"
+        - ".velnor/workflows.toml"
         - ".github/actions/**"
         - "scripts/**"
         - "images/**"
