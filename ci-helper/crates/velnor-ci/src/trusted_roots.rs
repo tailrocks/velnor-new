@@ -5,15 +5,8 @@ use ureq::tls::{Certificate, PemItem, RootCerts, parse_pem};
 
 use crate::error::CiError;
 
-/// The variable git, curl and the runner read for the certificates of a
-/// server whose CA the operating system, not Mozilla, trusts.
 pub const BUNDLE_VARIABLE: &str = "SSL_CERT_FILE";
 
-/// Roots for the GitHub API client: only the certificates of a PEM bundle.
-///
-/// # Errors
-///
-/// Returns an error when the bundle holds no certificate or a damaged one.
 pub fn roots_from_pem(pem: &[u8]) -> Result<RootCerts, CiError> {
     let mut certificates: Vec<Certificate<'static>> = Vec::new();
     for item in parse_pem(pem) {
@@ -28,9 +21,6 @@ pub fn roots_from_pem(pem: &[u8]) -> Result<RootCerts, CiError> {
     Ok(RootCerts::new_with_certs(&certificates))
 }
 
-/// The bundle `SSL_CERT_FILE` names, or the default roots when it is unset or
-/// unusable, so a broken variable never leaves the client with fewer roots
-/// than it had before.
 #[must_use]
 pub fn configured_roots() -> RootCerts {
     let Some(path) = std::env::var_os(BUNDLE_VARIABLE).filter(|path| !path.is_empty()) else {

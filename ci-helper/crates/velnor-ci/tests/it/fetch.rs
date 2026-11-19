@@ -277,6 +277,22 @@ fn the_runner_proxy_reaches_cargo_and_git_but_a_checkout_cargo_setting_does_not(
 }
 
 #[test]
+fn the_runner_ca_bundle_reaches_cargo_and_git() -> TestResult {
+    let fixture = Fixture::new("fetch-ca-bundle", 0)?;
+    let api = serve(204)?;
+    let bundle = [("SSL_CERT_FILE", "/etc/runner/private-ca.pem")];
+    let output = fixture.run_with(&api, Some(TOKEN), None, &["Cargo.toml"], &bundle);
+    assert!(output.status.success(), "{output:?}");
+    for environment in [fixture.log("cargo.env"), fixture.log("git.env")] {
+        assert!(
+            environment.contains("SSL_CERT_FILE=/etc/runner/private-ca.pem"),
+            "{environment}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn each_manifest_is_fetched_from_its_own_directory_so_its_cargo_config_applies() -> TestResult {
     let fixture = Fixture::new("fetch-nested", 0)?;
     fixture.repo.write_unstaged("tools/Cargo.toml", "");

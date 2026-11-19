@@ -187,8 +187,6 @@ fn entries_in_checkout(
         .collect())
 }
 
-/// The commits a queue checkout holds beyond its base branch, read with one
-/// comparison instead of one per queued entry.
 fn commits_since_base(
     base: &str,
     checkout: &str,

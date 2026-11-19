@@ -51,7 +51,6 @@ fn comparison(page: u32, total: usize, shas: &[&str]) -> (String, String) {
     )
 }
 
-/// The checkout holds the given queue groups beyond `main`.
 fn compare(holds: &[&str]) -> (String, String) {
     comparison(1, holds.len(), holds)
 }

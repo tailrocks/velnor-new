@@ -9,11 +9,13 @@ use std::time::Duration;
 use crate::cli::FetchArgs;
 use crate::error::CiError;
 use crate::github::GitHubWrite;
+use crate::trusted_roots::BUNDLE_VARIABLE;
 
 const TOKEN_VARIABLE: &str = "VELNOR_PRIVATE_TOKEN";
 const API_VARIABLE: &str = "VELNOR_API_URL";
 const SYSTEM_DIRECTORIES: [&str; 4] = ["/usr/bin", "/bin", "/usr/local/bin", "/opt/homebrew/bin"];
-const PROXY_VARIABLES: [&str; 8] = [
+const FORWARDED_VARIABLES: [&str; 9] = [
+    BUNDLE_VARIABLE,
     "HTTPS_PROXY",
     "https_proxy",
     "HTTP_PROXY",
@@ -279,7 +281,7 @@ impl Trusted {
             ("GIT_TERMINAL_PROMPT".into(), "0".into()),
         ];
         environment.extend(
-            PROXY_VARIABLES
+            FORWARDED_VARIABLES
                 .iter()
                 .filter_map(|name| Some((OsString::from(name), non_empty_variable(name)?))),
         );
