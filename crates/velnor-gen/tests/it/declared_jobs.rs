@@ -141,7 +141,11 @@ fn a_static_matrix_refuses_unknown_keys_and_a_second_source() -> TestResult {
 
 #[test]
 fn a_hosted_runner_has_no_fork_fence_and_a_self_hosted_one_has() -> TestResult {
-    let hosted = rendered(&workflow("runner = \"ubuntu-24.04\"", ON_PUSH, JOB))?;
+    let hosted = rendered(&workflow(
+        "runner = \"ubuntu-24.04\"\nhosted = true",
+        ON_PUSH,
+        JOB,
+    ))?;
     assert_eq!(
         job(&hosted, "check")?.get("runs-on").and_then(Node::text),
         Some("ubuntu-24.04")
@@ -167,7 +171,7 @@ fn a_job_can_pick_its_own_runner() -> TestResult {
         ON_PUSH,
         &JOB.replace(
             "id = \"check\"\n",
-            "id = \"check\"\nrunner = \"macos-15\"\n",
+            "id = \"check\"\nrunner = \"macos-15\"\nhosted = true\n",
         ),
     );
     let tree = rendered(&config)?;

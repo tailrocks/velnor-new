@@ -30,6 +30,7 @@ pub(crate) struct RawTestGroup {
     test_threads: Option<u16>,
     timeout_minutes: Option<u16>,
     runner: Option<String>,
+    hosted: Option<bool>,
     #[serde(default)]
     paths: Vec<String>,
     #[serde(default)]
@@ -128,6 +129,7 @@ fn group(raw: RawTestGroup) -> Result<TestGroup, Reason> {
             &TIMEOUT_RANGE,
         )?,
         runner,
+        hosted: raw.hosted,
         paths,
         events,
         root,

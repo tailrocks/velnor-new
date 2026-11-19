@@ -6,6 +6,7 @@ mod cache_layout;
 mod cache_outputs;
 mod cron;
 mod helper;
+mod hosted;
 mod ids;
 mod lint;
 mod mise;
@@ -29,9 +30,10 @@ pub use cache_outputs::{
 };
 pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
+pub use hosted::HostedRunners;
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
-    RunnerLabel, Sha256, TargetName, github_hosted,
+    RunnerLabel, Sha256, TargetName, looks_github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use mise::MisePlatform;

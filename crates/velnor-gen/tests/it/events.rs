@@ -189,7 +189,7 @@ fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> Tes
     assert!(here.contains("cargo machete"), "{here}");
     let mac = with(
         &[("mise.toml", &mise("macos"))],
-        Some(b"runner = \"macos-latest\"\n"),
+        Some(b"runner = \"macos-latest\"\nhosted = true\n"),
     )?;
     assert!(mac.contains("cargo machete"), "{mac}");
     Ok(())
@@ -204,12 +204,12 @@ fn a_machete_pin_reads_mise_os_arch_filters_and_darwin_as_macos() -> TestResult 
     };
     let linux_arch = with(
         &[("mise.toml", &mise("linux/x64"))],
-        Some(b"runner = \"ubuntu-latest\"\n"),
+        Some(b"runner = \"ubuntu-latest\"\nhosted = true\n"),
     )?;
     assert!(linux_arch.contains("cargo machete"), "{linux_arch}");
     let darwin = with(
         &[("mise.toml", &mise("darwin"))],
-        Some(b"runner = \"macos-latest\"\n"),
+        Some(b"runner = \"macos-latest\"\nhosted = true\n"),
     )?;
     assert!(darwin.contains("cargo machete"), "{darwin}");
     Ok(())

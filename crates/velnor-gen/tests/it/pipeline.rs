@@ -58,6 +58,9 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     view.files
         .insert(lock, String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes());
     if let Some(bytes) = config {
+        if bytes.windows(9).any(|window| window == b"hosted = ") {
+            pin_helper(&mut view, "0.1.99")?;
+        }
         let path = RepoPath::new(".velnor/rust-ci.toml")?;
         view.tracked_paths.insert(path.clone());
         view.files.insert(path, bytes.to_vec());

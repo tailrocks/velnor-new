@@ -217,8 +217,8 @@ fn host_ports_are_unique_across_services_and_explicit_without_a_container() -> T
 fn containers_are_refused_on_runners_that_are_not_linux() -> TestResult {
     let image = format!("redis@{DIGEST}");
     let cases = [
-        ("runner = \"macos-latest\"", ""),
-        ("", "runner = \"windows-2022\"\n"),
+        ("runner = \"macos-latest\"\nhosted = true", ""),
+        ("", "runner = \"windows-2022\"\nhosted = true\n"),
         (
             "fork_runner = \"macos-14\"",
             "runner = \"self-hosted-linux\"\n",
@@ -239,7 +239,7 @@ fn containers_are_refused_on_runners_that_are_not_linux() -> TestResult {
         }
     }
     let ubuntu = config_in(
-        "runner = \"ubuntu-24.04\"",
+        "runner = \"ubuntu-24.04\"\nhosted = true",
         &container(&image),
         &service(&image, ""),
     );

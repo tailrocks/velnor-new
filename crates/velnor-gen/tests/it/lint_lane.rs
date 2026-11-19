@@ -86,7 +86,7 @@ fn every_lint_entry_renders_one_fenced_least_privilege_job_that_waits_for_nothin
 
 #[test]
 fn a_hosted_runner_needs_no_fence_for_lint_jobs() -> TestResult {
-    let jobs = jobs(&format!("runner = 'ubuntu-24.04'\n{LINT}"))?;
+    let jobs = jobs(&format!("runner = 'ubuntu-24.04'\nhosted = true\n{LINT}"))?;
     for id in IDS {
         assert_eq!(jobs[id]["runs-on"].as_str(), Some("ubuntu-24.04"), "{id}");
     }

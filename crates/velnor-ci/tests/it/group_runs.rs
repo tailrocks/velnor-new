@@ -17,6 +17,7 @@ fn group(paths: &[&str], events: &[GroupEvent]) -> TestGroup {
         test_threads: None,
         timeout_minutes: None,
         runner: None,
+        hosted: None,
         paths: paths
             .iter()
             .map(|path| PathGlob::new(*path).unwrap_or_else(|e| unreachable!("{e}")))
