@@ -8,6 +8,12 @@ use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputsCli {
+    PerRoot,
+    Batched,
+}
+
 pub const BUDGET_JOB: &str = "rust-budget";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +32,7 @@ pub enum StepKind {
     RestoredTargets {
         expiry: BaseExpiry,
         targets: Vec<RepoPath>,
+        cli: InputsCli,
     },
     SourcesLocks(Vec<RepoPath>),
     SourcesFetch {
@@ -40,6 +47,7 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         target: RepoPath,
         archive: Option<RepoPath>,
+        cli: InputsCli,
         budget_bytes: u64,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
@@ -67,9 +75,15 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    InputsSave {
+        target: RepoPath,
+        cli: InputsCli,
+    },
+    InputsRestore {
+        roots: Vec<(RepoPath, RepoPath)>,
+        cli: InputsCli,
+    },
     TestGroupsCheck(Vec<GroupFilter>),
-    InputsSave(RepoPath),
-    InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
     PrivateCheck {
         cached: Vec<crate::ids::RootSlug>,

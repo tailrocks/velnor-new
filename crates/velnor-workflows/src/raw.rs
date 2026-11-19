@@ -35,8 +35,6 @@ pub(crate) struct RawWorkflow {
     pub(crate) case: Vec<RawCase>,
 }
 
-/// One qualification case: its steps run once on the hosted runner and once on
-/// the scale-set runner, in the modes it lists.
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct RawCase {

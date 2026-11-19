@@ -14,9 +14,8 @@ mod classify;
 mod compat;
 mod config;
 mod config_branch;
-mod config_cache;
-
 mod config_budget;
+mod config_cache;
 mod config_ci;
 mod config_events;
 mod config_exclude;
@@ -25,10 +24,9 @@ mod config_helper;
 mod config_keys;
 mod config_lint;
 mod config_mirror;
-mod config_test_groups;
-
 mod config_pr_ci;
 mod config_private;
+mod config_test_groups;
 mod config_test_lane;
 mod config_test_setup;
 mod credentials;
@@ -95,7 +93,6 @@ mod weaken;
 mod weaken_nextest;
 mod weaken_scope;
 mod weaken_targets;
-
 pub use base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};

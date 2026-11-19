@@ -57,5 +57,6 @@ pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
-    BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, StepKind, ToolsLocalVerb, TrimFamily,
+    BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, StepKind, ToolsLocalVerb,
+    TrimFamily,
 };
