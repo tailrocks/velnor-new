@@ -122,6 +122,8 @@ mod setup_action_cache;
 mod setup_action_owner;
 mod setup_action_swap;
 mod setup_action_tool_cache;
+mod shared_sources;
+mod source_roots_limit;
 mod step_target_dir;
 mod test_setup;
 mod tool_pins;
