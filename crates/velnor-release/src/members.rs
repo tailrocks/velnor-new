@@ -183,8 +183,7 @@ fn effective_tags(configs: &[RootConfig], metadata: &Metadata) -> Vec<(String, T
     for config in configs {
         tags.extend(
             config
-                .packages
-                .iter()
+                .tag_owners()
                 .map(|package| (package.name.clone(), package.tag_pattern.clone())),
         );
         if let Some((_, workspace)) = owner(&config.root, metadata) {
