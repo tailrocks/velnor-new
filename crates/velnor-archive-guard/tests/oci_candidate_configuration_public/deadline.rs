@@ -9,7 +9,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use velnor_actions_mise::CheckDeadline;
+use velnor_archive_guard::CheckDeadline;
 use velnor_archive_guard::owned_archive_guard::oci_candidate::{
     OciCandidateEvidence, inspect_oci_candidate, materialize_oci_candidate,
 };

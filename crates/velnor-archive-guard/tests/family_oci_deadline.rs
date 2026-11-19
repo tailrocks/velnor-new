@@ -7,7 +7,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use velnor_actions_mise::CheckDeadline;
+use velnor_archive_guard::CheckDeadline;
 
 pub(crate) fn expire_during<T>(
     operation: impl FnOnce() -> T,
