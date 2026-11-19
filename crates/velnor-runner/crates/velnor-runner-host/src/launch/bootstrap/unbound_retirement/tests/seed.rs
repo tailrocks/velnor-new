@@ -228,17 +228,33 @@ async fn trigger_sql(journal: &Journal, names: &[&str]) -> TestResult<Vec<String
     Ok(saved)
 }
 
+/// Runs `statements` with the triggers that could fire for them removed.
+///
+/// A trigger fires only when a statement writes its table, and a trigger on
+/// another table can only fire from the body of one that fired. So dropping
+/// every trigger on a table the statements mention leaves no trigger able to
+/// fire, and the rest need not be dropped. Dropping and re-creating all of
+/// them (each `CREATE TRIGGER` costs tens of milliseconds in a debug build)
+/// made seeding the slowest part of many tests.
 pub(crate) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
+    let words: std::collections::BTreeSet<String> = statements
+        .iter()
+        .flat_map(|sql| sql.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')))
+        .map(str::to_ascii_lowercase)
+        .collect();
     let connection = journal.connection().await?;
     let mut rows = connection
         .query(
-            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
+            "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
             (),
         )
         .await?;
     let mut saved = Vec::new();
     while let Some(row) = rows.next().await? {
-        saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
+        let table: String = row.get(1)?;
+        if words.contains(&table.to_ascii_lowercase()) {
+            saved.push((row.get::<String>(0)?, row.get::<String>(2)?));
+        }
     }
     for (name, _) in &saved {
         execute(journal, &format!("DROP TRIGGER {name}")).await?;

@@ -5,6 +5,8 @@ use std::{ops::AsyncFnOnce, path::Path};
 
 use crate::error::HostError;
 
+#[cfg(test)]
+use super::test_template;
 use super::{file_identity::JournalFile, one_row, same_ids, schema, token_rejected, transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,45 +63,80 @@ impl Journal {
 
     #[cfg(test)]
     pub(crate) async fn open_historical_v48_for_test(path: &Path) -> Result<Self, HostError> {
+        let seeded = test_template::seed(path, "v48");
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        schema::bootstrap_historical_v48(&journal.connection().await?).await?;
+        if !seeded.was_copied() {
+            schema::bootstrap_historical_v48(&journal.connection().await?).await?;
+        }
         journal.file.reset_after_bootstrap()?;
+        if seeded.is_pristine() {
+            test_template::publish(path, "v48");
+        }
         Ok(journal)
     }
 
     #[cfg(test)]
     pub(crate) async fn open_historical_v47_for_test(path: &Path) -> Result<Self, HostError> {
+        let seeded = test_template::seed(path, "v47");
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        schema::bootstrap_historical_v47(&journal.connection().await?).await?;
+        if !seeded.was_copied() {
+            schema::bootstrap_historical_v47(&journal.connection().await?).await?;
+        }
         journal.file.reset_after_bootstrap()?;
+        if seeded.is_pristine() {
+            test_template::publish(path, "v47");
+        }
         Ok(journal)
     }
 
     #[cfg(test)]
     pub(crate) async fn open_historical_v46_for_test(path: &Path) -> Result<Self, HostError> {
+        let seeded = test_template::seed(path, "v46");
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        schema::bootstrap_historical_v46(&journal.connection().await?).await?;
+        if !seeded.was_copied() {
+            schema::bootstrap_historical_v46(&journal.connection().await?).await?;
+        }
         journal.file.reset_after_bootstrap()?;
+        if seeded.is_pristine() {
+            test_template::publish(path, "v46");
+        }
         Ok(journal)
     }
 
     #[cfg(test)]
     pub(crate) async fn open_historical_v45_for_test(path: &Path) -> Result<Self, HostError> {
+        let seeded = test_template::seed(path, "v45");
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        schema::bootstrap_historical_v45(&journal.connection().await?).await?;
+        if !seeded.was_copied() {
+            schema::bootstrap_historical_v45(&journal.connection().await?).await?;
+        }
         journal.file.reset_after_bootstrap()?;
+        if seeded.is_pristine() {
+            test_template::publish(path, "v45");
+        }
         Ok(journal)
     }
 
     pub async fn open(path: &Path) -> Result<Self, HostError> {
+        #[cfg(test)]
+        let seeded = test_template::seed(path, "current");
+        let journal = Self::open_bootstrapped(path).await?;
+        #[cfg(test)]
+        if seeded.is_pristine() {
+            test_template::publish(path, "current");
+        }
+        Ok(journal)
+    }
+
+    pub(super) async fn open_bootstrapped(path: &Path) -> Result<Self, HostError> {
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
