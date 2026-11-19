@@ -35,7 +35,7 @@ pub(crate) fn cases(
             return refuse(format!("the case {} of {file} is declared twice", case.id));
         }
         seen.push(case.id.clone());
-        jobs.extend(pair(file, &options, case, &hosted, &scale_set)?);
+        jobs.extend(pair(file, options, &case, &hosted, &scale_set)?);
     }
     Ok(jobs)
 }
@@ -78,7 +78,7 @@ fn pair_runner(
 fn pair(
     file: &str,
     options: &[String],
-    case: RawCase,
+    case: &RawCase,
     hosted: &str,
     scale_set: &str,
 ) -> Result<[RawJob; 2], WorkflowsError> {
