@@ -22,7 +22,7 @@ A toolchain file, a cargo configuration or the workflow itself selects everythin
 
 The event decides how: pull requests and merge queue runs (`merge_group`) use the changed files. A push to the default branch does the same when `on_main = "affected"` (the default) and selects everything when it is `"everything"`. A scheduled run and a manual run (`workflow_dispatch`) always select everything. When git cannot tell what changed, the plan selects everything.
 
-The plan step runs `velnor-ci plan --explain`. Its output lists each root, then each selected package with its reason (`changed:<path>`, `depends-on:<package>`, `input:<path>`, `lock:<dependency>`), or the trigger when everything is selected (`all:event`, `all:toolchain-file:<path>`, `all:unknown-path:<path>`, `all:most-packages:<n>`, and others). It also lists each step it left out, such as doctests or documentation, and why. To see the same output locally, run `velnor-ci plan --explain --changed <path>...` in a checkout.
+The plan step runs `velnor-ci plan --explain`. Its output lists each root, then each selected package with its reason (`changed:<path>`, `depends-on:<package>`, `input:<path>`, `lock:<dependency>`), or the trigger when everything is selected (`all:event`, `all:toolchain-file:<path>`, `all:unknown-path:<path>`, `all:most-packages:<n>`, and others). It also lists each step it left out, such as doctests or documentation, and why. To see the same output locally, run `velnor-ci plan --explain --changed <path>...` in a checkout. When a changed path is `Cargo.lock`, a root `Cargo.toml` or configuration, also pass `--base-file PATH=FILE` for each, with the pre-change contents; without it the local plan selects everything, unlike the workflow, which reads them from the first parent.
 
 ## Job shape
 
@@ -42,11 +42,11 @@ Three more jobs are always part of the workflow:
 - `Cache` reads each lane's `ci-metrics.json` and fails when a crate was compiled although the restored cache held it, or when an upload failed. It is advisory unless `cache_check_blocks = true`.
 - `rust-trim` (named "Cache maintenance") deletes old entries and enforces the cache budget. It runs only on the default branch, and has no checkout and runs no repository code.
 
-When a repository has several roots, or its shape is not `one-job`, a `rust-inputs-audit` job also runs on full runs. It checks that every file a package reads at compile time outside its own folder is listed in `.velnor/rust-inputs.lock`.
+When a repository has several roots, or its shape is not `one-job`, a `rust-inputs-audit` job also runs on full runs. It checks that every file a package reads at compile time outside its own folder is listed in `.velnor/rust-inputs.lock`. The audit sees only the reads cargo records for its own build (its features, target and profile). A build script that reads an external file without emitting `cargo:rerun-if-changed` is not seen, so map that file with `[[inputs]]` yourself.
 
 ## Merge queue
 
-The workflow listens to `merge_group`. A queue run selects like a pull request (with `on_main = "affected"`), compares the queue's merge commit with its first parent, and only reads caches. Make `Required` the required status check of the ruleset that holds the queue. The workflow cancels an older run of the same pull request, and never cancels a queue or default-branch run.
+The workflow listens to `merge_group`. A queue run selects like a pull request (with `on_main = "affected"`), compares the queue's merge commit with its first parent, and only reads caches. Make the verdict check (`Required`, or the name set by `required_check`) the required status check of the ruleset that holds the queue. The workflow cancels an older run of the same pull request, and never cancels a queue or default-branch run.
 
 ## Caches
 
@@ -111,6 +111,7 @@ Unknown keys are refused. Every key is optional.
 | Key | Default | Meaning |
 |---|---|---|
 | `runner` | `ubuntu-latest` | Runner label for every job |
+| `fork_runner` | by platform | GitHub-hosted label used for pull requests from forks when `runner` is self-hosted, see [generator configuration](../generator/CONFIG.md) |
 | `timeout_minutes` | `30` | Job time limit, 1 to 360 |
 | `default_branch` | `main` | Checked against the repository's real default branch |
 | `on_main` | `affected` | `affected` or `everything` for a push and a queue run |
@@ -122,7 +123,7 @@ Unknown keys are refused. Every key is optional.
 | `non_inputs` | none | Globs of files that select no package |
 | `inputs` | none | Tables `{ glob, packages }`: files that select the named packages |
 | `default_ignores` | `true` | Treat common non-source files as non-inputs |
-| `nextest_harnesses` | none | `package:target` entries run directly, not by nextest |
+| `nextest_harnesses` | none | `package:target` entries (`harness = false` targets) run by nextest; unlisted custom harnesses run directly |
 | `test_setup` | none | Tables `{ root, name, run }`: one command before the tests |
 | `ci_debuginfo` | `line-tables-only` | `full`, `line-tables-only` or `none` |
 | `cache_budget_bytes` | `8000000000` | Repository cache budget, 0 to 8 GB |
