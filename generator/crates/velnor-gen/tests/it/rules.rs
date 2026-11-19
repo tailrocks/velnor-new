@@ -98,6 +98,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                 .map(|kind| Step {
                     kind,
                     directory: None,
+                    target_dir: None,
                     when: When::Success,
                     skip_on_draft: false,
                     skip_after_merge_group: None,
@@ -296,7 +297,7 @@ fn install_helper_renders_the_pinned_uses_step_with_the_release_tag_and_every_di
     let expected = format!(
         "\
       - name: Install velnor-ci 1.2.3
-        uses: {SETUP_ACTION}@{SETUP_COMMIT}  # rust-ci-v1.2.3
+        uses: {SETUP_ACTION}@{SETUP_COMMIT}  # tools-v1.2.3
         with:
           version: '1.2.3'
           sha256-linux-x64: {}

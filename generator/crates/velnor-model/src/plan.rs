@@ -98,6 +98,7 @@ pub struct Job {
 pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
+    pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_on_draft: bool,
     pub skip_after_merge_group: Option<PlanFrom>,
@@ -253,6 +254,14 @@ pub enum CargoCommand {
 }
 
 impl CargoCommand {
+    #[must_use]
+    pub fn builds(&self) -> bool {
+        !matches!(
+            self,
+            Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
