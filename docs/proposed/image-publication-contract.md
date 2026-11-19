@@ -1,6 +1,11 @@
 # Container image publication contract (`[[images]]`)
 
-**Status:** Proposed. Source: the ChainArgos split design, section 4.5. The
+**Status:** Obsolete. Image selection and the `[[images]]` configuration were
+deleted with the old engine (#1747) and the tracking issue #1209 was closed as
+obsolete; nothing in the current tree reads `[[images]]`. The text below is kept
+as history only.
+
+**Former status:** Proposed. Source: the ChainArgos split design, section 4.5. The
 schema and the Dockerfile analysis are implemented in
 `velnor-actions-contract` (`config::images`, `config::dockerfile`); the sections
 marked **Planned** are delivered by later increments of the same lane.

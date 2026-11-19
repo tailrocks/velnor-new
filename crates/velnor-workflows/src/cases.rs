@@ -104,6 +104,7 @@ fn pair(
         helper: false,
         runner: Some(runner.to_owned()),
         hosted: Some(hosted),
+        runner_labels: BTreeMap::new(),
         environment: None,
         timeout_minutes: case.timeout_minutes,
         concurrency: None,

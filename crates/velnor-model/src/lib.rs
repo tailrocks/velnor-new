@@ -16,6 +16,7 @@ mod repo_config;
 mod selection;
 mod steps;
 mod test_group;
+mod token_permission;
 mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
@@ -46,11 +47,11 @@ pub use plan::{
 };
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
-    PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget,
-    Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest,
-    Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, MbxRemote, MbxStore, MemberDependency,
+    OnMain, PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts,
+    RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot,
+    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
+    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
@@ -58,9 +59,10 @@ pub use selection::{
     WORKFLOWS_CONFIG_PATH,
 };
 pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
+pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BaseExpiry, GroupFilter, HelperCommand, InputsCli, StepKind, ToolsLocalVerb,
-    TrimFamily,
+    ToolsTelemetry, TrimFamily,
 };

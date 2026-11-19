@@ -150,7 +150,7 @@ impl Reason {
             Self::UntrackedManifest => f.write_str(
                 "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
             ),
-            Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
+            Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package` or `path<TAB>package<TAB>manifest`"),
             Self::UnknownLockedPackage(package) => write!(
                 f,
                 "lists {package}, which is not a package of this repository; run `velnor-ci inputs audit --write` after a build of all targets"

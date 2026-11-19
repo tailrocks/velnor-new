@@ -40,7 +40,14 @@ pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
         items.push(entry("if", Yaml::Expr(condition.clone())));
     }
     if let Some(environment) = &job.environment {
-        items.push(entry("environment", text(environment)));
+        let value = text(environment);
+        items.push(entry(
+            "environment",
+            match &job.environment_note {
+                Some(note) => Yaml::Noted(note.clone(), Box::new(value)),
+                None => value,
+            },
+        ));
     }
     if job.no_permissions {
         items.push(entry("permissions", Yaml::Map(Vec::new())));
@@ -209,13 +216,17 @@ fn launches_helper(step: &RenderedStep) -> bool {
 }
 
 fn runs_on(job: &RenderedJob) -> Yaml {
-    match &job.fork_runner {
-        Some(fork) => Yaml::Expr(format!(
-            "${{{{ {SAME_REPOSITORY} && {} || {} }}}}",
-            literal(&job.runs_on),
+    let primary = match &job.runs_on_axis {
+        Some(axis) => format!("matrix.{axis}"),
+        None => literal(&job.runs_on),
+    };
+    match (&job.fork_runner, &job.runs_on_axis) {
+        (Some(fork), _) => Yaml::Expr(format!(
+            "${{{{ {SAME_REPOSITORY} && {primary} || {} }}}}",
             literal(fork)
         )),
-        None => text(&job.runs_on),
+        (None, Some(_)) => Yaml::Expr(format!("${{{{ {primary} }}}}")),
+        (None, None) => text(&job.runs_on),
     }
 }
 

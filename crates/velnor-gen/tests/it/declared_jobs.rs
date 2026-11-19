@@ -219,6 +219,52 @@ fn permissions_are_empty_unless_a_job_names_them() -> TestResult {
 }
 
 #[test]
+fn a_job_can_declare_every_documented_token_scope() -> TestResult {
+    let scoped = rendered(&job_with(
+        "permissions = { models = \"read\", discussions = \"write\", code-quality = \"write\", copilot-requests = \"write\", vulnerability-alerts = \"read\", contents = \"none\" }\n",
+    ))?;
+    for (scope, access) in [
+        ("models", "read"),
+        ("discussions", "write"),
+        ("code-quality", "write"),
+        ("copilot-requests", "write"),
+        ("vulnerability-alerts", "read"),
+        ("contents", "none"),
+    ] {
+        assert_eq!(
+            job(&scoped, "check")?
+                .at(&["permissions", scope])
+                .and_then(Node::text),
+            Some(access),
+            "{scope}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_job_refuses_an_unknown_scope_and_an_access_the_scope_does_not_take() -> TestResult {
+    for (scope, access) in [
+        ("made-up", "read"),
+        ("contents", "admin"),
+        ("id-token", "read"),
+        ("models", "write"),
+        ("copilot-requests", "read"),
+        ("vulnerability-alerts", "write"),
+    ] {
+        let message = refusal(&job_with(&format!(
+            "permissions = {{ {scope} = \"{access}\" }}\n"
+        )))?;
+        assert!(
+            message.contains("permission"),
+            "{scope} {access}: {message}"
+        );
+        assert!(message.contains(scope), "{scope} {access}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
 fn timeout_minutes_default_to_thirty_and_stay_in_range() -> TestResult {
     let tree = rendered(&workflow("", "", JOB))?;
     assert_eq!(

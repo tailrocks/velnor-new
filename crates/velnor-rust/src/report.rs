@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::plan::{job, step};
 use velnor_model::{
     Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
-    PushAfterMergeGroup, RepoFacts, Step, StepKind, When,
+    PushAfterMergeGroup, RepoFacts, Step, StepKind, ToolsLocalVerb, ToolsTelemetry, When,
 };
 
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job {
@@ -75,11 +75,21 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
             _ => None,
         })
         .collect();
+    let has = |verb| {
+        job.steps
+            .iter()
+            .any(|step| step.kind == StepKind::ToolsLocal(verb))
+    };
+    let node_tools = ToolsTelemetry {
+        restore: has(ToolsLocalVerb::RecordRestore),
+        save: has(ToolsLocalVerb::RecordSave),
+    };
     job.steps.extend(
         [
             StepKind::ReportCaches {
                 caches,
                 nextest_artifacts,
+                node_tools,
             },
             StepKind::UploadMetrics,
         ]
@@ -115,6 +125,7 @@ pub(crate) fn finish(
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
         crate::merge_group_skip::ask(jobs, single, &facts.config.required_check);
     }
+    crate::merge_queue_check::ask(facts, jobs, single);
     let trim = crate::base_cache::trim_job(facts, jobs);
     let cache = attach(facts, jobs, trim.as_ref());
     if facts.config.cache_check_blocks {

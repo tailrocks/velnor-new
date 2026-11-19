@@ -11,6 +11,7 @@ mod guards;
 mod identity;
 mod inventory;
 mod links;
+mod lock_identity;
 mod managed_target;
 mod migration;
 mod optional;

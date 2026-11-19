@@ -5,11 +5,12 @@ use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{RepoPath, RepoView};
 
 use crate::facts::TestResult;
-use crate::pipeline::view;
+use crate::pipeline::{pin_helper, view};
 
 fn repo(runner: &str, macos_digest: bool) -> Result<RepoView, Box<dyn std::error::Error>> {
-    let config = format!("runner = \"{runner}\"\n");
+    let config = format!("runner = \"{runner}\"\nhosted = false\n");
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
+    pin_helper(&mut repo, "0.1.99")?;
     if !macos_digest {
         let lock = RepoPath::new(".velnor/rust-ci.lock")?;
         let text = String::from_utf8(repo.files.remove(&lock).ok_or("no helper lock")?)?;
