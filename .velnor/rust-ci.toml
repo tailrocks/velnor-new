@@ -8,6 +8,28 @@ docs = "post_merge"
 check_alone = "post_merge"
 pr_ci = "label"
 
+# Speed budget, provisional. Each limit is the median of the successful first
+# attempts of one selection plus a quarter, rounded up (the median of an even
+# count is the one `velnor-ci bench budget` computes). The samples are n = 4
+# per selection, which is small: tune these after more green main runs (#622).
+#
+# affected: main pushes whose plan wrote `some` (runner-cli, -host,
+#   -qualification and what depends on them). Runs 44612708889, 44613709317,
+#   44617267994, 44617883559: wall 625, 648, 666, 1023 s (median 657 s, limit
+#   822 s), runner 624, 639, 659, 908 s (median 649 s, limit 812 s).
+# none: main pushes whose plan wrote `none` for every root. Runs 44538849616,
+#   44545511926, 44549200059, 44552985844: wall 56, 79, 95, 181 s (median
+#   87 s, limit 109 s), runner 45, 46, 50, 53 s (median 48 s, limit 60 s).
+# full: no main push has selected everything yet, so it has no table and
+#   takes the plain keys, which are off.
+[budget.affected]
+main_wall_seconds = 822
+runner_seconds = 812
+
+[budget.none]
+main_wall_seconds = 109
+runner_seconds = 60
+
 [crates_mirror]
 runner = "ubuntu-26.04-scale-set"
 registry = "sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/"
