@@ -1,9 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod asset_name;
+mod bundle;
 mod cargo_allowlist;
+mod check;
 mod collisions;
 mod error;
+mod error_binary;
 mod error_cargo;
 mod error_family;
 mod family;
@@ -24,6 +28,9 @@ mod timeout;
 mod velnor_config;
 mod versions;
 
+pub use asset_name::{asset_name_uses_version, expand_asset_name};
+pub use bundle::ExtraBin;
+pub use check::{CheckArtifact, CheckPlan, CheckProblem, CheckStage};
 pub use error::ReleaseError;
 pub use error_family::FamilyError;
 pub use family::FamilyPlan;
