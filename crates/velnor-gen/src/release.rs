@@ -44,6 +44,15 @@ pub(crate) fn release_workflow(
             helper.version().clone(),
         ));
     }
+    let grouped = plan
+        .roots
+        .iter()
+        .any(|root| !root.version_groups.is_empty());
+    if grouped && !helper.version().at_least((0, 1, 97)) {
+        return Err(GenerateError::VersionGroupsHelperTooOld(
+            helper.version().clone(),
+        ));
+    }
     for root in &plan.roots {
         let manifest = if root.root == "." {
             "Cargo.toml".to_owned()
