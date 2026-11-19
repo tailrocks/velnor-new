@@ -74,3 +74,18 @@ fn each_nested_root_step_builds_with_its_own_target_directory() {
         );
     }
 }
+
+#[test]
+fn a_nested_root_selected_by_manifest_path_builds_from_the_repository_root() {
+    let repo = nested_roots();
+    let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
+        .current_dir(repo.root())
+        .env("CARGO_TARGET_DIR", repo.root().join("lab/target"))
+        .args(["inputs", "build", "--"])
+        .arg(repo.root().join("driver/cargo"))
+        .args(["build", "--manifest-path", "lab/Cargo.toml"])
+        .output()
+        .unwrap_or_else(|error| unreachable!("{error}"));
+    let text = String::from_utf8_lossy(&built.stderr);
+    assert!(built.status.success(), "{text}");
+}
