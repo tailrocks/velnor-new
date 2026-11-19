@@ -144,25 +144,16 @@ fn ensure_snapshot_fits(snapshot: &ConnectionSetupSnapshot) -> Result<(), HostEr
 
 fn setup_response(snapshot: ConnectionSetupSnapshot) -> Response {
     Response {
-        value: None,
-        doctor_probe: None,
-        readiness: None,
-        session_observation: None,
         setup_receipt: Some(SetupReceiptReply {
             status: SetupReceiptStatus::Ready,
             setup: Some(snapshot),
         }),
-        connection_census: None,
+        ..Response::default()
     }
 }
 
 fn census_response(snapshot: ConnectionSetupSnapshot) -> Response {
     Response {
-        value: None,
-        doctor_probe: None,
-        readiness: None,
-        session_observation: None,
-        setup_receipt: None,
         connection_census: Some(ConnectionCensusReply {
             setup_status: SetupReceiptStatus::Ready,
             setup: Some(snapshot),
@@ -183,6 +174,7 @@ fn census_response(snapshot: ConnectionSetupSnapshot) -> Response {
                 observed_at_unix_ms: Some(u64::MAX),
             },
         }),
+        ..Response::default()
     }
 }
 

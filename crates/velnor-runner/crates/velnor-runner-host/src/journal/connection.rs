@@ -20,6 +20,7 @@ mod intents;
 mod launch;
 pub(in crate::journal) mod reservation;
 mod runtime;
+mod scale_set_delete;
 mod scope;
 mod session;
 pub(super) mod storage;
@@ -53,6 +54,10 @@ pub(crate) use reservation::{
 pub(crate) use reservation::{
     UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
     UnboundRetirementPhase,
+};
+pub(crate) use scale_set_delete::{
+    ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode, ScaleSetDeleteRecord,
+    ScaleSetDeleteTarget, ScaleSetDeleted,
 };
 
 pub(in crate::journal) async fn validate_resources_bound(

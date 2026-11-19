@@ -55,6 +55,7 @@ mod remote;
 mod request_ledger;
 mod request_reservations;
 mod scale_set_create;
+mod scale_set_delete;
 mod session;
 mod session_refresh;
 mod source_authorization;
@@ -72,7 +73,7 @@ mod tamper_tests;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 57;
+pub(super) const JOURNAL_VERSION: i64 = 58;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -135,7 +136,8 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v53(conn).await
+    validate_persisted_schema_v53(conn).await?;
+    scale_set_delete::validate(conn).await
 }
 
 pub(in crate::journal::schema) async fn validate_persisted_schema_v52(

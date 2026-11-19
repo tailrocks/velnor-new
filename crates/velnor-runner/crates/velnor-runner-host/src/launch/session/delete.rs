@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_runner_github::{QueueSession, Transport, delete_session};
+use velnor_runner_github::{QueueSession, SessionClose, Transport, delete_session};
 
 use crate::journal::{ConnectionJournal, HeaderAllocation};
 use crate::listen::{Link, Secret};
@@ -47,14 +47,19 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
         return SessionDeleteOutcome::NotReady;
     };
 
-    if delete_session(
+    let closed = match delete_session(
         transport,
         allocation.scale_set_id(),
         allocation.session_id(),
         admin_token,
-    )
-    .is_err()
-    {
+    ) {
+        Ok(SessionClose::Closed) => true,
+        Ok(SessionClose::Gone) => {
+            created_set_deleted_by_us(scoped, allocation.scale_set_id()).await
+        }
+        Err(_) => false,
+    };
+    if !closed {
         let _ignored = scoped
             .mark_session_delete_uncertain(session_intent_id, attempt)
             .await;
@@ -78,3 +83,14 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
         Err(_) => SessionDeleteOutcome::Held,
     }
 }
+
+async fn created_set_deleted_by_us(scoped: &ConnectionJournal, scale_set_id: i64) -> bool {
+    scoped
+        .scale_set_recorded_deleted(scale_set_id)
+        .await
+        .unwrap_or(false)
+}
+
+#[cfg(test)]
+#[path = "delete/tests.rs"]
+mod tests;

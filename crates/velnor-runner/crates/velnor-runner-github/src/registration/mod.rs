@@ -18,8 +18,9 @@ pub use runners::{
     remove_runner,
 };
 pub use scale_set::{
-    ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetFound, create_runner_scale_set,
-    get_runner_scale_set, get_runner_scale_set_by_id,
+    ScaleSetById, ScaleSetByName, ScaleSetCreate, ScaleSetDelete, ScaleSetDeleteStatus,
+    ScaleSetFound, ScaleSetObserved, create_runner_scale_set, delete_runner_scale_set,
+    get_runner_scale_set, get_runner_scale_set_by_id, observe_runner_scale_set_by_id,
 };
 pub use token::{
     RegistrationScope, RegistrationToken, RegistrationTokenCall,
