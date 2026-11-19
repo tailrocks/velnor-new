@@ -83,6 +83,7 @@ struct RawConfig {
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
     #[serde(default)]
     lint: Vec<crate::config_lint::RawLint>,
+    #[serde(default)]
     test_groups: Vec<crate::config_test_groups::RawTestGroup>,
 }
 
