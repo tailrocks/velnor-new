@@ -7,14 +7,12 @@
 use std::process::ExitCode;
 
 fn main() -> ExitCode {
-    match velnor_freshness::request::gate_root() {
-        Some(root) => velnor_freshness::request::run(&root, "velnor-freshness"),
-        None => {
-            eprintln!(
-                "velnor-freshness: set VELNOR_REPO_POLICY_ACTION and VELNOR_REPO_POLICY_ROOT \
-                 (an existing directory)"
-            );
-            ExitCode::from(2)
-        }
-    }
+    let Some(root) = velnor_freshness::request::gate_root() else {
+        eprintln!(
+            "velnor-freshness: set VELNOR_REPO_POLICY_ACTION and VELNOR_REPO_POLICY_ROOT \
+             (an existing directory)"
+        );
+        return ExitCode::from(2);
+    };
+    velnor_freshness::request::run(&root, "velnor-freshness")
 }
