@@ -215,6 +215,14 @@ These keys choose which jobs a run starts. The defaults are in the table in [`do
 - `required_check` is the name of the one required check, `"Required"` by default. The name must not be blank or contain a control character.
 - `default_branch` is `"main"` by default. It must equal the repository's default branch, or the run fails.
 
+The shapes, and the jobs each one starts:
+
+| `shape` | Jobs | Chosen when |
+|---|---|---|
+| `one-job` | `rust` | `auto` and `.velnor/rust-ci-timings.json` has no entry for the root, or the shorter of its lint build and test build takes 5 s or less |
+| `lint-test` | `rust-lint`, `rust-test` | `auto` and the shorter build takes more than 5 s |
+| `groups` | `rust-lint`, `rust-test` (builds the tests once), `rust-test-default`, `rust-test-<name>` | `shape = "groups"`, or the root has a `[[test_groups]]` entry |
+
 ## Files and packages
 
 - `inputs` is a list of `[[inputs]]` entries. Each has a `glob`, a path glob, and `packages`, a non-empty list of package names. The files the glob matches belong to those packages. For a file that no package owns, `velnor-ci plan --explain` says what to add.
