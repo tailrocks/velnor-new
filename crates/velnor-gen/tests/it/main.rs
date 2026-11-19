@@ -118,6 +118,7 @@ mod lock;
 mod lock_affected;
 mod lock_archive;
 mod lock_consistency;
+mod lock_scope;
 mod macos_helper_lock;
 mod main_and_scheduled;
 mod mbx_remote;

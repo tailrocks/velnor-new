@@ -75,6 +75,7 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    Prepare(PrepareLocks),
     InputsAuditRoot(Option<RepoPath>),
     InputsSave {
         target: RepoPath,
@@ -171,11 +172,16 @@ pub enum BaseExpiry {
     OnDefaultBranch,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrepareLocks {
+    All,
+    Only(Vec<RootSlug>),
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HelperCommand {
     Plan,
     PlanFull,
-    Prepare,
     CheckMetadata,
     Restored(BaseExpiry),
     InputsAudit,

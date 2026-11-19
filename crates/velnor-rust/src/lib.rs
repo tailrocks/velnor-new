@@ -51,6 +51,7 @@ mod lint_tools;
 mod lock;
 mod lock_affected;
 mod lock_key;
+mod lock_scope;
 mod manifest_diff;
 mod members;
 mod merge_group_skip;

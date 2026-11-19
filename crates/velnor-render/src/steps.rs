@@ -274,6 +274,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::Prepare(locks) => crate::helper_steps::prepare_step(locks),
         StepKind::InputsAuditRoot(directory) => {
             crate::helper_steps::audit_root_step(directory.as_ref())
         }
