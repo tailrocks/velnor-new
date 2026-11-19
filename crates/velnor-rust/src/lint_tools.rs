@@ -1,13 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{LintJob, LintKind, RepoView, RunnerLabel, RustCiConfig, ToolPin, ToolPins};
+use velnor_model::{
+    LintJob, LintKind, MisePlatform, RepoView, RunnerLabel, RustCiConfig, ToolPin, ToolPins,
+    ToolRequest,
+};
 
 use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
 use crate::lint_error::LintFault;
 use crate::lint_tasks::{self, Catalog};
-use crate::mise_lock::lock_platform;
 
 pub(crate) const JACTIONLINT: &str = "jactionlint";
 pub(crate) const SHELLCHECK: &str = "shellcheck";
@@ -41,22 +43,16 @@ pub(crate) fn lookup<'a>(tools: &'a ToolPins, name: &str) -> Lookup<'a> {
     }
 }
 
-fn version_applies(pin: &ToolPin, version: &str, platform: Option<&str>) -> bool {
-    let Some(platform) = platform else {
-        return true;
-    };
-    let os = platform.split('-').next().unwrap_or(platform);
-    pin.os_filters
-        .get(version)
-        .is_none_or(|names| names.iter().any(|name| name == os || name == platform))
+fn version_applies(request: &ToolRequest, platform: Option<MisePlatform<'_>>) -> bool {
+    platform.is_none_or(|platform| request.applies_on(platform))
 }
 
-pub(crate) fn applies(pin: &ToolPin, platform: Option<&str>) -> bool {
+pub(crate) fn applies(pin: &ToolPin, platform: Option<MisePlatform<'_>>) -> bool {
     pin.requested.is_empty()
         || pin
             .requested
             .iter()
-            .any(|version| version_applies(pin, version, platform))
+            .any(|request| version_applies(request, platform))
 }
 
 pub(crate) fn usable<'a>(tools: &'a ToolPins, runner: &RunnerLabel, name: &str) -> Option<&'a str> {
@@ -64,7 +60,7 @@ pub(crate) fn usable<'a>(tools: &'a ToolPins, runner: &RunnerLabel, name: &str) 
         Lookup::One(key) => tools
             .tools
             .get(key)
-            .filter(|pin| applies(pin, lock_platform(runner)))
+            .filter(|pin| applies(pin, MisePlatform::runner(runner.as_str())))
             .map(|_| key),
         _ => None,
     }
@@ -85,12 +81,16 @@ fn covers(locked: &str, requested: &str) -> bool {
             .is_some_and(|rest| rest.starts_with(['.', '-', '+']))
 }
 
-fn stale_version<'a>(pin: &'a ToolPin, platform: Option<&str>) -> Option<&'a str> {
+fn stale_version<'a>(pin: &'a ToolPin, platform: Option<MisePlatform<'_>>) -> Option<&'a str> {
     pin.requested
         .iter()
-        .filter(|version| numeric(version) && version_applies(pin, version, platform))
-        .find(|version| !pin.locked.iter().any(|locked| covers(locked, version)))
-        .map(String::as_str)
+        .filter(|request| numeric(&request.version) && version_applies(request, platform))
+        .find(|request| {
+            !pin.locked
+                .iter()
+                .any(|locked| covers(&locked.version, &request.version))
+        })
+        .map(|request| request.version.as_str())
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -101,7 +101,7 @@ enum Need {
 
 fn verify(
     tools: &ToolPins,
-    platform: Option<&str>,
+    platform: Option<MisePlatform<'_>>,
     name: &str,
     need: Need,
 ) -> Result<(), LintFault> {
@@ -123,7 +123,7 @@ fn verify(
         return match need {
             Need::Required => Err(LintFault::ToolFiltered {
                 tool: name.to_owned(),
-                platform: platform.unwrap_or_default().to_owned(),
+                platform: platform.map(MisePlatform::lock_key).unwrap_or_default(),
             }),
             Need::Optional => Ok(()),
         };
@@ -165,7 +165,7 @@ fn check_job(
     job: &LintJob,
     view: &RepoView,
     tools: &ToolPins,
-    platform: Option<&str>,
+    platform: Option<MisePlatform<'_>>,
     catalog: &Catalog,
 ) -> Result<(), LintFault> {
     let check = |name: &str, need| verify(tools, platform, name, need);
@@ -199,7 +199,7 @@ pub(crate) fn check(
     config: &RustCiConfig,
     tools: &ToolPins,
 ) -> Result<(), DetectError> {
-    let platform = lock_platform(&config.runner);
+    let platform = MisePlatform::runner(config.runner.as_str());
     let catalog = if config
         .lint
         .iter()

@@ -178,6 +178,32 @@ fn a_setting_that_makes_a_check_do_less_is_accepted_and_named() -> TestResult {
 }
 
 #[test]
+fn deferring_a_check_to_after_the_merge_is_named() -> TestResult {
+    for (key, effect) in [
+        (
+            "docs",
+            "skips Documentation on pull requests and in the merge queue, so a rustdoc failure is found only after the merge",
+        ),
+        (
+            "check_alone",
+            "skips the per-crate alone checks on pull requests and in the merge queue, so a missing feature declaration is found only after the merge",
+        ),
+    ] {
+        assert_eq!(
+            named(&[(".velnor/rust-ci.toml", &format!("{key} = \"post_merge\"\n"))])?,
+            [format!(
+                ".velnor/rust-ci.toml: {key} = \"post_merge\": {effect}"
+            )]
+        );
+        assert_eq!(
+            named(&[(".velnor/rust-ci.toml", &format!("{key} = \"always\"\n"))])?,
+            Vec::<String>::new()
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn ordinary_settings_name_nothing() -> TestResult {
     let none = named(&[
         (

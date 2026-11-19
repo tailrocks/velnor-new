@@ -46,7 +46,7 @@ impl ReleaseError {
             ),
             Self::InvalidAssetName { package, template } => write!(
                 f,
-                ".velnor/release.toml: binary {package} has asset_name {template:?}, which must use only letters, digits, '.', '_', '-' and the placeholders {{{{ bin }}}}, {{{{ platform }}}}, {{{{ target }}}} and {{{{ version }}}}, must name {{{{ platform }}}} or {{{{ target }}}}, and may use {{{{ version }}}} only when the tag name ends in the version"
+                ".velnor/release.toml: binary {package} has asset_name {template:?}, which must use only letters, digits, '.', '_', '-' and the placeholders {{{{ bin }}}}, {{{{ platform }}}}, {{{{ target }}}} and {{{{ version }}}}, must name {{{{ platform }}}} or {{{{ target }}}}, may use {{{{ version }}}} only when the tag name ends in the version, and must expand, with a version of up to 32 bytes and the longest sidecar suffix, to a file name of at most 255 bytes"
             ),
             _ => Ok(()),
         }

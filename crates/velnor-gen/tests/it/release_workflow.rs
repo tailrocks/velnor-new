@@ -1,166 +1,108 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use velnor_render::{RenderedJob, RenderedStep, RenderedWorkflow, check_rules};
+use serde_json::{Map, Value};
 
-type TestResult = Result<(), Box<dyn Error>>;
+use crate::declared_fixture::{TestResult, rendered_text};
+use crate::yaml_tree::document;
 
-const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
+const WORKFLOW: &str = "release-rust-ci-tools";
+const DRIFT: &str = "tag-ruleset-drift";
 const WRITER: &str = "release";
-const TAG_PUSH: &str = "    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))";
-fn read() -> Result<String, Box<dyn Error>> {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../..")
-        .join(WORKFLOW);
-    Ok(fs::read_to_string(path)?)
+const BUILDS: [&str; 2] = ["build-linux-x64", "build-linux-arm64"];
+const TAG_PUSH: &str = "${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v')) }}";
+
+fn read(path: &str) -> Result<String, Box<dyn Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    Ok(fs::read_to_string(root.join(path))?)
 }
 
-fn jobs(text: &str) -> Vec<(String, Vec<&str>)> {
-    let mut jobs: Vec<(String, Vec<&str>)> = Vec::new();
-    let mut inside = false;
-    for line in text.lines() {
-        if line == "jobs:" {
-            inside = true;
-        } else if !inside {
-        } else if let Some(id) = line
-            .strip_prefix("  ")
-            .and_then(|rest| rest.strip_suffix(':'))
-            .filter(|rest| !rest.starts_with(' '))
-        {
-            jobs.push((id.to_owned(), Vec::new()));
-        } else if let Some((_, lines)) = jobs.last_mut() {
-            lines.push(line);
-        }
-    }
-    jobs
+fn committed(file: &str) -> Result<Value, Box<dyn Error>> {
+    Ok(document(&read(&format!(".github/workflows/{file}.yml"))?)?)
 }
 
-fn values<'a>(lines: &[&'a str], key: &str) -> Vec<&'a str> {
-    let prefix = format!("{key}: ");
-    lines
-        .iter()
-        .filter_map(|line| {
-            let line = line.trim_start();
-            line.strip_prefix("- ")
-                .unwrap_or(line)
-                .strip_prefix(&prefix)
-        })
+fn jobs(workflow: &Value) -> Result<&Map<String, Value>, Box<dyn Error>> {
+    Ok(workflow["jobs"].as_object().ok_or("no jobs")?)
+}
+
+fn runs(job: &Value) -> Vec<&str> {
+    job["steps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|step| step["run"].as_str())
         .collect()
 }
 
-fn release_jobs(text: &str) -> BTreeMap<String, Vec<&str>> {
-    let jobs = jobs(text);
-    let mut ids: Vec<&str> = jobs.iter().map(|(id, _)| id.as_str()).collect();
-    ids.sort_unstable();
-    assert_eq!(
-        ids,
-        ["build", "checksums", "gate", "release", "tag-ruleset-drift"]
-    );
-    jobs.into_iter()
-        .filter(|(id, _)| id != "tag-ruleset-drift")
+fn uses(job: &Value) -> Vec<&str> {
+    job["steps"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|step| step["uses"].as_str())
         .collect()
 }
 
-fn steps(lines: &[&str]) -> Vec<RenderedStep> {
-    let uses = values(lines, "uses")
-        .into_iter()
-        .map(|action| RenderedStep {
-            uses: Some(action.to_owned()),
-            ..RenderedStep::default()
-        });
-    let runs = values(lines, "run")
-        .into_iter()
-        .map(|command| RenderedStep {
-            run: Some(command.to_owned()),
-            ..RenderedStep::default()
-        });
-    uses.chain(runs).collect()
+fn position(runs: &[&str], prefix: &str) -> Result<usize, Box<dyn Error>> {
+    runs.iter()
+        .position(|run| run.starts_with(prefix))
+        .ok_or_else(|| format!("no run starts with {prefix}").into())
 }
 
 #[test]
-fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
-    let text = read()?;
-    let jobs = release_jobs(&text);
-    let rendered = RenderedWorkflow {
-        jobs: jobs
-            .iter()
-            .map(|(id, lines)| RenderedJob {
-                id: id.clone(),
-                runs_on: String::new(),
-                timeout_minutes: 1,
-                steps: steps(lines)
-                    .into_iter()
-                    .map(|step| match step.run.as_deref() {
-                        Some("|") => RenderedStep {
-                            run: Some("true".to_owned()),
-                            ..step
-                        },
-                        _ => step,
-                    })
-                    .collect(),
-                ..RenderedJob::default()
-            })
-            .collect(),
-    };
-    assert!(rendered.jobs.iter().all(|job| !job.steps.is_empty()));
-    assert_eq!(check_rules(&rendered), Ok(()));
-    for (_, lines) in jobs.iter().filter(|(id, _)| *id != "gate") {
-        assert!(
-            values(lines, "run")
-                .iter()
-                .all(|run| !run.starts_with(['|', '>']))
+fn both_committed_workflows_are_what_the_repository_config_renders() -> TestResult {
+    let config = read(".velnor/workflows.toml")?;
+    for file in [WORKFLOW, DRIFT] {
+        assert_eq!(
+            read(&format!(".github/workflows/{file}.yml"))?,
+            rendered_text(&config, file)?,
+            "{file}"
         );
     }
     Ok(())
 }
 
 #[test]
-fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> TestResult {
-    let text = read()?;
-    let jobs = release_jobs(&text);
-    let gate = &jobs["gate"];
-    let header = format!(
-        "    name: Gate
-{TAG_PUSH}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      checks: read
-    steps:
-      - name: Check that the tagged commit is on the default branch
-        env:
-          GH_TOKEN: ${{{{ github.token }}}}
-        run: |
-"
+fn the_release_dag_gates_the_tag_on_default_branch_ancestry_before_building() -> TestResult {
+    let workflow = committed(WORKFLOW)?;
+    let jobs = jobs(&workflow)?;
+    let mut ids: Vec<&str> = jobs.keys().map(String::as_str).collect();
+    ids.sort_unstable();
+    assert_eq!(
+        ids,
+        [
+            "build-linux-arm64",
+            "build-linux-x64",
+            "checksums",
+            "gate",
+            WRITER
+        ]
     );
-    let text = gate.join("\n");
-    assert!(text.starts_with(&header), "{text}");
-    assert!(!text.contains("uses:"), "{text}");
-    assert!(text.contains("compare/$default_branch...$GITHUB_SHA"));
-    assert_eq!(values(gate, "needs"), [] as [&str; 0]);
-    for (id, dependency) in [
-        ("build", "gate"),
-        ("checksums", "build"),
-        (WRITER, "checksums"),
-    ] {
-        assert_eq!(values(&jobs[id], "needs"), [dependency], "{id}");
+    let gate = &jobs["gate"];
+    assert_eq!(gate["if"], TAG_PUSH);
+    assert!(gate.get("needs").is_none());
+    assert_eq!(uses(gate), [] as [&str; 0]);
+    let compare = runs(gate)
+        .into_iter()
+        .find(|run| run.contains("/compare/$DEFAULT_BRANCH...$GITHUB_SHA"))
+        .ok_or("the gate never compares the tag with the default branch")?;
+    assert!(compare.ends_with(
+        "--jq '.status == \"behind\" or .status == \"identical\" or error(\"the tagged commit is not on the default branch\")'"
+    ));
+    for build in BUILDS {
+        assert_eq!(jobs[build]["needs"], serde_json::json!(["gate"]), "{build}");
     }
-    for (id, lines) in &jobs {
-        for line in lines {
-            let key = line.trim_start().trim_start_matches("- ");
-            assert!(
-                !key.starts_with("if:")
-                    || (id == "gate" && *line == TAG_PUSH)
-                    || (line.starts_with("        if:") && key.contains("runner.os")),
-                "{id}: {line}"
-            );
-            assert!(!key.starts_with("continue-on-error:"), "{id}: {line}");
+    assert_eq!(jobs["checksums"]["needs"], serde_json::json!(BUILDS));
+    assert_eq!(jobs[WRITER]["needs"], serde_json::json!(["checksums"]));
+    for (id, job) in jobs {
+        assert_eq!(job.get("if").is_some(), id == "gate", "{id}");
+        for step in job["steps"].as_array().ok_or("no steps")? {
+            assert!(step.get("if").is_none(), "{id}");
+            assert!(step.get("continue-on-error").is_none(), "{id}");
         }
     }
     Ok(())
@@ -169,72 +111,87 @@ fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> Test
 #[test]
 fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_publishes()
 -> TestResult {
-    let text = read()?;
-    assert!(text.lines().any(|line| line == "permissions: {}"));
-    let jobs = jobs(&text);
-    for (id, lines) in &jobs {
-        let writes = values(lines, "contents")
-            .iter()
-            .filter(|access| **access == "write")
-            .count();
-        assert_eq!(writes, usize::from(id == WRITER), "{id}");
+    let workflow = committed(WORKFLOW)?;
+    assert_eq!(workflow["permissions"], serde_json::json!({}));
+    let jobs = jobs(&workflow)?;
+    for (id, job) in jobs {
+        let permissions = job["permissions"].as_object().ok_or("no permissions")?;
         assert_eq!(
-            values(lines, "uses")
-                .iter()
-                .any(|action| action.starts_with("actions/checkout@")),
-            id == "build",
+            permissions
+                .values()
+                .filter(|access| *access == "write")
+                .count(),
+            usize::from(id == WRITER),
             "{id}"
         );
         assert_eq!(
-            values(lines, "run")
+            uses(job)
                 .iter()
-                .any(|run| run.starts_with("gh ")),
+                .any(|action| action.starts_with("actions/checkout@")),
+            BUILDS.contains(&id.as_str()),
+            "{id}"
+        );
+        assert_eq!(
+            runs(job).iter().any(|run| run.starts_with("gh release")),
             id == WRITER,
             "{id}"
         );
     }
-    let release_jobs = release_jobs(&text);
-    let tag_checks: Vec<&str> = values(&release_jobs["build"], "run")
-        .into_iter()
-        .filter(|run| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
-        .collect();
-    assert_eq!(
-        tag_checks,
-        [
-            "stage/velnor-ci check-tag \"$GITHUB_REF_NAME\"",
-            "stage/velnor-gen check-tag \"$GITHUB_REF_NAME\""
-        ]
-    );
-    let writer = &release_jobs[WRITER];
-    let runs = values(writer, "run");
-    let verify = runs
-        .iter()
-        .position(|run| run.starts_with("sha256sum --check"))
-        .ok_or("the writing job never verifies SHA256SUMS")?;
-    let publish = runs
-        .iter()
-        .position(|run| run.starts_with("gh release create"))
-        .ok_or("the writing job never creates the release")?;
+    for build in BUILDS {
+        let tag_checks: Vec<&str> = runs(&jobs[build])
+            .into_iter()
+            .filter(|run| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
+            .collect();
+        assert_eq!(
+            tag_checks,
+            [
+                "env -C stage ./velnor-ci check-tag \"$GITHUB_REF_NAME\"",
+                "env -C stage ./velnor-gen check-tag \"$GITHUB_REF_NAME\""
+            ]
+        );
+    }
+    let writer = runs(&jobs[WRITER]);
+    let verify = position(&writer, "env -C dist sha256sum --check --strict SHA256SUMS")?;
+    let publish = position(&writer, "gh release create")?;
     assert!(verify < publish);
-    assert!(runs[publish].contains(" --prerelease "));
-    let published = runs[publish].matches(" dist/").count();
-    assert_eq!(published, 7);
-    assert!(runs[publish].contains(" dist/COMMIT "));
-    assert!(
-        !runs
-            .iter()
-            .any(|run| run.contains("dist/COMMIT >") || run.contains("> dist/COMMIT"))
+    assert!(writer[publish].contains(" --prerelease "));
+    assert_eq!(writer[publish].matches(" dist/").count(), 7);
+    assert!(writer[publish].contains(" dist/COMMIT "));
+    let sums = runs(&jobs["checksums"]);
+    let record = position(&sums, "echo \"$GITHUB_SHA\" > dist/COMMIT")?;
+    let written = position(&sums, "env -C dist sha256sum COMMIT ")?;
+    assert!(record < written);
+    assert!(sums[written].ends_with(" > dist/SHA256SUMS"));
+    Ok(())
+}
+
+#[test]
+fn the_ruleset_drift_check_reads_its_admin_token_only_on_dispatch_and_holds_no_scope() -> TestResult
+{
+    let workflow = committed(DRIFT)?;
+    assert_eq!(
+        workflow["on"],
+        serde_json::json!({ "workflow_dispatch": {} })
     );
-    let checksum_runs = values(&release_jobs["checksums"], "run");
-    let record = checksum_runs
-        .iter()
-        .position(|run| *run == "echo \"$GITHUB_SHA\" > dist/COMMIT")
-        .ok_or("the checksums job never records the commit of the release")?;
-    let sums = checksum_runs
-        .iter()
-        .position(|run| run.starts_with("sha256sum ") && run.ends_with("> SHA256SUMS"))
-        .ok_or("the checksums job never writes SHA256SUMS")?;
-    assert!(record < sums);
-    assert!(checksum_runs[sums].contains(" COMMIT "));
+    assert_eq!(workflow["permissions"], serde_json::json!({}));
+    let jobs = jobs(&workflow)?;
+    assert_eq!(jobs.keys().collect::<Vec<_>>(), [DRIFT]);
+    let job = &jobs[DRIFT];
+    assert_eq!(job["permissions"], serde_json::json!({}));
+    let [step] = job["steps"].as_array().ok_or("no steps")?.as_slice() else {
+        return Err("the drift job has more than one step".into());
+    };
+    assert_eq!(
+        step["env"]["TAG_RULESET_ADMIN_READ_TOKEN"],
+        "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}"
+    );
+    assert!(step["with"].get("github-token").is_none());
+    let script = step["with"]["script"].as_str().ok_or("no script")?;
+    assert!(script.contains("const admin = getOctokit(process.env.TAG_RULESET_ADMIN_READ_TOKEN);"));
+    assert_eq!(script.matches("await admin.").count(), 2);
+    assert!(!script.contains("await github."));
+    for name in ["protect-tags", "release-tags", "refs/tags/tools-v*"] {
+        assert!(script.contains(name), "{name}");
+    }
     Ok(())
 }

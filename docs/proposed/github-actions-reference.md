@@ -751,6 +751,29 @@ The [Rules API](https://docs.github.com/en/rest/repos/rules) returns the effecti
 
 ## Generated Rust CI workflow events and concurrency
 
+### Literal action inputs
+
+Action inputs can contain repository paths whose bytes resemble Actions expressions.
+The generator represents these paths as JSON strings passed to `fromJSON` inside
+a single-quoted expression string. JSON escapes protect the JSON string, and
+doubled apostrophes protect the expression string.
+The runner's [template reader](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTObjectTemplating/ObjectTemplating/TemplateReader.cs#L493-L540)
+ignores closing expression braces inside quoted strings.
+The [`fromJSON` function](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/FromJson.cs#L11-L21)
+parses the JSON value, and the evaluator creates a
+[string token](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTObjectTemplating/ObjectTemplating/Tokens/TemplateToken.cs#L52-L82).
+The [action runner](https://github.com/actions/runner/blob/v2.338.2/src/Runner.Worker/ActionRunner.cs#L174-L185)
+receives evaluated input strings without a second template evaluation.
+Expression results therefore remain literal input values.
+The runner's [expression parser](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/ExpressionParser.cs#L441-L445)
+enforces the [21,000-character expression limit](https://github.com/actions/runner/blob/v2.338.2/src/Sdk/DTExpressions2/Expressions2/ExpressionConstants.cs#L28-L33).
+
+Large helper path lists use hex-encoded UTF-8 paths in JSON environment values.
+The shell command contains only the fixed environment-variable name.
+The helper decodes the complete specification before changing files.
+
+### Workflow events and concurrency
+
 The runner's [`toJSON` implementation](https://github.com/actions/runner/blob/main/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/ToJson.cs)
 serializes nested mappings with two spaces per level, LF newlines, a space after
 each colon, and commas between entries. The Required gate's environment size

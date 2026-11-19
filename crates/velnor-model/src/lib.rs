@@ -8,6 +8,7 @@ mod cron;
 mod helper;
 mod ids;
 mod lint;
+mod mise;
 mod plan;
 mod repo;
 mod repo_config;
@@ -33,6 +34,7 @@ pub use ids::{
     RunnerLabel, Sha256, TargetName, github_hosted,
 };
 pub use lint::{LintCommand, LintJob, LintKind};
+pub use mise::MisePlatform;
 pub use plan::{
     Access, BUILD_TESTS_STEP, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency, FilterRef,
     Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
@@ -45,8 +47,8 @@ pub use repo::{
     DependencyKind, DocsRun, FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
     PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
     RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget,
-    Target, TargetKind, TestLane, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage,
-    Unread, Weakening, WorkspaceGroup,
+    Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest,
+    Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,
@@ -58,6 +60,6 @@ pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
     BUDGET_JOB, BUDGET_MAIN_WALL, BUDGET_OUTPUTS, BUDGET_PR_WALL, BUDGET_RUNNER, BUDGET_SETUP,
-    BUDGET_STEP, BaseExpiry, GroupFilter, HelperCommand, RUN_RUNNER, RUN_WALL, StepKind,
+    BUDGET_STEP, BaseExpiry, GroupFilter, HelperCommand, InputsCli, RUN_RUNNER, RUN_WALL, StepKind,
     ToolsLocalVerb, TrimFamily,
 };

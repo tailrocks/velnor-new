@@ -13,12 +13,14 @@ use crate::velnor_config::refuse_expressions;
 
 const DEFAULT_CHECK_TIMEOUT_MINUTES: u16 = 30;
 const MAX_TIMEOUT_MINUTES: u16 = 360;
-const SCOPES: [&str; 15] = [
+const SCOPES: [&str; 18] = [
     "actions",
     "artifact-metadata",
     "attestations",
     "checks",
+    "code-quality",
     "contents",
+    "copilot-requests",
     "deployments",
     "id-token",
     "issues",
@@ -29,6 +31,7 @@ const SCOPES: [&str; 15] = [
     "security-events",
     "statuses",
     "discussions",
+    "vulnerability-alerts",
 ];
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
@@ -111,9 +114,20 @@ fn permissions_of(
     let invalid = |problem| ReleaseError::InvalidCheck(name.to_owned(), problem);
     let mut all = declared;
     for (scope, access) in &all {
-        if !SCOPES.contains(&scope.as_str()) || !matches!(access.as_str(), "read" | "write") {
+        if !SCOPES.contains(&scope.as_str()) {
             return Err(invalid(CheckProblem::UnknownPermission(scope.clone())));
         }
+        if !matches!(access.as_str(), "read" | "write" | "none")
+            || (scope == "id-token" && access == "read")
+        {
+            return Err(invalid(CheckProblem::InvalidAccess {
+                scope: scope.clone(),
+                access: access.clone(),
+            }));
+        }
+    }
+    if all.get("id-token").is_some_and(|access| access == "write") {
+        return Err(invalid(CheckProblem::WritesIdToken));
     }
     if all.get("contents").is_some_and(|access| access == "write") {
         return Err(invalid(CheckProblem::WritesContents));
@@ -227,7 +241,9 @@ pub enum CheckProblem {
     UnknownArtifact(String),
     ArtifactsBeforeTag,
     WritesContents,
+    WritesIdToken,
     UnknownPermission(String),
+    InvalidAccess { scope: String, access: String },
     NeedsALaterStage(String),
     Empty(&'static str),
     TimeoutOutOfRange,
@@ -255,6 +271,13 @@ impl fmt::Display for CheckProblem {
             Self::WritesContents => f.write_str(
                 "asks for contents: write, which a job that runs repository code must not hold",
             ),
+            Self::WritesIdToken => f.write_str(
+                "asks for id-token: write, which a job that runs repository code must not hold",
+            ),
+            Self::InvalidAccess { scope, access } => write!(
+                f,
+                "permission {scope}: {access:?} is not valid; use read, write or none (id-token has no read)"
+            ),
             Self::NeedsALaterStage(name) => write!(
                 f,
                 "runs before the tag but needs {name:?}, which runs before publish"
@@ -263,10 +286,9 @@ impl fmt::Display for CheckProblem {
             Self::TimeoutOutOfRange => {
                 write!(f, "timeout_minutes must be from 1 to {MAX_TIMEOUT_MINUTES}")
             }
-            Self::UnknownPermission(scope) => write!(
-                f,
-                "permission {scope:?} is not a GitHub token scope with read or write access"
-            ),
+            Self::UnknownPermission(scope) => {
+                write!(f, "permission {scope:?} is not a GitHub token scope")
+            }
         }
     }
 }
