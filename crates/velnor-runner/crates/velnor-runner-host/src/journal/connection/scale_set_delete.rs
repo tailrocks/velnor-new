@@ -5,9 +5,8 @@ use crate::error::HostError;
 use crate::scale_set::delete::ScaleSetAbsence;
 
 use super::ConnectionJournal;
-use super::storage::{
-    has_ambiguous_legacy_work, has_connection_work, in_transaction, read_transaction,
-};
+use super::session::has_work_besides_bound_session;
+use super::storage::{has_ambiguous_legacy_work, in_transaction, read_transaction};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ScaleSetDeleteState {
@@ -176,7 +175,7 @@ impl ConnectionJournal {
         self.validate_scope(connection).await?;
         let id = self.connection_id.as_str();
         if has_ambiguous_legacy_work(connection).await?
-            || has_connection_work(connection, id).await?
+            || has_work_besides_bound_session(connection, id).await?
         {
             return Ok(ScaleSetDeleteGate::NotDrained);
         }

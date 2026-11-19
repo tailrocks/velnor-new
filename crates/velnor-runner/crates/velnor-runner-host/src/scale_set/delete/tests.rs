@@ -43,6 +43,9 @@ platform = "linux/amd64"
 endpoint = "unix:///docker.sock"
 "#;
 
+#[path = "tests/live_session.rs"]
+mod live_session;
+
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 #[derive(Clone)]
@@ -114,7 +117,7 @@ pub(crate) struct Fixture {
     _dir: tempfile::TempDir,
     pub(crate) journal: Journal,
     pub(crate) binding: RepositoryConnection,
-    scoped: ConnectionJournal,
+    pub(crate) scoped: ConnectionJournal,
 }
 
 pub(crate) async fn fixture(created: bool) -> TestResult<Fixture> {
