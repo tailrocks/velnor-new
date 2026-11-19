@@ -37,6 +37,17 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
+    if facts
+        .config
+        .test_lanes
+        .iter()
+        .any(|lane| lane.filter.is_some())
+        && !release.version().at_least((0, 1, 86))
+    {
+        return Err(GenerateError::LaneGuardHelperTooOld(
+            release.version().clone(),
+        ));
+    }
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),

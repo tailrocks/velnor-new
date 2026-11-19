@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::facts::TestResult;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::workflow;
 
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::)'\n";
 const LANE_STEP: &str = "Test (features: local-mode)";
@@ -11,7 +11,7 @@ const NOTICE: &str = "echo 'skipped: no selected packages'";
 const WORKSPACE: &str = "contains(format(' {0} ', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), ' --workspace ')";
 
 fn lane_steps(config: &str) -> Result<Vec<serde_json::Value>, Box<dyn std::error::Error>> {
-    let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+    let repo = crate::feature_lanes::lane_view("0.1.86", config)?;
     let jobs = crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone();
     let steps: Vec<_> = jobs
         .as_object()
@@ -115,7 +115,7 @@ fn lane_packages_must_be_given_with_a_filter_and_be_packages_of_the_root() -> Te
         (LANE.replace("'package-0'", "'elsewhere'"), "elsewhere"),
         (LANE.replace("'package-0'", "'package-1'"), "package-1"),
     ] {
-        let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+        let repo = crate::feature_lanes::lane_view("0.1.86", &config)?;
         let error = workflow(&repo)
             .err()
             .ok_or_else(|| format!("the configuration was accepted: {config}"))?;

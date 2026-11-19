@@ -121,6 +121,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 |---|---|---|
 | `shape` | `"auto"` | `one-job`, `lint-test`, `groups` or `auto` |
 | `test_groups` | none | `[[test_groups]]` entries, see above |
+| `test_lane` | none | `[[test_lane]]` feature test lanes; a lane with `filter` also gets a `Test lane guard` step, see `generator/CONFIG.md` |
 | `on_main` | `"affected"` | what a push or merge queue run selects: `affected` or `everything` |
 | `full_run` | `"nightly"` | `off`, `hourly`, `nightly`, `weekly` or a cron expression |
 | `pr_ci` | `"always"` | `always` or `label` |

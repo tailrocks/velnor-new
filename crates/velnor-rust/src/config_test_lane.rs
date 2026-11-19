@@ -151,8 +151,15 @@ pub(crate) fn commands(
                 },
                 ci_profile: root.nextest_ci_profile,
             };
+            let guard = lane.filter.as_ref().map(|expr| CargoCommand::LaneGuard {
+                features: features(),
+                packages: lane.packages.clone(),
+                filter: expr.clone(),
+                except: direct.to_vec(),
+            });
             [
                 Some(test),
+                guard,
                 lane.lint.then(|| CargoCommand::ClippyFeatures {
                     features: features(),
                 }),

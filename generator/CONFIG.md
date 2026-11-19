@@ -160,7 +160,7 @@ lint = true
 doc = true
 ```
 
-The generator does not check that `filter` selects every test that exists only under the features. A new feature-only test whose name falls outside the filter is skipped without an error. Keep the filter to a naming rule that new feature-only tests follow.
+A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. It needs velnor-ci 0.1.86 or later, and `velnor-gen generate` refuses an older pin when a lane has a `filter`. A lane without a `filter` runs every selected test and has no guard.
 
 ## Unused dependencies
 

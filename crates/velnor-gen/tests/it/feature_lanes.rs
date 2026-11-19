@@ -4,13 +4,22 @@
 use velnor_model::RepoPath;
 
 use crate::facts::TestResult;
-use crate::pipeline::{view, workflow};
+use crate::pipeline::{pin_helper, view, workflow};
 
 const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
 const LANE_STEP: &str = "Test (features: local-mode)";
 
+pub(crate) fn lane_view(
+    helper: &str,
+    config: &str,
+) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
+    let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+    pin_helper(&mut repo, helper)?;
+    Ok(repo)
+}
+
 fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+    let repo = lane_view("0.1.86", config)?;
     Ok(crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone())
 }
 
@@ -157,7 +166,7 @@ fn a_feature_lane_that_is_not_one_safe_command_is_rejected() -> TestResult {
         (format!("{LANE}lint = 'yes'\n"), "expected a boolean"),
         (format!("{LANE}doc = 1\n"), "expected a boolean"),
     ] {
-        let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+        let repo = lane_view("0.1.86", &config)?;
         let error = workflow(&repo)
             .err()
             .ok_or_else(|| format!("the configuration was accepted: {config}"))?;
@@ -295,7 +304,7 @@ fn lane_filter_error(filter: &str) -> Result<String, Box<dyn std::error::Error>>
         "test(~local::) or binary(local_host_public)",
         &filter.replace('\'', "''"),
     );
-    let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
+    let repo = lane_view("0.1.86", &config)?;
     let error = workflow(&repo)
         .err()
         .ok_or_else(|| format!("the filter was accepted: {filter:?}"))?;
@@ -366,7 +375,7 @@ fn a_feature_lane_fails_when_its_filter_selects_no_test_and_the_default_step_doe
 #[test]
 fn a_feature_lane_runs_with_profile_ci_exactly_when_the_root_defines_it() -> TestResult {
     let lane_run = |nextest: Option<&str>| -> Result<String, Box<dyn std::error::Error>> {
-        let mut repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(LANE.as_bytes()))?;
+        let mut repo = lane_view("0.1.86", LANE)?;
         if let Some(text) = nextest {
             let path = RepoPath::new(".config/nextest.toml")?;
             repo.tracked_paths.insert(path.clone());

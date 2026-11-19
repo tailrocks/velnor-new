@@ -31,6 +31,7 @@ pub enum GenerateError {
     PrCiHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
+    LaneGuardHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
@@ -94,6 +95,10 @@ impl fmt::Display for GenerateError {
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+            ),
+            Self::LaneGuardHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot run lane-guard; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"
             ),
             Self::FamilyTagHelperTooOld(version) => write!(
                 f,
