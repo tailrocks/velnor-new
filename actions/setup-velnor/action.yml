@@ -59,6 +59,10 @@ runs:
           wait "$reader" || return 1
           [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
         }
+        copy_extracted() {
+          head -c "$((MAX_BYTES + 1))" "$1" > "$2" 2> /dev/null || return 1
+          [ "$(wc -c < "$2")" -le "$MAX_BYTES" ]
+        }
         arch="$(echo "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
         dir=
         if [ -n "${RUNNER_TOOL_CACHE:-}" ]; then
@@ -97,7 +101,7 @@ runs:
         mkdir "$extract"
         (ulimit -f "$((MAX_BYTES / 1024 + 1))"; tar --extract --gzip --no-same-owner --no-recursion --file "$staging/$archive" --directory "$extract" velnor-ci) || fail "extracting velnor-ci from $archive failed. velnor-ci was not installed"
         [ -f "$extract/velnor-ci" ] && [ ! -L "$extract/velnor-ci" ] || fail "$archive does not hold velnor-ci as a regular file. velnor-ci was not installed"
-        bounded_copy "$extract/velnor-ci" "$staging/velnor-ci" || fail "velnor-ci in $archive is larger than $MAX_BYTES bytes. velnor-ci was not installed"
+        copy_extracted "$extract/velnor-ci" "$staging/velnor-ci" || fail "velnor-ci in $archive is larger than $MAX_BYTES bytes. velnor-ci was not installed"
         bin="$RUNNER_TEMP/velnor-ci-bin"
         rm -rf "$bin"
         mkdir -p "$bin"

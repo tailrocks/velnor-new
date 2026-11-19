@@ -56,6 +56,11 @@ printf '%s\\t%s\\n' "$pipe" "$*" >> "$STUB_TAR_LOG"
 exec "$REAL_TAR" "$@"
 """
 
+STUB_SLOW_HEAD = """#!/bin/sh
+/bin/sleep 1
+exec "$REAL_HEAD" "$@"
+"""
+
 
 def archive_bytes(members=None):
     members = [("velnor-ci", PAYLOAD, 0o755)] if members is None else members
@@ -162,6 +167,7 @@ class SetupVelnorInstallTests(unittest.TestCase):
             "STUB_LOG": str(self.stub_log),
             "STUB_TAR_LOG": str(self.tar_log),
             "REAL_TAR": shutil.which("tar"),
+            "REAL_HEAD": shutil.which("head"),
         }
         result = subprocess.run(
             ["bash", "-c", install_script()],
@@ -341,6 +347,14 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertIn("velnor-ci was not installed", result.output)
         self.assertEqual(self.github_path.read_text(), "")
         self.assertEqual(installed_files(self.tool_cache), [], result.output)
+
+    def test_a_binary_on_a_slow_disk_is_installed_not_refused_as_too_large(self):
+        slow = self.stub_bin / "head"
+        slow.write_text(STUB_SLOW_HEAD)
+        slow.chmod(0o755)
+        result = self.install(sha256(self.archive))
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertEqual(self.installed_binary().read_bytes(), PAYLOAD)
 
     def test_a_download_above_the_size_limit_is_refused_before_it_is_stored(self):
         with self.payload.open("r+b") as handle:
