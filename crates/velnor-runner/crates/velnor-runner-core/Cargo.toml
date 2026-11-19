@@ -24,6 +24,10 @@ doctest = false
 name = "lifecycle_acquire"
 path = "tests/lifecycle_acquire.rs"
 
+[[test]]
+name = "cleanup_proof_public"
+path = "tests/cleanup_proof_public.rs"
+
 [lints]
 workspace = true
 
