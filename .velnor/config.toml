@@ -13,35 +13,35 @@ non_inputs = ["docs/**"]
 
 [[stacks.rust.inputs]]
 globs = [
-  "crates/velnor-runner/crates/velnor-runner-host/**",
+  "crates/velnor-runner-host/**",
   ".velnor/runner.lock",
-  "crates/velnor-runner/Cargo.toml",
-  "crates/velnor-runner/Cargo.lock",
+  "Cargo.toml",
+  "Cargo.lock",
 ]
 packages = ["velnor-runner-host"]
 complete = true
 
 [[stacks.rust.inputs]]
 globs = [
-  "crates/velnor-runner/crates/velnor-runner-cli/**",
-  "crates/velnor-runner/Cargo.toml",
-  "crates/velnor-runner/Cargo.lock",
+  "crates/velnor-runner-cli/**",
+  "Cargo.toml",
+  "Cargo.lock",
 ]
 packages = ["velnor-runner-cli"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["local/**"]
+globs = ["crates/velnor-local/**", "crates/velnor-cache-rules/**"]
 packages = ["velnor-cache-rules", "velnor-local"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["ci-helper/**"]
+globs = ["crates/velnor-ci/**", "ci-helper/**"]
 packages = ["velnor-ci"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["generator/**", ".github/workflows/release-rust-ci-tools.yml"]
+globs = ["crates/velnor-gen/**", "crates/velnor-model/**", "crates/velnor-release/**", "crates/velnor-render/**", "crates/velnor-rust/**", "generator/**", ".github/workflows/release-rust-ci-tools.yml"]
 packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen", "velnor-release"]
 complete = true
 
@@ -52,9 +52,9 @@ complete = true
 
 [[stacks.rust.inputs]]
 globs = [
-  "crates/velnor-runner/crates/velnor-runner-attestation/**",
-  "crates/velnor-runner/Cargo.toml",
-  "crates/velnor-runner/Cargo.lock",
+  "crates/velnor-runner-attestation/**",
+  "Cargo.toml",
+  "Cargo.lock",
 ]
 packages = ["velnor-runner-attestation"]
 complete = true
@@ -64,8 +64,6 @@ globs = [
   ".config/**",
   ".github/**",
   ".velnor/config.toml",
-  ".velnor/controller-approvals.json",
-  ".velnor/generator.lock",
   ".velnor/mise.lock",
   ".velnor/mise.toml",
   ".velnor/qualification/**",

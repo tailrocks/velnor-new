@@ -258,6 +258,6 @@ files MUST be split, and grandfathering new or existing debt is forbidden.
   successor lock validates against the official release manifest and pinned
   Mise catalog. A committed lock does not prove hosted qualification of current
   source.
-- `.velnor/runner.lock`: Scale Set runner identity (`crates/velnor-runner`);
+- `.velnor/runner.lock`: Scale Set runner identity (`crates/velnor-runner-*`);
   not created yet (deferred V2). Refresh rule: reviewed, binds image digest +
   runner version + arch + API versions.

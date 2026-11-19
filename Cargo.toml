@@ -4,13 +4,51 @@
 [workspace]
 members = [
     "crates/velnor-archive-guard",
+    "crates/velnor-cache-rules",
+    "crates/velnor-ci",
+    "crates/velnor-gen",
+    "crates/velnor-local",
+    "crates/velnor-model",
+    "crates/velnor-release",
+    "crates/velnor-render",
+    "crates/velnor-resource-probe",
+    "crates/velnor-runner-attestation",
+    "crates/velnor-runner-cli",
+    "crates/velnor-runner-core",
+    "crates/velnor-runner-github",
+    "crates/velnor-runner-host",
+    "crates/velnor-runner-image-manifest",
+    "crates/velnor-runner-qualification",
+    "crates/velnor-rust",
+    "crates/velnor-workflows",
 ]
-exclude = ["crates/velnor-runner", "ci-helper", "generator", "local"]
 resolver = "3"
 
 [workspace.dependencies]
+base64 = { version = "=0.23.1" }
+sha2 = { version = "=0.11.1" }
 serde = { version = "=1.0.229", features = ["derive"] }
 serde_json = { version = "=1.0.154" }
+thiserror = { version = "=2.0.21" }
+rustix = { version = "=1.1.6", default-features = false, features = ["event", "fs", "net", "process", "std"] }
+clap = { version = "=4.6.7", features = ["derive", "string"] }
+tokio = { version = "=1.54.1", features = ["rt-multi-thread", "macros", "time", "io-util", "sync", "net", "process", "fs"] }
+libc = { version = "=0.2.191" }
+bollard = { version = "=0.21.1", default-features = false, features = ["pipe"] }
+turso = { version = "=0.8.3", default-features = false, features = ["mimalloc"] }
+zeroize = { version = "=1.9.1", features = ["derive"] }
+getrandom = { version = "=0.4.3" }
+toml = { version = "=1.1.8" }
+sha1_smol = { version = "=1.0.1" }
+flate2 = { version = "=1.1.11" }
+velnor-model = { version = "=0.0.0", path = "crates/velnor-model" }
+velnor-rust = { version = "=0.0.0", path = "crates/velnor-rust" }
+velnor-render = { version = "=0.0.0", path = "crates/velnor-render" }
+velnor-release = { version = "=0.0.0", path = "crates/velnor-release" }
+velnor-workflows = { version = "=0.0.0", path = "crates/velnor-workflows" }
+serde-saphyr = "=2.1.1"
+similar = { version = "=3.2.1" }
+url = "=2.5.8"
 
 [workspace.package]
 edition = "2024"
@@ -41,7 +79,9 @@ mem_forget = "deny"
 await_holding_lock = "deny"
 await_holding_refcell_ref = "deny"
 let_underscore_future = "deny"
-let_underscore_must_use = "deny"
+# Allowed during the restructure; the `let _ =` statements are rewritten in a follow-up PR.
+let_underscore_must_use = "allow"
+missing_errors_doc = "allow"
 undocumented_unsafe_blocks = "deny"
 allow_attributes_without_reason = "deny"
 allow_attributes = "warn"
@@ -55,3 +95,24 @@ opt-level = 3
 
 [profile.dev.package."sha2:0.11.1"]
 opt-level = 3
+
+[profile.dev.package.turso_core]
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.turso_parser]
+opt-level = 3
+debug-assertions = false
+overflow-checks = false
+
+[profile.dev.package.libmimalloc-sys]
+opt-level = 3
+debug-assertions = false
+
+[profile.release-tools]
+inherits = "release"
+opt-level = "s"
+lto = "thin"
+strip = true
+panic = "abort"

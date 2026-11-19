@@ -4,11 +4,43 @@
 # Nextest profiles (Gate 0 skeleton).
 # Empty-run behavior is enforced via CLI `--no-tests fail` (contract §4);
 # nextest has no profile-level equivalent, so it is not set here.
+experimental = ["wrapper-scripts"]
+
+[scripts.wrapper.local-docker-ci]
+command = ["sh", "-c", 'if [ "${GITHUB_ACTIONS:-}" = true ] && [ "${VELNOR_TEST_DOCKER_HOST+x}" != x ]; then export VELNOR_TEST_DOCKER_HOST=unix:///var/run/docker.sock; fi; exec "$@"', "local-docker-ci"]
+
+[scripts.wrapper.no-programs]
+command = ["/usr/bin/env", "PATH=/nonexistent"]
+
+[test-groups]
+docker-networks = { max-threads = 4 }
+velnor-ci-serial = { max-threads = 1 }
+
 [profile.ci]
 retries = 0
 test-threads = "num-cpus"
 status-level = "all"
 final-status-level = "flaky"
+
+[[profile.default.scripts]]
+filter = "package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
+list-wrapper = "no-programs"
+run-wrapper = "no-programs"
+
+[[profile.ci.scripts]]
+filter = "package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
+list-wrapper = "no-programs"
+run-wrapper = "no-programs"
+
+[[profile.ci.scripts]]
+filter = 'package(=velnor-runner-host) and (binary(=local_pair_public) or binary(=local_host_public))'
+platform = 'cfg(target_os = "linux")'
+run-wrapper = 'local-docker-ci'
+
+[[profile.ci.scripts]]
+filter = 'package(=velnor-local) and binary(=it) and test(removal_audit::)'
+platform = 'cfg(target_os = "linux")'
+run-wrapper = 'local-docker-ci'
 
 [[profile.ci.overrides]]
 filter = 'package(=velnor-actions-orchestrator) and binary(=runner_image_build_public)'
@@ -48,3 +80,80 @@ threads-required = "num-test-threads"
 [[profile.default.overrides]]
 filter = 'package(=velnor-actions-orchestrator) and binary(=runner_image_build_public)'
 slow-timeout = { period = "60s", terminate-after = 10 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_ruleset_lock_version::the_ruleset_command_refuses_a_lock_version_of_a_released_member) or test(=release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository) or test(=golden_env::the_update_switch_leaves_the_expected_files_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_expected_files_when_it_is_one) or test(=golden_env::the_update_switch_leaves_the_ruleset_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_ruleset_when_it_is_one))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_ruleset_lock_version::the_ruleset_command_refuses_a_lock_version_of_a_released_member) or test(=release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository) or test(=golden_env::the_update_switch_leaves_the_expected_files_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_expected_files_when_it_is_one) or test(=golden_env::the_update_switch_leaves_the_ruleset_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_ruleset_when_it_is_one))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(crates_mirror)'
+success-output = "immediate"
+threads-required = "num-test-threads"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and (test(preview_parity) | test(preview_admit) | test(preview_authority))'
+slow-timeout = { period = "60s", terminate-after = 10 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and (test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes))'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(crates_mirror)'
+success-output = "immediate"
+threads-required = "num-test-threads"
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(plan_reads_each_roots_sources_to_decide_the_doctest_and_documentation_steps)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-ci) and test(audit::bounds::)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-ci) and test(audit::bounds::)'
+slow-timeout = { period = "30s", terminate-after = 4 }
+
+[[profile.default.overrides]]
+filter = "binary(local_host_public) | binary(local_pair_public)"
+test-group = "docker-networks"
+success-output = "immediate"
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-local) and binary(=it) and test(removal_audit::)'
+success-output = "immediate"
+
+[[profile.default.overrides]]
+filter = "package(=velnor-ci)"
+test-group = "velnor-ci-serial"
+
+[[profile.ci.overrides]]
+filter = "package(=velnor-ci)"
+test-group = "velnor-ci-serial"
+
+[[profile.default.overrides]]
+filter = "package(=velnor-ci) or package(=velnor-gen) or package(=velnor-model) or package(=velnor-release) or package(=velnor-render) or package(=velnor-rust)"
+slow-timeout = { period = "2s", terminate-after = 1 }

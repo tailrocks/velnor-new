@@ -8,7 +8,6 @@ mbx_shared_store = true
 docs = "post_merge"
 check_alone = "post_merge"
 pr_ci = "label"
-helper = { path = "ci-helper" }
 
 [[inputs]]
 glob = "scripts/ci-fixtures.sh"

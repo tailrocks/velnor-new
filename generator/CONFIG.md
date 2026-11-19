@@ -115,7 +115,7 @@ A package may have tests that exist only under a Cargo feature. A `[[test_lane]]
 
 ```toml
 [[test_lane]]
-root = "crates/velnor-runner"
+root = "crates/velnor-runner-*"
 features = ["local-mode"]
 packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
@@ -131,7 +131,7 @@ filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_p
 
 ```toml
 [[test_lane]]
-root = "crates/velnor-runner"
+root = "crates/velnor-runner-*"
 features = ["local-mode"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 lint = true

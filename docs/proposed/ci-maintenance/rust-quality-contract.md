@@ -11,7 +11,7 @@ file/path, required-file, and line-count rules. V1 has no custom Rust
 source-structure, Cargo-architecture, or test-layout linter. Automatic stack
 detection, composition, `[stacks].ignore`, and the stack-neutral
 `workflow.policy` belong to the workflow contract. Runner implementations in
-nested `crates/velnor-runner` are governed by `docs/proposed/macos-scaleset-runner.md`,
+nested `crates/velnor-runner-*` are governed by `docs/proposed/macos-scaleset-runner.md`,
 which defines its own workspace lints, rust version, and quality invariants.
 
 The words **MUST**, **MUST NOT**, **SHOULD**, and **MAY** are normative.

@@ -89,22 +89,6 @@ printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
 printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
-(
-  cd "$ROOT/crates/velnor-runner"
-  cargo fetch --locked
-)
-(
-  cd "$ROOT/ci-helper"
-  cargo fetch --locked
-)
-(
-  cd "$ROOT/generator"
-  cargo fetch --locked
-)
-(
-  cd "$ROOT/local"
-  cargo fetch --locked
-)
 printf "maintenance-phase: velnor-archive-guard\n"
 cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-archive-guard --no-tests fail --jobs 2
 '''

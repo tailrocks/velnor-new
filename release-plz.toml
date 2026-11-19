@@ -1,9 +1,9 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-# CI tools workspace: velnor-actions-cli tags `v<version>` (#1290, #731). The
-# runner workspace (crates/velnor-runner) is a separate root with its own
-# `runner-v<version>` tags; there is no family tag.
+# One root workspace (#1290, #731): velnor-actions-cli tags `v<version>` and
+# velnor-runner-cli tags `runner-v<version>`; there is no family tag. Every
+# other package is not released by release-plz.
 
 [workspace]
 release = false
@@ -11,9 +11,14 @@ release_always = false
 semver_check = false
 git_only = true
 git_release_draft = true
-pr_branch_prefix = "release-plz-actions-"
+pr_branch_prefix = "release-plz-"
 
 [[package]]
 name = "velnor-actions-cli"
 release = true
 git_tag_name = "v{{ version }}"
+
+[[package]]
+name = "velnor-runner-cli"
+release = true
+git_tag_name = "runner-v{{ version }}"
