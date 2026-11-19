@@ -40,8 +40,10 @@ pub fn is_file_name(name: &str) -> bool {
 }
 
 pub fn expected_artifacts(plan: &str) -> Result<Vec<String>, CiError> {
-    let plan: serde_json::Value = serde_json::from_str(plan)
+    serde_json::from_str::<serde_json::Value>(plan)
         .map_err(|e| CiError::new(format!("plan.json is not valid JSON: {e}")))?;
+    let plan = crate::preview::json::parse(plan.as_bytes(), plan.len())
+        .map_err(|_| CiError::new("plan.json repeats an object key"))?;
     let entries = plan
         .get("matrix")
         .and_then(|matrix| matrix.get("include"))
@@ -68,21 +70,32 @@ pub fn expected_artifacts(plan: &str) -> Result<Vec<String>, CiError> {
 
 #[must_use]
 pub fn select(expected: &[String], listed: &[Listed]) -> Selection {
-    let mut live: BTreeMap<&str, u64> = BTreeMap::new();
+    let mut live: BTreeMap<&str, Vec<u64>> = BTreeMap::new();
     let mut expired = BTreeSet::new();
     for artifact in listed {
         if artifact.expired {
             expired.insert(artifact.name.as_str());
         } else {
-            let newest = live.entry(artifact.name.as_str()).or_insert(artifact.id);
-            *newest = (*newest).max(artifact.id);
+            live.entry(artifact.name.as_str())
+                .or_default()
+                .push(artifact.id);
         }
     }
     let mut wanted = Vec::new();
     let mut problems = Vec::new();
     for name in expected {
-        match live.get(name.as_str()) {
-            Some(id) => wanted.push((name.clone(), *id)),
+        match live.get(name.as_str()).map(Vec::as_slice) {
+            Some(&[id]) => wanted.push((name.clone(), id)),
+            Some(ids) => {
+                let mut ids = ids.to_vec();
+                ids.sort_unstable();
+                let ids: Vec<_> = ids.iter().map(u64::to_string).collect();
+                problems.push(format!(
+                    "{name}: {} live artifacts share this name (ids {})",
+                    ids.len(),
+                    ids.join(", ")
+                ));
+            }
             None if expired.contains(name.as_str()) => problems.push(format!("{name}: expired")),
             None => problems.push(format!("{name}: not uploaded")),
         }
