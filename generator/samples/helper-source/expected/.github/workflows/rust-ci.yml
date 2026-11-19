@@ -95,6 +95,8 @@ jobs:
       contents: read
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -155,7 +157,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: &velnor_4 '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_ci_helper
         name: Restore the sources cache
@@ -196,8 +198,6 @@ jobs:
         run: '. "$VELNOR_EXEC" plan --full'
       - name: Build velnor-ci
         working-directory: ci-helper
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
         run: '. "$VELNOR_EXEC" run -- cargo build -p velnor-ci --bin velnor-ci --locked --message-format=json-render-diagnostics'
       - id: report_cache_metrics
         name: Report cache telemetry
@@ -300,7 +300,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
@@ -612,7 +612,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_ci_helper
         name: Restore the sources cache
@@ -867,7 +867,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_crates_velnor_runner
         name: Restore the sources cache
@@ -1164,7 +1164,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_generator
         name: Restore the sources cache
@@ -1437,7 +1437,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_local
         name: Restore the sources cache
@@ -1679,7 +1679,7 @@ jobs:
       - id: sources_locks
         name: Hash the sources lockfiles
         env:
-          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+          SOURCES_LOCKS: *velnor_4
         run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache

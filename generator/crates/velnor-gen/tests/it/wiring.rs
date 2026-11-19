@@ -246,7 +246,9 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
         "{job}"
     );
     assert!(
-        job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' --config 'deny.toml' --locked check"),
+        job.contains(
+            "cargo-deny --manifest-path 'lab/Cargo.toml' --config 'deny.toml' --locked check"
+        ),
         "{job}"
     );
     Ok(())

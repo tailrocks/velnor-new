@@ -8,10 +8,8 @@ use velnor_model::{
     PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
 };
 
-use crate::plan::{
-    CHECKOUT_DEPTH, PLAN_DEPTH, head, job, mirror_step, step, tools_install, tools_restore,
-    tools_save,
-};
+use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, head, job, step};
+use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
 const POLICY_JOB: JobId = JobId::from_static("policy");

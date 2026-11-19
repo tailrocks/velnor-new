@@ -380,13 +380,17 @@ pub(crate) fn upload(name: String, path: String) -> RenderedStep {
 }
 
 pub(crate) fn download(name: String) -> RenderedStep {
+    download_to(name, DIST)
+}
+
+pub(crate) fn download_to(name: String, path: &str) -> RenderedStep {
     RenderedStep {
         name: format!("Download {name}"),
         uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
         uses_comment: Some(DOWNLOAD_VERSION.to_owned()),
         with: vec![
             ("name".to_owned(), Value::Text(name)),
-            ("path".to_owned(), Value::Text(DIST.to_owned())),
+            ("path".to_owned(), Value::Text(path.to_owned())),
         ],
         ..RenderedStep::default()
     }
