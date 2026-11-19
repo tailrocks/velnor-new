@@ -15,8 +15,8 @@ fn image_job(extra: &str) -> String {
 }
 
 /// Asserts that the rendered job has exactly `scopes` as its permissions and
-/// `environment` as its environment. Both roles come from the publication
-/// table in docs/proposed/image-publication-contract.md.
+/// `environment` as its environment. Both roles are the current velnor-gen
+/// renderer contract for declared image jobs.
 fn assert_role_shape(extra: &str, scopes: &[(&str, &str)], environment: &str) -> TestResult {
     let tree = rendered(&image_job(extra))?;
     let image = job(&tree, "publish-images")?;
