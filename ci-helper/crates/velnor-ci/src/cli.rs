@@ -102,6 +102,10 @@ pub enum Command {
     )]
     MbxSeed,
     #[command(
+        about = "Keep the mise and rustup tool directories on the node's own disk. restore copies ~/.local/share/mise and ~/.rustup from tools/<key> of the store (VELNOR_MBX_SHARED_DIR on a trusted event, VELNOR_MBX_SEED_DIR otherwise) and writes hit=true or hit=false to $GITHUB_OUTPUT, so the network cache action can be skipped on a hit; save, on a trusted event only, copies them into tools/<key> with an atomic rename, keeping the two newest keys. A missing store, a failed check or a failed copy is a miss, never an error"
+    )]
+    ToolsLocal(ToolsLocalArgs),
+    #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
     CheckMetadata,
@@ -500,6 +504,14 @@ pub struct CratesMirrorArgs {
     pub registry: String,
     #[arg(long)]
     pub cainfo: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct ToolsLocalArgs {
+    #[arg(value_enum)]
+    pub verb: crate::tools_local::Verb,
+    #[arg(long)]
+    pub key: String,
 }
 
 #[derive(Debug, Subcommand)]

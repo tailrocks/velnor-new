@@ -140,6 +140,7 @@ mod timings;
 mod timings_groups;
 mod timings_runs;
 mod timings_setup;
+mod tools_local;
 mod trusted_roots;
 mod unowned;
 mod version;
