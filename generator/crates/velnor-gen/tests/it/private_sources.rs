@@ -187,9 +187,8 @@ fn a_misconfigured_section_or_an_old_helper_is_refused() -> TestResult {
     for released in ["0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
         let old = private_repo(&["Cargo.toml"], SECTION, released)?;
         assert!(
-            workflow(&old).is_err_and(|error| error
-                .to_string()
-                .contains("pin velnor-ci 0.1.86 or later")),
+            workflow(&old)
+                .is_err_and(|error| error.to_string().contains("pin velnor-ci 0.1.86 or later")),
             "{released}"
         );
     }
