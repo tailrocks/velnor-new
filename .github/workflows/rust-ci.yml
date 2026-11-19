@@ -75,17 +75,17 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: &velnor_0 'fail() { printf ''%s\n'' "::error title=setup-velnor::$1"; exit 1; }; resolve_tool() { local path; path="$(command -v "$2")" && [[ "$path" = /* && -f "$path" && -x "$path" ]] || fail "required tool ''$2'' was not found on PATH"; printf ''%s=%s\n'' "$1" "$path" >> "$GITHUB_ENV"; }; for binding in MKTEMP:mktemp CP:cp CHMOD:chmod MKDIR:mkdir ENV:env; do resolve_tool "VELNOR_HELPER_${binding%:*}" "${binding#*:}"; done; if command -v sha256sum > /dev/null; then checksum=sha256sum; arguments=''--check --status''; else checksum=shasum; arguments=''-a 256 --check --status''; fi; resolve_tool VELNOR_HELPER_CHECKSUM "$checksum"; printf ''%s=%s\n'' VELNOR_HELPER_CHECKSUM_ARGUMENTS "$arguments" >> "$GITHUB_ENV"'
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: &velnor_1 'directory="$RUNNER_TEMP/velnor-trusted-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT-$GITHUB_JOB" && "$VELNOR_HELPER_MKDIR" -m 700 "$directory" && "$VELNOR_HELPER_CP" "$RUNNER_TEMP/velnor-ci-bin/velnor-ci" "$directory/velnor-ci" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci" && printf ''%s\n'' "$VELNOR_HELPER_LAUNCHER" > "$directory/velnor-ci-exec" && "$VELNOR_HELPER_CHMOD" 500 "$directory/velnor-ci-exec" && printf ''%s=%s\n'' VELNOR_HELPER "$directory/velnor-ci" VELNOR_EXEC "$directory/velnor-ci-exec" VELNOR_HELPER_SHA256 "$VELNOR_HELPER_SHA256" >> "$GITHUB_ENV"'
           VELNOR_HELPER_LAUNCHER: &velnor_2 'directory=$("$VELNOR_HELPER_MKTEMP" -d "$RUNNER_TEMP/velnor-helper.XXXXXXXXXX") && copy=$("$VELNOR_HELPER_MKTEMP" "$directory/velnor-ci.XXXXXXXXXX") && "$VELNOR_HELPER_CP" "$VELNOR_HELPER" "$copy" && "$VELNOR_HELPER_CHMOD" 500 "$copy" && { "$VELNOR_HELPER_ENV" -i PATH=/usr/bin:/bin "$VELNOR_HELPER_CHECKSUM" $VELNOR_HELPER_CHECKSUM_ARGUMENTS <<< "$VELNOR_HELPER_SHA256  $copy" || { printf ''%s\n'' ''velnor-ci integrity check failed'' >&2; exit 1; }; } && exec "$copy" "$@"'
-          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd'' || '''' }}'
+          VELNOR_HELPER_SHA256: &velnor_3 '${{ runner.os == ''Linux'' && runner.arch == ''X64'' && ''b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d'' || runner.os == ''Linux'' && runner.arch == ''ARM64'' && ''3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'' || '''' }}'
         run: 'eval "$VELNOR_HELPER_INSTALL_LAUNCHER"'
       - name: velnor-ci mbx-store
         run: '. "$VELNOR_EXEC" mbx-store'
@@ -116,12 +116,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -287,12 +287,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -576,12 +576,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -823,12 +823,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1098,12 +1098,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1365,12 +1365,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1596,12 +1596,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1831,12 +1831,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -1947,12 +1947,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
@@ -2134,13 +2134,13 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
+      - name: Install velnor-ci 0.1.90
         if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         if: '${{ github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
         env:
@@ -2194,12 +2194,12 @@ jobs:
         env:
           VELNOR_HELPER_INSTALL_TOOLS: *velnor_0
         run: 'eval "$VELNOR_HELPER_INSTALL_TOOLS"'
-      - name: Install velnor-ci 0.1.89
-        uses: tailrocks/velnor-new/actions/setup-velnor@4d7e3f8f33037694665e961ade47665d0716ad3c  # tools-v0.1.89
+      - name: Install velnor-ci 0.1.90
+        uses: tailrocks/velnor-new/actions/setup-velnor@29931d53b4d5f11477669c38b2fcda9ab584a26a  # tools-v0.1.90
         with:
-          version: '0.1.89'
-          sha256-linux-x64: d6efb78b7de418ef90c13521856355d2f887f8b884f65157e0bab6105ba12139
-          sha256-linux-arm64: d0f598d8f9efe6bdecef2c0a07180fff14bab688e1c3b8990e9a9b691244b6dd
+          version: '0.1.90'
+          sha256-linux-x64: b74e6a27fc444e2336560c17bc7562c80e65d93131ec3ffe341eee65d6cc973d
+          sha256-linux-arm64: '3b5bc063606d49d4cb4fbffdb7a753b3ebecb36e72316f848048298b275b3cd7'
       - name: Install the released helper launcher
         env:
           VELNOR_HELPER_INSTALL_LAUNCHER: *velnor_1
