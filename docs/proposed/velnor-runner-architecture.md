@@ -587,7 +587,8 @@ not, how that is detected, and the automatic fallback.
 
 **The read audit** is eBPF in the node agent on the exits of `openat`, `openat2`, `newfstatat`,
 `statx`, `readlinkat` and `getdents64`, filtered by the sandbox's cgroup, failed lookups (`ENOENT`)
-included, with paths resolved against the materialised tree; its overhead is measured in shadow. A
+included, with paths resolved against the materialised tree; its overhead, with the tree hash, must
+stay within 3% of suite wall and 1.5 s per obligation at P50, measured in shadow. A
 backend without it keeps whole-tree keys. **Every per-root contract includes** each tracked file
 directly in the repository root and in every ancestor of the root (today `rustfmt.toml`,
 `clippy.toml`, `deny.toml`, `rust-toolchain.toml`, both `Cargo.*` and `mise.*`) and `.cargo/` and
@@ -794,7 +795,8 @@ seed from a git bundle in the site store, not from GitHub. Mirrors are read-only
 4. Set times by the generation rule (section 7.3). A job that needs `.git` gets the read-only mirror
    through alternates; obligations get no `.git` (C5).
 
-Tested: a stale unchanged file in the base, a mode-only change, a deletion, and a base refresh
+A kernel-verified read-only lower layer that lets only the delta be hashed is a lab candidate; the
+full hash stays until its measured cost is known. Tested: a stale unchanged file in the base, a mode-only change, a deletion, and a base refresh
 concurrent with a clone.
 
 **Every upstream the same way,** each new version crossing the internet about once per site and
@@ -1003,8 +1005,8 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 962 agent-hours of building and 120 of review,
-about 3.3 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 988 agent-hours of building and 120 of review,
+about 3.4 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min
 at P50 [E]. Its first ten items are listed there.
@@ -1137,6 +1139,7 @@ where release bytes are built (D12).
 | D14 | Delete the engine crates from velnor-new once velnor-gen's workflow replaces the engine's CI? | The engine's orchestrator and renderer are about 275k lines | Only after checking for other consumers | day 8 |
 | D15 | Approve the recovery path for a bad Velnor release, with no admin merge? | A release that fails every job also blocks the PR that fixes it | Yes: redeploy the previous image digest; if none can verify, the pre-approved break-glass verifier writes a green only after two full cold passes on two nodes (section 5.9) | day 1 |
 | D16 | Does a `velnor:verify` label added while the PR was a draft start verification when it becomes ready? | An agent opens a draft, labels it early, then marks it ready; today nothing would run until it re-labels or pushes | Recommend yes: the label states intent and the reconciler can read it from state. Default no, the literal reading of decision 12's step 2 | day 2 |
+| D18 | May Velnor land merges itself (a merge train that fast-forwards `main` by compare-and-swap after verifying the exact resulting tree), instead of GitHub's merge queue? Decision 7 keeps GitHub's queue | A green PR waits 19 s for GitHub to form its group and 26 s to merge it, even when the group's tree was verified seconds earlier | About 45 s per merge [M: medians of 19 s and 26 s], about half the 85 s goal estimate, more in bursts | Not now. Measure GitHub's share on 50–200 auto-merged PRs and shadow a compare-and-swap train for tree-match and latency; bring the numbers back before changing decision 7 | day 8 |
 | D19 | May Velnor compile and test a ready PR's pushes before the label, at idle priority, so the label finds the work done? Decision 12 says an unlabelled push starts nothing | An agent pushes, then labels 2 min later; today the label starts a 15–25 s compile and the tests | About 15–25 s off label-to-verdict [E], for about 5–10 runner-min per speculated head, 45% of which are superseded | No: keep decision 12. Use pre-push `velnor verify` (decision 10c) instead, which gives the same lookup when the agent asks for it | day 3 |
 | D22 | May the benchmark rent comparator arms (one of Namespace, Blacksmith or Depot, and GitHub larger runners) and run velnor-new's replayed heads on them? | Without a rented arm, "fastest" can only mean faster than our own baselines | None directly; it decides how wide the claim can be | Yes, one rented arm and GitHub larger runners, measurement only, for about a week; nothing they produce counts as a verdict | day 5 |
 | D17 | Who may approve a reduction (an obligation or test removed from the inventory)? | A PR deletes a slow test file; the head plan lists fewer tests than `main`'s | Recommend: only the owner, through a signed inventory entry. Default: no reduction is accepted | day 3 |

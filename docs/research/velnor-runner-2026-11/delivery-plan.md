@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 962 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.3 days of fleet time (962 ÷ 12 builders ≈ 80 h). Coding does not set the dates.
+- **Total work:** about 988 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.4 days of fleet time (988 ÷ 12 builders ≈ 82 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -425,10 +425,14 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | BM06 | S6 warm compile | 300 diffs per root, cold page cache, idle and loaded, cold control | C05 | 6 | mid | Slower witness P90 ≤ 25 s (helper, generator), digests equal | — |
 | BM08 | Floor inventory | Per-binary wall and CPU of every receipt-minting binary on a worker, process trees traced, before and after T02, T05 and F01 | B13 | 6 | mid | Replaces the 28-job-log figures; longest surviving binary published | — |
 | BM09 | Contract freeze and publication | K20 freeze of the contract; K22 paired arrival-block bootstrap intervals, pre-registered sentence, interleaved pairs reported as median and range | BM03 | 6 | strong | The rule runs on the dry arms; a planted tie is reported as a tie | — |
+| BM11 | Toolchain matrix (lab B4+) | `rust-lld`, `mold`, `wild` × unpacked debuginfo × `CARGO_INCREMENTAL` 0/1 × dependency `opt-level` 0/3 on three roots; 300 diffs, 20 planted faults; digest reproducibility re-proved | C06 | 8 | mid | Zero false greens; edit-to-test P50 and P90 per cell published | — |
+| BM12 | Page-cache contention (lab B2+) | 1, 4 and 6 build sandboxes running test, clippy and doc lanes beside RustFS and a cold A1 build, reflink against read-only overlayfs; `fincore`, PSI, major faults | C05, ST04 | 6 | mid | P90 slowdown ≤ 1.25× idle; no OOM; digests equal cold | — |
+| BM13 | Per-execution overhead | Suite wall with and without the read audit; tree-hash time by file count; C5 time per obligation; a sealed lower layer with a delta hash as the candidate | V07, C10 | 6 | mid | ≤ 3% of suite wall and ≤ 1.5 s per obligation at P50 | — |
+| BM14 | GitHub's share and a shadow train | 50–200 auto-merged PRs: `success` to enqueue to group to merge; a shadow compare-and-swap train measured for tree match and latency, landing nothing | B04, L07 | 6 | mid | Numbers for owner question D18 | — |
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 140 items, about 962 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 144 items, about 988 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions

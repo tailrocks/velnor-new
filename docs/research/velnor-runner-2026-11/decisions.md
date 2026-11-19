@@ -988,6 +988,17 @@ cluster test.
 | G12 crate splits | Adopted as repository work | plan T07 |
 | O13 graduation dates | Accepted: graduation and later dates are conditional on 72 h of replay capacity | plan 4.3 |
 
+### Group 30: fastest-runner critique by Gemini 4 Neon
+
+| Point | Decision | v3 section |
+|---|---|---|
+| G02 merge train | Owner question D18 (decision 7); recommended not now, measure first (BM14) | 13 |
+| G17 added-file scoping | Held: it lets a build trace license reuse, which is adjudication item X01 | 7.3 |
+| G09 sealed lower layer, delta hash; C13 | Lab candidate; full hash stays; C13 unresolved until BM13 | 7.4 |
+| G10 overlayfs, O09 | Lab B2+ (BM12) | plan BM12 |
+| G13 linker and debuginfo, K18 | Measured in BM11 with digests re-proved | plan BM11 |
+| C15 overhead | Settled: ≤ 3% of suite wall and ≤ 1.5 s per obligation at P50 | 6.4 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
