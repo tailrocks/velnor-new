@@ -64,7 +64,7 @@ Contention is already visible. Top-job durations rose monotonically 11-15→11-1
 - Cargo sources cache: not found in 48/48 Rust job logs; Plan on hosted hits the same key family 10/10 [E] T9a. Root cause is scoping/placement, not size (86 MB).
 - Rust toolchain: "no restored Rust toolchain" in 58/58 logs [E] — cluster jobs install/verify per job; the runner image seeds tools but explicitly not Rust (`RESULT.md` 2026-11-15.4: "Not baked in: the Rust toolchain… Reusing a prebuilt toolchain needs a generator change" [M]).
 - mbx: `MBX_REMOTE_URL` empty in 68/68 logs, 0 bytes transferred; local object-cache hits 40–74% **within** a job's passes [E] T9a. Cross-job reuse is zero: every pod's `emptyDir` dies with the job [M] pod volumes. The within-job hit rate proves the keys are stable; only persistence is missing.
-- State snapshots: restore skipped in 3,636/3,636 jobs [E] T9b. State seal succeeded only for generator (6/18) and ci-helper (4), never root/runner/local [E] T9d. The brief blames the merge-queue tip race; the pack shows only ~half the producer failures are the tip check, the rest fail at Clippy/wait steps [E] — the seal pipeline is both racy **and** fragile, and its 60-min producer chain (`state-seal.yml`, [E] C.3) guarantees staleness even when it works.
+- State snapshots: restore skipped in 3,636/3,636 jobs [E] T9b. State seal succeeded only for generator (6/18) and ci-helper (4), never root/runner/local [E] T9d. The brief blames the merge-queue tip race; the pack shows only ~half the producer failures are the tip check, the rest fail at Clippy/wait steps [E] — the seal pipeline is both racy **and** fragile, and its 60-min producer chain (the State seal workflow, [E] C.3) guarantees staleness even when it works.
 - GitHub cache total: ~3.5–3.7 GB in 3–4 entries [E] T9c, [M] `actions/cache/usage` — well under the 10 GB cap, yet useless to cluster jobs. The constraint that shaped this design ("inside GitHub's free limits", `docs/goals.md:45` [M]) does not bind a self-hosted runner with terabytes of local NVMe.
 
 Cache transfer time today is therefore ~0 s and cache value is ~0: the worst combination. Jobs pay restore-step overhead (1–2 s each, 3,636 times [E]) to discover nothing.
@@ -156,7 +156,7 @@ Deliberately **not** compatible: legacy pipelines transport (AES-wrapped `Pipeli
 Crate layout follows the owner's in-flight move to one root workspace `crates/velnor-*` (brief, decided). New/changed crates only; generator crates are out of scope except where noted.
 
 ```text
-crates/velnor-runner/                  (exists; keep journal/ownership discipline)
+crates/velnor-runner-*/                  (exists; keep journal/ownership discipline)
   velnor-runner-core        ids, capacity, lifecycle, CleanupProof      [reuse as-is]
   velnor-runner-github      scale-set wire types/paths, no HTTP         [reuse, extend]
   velnor-runner-host        controller: sessions, admission, placement  [evolve: add K8s runtime]

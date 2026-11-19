@@ -1,0 +1,4 @@
+    let output = run_bounded(command.current_dir(root), METADATA_CAP, METADATA_TIMEOUT)
+        .map_err(|error| format!("cargo metadata failed ({error})"))?;
+    if !output.status.success() {
+        return Err(format!(

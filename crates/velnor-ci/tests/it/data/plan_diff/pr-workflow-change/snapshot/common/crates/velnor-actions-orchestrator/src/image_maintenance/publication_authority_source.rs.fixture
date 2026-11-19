@@ -1,0 +1,6 @@
+            include_str!("../../../../images/runner/ubuntu-26.04/Dockerfile"),
+        ),
+        (dind, include_str!("../../../../images/dind/Dockerfile")),
+    ] {
+        if normalize_lock_lines(actual) != normalize_lock_lines(template) {
+            return Err(internal("image_publication_lock_dockerfile"));

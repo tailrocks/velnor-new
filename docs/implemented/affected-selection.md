@@ -203,7 +203,7 @@ velnor-new declares its package directories (plus the runner workspace
 manifest) with `complete = true` for
 `velnor-actions-cli`: its repository-policy
 tests read every crate's manifests, sources, and tests in both workspaces (for
-example MSRV parity with `crates/velnor-runner/Cargo.toml`). Its other crates
+example MSRV parity with `Cargo.toml`). Its other crates
 whose tests read the repository through `CARGO_MANIFEST_DIR` stay forced until
 their inputs are declared.
 

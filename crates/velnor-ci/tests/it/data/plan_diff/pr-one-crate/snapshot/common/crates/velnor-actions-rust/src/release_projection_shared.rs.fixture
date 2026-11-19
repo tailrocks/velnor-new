@@ -1,0 +1,17 @@
+        || pattern.split('/').any(|component| component == "..")
+        || (pattern != "."
+            && pattern
+                .split('/')
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(invalid("source_path_escape"));
+    }
+            ".." => {
+                if parts.pop().is_none() {
+                    return Err(invalid("source_path_escape"));
+                }
+pub(super) fn parent(path: &str) -> Option<&str> {
+    path.rsplit_once('/').map(|(parent, _)| parent)
+}
+
+pub(super) fn relative_to<'a>(base: &str, path: &'a str) -> Option<&'a str> {

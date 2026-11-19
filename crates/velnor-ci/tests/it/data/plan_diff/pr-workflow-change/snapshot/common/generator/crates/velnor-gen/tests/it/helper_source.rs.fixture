@@ -1,0 +1,4 @@
+    include_bytes!("../../../../samples/helper-source/view/.velnor/rust-ci.lock");
+
+const HELPER_CONFIG: &str = "exclude = [\"fixtures/**\"]\nhelper = { path = \"ci-helper\" }\n";
+

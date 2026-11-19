@@ -1,0 +1,14 @@
+        .current_dir(root)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_AUTHOR_NAME", "Fixture")
+    let script = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../scripts/generator-release/source-qualification.sh"
+    );
+    let run =
+        |event_base: &str, event_head: &str| -> Result<std::process::Output, Box<dyn Error>> {
+            .current_dir(checkout)
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("RUNNER_TEMP", runner)

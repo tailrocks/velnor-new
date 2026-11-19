@@ -1,0 +1,21 @@
+#[path = "package_release_artifacts_archive.rs"]
+mod archive;
+pub(crate) use archive::extract_tar_gz_members;
+#[path = "package_release_artifacts_checksums.rs"]
+mod checksums;
+#[path = "package_release_artifacts_identity.rs"]
+mod identity;
+#[path = "package_release_artifacts_inventory.rs"]
+mod inventory;
+#[path = "package_release_artifacts_public_content.rs"]
+mod public_content;
+use identity::{validate_expected_identity, validate_manifest_identity};
+pub(crate) use public_content::validate_authenticated_release_content;
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(invalid("package_output_path_invalid"));
+    }
+        if part.is_empty() || part == "." || part == ".." || part.contains('\\') {
+            return Err(invalid("package_output_path_invalid"));
+        }
+        parts.push(part);

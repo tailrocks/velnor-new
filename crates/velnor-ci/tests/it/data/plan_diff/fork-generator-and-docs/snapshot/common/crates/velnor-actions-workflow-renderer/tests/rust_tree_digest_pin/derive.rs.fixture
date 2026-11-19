@@ -1,0 +1,4 @@
+            .current_dir(root)
+            .env_clear()
+            .envs(extra.iter().copied())
+            .env("PATH", "/usr/bin:/bin")

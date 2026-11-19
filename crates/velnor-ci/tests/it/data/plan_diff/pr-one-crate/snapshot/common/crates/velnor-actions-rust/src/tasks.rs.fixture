@@ -1,0 +1,4 @@
+                path.is_empty() || path.starts_with('/') || path.split('/').any(|s| s == "..");
+            if bad {
+                return Err(ContractError::identity(
+                    "declared_inputs",

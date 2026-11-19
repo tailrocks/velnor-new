@@ -275,8 +275,8 @@ running an image.
 
 | Path | Responsibility |
 | --- | --- |
-| `crates/velnor-runner/Cargo.toml`, `Cargo.lock` | Add the probe package to the existing nested workspace and lock its exact dependencies. The root generator workspace remains independent. |
-| `crates/velnor-runner/crates/velnor-resource-probe/` | Minimal Rust executable, fixed-path numeric parsers, bounded output schema, and focused unit tests. |
+| `Cargo.toml`, `Cargo.lock` | Add the probe package to the existing nested workspace and lock its exact dependencies. The root generator workspace remains independent. |
+| `crates/velnor-resource-probe/` | Minimal Rust executable, fixed-path numeric parsers, bounded output schema, and focused unit tests. |
 | `images/resource-probe/Dockerfile`, `README.md` | Separate scratch-image context and its build/runtime contract. |
 | `crates/velnor-actions-workflow-renderer/src/schema2.rs`, `schema2_release.rs`, `schema2_product_release_family.rs`, and a small probe-release helper module | Compose the pinned build, verification, archive, manifest, and exact image-family asset inventory. |
 | `crates/velnor-actions-orchestrator/src/product_release_pins.rs` and renderer pin fixtures | Resolve the exact pinned musl-target installation and nested-package build argv through existing typed Mise adapters rather than handwritten tool resolution. |

@@ -3,8 +3,6 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
-use std::fs;
-use std::path::Path;
 
 use velnor_actions_workflow_renderer::render::RenderedTree;
 
@@ -43,36 +41,6 @@ pub(super) fn files_of(tree: &RenderedTree) -> Result<Files, Box<dyn Error>> {
             Ok((path, expand_aliases(&bytes)))
         })
         .collect()
-}
-
-pub(super) fn files_of_repo(root: &Path) -> Result<Files, Box<dyn Error>> {
-    let mut files = Files::new();
-    let workflows = root.join(".github/workflows");
-    for entry in fs::read_dir(&workflows)? {
-        let path = entry?.path();
-        if path.extension().is_some_and(|ext| ext == "yml")
-            && let Some(name) = path.file_name().and_then(|name| name.to_str())
-        {
-            files.insert(
-                format!(".github/workflows/{name}"),
-                expand_aliases(&fs::read_to_string(&path)?),
-            );
-        }
-    }
-    for entry in fs::read_dir(root.join(".github/actions"))? {
-        let dir = entry?.path();
-        let action = dir.join("action.yml");
-        if let (true, Some(name)) = (
-            action.is_file(),
-            dir.file_name().and_then(|name| name.to_str()),
-        ) {
-            files.insert(
-                format!(".github/actions/{name}/action.yml"),
-                fs::read_to_string(&action)?,
-            );
-        }
-    }
-    Ok(files)
 }
 
 pub(super) fn children(text: &str) -> Vec<(String, String)> {

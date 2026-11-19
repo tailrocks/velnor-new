@@ -177,24 +177,6 @@ impl Fixture {
         )
     }
 
-    pub(super) fn generate_with_guard_policy(
-        &self,
-        mode: &str,
-        output: &Path,
-    ) -> Result<Output, Box<dyn Error>> {
-        self.write_guard_mode(mode)?;
-        self.invoke_with_guard_policy(
-            &[
-                "--toolchain-guard",
-                self.guard.to_str().ok_or("non-UTF-8 guard path")?,
-                "generate",
-                "--output-dir",
-                output.to_str().ok_or("non-UTF-8 output path")?,
-            ],
-            true,
-        )
-    }
-
     pub(super) fn pin_jactionlint(&self, version: &str) -> Result<(), Box<dyn Error>> {
         let manifest = self.repo.join("mise.toml");
         let mut contents = fs::read_to_string(&manifest)?;
@@ -226,17 +208,6 @@ impl Fixture {
 
     pub(super) fn fail_qualification(&self, stderr: &str) -> Result<(), Box<dyn Error>> {
         fs::write(self.root.join("bin/qualify-stderr"), stderr)?;
-        Ok(())
-    }
-
-    pub(super) fn enable_release(&self, registry: &str) -> Result<(), Box<dyn Error>> {
-        let config = self.repo.join(".velnor/config.toml");
-        let mut contents = fs::read_to_string(&config)?;
-        writeln!(
-            contents,
-            "\n[stacks.rust.release]\nenabled = true\npackages = [\"probe\"]\nregistry = \"{registry}\""
-        )?;
-        fs::write(config, contents)?;
         Ok(())
     }
 

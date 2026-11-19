@@ -79,7 +79,7 @@ The checkout has 15 workflows. Velnor Actions 0.1.81 generated the live 39-job C
 The new five-root `velnor-gen` / `velnor-ci` workflow and release-plz are in samples. The repo has no root release-plz configuration.
 Reconcile the named jobs, fixtures, and feature modes with the new inventory before regenerating required workflows.
 `repo/.github/AGENTS.md:4–28`, `repo/.github/workflows/ci.yml:1–59,147–215,367–625,626–2898`,
-`repo/generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml:1–1713`, `repo/ci-helper/crates/velnor-ci/src/io/plan.rs:35–92`.
+`repo/generator/samples/velnor-new/expected/.github/workflows/rust-ci.yml:1–1713`, `repo/crates/velnor-ci/src/io/plan.rs:35–92`.
 
 | Operation | Stages | Same inputs? | Today, min and GB | Decision and mechanism |
 |---|---|---|---|---|
@@ -113,10 +113,10 @@ Reconcile the named jobs, fixtures, and feature modes with the new inventory bef
 | Artifact transfer, release publish and readback | P/Q/M/R/N/C | Same bytes, distinct external IDs. | Product publishers 5.72–5.78 min including macOS. Tools retained 0.01255 GB of artifacts [M]. | Local CAS reads. Export once for each required GitHub effect. Verify exact asset set. |
 | Rust CI tools and SDK preview channels | M/R/N | Partial. Target/format/version can differ. | Tools tag 7.23 min including 2.90 macOS. Preview Linux artifact 0.0160 GB [M]. | Use main payloads. Keep policy and channel receipts distinct. |
 
-Live sources are `repo/.github/workflows/{ci,source-qualification,job-image-candidate,state-seal,cache-prune,qualification,freshness}.yml`,
+Live sources are `repo/.github/workflows/{ci,source-qualification,job-image-candidate,state seal,cache-prune,qualification,freshness}.yml`,
 `product-release.yml:12–252`, `product-release-{images,binary,generator}.yml`, `product-release-generator.yml:979–1346` and `release-rust-ci-tools.yml:15–240`.
 Generated release sources are `repo/generator/samples/release-bin/view/{release-plz.toml,.velnor/release.toml}`,
-`repo/generator/crates/velnor-render/src/{release.rs:178–251,release_binaries.rs:42–119,164–183}` and `repo/ci-helper/crates/velnor-ci/src/{gate.rs:44,publish.rs:59,release_preflight.rs:30}`.
+`repo/crates/velnor-render/src/{release.rs:178–251,release_binaries.rs:42–119,164–183}` and `repo/crates/velnor-ci/src/{gate.rs:44,publish.rs:59,release_preflight.rs:30}`.
 
 ### Choose when to build optimized artifacts
 
@@ -127,7 +127,7 @@ Testing optimized artifacts alone would lose debug coverage. Build the optimized
 If the gate already needed the identical optimized fixture, verify its main provenance and promote it. Otherwise the publisher waits for the main builder to compile and qualify the exact payload.
 The publisher reads the signed main manifest. Preserve existing crate/package verification before credentials.
 If release-plz would repackage a verified crate, move its registry write to a narrow adapter that uploads the exact verified `.crate` bytes. Keep release-plz version, changelog, tag and draft orchestration.
-`publish_no_verify` skips Cargo's extra verification build only after exact bytes pass the original verification. `repo/generator/crates/velnor-release/src/release_plz.rs:99`.
+`publish_no_verify` skips Cargo's extra verification build only after exact bytes pass the original verification. `repo/crates/velnor-release/src/release_plz.rs:99`.
 
 ### Totals
 
@@ -243,7 +243,7 @@ Strip legacy branches and requalify against the latest oracle. Use archived expr
 `refs/velnor-legacy/Cargo.toml:19`, `crates/velnor-runner/src/{scaleset/session.rs:96,308,protocol.rs:2643,9318,action.rs:378–416,admission.rs:744,1010,script_step.rs:771–796,command_files.rs:12,checkout.rs,execution/artifacts.rs,gha_cache.rs,attestation.rs}`.
 Reuse velnor-new's probe, image/mount and authority models, generator types and helper plan inputs.
 `repo/crates/velnor-runner/crates/{velnor-resource-probe/src/mountinfo.rs:22–107,velnor-runner-host/src/config/job_authority.rs:42–132}`,
-`repo/ci-helper/crates/velnor-ci/src/{io/plan.rs:35–92,gate.rs:44}`.
+`repo/crates/velnor-ci/src/{io/plan.rs:35–92,gate.rs:44}`.
 Write closed admission, execution/scheduler state, proof issuance and check/effect outboxes for the new boundaries.
 
 ## 4. Native actions
@@ -262,7 +262,7 @@ Qualify Docker services and job containers as distinct runtime features.
 | `actions/download-artifact` | Resolve authorized run/name/ID or pattern, verify digest, keep merge/extract semantics. Read authorized local bytes if present. | 20 / 33 s matrix download. 2 s bundle, 18–49 s images in one release. | 0.2–1 s small local report. 1–3 s for 1.116 GB at 1–2 GB/s plus metadata. |
 | `jdx/mise-action` | Use checksum-pinned local tools, honor config/dir, PATH, env and install/cache modes. | Setup 2 / 4 s in 6,113 steps. Pinned tools 10 / 18 s in cluster sample. | 0.2–1 s activation. Baked image pays install once per input. |
 | `jdx/mr-boxington-action` | Pinned mbx from local store, exact setup and post, private target. Remove step from default Cargo lane. | Setup 1 / 2 s. Post 0 / 1 s. | 0.1–0.5 s when admitted. |
-| `actions/attest` | Native Sigstore statement over approved subjects and predicate. Scoped job OIDC, signing, GitHub bundle and required registry upload. | Custom state-seal predicate unsplit. | ~0.1 s metadata plus 2–10 s new signing/confirmation. Reuse identical verified claim. |
+| `actions/attest` | Native Sigstore statement over approved subjects and predicate. Scoped job OIDC, signing, GitHub bundle and required registry upload. | Custom state seal predicate unsplit. | ~0.1 s metadata plus 2–10 s new signing/confirmation. Reuse identical verified claim. |
 | `actions/attest-build-provenance` | Same adapter with provenance schema. Preserve builder, workflow/ref, subject, bundle outputs and readback. | 2 s Linux generator, 9 s images. Bundle readback 11 s in sample. | 2–10 s new claim, off ordinary merge path. |
 | `asamarts/alint` | Verified local binary with specified config, format, path and warning policy. Keep line-cap probe. | 1 / 2 s in 191 steps. | 0.3–2 s fresh. Reuse exact lint proof. |
 | `actions/create-github-app-token` | Release credential broker exchanges allowed repo/install scope. Mask output and revoke in post as required. | Generated sample only. | 0.3–2 s each for mint/revoke. |
@@ -271,7 +271,7 @@ Qualify Docker services and job containers as distinct runtime features.
 
 Step medians/tails use timestamped successes in `evidence/ci-raw/jobs_compact.json` and the release sample.
 Pins and inputs appear in `repo/.github/workflows/ci.yml:61–127,181–195,308–337,576–589,684–746`,
-`repo/.github/actions/*/action.yml`, `repo/actions/setup-velnor/action.yml:20–63` and `repo/generator/crates/velnor-render/src/steps.rs:24–35`.
+`repo/.github/actions/*/action.yml`, `repo/actions/setup-velnor/action.yml:20–63` and `repo/crates/velnor-render/src/steps.rs:24–35`.
 Byte reuse still needs the original service authorization. Prefix cache hits cannot pass an obligation.
 [CI evidence](../evidence.md) · [Release sample](https://github.com/tailrocks/velnor-new/actions/runs/43864723181) · [Cache](https://github.com/actions/cache) · [Upload](https://github.com/actions/upload-artifact) · [Download](https://github.com/actions/download-artifact) · [OIDC](https://docs.github.com/en/actions/reference/security/oidc) · [Attestations](https://docs.github.com/en/rest/repos/attestations#create-an-attestation)
 
@@ -388,8 +388,8 @@ Measure elapsed and CPU time alone and under contention. Separate migration, fix
 5. Gate ≤60 s maximum single-case wall after phase 2, ≤15 s stretch and 10 CPU-s objective [E]. Keep an explicit lane for known expensive cases until fixed.
 
 `repo/crates/velnor-actions-cli/tests/image_publication_public.rs:85–92`,
-`repo/crates/velnor-runner/crates/velnor-runner-host/src/{launch/bootstrap/unbound_retirement/tests/shape.rs:97–106,journal/file_backed.rs:63–102}`,
-`repo/mise.toml:90–193`, `repo/{.config,ci-helper/.config,crates/velnor-runner/.config}/nextest.toml`.
+`repo/crates/velnor-runner-host/src/{launch/bootstrap/unbound_retirement/tests/shape.rs:97–106,journal/file_backed.rs:63–102}`,
+`repo/mise.toml:90–193`, `repo/{.config,.config,crates/velnor-runner-*/.config}/nextest.toml`.
 
 Build each nextest mode once and export inventory, binaries, dynamic libraries, data and fixture helpers separately.
 Keep embedded workspace and executable paths valid across slots. Use supported nextest archive/run or partition, plus a distinct rustdoc/doctest lane.
@@ -544,8 +544,8 @@ Migrate the generator, helper, product/preview and publisher contracts together.
 Require exact landed SHA, allowed workflow/trigger/attempt, protected tag, freshness/ancestry, payload digest and signer before release privileges.
 Main builds and qualifies optimized Linux bytes. Release reads and promotes them with verified evidence. Put any new publication claim above the build claim.
 Pause Darwin and any pair-only proof requirement as an explicit Linux-only policy. Keep target in manifests for later macOS support.
-`repo/ci-helper/crates/velnor-ci/src/gate.rs:15,44–115,127–159,277–288`,
-`repo/.github/workflows/product-release.yml:78–86,118,170`, `repo/generator/crates/velnor-render/src/release.rs:148–251`.
+`repo/crates/velnor-ci/src/gate.rs:15,44–115,127–159,277–288`,
+`repo/.github/workflows/product-release.yml:78–86,118,170`, `repo/crates/velnor-render/src/release.rs:148–251`.
 
 ## 9. What would make CI not a bottleneck at all
 

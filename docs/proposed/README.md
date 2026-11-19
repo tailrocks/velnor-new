@@ -50,7 +50,7 @@ are separate crates; only the orchestrator composes them. The CLI package declar
 `velnor-actions` binary. Generic package names such as `velnor-model`, `velnor-core`,
 and `velnor-rust` are forbidden.
 
-The generator crates MUST NOT implement a runner, a Scale Set client, or an Actions interpreter. That work lives in the nested `crates/velnor-runner` workspace under the [macOS Scale Set runner](macos-scaleset-runner.md) specification. Kubernetes, a web server, a TUI, a remote cache service, and a deployment system remain out of scope. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
+The generator crates MUST NOT implement a runner, a Scale Set client, or an Actions interpreter. That work lives in the nested `crates/velnor-runner-*` workspace under the [macOS Scale Set runner](macos-scaleset-runner.md) specification. Kubernetes, a web server, a TUI, a remote cache service, and a deployment system remain out of scope. Generated workflows MAY use a small allowlist of full-SHA-pinned setup actions; Velnor does not execute arbitrary `uses:` actions itself.
 
 ## Normative specifications
 
@@ -61,7 +61,7 @@ The generator crates MUST NOT implement a runner, a Scale Set client, or an Acti
 5. [Workflow contract](workflow-contract.md) defines triggers, jobs, and matrix data.
 6. [Task execution contract](task-execution-contract.md) defines task steps, Mise invocation, execution, and reports.
 7. [Cache and report contract](cache-contract.md) defines task identities, cache ownership/trust, reports, and final status aggregation.
-   See also [cache decisions](cache-decisions.md): the owner-adopted cache redesign (producer-scoped saves, dependency seed, opaque MBX bundles, family pruning, PR-scoped sources, no ImageVersion). Family specs, keys, writers and size ceilings: [cache families](cache-families.md). Why compiled state does not carry between runs, and the storage design that would: [compiled-state persistence](compiled-state-persistence.md).
+   See also [cache decisions](cache-decisions.md): the owner-adopted cache redesign (producer-scoped saves, dependency seed, opaque MBX bundles, family pruning, PR-scoped sources, no ImageVersion). Family specs, keys, writers and size ceilings: [cache families](cache-families.md).
 8. [Host-image seed admission contract](host-seed-contract.md) defines trusted preinstalled seed inputs and fail-cold admission.
 9. [Parallelism and affected-work contract](parallelism-and-selection-contract.md) defines dependency-aware selection, not-affected crate jobs (hard decision 4), native background/wait steps, bounded concurrency, and complete test partitioning.
 10. [Rust quality contract](ci-maintenance/rust-quality-contract.md) defines crate ownership, lints, file limits, dependencies, and repository-policy protection.

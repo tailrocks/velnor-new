@@ -1,0 +1,4 @@
+            .current_dir(root)
+            .output()?;
+        assert!(
+            metadata.status.success(),

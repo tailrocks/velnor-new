@@ -1,0 +1,4 @@
+    if value.contains("..") {
+        return Err(reject(field, "dotdot"));
+    }
+    Ok(())

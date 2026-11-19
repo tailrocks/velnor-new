@@ -1,0 +1,4 @@
+            !name.is_empty() && !name.contains(['/', '\\']) && !matches!(*name, "." | "..")
+        })
+        .ok_or_else(|| invalid("orbstack_app", "invalid_main_executable_name"))?;
+    if declared != format!("Contents/MacOS/{name}") {

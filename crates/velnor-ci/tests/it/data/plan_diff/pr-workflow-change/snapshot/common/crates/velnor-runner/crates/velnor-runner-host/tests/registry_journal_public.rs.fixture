@@ -1,0 +1,4 @@
+        flate2::read::GzDecoder::new(&include_bytes!("fixtures/journal-v41.db.gz")[..]);
+    let mut bytes = Vec::new();
+    decoder.read_to_end(&mut bytes)?;
+    fs::write(&path, bytes)?;

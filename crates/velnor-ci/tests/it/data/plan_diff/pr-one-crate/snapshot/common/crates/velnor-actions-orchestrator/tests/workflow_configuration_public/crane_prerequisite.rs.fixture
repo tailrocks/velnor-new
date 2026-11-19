@@ -1,0 +1,8 @@
+        include_str!("../../../../mise.toml"),
+    )?;
+    fs::write(
+        root.join("mise.lock"),
+        include_str!("../../../../mise.lock"),
+    )?;
+    Ok(())
+}

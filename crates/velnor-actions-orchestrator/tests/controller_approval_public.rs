@@ -6,7 +6,7 @@ use std::{error::Error, fs, io, path::Path, process::Command};
 use tempfile::TempDir;
 use velnor_actions_orchestrator::prepare;
 
-#[path = "../../test_support/root_cargo_lock.rs"]
+#[path = "../../velnor-test-support/root_cargo_lock.rs"]
 mod root_cargo_lock;
 
 const CONFIG: &str = r#"schema = 2
@@ -65,8 +65,8 @@ platform = "macos_x64"
 executor = "hosted"
 "#;
 
-const BASE_APPROVALS: &str = include_str!("../../test_support/controller_approval_074.json");
-const BASE_LOCK: &str = include_str!("../../test_support/generator_074.lock");
+const BASE_APPROVALS: &str = include_str!("../../velnor-test-support/controller_approval_074.json");
+const BASE_LOCK: &str = include_str!("../../velnor-test-support/generator_074.lock");
 
 fn fixture(approvals: Option<&str>, lock: &str) -> Result<TempDir, Box<dyn Error>> {
     let temp = tempfile::tempdir()?;

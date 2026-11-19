@@ -1,0 +1,5 @@
+        "{}/../../conformance/{probe}.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let text = std::fs::read_to_string(&path);
+    assert!(text.is_ok(), "{path}");

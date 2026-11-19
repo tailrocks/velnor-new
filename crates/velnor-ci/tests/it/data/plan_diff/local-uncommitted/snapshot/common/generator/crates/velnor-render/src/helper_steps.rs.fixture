@@ -1,0 +1,4 @@
+    let relative = format!("{}{}", "../".repeat(depth), target.as_str());
+    RenderedStep {
+        name: format!("velnor-ci inputs {verb}"),
+        run: Some(format!(

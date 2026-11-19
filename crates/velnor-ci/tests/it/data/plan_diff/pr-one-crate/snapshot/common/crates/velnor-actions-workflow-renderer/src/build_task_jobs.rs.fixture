@@ -1,0 +1,4 @@
+        concat!(
+            "set -euo pipefail; ",
+            "/usr/bin/xcodebuild -version | /usr/bin/grep -Fqx 'Xcode {}'; ",
+            "/usr/bin/xcodebuild -version | /usr/bin/grep -Fqx 'Build version {}'; ",

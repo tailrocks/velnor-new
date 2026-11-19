@@ -11,7 +11,7 @@ aggregation, and workflow rendering remain internal.
 
 The Cargo package MUST be named `velnor-actions-cli` and declare the executable
 name `velnor-actions`. The workflow generator binary is `velnor-actions`, while runner
-supervisor operations are provided by `velnor-host` in `crates/velnor-runner/crates/velnor-runner-cli`.
+supervisor operations are provided by `velnor-host` in `crates/velnor-runner-cli`.
 
 The repository release authority also provides
 `velnor-actions image-maintenance admit-mac-publication`. It takes `--source-commit`,

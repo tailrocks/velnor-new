@@ -48,7 +48,7 @@ test-render-capture = ["velnor-actions-workflow-renderer/test-render-capture"]
 velnor-archive-guard = { version = "=0.1.82", path = "../velnor-archive-guard" }
 base64 = { workspace = true }
 x509-cert = { version = "=0.2.5", default-features = false }
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 lzma-rust2 = { version = "=0.23.0", default-features = false, features = ["std", "xz"] }
 tar = { version = "=0.4.46", default-features = false }
 zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
@@ -73,7 +73,7 @@ thiserror = { workspace = true }
 toml = { version = "=1.1.8" }
 rustls = { version = "=0.23.46", default-features = false, features = ["ring"] }
 rustls-native-certs = { version = "=0.8.5", default-features = false }
-ureq = { version = "=3.4.2", default-features = false, features = ["rustls-no-provider"] }
+ureq = { version = "=3.5.2", default-features = false, features = ["rustls-no-provider"] }
 
 # This dependency selects zip's pure-Rust deflate backend through feature
 # unification; archive parsing calls it transitively through `zip`.
@@ -84,9 +84,9 @@ ignored = ["flate2"]
 workspace = true
 
 [dev-dependencies]
-serde-saphyr = "=2.1.0"
+serde-saphyr = "=2.1.1"
 proc-macro2 = { version = "=1.0.107", features = ["span-locations"] }
 serde_json = { workspace = true }
-syn = { version = "=3.0.9", default-features = false, features = ["full", "parsing", "printing", "visit"] }
+syn = { version = "=3.0.10", default-features = false, features = ["full", "parsing", "printing", "visit"] }
 tempfile = { version = "=3.27.0" }
 velnor-actions-contract = { version = "=0.1.82", path = "../velnor-actions-contract" }

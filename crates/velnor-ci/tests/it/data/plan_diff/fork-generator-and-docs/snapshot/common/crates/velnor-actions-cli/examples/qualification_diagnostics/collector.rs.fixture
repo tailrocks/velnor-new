@@ -1,0 +1,4 @@
+    let current = std::env::current_dir()?.canonicalize()?;
+    if !current.starts_with(&root) {
+        return Err(std::io::Error::other("mutation outside private root"));
+    }

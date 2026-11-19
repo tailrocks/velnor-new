@@ -1,0 +1,8 @@
+#[path = "../tests/support/consumer_manifest.rs"]
+mod consumer_manifest_fixture;
+
+use std::error::Error;
+        .current_dir(root)
+        .args(["init", "-b", "testmain"])
+        .output()?;
+    if !init.status.success() {
