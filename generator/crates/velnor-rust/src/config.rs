@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use velnor_model::{
     CheckoutScope, CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel,
-    RustCiConfig, TargetName,
+    RustCiConfig, SpeedBudget, TargetName,
 };
 
 use crate::config_events::{docs_run, on_main};
@@ -108,6 +108,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
+        budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
         test_setup,
@@ -346,4 +347,8 @@ pub fn ci_debuginfo(
         || Ok(RustCiConfig::default().ci_debuginfo),
         |bytes| parse(bytes).map(|config| config.ci_debuginfo),
     )
+}
+
+pub fn budget(bytes: &[u8]) -> Result<Option<SpeedBudget>, DetectError> {
+    crate::config_budget::parse(bytes).map_err(|reason| DetectError::invalid(&CONFIG_PATH, reason))
 }

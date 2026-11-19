@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-pub const KEYS: [&str; 32] = [
+pub const KEYS: [&str; 33] = [
     "sparse_checkout",
     "private_sources",
     "cache_check_blocks",
@@ -34,4 +34,5 @@ pub const KEYS: [&str; 32] = [
     "lint",
     "test_groups",
     "test_lane",
+    "budget",
 ];
