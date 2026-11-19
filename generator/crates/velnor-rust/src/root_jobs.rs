@@ -10,6 +10,7 @@ use velnor_model::{
 
 use crate::audit_job::{AuditLocation, audit_when};
 use crate::base_cache::{save_steps, saving_run};
+use crate::check_alone::check_alone;
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
@@ -383,24 +384,4 @@ fn binary_id(package: &PackageName, harness: &CustomHarness) -> String {
         TargetKind::Bench => format!("{package}::bench/{name}"),
         TargetKind::Test | TargetKind::BuildScript => format!("{package}::{name}"),
     }
-}
-
-fn check_alone(root: &RustRoot) -> Vec<CargoCommand> {
-    root.members
-        .iter()
-        .filter(|member| {
-            member.targets.iter().any(|target| {
-                !target.requires_features
-                    && target.kinds.iter().any(|kind| {
-                        matches!(
-                            kind,
-                            TargetKind::Lib | TargetKind::ProcMacro | TargetKind::Bin
-                        )
-                    })
-            })
-        })
-        .map(|member| CargoCommand::CheckAlone {
-            package: member.name.clone(),
-        })
-        .collect()
 }
