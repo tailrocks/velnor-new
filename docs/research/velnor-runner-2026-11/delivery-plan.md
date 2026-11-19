@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 820 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 2.8 days of fleet time (820 ÷ 12 builders ≈ 68 h). Coding does not set the dates.
+- **Total work:** about 900 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.1 days of fleet time (900 ÷ 12 builders ≈ 75 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -406,7 +406,22 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | R05 | Promotion timing | Time upload, gate, attestation and read-back in the dry runs | R04 | 3 | cheap | The 15 s estimate replaced by [M] | — |
 | F01 | Final deletion | After cohort 4 has served one real release, and P07 | cohort 4, P07 | 8 | mid | No production path through ARC; the official runner only behind `velnor-official`; `rg` finds no dangling references | ARC's velnor-new scale set (Helm release) and the `local`/`hosted` profiles; wrapper parts RV05 rejected; `images/resource-probe`, `velnor-runner-qualification`; the Turso journal; the rest of `crates/velnor-runner` not moved by RV01 or RV05. **Keeps** `images/runner`, `.velnor/runner.lock`, `velnor-official`, and `images/dind` if P05 uses it |
 
-**Sum:** 124 items, about 820 agent-hours of building plus about 120 of review (about 110 PRs ×
+**BM: proving the speed (design section 11).** Dates follow the system the run needs, and self-hosted
+arms run one at a time on the same two FI workers, so arms, not agents, set the length.
+
+| ID | Title | Scope | Depends on | Agent-h | Class | Verification | Deletes |
+|---|---|---|---|---|---|---|---|
+| BM01 | S1 planted failures | 100 failing edits on every fast path (older-time edit, undeclared build-script input, sibling file, clock shift, stale generation, seeded flakes) | L08, C05, V04 | 10 | strong | 100% red or detected at (1−p)²; reruns on every fast-path change | — |
+| BM02 | S2 control race | Native against Official on the same warm workers and generation, ≥ 30 interleaved pairs per job type at 15% and 80% CPU; the same on today's ARC with phase 0 | O01, X16, cohort 2 | 10 | strong | Per-job-type deltas with intervals published | — |
+| BM03 | S3 head-to-head harness | Replay driver for 300 heads at arrival times on every arm; per-class clocks gross and net of GitHub | B15, L08 | 16 | strong | Two dry arms reproduce the 85-min proxy within its interval | — |
+| BM07 | Strong conventional baseline arm | The official runner on persistent agents on the two FI workers: reflink-cloned warm target, crates mirror, baked tool image, gates on the cluster, auto-merge, ALLGREEN | BM03, C04 | 12 | mid | Same expected test IDs as the inventory | — |
+| BM04 | S4 loaded replay | The 2026-11-18 trace with other organisations' load, A1 and release preparation | BM03 | 6 | mid | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s | — |
+| BM05 | S5 census | C5 classifier and read audit on `main` and 300 heads | V07, V12 | 6 | strong | C5 and whole-tree shares published; goals restated | — |
+| BM06 | S6 warm compile | 300 diffs per root, cold page cache, idle and loaded, cold control | C05 | 6 | mid | Slower witness P90 ≤ 25 s (helper, generator), digests equal | — |
+| V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
+| C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
+
+**Sum:** 133 items, about 900 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
@@ -622,6 +637,12 @@ Storage runs beside both chains: ST01 (h6–h16), ST04 (h16–h24, after D8), ST
 ST07; **L1 routes switch from `local` at about day 3** once ST06 passes, so cross-node cache hits and
 generation shipping start then; nothing on a verdict path waits for them.
 
+**Speed proof** [E]: BM05 and BM06 report by day 5–6; BM02 runs from day 3.5 on the moved job
+types and again after F01; BM01 runs on day 5.2–6; BM03's harness and BM07 are ready by day 9, and
+the self-hosted arms run one after another for about a day each on the 11-18 trace once the goal
+configuration stands (days 10–14, P90 13.5–18), with BM04 last. The claim is published at about
+day 15 (P90 19), only if section 11's pass rules hold.
+
 Then: **F01 at day 6.5**, after one real release on Velnor; **compile reuse graduated on the helper
 and generator roots at day 7.5** (C05 h28–h42, C07 replay plus two production days); **the read
 audit's shadow (V07 from h44) and contracts (V08) enrol per-root keys at day 10, the goal**; stretch
@@ -688,6 +709,7 @@ is [E] except the goal and stretch rows, which are [T].
 | 6.5 (9) | **F01.** **Deletes:** ARC's velnor-new scale set, the Turso journal, unkept `crates/velnor-runner`. **Keeps** the official runner image and `velnor-official` | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 90 | One real release on Velnor; review |
 | 7.5 (10) | Compile reuse graduated on the helper and generator roots | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 80 | 3,000 comparisons per root |
 | 10 (13.5) | **Goal:** per-root keys enrolled; floor fixed | **≤ 90 s / ≤ 4 min** | **≤ 3 / ≤ 8 min** | **≤ 50** | Contracts; evidence |
+| 15 (19) | **Speed claim published** if S1–S6 pass; otherwise the claim stays "designed to cut push-to-merge" | — | — | — | Arms run one at a time on two workers |
 | 16–18 | **Stretch:** per-package keys, `velnor verify`, longest test ≤ 15 s, stamp after link | 30 s / 100 s | 100 s / 4 min | ≤ 20 | Labs B and C |
 
 A milestone that misses its numbers holds the next cohort until the miss is explained; stretch work

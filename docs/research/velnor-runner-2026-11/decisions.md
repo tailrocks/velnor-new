@@ -939,6 +939,20 @@ cluster test.
 | R11 | 1.0.0 is two months old; open #9480 (node return), #8768 (backfill stall), #9161 (small-PUT regression); the operator is 0.0.8 | A risk row; a pinned version; own manifests; routes stay `local` until the phase-1 test passes; any S3 store can replace RustFS (N138) | 11; plan ST04, ST06 |
 | R12 | Not measured: multi-node, WireGuard replication, Linux fsync, the 8.7 GiB snapshot | The phase-1 cluster test, plan ST06, with five parts and pass and fallback rules | 7.1; plan ST06 |
 
+### Group 26: fastest-runner critique by Claude Opus 5.5
+
+| Point | Decision | v3 section |
+|---|---|---|
+| O01 attribution | Accepted: the claim belongs to the verification system; an executor claim needs the control race | 1.1, 5.3, 11 |
+| O02 enrolment, O03 whole-tree share (42 of 214 commits [M]) | Accepted: targets conditional; census S5; the P90 limit stated | 1.4, 3, 11 |
+| O04 C5 tainting; C09 | Accepted: realtime readers only are C5 (5 test files and `now_seconds()` [C]); `Instant` deadlines are flake budget | 6.1 |
+| O20, G29, C06 | Accepted: gross and net push-to-merge; the merge train is owner question D18 | 1.1 |
+| O21, O22, K26 | Accepted: a strong conventional baseline and a phase-0 ablation in the suite | 11 |
+| G03, C16 | Owner question D19 (decision 12); recommended no | 13 |
+| G05 fast red, G06 ancestor clause, G07 twin generations, G08 fan-out | Adopted (G07 and G08 lab-gated) | 6.2, 6.4 |
+| K01–K07 | Adopted as S1–S6 | 11; plan BM |
+| C05, C14, C17 | Settled on evidence | 3, 5.3, 6.2 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
