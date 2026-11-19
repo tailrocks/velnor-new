@@ -344,6 +344,19 @@ pub fn release_tag_patterns(root: &str, text: &str) -> Result<BTreeSet<String>, 
         .collect())
 }
 
+/// Each package that shares a tag with the other members of its
+/// `version_group`, mapped to the group's name.
+pub fn release_version_groups(
+    root: &str,
+    text: &str,
+) -> Result<BTreeMap<String, String>, ReleaseError> {
+    Ok(read(root, text)?
+        .packages
+        .into_iter()
+        .filter_map(|package| Some((package.name, package.group?)))
+        .collect())
+}
+
 pub fn release_pr_branch_prefix(root: &str, text: &str) -> Result<String, ReleaseError> {
     Ok(read(root, text)?.pr_branch_prefix)
 }

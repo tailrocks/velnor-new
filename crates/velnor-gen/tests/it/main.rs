@@ -158,6 +158,7 @@ mod release_yml_cargo;
 mod release_yml_family;
 mod release_yml_family_unsupported;
 mod release_yml_finalize;
+mod release_yml_groups;
 mod release_yml_isolation;
 mod release_yml_keys;
 mod release_yml_limits;
