@@ -150,7 +150,7 @@ fn a_ubuntu_label_without_a_version_is_not_github_hosted_and_gets_the_fork_fence
         "windows-2025",
     ] {
         let tree = rendered(&workflow(
-            &format!("runner = \"{label}\""),
+            &format!("runner = \"{label}\"\nhosted = true"),
             PULL_REQUEST,
             JOB,
         ))?;

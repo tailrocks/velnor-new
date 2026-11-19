@@ -19,6 +19,8 @@ pub struct Workflow {
     pub file: String,
     pub name: String,
     pub runner: String,
+    /// True only when `hosted = true` was declared for `runner`.
+    pub hosted: bool,
     pub fork_runner: String,
     pub condition: Option<String>,
     pub concurrency: Option<Concurrency>,
@@ -140,6 +142,8 @@ pub struct Job {
     pub condition: Option<String>,
     pub helper: bool,
     pub runner: Option<String>,
+    /// True only when the runner of this job is declared `hosted = true`.
+    pub hosted: bool,
     pub environment: Option<String>,
     pub timeout_minutes: u16,
     pub concurrency: Option<Concurrency>,

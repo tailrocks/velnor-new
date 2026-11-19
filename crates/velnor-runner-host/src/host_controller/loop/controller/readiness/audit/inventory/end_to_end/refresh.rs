@@ -4,6 +4,7 @@
 use std::time::Instant;
 
 use super::super::super::super::{RefreshDependencies, refresh_with_dependencies};
+use super::super::super::RemoteAuditFuture;
 use super::super::SettlingAges;
 use super::seed;
 use super::{OTHER_IMAGE, TestResult, World, engine, world};
@@ -36,7 +37,7 @@ async fn refresh_against(
     docker: &bollard::Docker,
     control: &ControlState,
 ) -> TestResult<(Result<(), HostError>, bool)> {
-    let remote_present = |_: &_, _: Option<&_>, _: i64| Ok(true);
+    let remote_present = |_, _, _| -> RemoteAuditFuture { Box::pin(async { Ok(true) }) };
     let outcome = refresh_with_dependencies(
         world.dir.path(),
         docker,

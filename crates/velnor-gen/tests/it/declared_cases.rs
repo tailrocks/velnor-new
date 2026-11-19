@@ -198,7 +198,7 @@ fn a_case_needs_a_mode_input_that_offers_its_modes() -> TestResult {
 }
 
 #[test]
-fn the_pair_runners_must_be_one_hosted_and_one_not() -> TestResult {
+fn the_pair_runners_are_declared_by_their_keys_and_cannot_be_one_label() -> TestResult {
     for (from, to, needle) in [
         ("hosted_runner = \"ubuntu-24.04\"", "", "hosted_runner"),
         (
@@ -207,14 +207,9 @@ fn the_pair_runners_must_be_one_hosted_and_one_not() -> TestResult {
             "scale_set_runner",
         ),
         (
-            "hosted_runner = \"ubuntu-24.04\"",
-            "hosted_runner = \"my-box\"",
-            "hosted_runner",
-        ),
-        (
             "scale_set_runner = \"ubuntu-26.04-scale-set\"",
             "scale_set_runner = \"ubuntu-24.04\"",
-            "scale_set_runner",
+            "one label is either hosted or self-hosted",
         ),
     ] {
         let message = refusal(&format!("{}{CASES}", MODES.replace(from, to)))?;

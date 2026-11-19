@@ -26,6 +26,7 @@ struct RawConfig {
 
     ci: Option<crate::config_ci::RawCi>,
     runner: Option<String>,
+    hosted: Option<bool>,
     fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     private_sources: Option<crate::config_private::RawPrivateSources>,
@@ -108,7 +109,20 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
     let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
+    let declared_runner = raw.runner.is_some();
+    let hosted_key = raw.hosted.is_some() || test_groups.iter().any(|group| group.hosted.is_some());
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
+    let crates_mirror = raw
+        .crates_mirror
+        .map(crate::config_mirror::mirror)
+        .transpose()
+        .map_err(invalid)?;
+    let hosted_runners = crate::config_hosting::resolve(
+        (&runner, raw.hosted.or((!declared_runner).then_some(true))),
+        crates_mirror.as_ref(),
+        &test_groups,
+    )
+    .map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         workspace_groups,
@@ -125,11 +139,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         mbx_remote: crate::config_cache::mbx_remote(raw.cache).map_err(invalid)?,
 
         push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
-        crates_mirror: raw
-            .crates_mirror
-            .map(crate::config_mirror::mirror)
-            .transpose()
-            .map_err(invalid)?,
+        crates_mirror,
+        hosted_runners: hosted_runners.with_key_written(hosted_key),
         docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
         check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
         private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,

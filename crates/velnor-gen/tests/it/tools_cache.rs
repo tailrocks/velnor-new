@@ -166,7 +166,10 @@ fn a_tool_without_a_prebuilt_binary_for_the_runner_fails_generation_naming_the_t
         Ok(())
     };
     assert!(generate(missing_platform, None)?.is_ok());
-    let arm = generate(missing_platform, Some(b"runner = \"ubuntu-24.04-arm\"\n"))?;
+    let arm = generate(
+        missing_platform,
+        Some(b"runner = \"ubuntu-24.04-arm\"\nhosted = true\n"),
+    )?;
     assert_eq!(
         arm,
         Err(GenerateError::Detect(DetectError::ToolNotPrebuilt {

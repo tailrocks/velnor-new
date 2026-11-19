@@ -11,8 +11,8 @@
 
 use std::path::Path;
 
-const DOCKERFILE: &str = "../../docker/runner-server/Dockerfile";
-const SNIPPET: &str = "../../docker/runner-server/job-grant.cs.snippet";
+const DOCKERFILE: &str = "../../local/docker/runner-server/Dockerfile";
+const SNIPPET: &str = "../../local/docker/runner-server/job-grant.cs.snippet";
 const EXPIRY: &str = "AddMinutes(timeoutMinutes + 10)";
 const BROKEN_WAIT: &str =
     "WaitAnyCancellationToken(jobRunningToken, ts.Token, job.CancelRequest.Token)";

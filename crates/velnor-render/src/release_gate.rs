@@ -34,7 +34,27 @@ fn on_the_default_branch(source: &Source) -> RenderedStep {
     }
 }
 
+fn on_the_default_branch_only(source: &Source) -> RenderedJob {
+    RenderedJob {
+        id: "gate".to_owned(),
+        condition: Some(expression(source.passed)),
+        permissions: permissions(&[("contents", "read")]),
+        outputs: vec![("ready".to_owned(), "true".to_owned())],
+        runs_on: HOSTED_RUNNER.to_owned(),
+        timeout_minutes: GATE_TIMEOUT_MINUTES,
+        steps: vec![on_the_default_branch(source)],
+        ..RenderedJob::default()
+    }
+}
+
 pub(crate) fn gate(plan: &ReleasePlan, helper: &HelperRelease, source: &Source) -> RenderedJob {
+    if plan
+        .family
+        .as_ref()
+        .is_some_and(|family| !family.required_checks)
+    {
+        return on_the_default_branch_only(source);
+    }
     let mut command = "velnor-ci release-gate --repo=\"$REPOSITORY\" --sha=\"$COMMIT\"".to_owned();
     let mut scopes = vec![
         ("actions", "read"),

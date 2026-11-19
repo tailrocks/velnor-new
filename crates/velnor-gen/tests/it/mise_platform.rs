@@ -15,7 +15,12 @@ pub(crate) fn generate(
     prebuilt: bool,
     deny: bool,
 ) -> Result<String, String> {
-    let config = format!("runner = \"{runner}\"\n");
+    let hosted = if velnor_model::looks_github_hosted(runner) {
+        "hosted = true\n"
+    } else {
+        ""
+    };
+    let config = format!("runner = \"{runner}\"\n{hosted}");
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes())).map_err(|e| e.to_string())?;
     let mise = format!(
         "[tools]\nrust = \"1.99.1\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\ncargo-deny = {{ version = \"0.20.2\", os = [\"{filter}\"] }}\n"

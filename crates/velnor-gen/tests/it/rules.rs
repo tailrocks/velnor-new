@@ -79,6 +79,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
         fork_runner: RunnerLabel::new("ubuntu-latest")?,
+        hosted_runners: velnor_model::HostedRunners::new(vec![RunnerLabel::new("ubuntu-latest")?]),
         jobs: vec![Job {
             id: JobId::new("format")?,
             name: None,

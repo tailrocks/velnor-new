@@ -10,11 +10,16 @@ use serde_json::{Map, Value};
 use crate::declared_fixture::{TestResult, rendered_text};
 use crate::yaml_tree::document;
 
-const WORKFLOW: &str = "release-rust-ci-tools";
+const WORKFLOW: &str = "release";
 const DRIFT: &str = "tag-ruleset-drift";
-const WRITER: &str = "release";
-const BUILDS: [&str; 2] = ["build-linux-x64", "build-linux-arm64"];
-const TAG_PUSH: &str = "${{ github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v')) }}";
+const WRITER: &str = "publish-family";
+const BUILDS: [&str; 4] = [
+    "build-velnor-ci-linux-x64",
+    "build-velnor-ci-linux-arm64",
+    "build-velnor-gen-linux-x64",
+    "build-velnor-gen-linux-arm64",
+];
+const TAG_PUSH: &str = "${{ github.ref_type == 'tag' }}";
 
 fn read(path: &str) -> Result<String, Box<dyn Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -54,63 +59,77 @@ fn position(runs: &[&str], prefix: &str) -> Result<usize, Box<dyn Error>> {
 }
 
 #[test]
-fn both_committed_workflows_are_what_the_repository_config_renders() -> TestResult {
+fn the_committed_ruleset_drift_workflow_is_what_the_repository_config_renders() -> TestResult {
     let config = read(".velnor/workflows.toml")?;
-    for file in [WORKFLOW, DRIFT] {
-        assert_eq!(
-            read(&format!(".github/workflows/{file}.yml"))?,
-            rendered_text(&config, file)?,
-            "{file}"
-        );
-    }
+    assert_eq!(
+        read(&format!(".github/workflows/{DRIFT}.yml"))?,
+        rendered_text(&config, DRIFT)?
+    );
     Ok(())
 }
 
+fn needs(job: &Value) -> Vec<&str> {
+    job["needs"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .collect()
+}
+
 #[test]
-fn the_release_dag_gates_the_tag_on_default_branch_ancestry_before_building() -> TestResult {
+fn the_release_dag_gates_the_tag_on_default_branch_ancestry_before_anything_else() -> TestResult {
     let workflow = committed(WORKFLOW)?;
     let jobs = jobs(&workflow)?;
     let mut ids: Vec<&str> = jobs.keys().map(String::as_str).collect();
     ids.sort_unstable();
+    let mut expected = vec![
+        "gate",
+        "family-versions",
+        "family",
+        "sums-family",
+        "verify-family",
+        WRITER,
+    ];
+    expected.extend(BUILDS);
+    expected.sort_unstable();
+    assert_eq!(ids, expected);
     assert_eq!(
-        ids,
-        [
-            "build-linux-arm64",
-            "build-linux-x64",
-            "checksums",
-            "gate",
-            WRITER
-        ]
+        workflow["on"]["push"]["tags"],
+        serde_json::json!(["tools-v*"])
     );
+    assert_eq!(workflow["on"].as_object().map(Map::len), Some(1));
     let gate = &jobs["gate"];
     assert_eq!(gate["if"], TAG_PUSH);
     assert!(gate.get("needs").is_none());
-    assert_eq!(uses(gate), [] as [&str; 0]);
     let compare = runs(gate)
         .into_iter()
-        .find(|run| run.contains("/compare/$DEFAULT_BRANCH...$GITHUB_SHA"))
+        .find(|run| run.contains("/compare/$DEFAULT_BRANCH...$COMMIT"))
         .ok_or("the gate never compares the tag with the default branch")?;
     assert!(compare.ends_with(
         "--jq '.status == \"behind\" or .status == \"identical\" or error(\"the tagged commit is not on the default branch\")'"
     ));
+    let checks_waived = read(".velnor/release.toml")?
+        .lines()
+        .any(|line| line == "family_required_checks = false");
+    assert_eq!(
+        position(&runs(gate), "velnor-ci release-gate").is_ok(),
+        !checks_waived
+    );
+    for (id, job) in jobs.iter().filter(|(id, _)| *id != "gate") {
+        assert!(needs(job).contains(&"gate"), "{id}");
+    }
     for build in BUILDS {
-        assert_eq!(jobs[build]["needs"], serde_json::json!(["gate"]), "{build}");
+        assert!(needs(&jobs[build]).contains(&"family"), "{build}");
     }
-    assert_eq!(jobs["checksums"]["needs"], serde_json::json!(BUILDS));
-    assert_eq!(jobs[WRITER]["needs"], serde_json::json!(["checksums"]));
-    for (id, job) in jobs {
-        assert_eq!(job.get("if").is_some(), id == "gate", "{id}");
-        for step in job["steps"].as_array().ok_or("no steps")? {
-            assert!(step.get("if").is_none(), "{id}");
-            assert!(step.get("continue-on-error").is_none(), "{id}");
-        }
-    }
+    assert_eq!(needs(&jobs["sums-family"]).len(), 2 + BUILDS.len());
+    assert!(needs(&jobs["verify-family"]).contains(&"sums-family"));
+    assert!(needs(&jobs[WRITER]).contains(&"verify-family"));
     Ok(())
 }
 
 #[test]
-fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_it_publishes()
--> TestResult {
+fn only_the_publish_job_can_write_contents_and_verification_precedes_it() -> TestResult {
     let workflow = committed(WORKFLOW)?;
     assert_eq!(workflow["permissions"], serde_json::json!({}));
     let jobs = jobs(&workflow)?;
@@ -118,53 +137,52 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
         let permissions = job["permissions"].as_object().ok_or("no permissions")?;
         assert_eq!(
             permissions
-                .values()
-                .filter(|access| *access == "write")
-                .count(),
-            usize::from(id == WRITER),
+                .get("contents")
+                .is_some_and(|access| access == "write"),
+            id == WRITER,
+            "{id}"
+        );
+        let attests = permissions.contains_key("id-token")
+            || permissions.contains_key("attestations") && permissions["attestations"] == "write";
+        assert_eq!(attests, id == "sums-family", "{id}");
+        assert_eq!(
+            runs(job)
+                .iter()
+                .any(|run| run.starts_with("velnor-ci release publish")),
+            id == WRITER,
             "{id}"
         );
         assert_eq!(
             uses(job)
                 .iter()
                 .any(|action| action.starts_with("actions/checkout@")),
-            BUILDS.contains(&id.as_str()),
-            "{id}"
-        );
-        assert_eq!(
-            runs(job).iter().any(|run| run.starts_with("gh release")),
-            id == WRITER,
+            id == "family-versions" || BUILDS.contains(&id.as_str()),
             "{id}"
         );
     }
     for build in BUILDS {
-        let tag_checks: Vec<(&str, &str)> = jobs[build]["steps"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter_map(|step| Some((step["run"].as_str()?, step["working-directory"].as_str()?)))
-            .filter(|(run, _)| run.ends_with(" check-tag \"$GITHUB_REF_NAME\""))
-            .collect();
-        assert_eq!(
-            tag_checks,
-            [
-                ("./velnor-ci check-tag \"$GITHUB_REF_NAME\"", "stage"),
-                ("./velnor-gen check-tag \"$GITHUB_REF_NAME\"", "stage")
-            ]
-        );
+        let build_runs = runs(&jobs[build]);
+        let built = position(&build_runs, "cargo build --profile release-tools ")?;
+        let smoke = build_runs
+            .iter()
+            .position(|run| run.ends_with(" check-tag \"$TAG\""))
+            .ok_or("no tag check")?;
+        let packed = position(&build_runs, "tar -czf ")?;
+        assert!(built < smoke && smoke < packed, "{build}");
     }
-    let writer = runs(&jobs[WRITER]);
-    let verify = position(&writer, "sha256sum --check --strict SHA256SUMS")?;
-    let publish = position(&writer, "gh release create")?;
-    assert!(verify < publish);
-    assert!(writer[publish].contains(" --prerelease "));
-    assert_eq!(writer[publish].matches(" dist/").count(), 7);
-    assert!(writer[publish].contains(" dist/COMMIT "));
-    let sums = runs(&jobs["checksums"]);
-    let record = position(&sums, "echo \"$GITHUB_SHA\" > dist/COMMIT")?;
-    let written = position(&sums, "sha256sum COMMIT ")?;
+    let sums = runs(&jobs["sums-family"]);
+    let record = position(&sums, "echo \"$COMMIT\" > COMMIT")?;
+    let written = position(&sums, "sha256sum velnor-ci-x86_64")?;
     assert!(record < written);
-    assert!(sums[written].ends_with(" > SHA256SUMS"));
+    let attest = uses(&jobs["sums-family"])
+        .iter()
+        .any(|action| action.starts_with("actions/attest-build-provenance@"));
+    assert!(attest);
+    assert!(
+        runs(&jobs["verify-family"])
+            .iter()
+            .any(|run| run.contains("gh attestation verify"))
+    );
     Ok(())
 }
 

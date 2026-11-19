@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::github_hosted;
+use velnor_model::looks_github_hosted;
 
 use crate::call::{call, rank, refuse_step_keys};
 use crate::cases::cases;
@@ -48,6 +48,8 @@ pub(crate) struct Context<'a> {
     pub(crate) workflows: &'a [Workflow],
     pub(crate) triggers: &'a Triggers,
     pub(crate) concurrency: Option<&'a Concurrency>,
+    pub(crate) runner: &'a str,
+    pub(crate) hosted: bool,
 }
 
 pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflow, WorkflowsError> {
@@ -72,11 +74,16 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
     }
     let runner = runner_label_of(&file, raw.runner.as_deref().unwrap_or(DEFAULT_RUNNER))?;
     let fork_runner = runner_label_of(&file, raw.fork_runner.as_deref().unwrap_or(DEFAULT_RUNNER))?;
-    if !github_hosted(&fork_runner) {
+    if !looks_github_hosted(&fork_runner) {
         return refuse(format!(
             "the fork_runner {fork_runner} of {file} must be a GitHub-hosted runner, because it runs code of pull requests from forks"
         ));
     }
+    let hosted = crate::hosting::resolve(
+        &format!("the workflow {file}"),
+        &runner,
+        raw.hosted.or(raw.runner.is_none().then_some(true)),
+    )?;
     let triggers = triggers(&file, raw.on, raw.input, raw.output)?;
     let input_names: Vec<&str> = triggers
         .workflow_call
@@ -96,6 +103,8 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         workflows: earlier,
         triggers: &triggers,
         concurrency: workflow_concurrency.as_ref(),
+        runner: &runner,
+        hosted,
     };
     let mut jobs: Vec<Job> = Vec::new();
     let mut raw_jobs = cases(
@@ -125,6 +134,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
             .map(|text| crate::expression::bare(&text).to_owned()),
         name: raw.name,
         runner,
+        hosted,
         fork_runner,
         concurrency: workflow_concurrency,
         triggers,
@@ -209,6 +219,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         .as_deref()
         .map(|label| runner_label_of(ctx.file, label))
         .transpose()?;
+    let hosted = crate::hosting::of_job(ctx, &id, runner.as_deref(), raw.hosted)?;
     let matrix = raw
         .matrix
         .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
@@ -239,6 +250,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         condition,
         helper: raw.helper,
         runner,
+        hosted,
         environment: raw.environment.clone(),
         timeout_minutes,
         concurrency: job_concurrency,

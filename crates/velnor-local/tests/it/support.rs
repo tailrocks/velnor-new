@@ -174,6 +174,8 @@ impl Harness {
     }
 }
 
+pub(crate) type Bound = (Option<Arc<dyn StandIn>>, Option<PathBuf>);
+
 #[derive(Debug)]
 pub(crate) struct Stub {
     stub: ApiStub,
@@ -187,12 +189,12 @@ impl Stub {
 
     /// A stub started with `--job-cache-admin`: the override that grants every job.
     pub(crate) fn job_cache_admin(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
-        Self::granting(repo, dir, cache_dir, true, None)
+        Self::granting(repo, dir, cache_dir, true, None, (None, None))
     }
 
-    /// A stub started with `--token-key`: it grants the jobs that carry a signed grant.
-    pub(crate) fn job_grants(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
-        Self::granting(repo, dir, cache_dir, false, Some(job_token_key()))
+    /// A stub started with `--token-key`, `--standin` and `--ledger`.
+    pub(crate) fn job_grants(repo: &Path, dir: &Path, cache_dir: &Path, bound: Bound) -> Self {
+        Self::granting(repo, dir, cache_dir, false, Some(job_token_key()), bound)
     }
 
     fn granting(
@@ -201,6 +203,7 @@ impl Stub {
         cache_dir: &Path,
         job_cache_admin: bool,
         token_key: Option<Vec<u8>>,
+        (standin, ledger): Bound,
     ) -> Self {
         Self {
             control: false,
@@ -210,11 +213,11 @@ impl Stub {
                 cache_dir: cache_dir.to_owned(),
                 default_branch: "main".to_owned(),
                 diff_limit_bytes: 1 << 20,
-                standin: None,
+                standin,
                 local_setup: false,
                 job_cache_admin,
                 token_key,
-                ledger: None,
+                ledger,
             }),
         }
     }

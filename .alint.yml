@@ -186,13 +186,13 @@ rules:
     kind: file_content_forbidden
     paths:
       include:
-        - ".github/workflows/release-rust-ci-tools.yml"
+        - ".github/workflows/release.yml"
         - ".velnor/workflows.toml"
         - ".github/actions/**"
         - "scripts/**"
         - "images/**"
         - "mise.toml"
-    pattern: 'cargo build[^\n]*--release\b[^\n]*(velnor-ci|velnor-gen|ci-helper|generator/Cargo)|cargo build[^\n]*(velnor-ci|velnor-gen|ci-helper|generator/Cargo)[^\n]*--release\b|release-rust-ci-tools[^\n]*--release\b|/release/velnor-(ci|gen)\b|(ci-helper|generator)/target'
+    pattern: 'cargo build[^\n]*--release\b[^\n]*(velnor-ci|velnor-gen|ci-helper|generator/Cargo)|cargo build[^\n]*(velnor-ci|velnor-gen|ci-helper|generator/Cargo)[^\n]*--release\b|/release/velnor-(ci|gen)\b|(ci-helper|generator)/target'
     level: error
     message: "velnor-ci and velnor-gen ship with the size-tuned release-tools profile: build them with `cargo build --profile release-tools -p <package>` and copy from target/<triple>/release-tools/"
 

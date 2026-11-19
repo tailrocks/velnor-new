@@ -104,7 +104,7 @@ fn the_engines_marked_file_is_left_alone() -> TestResult {
 
 #[test]
 fn an_unmarked_file_is_drift_only_without_the_engine_config() -> TestResult {
-    let other = path(".github/workflows/release-rust-ci-tools.yml")?;
+    let other = path(".github/workflows/release.yml")?;
     let files = disk(&other, "name: Release\n");
     assert_eq!(
         drift(&BTreeMap::new(), &files, false),
