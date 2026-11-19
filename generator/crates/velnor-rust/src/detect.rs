@@ -10,14 +10,15 @@ use velnor_model::{
 
 use crate::build_target::{build_targets, check_host_tuple_version};
 use crate::config::{CONFIG_PATH, excluded, parse};
+use crate::embedded::is_rust_source;
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
 use crate::os_pins::pinned_for_runner;
 use crate::policy::DENY_CONFIG;
 use crate::private_sources::{private_sources, private_suggestion, refuse_locked_credentials};
-use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
-use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
+use crate::reads::INPUTS_LOCK;
+use crate::roots::{CARGO_LOCK, is_cargo_config, is_cargo_lock, rust_roots};
 use crate::timings::{TIMINGS_PATH, usable_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
@@ -44,7 +45,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .chain(
         tracked
             .iter()
-            .filter(|path| is_cargo_config(path) || is_nextest_config(path) || is_cargo_lock(path))
+            .filter(|path| {
+                is_cargo_config(path)
+                    || is_nextest_config(path)
+                    || is_cargo_lock(path)
+                    || is_rust_source(path)
+            })
             .cloned(),
     )
     .chain(
@@ -66,10 +72,6 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
             .cloned(),
     )
     .collect()
-}
-
-fn is_cargo_lock(path: &RepoPath) -> bool {
-    path.as_str().rsplit('/').next() == Some(CARGO_LOCK.as_str())
 }
 
 fn is_nested_toolchain(path: &RepoPath) -> bool {
@@ -116,10 +118,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             });
         }
     }
-    let compile_inputs = view
-        .files
-        .get(&INPUTS_LOCK)
-        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_inputs_lock(bytes))?;
+    let compile_inputs = crate::embedded::locked_and_embedded(view, &rust_roots)?;
     let named = config.inputs.iter().flat_map(|input| &input.packages);
     if let Some(package) = unknown_package(&rust_roots, named) {
         return Err(DetectError::invalid(
