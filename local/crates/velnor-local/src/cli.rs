@@ -10,7 +10,7 @@ use crate::side::Side;
 mod environment;
 mod servers;
 
-pub use environment::{EnvironmentArgs, RunnerMode};
+pub use environment::{EnvironmentArgs, RunnerMode, runner_label};
 pub use servers::{ApiStubArgs, CacheServerArgs, ControlArgs};
 
 #[derive(Debug, Parser)]
@@ -88,6 +88,12 @@ pub struct SuperviseArgs {
     pub policy: bool,
     #[arg(long, help = "Repository whose workflow files the policy hashes")]
     pub repo: Option<PathBuf>,
+    #[arg(
+        long,
+        value_parser = runner_label,
+        help = "Extra runner label to register for every minted runner; `up` passes the --label values"
+    )]
+    pub label: Vec<String>,
 }
 
 #[derive(Debug, Args)]

@@ -199,3 +199,39 @@ async fn a_symlinked_policy_file_is_refused_and_nothing_is_copied() {
     );
     assert!(!dir.join("runner/policy.json").exists());
 }
+
+#[tokio::test]
+async fn the_authority_is_started_with_every_extra_label() {
+    let dir = temp_dir("policy-labels");
+    let script = dir.join("recording-authority");
+    std::fs::write(
+        &script,
+        "#!/bin/bash\nmkdir -p \"$3/runner\"\necho \"$@\" > \"$3/args\"\necho 127.0.0.1:9 > \"$3/authority/address\"\necho 'pair trusted-1 listening' > \"$3/runner/velnor-host.log\"\nexec -a \"$0 $1 $2 $3\" /bin/sleep 600\n",
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let pairs = Pairs {
+        host: script.clone(),
+        trusted: 1,
+        untrusted: 0,
+        policy: None,
+        labels: vec!["ubuntu-26.04-scale-set".to_owned(), "ci-fast".to_owned()],
+    };
+    let started = supervisor::start_pairs(
+        &dir,
+        &script,
+        &pairs,
+        async |_: &Path| Ok(Online),
+        Duration::from_secs(10),
+    )
+    .await;
+    let args = std::fs::read_to_string(dir.join("args")).unwrap_or_default();
+    let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
+    let _ = Command::new("kill").args(["-KILL", pid.trim()]).status();
+    started.unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        args.contains("--label ubuntu-26.04-scale-set --label ci-fast"),
+        "{args}"
+    );
+}

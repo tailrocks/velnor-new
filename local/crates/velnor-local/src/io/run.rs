@@ -102,7 +102,9 @@ async fn down(dir: &Path) -> std::io::Result<()> {
 }
 
 async fn up(args: UpArgs) -> std::io::Result<()> {
-    let env = Environment::at(&args.environment.dir, DockerCli).await?;
+    let env = Environment::at(&args.environment.dir, DockerCli)
+        .await?
+        .with_labels(&args.environment.label);
     let repo = fs::canonicalize(&args.repo).await?;
     let pairs = super::supervisor::pairs(&args.environment).await?;
     println!("velnor-local: {}", runner_mode(pairs.as_ref()));

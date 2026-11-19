@@ -13,6 +13,7 @@ mod environment;
 mod fake_docker;
 mod io;
 mod io_edges;
+mod labels;
 mod local_ci;
 mod local_setup;
 mod online;

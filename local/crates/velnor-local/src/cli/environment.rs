@@ -54,6 +54,26 @@ pub struct EnvironmentArgs {
         help = "linux-arm64 velnor-ci that setup-velnor installs instead of the pinned release, with a warning that names its SHA-256. Mounted read-only into the trusted plain runners only; needs --runner plain, because velnor-host owns the pair containers. The workflow stays unmodified and still pins the release"
     )]
     pub velnor_ci_binary: Option<PathBuf>,
+    #[arg(
+        long,
+        value_delimiter = ',',
+        value_parser = runner_label,
+        help = "Runner label to register besides the built-in ubuntu-* ones, so a workflow whose runs-on names another label (for example ubuntu-26.04-scale-set) runs unchanged; repeatable or comma separated; letters, digits, '.', '_' and '-' only"
+    )]
+    pub label: Vec<String>,
+}
+
+pub fn runner_label(text: &str) -> Result<String, String> {
+    if !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-'))
+    {
+        return Ok(text.to_owned());
+    }
+    Err(format!(
+        "runner label {text:?} must be non-empty and hold only letters, digits, '.', '_' and '-'"
+    ))
 }
 
 impl Default for EnvironmentArgs {
@@ -67,6 +87,7 @@ impl Default for EnvironmentArgs {
             policy: None,
             velnor_host: None,
             velnor_ci_binary: None,
+            label: Vec::new(),
         }
     }
 }
