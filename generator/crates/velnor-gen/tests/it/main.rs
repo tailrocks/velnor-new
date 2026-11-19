@@ -125,6 +125,7 @@ mod release_nested_root;
 mod release_nested_toolchain;
 mod release_pr_only;
 mod release_push_names;
+mod release_record_recover;
 mod release_ruleset_lock_version;
 mod release_sample_names;
 mod release_symlink;
