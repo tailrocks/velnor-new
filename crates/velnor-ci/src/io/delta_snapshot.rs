@@ -17,7 +17,10 @@ use crate::error::CiError;
 
 pub(super) const BASELINE: &str = ".velnor/delta-baseline.json";
 pub(super) const MANIFEST: &str = "manifest.json";
+/// The base inventory a default-branch run saves inside the base cache.
+pub(super) const INVENTORY: &str = ".velnor/delta-inventory.json";
 const METADATA_LIMIT: u64 = 16 * 1024 * 1024;
+const INVENTORY_LIMIT: u64 = 128 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", deny_unknown_fields)]
@@ -91,15 +94,73 @@ pub(super) struct Manifest {
     pub sources: super::delta_source::SourceSnapshot,
 }
 
-pub(super) fn capture(root: &Path, base: &str) -> Result<Snapshot, CiError> {
+/// Inventories `root`. A file whose size, time and mode match the same path in `known` keeps
+/// its recorded digest instead of being read again; any other file is hashed.
+pub(super) fn capture(
+    root: &Path,
+    base: &str,
+    known: Option<&Snapshot>,
+) -> Result<Snapshot, CiError> {
     let nodes = super::delta_tree::paths(root)?
         .into_iter()
-        .map(|path| identity(&root.join(&path)).map(|node| (path, node)))
+        .map(|path| {
+            let recorded = known.and_then(|known| known.nodes.get(&path));
+            identity_reusing(&root.join(&path), recorded).map(|node| (path, node))
+        })
         .collect::<Result<_, _>>()?;
     Ok(Snapshot {
         base: base.to_owned(),
         nodes,
     })
+}
+
+fn identity_reusing(path: &Path, recorded: Option<&Node>) -> Result<Node, CiError> {
+    let current = stat(path)?;
+    if let (
+        Node::File {
+            size,
+            modified,
+            mode,
+            ..
+        },
+        Some(Node::File {
+            size: old_size,
+            modified: old_modified,
+            mode: old_mode,
+            digest,
+        }),
+    ) = (&current, recorded)
+        && (size, modified, mode) == (old_size, old_modified, old_mode)
+    {
+        return Ok(Node::File {
+            size: *size,
+            modified: *modified,
+            mode: *mode,
+            digest: *digest,
+        });
+    }
+    identity(path)
+}
+
+/// Records the digest of every file of a base that is about to be saved, so a pull request
+/// that restores the base does not read the whole tree again before its first Cargo command.
+pub(super) fn record_inventory(target: &Path) -> Result<(), CiError> {
+    let inventory = capture(target, "", None)?;
+    let bytes = serde_json::to_vec(&inventory).map_err(|e| CiError::new(e.to_string()))?;
+    if bytes.len() as u64 > INVENTORY_LIMIT {
+        return Err(CiError::new("the base inventory exceeds its size limit"));
+    }
+    replace(&target.join(INVENTORY), Some(&bytes))
+}
+
+/// The inventory saved with the base, or `None` when it is absent or unusable; the caller
+/// then reads every file.
+pub(super) fn recorded_inventory(target: &Path) -> Option<Snapshot> {
+    read_bounded(&target.join(INVENTORY), INVENTORY_LIMIT).ok()
+}
+
+pub(super) fn forget_inventory(target: &Path) -> Result<(), CiError> {
+    replace(&target.join(INVENTORY), None)
 }
 
 pub(super) fn identity(path: &Path) -> Result<Node, CiError> {
@@ -159,15 +220,19 @@ pub(super) fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>, CiError> {
 }
 
 pub(super) fn read<T: for<'de> Deserialize<'de>>(path: &Path) -> Result<T, CiError> {
+    read_bounded(path, METADATA_LIMIT)
+}
+
+fn read_bounded<T: for<'de> Deserialize<'de>>(path: &Path, limit: u64) -> Result<T, CiError> {
     safe_path(path)?;
     let metadata = fs::symlink_metadata(path).map_err(|e| failure(path, &e))?;
-    if !metadata.is_file() || metadata.len() > METADATA_LIMIT {
+    if !metadata.is_file() || metadata.len() > limit {
         return Err(CiError::new(
             "delta metadata must be a bounded regular file",
         ));
     }
     let file = fs::File::open(path).map_err(|e| failure(path, &e))?;
-    serde_json::from_slice(&super::read_limited(file, METADATA_LIMIT)?)
+    serde_json::from_slice(&super::read_limited(file, limit)?)
         .map_err(|e| CiError::new(format!("invalid delta metadata: {e}")))
 }
 

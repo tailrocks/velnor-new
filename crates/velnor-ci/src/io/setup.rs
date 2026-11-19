@@ -13,7 +13,7 @@ use velnor_rust::{
     toolchain,
 };
 
-use super::build_inputs::{image_identity, release_of, repository_profile};
+use super::build_inputs::{image_or_cold, release_of, repository_profile};
 use super::{append_outputs, append_to, current_dir};
 use crate::error::CiError;
 use crate::setup::{
@@ -45,6 +45,7 @@ pub(super) fn prepare() -> Result<String, CiError> {
     }
     let rustc_verbose = rustc_verbose()?;
     let profile = build_profile(debuginfo, release_of(&rustc_verbose)?);
+    let (image, cold_notice) = image_or_cold();
     let inputs = CompatInputs {
         rustc_verbose,
         target: env_text("CARGO_BUILD_TARGET"),
@@ -53,14 +54,14 @@ pub(super) fn prepare() -> Result<String, CiError> {
         workspace: root.display().to_string(),
         driver: BUILD_DRIVER.to_owned(),
         repo_profile,
-        image: image_identity()?,
+        image,
     };
     let digest = compat(&inputs);
     write_cargo_config(&root, profile.cargo_config)?;
     append_to(ENV_VARIABLE, &env_lines(&profile))?;
     append_outputs(&output_lines(&digest))?;
     append_outputs(&lock_output_lines(&root)?)?;
-    Ok(String::new())
+    Ok(cold_notice)
 }
 
 fn lock_output_lines(root: &Path) -> Result<String, CiError> {
