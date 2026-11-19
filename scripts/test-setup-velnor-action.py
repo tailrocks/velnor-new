@@ -429,7 +429,8 @@ class SetupVelnorInstallTests(unittest.TestCase):
             extra_env={"STUB_MISSING": "tools-v0.1.79 rust-ci-v0.1.79"},
         )
         self.assertEqual(result.returncode, 1, result.output)
-        self.assertEqual(len(self.curl_calls()), 2, self.curl_calls())
+        requested = [call.rsplit(" ", 1)[-1] for call in self.curl_calls()]
+        self.assertEqual(requested, [RELEASE_URL, LEGACY_RELEASE_URL])
         self.assertIn("downloading velnor-ci", result.output)
         self.assertIn("tools-v0.1.79", result.output)
         self.assertIn("rust-ci-v0.1.79", result.output)
