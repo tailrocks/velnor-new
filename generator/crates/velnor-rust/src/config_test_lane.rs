@@ -69,12 +69,30 @@ fn feature_name(name: &str) -> bool {
 
 fn filterset(filter: &str) -> bool {
     !filter.trim().is_empty()
+        && balanced(filter)
         && !filter
             .chars()
             .any(|c| c.is_control() || FORBIDDEN_CHARACTERS.contains(&c))
         && !filter
             .split_whitespace()
             .any(|word| FORBIDDEN_WORDS.contains(&word))
+}
+
+/// An unbalanced `)` would close the `(...)` the filter is wrapped in and let
+/// the rest of it widen the selection past the plan's filter.
+fn balanced(filter: &str) -> bool {
+    let mut depth = 0_usize;
+    for c in filter.chars() {
+        match c {
+            '(' => depth += 1,
+            ')' => match depth.checked_sub(1) {
+                Some(rest) => depth = rest,
+                None => return false,
+            },
+            _ => {}
+        }
+    }
+    depth == 0
 }
 
 pub(crate) fn commands(
