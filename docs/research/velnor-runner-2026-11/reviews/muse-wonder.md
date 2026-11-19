@@ -33,7 +33,7 @@ Method: claims checked against `evidence.md` (T/B/C/E/F sections) and cited code
 - **Baselines are sums of medians from different cohorts.** 16.0 (11-17 PR, T5) + 12.8 (11-17 merge_group) added as stages of one PR. Medians do not add; cohorts differ; review/enqueue time is zero by construction. G's timelines and E's landed-commit check show that gap is minutes to tens of minutes. "Honest push-to-merge today" was never measured.
 - **"1,000 workflow runs saturated the 20-job hosted limit."** T11 counts runs *created* 11-18 (CI 348, image candidate 306, qualification 267) and 86 queued (25 non-CI). No evidence ties a 20-concurrent limit to this org or equates run count with concurrency. G flags the public-repo exemption as open; B states it as fact.
 - **CCD topology as measured fact.** "8 CCDs × 6 cores × 32 MB L3" asserted from the model string. B §1.6: CPU model, SMT, NUMA *not observable* read-only, in no owner doc. The pinning config (`reservedSystemCPUs: "0-5,48-53"`, 7 clean CCDs) breaks silently if enumeration differs.
-- **State seal softened.** T9d: producer failed 16/18 (7 tip, 9 Clippy/checks); root/runner **0/18**. B's ancestor-or-equal promotion cures only the 7; the 9 mean the producer pipeline is red half the time. Deleting `state-seal.yml` sidesteps this.
+- **State seal softened.** T9d: producer failed 16/18 (7 tip, 9 Clippy/checks); root/runner **0/18**. B's ancestor-or-equal promotion cures only the 7; the 9 mean the producer pipeline is red half the time. Deleting the State seal workflow sidesteps this.
 
 ### Missed bottlenecks or risks
 
@@ -44,7 +44,7 @@ Method: claims checked against `evidence.md` (T/B/C/E/F sections) and cited code
 
 ### Ideas worth taking
 
-- **Path-mismatch root cause** (hosted `/home/runner/work/_temp` vs scale-set `/home/runner/_work/_temp` into the cache version hash, `velnor-new/local/crates/velnor-cache-rules/src/lookup.rs:28-32`; `StateCompat` quoting, `.../state_fragments.rs:15-21`). Best diagnosis in any proposal. Adopt verbatim.
+- **Path-mismatch root cause** (hosted `/home/runner/work/_temp` vs scale-set `/home/runner/_work/_temp` into the cache version hash, `velnor-new/crates/velnor-cache-rules/src/lookup.rs:28-32`; `StateCompat` quoting, `.../state_fragments.rs:15-21`). Best diagnosis in any proposal. Adopt verbatim.
 - **In-sandbox `node24`, never native action clones** — legacy's 37k-LOC lesson learned, tarball tax (4.17 s/job) still removed. Right call on H1.
 - **Ancestor-or-equal `main` promotion**, `0555` snapshots, per-PR write scopes. Correct trust shape; all three converge here.
 - **Phase 1 two-pool split** (`velnor-fast` no DinD; `velnor-docker` 1 s probe): removes 3–4 s probe tax from ~90% of jobs (B §3.3) in a week.

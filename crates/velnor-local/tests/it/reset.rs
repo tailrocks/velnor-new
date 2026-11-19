@@ -4,7 +4,7 @@
 use velnor_local::io::env::Environment;
 
 use crate::fake_docker::FakeDocker;
-use crate::support::{Harness, MAIN, temp_dir};
+use crate::support::{Harness, MAIN, PULL_2, temp_dir};
 
 fn seeded(name: &str) -> std::path::PathBuf {
     let dir = temp_dir(name);
@@ -101,6 +101,29 @@ async fn a_rerun_forgets_a_reservation_the_old_run_never_committed() {
     let second = rerun(first, &dir).await;
 
     assert_eq!(second.save(MAIN, "crashed", b"whole").await["ok"], true);
+    let archives = std::fs::read_dir(dir.join("cache/archives")).map_or(0, Iterator::count);
+    assert_eq!(archives, 1);
+}
+
+#[tokio::test]
+async fn a_rerun_forgets_what_a_pull_request_saved_and_keeps_the_default_branch_entries() {
+    let dir = temp_dir("reset-pull-request");
+    let first = Harness::at(dir.join("cache"), 10_000_000_000).await;
+    assert_eq!(first.register_base(2, "main").await, 200);
+    assert_eq!(
+        first.save(PULL_2, "build", b"pull request 2").await["ok"],
+        true
+    );
+    assert_eq!(
+        first.save(MAIN, "tools", b"default branch").await["ok"],
+        true
+    );
+
+    let second = rerun(first, &dir).await;
+
+    assert_eq!(second.register_base(2, "main").await, 200);
+    assert_eq!(second.restore(PULL_2, "build").await["ok"], false);
+    assert_eq!(second.restore(MAIN, "tools").await["ok"], true);
     let archives = std::fs::read_dir(dir.join("cache/archives")).map_or(0, Iterator::count);
     assert_eq!(archives, 1);
 }

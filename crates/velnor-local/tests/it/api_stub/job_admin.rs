@@ -94,10 +94,36 @@ async fn a_push_job_with_actions_write_lists_page_by_page_and_deletes() {
 }
 
 #[tokio::test]
-async fn a_push_job_without_actions_write_gets_403() {
+async fn a_push_job_with_only_actions_read_lists_but_cannot_delete() {
     let harness = seeded("job-admin-read").await;
     let stub = stub(&harness, "job-admin-read", false);
-    refused(&stub, &harness, Some(&job_token("push-actions-read"))).await;
+    let token = job_token("push-actions-read");
+    let before = archives(&harness);
+
+    let listed = stub.call_as("GET", CACHES, &token).await;
+    let id = listed.json()["actions_caches"][0]["id"].clone();
+    let deleted = stub
+        .call_as("DELETE", &format!("{CACHES}/{id}"), &token)
+        .await;
+
+    assert_eq!(listed.status, 200);
+    assert_eq!(listed.json()["total_count"], 4);
+    assert_eq!(deleted.status, 403);
+    assert_eq!(archives(&harness), before);
+}
+
+#[test]
+fn runner_server_grants_a_job_on_its_calculated_permission_whether_or_not_the_job_spells_it_out() {
+    let snippet = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../local/docker/runner-server/job-grant.cs.snippet"),
+    )
+    .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!snippet.contains("jobPermissions"), "{snippet}");
+    assert!(snippet.contains("calculatedPermissions.TryGetValue(\"actions\""));
+    assert!(snippet.contains("actionsPermission == \"read\""));
+    assert!(snippet.contains("new Claim(\"actions\", actionsPermission)"));
+    assert!(snippet.contains("!wevent.StartsWith(\"pull_request\")"));
 }
 
 #[tokio::test]

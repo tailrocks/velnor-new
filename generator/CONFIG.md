@@ -94,6 +94,8 @@ With `velnor-ci` 0.1.86 or later in the lock, `mbx_shared_store = true` also ren
 
 `docs = "post_merge"` in `.velnor/rust-ci.toml` runs the `Documentation` step (`cargo doc`) only on `push`, `schedule` and `workflow_dispatch`, so a pull request and a `merge_group` run skip it. The default, `"always"`, keeps the step on every event. The step needs no helper version. mbx caches rustdoc, but it keys each crate's action on the whole workspace source tree, so any source change misses every crate and a pull request recompiles all the docs; the doc check then moves to the run after the merge.
 
+`check_alone = "post_merge"` does the same for the per-crate `Check <crate> alone` steps. They compile each crate with only its own feature set, so their dependency artifacts differ from the workspace lint and build steps and a pull request rarely finds them in the mbx cache. They keep their value as the check that a crate declares every feature it needs, and the run after the merge keeps that check. The default is `"always"`.
+
 ## Test setup steps
 
 A test that needs a fixture, such as a built example executable or a provisioned service, declares one step per fixture. The generator runs each step before the first test step of every job of that root, in the order written. Each step is one command, because a generated `run:` value is one command with no shell logic; the logic lives in a script the repository commits. The script exports variables to later steps through `$GITHUB_ENV`.
@@ -106,6 +108,28 @@ run = "bash scripts/ci-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
+
+## Optional speed budget
+
+The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request, and its failure never fails the required check.
+
+```toml
+[budget]
+pr_wall_seconds = 0
+main_wall_seconds = 0
+runner_seconds = 0
+setup_seconds = 0
+```
+
+`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it collects the last ten successful first attempts of the generated workflow for each kind of event, compares the medians of that window and the latest run of each kind with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.91` when the table holds a budget.
+
+The check fails closed. A budget for a kind of run there is none of is a failure, not a pass, and so is a budget whose runs do not carry a measurement it needs. The report is printed before the check fails, so that the breach is read next to the medians it broke.
+
+A budget is a number the project measures, not a number it guesses: set every key to the median of the relevant runs plus a quarter, so that a run of ordinary noise stays inside the budget. The required check prints the budget and the wall and runner seconds of the run so far, so that a breach can be read next to the numbers it broke.
+
+## Optional sparse checkout
+
+`sparse_checkout = true` in `.velnor/rust-ci.toml` makes the checkout step of each Rust lane job list only what that lane reads: its root and its members, the roots it depends on, the lockfiles and tool files at the repository top, `.cargo/`, `.config/`, `.velnor/`, and every path of the inputs lock and of declared `[[inputs]]`. It is `false` by default, and then the generated workflow is unchanged. The plan, policy and audit-plan jobs keep the full tree. The lane keeps a full checkout when a root manifest sits at the repository top, when the inputs lock has a repository-wide read, or when `[[test_setup]]` is set, because those reads are unknown. A test that reads a tracked file outside the list fails with a missing file; add that path under `[[inputs]]`.
 
 ## Test groups
 
@@ -135,7 +159,7 @@ A repository with any `[[test_groups]]` splits each root that has a group into t
 
 ## Non-Rust lint jobs
 
-A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs one command or one pinned action. It has `contents: read` and no other permission, no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and the only action a lint job adds to the fixed list is `asamarts/alint`, accepted at one pinned commit.
+A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission, no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`.
 
 ```toml
 [[lint]]
@@ -164,12 +188,14 @@ timeout_minutes = 5
 | `timeout_minutes` | all | 1 to 360, default 10. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
-| `task` | `mise-task` | The mise task, run as `mise run --skip-tools <task>`. |
-| `tools` | `mise-task` | Tools from `mise.toml` to install before the task. The task runs with `--skip-tools`, so a tool it needs and `tools` lacks fails the job instead of being installed unpinned. |
+| `task` | `mise-task` | The mise task, run as `mise run --force --skip-tools <task>`, so a task with fresh `sources` and `outputs` still runs. It must be a key of `[tasks]` in `mise.toml` or a file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`); generation fails otherwise. |
+| `tools` | `mise-task` | Tools from `mise.toml` to install before the task. The task runs with `--skip-tools`, so a tool it needs and `tools` lacks fails the job instead of being installed unpinned. Generation fails when the task, or a task it reaches through `depends`, declares a tool in its own `tools` table that this list does not name, because the runner's own binary of that name would run instead. The tools a task script calls without declaring them, and the headers of task files, are not read. |
 
-`jactionlint` is the version pinned in `mise.toml` (and its checksum in `mise.lock`); generation fails when `mise.toml` does not pin it. It checks the repository with `--strict-exit --no-online`. It runs ShellCheck when `mise.toml` pins `shellcheck`, and turns it off otherwise. A path or task name that is not made of letters, digits and `_-./:@`, or that starts with `-`, is refused, because it is written into a command.
+`jactionlint` is the version pinned in `mise.toml` (and its checksum in `mise.lock`); generation fails when `mise.toml` does not pin it. It checks the repository with `--strict-exit --no-online`. It runs ShellCheck when `mise.toml` pins `shellcheck`, and turns it off otherwise. When the repository has a workflow step that uses `actions/github-script`, jactionlint checks its script only with `node` on `PATH`, so generation fails unless `mise.toml` pins `node`; a pinned `node` is installed next to `jactionlint`. A path or task name that is not made of letters, digits and `_-./:@`, or that starts with `-`, is refused, because it is written into a command.
 
-`alint` runs with `fail-on-warning`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
+`alint` is the version pinned in `mise.toml` (for example `"github:asamarts/alint" = "0.22.1"`) with the archive digest of every platform in `mise.lock`, so the digest is the repository's own and no upstream installer runs. It runs `alint --format github --config <config> --fail-on-warning check .`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
+
+Every tool a lint entry needs is checked at generation. The tool must be pinned in `mise.toml` by its basename (`jactionlint`) or in full (`aqua:owner/tool/jactionlint`); a basename that matches two configured tools is refused until the entry names one in full. At least one of its requests must apply to the runner's operating system (the `os` key of the pin), and `mise.lock` must hold an entry that covers every version requested for that system. A `shellcheck` pin that is filtered out for the runner is treated as absent.
 
 ### One required check
 
@@ -202,7 +228,7 @@ A repository with any `[[test_groups]]` splits each root that has a group into t
 
 ## Optional extra binaries and files in a release asset
 
-A `[[binaries]]` entry in `.velnor/release.toml` packs one binary per platform by default: `<bin>-<platform>.tar.gz` holds only the file `<bin>`. Two opt-in keys put more in the same asset.
+A `[[binaries]]` entry in `.velnor/release.toml` packs one binary per platform by default: `<bin>-<target-triple>.tar.gz` holds only the file `<bin>`, as the archives of uv, ripgrep and bat do. Two opt-in keys put more in the same asset.
 
 ```toml
 [[binaries]]
@@ -216,13 +242,23 @@ include = ["LICENSE", "NOTICE"]
 
 Every entry lands at the top level of the asset, flat and by its file name: the main binary, then `bins` in the order written, then `include` in the order written. This is the layout of the old engine's `velnor-host` release. A `bin` or file name that appears twice, an `include` path that is absolute, starts with `-`, contains `..` or a character other than letters, digits, `.`, `_`, `-` and `/`, a `bin` that no package of the root builds, and an expression in any value are refused at generation. A listed file that is missing from the checkout fails the build job, not generation.
 
-Both keys are absent by default, and then the generated workflow is byte-identical to one generated without this feature. The `SHA256SUMS` file still covers the archives, not their members.
+Both keys are absent by default, and then the generated workflow is byte-identical to one generated without this feature. The `SHA256SUMS` file still covers the archives, not their members. With `attest = true` each archive is its own attestation subject, so the binary, the helper, `LICENSE` and `NOTICE` travel in one verified file.
 
 ## Release binary asset format
 
-`format` in a `[[binaries]]` table of `.velnor/release.toml` selects what the release job uploads for that binary. It is `"archive"` by default, and then the output is unchanged: one musl `<bin>-<platform>.tar.gz` for each platform plus the `SHA256SUMS` file.
+`format` in a `[[binaries]]` table of `.velnor/release.toml` selects what the release job uploads for that binary. It is `"archive"` by default: one `<bin>-<target-triple>.tar.gz` for each platform plus the `SHA256SUMS` file.
 
-`format = "raw"` publishes the bare executable instead, built for the gnu target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`), so a consumer can download it by its exact name. For each platform (`linux-x64`, `linux-arm64`, `macos-arm64`) the release holds three assets:
+| Platform | Archive asset (default, musl) | Runner |
+|---|---|---|
+| `linux-x64` | `<bin>-x86_64-unknown-linux-musl.tar.gz` | `ubuntu-24.04` |
+| `linux-arm64` | `<bin>-aarch64-unknown-linux-musl.tar.gz` | `ubuntu-24.04-arm` |
+| `macos-arm64` | `<bin>-aarch64-apple-darwin.tar.gz` | `macos-15` |
+
+`target = "gnu"` builds the linux platforms for `x86_64-unknown-linux-gnu` and `aarch64-unknown-linux-gnu` and names the archives after those triples. The macOS archive does not change.
+
+`checksum_files = "sha256"` adds a `<archive>.sha256` file next to each archive. It holds one line, `<sha256>  <archive>`, as `sha256sum --check` reads it. `SHA256SUMS` lists the sidecars too, because `velnor-ci release publish` checks every file it uploads against it, and an attested release attests and verifies them. It is off by default, and refused with `format = "raw"`, which always publishes its sidecar.
+
+`format = "raw"` publishes the bare executable instead, built for the gnu target (`x86_64-unknown-linux-gnu`, `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`) unless `target = "musl"` says otherwise, so a consumer can download it by its exact name. For each platform (`linux-x64`, `linux-arm64`, `macos-arm64`) the release holds three assets:
 
 - `<bin>-<platform>`: the executable, for example `velnor-ci-linux-x64`
 - `<bin>-<platform>.sha256`: one line, `<sha256>  <bin>-<platform>`, as `sha256sum --check` reads it
@@ -240,7 +276,7 @@ With `bins`, each extra binary is published the same way, as its own `<bin>-<pla
 
 ## Optional release asset names
 
-A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<platform>.tar.gz` by default, for example `app-linux-x64.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional, and an entry without it generates the same workflow as before.
+A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<target-triple>.tar.gz` by default, for example `app-x86_64-unknown-linux-musl.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional, and an entry without it generates the same workflow as before.
 
 ```toml
 [[binaries]]
@@ -254,6 +290,23 @@ The placeholders are `{{ bin }}`, `{{ platform }}` (`linux-x64`), `{{ target }}`
 `{{ version }}` is the version in the released tag. The build, `SHA256SUMS` and publish jobs each read it from the tag with a step that sets `VERSION` through `$GITHUB_ENV`, and the build job packs into a `stage` folder that it uploads. The tag name must end in the version, as the default `{{ package }}-v{{ version }}` does. A template without `{{ version }}` adds no step and no folder.
 
 `asset_name` applies to `format = "raw"` too: the template names the executable, and the `.sha256` and `.provenance.json` files take the same name. With `bins` on a raw binary, each extra binary is named by the same template with its own `{{ bin }}`, so the template must contain `{{ bin }}` or the assets would collide, and a template without it is refused. In an archive, `{{ bin }}` is the main binary.
+
+### Raw binary keys
+
+Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
+
+```toml
+[[binaries]]
+package = "velnor-ci"
+format = "raw"
+target = "musl"
+smoke = true
+commit_file = true
+```
+
+- `target = "musl"` builds `<arch>-unknown-linux-musl` for the linux platforms of a raw binary, with the musl C compiler installed, so the executable is static. `macos-arm64` keeps `aarch64-apple-darwin`. The default for raw stays `"gnu"`. `target = "musl"` is refused without a linux platform. The archive format accepts `target` too and defaults to musl.
+- `smoke = true` adds two steps to each build job after packing, for the main binary of each platform: `./<asset> --version`, then `./<asset> check-tag "$TAG"`, where `TAG` is the tag the release records for the package. The binary must implement `check-tag <tag>`, which fails when the tag does not name the version of the binary. `smoke` is refused with the archive format.
+- `commit_file = true` adds a `COMMIT` asset holding the commit the tag is on. The `sums-<package>` job writes it before `SHA256SUMS`, so `SHA256SUMS` lists it, an attested release attests and verifies it, and `velnor-ci release publish` uploads it.
 
 ## Release checks
 
@@ -365,13 +418,14 @@ Every workflow lists its events under `[workflow.on]`. The generator writes them
 
 - `workflow_call = true`. The inputs are `[[workflow.input]]` and the outputs are `[[workflow.output]]` of the workflow. An input has `name`, an optional `description`, `type` (`string`, `boolean` or `number`, default `string`), an optional `default` of that type, and `required`, which is `true` unless there is a `default`. A number is a whole number of zero or more. An output has `name`, an optional `description` and `value = "<job>.<output>"`, where the job declares that output (or is a job that calls a workflow with that output); it renders `${{ jobs.<job>.outputs.<output> }}`.
 - `[workflow.on.workflow_dispatch]` with `[[workflow.on.workflow_dispatch.input]]`. The input keys are the same, and `type` may also be `choice` (with `options`, and a `default` that is one of them) or `environment`.
-- `schedule = ["<five-field cron>", ...]`. A schedule that can fire twice less than 5 minutes apart (`*/1`, `*/4`, `0,3`, `*/7`, which fires at :56 and :00) is refused, because 5 minutes is the shortest interval GitHub runs a schedule at.
+- `schedule = ["<five-field cron>", ...]`. A schedule that can fire twice less than 5 minutes apart (`*/1`, `*/4`, `0,3`, `*/7`, which fires at :56 and :00) is refused, because 5 minutes is the shortest interval GitHub runs a schedule at. The gap is measured over the days the day, month and weekday fields select, so `0,57 0,23 * * 1` is allowed (Mondays only) and `0,57 0,23 * * *` is not (23:57, then 00:00). A schedule that no day matches, such as `0 0 31 2 *`, is refused.
 - `[workflow.on.push]` needs `branches` or `tags` or both, which are GitHub filter patterns. An unfiltered `push` is refused. Nothing in the generator knows a tag prefix: `rust-ci-v*`, `v*` and `sdk-preview-*` are all just values.
 - `[workflow.on.pull_request]` needs `types`, and takes optional `branches`. `pull_request_target` does not exist in this model, so a declared workflow never runs fork code with secrets.
 - `paths` or `paths_ignore` (never both on one trigger, as in GitHub) on `push` and `pull_request` skip the run when no changed file matches, or when every changed file is ignored. They are written `paths` and `paths-ignore`, after `branches` and `tags`. A `paths` or `paths_ignore` of `"**"` is refused. GitHub ignores path filters for a tag push and for `merge_group`, and a required check that a path filter skips stays pending on the pull request, so a workflow behind a required check either has no path filter or is not required. `workflow_run` has no path filters.
 - A `branches` list that holds `"**"` is refused as redundant on `push`, `pull_request` and `workflow_run`: leave `branches` out to match every branch (a `push` without `branches` needs `tags`). `tags = ["**"]` is allowed, since without `tags` a push of a tag starts nothing.
+- A `branches`, `tags` or `paths` list of only negative patterns (each starting with `!`) is refused on every trigger: GitHub requires one pattern that does not start with `!`.
 - `merge_group = true`.
-- `[workflow.on.workflow_run]` needs `workflows` (the names of the workflows it follows), takes `types` (default `completed`) and optional `branches`. A `workflow_run` workflow runs in the context of the default branch. Do not check out another ref: `with` cannot read `github.event.*`, so a step cannot name the head of the run it follows.
+- `[workflow.on.workflow_run]` needs `workflows` (the names of the workflows it follows), takes `types` (default `completed`) and optional `branches`. A `workflow_run` workflow runs in the context of the default branch. Do not check out another ref: `with` cannot read `github.event.*`, so a step cannot name the head of the run it follows. A chain of declared workflows that follow each other by name is refused when it is more than three `workflow_run` levels deep, which is as far as GitHub follows, or when it loops.
 - Inputs of `workflow_call` and `workflow_dispatch` are both read as `inputs.<name>`.
 
 ### Concurrency
@@ -380,6 +434,7 @@ Every workflow lists its events under `[workflow.on]`. The generator writes them
 
 - A group is plain text of letters, digits and `- _ . : /` (up to 200 bytes) with these expressions in `${{ }}` and no others: `github.workflow`, `github.ref`, `github.event.pull_request.number` and `github.head_ref || github.run_id`. `github.head_ref || github.run_id` is the pull request branch, or a group of one run for a push; `github.ref` is one group per branch, tag or pull request ref.
 - `cancel_in_progress = true` needs `github.ref` or `github.head_ref || github.run_id` in the group. A group of `github.workflow` alone would let a run on one branch cancel the runs on every other, release runs included, and is refused.
+- A call job and a workflow that contains it are refused when their group is also the group of the declared workflow they call (or of a job of it, or of a workflow it calls in turn) and one of the two cancels in progress, because GitHub then cancels the run on a deadlock.
 - A job that calls a reusable workflow may set `concurrency` too. Nothing but the group and the flag is configurable, so a group never reads `secrets`, `inputs`, `matrix` or `github.event.*` text an author of a pull request controls.
 
 ### Jobs
@@ -387,12 +442,12 @@ Every workflow lists its events under `[workflow.on]`. The generator writes them
 - `needs` lists earlier jobs of the workflow. `if` is one expression, with or without `${{ }}`. A workflow `if` and a job `if` both apply: the job gets `(workflow if) && (job if)`.
 - `runner` sets the runner of one job; the workflow `runner` is the default. A runner label is letters, digits, dashes, underscores and dots. A GitHub-hosted label is `ubuntu-`, `macos-` or `windows-` followed by `latest` or a version number (`ubuntu-24.04`, `ubuntu-24.04-arm`); `ubuntu-` alone is a label like any other. A label that is not a GitHub-hosted one gets the fork fence: `runs-on` is `<runner>` for a push, a schedule and a pull request from this repository, and `fork_runner` for a pull request from a fork.
 - `timeout_minutes` is 1 to 360, default 30.
-- `permissions` accepts these scopes: `actions`, `artifact-metadata`, `attestations`, `checks`, `contents`, `deployments`, `id-token`, `issues`, `packages`, `pages`, `pull-requests`, `security-events` and `statuses`, each `read`, `write` or `none` (`id-token` has no `read`). A job with none gets `permissions: {}`. `checkout` needs `contents: read` on a private repository, so name it.
+- `permissions` accepts these scopes: `actions`, `artifact-metadata`, `attestations`, `checks`, `contents`, `deployments`, `id-token`, `issues`, `packages`, `pages`, `pull-requests`, `security-events` and `statuses`, each `read`, `write` or `none` (`id-token` has no `read`). A job with none gets `permissions: {}`. `checkout` needs `contents: read` on a private repository, so name it: a `checkout` step is refused unless its job has `contents` set to `read` or `write`.
 - `environment = "<name>"` is for step jobs. A deployment environment is what holds secrets and approval.
 - `outputs` maps a name to `steps.<step id>.outputs.<name>` of a step of the same job.
 - `helper = true` puts the pinned `velnor-ci` install step first in the job.
-- A matrix has one source. `from_output = "<job>.<output>"` renders `fromJSON(needs.<job>.outputs.<output>)`; that job must be in `needs` and declare the output. `axes = { os = ["a", "b"], ... }` renders a static matrix of up to 256 combinations, and `matrix.<axis>` is then the only matrix key a value may read. `fail_fast` and `max_parallel` are optional.
-- `uses = "<workflow>"` makes the job call a reusable workflow, and then the job has no steps, `runner`, `timeout_minutes`, `environment`, `helper` or `outputs`. `<workflow>` is one of: the `file` of a workflow declared earlier in this file (its inputs are checked, its `boolean` and `number` inputs are written as such, and the job must hold every permission the called jobs ask for); `./.github/workflows/<name>.yml`; or `owner/repo/.github/workflows/<name>.yml@<full commit SHA>` (exactly 40 lower case hex digits). A `./.github/workflows` or pinned callee is not read, so its jobs get no fork fence and its permissions are not checked: a workflow that a `pull_request` or `merge_group` event starts is refused if it calls one, or calls a declared workflow that calls one. Such a call is allowed from `push`, `schedule`, `workflow_dispatch`, `workflow_call` and `workflow_run`. `with` passes inputs, each plain text or exactly one expression. No `secrets` are passed, ever. A later job reads `needs.<job>.outputs.<name>` for the outputs of a declared workflow.
+- A matrix has one source. `from_output = "<job>.<output>"` renders `fromJSON(needs.<job>.outputs.<output>)`; that job must be in `needs` and declare the output. `axes = { os = ["a", "b"], ... }` renders a static matrix of up to 256 combinations, and `matrix.<axis>` is then the only matrix key a value may read. Two axes whose names differ only by case are refused, since GitHub reads matrix keys without regard to case. `fail_fast` and `max_parallel` are optional.
+- `uses = "<workflow>"` makes the job call a reusable workflow, and then the job has no steps, `runner`, `timeout_minutes`, `environment`, `helper` or `outputs`. `<workflow>` is one of: the `file` of a workflow declared earlier in this file (its inputs are checked, its `boolean` and `number` inputs are written as such, and the job must hold every permission the called jobs ask for); `./.github/workflows/<name>.yml`; or `owner/repo/.github/workflows/<name>.yml@<full commit SHA>` (exactly 40 lower case hex digits). A `./.github/workflows` or pinned callee is not read, so its jobs get no fork fence and its permissions are not checked: a workflow that a `pull_request` or `merge_group` event starts is refused if it calls one, or calls a declared workflow that calls one. Such a call is allowed from `push`, `schedule`, `workflow_dispatch`, `workflow_call` and `workflow_run`. `with` passes inputs, each plain text or exactly one expression. No `secrets` are passed, ever. A later job reads `needs.<job>.outputs.<name>` for the outputs of a declared workflow. A chain of declared reusable workflows may be 10 levels deep at most (the top-level workflow and nine called ones), as in GitHub.
 
 ### Cases
 
@@ -405,9 +460,9 @@ A `[[workflow.case]]` is one qualification case that runs on a hosted runner and
 ### Steps
 
 - A step is exactly one of `run`, `uses` and `helper`. A name is optional for `uses` and `helper` steps. `continue_on_error = true` renders `continue-on-error: true` on that step only.
-- `run` is one simple command: no line break, no `;`, `|`, `&`, `$(`, backtick, `if`, `for`, `while` or `case`, and no `${{ }}`. Pass values through `env`. A command that runs `velnor-ci` needs `helper = true` on its job.
-- `helper = "<command>"` renders `run: velnor-ci <command>` and needs `helper = true` on its job.
-- `uses` names a SHA-pinned action from this fixed list: `checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache-restore`, `cache-save` and `attest` (`actions/attest-build-provenance`). `with` sets its inputs. Adding an action is a change to this list, not to the model.
+- `run` is one simple command: no line break, no `;`, `|`, `&`, `$(`, backtick, `if`, `for`, `while` or `case`, and no `${{ }}`. Pass values through `env`. A command that runs `velnor-ci` needs `helper = true` on its job, and its first argument must be a subcommand of `velnor-ci`; a test keeps the list in step with the helper.
+- `helper = "<command>"` renders `run: velnor-ci <command>` and needs `helper = true` on its job; `<command>` is a subcommand of `velnor-ci`, such as `validate-artifact-id`.
+- `uses` names a SHA-pinned action from this fixed list: `checkout`, `mise`, `upload-artifact`, `download-artifact`, `cache-restore`, `cache-save`, `attest` (`actions/attest-build-provenance`) and `github-script`. `with` sets its inputs. An input the pinned action does not have, or one with no default that is missing (`path` for `upload-artifact`, `path` and `key` for the cache actions, `script` for `github-script`), is refused; input names are compared without regard to case. Adding an action is a change to this list, not to the model.
 - `uses` also names a local action, and only these three paths are allowed: `./qualification/actions/post-fail`, `./qualification/actions/docker` and `./qualification/actions/composite`. They take no `with`. Any other local path, such as `./.github/actions/x`, fails generation, so a repository action cannot reach a job by accident. The generator writes the `# zizmor: ignore[self-repository]` note after each one.
 - Locked inputs: `checkout` always has `persist-credentials: false`; `mise` always has `cache: false` and `cache_save: false`; `attest` always has `push-to-registry: false`. Setting one to anything but `false` is refused, and setting it to `false` is accepted and written once. `attest` is refused unless its job has `id-token = "write"` and `attestations = "write"`.
 - An `if` on a step may read `needs.<needed job>.result`, `steps.<earlier step id>.outcome` and `github.*`, besides what a value may read. An `if` on a job may read `needs`, `inputs` and `github.*` only.
@@ -449,7 +504,11 @@ attest = true
 
 The `sums-<package>` job, which already downloads every platform asset and writes `SHA256SUMS`, gets one `actions/attest-build-provenance` step (pinned by commit) with `subject-path: dist/*`. It runs after the checksums are written and before they are uploaded, so the attestation covers every asset and `SHA256SUMS`. That job, and only that job, holds `id-token: write` and `attestations: write`; the workflow level keeps `permissions: {}`, and the build and publish jobs do not gain either scope. The build jobs run the compiler and stay without a token that can mint an identity. Verify a downloaded asset with `gh attestation verify <file> --repo <owner>/<repo>`.
 
-With `attest = true` the `publish-<package>` job also verifies every asset and `SHA256SUMS` before it publishes. One step per file runs `gh attestation verify` with a pinned `gh` (installed through mise), and checks `--repo`, `--source-digest`, `--source-ref`, `--signer-workflow` (this `release.yml`) and `--signer-digest`. A failed verification fails the job and nothing is published. The job gains only `attestations: read`. With `format = "raw"` the executable, its `.sha256` and its `.provenance.json` are each verified. With an `asset_name` that holds `{{ version }}`, each verified path is quoted with its `${VERSION}` reference in double quotes, after the step that reads the version from the tag.
+With `attest = true` a separate `verify-<package>` job verifies every asset and `SHA256SUMS`, and `publish-<package>` needs it. One step per file runs `gh attestation verify` with a pinned `gh` (installed through mise), and checks `--repo`, `--source-digest`, `--source-ref`, `--signer-workflow` (this `release.yml`), `--signer-digest` and `--deny-self-hosted-runners`. A failed verification fails the job, `publish-<package>` is skipped and nothing is published. The `verify-<package>` job holds only `attestations: read`, with no `contents` scope. Its `GITHUB_TOKEN` is the one the pinned `gh` sees, so that binary can read attestations and nothing else. The `publish-<package>` job holds only `contents: write`, as it does without `attest`, and it never installs `gh` or runs mise. Both jobs download the artifacts separately, so a swap of an artifact between the two jobs is not detected. With `format = "raw"` the executable, its `.sha256` and its `.provenance.json` are each verified. With an `asset_name` that holds `{{ version }}`, each verified path is quoted with its `${VERSION}` reference in double quotes, after the step that reads the version from the tag.
+
+`--source-digest` and `--source-ref` are the `GITHUB_SHA` and `GITHUB_REF` of a `workflow_run` job, which are the default-branch tip when the run started and not the tag commit. The archives are built from the tag, and the build jobs already check that the tag is the commit the gate verified. The attestation therefore proves that this workflow attested the files on a hosted runner at that default-branch commit. It does not prove that the files were built from the tag commit. `--deny-self-hosted-runners` rejects an attestation made on a self-hosted runner, and the `sums-<package>` job runs on a hosted runner, so no legitimate attestation is rejected.
+
+A re-run of only the verify or publish job can fail. The artifacts expire after one day, and the attestation is checked against the commit of that run. The failure fails closed: nothing is published. Re-run the whole workflow run, or let the next default-branch run release.
 
 `attest` does not combine with `family_tag` yet: generation refuses the combination.
 
@@ -486,4 +545,4 @@ Each binary package must be listed in its `release-plz.toml` with `release = fal
 
 A `family` job binds the tag to the commit that the gate verified. It uses `velnor-ci release family-tag`, which needs a helper release of `0.1.83` or later. It creates the tag on that commit, and it refuses the release unless the tag resolves to that commit itself. A published release of the tag on an earlier ancestor commit releases nothing. The build jobs check out the tag, refuse any other commit, and share one `sums-family` and one `publish-family` job, so all binaries of a release share one tag, one commit, one `SHA256SUMS` and one release.
 
-`family_tag` does not combine with `bins`, `include`, `asset_name`, `attest` or `[[checks]]` yet: generation refuses the combination.
+`family_tag` does not combine with `bins`, `include`, `asset_name`, `attest`, `smoke`, `commit_file`, `checksum_files` or `[[checks]]` yet: generation refuses the combination.

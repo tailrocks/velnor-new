@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
-    MERGE_GROUP_STEP, RepoPath, RunnerLabel, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted, group_output_name,
+    BUDGET_OUTPUTS, BUDGET_STEP, CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease,
+    Job, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, RepoPath, RunnerLabel, Step, StepKind,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    github_hosted, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -14,6 +15,7 @@ use crate::base_steps::{
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
+use crate::checkout_step::checkout_step;
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
     plan_source, sources_step, verdict_step,
@@ -88,6 +90,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             .chain(test_outputs(job))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
+            .chain(budget_outputs(job))
             .collect(),
         steps,
         ..RenderedJob::default()
@@ -231,15 +234,7 @@ fn step_body(
             needs_max_bytes,
             trusted_api,
         } => crate::report::check(*needs_max_bytes, *trusted_api),
-        StepKind::Checkout { depth } => RenderedStep {
-            name: "Check out".to_owned(),
-            uses: Some(CHECKOUT.to_owned()),
-            with: vec![
-                ("fetch-depth".to_owned(), Value::Int(u64::from(*depth))),
-                ("persist-credentials".to_owned(), Value::Bool(false)),
-            ],
-            ..RenderedStep::default()
-        },
+        StepKind::Checkout { depth, sparse } => checkout_step(*depth, sparse.as_deref()),
         StepKind::InstallTools { only } => install_tools(only.as_deref()),
         StepKind::InstallMise => install_mise(),
         StepKind::Lint(command) => crate::lint_steps::lint_step(command),
@@ -299,6 +294,39 @@ fn step_body(
             run: Some("exit 1".to_owned()),
             ..RenderedStep::default()
         },
+        StepKind::Budget { last } => budget_step(*last),
+    }
+}
+
+fn budget_outputs(job: &Job) -> Vec<(String, String)> {
+    if !job
+        .steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::Budget { .. }))
+    {
+        return Vec::new();
+    }
+    BUDGET_OUTPUTS
+        .iter()
+        .map(|name| {
+            (
+                name.to_string(),
+                format!("${{{{ steps.{BUDGET_STEP}.outputs.{name} }}}}"),
+            )
+        })
+        .collect()
+}
+
+fn budget_step(last: usize) -> RenderedStep {
+    RenderedStep {
+        name: "Check the speed budget".to_owned(),
+        id: Some(BUDGET_STEP.to_owned()),
+        env: vec![(
+            "GITHUB_TOKEN".to_owned(),
+            Value::Expr("${{ github.token }}".to_owned()),
+        )],
+        run: Some(format!("velnor-ci bench budget --last {last}")),
+        ..RenderedStep::default()
     }
 }
 

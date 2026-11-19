@@ -79,8 +79,7 @@ The [review gates](../reviews/ci-performance.md) use these primary sources:
 | [Actions limits](https://docs.github.com/en/actions/reference/limits) | Verify current workflow, matrix, concurrency and cache request limits for representative consumer scale. |
 
 These are review criteria, not new runtime behavior or cache capacity. Existing
-[cache decisions](cache-decisions.md) and stricter
-[compiled-state admission](compiled-state-persistence.md#budget) remain binding.
+[cache decisions](cache-decisions.md) remain binding.
 
 ### Runner-scoped crates mirror
 
@@ -580,8 +579,7 @@ for the bounded diagnostic output protocol and its runner-source references.
 
 See [native release asset upload](../implemented/native-release-upload.md) for
 the qualified upload-host, authentication and binary-input source contract.
-See [optional dependency-seed failure isolation](../implemented/optional-dependency-seed.md)
-and [immutable preview API qualification](../implemented/immutable-preview-api-qualification.md).
+See [immutable preview API qualification](../implemented/immutable-preview-api-qualification.md).
 See [explicit-token tool launch](../implemented/explicit-token-tool-launch.md).
 
 ## Pull Request Merge References

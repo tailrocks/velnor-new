@@ -57,7 +57,7 @@ OLD_ROOT_FILES = (
 )
 # Paths under an old root that the restructure leaves where they are (owner decision 2).
 STAY_PUT_DIRS = ("generator/samples/", "local/conformance/", "local/docker/", "local/scenarios/", "local/testdata/", "ci-helper/docs/")
-STAY_PUT_FILES = ("local/README.md",)
+STAY_PUT_FILES = ("local/README.md", "local/AGENTS.md", "local/CLAUDE.md", "ci-helper/AGENTS.md", "ci-helper/CLAUDE.md")
 STAY_PUT_TOP_LEVEL_MD = re.compile(r"^generator/[^/]+\.md$")
 ROOT_WORKSPACE_VERSION = {"ci-helper": None, "generator": "0.0.0", "local": "0.0.0", "crates/velnor-runner": "0.1.0"}
 ROOT_WORKSPACE_PUBLISH_FALSE = ("generator", "local")

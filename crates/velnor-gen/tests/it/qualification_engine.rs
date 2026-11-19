@@ -11,6 +11,8 @@ use serde_json::Value;
 use crate::declared_fixture::{TestResult, rendered_text};
 use crate::yaml_tree::document;
 
+mod shapes;
+
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
 const HOSTED: &str = "ubuntu-26.04";
 
@@ -46,13 +48,17 @@ const CHAINS: [&str; 21] = [
     "outputs-scale-set",
 ];
 
-const NARROWER: [&str; 23] = [
+const NARROWER: [&str; 29] = [
     "bind-hosted",
     "bind-scale-set",
     "buildx-hosted",
     "buildx-scale-set",
     "cancel-hosted",
     "cancel-scale-set",
+    "cancel-service-hosted",
+    "cancel-service-scale-set",
+    "container-hosted",
+    "container-scale-set",
     "js-pin-hosted",
     "js-pin-scale-set",
     "expect-fail-hosted",
@@ -65,6 +71,8 @@ const NARROWER: [&str; 23] = [
     "pressure-b-scale-set",
     "pressure-c-hosted",
     "pressure-c-scale-set",
+    "services-hosted",
+    "services-scale-set",
     "compare",
     "outputs-hosted",
     "outputs-scale-set",
@@ -231,6 +239,12 @@ fn compare(
     let mut note = |kind: &'static str| {
         kinds.entry(kind).or_default().insert(id.to_owned());
     };
+    let (unrolled, looped) = shapes::unroll(engine);
+    let engine = &unrolled;
+    if looped {
+        note("a retry loop is written as plain probes");
+    }
+    shapes::compare(id, engine, generated, &mut note, unexpected);
     for key in ["name", "timeout-minutes", "needs", "outputs"] {
         if engine.get(key) != generated.get(key) {
             unexpected.push(format!(
@@ -257,9 +271,9 @@ fn compare(
     }
     if engine_lane == Some("scale-set") {
         note("runs-on gets the fork fence");
-        if engine.pointer("/defaults/run/shell").is_some() {
-            note("defaults.run.shell is not written");
-        }
+    }
+    if engine.pointer("/defaults/run/shell").is_some() {
+        note("defaults.run.shell is not written");
     }
     let from_engine = permissions(engine, engine_workflow);
     let from_generated = permissions(generated, generated_workflow);
@@ -358,7 +372,7 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         .collect();
     let listed = |kind: &str| kinds.get(kind).cloned().unwrap_or_default();
     assert_eq!(listed("runs-on gets the fork fence"), scale_sets);
-    assert_eq!(listed("defaults.run.shell is not written"), scale_sets);
+    shapes::assert_notes(&kinds, &scale_sets);
     assert_eq!(
         listed("a pipe is written as two steps"),
         BTreeSet::from(["outputs-scale-set".to_owned()])

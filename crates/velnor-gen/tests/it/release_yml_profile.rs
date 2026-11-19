@@ -29,17 +29,17 @@ fn a_profiled_binary_builds_with_the_profile_and_packs_from_its_directory() -> T
         (
             "build-tools-linux-x64",
             "x86_64-unknown-linux-musl",
-            "tar -czf tools-linux-x64.tar.gz -C tools/target/x86_64-unknown-linux-musl/release-tools tools",
+            "tar -czf tools-x86_64-unknown-linux-musl.tar.gz -C tools/target/x86_64-unknown-linux-musl/release-tools tools",
         ),
         (
             "build-tools-linux-arm64",
             "aarch64-unknown-linux-musl",
-            "tar -czf tools-linux-arm64.tar.gz -C tools/target/aarch64-unknown-linux-musl/release-tools tools",
+            "tar -czf tools-aarch64-unknown-linux-musl.tar.gz -C tools/target/aarch64-unknown-linux-musl/release-tools tools",
         ),
         (
             "build-tools-macos-arm64",
             "aarch64-apple-darwin",
-            "tar -czf tools-macos-arm64.tar.gz -C tools/target/aarch64-apple-darwin/release-tools tools",
+            "tar -czf tools-aarch64-apple-darwin.tar.gz -C tools/target/aarch64-apple-darwin/release-tools tools",
         ),
     ];
     for (id, triple, pack) in want {
@@ -63,7 +63,7 @@ fn the_profile_belongs_to_its_binary_alone() -> TestResult {
     );
     assert!(
         commands.contains(
-            &"tar -czf app-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app"
+            &"tar -czf app-x86_64-unknown-linux-musl.tar.gz -C target/x86_64-unknown-linux-musl/release app"
         ),
         "{commands:?}"
     );
@@ -80,7 +80,7 @@ fn an_unprofiled_binary_still_builds_with_release() -> TestResult {
     );
     assert!(
         commands.contains(
-            &"tar -czf tools-linux-x64.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools"
+            &"tar -czf tools-x86_64-unknown-linux-musl.tar.gz -C tools/target/x86_64-unknown-linux-musl/release tools"
         ),
         "{commands:?}"
     );

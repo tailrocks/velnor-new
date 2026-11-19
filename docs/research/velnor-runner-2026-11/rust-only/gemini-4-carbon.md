@@ -33,7 +33,7 @@ GitHub's latest official runner runs only in `velnor-lab` as a continuous differ
 
 The trace below follows one typical `velnor-new` pull request from `git push` (with `velnor:verify` present, or from
 adding `velnor:verify` on the final head) to merged on `main`. P50 represents the median PR (47% touch only
-`generator/` or `ci-helper/` [EV: `v2/velnor-runner-architecture.md:698`]); P90 represents a `crates/velnor-runner` or
+`generator/` or `ci-helper/` [EV: `v2/velnor-runner-architecture.md:698`]); P90 represents a `crates/velnor-runner-*` or
 multi-root PR with a `Cargo.lock` or `merge_group` miss. Tags mark `[M]` measured in the repo or cluster experiments,
 `[EV]` cited from `evidence.md` or `v2`, and `[EST]` calculated with explicit arithmetic.
 
@@ -56,18 +56,18 @@ multi-root PR with a `Cargo.lock` or `merge_group` miss. Tags mark `[M]` measure
 
 ## 2b. Duplicate-work audit
 
-Audit across all 16 `.github/workflows/*.yml` files (`ci.yml`, `state-seal.yml`, `cache-prune.yml`, `freshness.yml`,
+Audit across all 16 `.github/workflows/*.yml` files (`ci.yml`, the State seal workflow, `cache-prune.yml`, `freshness.yml`,
 `homebrew-adoption.yml`, `job-image-candidate.yml`, `product-release*.yml`, `release-rust-ci-tools.yml`,
 `qualification.yml`, `source-preview-*.yml`, `source-qualification.yml`), generated `rust-ci.yml` and `release.yml`
-(`generator/crates/velnor-render/src/{steps,release,release_binaries}.rs`), `ci-helper/`, and PR lifecycle dimensions.
+(`crates/velnor-render/src/{steps,release,release_binaries}.rs`), `ci-helper/`, and PR lifecycle dimensions.
 
 ### Profile tension resolution (explicit, with numbers)
 
 Today CI compiles and tests with `[profile.dev]` / `[profile.test]` (`opt-level = 0` on all dependencies except `sha2`
-and `turso_core`, `Cargo.toml:69-73`, `crates/velnor-runner/Cargo.toml:74-75`), producing a `10.64 GiB` `target/`
+and `turso_core`, `Cargo.toml:69-73`, `Cargo.toml:74-75`), producing a `10.64 GiB` `target/`
 (`mbx-cache-cluster.md:33`) and slow unoptimised dependency execution in tests, then rebuilds shipped binaries from
 scratch in `--release` (`opt-level = "s"`, `lto = "thin"`, `strip = true`, `panic = "abort"`,
-`generator/Cargo.toml:35-39`) during release workflows. Testing everything in `--release` is rejected:
+`Cargo.toml:35-39`) during release workflows. Testing everything in `--release` is rejected:
 `panic = "abort"` breaks unwind-based test harnesses and `#[should_panic]`, `debug-assertions = false` and
 `overflow-checks = false` weaken confidence (Decision 11), and `lto = "thin"` across 356 integration test binaries
 (`design-feedback.md:122`) multiplies link cost on unshipped test harnesses. Rebuilding `--release` at tag time is
@@ -99,14 +99,14 @@ tagging. **Chosen design:**
 | Concurrent PRs touching disjoint roots/packages | Full 39-job `ci.yml` per PR (`97.4%` ran heavy jobs `[EV: v2:632]`) | Yes on untouched packages | 52.9 runner-min x N PRs | **Reuse (`100%` hit on untouched roots/packages; in-flight join deduplicates simultaneous identical obligations).** | Site-wide `velnor-ledger` receipt table + `ensure` singleflight coalescing. |
 | Stacked PRs (`PR2` targeting `PR1` or stacked commits) | Full 39-job `ci.yml` on both | Yes on `PR1`'s untouched packages | 52.9 runner-min per layer | **Reuse `PR1`'s verified package receipts (`PR2` compiles/tests only `PR2 - PR1` delta).** Promoted to `trusted` only after `merge_group` against `main`. | Content-addressed per-package receipts scoped as `candidate` until `main` lands. |
 | Agent pre-push (`velnor verify`) vs PR CI | Local agent build + full CI rebuild | Yes when run in cluster sandbox | ~15 min agent wait + 52.9 min CI | **Reuse (`0 s` rebuild on push).** `velnor verify` uploads `<200 KB` thin-pack to cluster `velnor-hooks` and runs `ensure` in the sealed Linux sandbox before `git push`. | Same `velnor-node` sandbox signer mints receipts keyed by tree OID. |
-| Toolchain (`rustup`) & pinned `mise` tools setup | All 39 `ci.yml` jobs + `state-seal` + releases (`0/58` toolchain hits `[EV]`) | Yes | ~16 runner-min / run, `0.60 GB` GH cache | **Eliminate per-job install (`10 ms` bind mount).** Provision once per pin into node L1 XFS `/store/{toolchains,mise}/<sha256>`. | Content-addressed read-only node store mounted into sandbox. |
+| Toolchain (`rustup`) & pinned `mise` tools setup | All 39 `ci.yml` jobs + `state seal` + releases (`0/58` toolchain hits `[EV]`) | Yes | ~16 runner-min / run, `0.60 GB` GH cache | **Eliminate per-job install (`10 ms` bind mount).** Provision once per pin into node L1 XFS `/store/{toolchains,mise}/<sha256>`. | Content-addressed read-only node store mounted into sandbox. |
 | `cargo fetch` / crate sources | 30 Rust jobs + `ledger-cli` + `maintenance-helpers` x5 (`0/48` scale-set hits `[EV]`) | Yes (`89.5%` of PRs share `Cargo.lock`) | ~3.5 runner-min / run, `0.17 GB` GH cache | **Reuse (`20 ms` `--offline`).** Pre-extracted crate store on node L1; lockfile deltas fetched once via site `crates-mirror`. | Read-only `/store/cargo-vendored/<lock_hash>` + site `crates-mirror`. |
-| Planner (`plan`) & `ledger-cli` helper build | `plan` + `ledger-cli` jobs in every PR, MG, `push`, `state-seal` | `ledger-cli` rebuilt from source every run (`0.9 min`) | 1.8 runner-min + 10 to 45 min hosted queue | **Eliminate job hops (`<50 ms` in-process).** Released `velnor-ci` binary runs directly inside `velnor-ledger` on webhook arrival (`docs/goals.md` rule 12). | Pre-installed pinned `velnor-ci` release digest in `/store/tools`. |
+| Planner (`plan`) & `ledger-cli` helper build | `plan` + `ledger-cli` jobs in every PR, MG, `push`, `state seal` | `ledger-cli` rebuilt from source every run (`0.9 min`) | 1.8 runner-min + 10 to 45 min hosted queue | **Eliminate job hops (`<50 ms` in-process).** Released `velnor-ci` binary runs directly inside `velnor-ledger` on webhook arrival (`docs/goals.md` rule 12). | Pre-installed pinned `velnor-ci` release digest in `/store/tools`. |
 | Compile workspace (`fmt`, `clippy`, `doc`, `test --no-run`) | 30 Rust jobs + `maintenance-helpers` (`build.jobs=2`) + `local-mode` duplicate build | Yes per configuration | ~38 runner-min / run; `322 GiB` ephemeral writes | **Reuse across lanes & runs (`0.31 s` unchanged `[M]`, `8.5 s` median delta).** Keep 2 passes max per changed crate (1 `.rmeta` pass shared by `clippy`+`doc`, 1 `--profile ci` bin/test link pass) because parallel `.rmeta` finishes faster than waiting on full codegen. | Multi-lower `overlayfs` over warm `main` XFS snapshot + shared jobserver; extract `velnor-runner-local` crate to stop rebuilding 482 crates twice. |
 | Unit & integration test execution (`cargo nextest`) | PR + `merge_group` + `main` `push` (`3x` full runs `[EV: evidence.md:207]`) | Yes when closure matches; touched tests run 3x intentionally | ~24 runner-min x 3 runs = 72 min | **Reuse unchanged by receipt (`0 s`); duplicate ONLY touched test binaries 3x in parallel (`+1.2 runner-min`, `0 s` wall penalty on idle cores) to catch `p=0.2` flakes at `49%` vs `20%` (`v2:94`).** | Signed `ObligationReceipt` keyed by package/binary input closure + sandbox manifest. |
 | `merge_group` verification | Full 39-job `ci.yml` (`64.6 runner-min` `[EV: evidence.md:83]`) | `89%` identical tree at `<2 min` window `[EV: v2:719]` | 64.6 runner-min / merge | **Reuse receipts (`0.15 min` witness on 89% hit); keep speculative duplicate on `2k - 1` queue-tip/bypass trees (`~1.5 min` batch CPU) because it saves `20 to 45 s` wall time on queue advances/ejections.** | Exact obligation-key lookup + preemptible batch `ensure(T_i)` & `ensure(T'_i)`. |
 | `push` to `main` CI run | Full 39-job `ci.yml` (`120/159 = 75.5%` same SHA `[EV: evidence.md:207]`) | Yes (`100%` identical SHA to `merge_group`) | 62.0 runner-min (`8.1%` false-red rate!) | **Reuse 100% of `merge_group` receipts (`0.05 min` `Required` witness).** Zero `rustc` or `nextest` runs on `main` pushes from the merge queue. | Receipt lookup by exact commit tree + `Required` (`15368`) `completejob` for `release-gate`. |
-| Cache sealing & pruning (`state-seal.yml` 16 jobs, `cache-prune.yml`) | Every `main` push (`state-seal` failed `16/18` on large roots `[EV]`) | Yes (re-compiles `main` without tests) | ~28 runner-min / `main` push; `3.37 GB` GH cache | **Eliminate completely (`0 min`, `0 GB` GH cache).** Site `main` builder updates `overlayfs` snapshot once per site (`~0.9 min/site`) and replicates `<150 MB` zstd layer to site workers (`<1 s` vs `92 s` compile). | Retire `state-seal.yml` and `cache-prune.yml`; local XFS generation GC keeps last 3 `main` layers. |
+| Cache sealing & pruning (the State seal workflow 16 jobs, `cache-prune.yml`) | Every `main` push (`state seal` failed `16/18` on large roots `[EV]`) | Yes (re-compiles `main` without tests) | ~28 runner-min / `main` push; `3.37 GB` GH cache | **Eliminate completely (`0 min`, `0 GB` GH cache).** Site `main` builder updates `overlayfs` snapshot once per site (`~0.9 min/site`) and replicates `<150 MB` zstd layer to site workers (`<1 s` vs `92 s` compile). | Retire the State seal workflow and `cache-prune.yml`; local XFS generation GC keeps last 3 `main` layers. |
 | Auxiliary PR/push workflows (`source-qualification.yml` 5 jobs, `job-image-candidate.yml` 3 jobs) | Every PR / every push on hosted runners | Mostly unchanged on non-generator/non-image PRs | ~14 runner-min / PR + hosted queue saturation | **Fold into `velnor-ci` obligation graph (`0 min` when unselected).** Run only when generator goldens or runner image inputs change. | Input-addressed obligation selection in `velnor-ledger`. |
 | Release builds, `<bin>-<target>.tar.gz`, `SHA256SUMS`, SLSA attestations (`release.yml`, `product-release*.yml`, `release-rust-ci-tools.yml`) | Tag / manual / `workflow_run` (`35+` jobs in `product-release*`; macOS paused per Decision 9) | Yes (identical `main` commit tree already verified in `merge_group`) | 38 to 240 runner-min / release; `1.8 GB` artifacts | **Promote exact `merge_group`-built artifacts (`0.5 runner-min` total, `0` `rustc` invocations).** Pause macOS workflows (Phase 0). Sign SLSA provenance over `velnor-store` digest on `main`; `release-plz` tags and publishes promoted tarballs + `SHA256SUMS`. | `release-artifact` CAS blob in `velnor-store` + OIDC Fulcio/GitHub Attestations API promotion. |
 | Nightly / scheduled audits & `freshness.yml` | `freshness.yml` + `rust-ci.yml` `schedule` | Yes (`main` tip) | ~65 runner-min / night | **Keep 1 cold differential build per night + every 20th merge on idle batch cores (`~0.4 min` amortised / PR)** to verify cache/receipt soundness (Decision 11). | Cold sandbox (`empty` lowerdir) comparing binary digests and test outcomes against warm receipts. |
@@ -133,7 +133,7 @@ CI for architectural review.
 |---|---|---|---|---:|
 | `velnor-proto` | library | Scale-set v6.0-preview, Broker V2, Run Service, Results Twirp + WebSocket, Cache v2 Twirp, Artifacts v4 Twirp, OIDC wire types & HTTP/2 clients | Copy & strip legacy paths from `velnor-legacy/crates/velnor-runner/src/{scaleset/*,protocol.rs,job_message.rs,runner_json.rs}`; fix `summary_url` bug (`protocol.rs:9796`) | 8,000 |
 | `velnor-expr` | library | `Expressions2` lexer, parser, evaluator, `ContextValue`, `hashFiles`, `TemplateToken` expander | Copy from `velnor-legacy/.../expression/*` (3,565 LOC) + `velnor-model/src/context_value.rs` (1,740 LOC) | 5,500 |
-| `velnor-dispatch` | 1 HA active/standby pair per site | Holds scale-set sessions, long-polls Broker V2, manages virtual JIT runner pool in RAM, places jobs onto nodes *before* `acquirejob`, journals leases | Adapt `velnor-legacy/.../scaleset/{session,client,credentials,backoff}.rs` + `velnor-new` SQLite WAL journal (`crates/velnor-runner`) | 5,000 |
+| `velnor-dispatch` | 1 HA active/standby pair per site | Holds scale-set sessions, long-polls Broker V2, manages virtual JIT runner pool in RAM, places jobs onto nodes *before* `acquirejob`, journals leases | Adapt `velnor-legacy/.../scaleset/{session,client,credentials,backoff}.rs` + `velnor-new` SQLite WAL journal (`crates/velnor-runner-*`) | 5,000 |
 | `velnor-exec` | inside `velnor-node` | Executes `PipelineAgentJobRequest`: contexts, steps, composites, `background:`/`wait-all`, LIFO `post:`, file/stdout commands, 11-encoder secret masking, lease renewal, Results streaming, crash recovery | Copy pure state machines from `velnor-legacy/.../execution/{step_outcome,step_conditions,post_drain,composite_scopes,cancel}.rs`, `workflow_command.rs`, `command_files.rs`, `velnor-model/src/redaction.rs`; write orchestrator fresh (discarding 37k-LOC `executor.rs` & 36.7k-LOC `runner.rs`) | 10,000 |
 | `velnor-native-actions` | linked into `velnor-exec` | Closed native Rust action registry (`checkout`, `cache`, `upload/download-artifact`, `mise-action`, `mr-boxington-action`, `attest*`, `create-github-app-token`, `alint`, `setup-velnor`, composites) + pre-job refusal gate | Adapt `velnor-legacy/.../{checkout,git_mirror}.rs` + `gha_cache.rs` v2 subset; write `attest` (Sigstore/Fulcio) & App-token fresh | 7,500 |
 | `velnor-sandbox` | inside `velnor-node` | Pre-warmed Linux user/mount/PID/IPC/UTS/net namespaces, cgroup v2 CPU/RAM/PID controllers, `overlayfs` views, `pivot_root`, Landlock/seccomp, Firecracker microVM driver for Docker suites | Fresh Rust (`rustix` + `libc`), borrowing UID/cgroup ownership proofs from `velnor-new/crates/velnor-runner` | 4,500 |
@@ -272,7 +272,7 @@ GitHub Broker V2 ──(8.0 s)──► velnor-dispatch              velnor-ledg
 
 `velnor-native-actions` compiles directly into `velnor-exec` and implements the closed union of `velnor-new`'s engine
 allowlist (`crates/velnor-actions-actionlint/src/actions.rs:6-20`, `.velnor/version-policy.toml:41-120`) and
-`velnor-gen`'s 8-action allowlist (`generator/crates/velnor-render/src/rules.rs:8-21`). Before step 1 starts,
+`velnor-gen`'s 8-action allowlist (`crates/velnor-render/src/rules.rs:8-21`). Before step 1 starts,
 `velnor-exec` validates every `uses:` reference in `PipelineAgentJobRequest.Steps` against
 `(owner/repo[/path], qualified_commit_sha)`; any unknown action, floating tag, `using: node20|node24`, or
 `using: docker` manifest fails the job immediately with zero user code executed.
@@ -407,7 +407,7 @@ Measured slow-test root causes and concrete fixes targeting **no single test `> 
    cold `image-publication-fixture` example build (`evidence.md:255`) into `--all-targets`.
 4. **Artificial nextest serialisation (`golden_collector_public` 12 tests with
    `threads-required = "num-test-threads"`, `.config/nextest.toml:19,46`, `212 to 246 s`;
-   `ci-helper/.config/nextest.toml:4` `test-threads = 1`):** **Fix:** Isolate tempdirs, ephemeral `127.0.0.1:0` ports,
+   `.config/nextest.toml:4` `test-threads = 1`):** **Fix:** Isolate tempdirs, ephemeral `127.0.0.1:0` ports,
    and env snapshots so `threads-required` and `test-threads = 1` are deleted (`246 s -> 14 s`; `ci-helper`
    `10 s -> 3 s`).
 5. **`[profile.ci.package."*"] opt-level = 2` (with `debug-assertions = true`, `overflow-checks = true`):** Cuts
@@ -603,7 +603,7 @@ notifications.
 
 **Exact solution:** The repository ruleset on `refs/heads/main` requires **two** bound checks:
 1. `Required` bound to **GitHub Actions (`integration_id: 15368`)**, which satisfies `velnor-ci release-gate`
-   (`ci-helper/crates/velnor-ci/src/gate.rs:15,277-288`) and `product-release.yml:86`.
+   (`crates/velnor-ci/src/gate.rs:15,277-288`) and `product-release.yml:86`.
 2. `velnor/verdict` bound to **Velnor GitHub App (`integration_id: <velnor_app_id>`)**, which is the cryptographic
    gate enforced on every commit SHA.
 
@@ -821,7 +821,7 @@ advancing. From Phase 1 onward, GitHub's official C# runner never runs in produc
 |---|---|---|---|---|---|---|
 | **Phase 0** (Days 1 to 4) | Pause macOS workflows; `velnor-hooks` + `velnor:verify` label flow + dual ruleset (`velnor/verdict` + `Required`, `min_wait=0`, auto-merge); `velnor-conformance` 420-case oracle live in `velnor-lab`; SQLite `Journal` template (`<50 ms`), test-loop splits, 356->30 test-binary consolidation, `--profile ci` (`opt-level=2` deps); XFS quotas + 3-node k3s etcd HA. | <= 6.0 m / <= 12.0 m | <= 15 m / <= 35 m | <= 95 min (was 347) | 0% cross-job (prep) | >= 95.0% in `velnor-lab` |
 | **Phase 1** (Weeks 1 to 2) | **Pure-Rust cutover:** `velnor-{proto,expr,dispatch,exec,sandbox,native-actions}` (all 9 native actions incl. `create-github-app-token` & `attest*`), pre-warmed 30 ms namespace/cgroup slots, `overlayfs` warm `main` snapshots + `velnor-store` zstd layers, Firecracker Docker microVMs, L1 read-only tool/crate/git stores. **Delete `tailrocks` ARC & C# runners.** | <= 90 s / <= 3.0 m | <= 4.0 m / <= 8.0 m | <= 28 min | >= 92% crate compile hit | **100.0%** (420/420 x2 nights + 200 shadows) |
-| **Phase 2** (Weeks 3 to 4) | Collapse `ci.yml` / `velnor-gen` to single `Required` witness job + `velnor-ledger` `ensure(tree)`; per-package closure receipts (`CARGO_BIN_EXE_*` + `pivot_root` sparse enforcement) across pushes, concurrent & stacked PRs, `merge_group`, and `main`; 6-way `velnor-runner-host` split + `velnor-runner-local`; parallel `merge_group` `--release` tarball build + zero-rebuild `release-plz` promotion; delete `state-seal.yml`, `cache-prune.yml`, & GH cache (`0 GB`). | <= 40 s / <= 90 s | <= 110 s / <= 3.5 m | <= 12 min | >= 96% compile; >= 80% MG receipt hit | **100.0%** + hourly live canary |
+| **Phase 2** (Weeks 3 to 4) | Collapse `ci.yml` / `velnor-gen` to single `Required` witness job + `velnor-ledger` `ensure(tree)`; per-package closure receipts (`CARGO_BIN_EXE_*` + `pivot_root` sparse enforcement) across pushes, concurrent & stacked PRs, `merge_group`, and `main`; 6-way `velnor-runner-host` split + `velnor-runner-local`; parallel `merge_group` `--release` tarball build + zero-rebuild `release-plz` promotion; delete the State seal workflow, `cache-prune.yml`, & GH cache (`0 GB`). | <= 40 s / <= 90 s | <= 110 s / <= 3.5 m | <= 12 min | >= 96% compile; >= 80% MG receipt hit | **100.0%** + hourly live canary |
 | **Phase 3 (Committed)** (Weeks 5 to 6) | `velnor-hooks` 1.2 s webhook pre-execution (overlapping GitHub's 8 s job offer); `2k - 1` cumulative + bypass queue speculation (`max_entries_to_build: 6`, `ALLGREEN`); 3x parallel touched-test execution; 5% live sampler + 100% post-merge cold audit + `POLICY_EPOCH` auto-fallback. | **<= 25 s / <= 55 s** | **<= 75 s / <= 150 s** | **<= 8.0 min** (`0.5 min` / release) | **>= 98% compile; >= 89% MG receipt hit** | **100.0%** (`<= 1 h` drift alert) |
 | **Phase 4 (Stretch)** (Weeks 7 to 8) | `velnor verify` `<200 KB` thin-pack pre-push sandbox execution + site-wide 288/480-thread LPT test-case sharding across workers via `velnor-store`. | **<= 12 s / <= 25 s** | **<= 60 s / <= 105 s** | **<= 3.5 min** | **>= 99% compile; >= 93% MG receipt hit** | **100.0%** |
 

@@ -4,7 +4,7 @@
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use velnor_local::io::local_ci::pin_workflows;
+use velnor_local::io::local_ci::{pin_branch, pin_workflows};
 
 use crate::local_ci::{ELF_ARM64, binary, parsed};
 use crate::support::temp_dir;
@@ -177,6 +177,42 @@ async fn the_flag_is_refused_for_pair_mode_and_for_a_file_that_is_not_a_linux_ar
     );
 }
 
+#[tokio::test]
+async fn a_branch_that_already_exists_in_the_checkout_is_pinned_when_the_driver_switches_to_it() {
+    let repo = checkout("dev-binary-branch");
+    git(&repo, &["branch", "feature"]);
+    let file = binary(&temp_dir("dev-binary-file-5"), &ELF_ARM64);
+    let flag = file.display().to_string();
+    let args = parsed(&repo, "plain", &["--velnor-ci-binary", &flag]);
+    let pin = pin_workflows(&args, &repo, "t")
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .unwrap_or_else(|| unreachable!("no pin"));
+    git(&repo, &["switch", "-q", "feature"]);
+    let workflow =
+        std::fs::read_to_string(repo.join(WORKFLOW)).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(refused(&launch(
+        &workflow,
+        &pinned_digest(&workflow),
+        &file
+    )));
+
+    pin_branch(&repo, &pin)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+
+    let workflow =
+        std::fs::read_to_string(repo.join(WORKFLOW)).unwrap_or_else(|e| unreachable!("{e}"));
+    let output = launch(&workflow, &pinned_digest(&workflow), &file);
+    assert!(!refused(&output), "{output:?}");
+    let commits = git(&repo, &["rev-list", "--count", "HEAD"]);
+    pin_branch(&repo, &pin)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(git(&repo, &["rev-list", "--count", "HEAD"]), commits);
+    assert_eq!(git(&repo, &["status", "--porcelain"]), "");
+}
+
 fn outside(name: &str) -> PathBuf {
     let dir = temp_dir(name);
     std::fs::write(dir.join("rust-ci.yml"), sample()).unwrap_or_else(|e| unreachable!("{e}"));
@@ -188,7 +224,7 @@ async fn refusal(repo: &Path, name: &str) -> String {
     let flag = file.display().to_string();
     let args = parsed(repo, "plain", &["--velnor-ci-binary", &flag]);
     match pin_workflows(&args, repo, "t").await {
-        Ok(()) => unreachable!("a symlinked workflow path was accepted"),
+        Ok(_) => unreachable!("a symlinked workflow path was accepted"),
         Err(error) => error.to_string(),
     }
 }

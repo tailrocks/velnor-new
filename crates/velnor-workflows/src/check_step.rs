@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Scope, check, check_condition, is_identifier, whole_expression};
-use crate::helper_call::calls_velnor_ci;
+use crate::helper_call::{HELPER_COMMANDS, calls_velnor_ci, subcommand};
 use crate::plan::{Action, Body, Env, LocalAction, Step};
 use crate::raw::RawStep;
 
@@ -43,6 +43,9 @@ pub(crate) fn step(
                     "job {job} calls velnor-ci, which must start with velnor-ci as the command word"
                 ));
             }
+            if calls_velnor_ci(&run) {
+                known_command(job, subcommand(&run).as_deref().unwrap_or_default())?;
+            }
             (String::new(), Body::Run(run))
         }
         (None, Some(name), None) if is_local(&name) => local_action(job, name)?,
@@ -64,6 +67,7 @@ pub(crate) fn step(
                     "job {job} runs the helper command {command}, so it needs helper = true"
                 ));
             }
+            known_command(job, &command)?;
             (command.clone(), Body::Helper(command))
         }
         _ => {
@@ -75,6 +79,7 @@ pub(crate) fn step(
     if !raw.with.is_empty() && !matches!(body, Body::Uses(_)) {
         return refuse(format!("a step of job {job} sets with without uses"));
     }
+    declared_inputs(job, &body, &label, &raw.with)?;
     let raw_with = locked_inputs(job, &body, &label, raw.with)?;
     let condition = raw
         .condition
@@ -89,6 +94,52 @@ pub(crate) fn step(
         continue_on_error: raw.continue_on_error,
         env: values(job, raw.env, scope)?,
     })
+}
+
+fn known_command(job: &str, command: &str) -> Result<(), WorkflowsError> {
+    if HELPER_COMMANDS.contains(&command) {
+        return Ok(());
+    }
+    refuse(format!(
+        "job {job} runs velnor-ci {command:?}, which the pinned velnor-ci does not have; its commands are {HELPER_COMMANDS:?}"
+    ))
+}
+
+fn declared_inputs(
+    job: &str,
+    body: &Body,
+    label: &str,
+    with: &BTreeMap<String, String>,
+) -> Result<(), WorkflowsError> {
+    let Body::Uses(action) = body else {
+        return Ok(());
+    };
+    let known = |name: &str| {
+        action
+            .known_inputs()
+            .iter()
+            .any(|input| input.eq_ignore_ascii_case(name))
+    };
+    for (index, key) in with.keys().enumerate() {
+        let repeated = with
+            .keys()
+            .take(index)
+            .any(|earlier| earlier.eq_ignore_ascii_case(key));
+        if !known(key) || repeated {
+            return refuse(format!(
+                "job {job} sets {key:?} on {label}, which is not a unique input of that action; its inputs are {:?}",
+                action.known_inputs()
+            ));
+        }
+    }
+    for needed in action.required_inputs() {
+        if !with.keys().any(|key| key.eq_ignore_ascii_case(needed)) {
+            return refuse(format!(
+                "job {job} does not set the required input {needed} of {label}"
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn local_action(job: &str, name: String) -> Result<(String, Body), WorkflowsError> {

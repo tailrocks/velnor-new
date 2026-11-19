@@ -5,15 +5,15 @@ use std::fmt;
 
 use crate::key_length::longest_cache_key;
 use crate::pinned_actions::{
-    ACTIONS_CACHE, ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
-    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, credential_rules, pin_rules,
+    ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
+    GITHUB_SCRIPT, MR_BOXINGTON, credential_rules, pin_rules,
 };
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 17] = [
+pub const ALLOWED_ACTIONS: [&str; 16] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
@@ -24,7 +24,6 @@ pub const ALLOWED_ACTIONS: [&str; 17] = [
     SETUP_VELNOR_ACTION,
     MBX_ACTION,
     ATTEST_BUILD_PROVENANCE.action,
-    ALINT.action,
     DOCKER_LOGIN.action,
     DOCKER_SETUP_BUILDX.action,
     DOCKER_BUILD_PUSH.action,
@@ -148,6 +147,7 @@ pub enum Rule {
     },
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
+    CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
@@ -211,6 +211,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
+            Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
@@ -234,8 +235,12 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
         .iter()
         .flat_map(|job| {
             let holds_token = holds_app_token(job);
+            let last = job.steps.len().saturating_sub(1);
             let step_violations = job.steps.iter().enumerate().flat_map(move |(index, step)| {
                 let mut rules = step_rules(step);
+                if crate::combined_cache::before_last(step, index, last) {
+                    rules.push(Rule::CombinedCacheNotLastStep);
+                }
                 if holds_token {
                     token_step_rules(step, &mut rules);
                 }

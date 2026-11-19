@@ -144,7 +144,7 @@ velnor-legacy is the test. It reached ~804k lines of Rust (evidence §E.1). Two 
 
 The protocol surface explains the breadth. The official runner speaks three registration paths, two message transports (legacy pipelines and broker), run-service acquire, renew and complete, Results Twirp for logs and step updates, and a launch service for action resolution (evidence §F.1–F.4). GitHub stops assigning jobs to runners more than 63 days out of date (evidence §F.6.1). A native runner must track all of that. The owner accepts breakage when GitHub changes the protocol. That acceptance covers a narrow profile. It does not cover re-implementing `if:` evaluation, matrix expansion, composite inlining, container hooks, file commands, secret masking and the dual template evaluators the Worker runs today (`PipelineTemplateEvaluatorWrapper.cs`, evidence §F.5.1).
 
-velnor-new makes the opposite bet today. `crates/velnor-runner` (~185k LOC, evidence §D.2) runs the official runner inside Docker and spends its complexity on journal, ownership proof and crash recovery instead. Its 430 tests pass on macOS (evidence §D.5). The V2-native stage in `docs/deferred/self-hosted-runner.md:19` — "replace the official runner for the restricted V1 profile with the real Rust protocol runtime" — is documented as superseded and not implemented (evidence §D.6). That history is a warning, not a veto: nobody has measured a native job end to end, so no speedup number exists for either side (evidence §E.7, §D.5).
+velnor-new makes the opposite bet today. `crates/velnor-runner-*` (~185k LOC, evidence §D.2) runs the official runner inside Docker and spends its complexity on journal, ownership proof and crash recovery instead. Its 430 tests pass on macOS (evidence §D.5). The V2-native stage in `docs/deferred/self-hosted-runner.md:19` — "replace the official runner for the restricted V1 profile with the real Rust protocol runtime" — is documented as superseded and not implemented (evidence §D.6). That history is a warning, not a veto: nobody has measured a native job end to end, so no speedup number exists for either side (evidence §E.7, §D.5).
 
 **Expected numbers [Est]:** a native executor saves the Worker's fixed startup: action resolution and download, .NET process start, and per-step Node launches. On a warm pod I put that at 5–20 s per job. It saves nothing on cargo time, which dominates. A full re-implementation costs person-years and still fails the first workflow that uses an unlisted action. A restricted executor for `velnor-gen` workflows (sequential `run:` steps that call `velnor-ci`, §3) costs far less and captures the same 5–20 s on the jobs that matter.
 
@@ -223,7 +223,7 @@ Split the system into three layers. Change the outer two. Keep the middle one bo
 
 **Layer A — Listener and scheduler (replace ARC).** Replace the ARC controller and listener with a Velnor-owned listener. The listener holds one scale-set session per org, long-polls for `JobAvailable`, calls `acquirejobs` and assigns each job to a warm pod on a node that already holds the needed cache (§4). It replaces ARC's chain of patch, batch create, JIT Secret and pod create (evidence §F.7.2) with a direct assignment to a pre-created pod from a warm pool (§6). Keep ARC running until the new listener passes the same jobs on `velnor-lab`. Roll back by scaling ARC up and the new listener down. Both speak the same GitHub API, so GitHub sees no change.
 
-Port the protocol types from `crates/velnor-runner/crates/velnor-runner-github` (evidence §D.3): session open and refresh, message ack rules, `acquirejobs` request IDs and JIT generation already exist as pure wire types with no HTTP dependency. Add one HTTP client and the scheduler. Do not port ARC's generic reconcilers. They solve a multi-tenant problem Velnor does not have.
+Port the protocol types from `crates/velnor-runner-github` (evidence §D.3): session open and refresh, message ack rules, `acquirejobs` request IDs and JIT generation already exist as pure wire types with no HTTP dependency. Add one HTTP client and the scheduler. Do not port ARC's generic reconcilers. They solve a multi-tenant problem Velnor does not have.
 
 **Layer B — Step executor (keep the official runner binary).** Each job still runs the unmodified official `Runner.Listener` and `Runner.Worker` inside its pod. The Worker keeps action download, composite inlining, container handling, expression evaluation and log streaming (evidence §F.5). This choice looks timid. It is the load-bearing one: it keeps every workflow that runs today running tomorrow, including the 61 `actions/checkout`, 80 `actions/upload-artifact` and 55 `jdx/mise-action` uses across the repo (evidence §C.2). The cost is the .NET startup and Node launches, 5–20 s per job **[Est]**. §3.4 recovers that cost on one profile without betting the merge gate on it.
 
@@ -245,7 +245,7 @@ Fix two ARC-era choices inside this layer. First, pre-seed the action archive ca
 
 Add a second executor beside the official Worker. Admit a job to it only when the job matches the `velnor-gen` profile:
 
-- The workflow comes from `velnor-gen` and each job is a sequence of `run:` steps that call `velnor-ci` subcommands (`plan`, `prepare`, `gate`, `report`, `cache` in `ci-helper/crates/velnor-ci`, evidence §C.6).
+- The workflow comes from `velnor-gen` and each job is a sequence of `run:` steps that call `velnor-ci` subcommands (`plan`, `prepare`, `gate`, `report`, `cache` in `crates/velnor-ci`, evidence §C.6).
 - The job uses no `uses:` step except `actions/checkout`, `actions/cache` restore and save, `actions/upload-artifact` and `actions/download-artifact`. Translate those four to built-ins. The deferred design already lists this exact split (`docs/deferred/self-hosted-runner.md`, evidence §D.6).
 - The job needs no service containers, no matrix fan-out beyond test shards (§5) and no Docker action.
 
@@ -309,7 +309,7 @@ Follow the rules the repo already wrote. Do not invent new ones.
 - **Push to main and merge_group:** read all tiers. Only push to the protected default branch writes the shared Tier 0 generation and Tier 1. Merge groups never write shared state. Current policy already states this split (evidence §C.3: pull requests, forks and merge groups never write cache). Keep it.
 - **Fork PR:** restore only. Give forks a separate slot family and a separate node label. Never mount the shared writable store into a fork job. Never cache any output built from a private dependency for a fork (`docs/goals.md:43`). The job-start hook (§3.2) enforces the mount set per trust scope. A job that asks for a store outside its scope fails before it runs repository code.
 - **Content keys only:** mbx and cargo key on input content. A wrong or stale entry can waste time. It cannot change the program that runs, because the compiler still checks fingerprints before it reuses an object. The `Cache` check from `docs/goals.md:67` must still run: report crates compiled versus crates the warm store held, and turn red when a held crate compiles. A red Cache check blocks nothing. It stops silent cache rot.
-- **Attestation:** the state-seal chain attests bundles with `actions/attest` and verifies with `gh attestation verify` before a consumer trusts a key (evidence §C.3). Node-local stores need the same property with less machinery: the node agent signs each shared generation with a cluster key at write time and verifies the signature on mount. Drop the GitHub round trip. Keep the rule that only default-branch writes create shared generations.
+- **Attestation:** the state seal chain attests bundles with `actions/attest` and verifies with `gh attestation verify` before a consumer trusts a key (evidence §C.3). Node-local stores need the same property with less machinery: the node agent signs each shared generation with a cluster key at write time and verifies the signature on mount. Drop the GitHub round trip. Keep the rule that only default-branch writes create shared generations.
 
 ### 4.5 Expected hit rates and the limiter behind each number
 
@@ -326,7 +326,7 @@ Report hit rate per run from runner one. Use crates compiled and crates download
 
 Check the arithmetic before you believe a target. Maintenance-helpers compiles 104 crates cold in 486 s [E T10]. If 90% hit, 10 crates compile. At the cold average of 4.7 s per crate that is 47 s, plus test time the cache cannot remove **[Est]**. So a 60–120 s warm job is consistent. A claim of 10 s would fail the limit check and would mean the tests did not run. Apply the same bound everywhere: a cache can remove compile and download time only. It cannot remove test execution, clippy analysis of changed crates or doc builds of changed crates.
 
-Fix the state-seal failures as part of this work, even though Tier 2 shrinks. Seven failures stop at `Check state tip` and nine at Clippy or parallel checks (evidence T9d). The tip check compares `GITHUB_SHA` to the live `main` ref after a chain of up to five 60 min producers (evidence §C.3). Shorten the chain or re-check the tip at seal time only. A seal that usually fails trains everyone to ignore the one signal that says the cache broke.
+Fix the state seal failures as part of this work, even though Tier 2 shrinks. Seven failures stop at `Check state tip` and nine at Clippy or parallel checks (evidence T9d). The tip check compares `GITHUB_SHA` to the live `main` ref after a chain of up to five 60 min producers (evidence §C.3). Shorten the chain or re-check the tip at seal time only. A seal that usually fails trains everyone to ignore the one signal that says the cache broke.
 
 ## 5. Workflow design: select less, shard the rest, verify each tree once
 
@@ -334,7 +334,7 @@ Fix the state-seal failures as part of this work, even though Tier 2 shrinks. Se
 
 Eight jobs still run on GitHub-hosted `ubuntu-26.04`: Plan, Ledger CLI, Cargo Deny, Jactionlint, Cargo Machete, Alint, Required verdict and Required (evidence §C.1). Their durations are short (0.2–0.9 min [E T3]) and their queues are long (p90 21–26 min [E T4]). The runner ruleset needs only the two `Required` names. Nothing in those jobs needs a GitHub-hosted machine. The repo kept them hosted to keep credentials and signatures off shared nodes (RESULT.md: "Stays on hosted runners by design").
 
-Move all eight to the scale set. Run them in pods with no Docker socket, no write token and a read-only cache mount. Plan and the lint jobs need network access to the API and to crates only. Required verdict needs the plan artifact and the per-crate reports. None needs `id-token: write` or `attestations: write`. Keep state-seal producers, release and publish jobs hosted. Those hold the signing keys. The gate does not.
+Move all eight to the scale set. Run them in pods with no Docker socket, no write token and a read-only cache mount. Plan and the lint jobs need network access to the API and to crates only. Required verdict needs the plan artifact and the per-crate reports. None needs `id-token: write` or `attestations: write`. Keep state seal producers, release and publish jobs hosted. Those hold the signing keys. The gate does not.
 
 `velnor-actions` v0.1.81 already moves these jobs (per the owner's decided context). Treat that release as Phase 0 (§8) and measure it before you build anything else. Expected effect **[Est from E]**: the 11-18 PR pattern loses 57.0 min of gate queue and keeps the 10.7 min fan-out, so wall falls from 71.8 min to about 15 min. On an 11-17 pattern, wall falls from 16.0 min to about 10 min. The limiter after this move is the fan-out itself. That is what the rest of this section attacks.
 
@@ -350,7 +350,7 @@ Guard each skip with the same proof rule as today: when the diff cannot map to c
 
 ### 5.3 Inside the job: compile once, shard tests
 
-Adopt the `velnor-gen` shape. One job per Cargo root (root, `ci-helper`, `generator`, `local`, `crates/velnor-runner`) replaces 29 per-crate jobs (evidence §C.6). The shape follows `docs/goals.md:69`: a job exists only when it cuts the wait by more than its startup cost. Five jobs pay the ~16 s setup tax five times, not 29 times. That saves about 6 runner-min per run **[Est: 24 fewer jobs × 16 s ≈ 384 s]** and, more important, lets one job compile a workspace once for lint, doc and tests (`docs/goals.md:68`: at most one metadata compile and one full compile per crate per configuration). The per-crate layout compiles shared dependencies once per crate job. The per-root layout compiles them once per root.
+Adopt the `velnor-gen` shape. One job per Cargo root (root, `ci-helper`, `generator`, `local`, `crates/velnor-runner-*`) replaces 29 per-crate jobs (evidence §C.6). The shape follows `docs/goals.md:69`: a job exists only when it cuts the wait by more than its startup cost. Five jobs pay the ~16 s setup tax five times, not 29 times. That saves about 6 runner-min per run **[Est: 24 fewer jobs × 16 s ≈ 384 s]** and, more important, lets one job compile a workspace once for lint, doc and tests (`docs/goals.md:68`: at most one metadata compile and one full compile per crate per configuration). The per-crate layout compiles shared dependencies once per crate job. The per-root layout compiles them once per root.
 
 Then shard the tests inside each root:
 
@@ -535,7 +535,7 @@ Baseline for all targets (scale-set era, evidence T2): PR wall median 26.7 min, 
 
 ### Phase 0 — Move the gate onto the cluster (days, no new code)
 
-Ship `velnor-actions` v0.1.81. Move Plan, Ledger CLI, Cargo Deny, Jactionlint, Cargo Machete, Alint, Required verdict and Required to the scale set in locked-down pods (§5.1). Keep state-seal, release and publish hosted.
+Ship `velnor-actions` v0.1.81. Move Plan, Ledger CLI, Cargo Deny, Jactionlint, Cargo Machete, Alint, Required verdict and Required to the scale set in locked-down pods (§5.1). Keep state seal, release and publish hosted.
 
 - **Target:** PR wall median under 15 min and p90 under 30 min over 20 merges. Hosted queue in CI reaches zero. Fan-out span stays near 9 min.
 - **Detect failure:** any `Required` job waits over 2 min for a pod, or the gate pods gain a Docker socket or write token in review. Audit the pod spec in the same PR.
