@@ -15,7 +15,6 @@ use crate::config::RepositoryConnection;
 use crate::error::HostError;
 use crate::host_controller::retirement::{record_absence, recorded_pairs};
 use crate::journal::Journal;
-use crate::keychain;
 use crate::scale_set::{RemovedRunnerProver, RunnerProver};
 
 use super::RemovedStartup;
@@ -33,10 +32,7 @@ pub(super) async fn record_github_absence(
     let state = startup.state.to_path_buf();
     let owned = binding.clone();
     let work = tokio::task::spawn_blocking(move || {
-        let credential = keychain::load_secret(
-            owned.credential_ref.service(),
-            owned.credential_ref.account(),
-        )?;
+        let credential = owned.credential_ref.load()?;
         let mut prover = RemovedRunnerProver::open(connection_pat(&credential)?, &owned)
             .map_err(|_| HostError::Endpoint)?;
         prove_and_record(&state, &owned, &targets, &mut prover)

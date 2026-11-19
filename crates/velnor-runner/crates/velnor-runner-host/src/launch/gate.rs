@@ -10,7 +10,6 @@ use crate::config::{HostConfig, RepositoryConnection};
 use crate::error::HostError;
 use crate::host_controller::{AbsenceProofs, connection_pat, read_absence_proofs};
 use crate::journal::Journal;
-use crate::keychain;
 use crate::reconcile::{IntentRow, Reconcile, before_advertise, occupies};
 use crate::scale_set::{EnsureError, observe_scale_set_runners};
 use bollard::Docker;
@@ -160,10 +159,7 @@ struct GithubSources {
 
 const LIVE: GithubSources = GithubSources {
     credential: |binding| {
-        keychain::load_secret(
-            binding.credential_ref.service(),
-            binding.credential_ref.account(),
-        )
+        binding.credential_ref.load()
     },
     list: observe_scale_set_runners,
 };

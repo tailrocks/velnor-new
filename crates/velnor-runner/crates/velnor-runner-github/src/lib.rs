@@ -10,6 +10,7 @@
     reason = "documentation comments are intentionally absent from this codebase"
 )]
 mod acquire;
+mod assign_time;
 mod error;
 mod paths;
 mod poll;

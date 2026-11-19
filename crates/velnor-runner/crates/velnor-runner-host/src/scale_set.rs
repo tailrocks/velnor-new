@@ -23,8 +23,8 @@ mod removal;
 pub(crate) use removal::{RemovedRunnerProver, RunnerProver};
 
 use support::{
-    create_connection_scale_set, default_group_id, map_host, map_repository, map_session,
-    open_admin, revalidate_repository_scope, selector_valid,
+    CreateIds, create_connection_scale_set, map_host, map_repository, map_session, open_admin,
+    revalidate_repository_scope, selected_group_id, selector_valid,
 };
 
 const GITHUB_API: &str = "https://api.github.com";
@@ -114,10 +114,10 @@ pub(crate) async fn ensure_connection_scale_set(
         pat,
     )
     .map_err(map_repository)?;
-    let (mut transport, admin) = open_admin(pat, &scope)?;
+    let (mut transport, admin) = open_admin(pat, &scope, binding)?;
     let groups = list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|error| map_session(error, &transport))?;
-    let group_id = default_group_id(&groups)?;
+    let group_id = selected_group_id(binding, &groups)?;
     let request = ScaleSetCreateRequest::new(binding, group_id).map_err(map_host)?;
     let record = scoped
         .prepare_scale_set_create(&request)
@@ -134,14 +134,16 @@ pub(crate) async fn ensure_connection_scale_set(
     )
     .map_err(|error| map_session(error, &transport))?;
 
-    let set = match (
-        lookup_action(record.state(), matches!(&found, ScaleSetFound::Found(_))),
-        found,
-    ) {
+    let exists = matches!(&found, ScaleSetFound::Found(_));
+    let organization = binding.organization.is_some();
+    let set = match (lookup_action(record.state(), exists, organization), found) {
         (ScaleSetLookupAction::Create, ScaleSetFound::NotFound) => {
             create_connection_scale_set(
-                pat,
-                &scope,
+                CreateIds {
+                    pat,
+                    scope: &scope,
+                    adopt_on_conflict: !organization,
+                },
                 &mut transport,
                 admin.expose_token(),
                 &scoped,
@@ -181,11 +183,19 @@ enum ScaleSetLookupAction {
     Hold,
 }
 
-fn lookup_action(state: ScaleSetCreateState, found: bool) -> ScaleSetLookupAction {
+fn lookup_action(
+    state: ScaleSetCreateState,
+    found: bool,
+    organization: bool,
+) -> ScaleSetLookupAction {
     match (state, found) {
-        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) => {
-            ScaleSetLookupAction::Adopt
-        }
+        (
+            ScaleSetCreateState::Prepared
+            | ScaleSetCreateState::Requested
+            | ScaleSetCreateState::Uncertain
+            | ScaleSetCreateState::NoEffect,
+            true,
+        ) if !organization => ScaleSetLookupAction::Adopt,
         (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
         (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
             ScaleSetLookupAction::Verify
@@ -258,7 +268,7 @@ fn open_binding_admin(
         pat,
     )
     .map_err(map_repository)?;
-    open_admin(pat, &scope)
+    open_admin(pat, &scope, binding)
 }
 
 /// Whether `binding`'s selector owns `scale_set_id`.
@@ -311,12 +321,16 @@ pub(crate) fn list_runner_ids<T: Transport + ?Sized>(
 pub fn product_runner_groups(
     pat: &str,
     scope: &VerifiedRepositoryScope,
+    binding: &RepositoryConnection,
 ) -> Result<Vec<RunnerGroup>, EnsureError> {
     if pat.is_empty() {
         return Err(EnsureError::Rejected);
     }
     revalidate_repository_scope(pat, scope)?;
-    let (mut transport, admin) = open_admin(pat, scope)?;
+    let (mut transport, admin) = open_admin(pat, scope, binding)?;
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
 }
+
+#[cfg(test)]
+mod tests;

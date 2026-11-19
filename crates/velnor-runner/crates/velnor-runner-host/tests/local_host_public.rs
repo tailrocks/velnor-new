@@ -38,6 +38,8 @@ mod refusals;
 mod removal_audit;
 #[path = "local_host_public/retry.rs"]
 mod retry;
+#[path = "local_host_public/runner_exit.rs"]
+mod runner_exit;
 #[path = "local_host_public/scenario.rs"]
 mod scenario;
 #[path = "local_host_public/sweep.rs"]

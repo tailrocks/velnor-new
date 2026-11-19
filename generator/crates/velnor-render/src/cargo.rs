@@ -171,7 +171,17 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
     )
 }
 
-fn cache_debug_env() -> (String, Value) {
+pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
+    (
+        "CARGO_TARGET_DIR".to_owned(),
+        Value::Expr(format!(
+            "${{{{ github.workspace }}}}/{}",
+            target.as_str().replace("${{", "${{ '${{' }}")
+        )),
+    )
+}
+
+pub(crate) fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
         Value::Expr(format!(
@@ -242,13 +252,13 @@ fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
     match manifest.parent() {
         None => (
             "Dependency policy".into(),
-            "cargo-deny check".into(),
+            "cargo-deny --locked check".into(),
             vec![],
         ),
         Some(directory) => (
             format!("Dependency policy ({directory})"),
             format!(
-                "cargo-deny --manifest-path '{}' check",
+                "cargo-deny --manifest-path '{}' --locked check",
                 manifest.as_str().replace('\'', "'\\''")
             ),
             vec![],
