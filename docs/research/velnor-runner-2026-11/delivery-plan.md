@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 900 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.1 days of fleet time (900 ÷ 12 builders ≈ 75 h). Coding does not set the dates.
+- **Total work:** about 912 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.2 days of fleet time (912 ÷ 12 builders ≈ 76 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -344,7 +344,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | V02 | Observation and signing | Node agent observation; receipts binding every executed binary's digest, generation, node, slot, epoch; signer daemon; append-only log | P04, V01 | 12 | strong | A forged report mints 0 receipts; a receipt without digests is rejected | — |
 | V03 | Witness scheduler | Distinct node, attempt and order seed (seeded batches through nextest filter expressions; overhead measured); a different generation or cold; shard layout in the execution manifest, fan-out off for receipts until lab C | V01, V02 | 8 | strong | Two witnesses on one node or one generation are refused; the seeded order is reproducible | — |
 | V04 | Exact-tree records | Shadow with re-execution, then on per kind after the evidence matrix | V03 | 6 | strong | 3,000 clean per obligation kind | — |
-| V05 | Audit A1 | Journalled request per first-parent commit; gap reconciliation; results bound to commit and proof set; reserved share; the push `Required` reports it | V02 | 8 | strong | An intermediate commit with no push run is audited; a planted stale result is caught within the SLO | The full push run (B09 of plan v1) |
+| V05 | Audit A1 | Journalled request per first-parent commit; gap reconciliation; results bound to commit and proof set; reserved share; the push `Required` reports it and, when the audit is unclaimed, takes its exclusive lease and runs it cold instead of waiting; the waiting slot is charged | V02 | 8 | strong | An intermediate commit with no push run is audited; a planted stale result is caught within the SLO | The full push run (B09 of plan v1) |
 | V06 | Audit A2 | Nightly, the clock shifted 8 and 30 days | V05 | 4 | mid | A planted date bomb fails | — |
 | V07 | Read audit | eBPF in the node agent on `openat`, `openat2`, `newfstatat`, `statx`, `readlinkat` and `getdents64` exits, by sandbox cgroup, `ENOENT` included; overhead measured | V02 | 14 | strong | Shadow traces on every obligation; overhead reported [M] | — |
 | V08 | Per-root keys | Dependency contracts per obligation, always including every tracked file in each ancestor directory of the root (`rustfmt.toml`, `clippy.toml`, `deny.toml`, `rust-toolchain.toml`, `Cargo.*`, `mise.*`) and `.cargo/`, `.config/`, `.github/`, `.velnor/`; enforced by V07 on every execution; the sibling-file canary | V07, V04 | 12 | strong | 3,000 clean per kind; the canary is caught | — |
@@ -387,12 +387,12 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 
 | ID | Title | Scope | Depends on | Agent-h | Class | Verification | Deletes |
 |---|---|---|---|---|---|---|---|
-| T02 | Loop splits | Looped cases in the suites that survive F01; prefix clones; the 924.8 s receipt-integrity test (no work on `velnor-runner-host` or its journal, decision 16) | — | 6 | mid | No surviving test over 60 s outside a list | The serial loops |
+| T02 | Loop splits | Looped cases in the suites that survive F01 (actions-cli's 258–274 s loops); prefix clones; no work on `velnor-runner-host`, its journal or its 924.8 s `receipt_integrity` test, which F01 deletes (decision 16) | — | 6 | mid | No surviving test over 60 s outside a list | The serial loops |
 | T03 | Parallel helper tests | ci-helper and archive-guard tests in parallel | — | 4 | mid | ci-helper ≤ 10 s | `test-threads = 1` |
 | T04 | Fixture and profile | Fold the 89-s fixture; lab B1's four-way matrix | — | 6 | mid | Numbers for the profile override | The separate fixture build |
-| T05 | Git differential speed | Fixture reuse, batching and sharding of `non_inputs_differential.rs` with the original assertions | — | 6 | mid | The full suite still runs; time measured against 679 s | — |
+| T05 | Git differential speed | A sealed no-checkout fixture cloned per accepted glob, batching and sharding of `non_inputs_differential.rs` with the original assertions | — | 6 | mid | The full suite still runs; time measured against 679 s | — |
 | T06 | One `tests/it` per package | 356 binaries → one per package | — | 8 | mid | Same test IDs; link passes counted | The separate binaries |
-| S01 | Cluster policy | Priority classes, the reserved merge path, A1's share, memory watermark requeue, PID limits, per-org quotas | D8 | 6 | mid | No OOM in a week; batch requeued first | — |
+| S01 | Cluster policy | Priority classes, the reserved merge path (a pair of distinct warm slots for a group that misses), A1's share, memory watermark requeue, PID limits, per-org quotas | D8 | 6 | mid | No OOM in a week; batch requeued first | — |
 | S02 | Control plane | Three k3s servers across failure domains; a third-site witness for shared fences | D8 | 4 | mid | Server and site loss drills pass | — |
 
 **R: release; F: final deletion**
@@ -418,10 +418,12 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | BM04 | S4 loaded replay | The 2026-11-18 trace with other organisations' load, A1 and release preparation | BM03 | 6 | mid | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s | — |
 | BM05 | S5 census | C5 classifier and read audit on `main` and 300 heads | V07, V12 | 6 | strong | C5 and whole-tree shares published; goals restated | — |
 | BM06 | S6 warm compile | 300 diffs per root, cold page cache, idle and loaded, cold control | C05 | 6 | mid | Slower witness P90 ≤ 25 s (helper, generator), digests equal | — |
+| BM08 | Floor inventory | Per-binary wall and CPU of every receipt-minting binary on a worker, process trees traced, before and after T02, T05 and F01 | B13 | 6 | mid | Replaces the 28-job-log figures; longest surviving binary published | — |
+| BM09 | Contract freeze and publication | K20 freeze of the contract; K22 paired arrival-block bootstrap intervals, pre-registered sentence, interleaved pairs reported as median and range | BM03 | 6 | strong | The rule runs on the dry arms; a planted tie is reported as a tie | — |
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 133 items, about 900 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 135 items, about 912 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions

@@ -92,8 +92,8 @@ greens have zero tolerance. "Same confidence" is this contract.
    --show-toplevel`; they get a read-only repository at the subject commit and are keyed by it), a
    scrubbed environment (no `GITHUB_*`; fixed `HOME`, `PATH` and locale) and a fixed CPU count.
 6. **C6. Reuse is audited, compile reuse included.** A new reuse class runs in shadow with every
-   reuse re-executed until about 3,000 clean comparisons per obligation kind; then 2% are
-   re-executed. Until compile reuse graduates, the second witness builds cold. Every landed commit is
+   reuse re-executed until about 3,000 clean comparisons per obligation kind (a bound near 0.1% at
+   95%, never a proof of zero, so A1, sampling and planted failures stay); then 2% are re-executed. Until compile reuse graduates, the second witness builds cold. Every landed commit is
    rebuilt cold and its changed obligations re-run (audit A1, section 6.5). The first disagreement
    suspends the class and blocks its dependants at once; five re-runs then decide between a flake
    (the class resumes) and a wrong key (the epoch is revoked).
@@ -748,7 +748,8 @@ path, with inputs proven by content, independently of cargo's freshness:
 - **No transport on the verdict path by default:** a node holding the generation, or cold. mbx with
   a per-site `mbx-cache` fills nodes in the background while it saves ≥ 20 runner-min a day or ≥ 10%
   of builds would start cold (N54). Lab B3 measures waiting for a warm slot against fetching
-  verified state and starting cold, under load; a bounded transfer joins the verdict path only where
+  verified state and starting cold, under load, and the wait threshold comes from those queue
+  observations; a bounded transfer joins the verdict path only where
   measured faster at the same provenance bar.
 - **Variants.** Overlayfs and compressed layers are lab candidates; no hard-linked `deps/` base;
   `-Z checksum-freshness` is nightly-only; `CARGO_INCREMENTAL=0` on every receipt or shipped build
@@ -813,7 +814,10 @@ directory per check kind (`docs/hard-decisions.md:56-62`); `cargo-deny` reads a 
 **The push `Required` job** runs `velnor-ci audit wait` with a read-only ledger token: it polls for
 the A1 result bound to `GITHUB_SHA` and passes only on a pass, failing after 2.5 h (the SLO plus
 margin); re-running the attempt waits again. Its concurrency group is per SHA, so one tip's wait
-never queues behind another's (today push runs are not cancelled, `ci.yml:57-59`).
+never queues behind another's (today push runs are not cancelled, `ci.yml:57-59`). While it waits
+it holds a gate slot, which the runner-minute accounting charges; when the tip's audit is still
+unclaimed, the job takes the audit's exclusive lease and runs it through the node agent's cold path
+instead of waiting, with the same signed evidence.
 
 **The obligation inventory** is the parity contract, not summary text. It is versioned, released
 with `velnor-ci`, and maps every check that blocks today (Plan, the lints, every Rust variant, the
@@ -931,20 +935,26 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 
 ### 8.5 Tests and the floor
 
-- **The floor that survives.** `velnor-runner-host`, its Turso journal and `Journal::open` are
+- **The floor that survives.** `velnor-runner-host`, its Turso journal, `Journal::open` and the
+  924.8 s `receipt_integrity` test (it lives in `velnor-runner-host`'s host controller [C]) are
   deleted at the final milestone (decision 16), so floor work aims at what stays: the 679 s
-  `non_inputs_differential` suite, the 924.8 s receipt-integrity test, the 132 s actions-cli test and
-  every other test over 60 s [M, 28 job logs]. Looped cases become one test each, `test-threads=1`
+  `non_inputs_differential` suite, actions-cli's 132 s test and 258–274 s looped tests, and every
+  other test over 60 s [M, 28 job logs]; a per-binary inventory on a worker (plan BM08) replaces
+  these job-log figures. Looped cases become one test each, `test-threads=1`
   goes once tests use private temp directories and ports, expensive valid prefixes are built once
   and cloned, and 356 integration-test binaries become one `tests/it` per package (about 340 fewer
   link passes). Runner-host is 25% of today's PRs, so the PR-class mix is recomputed after F01.
 - **The Git differential stays whole.** `non_inputs_differential.rs` compares the planner, Git's
-  sparse checkout and the archive guard for every accepted glob (about 45,000 `git` processes). It
-  stays on the merge gate until those paths are deleted or a matcher is qualified on the complete
-  corpus; fixture reuse, batching and sharding with the original assertions cut its time first.
+  sparse checkout and the archive guard for every accepted glob: only 69 of the 6,077 generated
+  candidates are accepted, so at most about 490 direct `git` calls [C, GPT-6.2-Astra's count]; the
+  679 s is the whole suite's. It stays on the merge gate until those paths are deleted or a matcher
+  is qualified on the complete corpus; a sealed no-checkout fixture cloned per glob, batching and
+  sharding with the original assertions cut its time first.
 - **Dependency `opt-level = 3` with assertions on** [M, one test]: 67% less CPU, the checks costing
   5% of instructions; adopted with both checks written out and `turso_core`'s line raised; no target
   counts the gain until lab B1.
+- **Pipelined link and test.** Each test binary starts as soon as it links, bound by digest to its
+  witness; a later build or inventory failure still fails the obligation.
 - **Fan-out** spreads a suite longest-first across free threads when that beats its longest test
   plus moving binaries; a copy racing a slow shard is an extra witness (section 6.2).
 
@@ -960,7 +970,9 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
   GB of page cache per clone, capping a node at six build sandboxes until lab B2. Node settings:
   reservations (3 CPU, 6 GiB), a 2 GiB eviction threshold, `podPidsLimit` 16384, XFS work volumes.
 - **Reserved merge path.** One 16-CPU build slot and 2 gate CPUs per site for merge and gate work
-  (about 7.7% of CPU; at 95% utilisation waiting grows about 19-fold), plus A1's slot. Priorities:
+  (about 7.7% of CPU; at 95% utilisation waiting grows about 19-fold), plus A1's slot. A group
+  whose records miss is admitted with a pair of distinct warm slots, so its second witness never
+  waits behind the first; restartable work may borrow the second slot. Priorities:
   merge > gate > PR = other organisations' CI > batch; shared work runs at its highest live
   claimant's priority; only batch (`cpu.idle`) is preempted. Freezing frees no memory, so at the
   memory watermark restartable batch work is terminated and requeued.
@@ -976,8 +988,8 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 900 agent-hours of building and 120 of review,
-about 3.1 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 912 agent-hours of building and 120 of review,
+about 3.2 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min
 at P50 [E]. Its first ten items are listed there.
@@ -1039,6 +1051,11 @@ then the refactor; every replacing PR deletes what it replaces.
 Nothing has run end to end, and no comparator has raced this repository, so the speed claim waits
 on this suite (decision log, fastest-runner critiques K01–K27).
 
+**The contract is frozen first** (K20): workload revisions, expected test IDs, features, Git and
+toolchain versions, timeouts, the released planner and both exact subjects are pinned; every arm
+must agree with an independent cold oracle on every contracted case, and unknown inputs force fresh
+work.
+
 **Workload.** 300 historical velnor-new PR heads replayed at their SHAs and arrival times, every
 class unweighted (the class mix from the daily report), plus the 2026-11-18 arrival trace; the same
 released inventory, expected test IDs, features, toolchain and contract for every arm.
@@ -1051,10 +1068,16 @@ and cost.
 |---|---|---|---|
 | S1 | Planted failures (K07) | 100 failing edits: the Q16 older-time edit, an undeclared build-script input, a new sibling file, a clock-shifted test, a stale generation, flaky tests at p = 0.05–0.2, on every fast path | 100% red, or detected at the measured (1−p)² rate; it gates every other run |
 | S2 | **Control race** (K01, K26) | Velnor Native against GitHub Official on the same warm workers, mirrors, tool store and generation, separate executor keys; ≥ 30 interleaved pairs per job type at 15% and 80% CPU; the same race on today's ARC with phase 0 applied | Per-job-type deltas with intervals; an executor claim only at ≥ 5 s per job at P50 on ≥ 3 job types |
-| S3 | **Head-to-head** (K02, K03, K25) | Arms: today's CI; **a strong conventional baseline** on the same workers (the official runner on persistent agents with a reflink-cloned warm target, crates mirror, baked tool image, gates on the cluster, auto-merge, ALLGREEN); Velnor with Official; Velnor Native; rented arms per owner question D22 | Lowest P50 and P90 per class on push-to-merge, gross and net, and on the verdict; a false green disqualifies an arm |
-| S4 | Loaded replay (K04) | The 2026-11-18 trace with other organisations' load, A1 and release preparation at production priority | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s |
+| S3 | **Head-to-head** (K02, K03, K25) | Arms: today's CI; **a strong conventional baseline** on the same workers (the official runner on persistent agents with a reflink-cloned warm target, crates mirror, baked tool image, gates on the cluster, auto-merge, ALLGREEN); Velnor with Official; Velnor Native; rented arms per owner question D22 | The publication rule below, on push-to-merge gross and net and on the verdict; every stage timed, `ensure` included |
+| S4 | Loaded replay (K04, K21) | The 2026-11-18 trace with other organisations' load, A1 and release preparation at production priority; then the reversal cases: a root or manifest edit, a cold toolchain, a lost worker, an ejected predecessor | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s |
 | S5 | Census (K06) | C5 classifier and read audit on `main` and the last 300 heads | Shares of C5 obligation-seconds and of heads with whole-tree keys published; goals restated from them |
 | S6 | Warm compile (K05) | 300 replayed diffs per root over a clone, cold page cache, idle and 70–90% load, with a cold control | Slower witness P90 ≤ 25 s for helper and generator, ≤ 40 s loaded; digests equal cold |
+
+**Publication rule** (K22, pre-registered). Velnor is "fastest" against an arm only if paired
+arrival-block bootstrap intervals for the P50 and the P90 difference, at simultaneous 95%, lie
+strictly below zero, per class; each self-hosted pair is interleaved at least five times and
+reported as median and range. A tie, an unrun arm, a lost class or a win only in the light class
+narrows the sentence, and any false green or skipped work disqualifies the arm or configuration.
 
 Component labs carry the rest: twin independence (K08), group reuse and GitHub's share (K09, K10),
 hardware (K11), floor inventory (K12), page cache (K13), overhead (K14), graduation (K15), storage

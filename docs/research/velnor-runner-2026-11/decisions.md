@@ -953,6 +953,19 @@ cluster test.
 | K01–K07 | Adopted as S1–S6 | 11; plan BM |
 | C05, C14, C17 | Settled on evidence | 3, 5.3, 6.2 |
 
+### Group 27: fastest-runner critique by GPT-6.2-Astra
+
+| Point | Decision | v3 section |
+|---|---|---|
+| The claim wording | Adopted as the post-benchmark sentence | 1.1 |
+| K20 contract freeze; K22 publication rule; C18 | Adopted; C18 settled on the paired-interval rule | 11 |
+| K21 reversal cases | Added to S4 | 11 |
+| O17, C08 (with Gemini 4 Carbon) | Verified: `receipt_integrity.rs` is inside `velnor-runner-host`; the floor statement and the git-call count corrected | 8.5 |
+| O30, G22 | Accepted: the waiting slot is charged; the reporter takes the audit lease when unclaimed | 8.1; plan V05 |
+| O07 | Accepted: 3,000 comparisons bound near 0.1%, never zero | 1.2 |
+| G20, G21, G23, G24 | Adopted | 7.3, 8.5, 9 |
+| C01 | Settled as an estimate: historical baselines cannot be ranked; 10–40× is [E] | 1.1 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
