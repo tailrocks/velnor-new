@@ -16,6 +16,7 @@ use crate::release_checks::publish_needs;
 use crate::release_context::{BuildContext, Private, package_tag};
 use crate::release_outputs::commit_output;
 use crate::release_raw::{raw_packaging, smoke_steps};
+use crate::release_source::PUSHED_COMMIT;
 use crate::release_steps::{
     checkout, expression, install_tool, join, permissions, shell_word, variables,
 };
@@ -184,11 +185,11 @@ pub(crate) fn build_steps(
     steps.extend([
         RenderedStep {
             working_directory: (binary.root != ".").then(|| binary.root.clone()),
-            env: if linux {
-                vec![("TARGET_CC".to_owned(), Value::Text("musl-gcc".to_owned()))]
-            } else {
-                Vec::new()
-            },
+            env: linux
+                .then(|| ("TARGET_CC".to_owned(), Value::Text("musl-gcc".to_owned())))
+                .into_iter()
+                .chain(variables(&[("VELNOR_COMMIT", PUSHED_COMMIT)]))
+                .collect(),
             ..command(
                 format!("Build {} for {suffix}", binary.package),
                 format!(
