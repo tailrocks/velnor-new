@@ -95,7 +95,7 @@ runs:
         [ -n "$verified" ] || fail "SHA-256 mismatch for velnor-ci $VERSION $platform: expected $expected, downloaded $(digest "$staging/$archive"). velnor-ci was not installed"
         extract="$staging/extract"
         mkdir "$extract"
-        (ulimit -f "$((MAX_BYTES / 1024 + 1))"; tar --extract --gzip --no-same-owner --file "$staging/$archive" --directory "$extract" velnor-ci) || fail "extracting velnor-ci from $archive failed. velnor-ci was not installed"
+        (ulimit -f "$((MAX_BYTES / 1024 + 1))"; tar --extract --gzip --no-same-owner --no-recursion --file "$staging/$archive" --directory "$extract" velnor-ci) || fail "extracting velnor-ci from $archive failed. velnor-ci was not installed"
         [ -f "$extract/velnor-ci" ] && [ ! -L "$extract/velnor-ci" ] || fail "$archive does not hold velnor-ci as a regular file. velnor-ci was not installed"
         bounded_copy "$extract/velnor-ci" "$staging/velnor-ci" || fail "velnor-ci in $archive is larger than $MAX_BYTES bytes. velnor-ci was not installed"
         bin="$RUNNER_TEMP/velnor-ci-bin"

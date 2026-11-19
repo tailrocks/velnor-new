@@ -269,6 +269,11 @@ class SetupVelnorInstallTests(unittest.TestCase):
         self.assertEqual(words[-1], "velnor-ci")
         self.assertIn(ARCHIVE, words[words.index("--file") + 1])
 
+    def test_the_archive_is_extracted_with_no_recursion(self):
+        result = self.install(sha256(self.archive))
+        self.assertEqual(result.returncode, 0, result.output)
+        self.assertIn("--no-recursion", self.tar_calls()[0].split("\t", 1)[1].split())
+
     def test_no_line_of_the_script_that_runs_tar_or_curl_has_a_shell_pipe(self):
         piped = [
             line
