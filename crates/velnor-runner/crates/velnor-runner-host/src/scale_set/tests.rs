@@ -44,8 +44,14 @@ fn a_matching_set_is_adopted_after_a_lost_create_response() {
         ScaleSetCreateState::Requested,
         ScaleSetCreateState::Uncertain,
     ] {
-        assert_eq!(lookup_action(state, true), ScaleSetLookupAction::Adopt);
-        assert_eq!(lookup_action(state, false), ScaleSetLookupAction::Hold);
+        assert_eq!(
+            lookup_action(state, true, false),
+            ScaleSetLookupAction::Adopt
+        );
+        assert_eq!(
+            lookup_action(state, false, false),
+            ScaleSetLookupAction::Hold
+        );
     }
 }
 
@@ -97,4 +103,23 @@ async fn an_uncertain_row_adopts_the_matching_set_it_never_recorded() -> TestRes
     let (state, ownership) = adopt_after_crash(true).await?;
     assert_eq!((state.as_str(), ownership.as_str()), ("adopted", "adopted"));
     Ok(())
+}
+
+#[test]
+fn an_organization_never_adopts_a_set_it_did_not_create() {
+    for state in [ScaleSetCreateState::Prepared, ScaleSetCreateState::NoEffect] {
+        assert_eq!(
+            lookup_action(state, true, false),
+            ScaleSetLookupAction::Adopt
+        );
+        assert_eq!(lookup_action(state, true, true), ScaleSetLookupAction::Hold);
+    }
+    assert_eq!(
+        lookup_action(ScaleSetCreateState::Created, true, true),
+        ScaleSetLookupAction::Verify
+    );
+    assert_eq!(
+        lookup_action(ScaleSetCreateState::Prepared, false, true),
+        ScaleSetLookupAction::Create
+    );
 }

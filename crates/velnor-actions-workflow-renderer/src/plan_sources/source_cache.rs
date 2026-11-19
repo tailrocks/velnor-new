@@ -3,8 +3,8 @@
 
 use velnor_actions_actionlint::actions::{CACHE_ACTION_SHA, CACHE_ACTION_VERSION};
 use velnor_actions_contract::workflow::cache_family::{
-    CacheFamily, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR, SOURCES_RESTORE_KEYS_PLAN_EXPR,
-    SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION,
+    CacheFamily, SOURCES_CACHE_HOME, SOURCES_KEY_PLAN_EXPR, SOURCES_KEY_STEP_EXPR,
+    SOURCES_RESTORE_KEYS_PLAN_EXPR, SOURCES_RESTORE_KEYS_STEP_EXPR, SOURCES_SAVE_CONDITION,
 };
 use velnor_actions_contract::{Step, StepId, StepRole};
 
@@ -42,7 +42,7 @@ fn sources_step(restore: bool, key: &str, restore_keys: &str) -> Result<Step, Pl
     use velnor_actions_mise::cache_sources::validate_sources_subset;
 
     let paths = CacheFamily::Sources.spec().resolved_paths(None);
-    validate_sources_subset(&paths, SHARED_CARGO_HOME)
+    validate_sources_subset(&paths, SOURCES_CACHE_HOME)
         .map_err(|err| PlanSourcesError::CacheSourcesPolicy(err.to_string()))?;
     let op = if restore { "restore" } else { "save" };
     let uses = PinnedActionRef::new(

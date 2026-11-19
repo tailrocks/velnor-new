@@ -122,11 +122,8 @@ fn validate_input(input: &SetupReceiptInput) -> Result<(), HostError> {
     {
         return Err(HostError::Identity);
     }
-    let mut defaults = input.groups.iter().filter(|group| group.is_default);
-    let Some(default) = defaults.next() else {
-        return Err(HostError::Identity);
-    };
-    if default.id != input.set.runner_group_id || defaults.next().is_some() {
+    let selected = input.binding.select_runner_group(&input.groups)?;
+    if selected != input.set.runner_group_id {
         return Err(HostError::Identity);
     }
     if input
