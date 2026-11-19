@@ -19,6 +19,7 @@ pub mod github;
 pub mod inputs;
 pub mod io;
 pub mod logscan;
+pub mod mbx_store;
 pub mod merge_group;
 pub mod metrics;
 mod needs;

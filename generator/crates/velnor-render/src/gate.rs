@@ -177,7 +177,11 @@ pub(crate) fn condition(
 }
 
 pub(crate) fn admission(when: When, gate: Option<&Gate>, skip_draft: bool) -> String {
-    match condition(when, gate, Setup::Before, skip_draft, &[]) {
+    let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
+        Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
+        _ => Vec::new(),
+    };
+    match condition(when, gate, Setup::Before, skip_draft, &plan_succeeded) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")
