@@ -126,11 +126,15 @@ fn private_shims(runner_temp: &Path) -> Result<PathBuf, &'static str> {
             Ok(shims)
         }
         Ok(_) => Err("shims path is not a directory"),
-        Err(_) => fs::DirBuilder::new()
-            .mode(0o700)
-            .create(&shims)
-            .map(|()| shims)
-            .map_err(|_| "cannot create the shims directory"),
+        Err(_) => {
+            fs::DirBuilder::new()
+                .mode(0o700)
+                .create(&shims)
+                .map_err(|_| "cannot create the shims directory")?;
+            fs::set_permissions(&shims, fs::Permissions::from_mode(0o700))
+                .map_err(|_| "cannot secure the shims directory")?;
+            Ok(shims)
+        }
     }
 }
 

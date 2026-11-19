@@ -152,17 +152,18 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
     let root_user = fs::File::create(root.join("ro").join("probe")).is_ok();
     if root_user {
         fs::remove_file(root.join("ro").join("probe")).ok();
-        return;
     }
-    let cases: [(PathBuf, &str); 7] = [
+    let mut cases: Vec<(PathBuf, &str)> = vec![
         (PathBuf::from("relative/dir"), "not absolute"),
         (root.join("missing"), "does not exist"),
         (root.join("file"), "not a directory"),
         (root.join("link"), "is a symlink"),
         (root.join("via/inner"), "path contains a symlink"),
         (root.join("shared/../shared"), "not a normal path"),
-        (root.join("ro"), "not writable"),
     ];
+    if !root_user {
+        cases.push((root.join("ro"), "not writable"));
+    }
     for (dir, reason) in cases {
         let outcome = run(&host, "push", "refs/heads/main", Some(&dir));
         assert_eq!(
