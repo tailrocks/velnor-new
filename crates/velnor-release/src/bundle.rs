@@ -98,6 +98,7 @@ pub(crate) fn check_targets(
     files: &ReleaseFiles,
 ) -> Result<(), ReleaseError> {
     check_include_files(binary, files)?;
+    crate::profile_defined::check_profile(binary, root_manifest, files)?;
     let Some(targets) = &files.bin_targets else {
         return Ok(());
     };
