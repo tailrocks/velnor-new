@@ -57,6 +57,7 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub profile: Option<String>,
     pub tag_pattern: TagPattern,
 }
 
@@ -238,6 +239,7 @@ pub(crate) fn plan_binaries(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            profile: binary.profile.clone(),
             tag_pattern,
         });
     }
