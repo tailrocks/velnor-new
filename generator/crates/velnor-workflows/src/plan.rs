@@ -315,6 +315,7 @@ impl Action {
     #[must_use]
     pub fn needs_permissions(self) -> &'static [(&'static str, &'static str)] {
         match self {
+            Self::Checkout => &[("contents", "read")],
             Self::AttestBuildProvenance => &[("id-token", "write"), ("attestations", "write")],
             _ => &[],
         }
@@ -346,6 +347,7 @@ impl WorkflowsPlan {
             }
             workflows.push(checked);
         }
+        crate::workflow_run::check_chains(&workflows)?;
         Ok(Self { workflows })
     }
 }

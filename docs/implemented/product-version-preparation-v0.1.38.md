@@ -11,9 +11,7 @@ cache-only dependency seeds, including root and nested workspaces. Mixed
 execution, report, control, untyped or privileged jobs fail validation instead of
 receiving a failure mask. Real crate/check jobs, Plan, Required, source/CI
 eligibility, signing, publication and protected approvals remain strict. Producer
-success and cancellation still control cache writes. See
-[optional seed isolation](optional-dependency-seed.md) for the implementation,
-original GitHub sources and qualification limits.
+success and cancellation still control cache writes.
 
 The branch integrates upstream main through
 `fb2a2eb5e9a050dbac92f8b1e3cfdc10cce98b55` (#285 to #301), preserving every

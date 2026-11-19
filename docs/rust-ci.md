@@ -125,6 +125,8 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `skip_draft_pull_requests` | `false` | draft pull requests run nothing |
 | `ci` | none | table; `skip_push_after_merge_group = true` skips checks the merge queue already ran |
 | `docs` | `"always"` | `post_merge` runs `cargo doc` only after a merge |
+| `check_alone` | `"always"` | `post_merge` runs the per-crate `Check <crate> alone` steps only after a merge |
+| `sparse_checkout` | `false` | each Rust lane job checks out only the paths its lane reads |
 | `inputs`, `non_inputs`, `exclude` | none | map files to packages, map files to nothing, or leave Cargo manifests out |
 | `default_ignores` | `true` | documentation and licence files select nothing |
 | `nextest_harnesses` | none | `package:target` entries for `harness = false` test targets that nextest can run; the others run in a direct step |
@@ -133,6 +135,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |
 | `cache_budget_bytes` | `8000000000` | cache budget, at most 8 GB |
+| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed of the workflow, checked by `rust-budget` on the default branch or the scheduled run (needs `velnor-ci` 0.1.92) |
 | `cache_check_blocks` | `false` | the `Cache` check joins `Required` |
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
