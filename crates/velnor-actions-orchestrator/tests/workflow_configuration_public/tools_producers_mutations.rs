@@ -296,7 +296,7 @@ fn donors(jobs: &Jobs) -> Result<Donors, Box<dyn Error>> {
     Ok(Donors {
         task: task_execution_step()?,
         upload: find(&is_upload).ok_or("no upload step")?,
-        check: find(&|step| step.role == Some(StepRole::CargoMachete)).ok_or("no check step")?,
+        check: find(&|step| step.role == Some(StepRole::Jactionlint)).ok_or("no check step")?,
         check_runner: CheckRunner {
             label: "ubuntu-26.04".to_owned(),
             platform: CheckPlatform::LinuxX64,
