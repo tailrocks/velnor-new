@@ -14,7 +14,7 @@ fn check_discovery_binds_provenance(key: &Step) -> Result<(), Box<dyn Error>> {
     for marker in [
         "\"family=state\"",
         "\"schema=4\"",
-        "$RUNNER_TEMP/velnor-gc1/state",
+        "/home/runner/work/_temp/velnor-gc1/state",
         "\"key=$key\"",
         "\"restore_key=$restore_key\"",
         "\"restore_digest=$restore_digest\"",
