@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 805 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 2.8 days of fleet time. Coding does not set the dates.
+- **Total work:** about 820 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 2.8 days of fleet time (820 ÷ 12 builders ≈ 68 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -36,6 +36,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 - **Every CI job on Velnor, or retired: day 4.8 at P50 (P90 day 7).** Each move deletes the type's
   old route in the same change.
 - **The App gate, day 4.2 (P90 6.5); the PR and group Actions gates deleted, day 5.2 (P90 7.5).**
+- **Storage:** the site RustFS clusters deploy on day 1; L1 routes leave `local` at about day 3,
+  only after the phase-1 cluster test (ST06) passes; no verdict waits on them.
 - **Final deletion, day 6.5 (P90 9):** ARC's velnor-new scale set and the old runner code review did
   not keep. The official runner image and `velnor-official` stay.
 - **Goal, day 10 (P90 13.5):** PR verdict ≤ 90 s / ≤ 4 min, push-to-merge ≤ 3 / ≤ 8 min, ≤ 50
@@ -105,7 +107,7 @@ its last 100 commits were fixes [M §E.6]. So the **structure** is redesigned, w
 | `velnor-runner-github` (6,878 LOC of pure scale-set wire types, pinned to `actions/scaleset` e6daac70) | `crates/velnor-runner/crates/velnor-runner-github` | Port and refactor, pending review: no HTTP coupling, which is good; it carries official-runner lifecycle states | RV01 |
 | `velnor-runner-core` (719 LOC: lifecycle, `CleanupProof`, `OwnedIds`) | `velnor-runner-core` | Port and refactor: the tri-state "unknown is never absent" rule is right; open defects #1143 (`covers` accepts a short id) and #1142 (`reserve` replaces a live slot) become tests | RV01 |
 | velnor-host launch state machine, official-runner pair, JIT-to-`Runner.Listener` delivery, job-start hook | `velnor-runner-host/src/launch/*`, `local/*`, `velnor-resource-probe` job hook | **Reviewed for `velnor-official` (RV05):** decisions 19 and 20 keep the official runner as a maintained executor; what passes review moves into `velnor-official`, the rest is redesigned there, and the ARC-bound launch path is deleted at F01 | RV05 |
-| velnor-host journal (Turso, ~35 schema modules) | `velnor-runner-host/src/journal*` | **Redesign:** schema bound to the official-runner lifecycle; `Journal::open` drives the 125-138 s test floor [M]; open defects #1303, #1206. Keep the discipline (persist intent, call, record), not the code | RV01 |
+| velnor-host journal (Turso, ~35 schema modules) | `velnor-runner-host/src/journal*` | **Delete at F01** (decision 16, no new investment): schema bound to the official-runner lifecycle; open defects #1303, #1206. The executor journal (X14) keeps the discipline (persist intent, call, record), not the code | RV01 |
 | velnor-host Docker client and spec audit (`docker_client` over a unix socket only; `docker_spec::audit_plan` forbids host mounts and the outer socket) | `velnor-runner-host/src/docker_*` | Port and refactor into the Docker backend, pending review: the audit rules are valuable; the call sites are spread over ~50 files (#1324 §1) | RV01 |
 | Daemon lock, launchd service, keychain credential | `daemon_lock`, `plist`, `keychain` | Port and refactor for the Docker backend on macOS, pending review | RV01 |
 | `Runtime` trait proposed in #1324 (`Observation{Present, AbsentProven, Unknown}`, Pod-UID proof mapping) | PR #1324, design only | Port and refactor into the platform trait: the observation model is right; `create_worker`, `deliver` and the JIT secret serve the official-runner pair and are dropped; warm pool, capabilities and exec plus log streaming are added | RV02 |
@@ -359,7 +361,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 |---|---|---|---|---|---|---|---|
 | C01 | Tool store | Read-only node store by pinned digest (Kubernetes); a read-only volume (Docker) | D8 | 6 | mid | Set-up ≤ 0.1 s; `EROFS` on write | — |
 | C02 | Crates store | Site mirror plus a read-only registry per lockfile, by checksum | D8 | 4 | mid | 0 downloads on a hit | — |
-| C03 | Git mirror and bundle | Node mirror on webhooks; site bundle seeding | D8, ST01 | 6 | mid | Fetch ≤ 0.5 s; a wiped node seeds without GitHub | — |
+| C03 | Git mirror and bundle | Node mirror on webhooks; site bundle seeding (from GitHub until ST06 passes) | D8, ST01 | 6 | mid | Fetch ≤ 0.5 s; after ST06 a wiped node seeds without GitHub | — |
 | C04 | XFS volumes | Work volumes with project quotas | D8 | 6 | mid | Quota enforced | ext4 `emptyDir` work dirs |
 | C05 | Verified generations | Builder per site; input manifest; changed set against it; coverage rule; time stamps; dep-info blob check | C04, P01, V02 | 14 | strong | Section 7.3's canaries rebuild and fail as they must | — |
 | C06 | Reproducibility audit | One commit cold on 2 nodes; digests per unit | C05 | 4 | mid | Equal, or the unit is listed and its dependants stay cold | — |
@@ -374,9 +376,11 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | ID | Title | Scope | Depends on | Agent-h | Class | Verification | Deletes |
 |---|---|---|---|---|---|---|---|
 | ST01 | `velnor-storage` | `BlobStore`, local and S3 backends, capability declaration | X01 | 10 | mid | Kit passes on local, RustFS and MinIO | — |
-| ST02 | Tiers and routes | Configuration, per-platform defaults | ST01 | 4 | mid | A misrouted class is slower, never wrong | — |
-| ST03 | Cache index | `repository × scope × key × version`, insert-if-absent, GitHub's lookup order, scope from the job token, home-site writer, LRU | ST01, V01 | 14 | strong | Concurrent saves, L0 stale prefix against L1 exact, PR-to-`main` isolation, disconnected site | — |
-| ST04 | RustFS per site | Deploy the site cluster; per-bucket durability | ST01, D8 | 8 | mid | Kit passes against it | — |
+| ST02 | Tiers and routes | Configuration; defaults: `local` on Docker and macOS, node NVMe → site RustFS → replication on Kubernetes, all routes `local` until ST06 passes | ST01 | 4 | mid | A misrouted, stalled or degraded tier is slower, never wrong | — |
+| ST03 | Cache index | `repository × scope × key × version`, insert-if-absent, GitHub's lookup order, scope from the job token, home-site writer; GitHub's eviction (7 days unused, size cap) as LRU in the index, S3 lifecycle only a backstop; content-defined chunks of about 1 MiB over the uncompressed archive; user keys never used as object names | ST01, V01 | 14 | strong | Concurrent saves, L0 stale prefix against L1 exact, PR-to-`main` isolation, disconnected site | — |
+| ST04 | RustFS per site | One cluster per site, pinned version, manifests owned by Velnor (the operator is 0.0.8); one drive per worker on its own device or partition, never the L0 filesystem; parity explicit (EC:1 at 3 drives, EC:2 at 4–5); layout fixed up front; `strict` durability on every bucket; node agents hold credentials, jobs get presigned URLs | ST01, D8 | 8 | mid | Kit passes against it; a startup with a shared or mis-sized layout is refused | — |
+| ST06 | RustFS phase-1 cluster test | On the real workers: (1) node loss and return, including #9480's sequence (a node away for a minute, then a drive replaced on another node) and a rolling restart, reads and writes checked throughout; (2) replication DE↔FI over WireGuard at 35 ms: throughput, lag, existing-object backfill (#8768) and an `rc` resync; (3) Linux fsync cost per durability mode (`strict`, `relaxed`) on XFS NVMe, for 16 KiB, 1 MiB and 2 GiB objects; (4) the 8.7 GiB target snapshot by multipart PUT and GET against the 92 s cold build and the 39.9 s mbx seed; (5) 1 MiB chunk PUT and GET rates under 16 and 64 clients | ST04 | 10 | strong | Each part reports [M]; pass: no data loss or lasting unavailability in (1), replication converges in (2), a snapshot GET plus clone beats a cold build in (4). On a failed part its route stays `local` (or moves to another S3 store), and the failure is filed upstream | — |
+| ST07 | Site replication | Bucket replication of content-addressed buckets DE↔FI, monitored lag, resync runbook with `rc` | ST06 | 4 | mid | Lag reported; a stalled backfill alarms and costs only misses | — |
 | ST05 | Cache endpoint for Official | Cache v2 route for the Worker, after the runner-source check | ST03, O01 | 10 | strong | Conformance cache cases pass under Official | — |
 
 **T: test floor; S: cluster**
@@ -402,7 +406,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | R05 | Promotion timing | Time upload, gate, attestation and read-back in the dry runs | R04 | 3 | cheap | The 15 s estimate replaced by [M] | — |
 | F01 | Final deletion | After cohort 4 has served one real release, and P07 | cohort 4, P07 | 8 | mid | No production path through ARC; the official runner only behind `velnor-official`; `rg` finds no dangling references | ARC's velnor-new scale set (Helm release) and the `local`/`hosted` profiles; wrapper parts RV05 rejected; `images/resource-probe`, `velnor-runner-qualification`; the Turso journal; the rest of `crates/velnor-runner` not moved by RV01 or RV05. **Keeps** `images/runner`, `.velnor/runner.lock`, `velnor-official`, and `images/dind` if P05 uses it |
 
-**Sum:** 122 items, about 805 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 124 items, about 820 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
@@ -414,7 +418,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | D3 | The phase-0 ruleset of section 3.4; depth 4 and timeout 15 only on the measured condition | h2 | The JSON as written |
 | D4 | Evaluator A or B (2.4); recommended B | day 3 | A |
 | D7 | The `velnor-verify` App and an agent identity without administration | h12 | — |
-| D8 | Deploy identity for `velnor-system`; node changes (XFS, reservations, taints) | h6 | — |
+| D8 | Deploy identity for `velnor-system`; node changes (XFS, reservations, taints, a RustFS device or partition per worker) | h6 | — |
 | D9 | Pre-approve CI-only engine releases | day 0 | One approval each |
 | D11 | Per-type cutover counts (section 5) | day 1 | As written |
 | D14 | Whether the engine crates are deleted after G04 | day 8 | Out of this plan |
@@ -527,6 +531,7 @@ flowchart LR
   end
   subgraph ST[Storage]
     ST01-->ST02 & ST03 & ST04
+    ST04-->ST06-->ST07
     ST03-->ST05
   end
   subgraph L[App and gate]
@@ -568,7 +573,7 @@ flowchart LR
 | App and gate | L01–L08 | 47 | 2 | D7; parity evidence |
 | Ledger and reuse | V01–V14 | 127 | 3 | Evidence counts |
 | Generations, checkout, mirrors | C01–C11 | 69 | 2 | D8 |
-| Storage | ST01–ST05 | 46 | 1 | ST01 |
+| Storage | ST01–ST07 | 60 | 2 | ST01; the phase-1 cluster test |
 | Test floor and cluster | T02–T06, S01–S02 | 40 | 2 | Shared test files |
 | Release | R01–R05 | 41 | 1 | Dry-run wall time |
 | Final deletion | F01 | 8 | 1 | Review of a large deletion |
@@ -589,6 +594,7 @@ Each reuse class and backend has a minimum before it counts, and replay capacity
 | Compile reuse | warm-against-cold digest set, per Cargo root | 3,000 per root, two days of production among them | cold witnesses plus replay | about 3.5 h per small root, 7 h for the runner root, then the production days |
 | Per-root keys | enforced-audit execution per kind; the sibling canary | 3,000 per kind | shadow | about 7 h after the audit's shadow |
 | Docker class | runs per binary per daemon kind | 200 | lab D | 3 × 3 × 200 × 3 min ≈ 90 slot-h ≈ 6 h |
+| RustFS L1 (per route) | the five ST06 parts | all five pass | the real workers | about 1 day, off the critical path |
 | Flake rate | rerun pair | 300 | sampler | about 1 day |
 | Speculation | merges | 50 | production | about 1 day |
 
@@ -611,6 +617,10 @@ P04) and L02–L04 (D7 at h12, to h36) → L06 shadow from h36: 100 groups at ab
 44 h → parity report at h86 → one fix loop → **L07 at h100 (day 4.2)**. R02 (h10–h24) and L01 (from
 h24) finish well before. V05 (h36–h44) and G04 (prepared from h60) let **L08 land at h124 (day
 5.2)** after a day of the App gate beside the Actions contexts.
+
+Storage runs beside both chains: ST01 (h6–h16), ST04 (h16–h24, after D8), ST06 (day 1–2.5) and
+ST07; **L1 routes switch from `local` at about day 3** once ST06 passes, so cross-node cache hits and
+generation shipping start then; nothing on a verdict path waits for them.
 
 Then: **F01 at day 6.5**, after one real release on Velnor; **compile reuse graduated on the helper
 and generator roots at day 7.5** (C05 h28–h42, C07 replay plus two production days); **the read
@@ -674,14 +684,17 @@ is [E] except the goal and stretch rows, which are [T].
 | 3.8 (5.3) | Cohort 3 on private daemons. **Deletes:** the shared dind sidecar | ≤ 5 / ≤ 9 | ≤ 13 / ≤ 25 | ≤ 110 | Lab D |
 | 4.2 (6.5) | App required on both subjects; label flow on; release authority migrated | ≤ 5 / ≤ 9 | ≤ 12 / ≤ 22 | ≤ 110 | D7; parity |
 | 4.8 (7) | Cohort 4. **Deletes:** hosted release labels; later the state seal and prune | — | — | — | Release dry runs |
-| 5.2 (7.5) | Step 4: obligations verify PRs and groups (whole-tree keys, cold second witness); A1 replaces the push run. **Deletes:** PR and group Actions gates, the interim label step, the full push run | ≈ 6 / 18 | ≈ 9 / 30 | ≈ 75–90 | Parity report; A1 live |
-| 6.5 (9) | **F01.** **Deletes:** ARC's velnor-new scale set, the Turso journal, unkept `crates/velnor-runner`. **Keeps** the official runner image and `velnor-official` | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 70 | One real release on Velnor; review |
-| 7.5 (10) | Compile reuse graduated on the helper and generator roots | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 55 | 3,000 comparisons per root |
+| 5.2 (7.5) | Step 4: obligations verify PRs and groups (whole-tree keys, cold second witness); A1 replaces the push run. **Deletes:** PR and group Actions gates, the interim label step, the full push run | ≈ 6 / 18 | ≈ 9 / 30 | ≈ 110 | Parity report; A1 live |
+| 6.5 (9) | **F01.** **Deletes:** ARC's velnor-new scale set, the Turso journal, unkept `crates/velnor-runner`. **Keeps** the official runner image and `velnor-official` | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 90 | One real release on Velnor; review |
+| 7.5 (10) | Compile reuse graduated on the helper and generator roots | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 80 | 3,000 comparisons per root |
 | 10 (13.5) | **Goal:** per-root keys enrolled; floor fixed | **≤ 90 s / ≤ 4 min** | **≤ 3 / ≤ 8 min** | **≤ 50** | Contracts; evidence |
 | 16–18 | **Stretch:** per-package keys, `velnor verify`, longest test ≤ 15 s, stamp after link | 30 s / 100 s | 100 s / 4 min | ≤ 20 | Labs B and C |
 
 A milestone that misses its numbers holds the next cohort until the miss is explained; stretch work
-continues. Verdict estimates at day 5.2 [E]: the cold second witness sets the time, about 3 min of
+continues. Runner-minutes follow design section 4's formula [E]: day 5.2, 2 × (16 warm + 22 cold) +
+0.3 × 38 + 10 (A1) + 8 (product bytes) + 5 ≈ 110; day 6.5, runner-host's tests gone (about 12 warm,
+18 cold) ≈ 90; day 7.5, a warm second witness ≈ 80; the goal needs per-root keys. Verdict estimates
+at day 5.2 [E]: the cold second witness sets the time, about 3 min of
 cold build of the largest root plus about 2.5 min for the longest test binary; P90 carries the
 924.8 s test until T02 lands.
 
@@ -753,6 +766,7 @@ first 48 h at once, with defaults.
 | GitHub API limits | Agents, harness, reconciler | `X-RateLimit-Remaining` | ETags (a `304` is free); App tokens |
 | Agents collide on shared files | Re-work | Conflict count | One owner per crate and per config lane |
 | F01 is hard to review | Final milestone | Deletion diff size | Split by area; `rg` proofs; the strong reviewer checks what replaced each part |
+| RustFS fails a phase-1 part, or regresses in a patch (1.0.0 is two months old; open #9480, #8768, #9161) | Cross-node cache hits, generation shipping, bundle seeding | ST06 report; per-tier hit, error and lag rates | Routes stay `local` or move to another S3 store through the same backend; a pinned version upgraded only after the storage kit passes; every failure is a miss, never a wrong result |
 
 ## 9. First ten work items
 

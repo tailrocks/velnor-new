@@ -36,7 +36,6 @@ from the LAN are reported apart.
 | Push-to-merge, P50 / P90 | 85 min / 457 min | [M, proxy] 98 merged PRs, from the first observable CI run at the final SHA, not a push timestamp (`proposals/opus-5.5.md` §1.1) |
 | PR run wall time, P50 / P90 (cluster era) | 26.7 min / 92.3 min | [M, proxy] run creation to completion, 77 completed PR runs, 27 of them failed (§A T2) |
 | PR runs cancelled; runs on an unchanged head | 1,156 of 2,558 (45%); 469 (18.3%), the `edited` trigger | [M] §A T1; F-H07 |
-| Admission span, PR runs | 2 s p50, 226 s p90, 2,203 s max; a superseding run waits 60 s p50, 626 s p90 | [M] 200 sampled runs (F-H06) |
 | Runner-minutes per run (PR / merge group / push) | 52.9 / 64.6 / 62.0 | [M] §A T2 |
 | Runner-minutes per merged PR | 285–347 for CI; about 460–515 with every workflow | [E] decision log; the panel's audits |
 | Full runs per merge | 3 (PR, merge group, push on the same SHA in 120 of 159) | [M] §A T7 |
@@ -122,7 +121,7 @@ Measured on the clocks of section 1.1; the arithmetic is in sections 3, 4 and 10
 | | PR verdict P50 / P90 | Push-to-merge P50 / P90 | Runner-min per merged PR | Conformance |
 |---|---|---|---|---|
 | Today | 26.7 / 92.3 min [M, proxy] | 85 / 457 min [M, proxy] | 285–347 (CI) [E] | — |
-| App gate, whole-tree keys, cold second witness | ≈ 6 / 18 min [E] | ≈ 9 / 30 min [E] | ≈ 75–90 [E] | 100% on both backends |
+| App gate, whole-tree keys, cold second witness | ≈ 6 / 18 min [E] | ≈ 9 / 30 min [E] | ≈ 110 [E] | 100% on both backends |
 | Goal | ≤ 90 s / ≤ 4 min [T] | ≤ 3 / ≤ 8 min [T] | ≤ 50 [T] | 100% |
 | Stretch | 30 s / 100 s [T] | 100 s / 4 min [T] | ≤ 20 [T] | 100% |
 
@@ -133,19 +132,14 @@ compiles and about 15 s of publication [E].
 
 ## 2. Where the time goes, and what changes the problem
 
-1. **Waiting, not working** [M]. A PR run with no hosted queue takes about 11 min, yet the median PR
-   waits 85 min [M, proxy]: gate jobs queue for the Free plan's 20 hosted slots (57.0 of a 71.8 min
-   run on the worst day, §A T5), a superseding push waits up to 2,203 s for the cancelled run, the
-   queue builds 2 entries, and no agent enables auto-merge.
-2. **The same work many times** [M]: 45% of PR runs cancelled; three full runs per merge; crates
-   compiled 4.4 times per run; releases rebuild. **Every job is cold** [M]: nothing compiled
-   survives a job, and the one restore took 44–61 s, longer than the build it saved (I036).
-3. **Code sets the floor** [M]: loops of 40 and 6 cases (258–274 s, 203–271 s), a 125–138 s floor
-   behind them, and `build.jobs=2` caps (I059, I061).
-
-The design removes work: nothing runs until the label asks; each unit runs once per unique input and
-is reused only where its key is proven; releases promote verified bytes; verified state stays warm
-next to the executor. The gain is locality, not the language: Node starts in 87–147 ms [M].
+Four causes [M]: **waiting** (gate jobs queued for the Free plan's 20 hosted slots, 57.0 of a 71.8
+min run on the worst day, §A T5; a superseding push waits up to 2,203 s; the queue builds 2 entries;
+no auto-merge); **repetition** (45% of PR runs cancelled, three full runs per merge, crates compiled
+4.4 times per run, releases rebuild); **cold jobs** (nothing compiled survives a job; the one restore
+took 44–61 s, longer than the build it saved, I036); and **the code's floor** (looped tests of
+258–274 s, a 125–138 s floor behind them, `build.jobs=2` caps). The design removes work: nothing runs
+until the label asks, each unit runs once per unique input and is reused only where its key is
+proven, releases promote verified bytes, and verified state stays warm next to the executor.
 
 ## 3. The latency budget
 
@@ -168,9 +162,7 @@ One typical PR (the 47% class touching only `generator/` or `ci-helper/`), label
 | 12. Merge | 26 s | 26 s | GitHub's queue (decision 7) |
 | **Verdict / push-to-merge** | **26.7 / 92.3 min; 85 / 457 min [M, proxy]** | **≤ 90 s / ≤ 4 min; ≤ 3 / ≤ 8 min (≈ 35 s; ≈ 85 s)** | |
 
-**What GitHub still costs:** delivery 1–2 s, and the measured medians of 19 s to a group and 26 s
-to merge [M], which include the queue's own load and are not a proven floor. The rest is the longest
-changed test and one compile of the change.
+GitHub's 19 s to a group and 26 s to merge are measured medians under load, not a proven floor.
 
 ## 4. The duplicate-work audit
 
@@ -200,12 +192,11 @@ content, **K** keep deliberately.
 | 18 | Source qualification on every PR event | PR | yes | 1,007 s per event, about 80 runner-min per merged PR | R once per key, in the queue | Obligations |
 | 19 | Job image candidate on every push | every push | yes unless images changed | 200 s; about 20 min per PR | R once per image-input key | Keyed action |
 | 20 | Source preview build, tag rebuilds, product release | `main` push, tag | yes | preview 410–534 s per push; tools 190–434 s; product 4,105–6,238 s | R promote by digest | Release promotion (section 8.4) |
-| 21 | macOS and Darwin legs | `main` push, release | — | 1,063–1,406 s per push | E (paused, decision 9) | — |
-| 22 | `VELNOR_COMMIT` forces both tools to rebuild per commit | every merge | no, by construction | two tool builds per merge | E once the stamp is proven | The group SHA in the key today; stamping after link is a lab item |
-| 23 | Per-node rebuilds of `main` by warmers | after every merge | yes | about 120 incremental builds an hour | R: the landed group's build output is the next generation, trusted when A1 gives equal digests | Generations by content |
-| 24 | GitHub cache save and restore | many | — | 1.92 GB restore 44–61 s | E from the verification path | Storage tiers (section 7) |
-| 25 | A Docker daemon in every pod | every job | — | 3–4 s per job; 57 probe failures an hour | E | Docker only for the three binaries that need it |
-| 26 | Second witness, cold audit A1, conformance pairs, speculation | PR, group, batch | yes | — | K | They buy confidence or wall time; charged below |
+| 21 | macOS and Darwin legs; `VELNOR_COMMIT` rebuilding both tools per commit | `main` push, release; every merge | —; no, by construction | 1,063–1,406 s per push; two tool builds per merge | E (paused, decision 9); E once the stamp after link is proven | — ; the group SHA in the key today |
+| 22 | Per-node rebuilds of `main` by warmers | after every merge | yes | about 120 incremental builds an hour | R: the landed group's build output is the next generation, trusted when A1 gives equal digests | Generations by content |
+| 23 | GitHub cache save and restore | many | — | 1.92 GB restore 44–61 s | E from the verification path | Storage tiers (section 7) |
+| 24 | A Docker daemon in every pod | every job | — | 3–4 s per job; 57 probe failures an hour | E | Docker only for the three binaries that need it |
+| 25 | Second witness, cold audit A1, conformance pairs, speculation | PR, group, batch | yes | — | K | They buy confidence or wall time; charged below |
 
 **Totals per merged PR** [E; occupied slots from executed steps, for the generator and helper class,
 about 2 labelled heads per merged PR, 3 runner-min of changed obligations per witness, 25–40% group
@@ -330,8 +321,7 @@ pub struct Capabilities {
     pub shared_page_cache: bool, pub snapshot_restore: bool, pub warm_pool: bool,
     pub docker: Docker,             // None | PrivateDaemonPrivileged | PrivateDaemonRootless
     pub read_audit: bool,           // file-access tracing for key enrolment (section 6.1)
-    pub network_policy: bool, pub cpu_pinning: bool, pub cgroup_kill: bool,
-    pub arch: Vec<Arch>, pub os: Os,
+    pub network_policy: bool, pub cpu_pinning: bool, pub cgroup_kill: bool, pub arch: Vec<Arch>, pub os: Os,
 }
 ```
 
@@ -356,20 +346,18 @@ backend declares `kernel: Separate`, `dir_entry: [VirtioFs]` or `[DiskImage]` an
 
 ### 5.5 The job path
 
-1. **Trigger.** The label flow (section 8.2) decides whether a head is verified. A labelled head's
-   webhook reaches `velnor-control` in 1–2 s; `ensure(tree, plan)` fetches the commit into the node
-   mirror, computes the tree with `git merge-tree` (the head merged into the queue tip, or the group's
-   own commit) and runs the released planner for the obligation vector and its keys.
-2. **Resolve and execute.** Each obligation's verification record is satisfied (every witness slot
-   holds a passing, current, unrevoked receipt), in flight (join it) or open (schedule its missing
-   witnesses); C5 obligations always schedule. Obligations are plain commands (`cargo`, `cargo
-   clippy`, `cargo doc`, `cargo nextest`) run through `velnor-ci` in a warm sandbox over a reflink
-   clone of a verified generation; the agent observes them and signs a receipt per witness.
+1. **Trigger.** A labelled head's webhook reaches `velnor-control` in 1–2 s (section 8.2);
+   `ensure(tree, plan)` fetches the commit into the node mirror, computes the tree with `git
+   merge-tree` (head into queue tip, or the group's commit) and runs the released planner.
+2. **Resolve and execute.** Each record is satisfied (every slot holds a passing, current, unrevoked
+   receipt), in flight (join it) or open (schedule the missing witnesses); C5 always schedules.
+   Obligations are plain commands (`cargo`, `cargo clippy`, `cargo doc`, `cargo nextest`) run through
+   `velnor-ci` in a warm sandbox over a reflink clone of a verified generation; the agent observes
+   them and signs one receipt per witness.
 3. **Actions jobs** (release, image, scheduled): the dispatcher holds every JIT identity, picks the
-   node (warm state, site, class, the reserved merge path), then acquires and hands the job to the
-   configured executor.
-4. **Report.** The repository's fenced writer posts `Velnor / Verified` when every record of the
-   head's vector is satisfied under the active epoch (section 8.2).
+   node (warm state, site, class, reserved merge path), then acquires and hands over the job.
+4. **Report.** The fenced writer posts `Velnor / Verified` when every record of the head's vector is
+   satisfied under the active epoch.
 
 ### 5.6 Native actions
 
@@ -460,9 +448,8 @@ only in the control plane, and agents act under an identity without repository a
   inventory cold on one node with the reference-qualified executor, and writes `Velnor / Verified`
   only if every obligation passes, with an audit record and a page. It is a real green on the exact
   tree; `bypass_actors` stays empty, and no procedure contains an admin merge.
-- **Control plane:** k3s has one server today (§B.1.5); a whole-cluster dependency waits for three
-  servers across failure domains and a third-site witness for any shared leader, such as the
-  status writer's fence.
+- **Control plane:** one k3s server today (§B.1.5); a whole-cluster dependency waits for three servers
+  and a third-site witness for shared fences.
 
 ### 5.10 What is reused, after review
 
@@ -471,14 +458,12 @@ is well designed for this architecture.
 
 | Component | Verdict | Why |
 |---|---|---|
-| velnor-legacy's broker, JIT and run-service client, Results client | Port and refactor | The wire behaviour is right and tested; legacy-protocol paths are stripped and the god files (`executor.rs` 37,028 lines, `runner.rs` 36,759) are split |
+| velnor-legacy's broker, JIT, run-service and Results clients; its checkout, artifacts, attest, App-token and mise adapters | Port and refactor | Wire behaviour and tests are sound; legacy-protocol paths are stripped, the god files (`executor.rs` 37,028 lines, `runner.rs` 36,759) split, and the adapters moved onto the node stores |
 | velnor-legacy's expression engine (3,565 lines, from actions/runner v2.337.0) | Option A of D4 (production until the owner answers); the harness's reference either way | Its results are what v2.338.2 returns on every path; option B ports the new evaluator (section 5.3) |
-| velnor-legacy's checkout, artifacts, attest, App-token and mise adapters | Port and refactor | Behaviour and tests are sound; they move onto the node stores |
-| velnor-legacy's `gha_cache.rs` (17,140 lines, v1 and v2 server) | Redesign; its v2 message types reviewed for the Official cache endpoint | Cache v1 is out; the cache index is new (section 7.2) |
-| velnor-legacy's Docker lease and JS sidecars | Drop | The socket proxy caused hangs; there is no Node in Velnor Native |
+| velnor-legacy's `gha_cache.rs` (17,140 lines, v1 and v2 server); its Docker lease and JS sidecars | Redesign, reviewing the v2 message types for the Official cache endpoint; drop the lease and sidecars | Cache v1 is out and the index is new (section 7.2); the socket proxy caused hangs; no Node in Velnor Native |
 | velnor-new's `velnor-runner-core` (lifecycle, `CleanupProof`, `OwnedIds`) | Port and refactor | The tri-state "unknown is never absent" rule is right; its two open slot defects (a short id accepted as covering, a live slot replaced) become tests |
 | velnor-new's `velnor-runner-github` (scale-set wire types) | Port and refactor, pending review | Pure types; it carries official-runner lifecycle states |
-| velnor-new's `velnor-host` journal (Turso) and launch state machine | Redesign | Bound to the official-runner pair; `Journal::open` drives the test floor. The discipline is kept |
+| velnor-new's `velnor-host` journal (Turso) and launch state machine | Delete at the final milestone; no new investment (decision 16) | Bound to the official-runner pair; its discipline (persist the intent, call, record) is kept in the executor journal |
 | velnor-new's Docker client and spec audit | Port into the Docker backend, pending review | The audit rules (no host mounts, no outer socket) are valuable |
 | The `Runtime` trait proposed for velnor-new's runner | Port its observation model into the platform trait | `Present`/`AbsentProven`/`Unknown` and Pod-UID proofs are right; the official-runner pair methods are dropped |
 | `velnor-runner-host`'s official-runner wrapper | Reviewed for `velnor-official`; redesigned if it fails | Decisions 19 and 20 make the official runner a maintained executor with production and reference roles |
@@ -544,8 +529,7 @@ is well designed for this architecture.
 | Situation | What runs |
 |---|---|
 | Rebase-only push, same tree; a re-run with no code change | the C5 obligations; the rest resolves from records within seconds |
-| Push N+1 while N runs | N is cancelled at once (no stall); N+1 joins N's records its keys still need and runs the rest |
-| Stacked or concurrent PRs | each key's record fills once; others join or reuse |
+| Push N+1 while N runs; stacked or concurrent PRs | N is cancelled at once (no stall); each key's record fills once, and others join or reuse it |
 | Merge group | the whole vector: records with equal keys are reused (about 60–75% of groups match the PR's whole tree with auto-enqueue against the queue tip; 16% today), C5 and misses run with two witnesses |
 | Push to `main` | promotion of the group's records and bytes; audit A1, the third execution, reported by the push run's Actions `Required` job |
 | Release tag | promotion of verified bytes; zero compiles (section 8.4) |
@@ -624,17 +608,42 @@ pub trait BlobStore: Send + Sync {
 ```
 
 - **Backends:** the local filesystem (node NVMe, or a directory on a Mac); RustFS single-node, or an
-  erasure-coded cluster per site with optional site replication; any S3-compatible store (MinIO, AWS
-  S3, R2) through the same S3 backend.
-- **Tiers and routes.** Tiers compose in configuration (`local`, `local → site`, `local → site →
-  cross-site`), each naming a backend; each data class routes separately: `actions/cache`,
-  artifacts v4, promoted release artifacts, the mbx-cache store, generation shipping.
+  erasure-coded cluster per site with optional replication; any S3-compatible store (MinIO, AWS S3,
+  R2) through the same S3 backend. Tiers compose in configuration (`local`, `local → site`, `local →
+  site → cross-site`), and each data class routes separately: `actions/cache`, artifacts v4,
+  promoted release artifacts, the mbx-cache store, generation shipping.
+- **What goes where** [M, `rustfs-exp/results.md`, RustFS 1.0.6 on one loaded Mac, indicative]: a
+  190 MiB, 6,053-file registry took about 1.2 s to GET as a 44.5 MB tarball and about 17 s to
+  extract, against about 5 s to reflink-copy the extracted tree; small PUTs ran at 120–385 objects a
+  second (16 KiB) and 27–70 (1 MiB). Restore cost is extraction, so **extracted trees stay in L0**
+  and **RustFS holds only blobs** (cache chunks, artifacts, release bytes, mbx blobs, shipped
+  generations), never a tree as many small objects.
+- **Topology.** One RustFS cluster per site, never one across DE and FI (every write needs a quorum
+  in one erasure set, with no WAN-aware placement); between sites, asynchronous replication of
+  content-addressed buckets, as warmth only (queue- and scanner-driven, no documented multi-writer
+  policy). Keys are single-writer by construction: blobs are named by hash, names live only in
+  Velnor's index. Each worker gives RustFS one drive on its own device or partition, never the L0
+  filesystem; parity is explicit (EC:1 at three drives survives one node loss for reads and writes,
+  EC:2 at four or five); the layout is immutable, so growth adds pools.
+- **Defaults per platform:**
+
+  | Platform | Tiers | Notes |
+  |---|---|---|
+  | Docker on macOS or one Linux host | `local` only: the filesystem backend, no extra service | RustFS single-node is optional on a Linux host; it can never grow into a cluster |
+  | Kubernetes cluster | node NVMe (L0) → the site's RustFS cluster (L1) → the other site by replication (L2) | `strict` durability on every bucket until the phase-1 test measures Linux fsync; release buckets stay `strict` |
+  | Any, by configuration | `local → s3` with MinIO, AWS S3 or R2 | The same S3 backend and invariants |
+
+- **Credentials.** The node agent holds them; a job gets only presigned URLs (STS is untested).
 - **Invariants for every configuration:** `actions/cache` semantics never change; correctness is
   enforced by Velnor's cache layer, not the backend (scoping, PR writes never reaching `main` scope,
-  immutable keys, content verification on read); a misconfiguration can only make things slower.
-  Blob stores hold only content-addressed bytes; every name that maps to them lives in Velnor's
-  authoritative index (section 7.2). Backends declare capabilities and the layer picks the fastest
-  correct path.
+  immutable keys, content verification on read); a misconfiguration or a lagging, stalled or
+  degraded store can only make things slower: a missing or corrupt blob is a miss. Backends declare
+  capabilities and the layer picks the fastest correct path.
+- **Phase-1 cluster test** (plan ST06), before L1 carries any route: node loss and return, including
+  issue #9480's sequence (a node away for a minute, then a drive replaced elsewhere); replication
+  over WireGuard at 35 ms, including existing-object backfill (#8768) and an `rc` resync; Linux
+  fsync cost per durability mode on the XFS NVMe workers; the 8.7 GiB target snapshot by multipart
+  against a 92 s cold build. Until it passes, routes stay `local` and generations are not shipped.
 
 ### 7.2 Native `actions/cache`
 
@@ -646,21 +655,28 @@ against the official runner.
 - **One authority for names.** Each entry is `repository × scope × key × version` (GitHub's version
   hashes paths, compression and `enableCrossOsArchive`), committed once, insert-if-absent, by the
   repository's cache index, a serialised writer in its home site; it names a content-addressed
-  manifest of chunks. The other site resolves names through the home index; if it is unreachable, a
-  lookup is a miss and a save is dropped.
+  manifest of chunks. User key strings never become object names (RustFS rejects `.`, `..`, empty
+  segments and control characters). The other site resolves names through the home index; if it is
+  unreachable, a lookup is a miss and a save is dropped.
 - **Scope and order.** The scope comes from the authenticated run context (the job token's ref, base
   ref and event), the PR merge ref included. Lookup follows GitHub's order (exact key, a prefix of
   the key, then each restore key, in the run's ref; then the same in the base and default branch)
   and resolves a manifest before any blob tier is read, so an L0 prefix hit never masks an exact
   entry.
-- **Tiers:** L0, node NVMe, holds the bytes of resolved manifests, unpacked once per node and
-  reflink-cloned per job; L1, the site's RustFS cluster; L2, replication DE↔FI in the background. A
-  lagging replica, a missing blob or a hash mismatch is a miss. GitHub's cache is off the hot path.
+- **Tiers:** L0, node NVMe, holds the extracted tree of each resolved manifest, unpacked once per
+  node and reflink-cloned per job; L1, the site's RustFS cluster, holds the compressed chunks; L2 is
+  replication of those chunks. A lagging replica, a missing chunk or a hash mismatch is a miss.
+  GitHub's cache is off the hot path.
+- **Chunks.** A save is chunked by content over the uncompressed archive (about 1 MiB average), so a
+  one-crate lockfile change uploaded about 1% of the bytes in the experiment (4 of 419 chunks new)
+  [M, one pair]; chunking a compressed tarball does not work.
+- **Eviction is Velnor's:** GitHub's rules (unused for 7 days, a size cap per repository) are kept
+  as least-recently-used order in the index; S3 lifecycle, which is day-granular and scanner-driven,
+  is only a backstop for orphaned chunks.
 - **Prefetch:** the dispatcher resolves keys whose inputs are known before the job (for example
   `hashFiles('Cargo.lock')` at the subject commit) and warms L0; the step resolves again and uses the
-  prefetched bytes only if it names the same manifest.
-- **Receipt-minting obligations never restore `actions/cache`**; it serves Actions jobs. Chunks
-  make saves deduplicated and incremental.
+  prefetched tree only if it names the same manifest.
+- **Receipt-minting obligations never restore `actions/cache`**; it serves Actions jobs.
 - **Tests:** concurrent saves of one key, an L0 stale prefix beside an exact L1 entry, PR-to-`main`
   isolation, a disconnected site.
 - **Open:** whether GitHub Official can use a Velnor endpoint compatible with cache service v2
@@ -736,16 +752,13 @@ seed from a git bundle in the site store, not from GitHub. Mirrors are read-only
 Tested: a stale unchanged file in the base, a mode-only change, a deletion, and a base refresh
 concurrent with a clone.
 
-**Every upstream the same way,** so each new version crosses the internet about once per site, and
-every mirrored object is pinned and verified before use: the crates.io index and crates by lockfile
-checksum (the cluster's unused crates-mirror DaemonSet, §B.4.2), toolchains and mise tools by pinned
-digest, container images by digest through a registry mirror per site. Repositories, upstreams,
-refresh policy, tier and on or off per platform are configuration; on a Mac the Docker backend may
-reuse the developer's clone, read-only.
+**Every upstream the same way,** each new version crossing the internet about once per site and
+pinned and verified before use: crates by lockfile checksum (the unused crates-mirror DaemonSet,
+§B.4.2), toolchains and mise tools by digest, images by digest through a registry mirror per site.
+All of it is configuration per platform; on a Mac the Docker backend may reuse the developer's clone.
 
-**What it saves** [E, an upper bound: about 10,000 job records a day from about 50 merges a day (159
-green groups in three days [M]) × about 6.5 runs per merge × about 30 job records per run (31–39
-[M], skipped jobs included)]:
+**What it saves** [E, an upper bound: about 50 merges a day × 6.5 runs × 30 job records per run,
+skipped jobs included, about 10,000 a day]:
 
 | Upstream | Today, per job [M] | With node mirrors | Saved per job | Saved per day [E, upper bound] |
 |---|---|---|---|---|
@@ -754,27 +767,26 @@ green groups in three days [M]) × about 6.5 runs per merge × about 30 job reco
 | Rust toolchain and mise tools | 14–15 s; toolchain restored 0 of 58 times | 0 s: a read-only store, once per site per version | about 14 s | about 39 runner-hours |
 | Container images | pulled per node, and per daemon inside dind | a registry mirror per site | not yet measured | measured when the Docker-class jobs move |
 
-At most about 62 runner-hours a day at today's volume, about a fifth of today's 238–289 [E: 285–347
-runner-min × about 50 merges]; under
-v3 far fewer jobs run, but each still saves about 20 s.
+At most about 62 runner-hours a day, about a fifth of today's 238–289 [E: 285–347 runner-min × 50
+merges]; v3 runs far fewer jobs, each still saving about 20 s.
 
 ### 7.5 Budgets
 
 The last three verified generations per root, then least-recently-used; 40% of a node's data
-volume, alert at 70%. FI workers have one 3.5 TB data disk each, DE workers 32–50 TB (§B.1.4). The
-runner workspace's target is 10.6 GiB [M]. Every store has garbage collection and a budget;
-`mbx-cache` starts at 300 GiB per site.
+volume, alert at 70%. FI workers have one 3.5 TB data disk each, DE workers 32–50 TB (§B.1.4), so a
+FI worker's RustFS drive is a partition of that disk. The runner workspace's target is 10.6 GiB [M].
+Every store has garbage collection and a budget kept by Velnor; `mbx-cache` starts at 300 GiB per
+site, and its metadata (PostgreSQL) is per site, so replicating its blobs does not make it
+cross-site.
 
 ## 8. Label flow, workflow, merge queue and release
 
 ### 8.1 Shape and gate parity
 
-Once the transition of section 8.2 completes, a PR and a merge group have no Actions run: the
-obligation graph runs through `ensure` and the App's status judges it. `ci.yml` keeps one always-run
-`Required` job on push to `main`, which reports A1 for the pushed tip to the release gate; release,
-image and scheduled workflows stay Actions jobs on Velnor. Inside a request, format, lint, docs,
-"check alone" and tests run as parallel lanes, one target directory per check kind (cargo locks a
-target directory, `docs/hard-decisions.md:56-62`); `cargo-deny` reads a pinned RustSec database.
+After the transition (section 8.2) a PR and a merge group have no Actions run: obligations run
+through `ensure` and the App's status judges them; release, image and scheduled workflows stay
+Actions jobs on Velnor. Format, lint, docs, "check alone" and tests run as parallel lanes, one target
+directory per check kind (`docs/hard-decisions.md:56-62`); `cargo-deny` reads a pinned RustSec copy.
 
 **The push `Required` job** runs `velnor-ci audit wait` with a read-only ledger token: it polls for
 the A1 result bound to `GITHUB_SHA` and passes only on a pass, failing after 2.5 h (the SLO plus
@@ -898,61 +910,51 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 ### 8.5 Tests and the floor
 
 - **The floor that survives.** `velnor-runner-host`, its Turso journal and `Journal::open` are
-  deleted at the final milestone (decision 16 gives them no new investment), so the floor work aims
-  at what stays: the 679 s `non_inputs_differential` suite, the 924.8 s receipt-integrity test, the
-  132 s actions-cli test and every other test over 60 s [M, 28 job logs]. No test exceeds 10 CPU-s
-  alone outside a shrinking list; looped cases become one test each; `test-threads=1` goes once
-  tests use private temp directories and ports; expensive valid prefixes are built once and cloned
-  per case. The 356 integration-test binaries become one `tests/it` per package, saving about 340
-  link passes per cold build. Runner-host is 25% of today's PRs, so B15 recomputes the PR-class mix
-  behind the P90 after the final milestone.
+  deleted at the final milestone (decision 16), so floor work aims at what stays: the 679 s
+  `non_inputs_differential` suite, the 924.8 s receipt-integrity test, the 132 s actions-cli test and
+  every other test over 60 s [M, 28 job logs]. Looped cases become one test each, `test-threads=1`
+  goes once tests use private temp directories and ports, expensive valid prefixes are built once
+  and cloned, and 356 integration-test binaries become one `tests/it` per package (about 340 fewer
+  link passes). Runner-host is 25% of today's PRs, so the PR-class mix is recomputed after F01.
 - **The Git differential stays whole.** `non_inputs_differential.rs` compares the planner, Git's
-  sparse checkout and the archive guard for every accepted generated glob (about 45,000 `git`
-  processes, a 679 s suite). It stays on the merge gate until those paths are deleted or an
-  in-process matcher is qualified against the complete corpus; its time falls first through fixture
-  reuse, batching and sharding with the original assertions, measured against the full suite.
-- **Dependency `opt-level = 3` holds with assertions on** [M, one test]: 67% less CPU and 74% fewer
-  instructions than today's dev profile, with `debug-assertions` and `overflow-checks` costing 5% of
-  instructions. Adopted with both checks written out and `turso_core`'s line raised; it changes
-  every compile key once, and no target counts the gain until lab B1.
-- **Fan-out.** A suite's cases spread longest-first across free threads when its summed time exceeds
-  its longest test plus the cost of moving binaries by digest. A copy started to race a slow shard
-  is an extra witness under section 6.2's hedging rule.
+  sparse checkout and the archive guard for every accepted glob (about 45,000 `git` processes). It
+  stays on the merge gate until those paths are deleted or a matcher is qualified on the complete
+  corpus; fixture reuse, batching and sharding with the original assertions cut its time first.
+- **Dependency `opt-level = 3` with assertions on** [M, one test]: 67% less CPU, the checks costing
+  5% of instructions; adopted with both checks written out and `turso_core`'s line raised; no target
+  counts the gain until lab B1.
+- **Fan-out** spreads a suite longest-first across free threads when that beats its longest test
+  plus moving binaries; a copy racing a slow shard is an extra witness (section 6.2).
 
 ## 9. The cluster
 
-- **Role.** k3s is the Kubernetes backend's fleet layer: it deploys the dispatchers, node agents,
-  site services, RustFS and mirrors, and enforces quotas, priorities and network policy. Velnor
-  places work; kube-scheduler places pods.
-- **Sizes.** Per worker, 125.5 GiB less 6 GiB for the system, 2 GiB of eviction margin and 8 GiB for
-  gate sandboxes leaves 109.5 GiB for idle and running sandboxes together. A build sandbox reserves
-  its measured peak RSS plus measured page-cache use, 24 GiB today (the heaviest job peaked at
-  15.7–16.8 GiB, §B.2.2), and 16 CPU with no CPU limit, so four fit. Nextest's threads equal the
-  class's fixed CPU count, which is in the key; only the compile jobserver widens with free CPUs
-  (16–64), which changes no output. A fully read target holds 14.29 GB of page cache per clone,
-  which caps a node at six build sandboxes until lab B2.
-- **Node settings.** Reservations (3 CPU, 6 GiB), a 2 GiB `memory.available` eviction threshold,
-  `podPidsLimit` 16384, site topology labels; work directories on local-path XFS with quotas.
-- **Reserved merge path.** Each site keeps one 16-CPU build slot and 2 gate CPUs for merge and gate
-  work (about 7.7% of allocatable CPU; at 95% utilisation waiting grows to about 19 times the
-  service time). Priorities: merge > gate > PR = other organisations' CI > batch; shared work runs
-  at its highest live claimant's priority. Batch runs in `cpu.idle` cgroups and is the only class
-  preempted. Freezing pauses CPU and frees no memory, so at the memory watermark restartable batch
-  work is terminated and requeued; freezing only pauses CPU work whose reservation stays.
+- **Role.** k3s deploys the dispatchers, node agents, site services, RustFS and mirrors, and enforces
+  quotas, priorities and network policy; Velnor places work, kube-scheduler places pods.
+- **Sizes.** Per worker, 125.5 GiB less 6 GiB system, 2 GiB eviction margin and 8 GiB gate sandboxes
+  leaves 109.5 GiB for idle and running sandboxes. A build sandbox reserves its measured peak RSS
+  plus page-cache use, 24 GiB today (the heaviest job peaked at 15.7–16.8 GiB, §B.2.2), and 16 CPU
+  with no CPU limit, so four fit. Nextest's threads equal the class's fixed CPU count, which is in
+  the key; only the compile jobserver widens with free CPUs (16–64). A fully read target holds 14.29
+  GB of page cache per clone, capping a node at six build sandboxes until lab B2. Node settings:
+  reservations (3 CPU, 6 GiB), a 2 GiB eviction threshold, `podPidsLimit` 16384, XFS work volumes.
+- **Reserved merge path.** One 16-CPU build slot and 2 gate CPUs per site for merge and gate work
+  (about 7.7% of CPU; at 95% utilisation waiting grows about 19-fold), plus A1's slot. Priorities:
+  merge > gate > PR = other organisations' CI > batch; shared work runs at its highest live
+  claimant's priority; only batch (`cpu.idle`) is preempted. Freezing frees no memory, so at the
+  memory watermark restartable batch work is terminated and requeued.
 - **Sites.** Each site has its own dispatcher, ledger replica, node agents and RustFS cluster; a
-  request executes in one site; DE to FI is 35 ms over WireGuard. A repository's status writer and
-  cache index live in its home site (section 6.5).
-- **Other organisations.** ChainArgos and jackin keep their ARC scale sets, quotas and stores.
+  request executes in one site (DE to FI is 35 ms over WireGuard); a repository's status writer and
+  cache index live in its home site. ChainArgos and jackin keep their ARC scale sets and quotas.
 - **Hardware and tuning.** Two more k3s servers precede any whole-cluster dependency; a high-clock
-  node (1.3–1.5× serial [E]) is trialled only after the floor fixes; a worker is bought when peak CPU
+  node (1.3–1.5× serial [E]) is trialled after the floor fixes; a worker is bought when peak CPU
   stays above 70% after dedupe or the eligible merge wait p90 exceeds 10 s for two weeks. What pays:
-  gate jobs on the cluster (−5.8 to −57 min per run, §A T5), honest requests (§A T6), no `-j2` caps,
-  XFS, line-table debuginfo (−20 to −27% CPU, I108); other tuning waits for a measured stall.
+  gate jobs on the cluster (−5.8 to −57 min per run, §A T5), honest requests, no `-j2` caps, XFS,
+  line-table debuginfo (−20 to −27% CPU, I108).
 
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 805 agent-hours of building and 120 of review,
+(v2, decisions 1–24 and the rulings) sizes about 820 agent-hours of building and 120 of review,
 about 2.8 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min
@@ -970,8 +972,7 @@ Shadow sampling continues (decision 19); a divergence is fixed forward on a 2-ho
 | 1 | `Required` gate, `Required verdict`, Plan, Ledger CLI, the four lints, freshness | 100–150 per type | about 15 s of acquisition and 25–40 s of set-up per gate job, on the critical path | Their ARC routes and hosted twins; Plan's tool-seed steps; two tool composites |
 | 2 | The Rust crate template (26 jobs), `check-maintenance-helpers`, `check-generator-samples` | 300 across crates; 150 | about 30 s of set-up × 26 = 13 runner-min per run; the verdict's maximum 8.5 → ≤ 4 min | 26 routes; six tool composites |
 | 3 | `velnor-runner-host`, its `local-mode`, `velnor-local` (the three Docker-class binaries), only what review keeps; the rest is deleted with its code at the final milestone instead of moved | 150 each | verdict P90 10.1–10.4 → ≤ 6 min | Their routes; the shared dind sidecar for velnor-new |
-| 4 | State seal (then deleted), job image candidate, source qualification, `release-rust-ci-tools` and product release (Linux) | 30 each; three release dry runs per workflow | hosted queue 5.9–9.1 min per run; a release about 104 → about 1 min with promotion | Hosted release labels in velnor-gen and the engine; the state seal and `cache-prune.yml` |
-| — | `qualification.yml`, homebrew and mac-proof | — | — | Retired |
+| 4 | State seal (then deleted), job image candidate, source qualification, `release-rust-ci-tools` and product release (Linux) | 30 each; three release dry runs per workflow | hosted queue 5.9–9.1 min per run; a release about 104 → about 1 min with promotion | Hosted release labels; the state seal and `cache-prune.yml`; `qualification.yml`, homebrew and mac-proof retired |
 
 Merge-group and push runs move with their job types. Cohort 1 is the cheapest gate chain, cohort 2
 one template for 26 jobs, cohort 3 sets the verdict's maximum, and releases come last: rare, holding
@@ -992,9 +993,9 @@ the delivery plan's critical path, except the goal row, which is [T].
 | 3.8 (5.3) | Cohort 3 with private Docker daemons. **Deletes** the shared dind sidecar | ≤ 5 / ≤ 9 | ≤ 13 / ≤ 25 | ≤ 110 | Lab D; Docker-class evidence |
 | 4.2 (6.5) | App required on both subjects after lab A and shadow parity; release authority migrated; label flow on | ≤ 5 / ≤ 9 | ≤ 12 / ≤ 22 | ≤ 110 | D7; 300 heads and 100 groups of parity |
 | 4.8 (7) | Cohort 4 (releases on Velnor). **Deletes** hosted release labels, the state seal and prune | — | — | — | Release dry runs |
-| 5.2 (7.5) | Ruleset step 4; obligations verify PRs and groups with whole-tree keys and a cold second witness; A1 replaces the full push run. **Deletes** the PR and group Actions gates and the interim label step | ≈ 6 / 18 | ≈ 9 / 30 | ≈ 75–90 | Parity report; A1 live |
-| 6.5 (9) | Final deletion. **Deletes** ARC's velnor-new scale set and profiles, the Turso journal and the parts of `crates/velnor-runner` review did not keep. **Keeps** the official runner's image, `.velnor/runner.lock` and `velnor-official` (decisions 19, 20) | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 70 | Local runs on Docker; review of a large deletion |
-| 7.5 (10) | Compile reuse graduated on the helper and generator roots: second witness over another generation | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 55 | 3,000 comparisons per root |
+| 5.2 (7.5) | Ruleset step 4; obligations verify PRs and groups with whole-tree keys and a cold second witness; A1 replaces the full push run. **Deletes** the PR and group Actions gates and the interim label step | ≈ 6 / 18 | ≈ 9 / 30 | ≈ 110 | Parity report; A1 live |
+| 6.5 (9) | Final deletion. **Deletes** ARC's velnor-new scale set and profiles, the Turso journal and the parts of `crates/velnor-runner` review did not keep. **Keeps** the official runner's image, `.velnor/runner.lock` and `velnor-official` (decisions 19, 20) | ≈ 4 / 12 | ≈ 7 / 22 | ≈ 90 | Local runs on Docker; review of a large deletion |
+| 7.5 (10) | Compile reuse graduated on the helper and generator roots: second witness over another generation | ≈ 2.5 / 8 | ≈ 5 / 15 | ≈ 80 | 3,000 comparisons per root |
 | 10 (13.5) | **Goal.** Per-root keys enrolled after the read audit's shadow; the test floor fixed | **≤ 90 s / ≤ 4 min** [T] | **≤ 3 / ≤ 8 min** [T] | **≤ 50** [T] | Contract review; statistical evidence |
 | 16–18 | **Stretch measured:** per-package keys, `velnor verify`, longest test ≤ 15 s, the commit stamped after link | 30 s / 100 s [T] | 100 s / 4 min [T] | ≤ 20 [T] | Package enrolment; labs B and C |
 
@@ -1002,9 +1003,7 @@ A milestone that misses its numbers holds the next cohort until the miss is expl
 2–8 agent-hours, one PR under 400 refactored lines; ports land as a checker-proven verbatim move,
 then the refactor; every replacing PR deletes what it replaces.
 
-### 10.3 Lab experiments and their safe defaults
-
-Each default stays correct whichever way its lab goes.
+### 10.3 Lab experiments and their safe defaults (each correct whichever way its lab goes)
 
 | Lab | What it runs | Pass | Default until then |
 |---|---|---|---|
@@ -1025,6 +1024,7 @@ Each default stays correct whichever way its lab goes.
 | The release path trusts the old gate | Both release entry points exercised with missing, stale and wrong proofs | One release authority before the ruleset changes |
 | A move leaves no way back and diverges | Sampled shadow runs; per-type failure rates | Fix forward on a 2-hour target; redeploy the previous image digest |
 | A backend or store behaves differently | Per-backend conformance; content verification on read | Capability fallbacks; slower, never wrong |
+| RustFS is young (1.0.0 two months old, a patch about every 10 days) and has open issues on node return (#9480), replication backfill (#8768) and small PUTs (#9161) | The phase-1 cluster test; per-tier hit and error rates; replication lag | Routes stay `local` until the test passes; a pinned version upgraded through the storage kit; any S3 store can replace it; a stalled or degraded tier is a miss |
 | Stale compile state | Content-proven inputs; the cold second witness; A1 digests; canaries | Retire the generation; build cold |
 | The cluster is saturated | Per-class CPU and memory watermarks | Batch work preempted or requeued first; reserved merge path; lab replay at night and on Docker hosts outside the cluster |
 | Owner decisions wait; agents collide | Due hours; conflict counts | One decision pack with defaults; one owner per crate and shared file (delivery plan §8) |
@@ -1037,13 +1037,12 @@ where release bytes are built (D12).
 
 | # | Question | Example | Recommendation and default | Needed by |
 |---|---|---|---|---|
-| D1 | Release the prepared engine version that moves the gate jobs off hosted runners? | Eight gate jobs still run on `ubuntu-26.04` and waited 57 of a 71.8 min run on the worst day | Yes, now | hour 0 |
+| D1 | Release the prepared engine version that moves the gate jobs off hosted runners, and pre-approve CI-only engine releases (D9)? | Eight gate jobs still run on `ubuntu-26.04` and waited 57 of a 71.8 min run on the worst day | Yes, now, one approval for the batch | hour 0 |
 | D2 | Should agents enable auto-merge and stop merging `main` into their branches? | 0 of 40 recent PRs used auto-merge; the median waited 7.5 min between green and enqueue | Yes | hour 0 |
 | D3 | Apply the first ruleset update now: two contexts bound to 15368, empty `bypass_actors`, ALLGREEN, depth 2, timeout 90, minimum wait 0? | An admin bypass carried 7 of 136 merges in three days, and three commits with a failed `Required` sit on `main` | Yes; depth 4 and timeout 15 min only once a group verdict takes ≤ 5 min at P90 and paired false failures are ≤ 3% | hour 2 |
 | D4 | Which evaluator ships: A, velnor-legacy's port of the legacy `Expressions2`, or B, a port of the new `Sdk/Expressions` and `WorkflowParser`? | v2.338.2 computes the new evaluator in compare mode but returns the legacy result; Velnor refuses every job where the two differ, so on accepted jobs A and B give the same answer | Recommend B: it complies with decision 3 and ruling Q4, and correctness is equal because differing jobs are refused. Default A until you answer, because it matches the latest runner and costs 3 h against 28; only one ships | day 3 |
 | D7 | Create the `velnor-verify` App (section 8.2's permissions and webhooks) and an agent identity without repository administration? | Today agents label and merge under the owner's identity, which can edit the ruleset | Yes; its status becomes the gate after lab A and parity | day 2 |
-| D8 | A deploy identity for `velnor-system`, and the node changes (XFS work directories, reservations, taints)? | Job directories sit on the ext4 OS disk, where a warm target copy costs 8.6 s and 10.75 GiB | Yes | hour 6 |
-| D9 | Pre-approve engine releases that change only CI? | Each day-0 change needs one release | Yes, one approval for the batch | day 0 |
+| D8 | A deploy identity for `velnor-system`, and the node changes (XFS work directories, reservations, taints, a RustFS device or partition per worker)? | Job directories sit on the ext4 OS disk, where a warm target copy costs 8.6 s and 10.75 GiB | Yes | hour 6 |
 | D11 | The per-type cutover counts of section 10.1? | Cohort 1 needs 150 replayed pairs per type | Yes, as written | day 1 |
 | D14 | Delete the engine crates from velnor-new once velnor-gen's workflow replaces the engine's CI? | The engine's orchestrator and renderer are about 275k lines | Only after checking for other consumers | day 8 |
 | D15 | Approve the recovery path for a bad Velnor release, with no admin merge? | A release that fails every job also blocks the PR that fixes it | Yes: redeploy the previous image digest; if none can verify, the pre-approved break-glass verifier writes a green only after a full cold pass (section 5.9) | day 1 |

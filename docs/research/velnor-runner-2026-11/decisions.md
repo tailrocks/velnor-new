@@ -353,6 +353,10 @@ in the design review. "Same as" marks a merged duplicate.
 | N132 | Every per-root contract includes each ancestor's tracked files and `.cargo/`, `.config/`, `.github/`, `.velnor/`; the read audit is eBPF on the file-lookup syscalls, `ENOENT` included. | Claude Opus 5.5 (final review) | — | Adopted (v3 final) | Root `rustfmt.toml` and `clippy.toml` govern `ci-helper/` and `generator/`, which have none |
 | N133 | Executor selection, versions and digests are read from the base commit's `.velnor/`, certified identities only. | Claude Opus 5.5 (final review) | — | Adopted (v3 final) | A candidate must not choose its own verifier (C3) |
 | N134 | The push `Required` job waits on the ledger's A1 result for its SHA (`velnor-ci audit wait`, 2.5 h, per-SHA concurrency). | Claude Opus 5.5 (final review) | — | Adopted (v3 final) | Push runs are not cancelled (`ci.yml:57-59`); a shared group would queue tips |
+| N135 | Extracted trees live only in node-local L0; RustFS stores blobs (cache chunks, artifacts, release bytes, mbx blobs, shipped generations). | RustFS experiment | — | Adopted (v3 final) | Extraction, not the object store, is the restore cost |
+| N136 | One RustFS cluster per site; asynchronous replication of content-addressed buckets between sites, never a correctness path. | RustFS experiment | — | Adopted (v3 final) | Quorum writes inside one erasure set; no WAN-aware placement; no multi-writer policy |
+| N137 | Cache eviction (GitHub's 7-day and size rules) as LRU in Velnor's index; S3 lifecycle only a backstop. | RustFS experiment | — | Adopted (v3 final) | Lifecycle is day-granular and scanner-driven |
+| N138 | A phase-1 RustFS cluster test (node loss and return, WireGuard replication and backfill, Linux fsync per durability mode, the 8.7 GiB snapshot, chunk rates) gates every L1 route. | RustFS experiment; manager | — | Adopted (v3 final) | The deciding numbers were not measurable on one Mac |
 
 
 ## Load-bearing decisions
@@ -913,6 +917,27 @@ rejected. Rows N131–N134 are new.
 | B19 | Numbers | Fixed: acquire 13 / 27 s (V5); 238–289 runner-hours; the 2 s kill is not in the `ci` profile; the owner table no longer splits | 1.3, 3, 7.4, 12 |
 | B20 | The interim label flow restarts on any label | Fixed: named as an accepted interim cost; agents and Renovate label at creation only | 8.2; plan B07 |
 | B21 | Storage invariants across sites | Fixed by group 23 (A9): names live in one home-site index, blobs are content-addressed. B's site-local first-writer-wins names are rejected: two sites could then bind one key to two manifests, which breaks key immutability | 7.1, 7.2 |
+
+### Group 25: the RustFS results applied
+
+From `rustfs-exp/results.md` (RustFS 1.0.6 on one loaded Mac; source read at `a3d6b59d03`). Multi-node
+clusters, WireGuard replication and Linux fsync were not measured, so they become the phase-1
+cluster test.
+
+| # | Result | Decision | v3 section |
+|---|---|---|---|
+| R1 | Restoring a 6,053-file registry: GET 1.2 s, extraction about 17 s, a reflink copy about 5 s [M, indicative] | Extracted trees stay in node-local L0; RustFS holds only blobs; no tree as many small objects (N135) | 7.1, 7.2 |
+| R2 | Writes need a quorum inside one erasure set; replication is asynchronous and scanner-bound, with no documented multi-writer policy | One cluster per site; asynchronous replication of content-addressed buckets only, as warmth (N136) | 7.1 |
+| R3 | Replication conflicts are undefined | Single-writer keys by construction: blobs by hash, names only in Velnor's home-site index | 7.1, 7.2 |
+| R4 | S3 lifecycle is day-granular and scanner-driven; GitHub evicts after 7 days unused and by size | LRU and GitHub's eviction kept in Velnor's index; lifecycle only a backstop (N137) | 7.2 |
+| R5 | Single-node RustFS cannot grow; layouts are immutable; distinct disks per endpoint | Defaults per platform (local on Docker and macOS; L0 → per-site RustFS → replication on Kubernetes); one drive per worker on its own device or partition; parity explicit; growth by pools | 7.1, 7.5 |
+| R6 | `strict` durability cost on macOS is dominated by `F_FULLFSYNC`; the Linux cost is unknown | `strict` on every bucket until the phase-1 test measures Linux fsync; release buckets stay `strict` | 7.1 |
+| R7 | Keys with `.`, `..`, empty segments or control characters are rejected | User cache keys never become object names | 7.2 |
+| R8 | STS with session policies is possible but untested | The node agent holds credentials; jobs get presigned URLs | 7.1 |
+| R9 | A one-crate change moves about 1% of bytes with content-defined chunks; chunking compressed tarballs does not work | Chunks of about 1 MiB over the uncompressed archive | 7.2 |
+| R10 | mbx-cache keeps metadata in PostgreSQL apart from its blobs | `mbx-cache` stays per site; blob replication does not make it cross-site | 7.5 |
+| R11 | 1.0.0 is two months old; open #9480 (node return), #8768 (backfill stall), #9161 (small-PUT regression); the operator is 0.0.8 | A risk row; a pinned version; own manifests; routes stay `local` until the phase-1 test passes; any S3 store can replace RustFS (N138) | 11; plan ST04, ST06 |
+| R12 | Not measured: multi-node, WireGuard replication, Linux fsync, the 8.7 GiB snapshot | The phase-1 cluster test, plan ST06, with five parts and pass and fallback rules | 7.1; plan ST06 |
 
 ## Design review
 
