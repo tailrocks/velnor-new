@@ -7,13 +7,14 @@ use std::time::Duration;
 use serde::Deserialize;
 use velnor_rust::{CacheEntry, budget_plan, cache_family, delta_pull_request};
 
-use crate::cache::{MAX_PAGES, encode, stale_entries};
+use crate::cache::{MAX_PAGES, encode, foreign_entries, stale_entries};
 use crate::cli_cache::BudgetArgs;
 use crate::error::CiError;
 use crate::github::{GitHubWrite, Repo};
 use crate::time::parse_utc;
 
 const PAGE: usize = 100;
+const RESTORED_GRACE_SECONDS: i64 = 86_400;
 
 #[derive(Deserialize)]
 struct Listing<T> {
@@ -88,19 +89,26 @@ pub fn trim(
     reference: &str,
     prefix: &str,
     keep: usize,
+    now: i64,
 ) -> Result<String, CiError> {
     if prefix.is_empty() {
         return Err(CiError::new("the cache prefix is empty"));
     }
+    let listed = velnor_rust::target_family_prefix(prefix).unwrap_or(prefix);
     let path = format!(
         "/repos/{repo}/actions/caches?key={}&ref={}",
-        encode(prefix),
+        encode(listed),
         encode(reference)
     );
     let (entries, truncated): (Vec<crate::cache::CacheEntry>, bool) =
         pages(github, &path, Some(MAX_PAGES))?;
     unique_ids(entries.iter().map(|entry| entry.id))?;
-    let stale = stale_entries(&entries, prefix, keep);
+    let in_use_since = prefix
+        .starts_with("velnor-src-")
+        .then(|| now.saturating_sub(RESTORED_GRACE_SECONDS));
+    let mut stale = stale_entries(&entries, prefix, keep, in_use_since);
+    let foreign = foreign_entries(&entries, prefix);
+    stale.extend(&foreign);
     delete_entries(github, repo, &stale)?;
     let warning = if truncated {
         format!(
@@ -111,12 +119,13 @@ pub fn trim(
         String::new()
     };
     Ok(format!(
-        "{prefix}: {} entries on {reference}, kept the newest {keep}, deleted {}\n{warning}",
+        "{prefix}: {} entries on {reference}, kept the newest {keep}, deleted {} ({} of another compatibility family)\n{warning}",
         entries
             .iter()
             .filter(|entry| entry.key.starts_with(prefix))
             .count(),
-        stale.len()
+        stale.len(),
+        foreign.len()
     ))
 }
 

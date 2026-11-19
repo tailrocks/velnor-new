@@ -135,7 +135,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |
 | `cache_budget_bytes` | `8000000000` | cache budget, at most 8 GB |
-| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed of the workflow, checked by `rust-budget` on the default branch or the scheduled run (needs `velnor-ci` 0.1.91) |
+| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed of the workflow, checked by `rust-budget` on the default branch or the scheduled run (needs `velnor-ci` 0.1.92) |
 | `cache_check_blocks` | `false` | the `Cache` check joins `Required` |
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |

@@ -20,6 +20,7 @@ use crate::release_commit::tagged_commits;
 use crate::release_family::{family_tag, lines, tag_of, version_of};
 use crate::release_preflight::check_release_source;
 use crate::release_published::check_published_tagged;
+use crate::release_recover::recover;
 use crate::rulesets::check_tag_rulesets;
 use velnor_release::expected_releases;
 
@@ -69,22 +70,55 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
         })
         .collect::<Result<Vec<_>, CiError>>()?;
-    let tags = recorded(&outputs)?;
-    let mut lines = tag_lines(&tags);
+    let mut tags = recorded(&outputs)?;
+    let mut lines = String::new();
     if let (Some(repo), Some(verified)) = (&args.repo, &args.verified_commit) {
         let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
-        lines.push_str(&tagged_commits(
-            &github,
-            &Repo::parse(repo)?,
-            verified,
-            &tags,
-        )?);
+        let repo = Repo::parse(repo)?;
+        if let Some(app) = &args.app {
+            tags.extend(recover(
+                &github,
+                &repo,
+                app,
+                &expected_tags(&args.config)?,
+                &tags,
+            )?);
+        }
+        lines.push_str(&tag_lines(&tags));
+        lines.push_str(&tagged_commits(&github, &repo, verified, &tags)?);
+    } else {
+        lines.push_str(&tag_lines(&tags));
     }
     if !args.release_configs.is_empty() {
         check_published(args, &outputs, &tags)?;
     }
     super::append_outputs(&lines)?;
     Ok(lines)
+}
+
+fn expected_tags(configs: &[std::path::PathBuf]) -> Result<BTreeMap<String, String>, CiError> {
+    let top = std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
+    let mut files = Vec::new();
+    for path in configs {
+        let text = fs::read_to_string(path)
+            .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
+        files.push((relative_to(&top, path), text));
+    }
+    let roots: Vec<String> = configs.iter().map(|path| root_of(&top, path)).collect();
+    let known = super::manifests::read(&top, &roots)?;
+    let mut tags = BTreeMap::new();
+    for release in
+        expected_releases(&files, &known.metadata, &known.versions).map_err(CiError::new)?
+    {
+        if let Some(other) = tags.insert(release.package.clone(), release.tag.clone()) {
+            return Err(CiError::new(format!(
+                "package {} is released as {other} and as {}",
+                release.package, release.tag
+            )));
+        }
+    }
+    Ok(tags)
 }
 
 fn check_published(

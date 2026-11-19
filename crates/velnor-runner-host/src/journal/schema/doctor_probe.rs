@@ -62,9 +62,11 @@ async fn validate_existing_transition_guard(
         )
         .await
         .map_err(|_| HostError::Journal)?;
-    let Some(row) = rows.next().await.map_err(|_| HostError::Journal)? else {
-        return Ok(());
-    };
+    let row = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?;
     let sql: String = row.get(0).map_err(|_| HostError::Journal)?;
     let actual = canonical_sql(&sql);
     if actual == canonical_sql(TRANSITION_GUARD) || actual == canonical_sql(TRANSITION_GUARD_V52) {
@@ -319,11 +321,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_absent_transition_guard_still_migrates_on_rerun() -> TestResult {
+    async fn an_absent_transition_guard_is_refused() -> TestResult {
         let state = tempfile::tempdir()?;
         let path = state.path().join("launch.db");
         rewind_to_version_56(&path, None).await?;
-        Journal::open(&path).await?;
+        assert!(
+            Journal::open(&path).await.is_err(),
+            "a version 56 journal without its transition guard must be refused"
+        );
         Ok(())
     }
 }

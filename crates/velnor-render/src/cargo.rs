@@ -6,6 +6,7 @@ use velnor_model::{
     TargetKind, TargetName,
 };
 
+use crate::cargo_features::NO_TESTS_PASS;
 use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
@@ -115,7 +116,14 @@ fn cargo_command(
             &format!("--workspace --locked{nextest}"),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
+        CargoCommand::NextestFeatures {
+            features,
+            filter,
+            ci_profile,
+            ..
+        } => crate::cargo_features::nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::NextestRunArchive {
             file,
             filter,
@@ -129,6 +137,7 @@ fn cargo_command(
             ),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
@@ -293,16 +302,17 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(
+pub(crate) fn nextest_run(
     scope: &str,
     filter: &FilterRef,
     ci_profile: bool,
+    no_tests: &str,
 ) -> (String, String, Vec<(String, Value)>) {
     let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests={no_tests}",
             nextest_filter(filter)
         ),
         vec![],
@@ -313,6 +323,7 @@ fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
         FilterRef::All => "$TEST_FILTER".to_owned(),
         FilterRef::AllExcept(binaries) => without_binaries("($TEST_FILTER)".to_owned(), binaries),
+        FilterRef::Expr { expr, except } => crate::cargo_features::expr(expr, except),
         FilterRef::Group {
             include,
             exclude,
@@ -331,13 +342,13 @@ fn nextest_filter(filter: &FilterRef) -> String {
     }
 }
 
-fn without_binaries(base: String, binaries: &[String]) -> String {
+pub(crate) fn without_binaries(base: String, binaries: &[String]) -> String {
     binaries
         .iter()
         .fold(base, |text, id| format!("{text} - binary_id(={id})"))
 }
 
-fn feature_flag(features: &[String]) -> String {
+pub(crate) fn feature_flag(features: &[String]) -> String {
     if features.is_empty() {
         String::new()
     } else {

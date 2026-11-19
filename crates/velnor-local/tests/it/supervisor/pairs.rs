@@ -83,7 +83,10 @@ async fn start_listening_pair(
         .output()
         .map(|out| String::from_utf8_lossy(&out.stdout).into_owned())
         .unwrap_or_default();
-    let _ = Command::new("kill").args(["-KILL", pid.trim()]).status();
+    Command::new("kill")
+        .args(["-KILL", pid.trim()])
+        .status()
+        .ok();
     (started, asked.load(Ordering::SeqCst), command)
 }
 

@@ -135,6 +135,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
+    crate::config_test_lane::check(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = crate::config_lint::pinned_tools(view, &config)?;
     check_setup_files(view, &rust_roots)?;

@@ -23,7 +23,7 @@ use tokio::signal::unix::{SignalKind, signal};
 
 pub(super) use host::pairs;
 pub use host::{Pairs, default_host, write_plan};
-pub use online::await_online;
+pub use online::{await_online, await_replacement};
 
 use super::authority::{Authority, Backend, LEDGER, Runners};
 use super::env::{DockerCli, Environment, program};
@@ -76,7 +76,7 @@ impl Starting {
 impl Drop for Starting {
     fn drop(&mut self) {
         if let Some(child) = self.0.as_mut() {
-            let _ = child.start_kill();
+            child.start_kill().ok();
         }
     }
 }
@@ -137,7 +137,7 @@ where
         await_online(&backend, &sides, timeout).await
     };
     if let Err(error) = ready.await {
-        let _ = stop(dir).await;
+        stop(dir).await.ok();
         return Err(error);
     }
     Ok(endpoint)

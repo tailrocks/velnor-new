@@ -61,11 +61,12 @@ pub fn healthy(parts: &[Part]) -> bool {
 #[must_use]
 pub fn render(parts: &[Part]) -> String {
     parts.iter().fold(String::new(), |mut text, part| {
-        let _ = match &part.fix {
+        (match &part.fix {
             None if !part.known => writeln!(text, "n/a   {}", part.what),
             None => writeln!(text, "ok    {}", part.what),
             Some(fix) => writeln!(text, "miss  {}   fix: {fix}", part.what),
-        };
+        })
+        .ok();
         text
     })
 }

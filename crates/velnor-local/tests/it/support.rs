@@ -42,7 +42,7 @@ impl Harness {
     pub(crate) async fn new(name: &str, limit_bytes: u64) -> Self {
         let dir =
             std::env::temp_dir().join(format!("velnor-local-it-{}-{name}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::remove_dir_all(&dir).ok();
         Self::open(dir, limit_bytes).await
     }
 
@@ -325,7 +325,7 @@ impl Reply {
 
 pub(crate) fn temp_dir(name: &str) -> PathBuf {
     let dir = std::env::temp_dir().join(format!("velnor-local-it-{}-{name}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::remove_dir_all(&dir).ok();
     std::fs::create_dir_all(&dir).unwrap_or_else(|e| unreachable!("{e}"));
     dir
 }
