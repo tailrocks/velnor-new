@@ -18,8 +18,7 @@ use crate::preview_login::owned_by;
 use crate::support::fresh_dir;
 
 fn renderer() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../velnor-actions-workflow-renderer/src")
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../velnor-actions-workflow-renderer/src")
 }
 
 fn python_ready() -> bool {
