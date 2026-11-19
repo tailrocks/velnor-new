@@ -94,7 +94,10 @@ pub(super) fn check_owned_mounts(
                 )
         }) {
             match open_mount_target(pid, tid, &root, &target) {
-                Ok((device, inode)) if volume_identity_matches(volume, device, inode) => {
+                Ok((device, inode))
+                    if target == volume.mountpoint
+                        || volume_identity_matches(volume, device, inode) =>
+                {
                     *references = references.saturating_add(1);
                 }
                 Ok(_) => {}

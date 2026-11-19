@@ -116,6 +116,32 @@ fn gate_step() -> Result<velnor_actions_contract::Step, RenderError> {
         .ok_or_else(|| RenderError::InvalidWorkflow("required_gate_missing_step".to_owned()))
 }
 
+pub(crate) const REQUIRED_GATE_FORK_JOB_ID: &str = "required-gate-fork";
+
+fn fenced_gate_condition() -> String {
+    velnor_actions_contract::workflow::fork_fenced_condition(Some(REQUIRED_GATE_CONDITION))
+}
+
+fn fork_gate_condition() -> String {
+    format!(
+        "${{{{ always() && !({}) }}}}",
+        velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION
+    )
+}
+
+/// The gate moved to the scale set is skipped for fork pull requests, and a
+/// skipped required check counts as passing. This hosted twin carries the
+/// same check name and fails unless the verdict passed, so a fork pull
+/// request fails closed instead of passing by skipping.
+pub(crate) fn add_fork_gate(
+    jobs: &mut BTreeMap<String, Job>,
+    hosted: &str,
+) -> Result<(), RenderError> {
+    let mut twin = required_gate_job(hosted)?;
+    twin.condition = Some(fork_gate_condition());
+    crate::support::insert_support_job(jobs, REQUIRED_GATE_FORK_JOB_ID, twin, "required-gate")
+}
+
 pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), RenderError> {
     if !jobs.contains_key(FINAL_JOB_ID) {
         return Ok(());
@@ -124,8 +150,9 @@ pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     let Some(gate) = jobs.get(REQUIRED_GATE_JOB_ID) else {
         return bad("missing_required_gate");
     };
+    let fenced = gate.condition.as_deref() == Some(fenced_gate_condition().as_str());
     if gate.display_name != REQUIRED_DISPLAY_NAME
-        || gate.condition.as_deref() != Some(REQUIRED_GATE_CONDITION)
+        || (gate.condition.as_deref() != Some(REQUIRED_GATE_CONDITION) && !fenced)
         || gate.needs != [FINAL_JOB_ID]
         || gate.steps != [gate_step()?]
     {
@@ -139,11 +166,112 @@ pub(crate) fn check_required_gate(jobs: &BTreeMap<String, Job>) -> Result<(), Re
     {
         return bad("required_gate_carries_payload");
     }
-    if jobs
-        .iter()
-        .any(|(id, job)| id != REQUIRED_GATE_JOB_ID && job.display_name == REQUIRED_DISPLAY_NAME)
-    {
+    match (fenced, jobs.get(REQUIRED_GATE_FORK_JOB_ID)) {
+        (true, Some(twin))
+            if twin.display_name == REQUIRED_DISPLAY_NAME
+                && twin.condition.as_deref() == Some(fork_gate_condition().as_str())
+                && twin.needs == [FINAL_JOB_ID]
+                && twin.steps == gate.steps
+                && !twin.runs_on.starts_with("scale-set:") => {}
+        (true, _) => return bad("fenced_required_gate_without_hosted_fork_twin"),
+        (false, None) => {}
+        (false, Some(_)) => return bad("unexpected_required_gate_fork_twin"),
+    }
+    if jobs.iter().any(|(id, job)| {
+        id != REQUIRED_GATE_JOB_ID
+            && id != REQUIRED_GATE_FORK_JOB_ID
+            && job.display_name == REQUIRED_DISPLAY_NAME
+    }) {
         return bad("duplicate_required_check_name");
     }
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SCALE: &str = "scale-set:velnor+ubuntu-26.04-scale-set";
+
+    fn verdict() -> Result<Job, RenderError> {
+        let mut job = required_gate_job("ubuntu-26.04")?;
+        job.display_name = REQUIRED_VERDICT_DISPLAY_NAME.to_owned();
+        job.needs.clear();
+        job.steps.clear();
+        job.condition = Some(REQUIRED_CONDITION.to_owned());
+        Ok(job)
+    }
+
+    fn fenced_gate() -> Result<Job, RenderError> {
+        let mut gate = required_gate_job(SCALE)?;
+        gate.condition = Some(fenced_gate_condition());
+        Ok(gate)
+    }
+
+    fn jobs(with_twin: bool) -> Result<BTreeMap<String, Job>, RenderError> {
+        let mut jobs = BTreeMap::from([
+            (FINAL_JOB_ID.to_owned(), verdict()?),
+            (REQUIRED_GATE_JOB_ID.to_owned(), fenced_gate()?),
+        ]);
+        if with_twin {
+            add_fork_gate(&mut jobs, "ubuntu-26.04")?;
+        }
+        Ok(jobs)
+    }
+
+    #[test]
+    fn a_fenced_gate_without_the_hosted_fork_twin_is_rejected() -> Result<(), RenderError> {
+        let error = check_required_gate(&jobs(false)?)
+            .err()
+            .map(|e| e.to_string());
+        assert!(error.is_some_and(|e| e.contains("fenced_required_gate_without_hosted_fork_twin")));
+        Ok(())
+    }
+
+    #[test]
+    fn the_hosted_fork_twin_fails_closed_for_fork_pull_requests() -> Result<(), RenderError> {
+        let jobs = jobs(true)?;
+        check_required_gate(&jobs)?;
+        let twin = jobs
+            .get(REQUIRED_GATE_FORK_JOB_ID)
+            .ok_or_else(|| RenderError::InvalidWorkflow("twin missing".to_owned()))?;
+        assert_eq!(twin.runs_on, "ubuntu-26.04");
+        assert_eq!(twin.display_name, REQUIRED_DISPLAY_NAME);
+        let condition = twin.condition.clone().unwrap_or_default();
+        assert!(condition.contains("&& !(github.event_name == 'push'"));
+        // The twin runs the gate step, which fails unless the verdict job succeeded.
+        assert_eq!(twin.needs, [FINAL_JOB_ID]);
+        assert_eq!(twin.steps, jobs[REQUIRED_GATE_JOB_ID].steps);
+        assert_eq!(
+            twin.steps[0].condition.as_deref(),
+            Some(REQUIRED_GATE_FAIL_CONDITION)
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn a_scale_set_twin_is_rejected() -> Result<(), RenderError> {
+        let mut jobs = jobs(true)?;
+        if let Some(twin) = jobs.get_mut(REQUIRED_GATE_FORK_JOB_ID) {
+            SCALE.clone_into(&mut twin.runs_on);
+        }
+        assert!(check_required_gate(&jobs).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn an_unfenced_gate_needs_no_twin() -> Result<(), RenderError> {
+        let jobs = BTreeMap::from([
+            (FINAL_JOB_ID.to_owned(), verdict()?),
+            (
+                REQUIRED_GATE_JOB_ID.to_owned(),
+                required_gate_job("ubuntu-26.04")?,
+            ),
+        ]);
+        check_required_gate(&jobs)
+    }
+}
+
+#[cfg(test)]
+#[path = "required_gate_fork_tests.rs"]
+mod fork_tests;
