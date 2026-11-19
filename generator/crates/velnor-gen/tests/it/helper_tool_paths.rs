@@ -14,7 +14,7 @@ fn tools(root: &Path, missing: &str) -> TestResult {
     fs::create_dir(root.join("tools"))?;
     for tool in [
         "bash", "mktemp", "cp", "chmod", "mkdir", "env", "shasum", "head", "seq", "sleep", "wc",
-        "tr", "rm", "curl", "mv", "cut",
+        "tr", "rm", "curl", "mv", "cut", "tar", "gzip",
     ] {
         if tool != missing {
             let path = root.join("tools").join(tool);
