@@ -101,6 +101,35 @@ fn a_modified_file_selects_its_package_with_no_token() {
     );
 }
 
+fn docs_only_merge(name: &str) -> Repo {
+    merged_pull_request(name, |repo| repo.write("docs/readme.md", "docs\n"))
+}
+
+#[test]
+fn an_unstaged_source_edit_after_a_docs_only_merge_selects_everything() {
+    let repo = docs_only_merge("git-dirty-worktree");
+    let clean = pull_request(&repo);
+    assert!(clean.status.success(), "{clean:?}");
+    assert_eq!(
+        selected(&clean),
+        "Cargo.toml: none\ntools/Cargo.toml: none\n"
+    );
+    repo.write_unstaged("b/src/lib.rs", "pub fn broken( {\n");
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
+
+#[test]
+fn a_staged_source_edit_after_a_docs_only_merge_selects_everything() {
+    let repo = docs_only_merge("git-dirty-index");
+    repo.write("b/src/lib.rs", "pub fn broken( {\n");
+    repo.git(&["add", "b/src/lib.rs"]);
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
+
 #[test]
 fn a_changed_lockfile_is_compared_with_its_text_at_the_first_parent() {
     let repo = merged_pull_request("git-lock", |repo| {
