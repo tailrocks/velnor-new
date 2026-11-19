@@ -16,7 +16,7 @@ Normative terms **MUST**, **MUST NOT**, **SHOULD**, and **MAY** have their usual
 Velnor Actions is a stack-generic GitHub Actions workflow generator. V1 registers
 the `rust` and `tofu` detectors; the architecture keeps stack analysis, Mise integration,
 generic workflow rendering, and orchestration in separate packages. Runner execution
-and supervision live in the nested `crates/velnor-runner` workspace under
+and supervision live in the nested `crates/velnor-runner-*` workspace under
 `docs/proposed/macos-scaleset-runner.md`.
 
 Cargo dependency direction (`A -> B` means “A depends on B”):
@@ -84,7 +84,7 @@ the workflow-lint adapter to validate rendered output with pinned jactionlint be
 workflow IR to YAML and writes `.github`. Rust, Mise, and workflow-renderer crates MUST
 depend only on `velnor-actions-contract`; they MUST NOT depend on each other.
 Only the orchestrator composes them. The generator CLI binary is named `velnor-actions`,
-while runner supervisor operations are provided by `velnor-host` in `crates/velnor-runner`.
+while runner supervisor operations are provided by `velnor-host` in `crates/velnor-runner-*`.
 
 Adapters exchange typed requests and stack-neutral results through the contract
 crate. The Rust adapter requests Cargo metadata; the orchestrator asks Mise to
@@ -131,7 +131,7 @@ crates/velnor-actions-orchestrator/
 crates/velnor-actions-cli/
 crates/velnor-actions-freshness/  # repository-only support, outside V1 product graph
 crates/velnor-archive-guard/      # repository-only build protection
-crates/velnor-runner/             # nested runner workspace (crates/velnor-runner/Cargo.toml)
+crates/velnor-runner-*/           # runner packages, members of the root workspace
 fixtures/rust-workspaces/
 .github/jactionlint.yaml
 .github/workflows/ci.yml

@@ -29,9 +29,7 @@ uses that same project Bun pin in its preparation step and tools-cache identity.
 with Nextest-applicable targets (`test = true`). A successful empty result
 skips Nextest only for that workspace; metadata errors fail verification. The
 root workspace runs per-package and workspace-wide Nextest scopes with
-`--no-tests fail` when applicable targets exist. The nested runner workspace
-keeps its existing workspace-wide scope, guarded by its own manifest's
-metadata result and `--no-tests fail`. The required
+`--no-tests fail` when applicable targets exist. The required
 `test-maintenance-helpers` task applies the same metadata rule to its two named
 package scopes and first runs the `pin-mirror` repository-policy action against
 the PR head with `refs/remotes/origin/main` as the base ref. Each invoked
@@ -55,12 +53,10 @@ the test scope; tests do not invoke Cargo to build it.
 ## The Verification Suite
 
 For complete Rust verification, run `bash scripts/verify-local.sh` from the repo
-root. It checks the root and nested workspaces, including formatting, Clippy,
+root. It checks the root workspace, including formatting, Clippy,
 metadata-gated Nextest, docs, and freshness. Run the independent repository
 checks alongside it. For each change, run narrow checks that exercise it and
-complete the full relevant verification scope before finishing. The nested
-runner is a separate Cargo workspace and root `cargo --workspace` and root
-formatting do not include it.
+complete the full relevant verification scope before finishing.
 
 If the workspace `target` is a symlink into an MBX-managed cache, direct Cargo
 commands do not hold an MBX cache lease. Use a separately owned absolute
@@ -78,8 +74,7 @@ alint validate-config && alint check --fail-on-warning
 cargo deny check
 ```
 
-The local script also runs `scripts/check-freshness.sh` and covers the nested
-runner workspace.
+The local script also runs `scripts/check-freshness.sh`.
 
 Tests that need a fixture or an environment variable that only the verification
 entry points set are run with the recipe in
@@ -164,9 +159,9 @@ The tests verify the receipt, fixture source, and library before use.
 
 ### 1. Code Formatting: `cargo fmt --all -- --check`
 
-- **Purpose**: Validates Rust formatting in the root Cargo workspace. The nested runner workspace is excluded and must also pass `cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check`.
+- **Purpose**: Validates Rust formatting in the root Cargo workspace, which holds every crate.
 - **Why It Matters**: Enforces zero format variance and uniform code aesthetics without manual style debates.
-- **Remediation**: Run `cargo fmt --all` for root files and `cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all` for runner files.
+- **Remediation**: Run `cargo fmt --all`.
 
 ### 2. Static Analysis & Lints: `cargo clippy --locked --workspace --all-targets -- -D warnings`
 
@@ -179,7 +174,7 @@ The tests verify the receipt, fixture source, and library before use.
 
 ### 3. Test Suite Execution: `bash scripts/verify-local.sh`
 
-- **Purpose**: Runs root per-package and workspace Nextest scopes, plus the existing nested workspace scope. Cargo metadata decides whether each workspace or named package scope has a `test = true` target; only a successful empty result skips Nextest. Metadata errors fail, and each invoked Nextest scope uses `--no-tests fail`.
+- **Purpose**: Runs root per-package and workspace Nextest scopes. Cargo metadata decides whether each workspace or named package scope has a `test = true` target; only a successful empty result skips Nextest. Metadata errors fail, and each invoked Nextest scope uses `--no-tests fail`.
 - **Strict Prohibition**: **Never use `cargo test`**. `cargo test` is forbidden because it lacks process isolation, nextest profile management, and retry handling.
 - **Focused Execution**:
   - Run a package whose Cargo metadata reports a test-enabled target: `cargo nextest run --locked -p <package_name> --no-tests fail`
@@ -220,15 +215,9 @@ The tests verify the receipt, fixture source, and library before use.
 
 ---
 
-## Nested Runner Workspace (`crates/velnor-runner`)
+## Runner Crates (`crates/velnor-runner-*`)
 
-The runner controller and supervisor live in the nested virtual workspace `crates/velnor-runner`, which has its own `Cargo.toml`, `Cargo.lock`, and `deny.toml`. `scripts/verify-local.sh` queries metadata for this manifest and runs the existing workspace-wide Nextest scope with `--no-tests fail` only when applicable targets exist.
-
-```bash
-cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
-cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
-cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
-```
+The runner controller and supervisor crates (`crates/velnor-runner-*` and `crates/velnor-resource-probe`) are members of the root workspace. They use the root `Cargo.toml`, `Cargo.lock` and `deny.toml`, and `scripts/verify-local.sh` verifies them with the root stages.
 
 The Docker-readiness fixture rewrites the entrypoint to no-op its absolute-path
 `wait-docker-sock` and `clear-dockerenv` commands because the fixture stub root

@@ -44,7 +44,7 @@ Method: claims checked against `evidence.md` (T/B/C/E/F sections) and cited code
 
 ### Ideas worth taking
 
-- **Path-mismatch root cause** (hosted `/home/runner/work/_temp` vs scale-set `/home/runner/_work/_temp` into the cache version hash, `velnor-new/local/crates/velnor-cache-rules/src/lookup.rs:28-32`; `StateCompat` quoting, `.../state_fragments.rs:15-21`). Best diagnosis in any proposal. Adopt verbatim.
+- **Path-mismatch root cause** (hosted `/home/runner/work/_temp` vs scale-set `/home/runner/_work/_temp` into the cache version hash, `velnor-new/crates/velnor-cache-rules/src/lookup.rs:28-32`; `StateCompat` quoting, `.../state_fragments.rs:15-21`). Best diagnosis in any proposal. Adopt verbatim.
 - **In-sandbox `node24`, never native action clones** — legacy's 37k-LOC lesson learned, tarball tax (4.17 s/job) still removed. Right call on H1.
 - **Ancestor-or-equal `main` promotion**, `0555` snapshots, per-PR write scopes. Correct trust shape; all three converge here.
 - **Phase 1 two-pool split** (`velnor-fast` no DinD; `velnor-docker` 1 s probe): removes 3–4 s probe tax from ~90% of jobs (B §3.3) in a week.

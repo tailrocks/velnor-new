@@ -10,7 +10,7 @@ mod homebrew_adoption_seed_public_deletions;
 
 use std::{error::Error, fs, io, path::Path, process::Command};
 
-#[path = "../../test_support/root_cargo_lock.rs"]
+#[path = "../../velnor-test-support/root_cargo_lock.rs"]
 mod root_cargo_lock;
 
 use sha2::{Digest, Sha256};
@@ -165,11 +165,11 @@ fn public_velnor_repository_bootstrap_accepts_only_catalog_mise_lock() -> Result
         "[tasks.fixture-check]\nrun = \"true\"\n",
     )?;
     let lock_path = temp.path().join(".velnor/generator.lock");
-    let lock_text = include_str!("../../test_support/generator_074.lock");
+    let lock_text = include_str!("../../velnor-test-support/generator_074.lock");
     fs::write(&lock_path, lock_text)?;
     fs::write(
         temp.path().join(".velnor/controller-approvals.json"),
-        include_str!("../../test_support/controller_approval_074.json"),
+        include_str!("../../velnor-test-support/controller_approval_074.json"),
     )?;
     let published_lock: GeneratorLock =
         velnor_actions_mise::catalog::lock::parse_generator_lock(lock_text)?;
