@@ -148,6 +148,34 @@ fn a_mise_task_installs_the_configured_backend_qualified_tool_key() -> TestResul
 }
 
 #[test]
+fn the_alint_job_checks_the_repo_then_proves_the_line_cap_rejects_a_seeded_file() -> TestResult {
+    let jobs = jobs(LINT)?;
+    let steps = jobs["lint-alint"]["steps"]
+        .as_array()
+        .ok_or("alint job has no steps")?;
+    let order: Vec<&str> = steps
+        .iter()
+        .filter_map(|step| step["uses"].as_str().or(step["run"].as_str()))
+        .collect();
+    assert!(order.len() == 3 && order[2] == "bash scripts/alint-line-cap-probe.sh");
+    assert!(order[1].starts_with("asamarts/alint@"));
+    assert_eq!(steps[1]["with"]["fail-on-warning"], true);
+    Ok(())
+}
+
+#[test]
+fn the_jactionlint_job_fails_the_job_on_any_finding_in_the_workflows() -> TestResult {
+    let jobs = jobs(LINT)?;
+    let command = runs(&jobs["lint-jactionlint"]).join("\n");
+    for flag in ["--strict-exit", "--format github", "--no-online"] {
+        assert!(command.contains(flag), "{flag} missing from {command}");
+    }
+    assert!(!command.contains("||") && !command.contains("continue"));
+    assert!(jobs["lint-jactionlint"]["steps"][2]["continue-on-error"].is_null());
+    Ok(())
+}
+
+#[test]
 fn a_repository_without_lint_entries_renders_no_lint_job() -> TestResult {
     let jobs = jobs("")?;
     assert!(
