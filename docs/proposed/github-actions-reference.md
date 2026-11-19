@@ -30,6 +30,13 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
   - Ephemeral runner lifecycles, graceful teardown, and runner pool auto-scaling contracts.
   - Compatibility with GitHub Enterprise Server and GitHub.com scale set endpoints.
 
+### Organization scale-set registration
+
+- The actions/scaleset client registers with `POST /actions/runner-registration` carrying the `url` of the registration scope and a registration token; GitHub documents the organization token as `POST /orgs/{org}/actions/runners/registration-token` and the repository token as `POST /repos/{owner}/{repo}/actions/runners/registration-token`. For an organization binding, `velnor-runner-host` sends `url=https://github.com/{org}` and uses the organization token path; the organization must equal the owner of the bound repository, compared exactly as configured.
+- Runner groups are listed at `_apis/runtime/runnergroups` on the admin connection. A named group must match exactly one entry and the unnamed choice must match exactly one default entry. Duplicate numeric group IDs anywhere in the response are rejected, because the journal keeps only the numeric ID.
+- An organization scale set is shared by every repository of the organization that selects the same group, name and labels, so the host never adopts an existing organization scale set that this connection did not create; a name conflict stays uncertain.
+- The bound repository ID, owner and name are verified before registration and again on every admin refresh. Owner and name compare ASCII case-insensitively against GitHub's canonical spelling; the repository ID must match exactly.
+
 ### 3. Runner Environments & Tooling Inventories
 
 - **Repository**: [actions/runner-images](https://github.com/actions/runner-images)
