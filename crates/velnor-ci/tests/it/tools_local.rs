@@ -5,7 +5,7 @@ use std::fs;
 use std::os::unix::fs::{MetadataExt, PermissionsExt, symlink};
 use std::path::{Path, PathBuf};
 
-use velnor_ci::tools_local::{Inputs, Outcome, Verb, message, run, valid_key};
+use velnor_ci::tools_local::{Inputs, Outcome, Verb, finish, message, run, valid_key};
 
 use crate::io::Repo;
 
@@ -284,6 +284,24 @@ fn abandoned_staging_trees_are_swept_and_active_ones_are_kept() {
     assert!(!tools.join(".staging-k0-dead").exists());
     assert!(!tools.join(".lock-k0").exists());
     assert!(tools.join(".staging-k0-live/payload").is_dir());
+}
+
+#[test]
+fn a_failed_save_fails_the_step_but_nothing_else_does() {
+    let failed = Outcome::Failed("the copy to the store failed");
+    let error = finish(Verb::Save, &failed).expect_err("a failed save must fail the step");
+    assert!(error.to_string().contains("not saved"), "{error}");
+    for outcome in [
+        Outcome::NotOffered,
+        Outcome::Miss,
+        Outcome::AlreadySaved,
+        Outcome::Busy,
+        Outcome::Untrusted,
+        Outcome::Rejected("world-writable"),
+    ] {
+        assert!(finish(Verb::Save, &outcome).is_ok(), "{outcome:?}");
+    }
+    assert!(finish(Verb::Restore, &failed).is_ok());
 }
 
 #[test]

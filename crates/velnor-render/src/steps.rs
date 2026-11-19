@@ -183,6 +183,10 @@ fn rendered_steps(
         }
         let mut extra = saved_unless_hit(&step.kind);
         extra.extend(
+            step.skip_when_cold
+                .then(|| crate::gate::PREPARE_COLD.to_owned()),
+        );
+        extra.extend(
             step.skip_after_merge_group
                 .as_ref()
                 .map(|from| merge_group_skipped(from, setup)),
@@ -224,7 +228,9 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
     let kind = &step.kind;
     let directory = step.directory.as_ref();
     match kind {
-        StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests.first_id()),
+        StepKind::ReportCaches {
+            caches, node_tools, ..
+        } => crate::report::lane(caches, *node_tools, tests.first_id()),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
         StepKind::CheckMetrics {
