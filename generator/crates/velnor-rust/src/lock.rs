@@ -63,7 +63,7 @@ pub fn release_version(text: &str) -> Result<HelperVersion, LockError> {
 
 #[must_use]
 pub fn sums_url(version: &HelperVersion) -> String {
-    format!("{RELEASES}/rust-ci-v{version}/SHA256SUMS")
+    format!("{RELEASES}/{}/SHA256SUMS", version.release_tag())
 }
 
 #[must_use]
@@ -80,7 +80,7 @@ pub fn lists_binary_sums(sums: &str) -> bool {
 
 #[must_use]
 pub fn commit_url(version: &HelperVersion) -> String {
-    format!("{RELEASES}/rust-ci-v{version}/COMMIT")
+    format!("{RELEASES}/{}/COMMIT", version.release_tag())
 }
 
 pub fn pin_lock(
