@@ -1,3 +1,0 @@
-// repo-path: docs/wip/snapshot/crates/velnor-runner-host/src/launch_harness.rs.source
-//! Simulated snapshot duplicate (velnor-no-source-suffix negative).
-fn launch_harness() {}

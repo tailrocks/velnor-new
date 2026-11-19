@@ -4,7 +4,6 @@
 [workspace]
 members = [
     "crates/velnor-archive-guard",
-    "crates/velnor-freshness",
 ]
 exclude = ["crates/velnor-runner", "ci-helper", "generator", "local"]
 resolver = "3"

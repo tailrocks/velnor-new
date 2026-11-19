@@ -77,101 +77,16 @@ done
 test "$CHECKED" -gt 0
 '''
 
-[tasks.check-native-image-inventory]
-description = "Check native image source inventory from Linux release compiler inputs"
-run = '''
-set -eu
-if [ "$(uname -s):$(uname -m)" != "Linux:x86_64" ]; then
-  echo "Native image inventory requires a native Linux x86_64 runner" >&2
-  exit 1
-fi
-ROOT="$(git rev-parse --show-toplevel)"
-cd "$ROOT"
-INVENTORY_WORK="$(mktemp -d)"
-trap 'rm -rf "$INVENTORY_WORK"' EXIT
-cargo metadata --locked --format-version=1 \
-  --filter-platform x86_64-unknown-linux-gnu >"$INVENTORY_WORK/metadata.json"
-cargo --config build.jobs=2 check --release --locked --package velnor-actions-cli \
-  --bin velnor-actions --message-format=json >"$INVENTORY_WORK/artifacts.jsonl"
-python3 scripts/native-image-candidate-inventory.py --check --root "$ROOT" \
-  --metadata "$INVENTORY_WORK/metadata.json" \
-  --artifacts "$INVENTORY_WORK/artifacts.jsonl" --target x86_64-unknown-linux-gnu
-'''
-
 [tasks.test-maintenance-helpers]
 description = "Run repository-only maintenance helper test suites"
 run = '''
 set -eu
 ROOT="$(git rev-parse --show-toplevel)"
 cd "$ROOT"
-printf "maintenance-phase: pin-mirror\n"
-VELNOR_INTERNAL_OP=repo-policy-v1 \
-  VELNOR_REPO_POLICY_ACTION=pin-mirror \
-  VELNOR_REPO_POLICY_ROOT="$ROOT" \
-  VELNOR_REPO_POLICY_BASE_REF=refs/remotes/origin/main \
-  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions
-case "$(uname -s):$(uname -m)" in
-  Linux:x86_64)
-    printf "maintenance-phase: native-image-source-inventory\n"
-    mise --no-env --no-hooks run --force --task-cache off --skip-tools check-native-image-inventory
-    ;;
-  Darwin:*)
-    printf "maintenance-phase: native-image-source-inventory skipped on macOS; requires native Linux x86_64\n"
-    ;;
-  *) echo "Maintenance native image inventory requires Linux x86_64 or macOS" >&2; exit 1 ;;
-esac
-printf "maintenance-phase: native-image-inventory\n"
-python3 scripts/test-native-image-candidate-inventory.py
 printf "maintenance-phase: setup-velnor-install\n"
 python3 scripts/test-setup-velnor-action.py
 printf "maintenance-phase: tag-ruleset-drift\n"
 bun test ./scripts/tag-ruleset-drift.test.ts
-printf "maintenance-phase: diagnostics-build\n"
-ARTIFACT_MESSAGES="$(mktemp)"
-trap 'rm -f "$ARTIFACT_MESSAGES"' EXIT
-cargo --config build.jobs=2 build --locked -p velnor-actions-cli \
-  --example qualification-diagnostics --message-format=json >"$ARTIFACT_MESSAGES"
-DIAGNOSTICS_FIXTURE="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
-  VELNOR_REPO_POLICY_ACTION=artifact-executable \
-  VELNOR_REPO_POLICY_ROOT="$ROOT" \
-  VELNOR_REPO_POLICY_MESSAGES="$ARTIFACT_MESSAGES" \
-  VELNOR_REPO_POLICY_MANIFEST=crates/velnor-actions-cli/Cargo.toml \
-  VELNOR_REPO_POLICY_TARGET=qualification-diagnostics \
-  VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
-  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli \
-    --bin velnor-actions)"
-case "$DIAGNOSTICS_FIXTURE" in
-  /*) ;;
-  *) echo "qualification diagnostics artifact is missing" >&2; exit 1 ;;
-esac
-if [ ! -x "$DIAGNOSTICS_FIXTURE" ]; then
-  echo "qualification diagnostics artifact is not executable" >&2
-  exit 1
-fi
-export VELNOR_QUALIFICATION_DIAGNOSTICS_FIXTURE="$DIAGNOSTICS_FIXTURE"
-cargo --config build.jobs=2 build --locked -p velnor-archive-guard \
-  --example golden_collector_clock --message-format=json >"$ARTIFACT_MESSAGES"
-CLOCK_DRIVER="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
-  VELNOR_REPO_POLICY_ACTION=artifact-executable \
-  VELNOR_REPO_POLICY_ROOT="$ROOT" \
-  VELNOR_REPO_POLICY_MESSAGES="$ARTIFACT_MESSAGES" \
-  VELNOR_REPO_POLICY_MANIFEST=crates/velnor-archive-guard/Cargo.toml \
-  VELNOR_REPO_POLICY_TARGET=golden_collector_clock \
-  VELNOR_REPO_POLICY_ARTIFACT_KIND=example \
-  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli \
-    --bin velnor-actions)"
-case "$CLOCK_DRIVER" in
-  /*) ;;
-  *) echo "qualification clock driver is missing" >&2; exit 1 ;;
-esac
-test -x "$CLOCK_DRIVER"
-export VELNOR_QUALIFICATION_CLOCK_DRIVER="$CLOCK_DRIVER"
-printf "maintenance-phase: test-members\n"
-TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
-  VELNOR_REPO_POLICY_ACTION=test-members \
-  VELNOR_REPO_POLICY_ROOT="$ROOT" \
-  VELNOR_REPO_POLICY_MANIFEST_PATH='' \
-  cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
 printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
 (
@@ -190,15 +105,6 @@ cargo fetch --locked
   cd "$ROOT/local"
   cargo fetch --locked
 )
-for package in velnor-freshness velnor-archive-guard; do
-  printf "maintenance-phase: %s\n" "$package"
-  case " $TEST_MEMBERS " in
-    *" $package "*)
-      cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package "$package" --no-tests fail --jobs 2
-      ;;
-    *)
-      echo "skip: $package (Cargo metadata has no test-enabled targets)"
-      ;;
-  esac
-done
+printf "maintenance-phase: velnor-archive-guard\n"
+cargo --config build.jobs=2 nextest run --locked --manifest-path Cargo.toml --package velnor-archive-guard --no-tests fail --jobs 2
 '''

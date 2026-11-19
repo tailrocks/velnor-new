@@ -1,3 +1,0 @@
-variable  "h"  {
-  default="hidden"
-}
