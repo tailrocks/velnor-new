@@ -8,6 +8,7 @@ use velnor_workflows::{
 };
 
 use crate::gate::all_conditions;
+use crate::pinned_actions::GITHUB_SCRIPT;
 use crate::reusable_on::on;
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix,
@@ -206,8 +207,8 @@ fn call_values(items: &[(String, CallValue)]) -> Vec<(String, Value)> {
         .collect()
 }
 
-fn pin(action: Action) -> &'static str {
-    match action {
+fn pin(action: Action) -> String {
+    let fixed = match action {
         Action::Checkout => CHECKOUT,
         Action::Mise => MISE,
         Action::UploadArtifact => UPLOAD_ARTIFACT,
@@ -215,7 +216,11 @@ fn pin(action: Action) -> &'static str {
         Action::CacheRestore => CACHE_RESTORE,
         Action::CacheSave => CACHE_SAVE,
         Action::AttestBuildProvenance => ATTEST_BUILD_PROVENANCE,
-    }
+        Action::GithubScript => {
+            return format!("{}@{}", GITHUB_SCRIPT.action, GITHUB_SCRIPT.commit);
+        }
+    };
+    fixed.to_owned()
 }
 
 fn values(items: &[(String, Env)]) -> Vec<(String, Value)> {
@@ -243,7 +248,7 @@ fn locked_off(body: &Body) -> impl Iterator<Item = (String, Value)> {
 fn rendered_step(step: &Step) -> RenderedStep {
     let (uses, run) = match &step.body {
         Body::Run(run) => (None, Some(run.clone())),
-        Body::Uses(action) => (Some(pin(*action).to_owned()), None),
+        Body::Uses(action) => (Some(pin(*action)), None),
         Body::Local(action) => (Some(action.path().to_owned()), None),
         Body::Helper(command) => (None, Some(format!("velnor-ci {command}"))),
     };

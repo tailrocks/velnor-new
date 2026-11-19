@@ -256,10 +256,11 @@ pub enum Action {
     CacheRestore,
     CacheSave,
     AttestBuildProvenance,
+    GithubScript,
 }
 
 impl Action {
-    pub const NAMES: [&'static str; 7] = [
+    pub const NAMES: [&'static str; 8] = [
         "checkout",
         "mise",
         "upload-artifact",
@@ -267,6 +268,7 @@ impl Action {
         "cache-restore",
         "cache-save",
         "attest",
+        "github-script",
     ];
 
     #[must_use]
@@ -279,6 +281,7 @@ impl Action {
             "cache-restore" => Self::CacheRestore,
             "cache-save" => Self::CacheSave,
             "attest" => Self::AttestBuildProvenance,
+            "github-script" => Self::GithubScript,
             _ => return None,
         })
     }
@@ -292,7 +295,8 @@ impl Action {
             Self::UploadArtifact
             | Self::DownloadArtifact
             | Self::CacheRestore
-            | Self::CacheSave => &[],
+            | Self::CacheSave
+            | Self::GithubScript => &[],
         }
     }
 

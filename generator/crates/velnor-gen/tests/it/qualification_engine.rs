@@ -46,13 +46,15 @@ const CHAINS: [&str; 21] = [
     "outputs-scale-set",
 ];
 
-const NARROWER: [&str; 21] = [
+const NARROWER: [&str; 23] = [
     "bind-hosted",
     "bind-scale-set",
     "buildx-hosted",
     "buildx-scale-set",
     "cancel-hosted",
     "cancel-scale-set",
+    "js-pin-hosted",
+    "js-pin-scale-set",
     "expect-fail-hosted",
     "expect-fail-scale-set",
     "mask-hosted",
