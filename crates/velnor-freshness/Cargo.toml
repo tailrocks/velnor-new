@@ -13,12 +13,8 @@ autotests = false
 doctest = true
 test = true
 
-# The binary source sits under tests/ on purpose: the native image candidate builds
-# velnor-actions-cli only, so a bin of this library crate is not a closure input and
-# must stay out of closure_inventory.txt.
 [[bin]]
 name = "velnor-freshness"
-path = "tests/bin/velnor_freshness.rs"
 test = false
 
 [[test]]
