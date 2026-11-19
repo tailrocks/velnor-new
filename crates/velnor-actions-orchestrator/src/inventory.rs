@@ -287,10 +287,6 @@ fn is_tool_missing(stderr: &str) -> bool {
         || text.contains("no such tool")
 }
 
-pub(crate) fn require_rust_pin(catalog: &ToolCatalog) -> Result<(), OrchestratorError> {
-    require_metadata_tools(catalog, None)
-}
-
 #[path = "inventory_resolve.rs"]
 mod resolve;
 pub(crate) use resolve::{WorkspaceResolve, qualify_workspaces_with_guard};

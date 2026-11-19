@@ -3,7 +3,7 @@
 
 use std::path::Path;
 
-use velnor_actions_contract::{WorkflowPolicy, parse_strict_json};
+use velnor_actions_contract::parse_strict_json;
 use velnor_actions_mise::catalog::owned_source::ApprovedOwnedSource;
 use velnor_actions_mise::catalog::source_build_bootstrap::{
     SourceBuildBootstrapAsset, SourceBuildBootstrapFormat, SourceBuildBootstrapHost,
@@ -15,20 +15,9 @@ use velnor_actions_workflow_renderer::owned_tool_publication::{
     render_owned_publication_files,
 };
 
-use crate::{OrchestratorError, prepare::GenerationPreparation, workflow::CHECKOUT_USES};
+use crate::{OrchestratorError, workflow::CHECKOUT_USES};
 
 pub(crate) const SOURCE_APPROVAL_PATH: &str = ".velnor/owned-tool-sources.json";
-
-pub(crate) fn files(prep: &GenerationPreparation) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    if prep.config.workflow.policy != WorkflowPolicy::VelnorRepositoryV1 {
-        return Ok(Vec::new());
-    }
-    files_for_root(&prep.root)
-}
-
-pub(crate) fn files_for_root(root: &Path) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    files_for_trigger(root, SourceQualificationTrigger::DefaultBranchDispatch)
-}
 
 pub(crate) fn files_for_trigger(
     root: &Path,

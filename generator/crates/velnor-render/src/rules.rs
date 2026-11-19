@@ -13,7 +13,7 @@ pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 16] = [
+pub const ALLOWED_ACTIONS: [&str; 17] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
@@ -22,6 +22,7 @@ pub const ALLOWED_ACTIONS: [&str; 16] = [
     "actions/download-artifact",
     MISE_ACTION,
     SETUP_VELNOR_ACTION,
+    MBX_ACTION,
     ATTEST_BUILD_PROVENANCE.action,
     ALINT.action,
     DOCKER_LOGIN.action,
@@ -32,6 +33,7 @@ pub const ALLOWED_ACTIONS: [&str; 16] = [
     ACTIONS_CACHE.action,
 ];
 
+pub(crate) const MBX_ACTION: &str = "jdx/mr-boxington-action";
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
@@ -72,6 +74,30 @@ pub struct RenderedConcurrency {
     pub cancel_in_progress: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderedMatrixSource {
+    /// `fromJSON(<expression>)`, such as `needs.plan.outputs.matrix`.
+    Output(String),
+    /// Static axes, each with its values.
+    Axes(Vec<(String, Vec<String>)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedMatrix {
+    pub source: RenderedMatrixSource,
+    pub fail_fast: Option<bool>,
+    pub max_parallel: Option<u16>,
+}
+
+/// A job `container:` or one service; `ports` is empty for a job container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedContainer {
+    pub image: String,
+    pub ports: Vec<String>,
+    pub options: Option<String>,
+    pub env: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -84,9 +110,16 @@ pub struct RenderedJob {
     pub no_permissions: bool,
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
+    pub matrix: Option<RenderedMatrix>,
+    pub container: Option<RenderedContainer>,
+    pub services: Vec<(String, RenderedContainer)>,
+    /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
+    pub uses: Option<String>,
+    pub with: Vec<(String, Value)>,
     pub runs_on: String,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
+    pub env: Vec<(String, Value)>,
     pub steps: Vec<RenderedStep>,
 }
 
@@ -229,9 +262,11 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
 
 fn holds_app_token(job: &RenderedJob) -> bool {
     job.steps.iter().any(|step| {
-        step.uses
-            .as_deref()
-            .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+        step.id.as_deref() != Some(crate::private_steps::TOKEN_STEP)
+            && step
+                .uses
+                .as_deref()
+                .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
     })
 }
 
@@ -335,6 +370,12 @@ fn has_word(run: &str, word: &str) -> bool {
 }
 
 fn action_rules(uses: &str, rules: &mut Vec<Rule>) {
+    if uses.starts_with("./") {
+        if velnor_workflows::LocalAction::parse(uses).is_none() {
+            rules.push(Rule::ActionNotAllowed(uses.to_owned()));
+        }
+        return;
+    }
     let (action, reference) = uses.split_once('@').unwrap_or((uses, ""));
     if !ALLOWED_ACTIONS.contains(&action) {
         rules.push(Rule::ActionNotAllowed(action.to_owned()));

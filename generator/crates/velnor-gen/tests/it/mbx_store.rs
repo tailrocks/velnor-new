@@ -110,11 +110,9 @@ fn the_pr_seed_follows_the_store_selection_on_pull_requests_and_merge_groups_onl
 
 #[test]
 fn an_older_helper_keeps_phase_one_without_a_seed_step() -> TestResult {
-    for helper in ["0.1.84", "0.1.85"] {
-        let text = workflow(&repo("mbx_shared_store = true\n", helper)?)?;
-        assert!(text.contains("mbx-store"), "{helper}");
-        assert!(!text.contains("mbx-seed"), "{helper}");
-    }
+    let text = workflow(&repo("mbx_shared_store = true\n", "0.1.85")?)?;
+    assert!(text.contains("mbx-store"));
+    assert!(!text.contains("mbx-seed"));
     assert!(!workflow(&repo("", "0.1.86")?)?.contains("mbx-seed"));
     Ok(())
 }

@@ -238,9 +238,13 @@ pub(crate) fn prepare_declared(name: &str, json: &str, declared: Option<&Declare
 }
 
 pub(crate) fn digest(run: &Run) -> &str {
+    output(run, "compat")
+}
+
+pub(crate) fn output<'a>(run: &'a Run, name: &str) -> &'a str {
     run.outputs
-        .strip_prefix("compat=")
-        .and_then(|rest| rest.strip_suffix('\n'))
+        .lines()
+        .find_map(|line| line.strip_prefix(name)?.strip_prefix('='))
         .unwrap_or_default()
 }
 

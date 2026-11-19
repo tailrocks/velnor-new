@@ -4,11 +4,20 @@
 use super::{
     AsyncReadExt, AsyncWriteExt, ChildWait, ConnectionId, Duration, ExitCode, HostError,
     INTERNAL_FLAG, Instant, OsStr, Path, PathBuf, REAP_RESERVE, Read, RepositoryConnection,
-    StdInstant, Stdio, Write, bounded_wait, reactivate_connection_if_drained, stop_and_reap,
-    timeout_at, wait_for_connection_detached, wait_for_connection_drain, wait_for_drain,
-    write_readiness,
+    StdInstant, Stdio, bounded_wait, reactivate_connection_if_drained, stop_and_reap, timeout_at,
+    wait_for_connection_detached, wait_for_connection_drain, wait_for_drain, write_readiness,
 };
 use tokio::process::Command;
+
+mod answer;
+pub(crate) use answer::delete_created_scale_set_until;
+use answer::{MAX_ANSWER_BYTES, run_delete_leaf, write_answer};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ControlAnswer {
+    Flag(bool),
+    Deletion(velnor_runner_host::CreatedSetDeletion),
+}
 
 const CONTROL_PARENT_FLAG: &str = "--internal-control-request";
 const CONTROL_LEAF_FLAG: &str = "--internal-control-leaf";
@@ -122,8 +131,19 @@ fn control_job(
 }
 
 fn run_control_job(request: Vec<u8>, deadline: StdInstant) -> Result<bool, HostError> {
+    match run_answer_job(request, deadline)? {
+        Some(ControlAnswer::Flag(value)) => Ok(value),
+        None => Ok(false),
+        Some(ControlAnswer::Deletion(_)) => Err(HostError::Lock),
+    }
+}
+
+fn run_answer_job(
+    request: Vec<u8>,
+    deadline: StdInstant,
+) -> Result<Option<ControlAnswer>, HostError> {
     if request == br#"{"operation":"expired"}"# {
-        return Ok(false);
+        return Ok(None);
     }
     let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
         .enable_time()
@@ -132,14 +152,15 @@ fn run_control_job(request: Vec<u8>, deadline: StdInstant) -> Result<bool, HostE
     else {
         return Err(HostError::Lock);
     };
-    match runtime.block_on(run_control_child(request, Instant::from_std(deadline))) {
-        Ok(Some(value)) => Ok(value),
-        Ok(None) => Ok(false),
-        Err(()) => Err(HostError::Lock),
-    }
+    runtime
+        .block_on(run_control_child(request, Instant::from_std(deadline)))
+        .map_err(|()| HostError::Lock)
 }
 
-async fn run_control_child(request: Vec<u8>, deadline: Instant) -> Result<Option<bool>, ()> {
+async fn run_control_child(
+    request: Vec<u8>,
+    deadline: Instant,
+) -> Result<Option<ControlAnswer>, ()> {
     let now = Instant::now();
     let remaining = deadline.saturating_duration_since(now);
     if remaining.is_zero() {
@@ -178,14 +199,10 @@ async fn run_control_child(request: Vec<u8>, deadline: Instant) -> Result<Option
             let mut output = Vec::new();
             let mut limited = stdout.take(MAX_CONTROL_RESULT);
             let read = timeout_at(deadline, limited.read_to_end(&mut output)).await;
-            if !matches!(read, Ok(Ok(_))) || output.len() > 5 {
+            if !matches!(read, Ok(Ok(_))) || output.len() > MAX_ANSWER_BYTES {
                 return Err(());
             }
-            match output.as_slice() {
-                b"true\n" => Ok(Some(true)),
-                b"false\n" => Ok(Some(false)),
-                _ => Err(()),
-            }
+            ControlAnswer::parse(&output).map(Some).ok_or(())
         }
         ChildWait::Exited(_) | ChildWait::Failed => Err(()),
         ChildWait::TimedOut => Ok(None),
@@ -233,8 +250,8 @@ fn run_control_parent(timeout: &OsStr) -> ExitCode {
         serde_json::to_vec(&request).unwrap_or_default(),
         Instant::from_std(deadline),
     )) {
-        Ok(Some(value)) => write_control_result(value),
-        Ok(None) => write_control_result(false),
+        Ok(Some(answer)) => write_answer(answer),
+        Ok(None) => write_answer(ControlAnswer::Flag(false)),
         Err(()) => ExitCode::from(1),
     }
 }
@@ -311,10 +328,15 @@ fn run_control_leaf() -> ExitCode {
                 reactivate_connection_if_drained(&state, &binding)
             }
         }
+        "delete_set"
+            if exact_control_fields(&request, &["operation", "state", "timeout_ms", "binding"]) =>
+        {
+            return run_delete_leaf(&state, &request, timeout);
+        }
         _ => return ExitCode::from(2),
     };
     match result {
-        Ok(value) => write_control_result(value),
+        Ok(value) => write_answer(ControlAnswer::Flag(value)),
         Err(_) => ExitCode::from(1),
     }
 }
@@ -373,14 +395,4 @@ fn exact_control_fields(request: &serde_json::Value, allowed: &[&str]) -> bool {
     request.as_object().is_some_and(|object| {
         object.len() == allowed.len() && object.keys().all(|key| allowed.contains(&key.as_str()))
     })
-}
-
-fn write_control_result(value: bool) -> ExitCode {
-    let mut output = std::io::stdout().lock();
-    let result: &[u8] = if value { b"true\n" } else { b"false\n" };
-    if output.write_all(result).is_err() || output.flush().is_err() {
-        ExitCode::from(2)
-    } else {
-        ExitCode::SUCCESS
-    }
 }

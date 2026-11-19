@@ -13,7 +13,7 @@ macro_rules! private_mods {
 }
 
 private_mods!(affected_inputs, api, attach);
-private_mods!(binary_preview_emit, binary_release_emit);
+private_mods!(binary_preview_emit);
 private_mods!(build_task_tools, build_tasks);
 private_mods!(bun_assets_handoff, cache_admission);
 private_mods!(cache_archive, cache_inventory);
@@ -32,7 +32,7 @@ private_mods!(discover, discover_index);
 private_mods!(discover_tofu, error, evidence);
 private_mods!(extension_schemas);
 private_mods!(filesystem_owner, finalized);
-private_mods!(freshness_emit, generate);
+private_mods!(generate);
 private_mods!(generator, gh_download, git_paths);
 #[cfg(test)]
 mod git_fixture;
@@ -63,31 +63,31 @@ private_mods!(pins, plan, plan_dispositions);
 private_mods!(plan_output_limits, plan_stacks);
 private_mods!(prepare, preseed_manifest);
 private_mods!(preview_producer, product_release_pins);
-private_mods!(provenance, publish_emit);
-private_mods!(publish_release_steps, publish_steps);
+private_mods!(provenance);
+
 private_mods!(qualification_candidate, selected_preview_identity);
 private_mods!(qualification_resolver);
 private_mods!(qualify, recommendations);
-private_mods!(release_checkouts, release_emit);
-private_mods!(release_identity, release_steps);
+
+private_mods!(release_identity);
 private_mods!(release_task_identity);
 private_mods!(required_dispositions);
 private_mods!(retrieve_reports, retrieve_retry);
-private_mods!(review_completion_workflow_emit);
+
 private_mods!(root, routing, safe_read);
 private_mods!(select, select_affected);
 private_mods!(select_edges, select_reads);
 private_mods!(select_reads_lex, select_reads_scan);
 private_mods!(select_symlinks, select_tofu);
 private_mods!(source_cache, source_prep, state_roots);
-private_mods!(stable_release_emit, tap_history_relevance, tap_merge);
+private_mods!(tap_history_relevance, tap_merge);
 private_mods!(
     tap_prepare,
     tap_source_freshness,
     tap_writer_history_timestamp
 );
 private_mods!(task_execution, task_report_aggregate);
-private_mods!(tofu_apply_emit, tofu_cache);
+private_mods!(tofu_cache);
 private_mods!(toolcheck, toolfindings, utf8);
 private_mods!(validate, validate_shell);
 private_mods!(validators, vectors);
@@ -116,5 +116,3 @@ pub(crate) mod tool_catalog_resolve;
 pub use api::*;
 
 mod task_producer;
-
-mod premerge_event_proof_emit;

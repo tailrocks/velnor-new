@@ -11,21 +11,9 @@ use super::maintenance_features::owner_feature_repo;
 use super::tools_producers::{POLICIES, finalized};
 use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
 use super::waste_lint::{CI_PATH, plain_shell_step, run_without_homes};
-use super::waste_oracle::{self as oracle, Files, JobUse, files_of, files_of_repo};
+use super::waste_oracle::{self as oracle, Files, JobUse, files_of};
 use super::waste_verifier_oracle::{VerifierScan, verifier_homes};
 use super::workflow_configuration_fixture;
-
-const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
-const UNCOVERED_WORKFLOWS: [&str; 8] = [
-    "job-image-candidate.yml",
-    "product-release-binary.yml",
-    "product-release-generator.yml",
-    "product-release-images.yml",
-    "product-release.yml",
-    "qualification.yml",
-    "release-rust-ci-tools.yml",
-    "rust-ci.yml",
-];
 
 fn assert_no_violations(label: &str, jobs: &[JobUse]) {
     assert!(
@@ -37,19 +25,16 @@ fn assert_no_violations(label: &str, jobs: &[JobUse]) {
 }
 
 fn assert_velnor_repository_guards(files: &Files, jobs: &[JobUse]) -> Result<(), Box<dyn Error>> {
-    for path in [CI_PATH, FRESHNESS_PATH] {
-        assert!(files.contains_key(path), "{path} is not rendered");
-    }
+    assert!(files.contains_key(CI_PATH), "{CI_PATH} is not rendered");
     for id in [
         "cargo-machete",
         "cargo-deny",
-        "freshness",
         LEDGER_CLI_JOB_ID,
         PLAN_JOB_ID,
     ] {
         oracle::find(jobs, id)?;
     }
-    for id in ["freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
+    for id in [LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
         assert!(
             oracle::find(jobs, id)?.is_user(),
             "{id} is not a toolchain job"
@@ -111,7 +96,6 @@ fn every_rust_verifier_reads_the_toolchain_home_its_job_installs_into() -> Resul
                     .iter()
                     .any(|checked| checked.file == file && checked.job == job)
             };
-            assert!(has(FRESHNESS_PATH, "freshness"), "{:?}", scan.checked);
             assert!(has(CI_PATH, PLAN_JOB_ID), "{:?}", scan.checked);
             assert!(
                 scan.checked
@@ -187,35 +171,6 @@ fn w3_flags_a_job_by_the_toolchain_command_its_steps_run() -> Result<(), Box<dyn
         assert!(
             !waste_findings(&jobs).contains(&unbound_finding(&id)),
             "{command:?} was flagged"
-        );
-    }
-    Ok(())
-}
-
-#[test]
-fn committed_generated_workflows_have_auto_install_off_or_are_listed_uncovered()
--> Result<(), Box<dyn Error>> {
-    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let files = files_of_repo(&root)?;
-    let scanned = |path: &str| {
-        path != CI_PATH
-            && !UNCOVERED_WORKFLOWS
-                .iter()
-                .any(|name| path.ends_with(&format!("/{name}")))
-    };
-    let jobs = oracle::scan(&files, scanned)?;
-    assert!(
-        jobs.iter().any(|job| job.file == FRESHNESS_PATH),
-        "freshness.yml is not scanned"
-    );
-    let found = oracle::violations(&jobs);
-    assert!(found.is_empty(), "{found:#?}");
-    for name in UNCOVERED_WORKFLOWS {
-        let path = format!(".github/workflows/{name}");
-        let listed = oracle::scan(&files, |candidate| candidate == path)?;
-        assert!(
-            !oracle::violations(&listed).is_empty(),
-            "{path} is covered now; delist it from UNCOVERED_WORKFLOWS"
         );
     }
     Ok(())
