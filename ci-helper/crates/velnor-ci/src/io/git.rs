@@ -43,6 +43,15 @@ fn checked_out(root: &Path, expected: Option<&str>) -> Result<(), CiError> {
             "HEAD is not the commit of the event named by {SHA_VARIABLE}, so git cannot tell which files the event changes"
         )));
     }
+    let dirty = git(
+        root,
+        &["status", "--porcelain=v1", "-z", "--untracked-files=no"],
+    )?;
+    if !dirty.is_empty() {
+        return Err(CiError::new(
+            "tracked files differ from HEAD in the index or the worktree, so the commit diff does not describe the files being analysed",
+        ));
+    }
     Ok(())
 }
 
