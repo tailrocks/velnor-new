@@ -128,6 +128,13 @@ impl Scenario {
         }
     }
 
+    pub(crate) async fn ended(&mut self) -> TestResult<Result<(), HostError>> {
+        match self.task.take() {
+            Some(task) => Ok(tokio::time::timeout(WAIT, task).await??),
+            None => Ok(Ok(())),
+        }
+    }
+
     pub(crate) fn decisions(&self) -> Vec<serde_json::Value> {
         let path = self.state.path().join("decisions.jsonl");
         std::fs::read_to_string(path)
