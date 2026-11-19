@@ -21,7 +21,7 @@ export STATE="$HOME/.velnor/warm"
 
 docker build -t velnor-local/runner-server local/docker/runner-server
 docker build -t velnor-local/runner local/docker/runner
-docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile local
+docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile .
 cargo build --release --manifest-path Cargo.toml
 cargo build --release --manifest-path Cargo.toml -p velnor-ci
 export PATH="$VELNOR/target/release:$VELNOR/target/release:$PATH"
@@ -74,11 +74,30 @@ The binary is unverified by design: this is for a developer's own machine, and t
 `velnor-local` mounts host paths into the containers and reaches the control ports that `up` publishes on `127.0.0.1`, so it must run on the machine that runs the Docker daemon. To keep a dind daemon from touching your own Docker, start `velnor-local` in a container that shares the dind container's network namespace and sees the same paths:
 
 ```sh
+export WORK="$HOME/velnor-dind"
+mkdir -p "$WORK" && git clone https://github.com/tailrocks/velnor-new "$WORK/repo"
 docker run -d --privileged --name dind -e DOCKER_TLS_CERTDIR= -v "$WORK:$WORK" docker:dind
-docker run -d --name driver --network container:dind -e DOCKER_HOST=tcp://127.0.0.1:2375 -v "$WORK:$WORK" debian:trixie-slim sleep infinity
+docker run -d --name driver --network container:dind -v "$WORK:$WORK" debian:trixie-slim sleep infinity
+docker exec driver sh -c 'apt-get update && apt-get install -y --no-install-recommends docker-cli git procps socat'
 ```
 
-Put the linux/arm64 `velnor-local` (the one in the `velnor-local/cache-server` image), the `docker` client, `git` and `ps` in `driver`, build the three images inside dind, and keep `--repo` and `--dir` under `$WORK`. A program that is not installed is named in the error (`cannot start `docker``). Pointing `DOCKER_HOST` of the Mac at the dind instead fails with `docker port ... no public port`, because the published ports exist only inside the dind.
+`velnor-local` refuses a `tcp://` endpoint (`doctor`, `run` and `up` say `not a local socket`), so the driver does not get `DOCKER_HOST=tcp://...`. Instead it gets a unix socket that forwards to the dind's TCP port. The driver shares the dind's network namespace, so `127.0.0.1:2375` is the dind's daemon. Start the bridge inside `driver` and point the client at its socket:
+
+```sh
+docker exec -d driver socat UNIX-LISTEN:/var/run/docker.sock,fork TCP:127.0.0.1:2375
+docker exec -e DOCKER_HOST=unix:///var/run/docker.sock driver docker info
+```
+
+The second command must print the dind's server version. Keep the bridge running for the whole session; `velnor-local` then sees `unix:///var/run/docker.sock`, which is a local socket.
+
+Inside `driver`, build the three images from the repository root, which is the build context of the single root workspace (#1594). The cache-server image needs the root `Cargo.toml`, `Cargo.lock` and `crates`, so the build context is `.`, not `local`. Then put the linux/arm64 `velnor-local` (the one in the `velnor-local/cache-server` image) into `driver`, and keep `--repo` and `--dir` under `$WORK`. A program that is not installed is named in the error (`cannot start `docker``). Pointing `DOCKER_HOST` of the Mac at the dind instead fails with `docker port ... no public port`, because the published ports exist only inside the dind.
+
+```sh
+cd "$WORK/repo"
+docker build -t velnor-local/runner-server local/docker/runner-server
+docker build -t velnor-local/runner local/docker/runner
+docker build -t velnor-local/cache-server -f local/docker/velnor-local/Dockerfile .
+```
 
 ## Remote daemons and what still needs GitHub
 
