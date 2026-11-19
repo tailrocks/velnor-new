@@ -26,19 +26,19 @@ pub use cron::CronExpr;
 pub use helper::{HelperRelease, Platform};
 pub use ids::{
     CommitSha, HelperVersion, InvalidId, JobId, PackageName, PathGlob, RepoPath, RootSlug,
-    RunnerLabel, Sha256, TargetName,
+    RunnerLabel, Sha256, TargetName, github_hosted,
 };
 pub use plan::{
     Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP,
     PermissionScope, Permissions, PlanFrom, PlanRef, PullRequestType, Shape, ShapeDecision, Step,
-    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When,
-    WorkflowPlan,
+    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
-    CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun, InputRule,
-    MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
-    TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
+    CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
+    InputRule, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools, RepoFacts,
+    RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot,
+    Target, TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
     Weakening,
 };
 pub use selection::{

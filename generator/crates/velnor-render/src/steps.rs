@@ -2,14 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, Step, StepKind,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, RunnerLabel,
+    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, github_hosted,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
-use crate::base_steps::{cache_decide, cache_trim, lane_outputs, trimmed_lane, with_saved_lane};
+use crate::base_steps::{cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane};
 use crate::cache::{path_text, render_key};
-use crate::cargo::{ArtifactFormat, cargo_step, reports_tests};
+use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, output, plan_read, plan_source,
     sources_step, verdict_step,
@@ -29,14 +30,14 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
     "actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333";
 
 pub(crate) const TEST_STEP_ID: &str = "test";
-pub(crate) const MISE_VERSION: &str = "2026.11.1";
+pub(crate) const MISE_VERSION: &str = "2026.11.10";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
     let artifacts = job
         .steps
@@ -52,6 +53,13 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             _ => None,
         })
         .unwrap_or(ArtifactFormat::Disabled);
+    let lane = CargoLane {
+        artifacts,
+        cache_debug: job
+            .steps
+            .iter()
+            .any(|step| step.kind == StepKind::UploadCargoLog),
+    };
     let tests = job
         .steps
         .iter()
@@ -61,11 +69,12 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
         name: job.name.clone(),
         comment: job.comment.clone(),
         needs: job.needs.iter().map(ToString::to_string).collect(),
-        condition: Some(with_saved_lane(
-            crate::base_steps::audited_lane(admission(job.when, job.gate.as_ref(), job.skip_on_draft), job),
-            &job.steps,
+        condition: Some(crate::base_steps::audited_lane(
+            admission(job.when, job.gate.as_ref(), job.skip_on_draft),
+            job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
+        fork_runner: (!github_hosted(job.runs_on.as_str())).then(|| fork_runner.to_string()),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
         outputs: job
@@ -82,12 +91,16 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
                     .any(|step| {
                         matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
                     })
-                    .then_some([
-                        TESTS_RUN_OUTPUT,
-                        TESTS_LISTED_OUTPUT,
-                        TESTS_BY_PACKAGE_OUTPUT,
-                    ])
+                    .then(|| {
+                        [
+                            Some(TESTS_RUN_OUTPUT),
+                            Some(TESTS_LISTED_OUTPUT),
+                            job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
+                            Some(TESTS_BY_PACKAGE_OUTPUT),
+                        ]
+                    })
                     .into_iter()
+                    .flatten()
                     .flatten()
                     .map(|name| {
                         (
@@ -100,7 +113,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             .collect(),
         steps: crate::helper_integrity::secure_steps(
             job,
-            job_steps(job, restores, audit, tests, artifacts),
+            job_steps(job, restores, audit, tests, lane),
         ),
         ..RenderedJob::default()
     }
@@ -111,7 +124,7 @@ fn job_steps(
     restores: bool,
     audit: bool,
     tests: bool,
-    artifacts: ArtifactFormat,
+    lane: CargoLane,
 ) -> Vec<RenderedStep> {
     job.steps
         .iter()
@@ -121,7 +134,7 @@ fn job_steps(
             Some(crate::base_steps::audited_save(
                 job,
                 step,
-                rendered_steps(step, setup, audit, tests, artifacts, job.name.as_deref()),
+                rendered_steps(step, setup, audit, tests, lane, job.name.as_deref()),
             ))
         })
         .flatten()
@@ -133,21 +146,24 @@ fn rendered_steps(
     setup: Setup,
     audit: bool,
     tests: bool,
-    artifacts: ArtifactFormat,
+    lane: CargoLane,
     job_name: Option<&str>,
 ) -> Vec<RenderedStep> {
     let mut rendered = Vec::new();
     if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
-        rendered.push(cargo_step(&CargoCommand::BuildAll, true, artifacts));
+        rendered.push(cargo_step(&CargoCommand::BuildAll, true, lane));
     }
     rendered.push(step_body(
         &step.kind,
         step.directory.as_ref(),
         audit,
         tests,
-        artifacts,
+        lane,
     ));
     for body in &mut rendered {
+        if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
+            body.env.push(crate::cargo::target_dir_env(target));
+        }
         if matches!(step.kind, StepKind::ReportCaches { .. })
             && let Some(name) = job_name
         {
@@ -209,12 +225,20 @@ fn variable(need: GateNeed) -> &'static str {
     }
 }
 
+fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
+    RenderedStep {
+        name: format!("Add Rust {kind}s"),
+        run: Some(format!("rustup {kind} add {}", items.join(" "))),
+        ..RenderedStep::default()
+    }
+}
+
 fn step_body(
     kind: &StepKind,
     directory: Option<&RepoPath>,
     audit: bool,
     tests: bool,
-    artifacts: ArtifactFormat,
+    lane: CargoLane,
 ) -> RenderedStep {
     match kind {
         StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests),
@@ -249,23 +273,18 @@ fn step_body(
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
-        StepKind::RustComponents(components) => RenderedStep {
-            name: "Add Rust components".to_owned(),
-            run: Some(format!("rustup component add {}", components.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::RustTargets(targets) => RenderedStep {
-            name: "Add Rust targets".to_owned(),
-            run: Some(format!("rustup target add {}", targets.join(" "))),
-            ..RenderedStep::default()
-        },
-        StepKind::Cargo(command) => cargo_step(command, audit, artifacts),
+        StepKind::CacheBudget(bytes) => cache_budget(*bytes),
+        StepKind::RustComponents(components) => rustup_add("component", components),
+        StepKind::RustTargets(targets) => rustup_add("target", targets),
+        StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
         StepKind::InputsRestore(target) => {
             crate::helper_steps::inputs_step("restore", target, directory)
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
@@ -348,7 +367,7 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     RenderedStep {
         name: format!("Install velnor-ci {version}"),
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
-        uses_comment: Some(format!("rust-ci-v{version}")),
+        uses_comment: Some(version.release_tag()),
         with,
         ..RenderedStep::default()
     }

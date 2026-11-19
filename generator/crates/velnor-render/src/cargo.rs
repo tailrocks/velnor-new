@@ -16,6 +16,12 @@ const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 #[derive(Clone, Copy)]
+pub(crate) struct CargoLane {
+    pub(crate) artifacts: ArtifactFormat,
+    pub(crate) cache_debug: bool,
+}
+
+#[derive(Clone, Copy)]
 pub(crate) enum ArtifactFormat {
     Disabled,
     CargoOnly,
@@ -38,12 +44,8 @@ impl ArtifactFormat {
     }
 }
 
-pub(crate) fn cargo_step(
-    command: &CargoCommand,
-    audit: bool,
-    artifacts: ArtifactFormat,
-) -> RenderedStep {
-    let (name, run, env) = cargo_command(command, artifacts);
+pub(crate) fn cargo_step(command: &CargoCommand, audit: bool, lane: CargoLane) -> RenderedStep {
+    let (name, run, env) = cargo_command(command, lane.artifacts);
     let prefix = if matches!(command, CargoCommand::Doctest) {
         RUN_DOCTESTS
     } else {
@@ -52,7 +54,10 @@ pub(crate) fn cargo_step(
     RenderedStep {
         name,
         id: reports_tests(command).then(|| TEST_STEP_ID.to_owned()),
-        env: env.into_iter().chain([cache_debug_env()]).collect(),
+        env: env
+            .into_iter()
+            .chain(lane.cache_debug.then(cache_debug_env))
+            .collect(),
         run: Some(format!(
             "{prefix} {}{run}",
             inventory_prefix(command, audit)
@@ -71,15 +76,22 @@ fn cargo_command(
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
         CargoCommand::NextestBuild => nextest_build(nextest),
-        CargoCommand::NextestRun { filter } => {
-            nextest_run(&format!("--workspace --locked{nextest}"), filter)
-        }
-        CargoCommand::NextestRunArchive { file, filter } => nextest_run(
+        CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
+            &format!("--workspace --locked{nextest}"),
+            filter,
+            *ci_profile,
+        ),
+        CargoCommand::NextestRunArchive {
+            file,
+            filter,
+            ci_profile,
+        } => nextest_run(
             &format!(
                 "--archive-file '{}' --extract-to . --extract-overwrite --workspace-remap .",
                 file.as_str().replace('\'', "'\\''")
             ),
             filter,
+            *ci_profile,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
@@ -125,7 +137,7 @@ fn cargo_command(
             vec![],
         ),
         CargoCommand::Deny { manifest } => deny(manifest),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+        CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
 
@@ -159,6 +171,16 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
     )
 }
 
+pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
+    (
+        "CARGO_TARGET_DIR".to_owned(),
+        Value::Expr(format!(
+            "${{{{ github.workspace }}}}/{}",
+            target.as_str().replace("${{", "${{ '${{' }}")
+        )),
+    )
+}
+
 fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
@@ -178,11 +200,16 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(scope: &str, filter: &FilterRef) -> (String, String, Vec<(String, Value)>) {
+fn nextest_run(
+    scope: &str,
+    filter: &FilterRef,
+    ci_profile: bool,
+) -> (String, String, Vec<(String, Value)>) {
+    let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
             nextest_filter(filter)
         ),
         vec![],

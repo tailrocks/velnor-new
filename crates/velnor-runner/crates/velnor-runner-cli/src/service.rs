@@ -90,11 +90,23 @@ fn installed_plist(state: &Path) -> Option<InstalledPlist> {
 }
 
 fn install(state: &Path) -> ExitCode {
+    install_to(
+        rustix::process::geteuid().as_raw(),
+        state,
+        &plist_path(),
+        &log_dir(),
+    )
+}
+
+fn install_to(euid: u32, state: &Path, path: &Path, logs: &Path) -> ExitCode {
+    if euid == 0 {
+        eprintln!("Service configuration is different.");
+        return ExitCode::from(1);
+    }
     let Ok(bin) = std::env::current_exe() else {
         return ExitCode::from(1);
     };
-    let path = plist_path();
-    if !write_plist(&bin, state, &path, &log_dir()) {
+    if !write_plist(&bin, state, path, logs) {
         return ExitCode::from(1);
     }
     println!("{}", path.display());
@@ -144,7 +156,7 @@ mod tests {
     use std::os::unix::fs::PermissionsExt;
     use std::path::Path;
 
-    use super::start;
+    use super::{install_to, start};
 
     fn mode(path: &Path) -> std::io::Result<u32> {
         Ok(std::fs::metadata(path)?.permissions().mode() & 0o777)
@@ -162,6 +174,21 @@ mod tests {
         let _ = start(&root.join("state"), &logs);
         assert_eq!(mode(&logs)?, 0o700);
         assert_eq!(mode(&parent)?, 0o755);
+        Ok(())
+    }
+
+    #[test]
+    fn install_refuses_root_and_writes_no_plist() -> std::io::Result<()> {
+        let temp = tempfile::tempdir()?;
+        let root = temp.path().canonicalize()?;
+        let plist = root.join("LaunchAgents").join("host.plist");
+        let code = install_to(0, &root.join("state"), &plist, &root.join("logs"));
+        assert_eq!(
+            format!("{code:?}"),
+            format!("{:?}", std::process::ExitCode::from(1))
+        );
+        assert!(!plist.exists());
+        assert!(!root.join("LaunchAgents").exists());
         Ok(())
     }
 }
