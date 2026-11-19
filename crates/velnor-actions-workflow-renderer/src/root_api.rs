@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "pr_ci.rs"]
+pub mod pr_ci;
 pub use crate::artifact_paths::{
     PRESEED_OUTPUT_DIR_EXPR, PRESEED_STAGE_DIR_EXPR, candidate_artifact_name,
 };
@@ -91,6 +93,8 @@ pub use crate::homebrew_adoption_seed::{
 pub use crate::homebrew_adoption_workflow::{
     RenderedHomebrewAdoptionCallee, render_homebrew_adoption_callee,
 };
+
+pub use crate::project_tool_resolver::quote_project_tool_run_refs;
 
 pub const VERIFY_RUST_TOOLCHAIN_STEP: &str = "Verify Rust channel manifest";
 

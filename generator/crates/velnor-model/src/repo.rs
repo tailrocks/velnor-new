@@ -180,6 +180,7 @@ pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 pub struct RustRoot {
     pub manifest: RepoPath,
     pub target_dir: RepoPath,
+    pub nextest_ci_profile: bool,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,
@@ -244,6 +245,7 @@ pub struct ToolPin {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustCiConfig {
     pub runner: RunnerLabel,
+    pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
     pub private_sources: Option<PrivateSources>,
     pub timeout_minutes: u16,
@@ -317,6 +319,7 @@ impl Default for RustCiConfig {
     fn default() -> Self {
         Self {
             runner: RunnerLabel::from_static("ubuntu-latest"),
+            fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
             private_sources: None,
             timeout_minutes: 30,
