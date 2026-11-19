@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{FullRun, HelperRelease, HelperVersion, OnMain, RepoFacts};
+use velnor_model::{
+    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, PushAfterMergeGroup, RepoFacts,
+};
 
 use crate::{COMPATIBLE_HELPER_SERIES, GenerateError};
 
@@ -18,8 +20,33 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
+    if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 82)) {
+        return Err(GenerateError::TestGroupsHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
+        return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
+    }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
+    }
+    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
+        return Err(GenerateError::PrivateSourcesHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
+        && !release.version().at_least((0, 1, 82))
+    {
+        return Err(GenerateError::MergeGroupHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
+        return Err(GenerateError::MbxStoreHelperTooOld(
+            release.version().clone(),
+        ));
     }
     Ok(release)
 }

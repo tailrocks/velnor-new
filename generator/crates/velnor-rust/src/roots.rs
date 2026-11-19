@@ -339,6 +339,7 @@ fn member(
                     name: dependency.name.clone(),
                     kind: dependency.kind,
                     platform: dependency.platform.clone(),
+                    optional: dependency.optional,
                     manifest,
                 })
             })
@@ -346,4 +347,8 @@ fn member(
         targets: package.targets.clone(),
         custom_harnesses: custom_harnesses(view, package)?,
     })
+}
+
+pub(crate) fn is_cargo_lock(path: &RepoPath) -> bool {
+    path.as_str().rsplit('/').next() == Some(CARGO_LOCK.as_str())
 }

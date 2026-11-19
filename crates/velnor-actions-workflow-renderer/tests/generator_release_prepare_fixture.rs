@@ -1,15 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-use serde_json::json;
-use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use velnor_actions_contract::RoutingWorkflow;
 use velnor_actions_workflow_renderer::render::RenderedFile;
@@ -157,6 +156,7 @@ impl Fixture {
 
 fn request(fake_gh: &Path) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
         pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: "1".to_owned(),

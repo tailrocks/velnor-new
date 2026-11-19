@@ -3,6 +3,8 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use velnor_model::SHARED_SOURCES_OWNER;
+
 pub type CacheId = u64;
 pub type Timestamp = i64;
 pub const DEFAULT_CACHE_BUDGET_BYTES: u64 = 8_000_000_000;
@@ -96,6 +98,16 @@ fn classify(key: &str) -> Option<(CacheFamily, &str)> {
         .then_some((family, group))
 }
 
+fn retired_sources(key: &str) -> bool {
+    classify(key).is_some_and(|(family, group)| {
+        family == CacheFamily::Sources
+            && !group
+                .strip_suffix(SHARED_SOURCES_OWNER)
+                .and_then(|platform| platform.strip_suffix('-'))
+                .is_some_and(host)
+    })
+}
+
 fn pull_request(reference: &str) -> Option<u64> {
     let number = reference
         .strip_prefix("refs/pull/")?
@@ -134,6 +146,7 @@ pub fn budget_plan(
     let mut candidates = Vec::new();
     for entry in entries {
         let tier = match cache_family(&entry.key) {
+            CacheFamily::Sources if retired_sources(&entry.key) => 0,
             CacheFamily::Delta => {
                 let Some(pr) = delta_pull_request(entry) else {
                     continue;

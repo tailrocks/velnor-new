@@ -25,7 +25,7 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 18] = [
+const LANE_SETUP: [&str; 19] = [
     "Check out",
     "Resolve released helper tools",
     "Install velnor-ci 0.1.82",
@@ -36,6 +36,7 @@ const LANE_SETUP: [&str; 18] = [
     "Save the tools cache",
     "velnor-ci prepare",
     "velnor-ci check-metadata",
+    "Hash the sources lockfiles",
     "Restore the sources cache",
     "Restore the target cache",
     "velnor-ci delta prepare",
@@ -125,7 +126,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
             );
         }
         assert!(text.contains(&format!(
-            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
+            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
         )));
     }
     assert!(!text.contains("_doctests"), "{text}");
@@ -343,7 +344,7 @@ fn a_cargo_step_runs_only_after_the_last_setup_step_succeeded() -> TestResult {
 }
 
 #[test]
-fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestResult {
+fn the_single_job_policy_lane_reads_the_rust_jobs_plan_and_checks_out_one_commit() -> TestResult {
     let mut files = view(&["Cargo.toml"], None)?;
     let deny = RepoPath::new("deny.toml")?;
     files.tracked_paths.insert(deny.clone());
@@ -355,10 +356,10 @@ fn the_single_job_policy_lane_plans_itself_from_git_with_two_commits() -> TestRe
     let text = workflow(&files)?;
     assert!(!text.contains("rust-plan"), "{text}");
     assert!(
-        steps_of(&text, "policy").contains(&"velnor-ci plan"),
+        !steps_of(&text, "policy").contains(&"velnor-ci plan"),
         "{text}"
     );
-    assert_eq!(checkout_depths(&text, "policy"), ["2"], "{text}");
+    assert_eq!(checkout_depths(&text, "policy"), ["1"], "{text}");
     assert_eq!(
         job_permissions(&text, "policy"),
         ["contents: read"],

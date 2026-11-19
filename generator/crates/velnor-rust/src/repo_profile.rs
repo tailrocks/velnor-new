@@ -56,6 +56,7 @@ pub fn check_runtime_configs(
     roots: &[RepoPath],
     files: &BTreeMap<RepoPath, Vec<u8>>,
     tracked: &BTreeSet<RepoPath>,
+    recorded: &BTreeMap<RepoPath, RepoPath>,
 ) -> Result<BTreeSet<RepoPath>, DetectError> {
     for (file, bytes) in effective_configs(files) {
         if let Ok(parsed) = table(bytes)
@@ -79,6 +80,17 @@ pub fn check_runtime_configs(
     let mut targets = BTreeSet::new();
     for root in roots {
         let (used, source) = target_dir_source(&read, root)?;
+        if let Some(recorded) = recorded.get(root)
+            && *recorded != used
+        {
+            return Err(DetectError::invalid(
+                source.unwrap_or(root),
+                Reason::RuntimeTargetDir {
+                    used,
+                    rendered: recorded.clone(),
+                },
+            ));
+        }
         let (rendered, rendered_from) = target_dir_source(&generated, root)?;
         if used != rendered {
             return Err(DetectError::invalid(

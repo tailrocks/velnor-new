@@ -9,6 +9,7 @@ mod helper;
 pub mod io;
 mod plan_render;
 mod release;
+mod reusable;
 mod workflow_triggers;
 
 pub use crate::release::{release_ruleset, release_ruleset_drift};
@@ -20,7 +21,10 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{CacheKey, FullRun, OnMain, RepoPath, RepoView, StepKind};
-use velnor_rust::{METADATA_PATH, check_tools, detect, metadata_file, silent_build_scripts};
+use velnor_rust::{
+    METADATA_PATH, check_tools, detect, metadata_file, silent_build_scripts, source_roots_over_limit,
+    suggest_groups as suggested_groups,
+};
 
 use crate::helper::check_helper;
 use crate::plan_render::plan_and_render;
@@ -58,6 +62,11 @@ pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
         .collect())
 }
 
+pub fn suggest_groups(view: &RepoView) -> Result<(String, Vec<String>), GenerateError> {
+    let facts = detect(view)?;
+    Ok((suggested_groups(&facts), facts.timings_notes))
+}
+
 pub fn expected_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     expected_with_notes(view).map(|(files, _)| files)
 }
@@ -68,7 +77,11 @@ pub fn expected_with_notes(
     let facts = detect(view)?;
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
+    if let Some(roots) = source_roots_over_limit(&facts) {
+        return Err(GenerateError::TooManySourceRoots(roots));
+    }
     let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
+    files.extend(reusable::reusable_workflows(view, helper)?);
     if plan
         .jobs
         .iter()
@@ -82,6 +95,7 @@ pub fn expected_with_notes(
     files.extend(release);
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
+    notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     notes.extend(budget_notes);
     Ok((files, notes))
@@ -102,12 +116,13 @@ pub fn plan_generate(
 }
 
 pub fn check_tag(version: &str, tag: &str) -> Result<String, String> {
-    let expected = format!("rust-ci-v{version}");
-    if tag == expected {
+    let legacy = format!("rust-ci-v{version}");
+    let current = format!("tools-v{version}");
+    if tag == legacy || tag == current {
         Ok(format!("tag {tag} names version {version}"))
     } else {
         Err(format!(
-            "tag {tag} must be {expected}, because this program is version {version}"
+            "tag {tag} must be {legacy} or {current}, because this program is version {version}"
         ))
     }
 }

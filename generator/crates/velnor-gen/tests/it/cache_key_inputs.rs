@@ -1,8 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheRoot, Host, RepoPath};
-use velnor_render::render_key;
+use velnor_model::RepoPath;
 
 use crate::cache_key_defects::with_config;
 use crate::facts::TestResult;
@@ -61,12 +60,8 @@ fn build_dir_and_placeholder_target_dirs_fail_generation() -> TestResult {
 
 #[test]
 fn a_leading_tilde_in_a_hashed_path_is_read_literally() -> TestResult {
-    let key = render_key(&CacheKey::Sources {
-        host: Host,
-        root: CacheRoot::new(&RepoPath::new("~x/Cargo.toml")?, RepoPath::new("target")?),
-    })
-    .key;
-    assert!(key.contains("'./~x/Cargo.lock'"), "{key}");
+    let hash = crate::shared_sources::locks_hash(&["~x/Cargo.toml"])?;
+    assert!(hash.contains("'./~x/Cargo.lock'"), "{hash}");
     Ok(())
 }
 

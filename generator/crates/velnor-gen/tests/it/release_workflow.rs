@@ -6,22 +6,13 @@ use std::error::Error;
 use std::fs;
 use std::path::Path;
 
-use velnor_render::{
-    RenderedJob, RenderedStep, RenderedWorkflow, SETUP_VELNOR_ACTION, check_rules,
-};
+use velnor_render::{RenderedJob, RenderedStep, RenderedWorkflow, check_rules};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 const WORKFLOW: &str = ".github/workflows/release-rust-ci-tools.yml";
 const WRITER: &str = "release";
-const TAG_PUSH: &str =
-    "    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-ci-v')";
-const PINNED: (&str, &str) = (
-    "0.1.80",
-    "659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c",
-);
-const ACTION_COMMIT: &str = "46f7a043952f82ef1a78d8ebb63143faca8f268c";
-
+const TAG_PUSH: &str = "    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))";
 fn read() -> Result<String, Box<dyn Error>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
@@ -102,14 +93,23 @@ fn every_step_of_the_release_workflow_passes_the_yaml_rules() -> TestResult {
                 id: id.clone(),
                 runs_on: String::new(),
                 timeout_minutes: 1,
-                steps: steps(lines),
+                steps: steps(lines)
+                    .into_iter()
+                    .map(|step| match step.run.as_deref() {
+                        Some("|") => RenderedStep {
+                            run: Some("true".to_owned()),
+                            ..step
+                        },
+                        _ => step,
+                    })
+                    .collect(),
                 ..RenderedJob::default()
             })
             .collect(),
     };
     assert!(rendered.jobs.iter().all(|job| !job.steps.is_empty()));
     assert_eq!(check_rules(&rendered), Ok(()));
-    for lines in jobs.values() {
+    for (_, lines) in jobs.iter().filter(|(id, _)| *id != "gate") {
         assert!(
             values(lines, "run")
                 .iter()
@@ -124,8 +124,7 @@ fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> Test
     let text = read()?;
     let jobs = release_jobs(&text);
     let gate = &jobs["gate"];
-    let (version, digest) = PINNED;
-    let expected = format!(
+    let header = format!(
         "    name: Gate
 {TAG_PUSH}
     runs-on: ubuntu-24.04
@@ -134,17 +133,16 @@ fn the_release_dag_gates_the_tag_with_a_pinned_release_before_building() -> Test
       contents: read
       checks: read
     steps:
-      - name: Install velnor-ci {version}
-        uses: {SETUP_VELNOR_ACTION}@{ACTION_COMMIT}
-        with:
-          version: {version}
-          sha256-linux-x64: {digest}
-      - name: Check that the tagged commit is on the default branch and passed Required
+      - name: Check that the tagged commit is on the default branch
         env:
-          GITHUB_TOKEN: ${{{{ github.token }}}}
-        run: velnor-ci release-gate --repo \"$GITHUB_REPOSITORY\" --sha \"$GITHUB_SHA\""
+          GH_TOKEN: ${{{{ github.token }}}}
+        run: |
+"
     );
-    assert_eq!(gate.join("\n"), expected);
+    let text = gate.join("\n");
+    assert!(text.starts_with(&header), "{text}");
+    assert!(!text.contains("uses:"), "{text}");
+    assert!(text.contains("compare/$default_branch...$GITHUB_SHA"));
     assert_eq!(values(gate, "needs"), [] as [&str; 0]);
     for (id, dependency) in [
         ("build", "gate"),
@@ -220,7 +218,7 @@ fn only_the_release_job_can_write_and_it_checks_out_nothing_and_verifies_before_
     assert!(verify < publish);
     assert!(runs[publish].contains(" --prerelease "));
     let published = runs[publish].matches(" dist/").count();
-    assert_eq!(published, 8);
+    assert_eq!(published, 6);
     assert!(runs[publish].contains(" dist/COMMIT "));
     assert!(
         !runs

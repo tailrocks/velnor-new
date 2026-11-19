@@ -1,0 +1,484 @@
+[[workflow]]
+file = "qualification-gen"
+name = "Qualification (generated)"
+runner = "ubuntu-26.04"
+fork_runner = "ubuntu-26.04"
+hosted_runner = "ubuntu-26.04"
+scale_set_runner = "ubuntu-26.04-scale-set"
+
+[workflow.on.workflow_dispatch]
+
+[[workflow.on.workflow_dispatch.input]]
+name = "mode"
+type = "choice"
+default = "both"
+options = ["both", "features", "js", "artifacts", "buildx", "negative", "composite", "docker-action", "post-fail", "oidc", "cancel", "compose", "bind", "testcontainers", "submodule", "pressure", "mask", "outputs", "js-pin", "services", "container", "cancel-service"]
+
+
+[[workflow.case]]
+id = "js"
+title = "JavaScript actions"
+modes = ["features", "js"]
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Record checkout"
+run = "git rev-parse HEAD"
+
+[[workflow.case.step]]
+name = "Run JavaScript"
+run = "node -e 'console.log(\"js-action-ok\")'"
+
+[[workflow.case]]
+id = "buildx"
+title = "Buildx"
+modes = ["features", "buildx"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Buildx version"
+run = "docker buildx version"
+
+[[workflow.case.step]]
+name = "Write Dockerfile"
+run = "printf 'FROM scratch\\n' > Dockerfile"
+
+[[workflow.case.step]]
+name = "Buildx probe"
+run = "docker buildx build --progress=plain -t velnor-g4:probe ."
+
+[[workflow.case]]
+id = "expect-fail"
+title = "Expected negative"
+modes = ["negative"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce failure"
+run = "echo expected-negative"
+
+[[workflow.case.step]]
+name = "Intentional failure"
+run = "exit 1"
+
+[[workflow.case]]
+id = "js-pin"
+title = "Pinned JavaScript"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Pinned script"
+uses = "github-script"
+with = { script = "console.log('js-pin-ok')" }
+
+[[workflow.case]]
+id = "composite"
+title = "Composite"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Local composite"
+uses = "./qualification/actions/composite"
+
+[[workflow.case]]
+id = "docker-action"
+title = "Docker action"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Local docker"
+uses = "./qualification/actions/docker"
+
+[[workflow.case]]
+id = "post-fail"
+title = "Post failure"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Main fails post runs"
+uses = "./qualification/actions/post-fail"
+
+[[workflow.case]]
+id = "oidc"
+title = "OIDC"
+timeout_minutes = 5
+permissions = { id-token = "write", contents = "read" }
+
+[[workflow.case.step]]
+name = "Require OIDC request URL"
+run = "test -n \"$ACTIONS_ID_TOKEN_REQUEST_URL\""
+
+[[workflow.case]]
+id = "cancel"
+title = "Cancel"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Sleep until cancelled"
+run = "sleep 180"
+
+[[workflow.case]]
+id = "compose"
+title = "Compose"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Start compose"
+run = "docker compose -f qualification/compose/stack.yml up -d --wait"
+
+[[workflow.case.step]]
+name = "List running services"
+run = "docker compose -f qualification/compose/stack.yml ps --services --status running > \"$RUNNER_TEMP/g4-compose-ps\""
+
+[[workflow.case.step]]
+name = "Require api"
+run = "grep -qx api \"$RUNNER_TEMP/g4-compose-ps\""
+
+[[workflow.case.step]]
+name = "Require db"
+run = "grep -qx db \"$RUNNER_TEMP/g4-compose-ps\""
+
+[[workflow.case.step]]
+name = "Remove compose"
+run = "docker compose -f qualification/compose/stack.yml down --volumes"
+
+[[workflow.case.step]]
+name = "Record compose"
+run = "echo compose-ok"
+
+[[workflow.case]]
+id = "bind"
+title = "Bind"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Write workspace file"
+run = "printf '%s\\n' bind-ok > \"$GITHUB_WORKSPACE/g4-bind.txt\""
+
+[[workflow.case.step]]
+name = "Read it through a bind mount"
+run = "docker run --rm -v \"$GITHUB_WORKSPACE/g4-bind.txt:/g4-bind.txt:ro\" alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395 cat /g4-bind.txt > \"$RUNNER_TEMP/g4-bind-out\""
+
+[[workflow.case.step]]
+name = "Require the content"
+run = "grep -qx bind-ok \"$RUNNER_TEMP/g4-bind-out\""
+
+[[workflow.case]]
+id = "testcontainers"
+title = "Testcontainers"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+
+[[workflow.case.step]]
+name = "Install"
+run = "npm ci --prefix qualification/testcontainers"
+
+[[workflow.case.step]]
+name = "Reap"
+run = "node qualification/testcontainers/reap.mjs"
+
+[[workflow.case]]
+id = "submodule"
+title = "Submodule"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.case.step]]
+name = "Check out"
+uses = "checkout"
+with = { submodules = "recursive", lfs = "true" }
+
+[[workflow.case.step]]
+name = "Record HEAD"
+run = "git rev-parse HEAD > \"$RUNNER_TEMP/g4-head\""
+
+[[workflow.case.step]]
+name = "Require the workflow commit"
+run = "grep -qx \"$GITHUB_SHA\" \"$RUNNER_TEMP/g4-head\""
+
+[[workflow.case.step]]
+name = "Require the submodule"
+run = "grep -qx submodule-ok qualification/fixtures/submodule/MARKER"
+
+[[workflow.case.step]]
+name = "Require the LFS file"
+run = "grep -qx lfs-ok qualification/fixtures/lfs-marker.txt"
+
+[[workflow.case]]
+id = "pressure-a"
+title = "Pressure A"
+modes = ["pressure"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce pressure"
+run = "echo pressure-start"
+
+[[workflow.case.step]]
+name = "Pressure sleep"
+run = "sleep 150"
+
+[[workflow.case.step]]
+name = "Record pressure"
+run = "echo pressure-ok"
+
+[[workflow.case]]
+id = "pressure-b"
+title = "Pressure B"
+modes = ["pressure"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce pressure"
+run = "echo pressure-start"
+
+[[workflow.case.step]]
+name = "Pressure sleep"
+run = "sleep 150"
+
+[[workflow.case.step]]
+name = "Record pressure"
+run = "echo pressure-ok"
+
+[[workflow.case]]
+id = "pressure-c"
+title = "Pressure C"
+modes = ["pressure"]
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Announce pressure"
+run = "echo pressure-start"
+
+[[workflow.case.step]]
+name = "Pressure sleep"
+run = "sleep 150"
+
+[[workflow.case.step]]
+name = "Record pressure"
+run = "echo pressure-ok"
+
+[[workflow.case]]
+id = "mask"
+title = "Mask"
+timeout_minutes = 5
+
+[[workflow.case.step]]
+name = "Register mask"
+run = "echo \"::add-mask::g4-mask-canary\""
+
+[[workflow.case.step]]
+name = "Mask canary"
+run = "echo g4-mask-canary"
+
+[[workflow.case]]
+id = "services"
+title = "Services"
+modes = ["features", "services"]
+timeout_minutes = 5
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Localhost port"
+run = "nc -z -w 1 127.0.0.1 6379"
+
+[[workflow.case]]
+id = "container"
+title = "Container"
+timeout_minutes = 5
+
+[workflow.case.container]
+image = "alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395"
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Service DNS"
+run = "nc -z -w 1 redis 6379"
+
+[[workflow.case]]
+id = "cancel-service"
+title = "Cancel service"
+timeout_minutes = 5
+
+[[workflow.case.service]]
+name = "redis"
+image = "redis:8.10.2-alpine@sha256:2d3814be5e9b06a30a0be54770b7e12052e7e79ec85271aefd34875c1f393b23"
+ports = ["6379:6379"]
+options = "--health-cmd \"redis-cli ping\" --health-interval 5s --health-timeout 5s --health-retries 12"
+
+[[workflow.case.step]]
+name = "Probe service"
+run = "nc -z -w 1 127.0.0.1 6379"
+
+[[workflow.case.step]]
+name = "Announce service"
+run = "echo service-up"
+
+[[workflow.case.step]]
+name = "Sleep until cancelled"
+run = "sleep 900"
+
+[[workflow.job]]
+id = "verify-hosted"
+name = "Verify / GitHub hosted / Linux x64"
+if = "inputs.mode == 'both'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Qualify hosted lane"
+run = "echo qualification-hosted"
+
+[[workflow.job]]
+id = "verify-scale-set"
+name = "Verify / Velnor Scale Set / Linux x64"
+if = "inputs.mode == 'both'"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Qualify scale-set lane"
+run = "echo qualification-scale-set"
+
+[[workflow.job]]
+id = "compare"
+name = "Compare hosted and Velnor execution"
+if = "inputs.mode == 'both'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["verify-hosted", "verify-scale-set"]
+
+[[workflow.job.step]]
+name = "Compare lanes"
+run = "echo compare-lanes"
+
+[[workflow.job]]
+id = "artifacts-hosted"
+name = "Artifacts / GitHub hosted"
+if = "inputs.mode == 'features' || inputs.mode == 'artifacts'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+
+[[workflow.job.step]]
+name = "Write proof"
+run = "echo g4-artifact > g4-proof.txt"
+
+[[workflow.job.step]]
+name = "Upload proof"
+uses = "upload-artifact"
+with = { name = "g4-proof-hosted", path = "g4-proof.txt", if-no-files-found = "error" }
+
+[[workflow.job]]
+id = "artifacts-scale-set"
+name = "Artifacts / Velnor Scale Set"
+if = "inputs.mode == 'features' || inputs.mode == 'artifacts'"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+permissions = { contents = "read", actions = "write" }
+
+[[workflow.job.step]]
+name = "Write proof"
+run = "echo g4-artifact > g4-proof.txt"
+
+[[workflow.job.step]]
+name = "Upload proof"
+uses = "upload-artifact"
+with = { name = "g4-proof-scale-set", path = "g4-proof.txt", if-no-files-found = "error" }
+
+[[workflow.job]]
+id = "outputs-scale-set"
+name = "Outputs / Velnor Scale Set"
+if = "inputs.mode == 'outputs'"
+runner = "ubuntu-26.04-scale-set"
+timeout_minutes = 5
+outputs = { proof = "steps.emit.outputs.proof" }
+
+[[workflow.job.step]]
+name = "Create bin directory"
+run = "mkdir -p \"$RUNNER_TEMP/g4-bin\""
+
+[[workflow.job.step]]
+name = "Write path probe"
+run = "printf '%s\\n' '#!/bin/sh' 'echo path-ok' > \"$RUNNER_TEMP/g4-bin/g4-path-ok\""
+
+[[workflow.job.step]]
+name = "Make probe executable"
+run = "chmod +x \"$RUNNER_TEMP/g4-bin/g4-path-ok\""
+
+[[workflow.job.step]]
+id = "emit"
+name = "Write output"
+run = "echo proof=outputs-ok >> \"$GITHUB_OUTPUT\""
+
+[[workflow.job.step]]
+name = "Write env"
+run = "echo G4_ENV=outputs-ok >> \"$GITHUB_ENV\""
+
+[[workflow.job.step]]
+name = "Write path"
+run = "echo \"$RUNNER_TEMP/g4-bin\" >> \"$GITHUB_PATH\""
+
+[[workflow.job.step]]
+name = "Check env"
+run = "test \"$G4_ENV\" = outputs-ok"
+
+[[workflow.job.step]]
+name = "Run path probe"
+run = "g4-path-ok > \"$RUNNER_TEMP/g4-path-out\""
+
+[[workflow.job.step]]
+name = "Check path probe"
+run = "grep -qx path-ok \"$RUNNER_TEMP/g4-path-out\""
+
+[[workflow.job]]
+id = "outputs-hosted"
+name = "Outputs / GitHub hosted"
+if = "inputs.mode == 'outputs'"
+runner = "ubuntu-26.04"
+timeout_minutes = 5
+needs = ["outputs-scale-set"]
+
+[[workflow.job.step]]
+name = "Check job output"
+run = "test \"$PROOF\" = outputs-ok"
+env = { PROOF = "${{ needs.outputs-scale-set.outputs.proof }}" }

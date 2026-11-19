@@ -3,6 +3,8 @@
 
 use std::collections::BTreeSet;
 
+mod archive;
+
 use velnor_model::{
     CargoCommand, CustomHarness, FilterRef, HelperCommand, Job, JobId, PackageName, RepoFacts,
     RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, When,
@@ -13,11 +15,7 @@ use crate::base_cache::{save_steps, saving_run};
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
 use crate::lane::Lane;
-use crate::mise::nextest_tool;
-use crate::plan::{
-    CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, mirror_step, setup,
-    step, tools_restore,
-};
+use crate::plan::{LINT_JOB, RUST_JOB, TEST_JOB, job, setup, step};
 
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
 const ARCHIVE_FILE: RepoPath = RepoPath::from_static("nextest-archive.tar.zst");
@@ -82,10 +80,10 @@ impl RootJobs<'_> {
         commands: impl IntoIterator<Item = CargoCommand>,
     ) -> impl Iterator<Item = Step> {
         let lane = self.lane;
-        let directory = self.root.manifest.parent();
+        let root = self.root;
         commands
             .into_iter()
-            .map(move |command| lane.cargo(command, directory.clone()))
+            .map(move |command| lane.cargo(command, Some(root)))
     }
 
     fn saves(&self, job: &JobId, archive: Option<RepoPath>, sources: bool) -> Vec<Step> {
@@ -155,9 +153,8 @@ impl RootJobs<'_> {
             .collect()
     }
 
-    fn filter(&self) -> FilterRef {
-        let direct: Vec<String> = self
-            .root
+    fn direct_binaries(&self) -> Vec<String> {
+        self.root
             .members
             .iter()
             .flat_map(|member| {
@@ -167,7 +164,11 @@ impl RootJobs<'_> {
                     .filter(|harness| runs_in_direct_step(&self.facts.config, member, harness))
                     .map(|harness| binary_id(&member.name, harness))
             })
-            .collect();
+            .collect()
+    }
+
+    fn filter(&self) -> FilterRef {
+        let direct = self.direct_binaries();
         if direct.is_empty() {
             FilterRef::All
         } else {
@@ -204,18 +205,21 @@ impl RootJobs<'_> {
     }
 
     fn single(&self) -> Job {
-        let draft = self.facts.config.skip_draft_pull_requests;
-        let skip_on_draft = |step: Step| Step {
-            skip_on_draft: draft
-                && matches!(
-                    step.kind,
-                    StepKind::Cargo(
-                        CargoCommand::NextestBuild
-                            | CargoCommand::NextestRun { .. }
-                            | CargoCommand::TestTarget { .. }
-                            | CargoCommand::Doctest
-                    )
-                ),
+        let full = crate::plan::full(self.facts);
+        let heavy = |step: Step| Step {
+            pr: if matches!(
+                step.kind,
+                StepKind::Cargo(
+                    CargoCommand::NextestBuild
+                        | CargoCommand::NextestRun { .. }
+                        | CargoCommand::TestTarget { .. }
+                        | CargoCommand::Doctest
+                )
+            ) {
+                full
+            } else {
+                step.pr
+            },
             ..step
         };
         let job_id = self.id(RUST_JOB);
@@ -234,14 +238,14 @@ impl RootJobs<'_> {
             steps.extend(checks());
             steps.extend(
                 self.cargo(vec![CargoCommand::NextestBuild])
-                    .map(skip_on_draft)
+                    .map(heavy)
                     .map(saving_run),
             );
-            steps.extend(self.cargo(self.tests()).map(skip_on_draft));
+            steps.extend(self.cargo(self.tests()).map(heavy));
             steps.extend(self.audit());
             steps.extend(saves.iter().cloned());
         } else if saves.is_empty() {
-            steps.extend(self.cargo(self.tests()).map(skip_on_draft));
+            steps.extend(self.cargo(self.tests()).map(heavy));
             steps.extend(self.audit());
             steps.extend(checks());
         } else {
@@ -253,13 +257,13 @@ impl RootJobs<'_> {
                     other => after.push(other),
                 }
             }
-            steps.extend(self.cargo(workspace).map(skip_on_draft));
-            steps.extend(self.cargo(after).map(skip_on_draft));
+            steps.extend(self.cargo(workspace).map(heavy));
+            steps.extend(self.cargo(after).map(heavy));
             steps.extend(self.audit());
             steps.extend(saves);
         }
         Job {
-            skip_on_draft: false,
+            pr: crate::plan::quick(self.facts),
             ..self.lane_job(job_id, steps)
         }
     }
@@ -276,10 +280,10 @@ impl RootJobs<'_> {
         steps.extend(self.cargo(check_alone(self.root)));
         let mut jobs = vec![Job {
             comment,
-            skip_on_draft: false,
+            pr: crate::plan::quick(self.facts),
             ..self.lane_job(lint_id, steps)
         }];
-        if archive && self.nextest {
+        if archive && self.nextest && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());
         } else if !tests.is_empty() {
             let test_id = self.id(TEST_JOB);
@@ -308,52 +312,6 @@ impl RootJobs<'_> {
             gate: self.lane.steps(),
             ..step(kind)
         }
-    }
-
-    fn archived_tests(&self) -> [Job; 2] {
-        let build_id = self.id(TEST_JOB);
-        let artifact = self.id(ARCHIVE_ID).to_string();
-        let mut build = setup(self.facts, self.root, self.lane, &build_id);
-        build.extend(self.cargo(vec![CargoCommand::NextestArchive { file: ARCHIVE_FILE }]));
-        build.push(self.gated(StepKind::UploadArchive {
-            name: artifact.clone(),
-            file: self.root.manifest.sibling(&ARCHIVE_FILE),
-        }));
-        build.extend(self.cargo(self.built_without_nextest()));
-        build.extend(self.audit());
-        build.extend(self.saves(
-            &build_id,
-            Some(self.root.manifest.sibling(&ARCHIVE_FILE)),
-            true,
-        ));
-        let mut group = head(self.facts, CHECKOUT_DEPTH);
-        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
-        group.extend(tools_restore(self.facts).map(|restore| Step {
-            gate: self.lane.steps(),
-            ..restore
-        }));
-        group.push(self.gated(StepKind::InstallTools {
-            only: nextest_tool(&self.facts.tools).map(str::to_owned),
-        }));
-        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
-        group.push(self.gated(StepKind::DownloadArchive {
-            name: artifact,
-            into: self.root.manifest.parent(),
-        }));
-        group.extend(
-            self.cargo(vec![CargoCommand::NextestRunArchive {
-                file: ARCHIVE_FILE,
-                filter: self.filter(),
-                ci_profile: self.root.nextest_ci_profile,
-            }])
-            .map(|step| Step {
-                when: When::Success,
-                ..step
-            }),
-        );
-        let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
-        group_job.needs.push(build_id.clone());
-        [self.lane_job(build_id, build), group_job]
     }
 }
 
