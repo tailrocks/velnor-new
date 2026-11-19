@@ -122,6 +122,7 @@ fn single_job_asks_the_helper_after_the_plan_and_skips_only_checks() -> TestResu
         assert!(!condition(job, kept).contains("merge_group"), "{kept}");
     }
     assert!(!text.contains("rust-plan"), "{text}");
+    assert!(!waived_on_push(&all["required"]), "{text}");
     Ok(())
 }
 
@@ -159,7 +160,23 @@ fn planned_lanes_read_the_plan_job_flag_and_cache_jobs_keep_running() -> TestRes
     assert!(skipped >= 4, "{text}");
     let required = &all["required"];
     assert!(step(required, "velnor-ci gate").is_some(), "{required}");
+    assert!(!waived_on_push(required), "{required}");
     Ok(())
+}
+
+/// True when the job or any of its steps has a condition that mentions the
+/// queue-run skip. The gate must never carry one, or a skipped push would
+/// pass without running the gate.
+fn waived_on_push(job: &Value) -> bool {
+    let mentions = |text: Option<&str>| {
+        text.is_some_and(|text| text.contains("merge_group") || text.contains("skip_push"))
+    };
+    mentions(job["if"].as_str())
+        || job["steps"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .any(|step| mentions(step["if"].as_str()))
 }
 
 #[test]
