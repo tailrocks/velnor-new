@@ -109,6 +109,14 @@ impl ConnectionJournal {
         .await
     }
 
+    pub(crate) async fn has_intended_scale_set_delete(&self) -> Result<bool, HostError> {
+        read_transaction(&self.journal, async |connection| {
+            self.validate_scope(connection).await?;
+            has_pending_scale_set_delete(connection, self.connection_id.as_str()).await
+        })
+        .await
+    }
+
     pub(crate) async fn claim_scale_set_delete(
         &self,
         target: &ScaleSetDeleteTarget,

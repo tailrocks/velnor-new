@@ -45,6 +45,8 @@ endpoint = "unix:///docker.sock"
 
 #[path = "tests/live_session.rs"]
 mod live_session;
+#[path = "tests/recovery.rs"]
+mod recovery;
 
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
