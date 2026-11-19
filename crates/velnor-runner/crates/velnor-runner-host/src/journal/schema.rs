@@ -131,11 +131,24 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v53(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v52(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     validate_persisted_schema_v42(conn).await?;
     unbound_retirement::validate(conn).await?;
     jit_interrupted_claims::validate(conn).await?;
     jit_claim_deadline::validate(conn).await?;
     jit_tombstone_completion::validate(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v53(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v52(conn).await?;
+    execution_authorization::validate_v53(conn).await
 }
 
 #[cfg(test)]
