@@ -47,6 +47,7 @@ mod plan;
 mod plan_api;
 mod plan_git;
 mod plan_main;
+mod plan_modes;
 mod platform;
 mod prepare;
 mod prepare_compat;

@@ -21,6 +21,7 @@ mod http;
 mod inputs;
 mod manifests;
 mod plan;
+mod plan_request;
 pub mod pump;
 mod recording;
 mod release;
