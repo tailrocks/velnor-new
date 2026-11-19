@@ -55,7 +55,9 @@ fn generator_policy_tools_follow_mise_os_and_architecture_filters() -> TestResul
     );
     let wrong_arch = generate("linux/arm64", "ubuntu-latest", true, true);
     assert!(wrong_arch.is_err_and(|error| error.contains("cargo-deny is not pinned")));
-    assert!(generate("linux/arm64", "ubuntu-24.04-arm", true, true)?.contains("cargo-deny --config"));
+    assert!(
+        generate("linux/arm64", "ubuntu-24.04-arm", true, true)?.contains("cargo-deny --config")
+    );
     Ok(())
 }
 
