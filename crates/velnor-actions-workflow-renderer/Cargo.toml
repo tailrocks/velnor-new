@@ -33,7 +33,7 @@ velnor-actions-rust = { version = "=0.1.82", path = "../velnor-actions-rust" }
 velnor-actions-tofu = { version = "=0.1.82", path = "../velnor-actions-tofu" }
 
 [dev-dependencies]
-serde-saphyr = "=2.1.0"
+serde-saphyr = "=2.1.1"
 tempfile = { version = "=3.27.0" }
 velnor-actions-mise = { version = "=0.1.82", path = "../velnor-actions-mise" }
 

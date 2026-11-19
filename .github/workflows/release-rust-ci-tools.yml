@@ -142,25 +142,25 @@ jobs:
           TARGET: ${{ matrix.target }}
           TARGET_CC: ${{ matrix.cc }}
           VELNOR_COMMIT: ${{ github.sha }}
-        run: cargo build --release --locked --target "$TARGET" --manifest-path ci-helper/Cargo.toml
+        run: cargo build --profile release-tools --locked --target "$TARGET" --package velnor-ci
       - name: Build velnor-gen
         env:
           TARGET: ${{ matrix.target }}
           TARGET_CC: ${{ matrix.cc }}
           VELNOR_COMMIT: ${{ github.sha }}
-        run: cargo build --release --locked --target "$TARGET" --manifest-path generator/Cargo.toml --package velnor-gen
+        run: cargo build --profile release-tools --locked --target "$TARGET" --package velnor-gen
       - name: Create the folder of release files
         run: mkdir dist
       - name: Name velnor-ci for its platform
         env:
           SUFFIX: ${{ matrix.suffix }}
           TARGET: ${{ matrix.target }}
-        run: cp "ci-helper/target/$TARGET/release/velnor-ci" "dist/velnor-ci-$SUFFIX"
+        run: cp "target/$TARGET/release-tools/velnor-ci" "dist/velnor-ci-$SUFFIX"
       - name: Name velnor-gen for its platform
         env:
           SUFFIX: ${{ matrix.suffix }}
           TARGET: ${{ matrix.target }}
-        run: cp "generator/target/$TARGET/release/velnor-gen" "dist/velnor-gen-$SUFFIX"
+        run: cp "target/$TARGET/release-tools/velnor-gen" "dist/velnor-gen-$SUFFIX"
       - name: Run velnor-ci
         env:
           SUFFIX: ${{ matrix.suffix }}

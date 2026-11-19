@@ -31,6 +31,9 @@ default_shards = 1
 
 [test_sharding.by_manifest]
 
+[runner_workspace]
+root = ""
+
 [stacks]
 ignore = []
 
@@ -43,8 +46,9 @@ non_inputs = ["docs/**"]
 globs = [
   "crates/velnor-actions-*/**",
   "crates/velnor-archive-guard/**",
-  "crates/velnor-runner/Cargo.toml",
-  "crates/velnor-runner/crates/*/**",
+  "Cargo.toml",
+  "crates/velnor-runner-*/**",
+  "crates/velnor-resource-probe/**",
   "scripts/native-image-candidate-inventory.py",
 ]
 packages = ["velnor-actions-cli"]
@@ -52,16 +56,16 @@ complete = true
 
 [[stacks.rust.inputs]]
 globs = [
-  "crates/velnor-runner/crates/velnor-runner-host/**",
+  "crates/velnor-runner-host/**",
   ".velnor/runner.lock",
-  "crates/velnor-runner/Cargo.toml",
-  "crates/velnor-runner/Cargo.lock",
+  "Cargo.toml",
+  "Cargo.lock",
 ]
 packages = ["velnor-runner-host"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["local/**"]
+globs = ["crates/velnor-local/**", "crates/velnor-cache-rules/**"]
 packages = ["velnor-cache-rules", "velnor-local"]
 complete = true
 
@@ -76,12 +80,12 @@ packages = ["velnor-actions-rust"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["ci-helper/**"]
+globs = ["crates/velnor-ci/**", "ci-helper/**"]
 packages = ["velnor-ci"]
 complete = true
 
 [[stacks.rust.inputs]]
-globs = ["generator/**", ".github/workflows/release-rust-ci-tools.yml"]
+globs = ["crates/velnor-gen/**", "crates/velnor-model/**", "crates/velnor-release/**", "crates/velnor-render/**", "crates/velnor-rust/**", "generator/**", ".github/workflows/release-rust-ci-tools.yml"]
 packages = ["velnor-model", "velnor-rust", "velnor-render", "velnor-gen", "velnor-release"]
 complete = true
 
@@ -92,9 +96,9 @@ complete = true
 
 [[stacks.rust.inputs]]
 globs = [
-  "crates/velnor-runner/crates/velnor-runner-attestation/**",
-  "crates/velnor-runner/Cargo.toml",
-  "crates/velnor-runner/Cargo.lock",
+  "crates/velnor-runner-attestation/**",
+  "Cargo.toml",
+  "Cargo.lock",
 ]
 packages = ["velnor-runner-attestation"]
 complete = true

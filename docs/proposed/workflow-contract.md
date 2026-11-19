@@ -9,7 +9,7 @@ This document fixes V1 defaults; unsupported configuration MUST be rejected.
 Velnor Actions is a stack-generic workflow generator, not a task interpreter. V1 registers Rust/Cargo and
 OpenTofu adapters and typed verification declarations in one workflow IR; GitHub Actions runs jobs on hosted
 or configured Scale Set runners. Workflow generation never runs CI scripts locally, while runner host
-lifecycle is managed separately by the Runner Scale Set controller in `crates/velnor-runner`.
+lifecycle is managed separately by the Runner Scale Set controller in `crates/velnor-runner-*`.
 
 Each registered stack adapter owns its discovery and task proposals. The Mise adapter owns tool selection,
 command construction and execution, and cache integration. The jactionlint crate owns jactionlint configuration
@@ -21,7 +21,7 @@ The V1 workspace contains eight purpose-specific crates under `crates/`: `velnor
 `velnor-actions-rust`, `velnor-actions-tofu`, `velnor-actions-mise`, `velnor-actions-actionlint`,
 `velnor-actions-workflow-renderer`, `velnor-actions-orchestrator`, and `velnor-actions-cli`, plus repository
 maintenance crates `velnor-actions-freshness` and `velnor-archive-guard`. Runner support lives in the nested
-`crates/velnor-runner` workspace. Generic package names such as `velnor-model`, `velnor-core`, `velnor-rust`,
+`crates/velnor-runner-*` workspace. Generic package names such as `velnor-model`, `velnor-core`, `velnor-rust`,
 `velnor-util`, and `velnor-common` are forbidden.
 
 ```text

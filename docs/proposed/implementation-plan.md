@@ -2,7 +2,7 @@
 
 **Status:** Implemented. Gates 0 through 8 are implemented, verified, and dogfooded.
 
-The implementation followed Gates 0–8 in order. V1 gates and dogfooding have passed; runner development in nested `crates/velnor-runner` is governed by [macOS Scale Set runner](macos-scaleset-runner.md). Parallel scheduling and safe omission rules are normative in the [parallelism and affected-work contract](parallelism-and-selection-contract.md).
+The implementation followed Gates 0–8 in order. V1 gates and dogfooding have passed; runner development in nested `crates/velnor-runner-*` is governed by [macOS Scale Set runner](macos-scaleset-runner.md). Parallel scheduling and safe omission rules are normative in the [parallelism and affected-work contract](parallelism-and-selection-contract.md).
 
 ## Work packages and merge gates
 

@@ -264,27 +264,6 @@ else
   fail "hk-native-fmt (installed hk 2.8.0 is unavailable; log: $TOOLCHAIN_LOG)"
 fi
 
-RUNNER_MANIFEST="crates/velnor-runner/Cargo.toml"
-if [ -f "$RUNNER_MANIFEST" ]; then
-  stage runner-fmt "${MISE_EXEC[@]}" cargo fmt --manifest-path "$RUNNER_MANIFEST" --all -- --check
-  stage runner-clippy "${MISE_EXEC[@]}" cargo clippy --manifest-path "$RUNNER_MANIFEST" --locked --workspace --all-targets -- -D warnings
-  RUNNER_TEST_MEMBERS=""
-  RUNNER_TEST_MEMBERS_OK=0
-  if RUNNER_TEST_MEMBERS="$(repo_policy test-members "$RUNNER_MANIFEST" 2>"$RUNNER_TEST_MEMBER_LIST_LOG")"; then
-    RUNNER_TEST_MEMBERS_OK=1
-  else
-    fail "runner-test-members (metadata failed; log: $RUNNER_TEST_MEMBER_LIST_LOG)"
-  fi
-  if [ "$RUNNER_TEST_MEMBERS_OK" -eq 1 ]; then
-    if [ -z "$RUNNER_TEST_MEMBERS" ]; then
-      echo "skip: runner-nextest (metadata found no test-enabled targets)"
-    else
-      stage runner-nextest "${NEXTEST_RUN[@]}" run --manifest-path "$RUNNER_MANIFEST" --locked --workspace --no-tests fail
-    fi
-  fi
-  stage runner-deny mise exec "cargo-deny@0.20.2" -- cargo-deny --locked --manifest-path "$RUNNER_MANIFEST" --config "crates/velnor-runner/deny.toml" check
-fi
-
 stage repo-policy "${MISE_EXEC[@]}" bash scripts/check-freshness.sh
 
 GEN_DIR=""

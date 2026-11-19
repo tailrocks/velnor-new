@@ -15,8 +15,8 @@ use velnor_actions_contract::{Plan, ReleaseTarget, plan_json_bytes};
 use velnor_actions_mise::current_mise_binary;
 use velnor_actions_orchestrator::plan_internal;
 
-const APPROVALS: &str = include_str!("../../test_support/controller_approval_074.json");
-const GENERATOR_LOCK: &str = include_str!("../../test_support/generator_074.lock");
+const APPROVALS: &str = include_str!("../../velnor-test-support/controller_approval_074.json");
+const GENERATOR_LOCK: &str = include_str!("../../velnor-test-support/generator_074.lock");
 const CHECK_ID: &str = "runtime-fixture";
 const JOB_ID: &str = "check-runtime-fixture";
 const RUN_KEY: &str = "r260001-a1";

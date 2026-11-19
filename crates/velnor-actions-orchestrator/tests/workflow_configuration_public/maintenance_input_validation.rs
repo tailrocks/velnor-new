@@ -143,7 +143,7 @@ fn assert_freshness_only_inputs_excluded(root: &Path, archive_globs: &[&str]) ->
 }
 
 fn assert_workspace_metadata(root: &Path, globs: &[&str]) -> TestResult {
-    for manifest in ["Cargo.toml", "crates/velnor-runner/Cargo.toml"] {
+    for manifest in ["Cargo.toml"] {
         assert_metadata_path_matches(globs, manifest);
         let lock = manifest
             .strip_suffix("Cargo.toml")
@@ -203,10 +203,10 @@ fn assert_package_inputs(root: &Path, package: &str, globs: &[&str]) -> TestResu
         ],
         "velnor-actions-rust" => &["crates/velnor-actions-rust/src/lib.rs"],
         "velnor-runner-attestation" => &[
-            "crates/velnor-runner/Cargo.toml",
-            "crates/velnor-runner/Cargo.lock",
-            "crates/velnor-runner/crates/velnor-runner-attestation/src/main.rs",
-            "crates/velnor-runner/crates/velnor-runner-attestation/src/sigstore-production-tuf-root.json",
+            "Cargo.toml",
+            "Cargo.lock",
+            "crates/velnor-runner-attestation/src/main.rs",
+            "crates/velnor-runner-attestation/src/sigstore-production-tuf-root.json",
         ],
         "velnor-actions-workflow-renderer" => &[
             ".github/workflows/ci.yml",
