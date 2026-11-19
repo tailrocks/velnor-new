@@ -1,6 +1,6 @@
 [[workflow]]
-file = "qualification-gen"
-name = "Qualification (generated)"
+file = "qualification"
+name = "Qualification"
 runner = "ubuntu-26.04"
 fork_runner = "ubuntu-26.04"
 hosted_runner = "ubuntu-26.04"

@@ -1,58 +1,15 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
 
-schema = 2
-
-[workflow]
-name = "CI"
-policy = "velnor-repository-v1"
-default_branch = "main"
-generator_validation = "bootstrap"
-max_parallel_jobs = 2
-crate_timeout_minutes = 45
-plan_timeout_minutes = 15
-pull_request_cache_policy = "read-only"
-
-[workflow.lint]
-# jactionlint's security and policy rules (hard decision 10); velnor-new is
-# the first repository on them.
-profile = "default"
-
-[dco]
-# The dco-2 app is installed organization-wide; this repository requires no sign-off.
-require = { members = false }
-
-[resources]
-compiler_process_budget = 2
-test_process_budget = 2
-
-[test_sharding]
-default_shards = 1
-
-[test_sharding.by_manifest]
-
-[runner_workspace]
-root = ""
+# What velnor-ci reads to decide which crate jobs a diff affects: the Rust input
+# rules and non-inputs. Everything else about the generated workflows lives in
+# .velnor/rust-ci.toml and .velnor/workflows.toml (velnor-gen).
 
 [stacks]
 ignore = []
 
 [stacks.rust]
-compile_driver = "mbx"
-test_runner = "cargo_nextest"
 non_inputs = ["docs/**"]
-
-[[stacks.rust.inputs]]
-globs = [
-  "crates/velnor-actions-*/**",
-  "crates/velnor-archive-guard/**",
-  "Cargo.toml",
-  "crates/velnor-runner-*/**",
-  "crates/velnor-resource-probe/**",
-  "scripts/native-image-candidate-inventory.py",
-]
-packages = ["velnor-actions-cli"]
-complete = true
 
 [[stacks.rust.inputs]]
 globs = [
@@ -76,16 +33,6 @@ complete = true
 [[stacks.rust.inputs]]
 globs = ["crates/velnor-local/**", "crates/velnor-cache-rules/**"]
 packages = ["velnor-cache-rules", "velnor-local"]
-complete = true
-
-[[stacks.rust.inputs]]
-globs = ["crates/velnor-actions-contract/**"]
-packages = ["velnor-actions-contract"]
-complete = true
-
-[[stacks.rust.inputs]]
-globs = ["crates/velnor-actions-rust/**"]
-packages = ["velnor-actions-rust"]
 complete = true
 
 [[stacks.rust.inputs]]
@@ -114,29 +61,9 @@ complete = true
 
 [[stacks.rust.inputs]]
 globs = [
-  "crates/velnor-actions-workflow-renderer/**",
-  ".github/workflows/**",
-  ".velnor/config.toml",
-  "scripts/generator-release/cargo-git-handoff.py",
-  "scripts/generator-release/cargo-source-handoff.sh",
-  "scripts/generator-release/preflight-release-tag.sh",
-  "scripts/generator-release/create-release-manifest.sh",
-  "scripts/generator-release/source-qualification.sh",
-  "scripts/upgrades/bump-gradle-catalog.py",
-  "scripts/derive-rust-tree-digest",
-  "LICENSE",
-  "NOTICE",
-]
-packages = ["velnor-actions-workflow-renderer"]
-complete = true
-
-[[stacks.rust.inputs]]
-globs = [
   ".config/**",
   ".github/**",
   ".velnor/config.toml",
-  ".velnor/controller-approvals.json",
-  ".velnor/generator.lock",
   ".velnor/mise.lock",
   ".velnor/mise.toml",
   ".velnor/qualification/**",
@@ -164,235 +91,3 @@ globs = [
 ]
 packages = ["velnor-archive-guard"]
 complete = true
-
-[[stacks.rust.inputs]]
-globs = [
-  "crates/velnor-actions-orchestrator/**",
-  ".velnor/qualification/**",
-  ".velnor/config.toml",
-  ".velnor/controller-approvals.json",
-  ".velnor/generator.lock",
-  "fixtures/bun-install-lifecycle-runtime/legacy-install-step.sh",
-  "fixtures/bun-workspace-suites/input/.velnor/config.toml",
-  "mise.toml",
-  "mise.lock",
-  "rust-toolchain.toml",
-  "images/runner/ubuntu-26.04/Dockerfile",
-  "images/dind/Dockerfile",
-  "images/resource-probe/Dockerfile",
-  "scripts/check-runner-image-candidate.sh",
-  "scripts/runner-family-discovery.sh",
-  "scripts/resolve-runner-family-producer.sh",
-  "scripts/resolve-runner-family-publication.sh",
-  "scripts/generator-release/create-release-manifest.sh",
-  "scripts/generator-release/source-qualification-validator-recipes.json",
-  "Cargo.toml",
-  "Cargo.lock",
-  "crates/**/Cargo.toml",
-  "crates/**/Cargo.lock",
-  "crates/**/build.rs",
-  "crates/**/src/lib.rs",
-  "crates/**/src/main.rs",
-  "crates/**/src/bin/*.rs",
-  "crates/**/src/bin/*/main.rs",
-  "crates/**/examples/*.rs",
-  "crates/**/examples/*/main.rs",
-  "crates/**/tests/*.rs",
-  "crates/**/tests/*/main.rs",
-  "crates/**/benches/*.rs",
-  "crates/**/benches/*/main.rs",
-]
-packages = ["velnor-actions-orchestrator"]
-complete = true
-
-[[stacks.rust.inputs]]
-globs = [
-  "crates/velnor-freshness/**",
-  ".velnor/version-policy.toml",
-  ".cargo/mutants.toml",
-  "Cargo.toml",
-  "Cargo.lock",
-  "deny.toml",
-  "crates/**/Cargo.toml",
-  "crates/**/Cargo.lock",
-  "crates/**/deny.toml",
-  "crates/**/build.rs",
-  "crates/**/src/lib.rs",
-  "crates/**/src/main.rs",
-  "crates/**/src/bin/*.rs",
-  "crates/**/src/bin/*/main.rs",
-  "crates/**/examples/*.rs",
-  "crates/**/examples/*/main.rs",
-  "crates/**/tests/*.rs",
-  "crates/**/tests/*/main.rs",
-  "crates/**/benches/*.rs",
-  "crates/**/benches/*/main.rs",
-]
-packages = ["velnor-freshness"]
-complete = true
-
-[[stacks.rust.inputs]]
-globs = [
-  "crates/velnor-actions-mise/**",
-  "Cargo.toml",
-  "Cargo.lock",
-  "crates/**/Cargo.toml",
-  "crates/**/Cargo.lock",
-  "crates/**/build.rs",
-  "crates/**/src/lib.rs",
-  "crates/**/src/main.rs",
-  "crates/**/src/bin/*.rs",
-  "crates/**/src/bin/*/main.rs",
-  "crates/**/examples/*.rs",
-  "crates/**/examples/*/main.rs",
-  "crates/**/tests/*.rs",
-  "crates/**/tests/*/main.rs",
-  "crates/**/benches/*.rs",
-  "crates/**/benches/*/main.rs",
-]
-packages = ["velnor-actions-mise"]
-complete = true
-
-[[stacks.rust.configurations]]
-name = "default"
-features = ["default"]
-target = "host"
-
-[[stacks.rust.configurations]]
-name = "local-mode"
-features = ["local-mode"]
-target = "host"
-packages = ["velnor-runner-host"]
-
-[stacks.rust.release]
-enabled = false
-manifest_path = "Cargo.toml"
-packages = []
-publishable_workspace = false
-environment = "release"
-release_pr = true
-tag_name = "{{ package }}-v{{ version }}"
-
-[discovery]
-exclude = ["fixtures/**", "crates/**/tests/fixtures/**"]
-
-[actions.overrides]
-
-[execution]
-default_profile = "local"
-hosted_profile = "hosted"
-scale_set_profile = "local"
-workflows = ["qualification"]
-
-[execution.profiles.hosted]
-kind = "github-hosted"
-label = "ubuntu-26.04"
-platform = "linux/amd64"
-
-[execution.profiles.local]
-kind = "github-scale-set"
-name = "ubuntu-26.04-scale-set"
-labels = ["velnor", "ubuntu-26.04-scale-set"]
-platform = "linux/amd64"
-
-[[qualified_tools]]
-id = "bun-ci"
-backend = { kind = "core", tool = "bun" }
-version = "1.4.4"
-options = { kind = "default" }
-depends_on = []
-[[qualified_tools.platforms]]
-platform = "linux_x64"
-artifacts = [
-  { url = "https://github.com/oven-sh/bun/releases/download/bun-v1.4.4/bun-linux-x64.zip", sha256 = "bf8ccbfb2b0b80159e0f9a6d15c55317add8077534dbc6130a3edb52fccb395c" },
-]
-dependency_artifacts = []
-install_tree_sha256 = "7c07b5eb3194ed1da6d07db7511e5a5661825ed7877c2a4cd635096afb87196a"
-[[qualified_tools.platforms.executables]]
-name = "bun"
-path = "bun"
-sha256 = "10702245766b225e70bbf6235fd6b47214fd94b4760d00ffaed8ab0df57ac235"
-probe = { kind = "version", expected = "1.4.4" }
-
-[[qualified_tools]]
-id = "cargo-nextest"
-backend = { kind = "aqua", package = "nextest-rs/nextest/cargo-nextest" }
-version = "0.9.152"
-options = { kind = "default" }
-depends_on = ["rust"]
-[[qualified_tools.platforms]]
-platform = "linux_x64"
-artifacts = [
-  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-x86_64-unknown-linux-gnu.tar.gz", sha256 = "d039b43c3e0958441b6ad0a39c8884d018b3d2e8fb9928f209074b1100b5e17a" },
-]
-dependency_artifacts = []
-install_tree_sha256 = "de02d1607c6947ae0f8fbb11d48f97ade7151f7d9dabe7040176fc75a4a7b967"
-[[qualified_tools.platforms.executables]]
-name = "cargo-nextest"
-path = "cargo-nextest"
-sha256 = "eae075c1f810a15aa3ffa31d774d2a9e3dbbbab3d0a1b8c3abad4f2cdb64c2b3"
-probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.152 (26ebeda79 2026-11-13)" }
-
-[[qualified_tools]]
-id = "jactionlint-linux-x64"
-backend = { kind = "aqua", package = "jdx/jactionlint" }
-version = "2.6.0"
-options = { kind = "default" }
-depends_on = []
-[[qualified_tools.platforms]]
-platform = "linux_x64"
-artifacts = [
-  { url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_amd64.tar.gz", sha256 = "d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8" },
-]
-dependency_artifacts = []
-install_tree_sha256 = "788eab0e6fc6285ca1857bba82990da92a6b00e0ae4183dc00c3afa372c2aeb8"
-[[qualified_tools.platforms.executables]]
-name = "jactionlint"
-path = "jactionlint"
-sha256 = "0793a4bcfd85a1cdf89296038fa86222c7a630bac2e7f0c988cbf2eb55f368c9"
-probe = { kind = "version", expected = "2.6.0" }
-
-[[qualified_tools]]
-id = "rust"
-backend = { kind = "core", tool = "rust" }
-version = "1.99.1"
-options = { kind = "rust", components = [], targets = [] }
-depends_on = []
-[[qualified_tools.platforms]]
-platform = "linux_x64"
-artifacts = [
-  { url = "https://static.rust-lang.org/dist/2026-10-15/cargo-1.99.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "53f3521949404d595efb06a55c12c5658d4ed1c75566f33d3d514eaebe70bd8a" },
-  { url = "https://static.rust-lang.org/dist/2026-10-15/rust-std-1.99.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "109b074225bf5b9ea3820890876bfdf4ed161adbfaf94b2b4b5984c85ee5d958" },
-  { url = "https://static.rust-lang.org/dist/2026-10-15/rustc-1.99.1-x86_64-unknown-linux-gnu.tar.xz", sha256 = "2ff05ff9c08a90861e7f6e4065b40a8b87463b4576186fd613871c3e37f2091f" },
-]
-dependency_artifacts = []
-install_tree_sha256 = "baa8089f830b6c49980b5c2274a0863d963d2eae8ef7f8ece56b90dfae8a8625"
-[[qualified_tools.platforms.executables]]
-name = "cargo"
-path = "bin/cargo"
-sha256 = "a670e02cfa39ac2e53f77a2d911ca1fc9e2c479b0603ec956625be1daf24e3af"
-probe = { kind = "version", expected = "cargo 1.99.1 (5f94df478 2026-08-27)" }
-[[qualified_tools.platforms.executables]]
-name = "rustc"
-path = "bin/rustc"
-sha256 = "b53b780f77f952062f8ca8a3b70aef2390b1e45ad91939be94afdc9543026853"
-probe = { kind = "rustc_verbose", expected = "rustc 1.99.1 (58cf8f9c3 2026-10-13)\nbinary: rustc\ncommit-hash: 58cf8f9c35b355199727627d07ae34a4e2846d67\ncommit-date: 2026-10-13\nhost: x86_64-unknown-linux-gnu\nrelease: 1.99.1\nLLVM version: 23.1.1" }
-
-[[qualified_tools]]
-id = "shellcheck-linux-x64"
-backend = { kind = "aqua", package = "koalaman/shellcheck" }
-version = "0.11.0"
-options = { kind = "default" }
-depends_on = []
-[[qualified_tools.platforms]]
-platform = "linux_x64"
-artifacts = [
-  { url = "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.xz", sha256 = "8c3be12b05d5c177a04c29e3c78ce89ac86f1595681cab149b65b97c4e227198" },
-]
-dependency_artifacts = []
-install_tree_sha256 = "7749409e35f099392243174fb0f8d90619339f3b1f81643901df731cfda31fe2"
-[[qualified_tools.platforms.executables]]
-name = "shellcheck"
-path = "shellcheck"
-sha256 = "4da528ddb3a4d1b7b24a59d4e16eb2f5fd960f4bd9a3708a15baddbdf1d5a55b"
-probe = { kind = "shellcheck_version", expected = "ShellCheck - shell script analysis tool\nversion: 0.11.0\nlicense: GNU General Public License, version 3\nwebsite: https://www.shellcheck.net" }

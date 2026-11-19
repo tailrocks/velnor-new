@@ -11,6 +11,7 @@ use velnor_model::{
 
 use crate::lane::Lane;
 use crate::plan::{job, step};
+use crate::units::Unit;
 
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
@@ -117,10 +118,9 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
     let restore = if has_saving_helper(facts) {
         StepKind::RestoredTargets {
             expiry,
-            targets: facts
-                .rust_roots
+            targets: crate::units::units(facts)
                 .iter()
-                .map(|root| root.target_dir.clone())
+                .map(|unit| unit.target_dir.clone())
                 .collect(),
             cli: inputs_cli(facts),
         }
@@ -157,7 +157,7 @@ fn expiry(facts: &RepoFacts) -> BaseExpiry {
 
 pub(crate) fn save_steps(
     facts: &RepoFacts,
-    root: &RustRoot,
+    unit: &Unit,
     lane: &Lane,
     job: &JobId,
     archive: Option<RepoPath>,
@@ -166,7 +166,7 @@ pub(crate) fn save_steps(
     if !writes_base(facts) {
         return Vec::new();
     }
-    let cache_root = cache_root(facts, root);
+    let cache_root = unit.cache_root(facts);
     let target = CacheKey::Target {
         job: job.clone(),
         root: cache_root.clone(),
@@ -174,10 +174,10 @@ pub(crate) fn save_steps(
     };
     let mut steps = vec![
         Step {
-            directory: root.manifest.parent(),
+            directory: unit.directory(),
             when: When::SaveBase,
             ..step(StepKind::InputsSave {
-                target: root.target_dir.clone(),
+                target: unit.target_dir.clone(),
                 cli: inputs_cli(facts),
             })
         },
@@ -189,7 +189,7 @@ pub(crate) fn save_steps(
                     .iter()
                     .map(|root| root.manifest.clone())
                     .collect(),
-                target: root.target_dir.clone(),
+                target: unit.target_dir.clone(),
                 archive,
                 cli: inputs_cli(facts),
                 budget_bytes: facts.config.cache_budget_bytes,

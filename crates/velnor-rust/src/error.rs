@@ -57,6 +57,16 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    DuplicateGroup(String),
+    GroupRootTwice {
+        name: String,
+        root: RepoPath,
+    },
+    UnknownGroupRoot(RepoPath),
+    GroupNameTaken(String),
+    GroupShape,
+    GroupHelper,
+    GroupTestGroups(RepoPath),
     UnknownTestLaneRoot(String),
     TestLaneWithoutNextest(String),
     UnknownTestLanePackage(String),
@@ -312,7 +322,14 @@ impl fmt::Display for Reason {
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
-            Self::Lint(_)
+            Self::DuplicateGroup(_)
+            | Self::GroupRootTwice { .. }
+            | Self::UnknownGroupRoot(_)
+            | Self::GroupNameTaken(_)
+            | Self::GroupHelper
+            | Self::GroupShape
+            | Self::GroupTestGroups(_)
+            | Self::Lint(_)
             | Self::LintDuplicate(_)
             | Self::LintKeyForeign { .. } => self.fmt_config(f),
             Self::InvalidPatch(key) => {

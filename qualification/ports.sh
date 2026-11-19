@@ -5,7 +5,7 @@
 
 # Qualification mode `ports`: two jobs on one host each publish host port 8080
 # of their own container, so the runner must give every job its own port
-# space. This is the script form of the `ports-*` jobs of qualification.yml,
+# space. This is the script form of the `ports-*` jobs of the old engine qualification.yml,
 # which wrote it as one `&&` chain with a `while` loop.
 #
 # The chain ran under the runner's default shell, `bash -e {0}`, which has no

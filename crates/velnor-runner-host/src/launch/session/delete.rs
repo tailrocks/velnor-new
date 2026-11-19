@@ -84,6 +84,57 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
     }
 }
 
+pub(crate) async fn retire_session_of_deleted_set(
+    link: &mut Link,
+    session: &QueueSession,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+) -> Option<SessionDeleteOutcome> {
+    let admin_token = Secret::new(link.token());
+    retire_session_of_deleted_set_with(
+        link.transport(),
+        admin_token.expose(),
+        session,
+        scoped,
+        session_intent_id,
+    )
+    .await
+}
+
+pub(super) async fn retire_session_of_deleted_set_with<T: Transport + ?Sized>(
+    transport: &mut T,
+    admin_token: &str,
+    session: &QueueSession,
+    scoped: &ConnectionJournal,
+    session_intent_id: i64,
+) -> Option<SessionDeleteOutcome> {
+    let allocation = scoped
+        .session_header_allocation(session_intent_id)
+        .await
+        .ok()?;
+    if !created_set_deleted_by_us(scoped, allocation.scale_set_id()).await {
+        return None;
+    }
+    if scoped
+        .settle_header_of_deleted_set(session_intent_id, &allocation)
+        .await
+        .is_err()
+    {
+        return Some(SessionDeleteOutcome::NotReady);
+    }
+    Some(
+        delete_removed_connection_session_with(
+            transport,
+            admin_token,
+            session,
+            scoped,
+            session_intent_id,
+            &allocation,
+        )
+        .await,
+    )
+}
+
 async fn created_set_deleted_by_us(scoped: &ConnectionJournal, scale_set_id: i64) -> bool {
     scoped
         .scale_set_recorded_deleted(scale_set_id)

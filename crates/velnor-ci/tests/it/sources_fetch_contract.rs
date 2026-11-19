@@ -51,6 +51,7 @@ fn rendered_run(manifests: &[&str]) -> String {
                     manifests,
                 },
                 directory: None,
+                manifest: None,
                 target_dir: None,
                 when: When::FetchSources,
                 pr: PrRun::Always,

@@ -59,7 +59,7 @@ pub(in crate::launch) use resource_probe::{PreJitCapacityObservation, measure_pr
 pub(crate) use session::{
     CompletedHeaderPoll, DeletedSession204, ReturnedSessionRefreshTransportError,
     SessionDeleteOutcome, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
-    delete_removed_connection_session, open_connection_session,
+    delete_removed_connection_session, open_connection_session, retire_session_of_deleted_set,
 };
 
 pub(crate) use turn::{

@@ -9,7 +9,8 @@
     missing_docs,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
-pub mod golden_collector;
+mod check_deadline;
+pub use check_deadline::{CheckDeadline, DeadlineError};
 pub mod owned_archive_guard;
 pub use owned_archive_guard::{
     validate_qualification_manifest, validate_qualification_output_bindings,

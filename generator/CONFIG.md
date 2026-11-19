@@ -88,6 +88,24 @@ With `[private_sources]` the `groups` shape builds and runs the tests in one job
 
 Every later cargo command of the job runs with `--offline` and `CARGO_NET_OFFLINE=true`. The token is written to no file, to `$GITHUB_ENV` or to any git configuration.
 
+## Workspace groups
+
+A repository with many small Cargo workspaces can check several of them in one job set, when the project asks for it. A group names the workspaces that share one job set; a workspace that no group names keeps its own jobs.
+
+```toml
+[[workspace_groups]]
+name = "tools"
+roots = ["tools/a", "tools/b", "tools/c"]
+```
+
+`name` is the group's job name and its cache name; it uses lowercase letters, digits and `_`, and it must not be the name of a Cargo root of the repository. `roots` are the folders of the roots' `Cargo.toml` files, or `.` for the repository root. Every root exists in the repository and belongs to at most one group, and a group has at least two roots.
+
+A group gets one set of jobs, named after the group. The job runs each cargo command once per root, one after another, with `--manifest-path` naming that root's manifest, from the repository root. All roots of a group share one build folder, `target-velnor/<name>`, so a crate that several of them use at the same version and features is compiled once. The group has one sources cache and one target cache, and the target cache key hashes the lock file of every root of the group. A root with nothing selected is skipped inside the job; the job itself runs when any root of the group is selected.
+
+A root of a group cannot have `[[test_groups]]` or `[[test_lane]]` entries; generation fails when one names it.
+
+The key needs a helper release that writes the plan output of every group (`0.1.86` or later); generation fails with an older pin.
+
 ## Optional shared MBX store
 
 `mbx_shared_store = true` in `.velnor/rust-ci.toml` makes every job run `velnor-ci mbx-store` right after the helper is installed. It needs `velnor-ci` 0.1.85 or later and is off by default.
@@ -142,7 +160,7 @@ lint = true
 doc = true
 ```
 
-The generator does not check that `filter` selects every test that exists only under the features. A new feature-only test whose name falls outside the filter is skipped without an error. Keep the filter to a naming rule that new feature-only tests follow.
+A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. It needs velnor-ci 0.1.86 or later, and `velnor-gen generate` refuses an older pin when a lane has a `filter`. A lane without a `filter` runs every selected test and has no guard.
 
 ## Unused dependencies
 

@@ -23,11 +23,36 @@ pub(crate) fn nextest_features(
         filter,
         ci_profile,
         NO_TESTS_FAIL,
+        "",
     );
     (
         format!("{TEST_STEP} (features: {})", features.join(",")),
         run,
         env,
+    )
+}
+
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+pub(crate) fn lane_guard(
+    features: &[String],
+    filter: &str,
+    except: &[String],
+) -> (String, String, Vec<(String, Value)>) {
+    let run = except.iter().fold(
+        format!(
+            "velnor-ci lane-guard --features {} --filter {}",
+            quoted(&features.join(",")),
+            quoted(filter)
+        ),
+        |text, id| format!("{text} --except-binary {}", quoted(id)),
+    );
+    (
+        format!("Test lane guard (features: {})", features.join(",")),
+        run,
+        vec![],
     )
 }
 
@@ -44,7 +69,7 @@ pub(crate) fn clippy_features(
     cargo: &str,
     features: &[String],
 ) -> (String, String, Vec<(String, Value)>) {
-    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[]);
+    let (name, run, env) = clippy(&format!("{cargo}{}", feature_flag(features)), &[], "");
     (
         format!("{name} (features: {})", features.join(",")),
         run,

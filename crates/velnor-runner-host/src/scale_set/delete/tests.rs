@@ -43,6 +43,8 @@ platform = "linux/amd64"
 endpoint = "unix:///docker.sock"
 "#;
 
+#[path = "tests/lifecycle.rs"]
+mod lifecycle;
 #[path = "tests/live_session.rs"]
 mod live_session;
 #[path = "tests/recovery.rs"]

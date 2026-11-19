@@ -12,6 +12,8 @@ use crate::journal::connection::storage::{
 };
 use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
+#[path = "header/deleted_set.rs"]
+mod deleted_set;
 #[path = "header/pressure.rs"]
 mod pressure;
 

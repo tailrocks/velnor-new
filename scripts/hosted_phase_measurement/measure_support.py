@@ -43,7 +43,7 @@ UNKNOWN_ACTUAL_COUNTER_REASON_FIELDS = {
 
 # Owned observation bindings carried inside the API-bound final artifact ZIP.
 # Field-for-field mirror of the merge pipeline's UnitObservationBinding
-# (crates/velnor-actions-orchestrator/src/task_report.rs); the merge pipeline
+# (the retired engine's task report); the merge pipeline
 # recomputes the blake3 content digest before sealing the artifact, and this
 # collector pins the sealed bytes through the artifact API size/digest gate.
 OBSERVATION_SCHEMA = 1

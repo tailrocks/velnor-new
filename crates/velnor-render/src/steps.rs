@@ -3,8 +3,8 @@
 
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, MERGE_GROUP_SKIP_OUTPUT,
-    MERGE_GROUP_STEP, RepoPath, RunnerLabel, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted, group_output_name,
+    MERGE_GROUP_STEP, RunnerLabel, Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
+    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -23,6 +23,7 @@ use crate::gate::{
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
+use crate::tests::Tests;
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
 pub(crate) const RUN: &str = "velnor-ci run --";
@@ -38,7 +39,6 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
 pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 
-pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
 #[path = "steps_helpers.rs"]
 mod steps_helpers;
@@ -53,12 +53,9 @@ const A_NEED_FAILED: &str =
 pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
     let lane = crate::cargo::cargo_lane(job);
-    let tests = job
-        .steps
-        .iter()
-        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)));
+    let tests = Tests::of(job);
     let mut steps =
-        crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, tests, lane));
+        crate::helper_integrity::secure_steps(job, job_steps(job, restores, audit, &tests, lane));
     let env = crate::cargo::hoist_target_dir(job, &mut steps);
     RenderedJob {
         id: job.id.to_string(),
@@ -87,7 +84,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             }))
-            .chain(test_outputs(job))
+            .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
             .chain(budget_outputs(job))
@@ -97,7 +94,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
     }
 }
 
-fn test_outputs(job: &Job) -> impl Iterator<Item = (String, String)> + '_ {
+fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (String, String)> + 'a {
     job.steps
         .iter()
         .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)))
@@ -112,12 +109,7 @@ fn test_outputs(job: &Job) -> impl Iterator<Item = (String, String)> + '_ {
         .into_iter()
         .flatten()
         .flatten()
-        .map(|name| {
-            (
-                name.to_owned(),
-                format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
-            )
-        })
+        .flat_map(|name| tests.outputs(name))
 }
 
 fn merge_group_output(job: &Job) -> Option<(String, String)> {
@@ -136,7 +128,7 @@ fn job_steps(
     job: &Job,
     restores: bool,
     audit: bool,
-    tests: bool,
+    tests: &Tests,
     lane: CargoLane,
 ) -> Vec<RenderedStep> {
     job.steps
@@ -158,21 +150,21 @@ fn rendered_steps(
     step: &Step,
     setup: Setup,
     audit: bool,
-    tests: bool,
+    tests: &Tests,
     lane: CargoLane,
     job_name: Option<&str>,
 ) -> Vec<RenderedStep> {
     let mut rendered = Vec::new();
     if audit && step.kind == StepKind::Cargo(CargoCommand::Doctest) {
-        rendered.push(cargo_step(&CargoCommand::BuildAll, true, lane));
+        rendered.push(cargo_step(
+            &CargoCommand::BuildAll,
+            step.manifest.as_ref(),
+            true,
+            lane,
+            None,
+        ));
     }
-    rendered.push(step_body(
-        &step.kind,
-        step.directory.as_ref(),
-        audit,
-        tests,
-        lane,
-    ));
+    rendered.push(step_body(step, audit, tests, lane));
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
             body.env.push(crate::cargo::target_dir_env(target));
@@ -219,15 +211,11 @@ fn rendered_steps(
     rendered
 }
 
-fn step_body(
-    kind: &StepKind,
-    directory: Option<&RepoPath>,
-    audit: bool,
-    tests: bool,
-    lane: CargoLane,
-) -> RenderedStep {
+fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> RenderedStep {
+    let kind = &step.kind;
+    let directory = step.directory.as_ref();
     match kind {
-        StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests),
+        StepKind::ReportCaches { caches, .. } => crate::report::lane(caches, tests.first_id()),
         StepKind::UploadMetrics => crate::report::artifact(true),
         StepKind::DownloadMetrics => crate::report::artifact(false),
         StepKind::CheckMetrics {
@@ -263,7 +251,13 @@ fn step_body(
         StepKind::SourcesFetchAll { manifests, .. } => {
             sources_fetch_all(manifests, lane.cache_debug)
         }
-        StepKind::Cargo(command) => cargo_step(command, audit, lane),
+        StepKind::Cargo(command) => cargo_step(
+            command,
+            step.manifest.as_ref(),
+            audit,
+            lane,
+            reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
+        ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
         StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),

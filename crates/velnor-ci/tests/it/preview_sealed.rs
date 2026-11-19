@@ -97,42 +97,6 @@ fn the_plan_is_refused_without_an_absolute_temp_a_full_digest_or_every_input() {
     }
 }
 
-fn legacy_script() -> String {
-    let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("../velnor-actions-mise/src/source_preview/source_preview_run_verified.py");
-    fs::read_to_string(path).unwrap_or_else(|e| unreachable!("{e}"))
-}
-
-#[test]
-fn the_allowlist_and_the_flags_are_the_legacy_ones() {
-    let script = legacy_script();
-    let block = script
-        .split("allowed = {")
-        .nth(1)
-        .and_then(|rest| rest.split('}').next())
-        .unwrap_or_default();
-    let names: Vec<&str> = block.split('"').skip(1).step_by(2).collect();
-    assert_eq!(names, ALLOWED_ENV);
-    let flags: Vec<&str> = script
-        .lines()
-        .filter_map(|l| l.split("\"--").nth(1))
-        .filter_map(|l| l.split('"').next())
-        .collect();
-    assert_eq!(
-        flags,
-        [
-            "producer-run-id",
-            "producer-run-attempt",
-            "producer-artifact-id",
-            "publisher-artifact-id",
-            "assets-dir",
-            "runner-temp"
-        ]
-    );
-    assert!(script.contains("\"image-maintenance\", \"verify-mac-attestation\""));
-    assert!(script.contains("268435456"));
-}
-
 fn run(env: &[(&str, &str)]) -> std::process::Output {
     Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .arg("verify-mac-proof")

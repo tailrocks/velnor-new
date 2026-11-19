@@ -32,7 +32,7 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             CacheKeySegment::Host => HOST.to_owned(),
             CacheKeySegment::TargetOwner { job, root } => format!("{job}.{root}.{HOST}"),
             CacheKeySegment::Compat => format!("${{{{ steps.{PREPARE_STEP}.outputs.compat }}}}"),
-            CacheKeySegment::Lock(path) => hash_files(std::slice::from_ref(path)),
+            CacheKeySegment::Locks(paths) => hash_files(paths),
             CacheKeySegment::RootLock(root) => {
                 format!("${{{{ steps.{PREPARE_STEP}.outputs.{LOCK_OUTPUT_PREFIX}{root} }}}}")
             }

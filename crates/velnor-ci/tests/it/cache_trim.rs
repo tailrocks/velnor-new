@@ -283,7 +283,7 @@ fn trim_keeps_a_sources_entry_restored_within_a_day_beyond_the_newest_two() {
     let row = |id: u64, accessed: &str| {
         format!(
             r#"{{"id":{id},"key":"{}","created_at":"2026-11-{id:02}T10:00:00Z","last_accessed_at":"{accessed}"}}"#,
-            keys[id as usize - 1]
+            keys[usize::try_from(id).expect("id fits usize") - 1]
         )
     };
     let listing = |restored: &str| {

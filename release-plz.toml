@@ -7,8 +7,8 @@
 #   tools-v<version>   velnor-ci and velnor-gen, always released together
 #   runner-v<version>  the runner
 #
-# The old engine (velnor-actions-*) has no group: it is being deleted and never
-# releases through release-plz. Every other package is not released either.
+# The old engine (velnor-actions-*) was deleted in #1459. Every other package is
+# not released by release-plz.
 #
 # Release-plz never diffs a `release = false` crate, so the runner's internal
 # crates carry their own `release = true` entry in the runner version group.

@@ -15,7 +15,7 @@
 # `$.package.edition` would reject all seven manifests. Adoption §4
 # requires the inheritance-aware form instead, enforced and tested by the
 # Rust policy suite (`cargo metadata` effective edition plus TOML
-# inheritance predicates in `crates/velnor-actions-cli/tests/fixtures/`).
+# inheritance predicates).
 #
 # Schema: alint config model (`version` + `rules`, each rule with
 # id/kind/level). The top-level `command` rule is trusted and checks only
@@ -177,12 +177,10 @@ rules:
         - "generator/*.md"
       exclude:
         - "scripts/generator-release/**"
-        - "scripts/restructure-crates.py"
-        - "scripts/test-restructure-crates.py"
         - "scripts/test-native-hk-fmt.sh"
     pattern: 'ci-helper/crates|generator/crates|local/crates|crates/velnor-runner/|crates/test_support'
     level: error
-    message: "Crates live in crates/velnor-* under the root workspace; use the new path (scripts/restructure-crates.py status lists the move table)"
+    message: "Crates live in crates/velnor-* under the root workspace; use the new path"
 
   - id: ci-gen-release-profile
     kind: file_content_forbidden
@@ -193,9 +191,6 @@ rules:
         - "scripts/**"
         - "images/**"
         - "mise.toml"
-      exclude:
-        - "scripts/restructure-crates.py"
-        - "scripts/test-restructure-crates.py"
     pattern: 'cargo build[^\n]*--release\b[^\n]*(velnor-ci|velnor-gen|ci-helper|generator/Cargo)|cargo build[^\n]*(velnor-ci|velnor-gen|ci-helper|generator/Cargo)[^\n]*--release\b|release-rust-ci-tools[^\n]*--release\b|/release/velnor-(ci|gen)\b|(ci-helper|generator)/target'
     level: error
     message: "velnor-ci and velnor-gen ship with the size-tuned release-tools profile: build them with `cargo build --profile release-tools -p <package>` and copy from target/<triple>/release-tools/"

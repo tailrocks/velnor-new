@@ -244,6 +244,7 @@ pub struct SummaryTap {
     counts: Option<TestCounts>,
     seen: Seen,
     closed: bool,
+    started: bool,
 }
 
 impl SummaryTap {
@@ -270,6 +271,11 @@ impl SummaryTap {
     }
 
     #[must_use]
+    pub fn started(&self) -> bool {
+        self.started
+    }
+
+    #[must_use]
     pub fn finish(mut self) -> Option<TestCounts> {
         self.end_line();
         self.counts
@@ -279,6 +285,9 @@ impl SummaryTap {
         let line = String::from_utf8_lossy(&self.line);
         let cleaned = strip_ansi(&line);
         let trimmed = cleaned.trim_start();
+        if !self.overlong && trimmed.starts_with("Starting ") && trimmed.contains(" across ") {
+            self.started = true;
+        }
         let summary = if self.overlong {
             None
         } else {

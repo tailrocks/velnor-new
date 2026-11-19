@@ -100,6 +100,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
                 .map(|kind| Step {
                     kind,
                     directory: None,
+                    manifest: None,
                     target_dir: None,
                     when: When::Success,
                     skip_on_draft: false,
