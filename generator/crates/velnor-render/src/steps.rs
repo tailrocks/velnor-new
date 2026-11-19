@@ -35,6 +35,10 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
 
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.10";
+#[path = "steps_helpers.rs"]
+mod steps_helpers;
+use steps_helpers::{rustup_add, saved_unless_hit, variable};
+
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
@@ -227,46 +231,6 @@ fn rendered_steps(
         rendered.push(verify);
     }
     rendered
-}
-
-fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
-    match kind {
-        StepKind::CacheSave(CacheKey::Sources { lane, .. }) => vec![format!(
-            "steps.{}.outputs.cache-hit != 'true'",
-            sources_step(lane.slug())
-        )],
-        StepKind::SourcesFetch { lane, position } => {
-            let mut terms = vec![format!(
-                "steps.{}.outputs.cache-hit != 'true'",
-                sources_step(lane)
-            )];
-            if let Some(previous) = position.checked_sub(1) {
-                terms.push(format!(
-                    "steps.{}.outcome == 'success'",
-                    crate::gate::sources_fetch_step(previous)
-                ));
-            }
-            terms
-        }
-        StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
-        _ => Vec::new(),
-    }
-}
-
-fn variable(need: GateNeed) -> &'static str {
-    match need {
-        GateNeed::TestFilter => "TEST_FILTER",
-        GateNeed::DoctestsKnown => "DOCTESTS_KNOWN",
-        _ => "PACKAGE_ARGS",
-    }
-}
-
-fn rustup_add(kind: &str, items: &[String]) -> RenderedStep {
-    RenderedStep {
-        name: format!("Add Rust {kind}s"),
-        run: Some(format!("rustup {kind} add {}", items.join(" "))),
-        ..RenderedStep::default()
-    }
 }
 
 fn step_body(
