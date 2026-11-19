@@ -8,7 +8,7 @@ use velnor_model::{
     RepoPath, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetKind, When,
 };
 
-use crate::audit_job::{AuditLocation, audit_when, audits_per_root};
+use crate::audit_job::{AuditLocation, audit_location, audit_when};
 use crate::base_cache::{save_steps, saving_run};
 use crate::doc_steps::has_doctest_library;
 use crate::harness::{runs_in_direct_step, selector_id, uses_nextest};
@@ -44,14 +44,7 @@ pub(crate) fn root_jobs(
         root,
         lane,
         suffixed,
-        audit: if !audits_per_root(facts)
-            && (suffixed
-                || (decision.shape != Shape::OneJob && crate::base_cache::writes_base(facts)))
-        {
-            AuditLocation::Separate
-        } else {
-            AuditLocation::Inline
-        },
+        audit: audit_location(facts, decision.shape, suffixed),
         nextest: root
             .members
             .iter()

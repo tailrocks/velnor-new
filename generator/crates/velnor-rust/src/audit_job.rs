@@ -3,7 +3,7 @@
 
 use velnor_model::{
     CacheKey, CacheRoot, CargoCommand, HelperCommand, Job, JobId, RepoFacts, RootSlug, RustRoot,
-    StepKind,
+    Shape, StepKind,
 };
 
 use crate::lane::{Lane, PLAN_JOB};
@@ -18,6 +18,16 @@ pub(crate) fn audits_per_root(facts: &RepoFacts) -> bool {
         .helper
         .as_ref()
         .is_some_and(|release| release.version().at_least((0, 1, 82)))
+}
+
+pub(crate) fn audit_location(facts: &RepoFacts, shape: Shape, suffixed: bool) -> AuditLocation {
+    let separate = !audits_per_root(facts)
+        && (suffixed || (shape != Shape::OneJob && crate::base_cache::writes_base(facts)));
+    if separate {
+        AuditLocation::Separate
+    } else {
+        AuditLocation::Inline
+    }
 }
 
 pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
