@@ -103,7 +103,7 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
     assert!(
         Command::new(program("tar"))
             .arg("--create")
-            .arg("--gzip")
+            .arg(format!("--use-compress-program={}", program("gzip")))
             .arg("--file")
             .arg(release.join(ARCHIVE))
             .arg("--directory")
@@ -182,7 +182,7 @@ impl Install {
         fs::write(packed.join("velnor-ci"), Self::BINARY)?;
         let status = std::process::Command::new(program("tar"))
             .arg("--create")
-            .arg("--gzip")
+            .arg(format!("--use-compress-program={}", program("gzip")))
             .arg("--file")
             .arg(release.join(ARCHIVE))
             .arg("--directory")
