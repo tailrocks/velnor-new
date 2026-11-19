@@ -6,6 +6,7 @@ exclude = ["fixtures/**"]
 required_check = "Required"
 mbx_shared_store = true
 docs = "post_merge"
+pr_ci = "label"
 helper = { path = "ci-helper" }
 
 [[inputs]]

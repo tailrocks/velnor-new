@@ -33,18 +33,18 @@ pub use ids::{
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use plan::{
-    Access, BUILD_TESTS_STEP, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency, FilterRef,
-    Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
-    Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Shape, ShapeDecision, Step, TEST_STEP,
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
-    When, WorkflowPlan,
+    Access, BUILD_TESTS_STEP, CargoCommand, CI_AUTO_LABEL, CI_RUN_LABEL, Concurrency, FilterRef,
+    Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, Permissions,
+    PermissionScope, PlanFrom, PlanRef, PrRun, PullRequestType, Shape, ShapeDecision, Step,
+    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan, group_output_name,
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, DocsRun,
-    FullRun, GroupEvent, GroupRoot, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
+    FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
     PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
     RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
-    TargetKind, TestGroup, TestNeed, TestSetup, Timings, ToolPin, ToolPins, Toolchain,
+    TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain,
     UnownedPackage, Unread, Weakening,
 };
 pub use selection::{
@@ -52,6 +52,7 @@ pub use selection::{
     RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed, WORKFLOW_PATH,
     WORKFLOWS_CONFIG_PATH,
 };
+pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{BaseExpiry, HelperCommand, StepKind, TrimFamily};

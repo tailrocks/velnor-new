@@ -64,15 +64,15 @@ pub const GH_VERSION: &str = "2.104.0";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
 pub const NEXTEST_VERSION: &str = "0.9.151";
-pub const OPENTOFU_VERSION: &str = "1.13.8";
+pub const OPENTOFU_VERSION: &str = "1.13.9";
 pub const OPENTOFU_SHA256_LINUX_AMD64: &str =
-    "dab8135df87343ce143e1bef1a6174d7b82035950818bde17950658ff9a72697";
+    "b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857";
 pub const OPENTOFU_SHA256_LINUX_ARM64: &str =
-    "fb4a3cbae5eba5a07f16e53bdf61493d2da81b4a559f645b39761409a7abc2ea";
+    "5dc196dde75b667e4806d358310ec96742774cd0993c54c1237efee5644b69b8";
 pub const OPENTOFU_SHA256_DARWIN_AMD64: &str =
-    "1e829e672127cef6c712496adb161c22d5b85775a96f3ae1b3749151ea55e9fb";
+    "347e2e5a2cfe2f368829572d308b2e7c1e0486b20a1779090ff06360f7551e4f";
 pub const OPENTOFU_SHA256_DARWIN_ARM64: &str =
-    "dc53f79995cb235a3f68e87d3856f37179a091a9c75ff4eaf1d5ebf0006e4cf4";
+    "496f4c3064b5c3bff79174b3dae4faaf65a66774eb8e2bf074f895412c5f124f";
 pub const RELEASE_PLZ_VERSION: &str = "0.4.3";
 pub const CRANE_VERSION: &str = "0.22.1";
 pub const BUN_VERSION: &str = "1.4.4";
