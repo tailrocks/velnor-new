@@ -16,6 +16,7 @@ pub enum DetectError {
     MiseLockRequired { path: RepoPath },
     ToolNotPrebuilt { tool: String, platform: String },
     NextestRequired { path: RepoPath },
+    RustPinRequired { channel: String, path: RepoPath },
     SameSlug { first: RepoPath, second: RepoPath },
     ToolchainConflict { file: String, mise: String },
     NestedToolchain { file: RepoPath },
@@ -260,6 +261,10 @@ impl fmt::Display for DetectError {
             Self::NextestRequired { path } => write!(
                 f,
                 "the generated job runs the tests with cargo-nextest; pin it in {path}, for example \"aqua:nextest-rs/nextest/cargo-nextest\" = \"<version>\""
+            ),
+            Self::RustPinRequired { channel, path } => write!(
+                f,
+                "the Rust toolchain file names {channel}, and the generated jobs never let rustup install a toolchain on its own; pin rust = \"{channel}\" in {path}"
             ),
             Self::SameSlug { first, second } => write!(
                 f,
