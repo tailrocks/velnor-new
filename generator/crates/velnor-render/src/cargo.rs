@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, LINT_STEP, RepoPath, TEST_STEP, TargetKind,
-    TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, LINT_STEP, PackageName, RepoPath, TEST_STEP,
+    TargetKind, TargetName,
 };
 
 use crate::gate::CACHE_DEBUG_ON;
@@ -115,15 +115,7 @@ fn cargo_command(
             target,
             kind,
             features,
-        } => (
-            format!("Test {package} {target}"),
-            format!(
-                "cargo test -p {package} --locked{cargo} {}{}",
-                test_selector(*kind, target),
-                feature_flag(features)
-            ),
-            vec![],
-        ),
+        } => test_target(package, target, *kind, features, cargo),
         CargoCommand::Doctest => (
             "Doctests".into(),
             format!("cargo test --doc --workspace --locked{cargo}"),
@@ -153,6 +145,24 @@ fn cargo_command(
         } => deny(manifest, *locked, config.as_ref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
+}
+
+fn test_target(
+    package: &PackageName,
+    target: &TargetName,
+    kind: TargetKind,
+    features: &[String],
+    cargo: &str,
+) -> (String, String, Vec<(String, Value)>) {
+    (
+        format!("Test {package} {target}"),
+        format!(
+            "cargo test -p {package} --locked{cargo} {}{}",
+            test_selector(kind, target),
+            feature_flag(features)
+        ),
+        vec![],
+    )
 }
 
 fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
