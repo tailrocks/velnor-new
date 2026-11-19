@@ -239,7 +239,7 @@ velnor-local conformance --dir "$STATE"
 It prints each leg as `reproduced`, with its differences, or as `not observed`, and exits with an error unless every leg is reproduced. The legs of `event-payload`, `cache-restore-keys`, `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` are reproduced. The rest differ, each for a reason listed in #632 (the lab-side fixes are tailrocks/velnor-lab#289):
 
 - `cache-save-existing` reads the job log from `https://api.github.com`, not from `GITHUB_API_URL`; with the probe reading `GITHUB_API_URL` it is reproduced.
-- `needs-result` cancels its run with `gh run cancel`, which the runner image does not have and which would call github.com. Cancellation is not modelled: a run that cancels itself is not cancelled locally, so `if: cancelled()` and `needs.<job>.result == 'cancelled'` behave differently from GitHub.
+- `needs-result` is refused locally, not run. Its canceller cancels the run with `gh run cancel`, which the runner image does not have and which would call github.com, so the sleeper never ends and `run` would wait for it. `scenarios/probe-needs-result.json` carries `not_modelled`, and `run` refuses it with `not modelled locally` before it starts an environment, so its legs print as `not observed`. Cancellation is not modelled: `if: cancelled()` and `needs.<job>.result == 'cancelled'` are not checked here.
 - `token` reads GitHub's own claims, such as the cache scopes in `ac`; runner.server signs other claims (`ref`, `defaultRef`, `repository`), which the cache server reads, and the cache scopes they lead to are what `cache-pr-reads`, `cache-other-pr` and `cache-own-pr` check.
 
 ## Cache rules and cache server
