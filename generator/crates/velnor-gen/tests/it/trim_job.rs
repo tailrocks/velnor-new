@@ -178,7 +178,7 @@ fn a_two_root_budget_waits_for_both_lanes_and_guards_their_trims() -> TestResult
     let mut repo = view(&["Cargo.toml", "lab/Cargo.toml"], Some(b""))?;
     repo.files.insert(
         LOCK_PATH,
-        pin_lock("0.1.81", COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock("0.1.81", COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     let text = workflow(&repo)?;
     let trim = jobs_of(&text)

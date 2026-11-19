@@ -13,7 +13,7 @@ fn render(version: &str, config: &str) -> Result<String, Box<dyn std::error::Err
     let mut repo = view(&["Cargo.toml"], Some(config.as_bytes()))?;
     repo.files.insert(
         LOCK_PATH,
-        pin_lock(version, COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock(version, COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     workflow(&repo)
 }
