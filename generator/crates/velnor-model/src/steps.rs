@@ -105,4 +105,5 @@ pub enum HelperCommand {
     CheckMetadata,
     Restored(BaseExpiry),
     InputsAudit,
+    MergeGroupPassed,
 }

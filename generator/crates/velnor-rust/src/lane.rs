@@ -86,6 +86,8 @@ impl Lane {
                 .map(|root| root.target_dir.clone()),
             kind: StepKind::Cargo(command),
             when: When::NotCancelled,
+            skip_on_draft: false,
+            skip_after_merge_group: None,
             pr: PrRun::Always,
         }
     }

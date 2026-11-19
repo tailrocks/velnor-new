@@ -53,6 +53,7 @@ mod lane_guard;
 mod logscan;
 mod mbx_seed;
 mod mbx_store;
+mod merge_group_skip;
 mod plan;
 mod plan_api;
 mod plan_git;
