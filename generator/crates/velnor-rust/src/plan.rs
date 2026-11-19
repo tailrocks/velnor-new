@@ -4,10 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, MbxRemote, MbxStore, PackageName, Permissions, PermissionScope, PrCi, PrRun,
-    PullRequestType, PushAfterMergeGroup, RepoFacts, RootSlug, RunnerLabel, RustRoot, Shape,
-    ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers, When, WorkflowPlan,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RunnerLabel, RustRoot, Shape, ShapeDecision, Step,
+    StepKind, TargetName, Toolchain, ToolsLocalVerb, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -25,6 +25,7 @@ pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
 pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
+pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
@@ -213,15 +214,55 @@ pub(crate) fn tools_cache_key() -> CacheKey {
     CacheKey::Tools { host: Host }
 }
 
-pub(crate) fn tools_restore(facts: &RepoFacts) -> Option<Step> {
-    (!facts.tools.tools.is_empty()).then(|| step(StepKind::CacheRestore(tools_cache_key())))
+fn tools_local(facts: &RepoFacts) -> bool {
+    facts.config.mbx_store == MbxStore::Shared
+        && facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(TOOLS_LOCAL_HELPER))
 }
 
-pub(crate) fn tools_save(facts: &RepoFacts) -> Option<Step> {
-    (!facts.tools.tools.is_empty()).then(|| Step {
-        when: When::SaveToolsOnDefaultBranch,
+pub(crate) fn tools_restore(facts: &RepoFacts) -> Vec<Step> {
+    if facts.tools.tools.is_empty() {
+        return Vec::new();
+    }
+    let local = tools_local(facts);
+    let network = Step {
+        when: if local {
+            When::RestoreToolsUnlessLocal
+        } else {
+            When::Success
+        },
+        ..step(StepKind::CacheRestore(tools_cache_key()))
+    };
+    local
+        .then(|| step(StepKind::ToolsLocal(ToolsLocalVerb::Restore)))
+        .into_iter()
+        .chain([network])
+        .collect()
+}
+
+pub(crate) fn tools_save(facts: &RepoFacts) -> Vec<Step> {
+    if facts.tools.tools.is_empty() {
+        return Vec::new();
+    }
+    let local = tools_local(facts);
+    let network = Step {
+        when: if local {
+            When::SaveToolsUnlessLocal
+        } else {
+            When::SaveToolsOnDefaultBranch
+        },
         ..step(StepKind::CacheSave(tools_cache_key()))
-    })
+    };
+    local
+        .then(|| Step {
+            when: When::SavingRun,
+            ..step(StepKind::ToolsLocal(ToolsLocalVerb::Save))
+        })
+        .into_iter()
+        .chain([network])
+        .collect()
 }
 
 pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
@@ -285,14 +326,11 @@ pub(crate) fn setup_roots(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = [
-        mirror_step(facts),
-        tools_restore(facts),
-        tools_install(facts),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    let mut toolchain: Vec<Step> = mirror_step(facts)
+        .into_iter()
+        .chain(tools_restore(facts))
+        .chain(tools_install(facts))
+        .collect();
     if !facts.tools.tools.is_empty() {
         toolchain.extend(mirror_step(facts));
     }

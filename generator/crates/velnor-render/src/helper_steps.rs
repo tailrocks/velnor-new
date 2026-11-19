@@ -108,6 +108,40 @@ pub(crate) fn mbx_seed_step() -> RenderedStep {
     }
 }
 
+pub(crate) fn node_step(kind: &velnor_model::StepKind) -> RenderedStep {
+    match kind {
+        velnor_model::StepKind::ToolsLocal(verb) => tools_local_step(*verb),
+        _ => mbx_seed_step(),
+    }
+}
+
+fn tools_local_step(verb: velnor_model::ToolsLocalVerb) -> RenderedStep {
+    let key = crate::cache::render_key(&velnor_model::CacheKey::Tools {
+        host: velnor_model::Host,
+    })
+    .key;
+    let (name, id, word) = match verb {
+        velnor_model::ToolsLocalVerb::Restore => (
+            "Restore the tools from the node store",
+            Some(crate::gate::TOOLS_LOCAL_STEP.to_owned()),
+            "restore",
+        ),
+        velnor_model::ToolsLocalVerb::Save => ("Save the tools to the node store", None, "save"),
+    };
+    RenderedStep {
+        id,
+        name: name.to_owned(),
+        env: vec![(
+            "VELNOR_TOOLS_KEY".to_owned(),
+            crate::rules::Value::Expr(key),
+        )],
+        run: Some(format!(
+            "velnor-ci tools-local {word} --key \"$VELNOR_TOOLS_KEY\""
+        )),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn restored_step(
     expiry: velnor_model::BaseExpiry,
     targets: &[RepoPath],

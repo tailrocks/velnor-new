@@ -78,6 +78,7 @@ pub enum StepKind {
     MbxRemote,
     MbxStore,
     MbxSeed,
+    ToolsLocal(ToolsLocalVerb),
     TestSetup {
         name: String,
         run: String,
@@ -109,6 +110,12 @@ pub enum StepKind {
 pub struct GroupFilter {
     pub name: String,
     pub filter: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolsLocalVerb {
+    Restore,
+    Save,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
