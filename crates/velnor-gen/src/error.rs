@@ -33,6 +33,7 @@ pub enum GenerateError {
     CheckAloneHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
+    TagPushHelperTooOld(HelperVersion),
     LaneGuardHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Workflows(WorkflowsError),
@@ -113,6 +114,10 @@ impl fmt::Display for GenerateError {
             Self::FamilyTagHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
+            ),
+            Self::TagPushHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot check a pushed family tag, which family_trigger = \"tag_push\" needs; pin velnor-ci 0.1.97 or later with `velnor-gen pin-helper 0.1.97`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Workflows(error) => error.fmt(f),

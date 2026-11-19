@@ -120,11 +120,26 @@ fn smoke_run_values_have_no_expression_and_take_the_tag_from_env() -> TestResult
 }
 
 #[test]
-fn smoke_on_an_archive_binary_is_refused() {
-    assert!(matches!(
-        refused("[[binaries]]\npackage = \"app\"\nsmoke = true\n"),
-        Some(ReleaseError::KeyNeedsFormat { key: "smoke", .. })
-    ));
+fn smoke_on_an_archive_binary_runs_the_built_binary_before_packing() -> TestResult {
+    let (_, tree) = render(
+        &[APP],
+        Some("[[binaries]]\npackage = \"app\"\nsmoke = true\n"),
+    )?;
+    let commands = runs(job(&tree, "build-app-linux-x64")?);
+    let run = commands
+        .iter()
+        .position(|run| *run == "target/x86_64-unknown-linux-musl/release/app --version")
+        .ok_or("no run")?;
+    let pack = commands
+        .iter()
+        .position(|run| run.starts_with("tar -czf"))
+        .ok_or("no pack")?;
+    assert_eq!(
+        commands[run + 1],
+        "target/x86_64-unknown-linux-musl/release/app check-tag \"$TAG\""
+    );
+    assert!(run + 1 < pack);
+    Ok(())
 }
 
 #[test]

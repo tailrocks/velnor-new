@@ -8,6 +8,7 @@ use crate::asset_name;
 use crate::bundle::{ExtraBin, RawExtraBin, parse as bundle};
 use crate::check::RawCheck;
 use crate::error::ReleaseError;
+use crate::error_family::FamilyError;
 use crate::release_plz::valid_package_name;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -21,6 +22,13 @@ pub enum BinaryFormat {
 #[serde(rename_all = "lowercase")]
 pub enum Checksum {
     Sha256,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FamilyTrigger {
+    WorkflowRun,
+    TagPush,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
@@ -55,7 +63,16 @@ pub(crate) struct VelnorConfig {
     pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
     pub(crate) family_tag: Option<String>,
+    pub(crate) family: FamilyOptions,
     pub(crate) checks: Vec<RawCheck>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub(crate) struct FamilyOptions {
+    pub(crate) trigger: Option<FamilyTrigger>,
+    pub(crate) checksums_file: Option<String>,
+    pub(crate) commit_file: bool,
+    pub(crate) attest: bool,
 }
 
 #[derive(Deserialize)]
@@ -92,6 +109,12 @@ struct Raw {
     #[serde(default)]
     binaries: Vec<RawBinary>,
     family_tag: Option<String>,
+    family_trigger: Option<FamilyTrigger>,
+    checksums_file: Option<String>,
+    #[serde(default)]
+    commit_file: bool,
+    #[serde(default)]
+    attest: bool,
     #[serde(default)]
     checks: Vec<RawCheck>,
 }
@@ -118,6 +141,10 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             pr_only_checks: Vec::new(),
             binaries: Vec::new(),
             family_tag: None,
+            family_trigger: None,
+            checksums_file: None,
+            commit_file: false,
+            attest: false,
             checks: Vec::new(),
         },
     };
@@ -160,6 +187,13 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             .map(String::as_str)
             .collect::<Vec<_>>(),
     )?;
+    let family = family_options(
+        raw.family_tag.is_some(),
+        raw.family_trigger,
+        raw.checksums_file,
+        raw.commit_file,
+        raw.attest,
+    )?;
     let binaries = raw
         .binaries
         .into_iter()
@@ -181,8 +215,56 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         pr_only_checks: raw.pr_only_checks,
         binaries,
         family_tag: raw.family_tag,
+        family,
         checks: raw.checks,
     })
+}
+
+fn family_options(
+    has_family_tag: bool,
+    trigger: Option<FamilyTrigger>,
+    checksums_file: Option<String>,
+    commit_file: bool,
+    attest: bool,
+) -> Result<FamilyOptions, ReleaseError> {
+    if !has_family_tag {
+        let key = if trigger.is_some() {
+            Some("family_trigger")
+        } else if checksums_file.is_some() {
+            Some("checksums_file")
+        } else if commit_file {
+            Some("commit_file")
+        } else if attest {
+            Some("attest")
+        } else {
+            None
+        };
+        if let Some(key) = key {
+            return Err(FamilyError::NeedsFamilyTag { key }.into());
+        }
+    }
+    if let Some(name) = &checksums_file {
+        refuse_expressions("checksums_file", &[name])?;
+        if !valid_file_name(name) || RESERVED_FAMILY_FILES.contains(&name.as_str()) {
+            return Err(FamilyError::InvalidChecksumsFile { name: name.clone() }.into());
+        }
+    }
+    Ok(FamilyOptions {
+        trigger,
+        checksums_file,
+        commit_file,
+        attest,
+    })
+}
+
+const RESERVED_FAMILY_FILES: [&str; 2] = ["SHA256SUMS", "COMMIT"];
+
+fn valid_file_name(name: &str) -> bool {
+    !name.is_empty()
+        && !name.starts_with(['.', '-'])
+        && name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
 }
 
 fn text_refs(values: &[String]) -> Vec<&str> {
@@ -288,13 +370,6 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
             package: raw.package,
             key: "member_digests",
             format: "archive",
-        });
-    }
-    if format == BinaryFormat::Archive && raw.smoke {
-        return Err(ReleaseError::KeyNeedsFormat {
-            package: raw.package,
-            key: "smoke",
-            format: "raw",
         });
     }
     let (bins, include) = bundle(&raw.package, &bin, raw.bins, raw.include)?;

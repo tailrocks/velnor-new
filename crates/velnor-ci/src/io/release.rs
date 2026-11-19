@@ -17,7 +17,7 @@ use crate::release::{
     check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
 use crate::release_commit::tagged_commits;
-use crate::release_family::{family_tag, lines, tag_of, version_of};
+use crate::release_family::{family_tag, lines, require_pushed, tag_of, version_of};
 use crate::release_preflight::check_release_source;
 use crate::release_published::check_published_tagged;
 use crate::release_recover::recover;
@@ -48,6 +48,9 @@ pub(super) fn run_family_tag(args: &FamilyTagArgs) -> Result<String, CiError> {
         })
         .collect::<Result<Vec<_>, CiError>>()?;
     let tag = tag_of(&args.tag_pattern, &version_of(&metadata, &args.packages)?)?;
+    if let Some(pushed) = &args.pushed_tag {
+        require_pushed(&tag, pushed)?;
+    }
     let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
     let outcome = family_tag(
         &github,

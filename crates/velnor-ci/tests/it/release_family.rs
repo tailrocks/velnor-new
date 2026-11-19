@@ -5,7 +5,9 @@ use std::sync::Mutex;
 
 use velnor_ci::error::CiError;
 use velnor_ci::github::{GitHub, Repo};
-use velnor_ci::release_family::{Family, GitHubPost, family_tag, lines, tag_of, version_of};
+use velnor_ci::release_family::{
+    Family, GitHubPost, family_tag, lines, require_pushed, tag_of, version_of,
+};
 
 const VERIFIED: &str = "1111111111111111111111111111111111111111";
 const EARLIER: &str = "2222222222222222222222222222222222222222";
@@ -134,4 +136,14 @@ fn the_binaries_must_share_one_version() {
         metadata("0.1.81").replace("app", "tools"),
     ];
     assert!(version_of(&split, &names).is_err());
+}
+
+#[test]
+fn a_pushed_tag_must_be_the_family_tag_of_the_versions() -> Result<(), CiError> {
+    let tag = tag_of("tools-v{{ version }}", "0.1.97")?;
+    assert!(require_pushed(&tag, "tools-v0.1.97").is_ok());
+    for pushed in ["tools-v0.1.96", "tools-v0.1.97-rc1", "app-v0.1.97", ""] {
+        assert!(require_pushed(&tag, pushed).is_err(), "{pushed}");
+    }
+    Ok(())
 }
