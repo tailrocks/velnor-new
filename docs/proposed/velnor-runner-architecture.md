@@ -68,8 +68,10 @@ greens have zero tolerance. "Same confidence" is this contract.
    (`CARGO_BIN_EXE_*`), data files, the execution fingerprint and the executor's identity (section
    6.1). Every obligation runs on the full tree: cargo refuses a missing member, and a trimmed
    sandbox turns a real failure green [M, reproduced]. **Keys are the whole tree** until section
-   6.1's enrolment narrows one; a read trace never proves a key complete, because it cannot see a
-   branch the run did not take.
+   6.1's enrolment narrows one; a read trace never proves a key complete: it cannot see a branch the
+   run did not take, clock reads answered in the vDSO, or the run-to-run variation of what is read
+   (a `HashMap`'s seed chose a different fixture on one tree, so a trace-keyed lookup passed a tree
+   where 12 of 40 fresh runs fail [M, landscape ruling X01]).
 3. **C3. Selection is sound or wide.** The plan and the **obligation inventory** come from a
    released helper and the base commit, never from the change under test (`docs/goals.md` rule 12).
    The inventory is versioned and maps every check that gates today (section 8.1); a file the plan
@@ -117,9 +119,12 @@ rerun or a queue ejection, and every queued entry behind an ejection is rebuilt.
   half as often (two runs at today's 8.1% fail together-or-either 15.5% of the time); each claimed only after about 300 rerun pairs sampled both ways under
   load (zero disagreements in 299 bound the rate just under 1% at 95%). "Not requested" never
   counts. Today's 8.1% [M] comes from full runs.
-- **Act:** retries stay at 0, so a flaky test fails and is counted. Two false failures in seven days
-  open an owner-labelled issue; a test is fixed, or quarantined only when a blocking check covers the
-  same property or under an expiring owner exception.
+- **Act:** retries stay at 0, so a flaky test fails and is counted. Per-test discordance is scored
+  from witness pairs, A1 and the 2% sample; two false failures in seven days open an issue
+  automatically. A test is fixed, or quarantined only when an equivalent blocking check is shown to
+  catch the same planted fault; a quarantined test keeps running in a non-blocking lane and returns
+  to blocking automatically when its quarantine expires. An owner exception is an inventory
+  reduction (owner question D17), unavailable while D17's default holds.
 - **Known causes first:** CPU starvation of tight timeouts under pods that request 2 CPU and burst
   to 84 cores (§B.2.2); the `event.json` rewrite race between steps (I023). Obligations run the `ci`
   nextest profile, so the 2 s kill of the default profile (S8, F-H36) is not among them.
@@ -159,11 +164,12 @@ One typical PR (the 47% class touching only `generator/` or `ci-helper/`), label
 |---|---|---|---|
 | 1. Event, webhook, job offer | push → run 1–2 s; run → first job 2 s p50, 226 s p90; hosted Plan queue 5.5 min median | webhook 1–2 s; the reconciler within 10 s | Verification starts from the label or labelled push; no Actions job is on the verdict path |
 | 2. Acquire | 13 s p50, 27 s p90 from job created to started, n = 1,124 (scale set, ruling V5) | not on the verdict path | Obligations are not Actions jobs; Actions jobs (release, image, scheduled) acquire on pre-registered JIT identities |
-| 3. Sandbox start | ARC pod about 6 s (436 starts) plus a dind probe | ≤ 1 s P90 for provision, attach and spawn (only the 0.25 s clone is [M]) | Warm pool; the clone lands in the warm pod's pre-mounted volume, since a running pod takes no new mount |
+| 3. Sandbox start | ARC pod about 6 s (436 starts) plus a dind probe | build class on a pool hit: ≤ 1 s P90 for claim, attach and spawn (only the 0.25 s clone is [M]) | Warm pool sized by demand; the clone lands in the warm pod's pre-mounted volume, since a running pod takes no new mount |
+| 3d. Docker-class start | 3–4 s dind probe [M] | seconds: a private daemon per request | Only the three Docker-class binaries pay it |
 | 4. Checkout | 6 s per job × 31–39 jobs; Plan 12 s | ≤ 1 s | Node mirror; a reflink clone of a sealed tree plus the changed files, then a full tree check (section 7.4) |
 | 5. Toolchain and tools | 10 s median, 18 s p90, plus mise 2 s and action downloads 4.4 s per job | ≈ 0 s | Read-only verified tool store; native actions |
 | 6. Dependency fetch | 3.5–6.1 s per job; sources cache 0 of 48 | 0 s (≈ 3 s on a lockfile change) | Site crates mirror and node crate store |
-| 7. Compile | 196–497 crates per job; 81 s runner-host, 14 s velnor-ci; 8.5 min critical path | ≤ 25 s (15 s) | Warm generation: only the change's closure compiles; 0 crates and 0.31 s for an unchanged tree [M] |
+| 7. Compile | 196–497 crates per job; 81 s runner-host, 14 s velnor-ci; 8.5 min critical path | ≤ 25 s (15 s) on heads that add no source file; 64% of landed commits add one and build their root cold until lab B5 | Warm generation: only the change's closure compiles; 0 crates and 0.31 s for an unchanged tree [M] |
 | 8. Tests | velnor-ci 10 s / 62 s; runner-host 192 / 417 s; floor 125–138 s | ≤ 60 s (10 s) | Per-root keys, two witnesses in parallel; the test floor programme |
 | 9. Result reporting | 1.48 GB archive upload 36–43 s; `Required verdict` 49 s | ≤ 1 s | Results streaming; binaries by digest in the site store |
 | 10. Required check | hosted verdict queue 1.6 / 24.3 min, then `Required` 1.9 / 21.4 min | ≤ 1 s after the last receipt | One App-written status, `Velnor / Verified` |
@@ -299,6 +305,10 @@ pub enum Role { Production, Reference } // Reference: conformance, shadow, diff;
   (about 28; ruling Q4). Until the owner answers the default is A, matching what the latest runner
   returns; B is built in parallel, and only the chosen one ships (decision 18).
 
+`velnor-official` runs with `ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE` (`Constants.cs:327`) on a
+read-only store filled by pinned SHA and covered by the tool-store digest, in both roles, as GitHub's
+own images do; it removes 4.4 s of action downloads per Official job [M], and S2 runs with it.
+
 **Speed per job type** [unmeasured as a difference; paired runs on the same backend, tool store,
 generation and warm or cold mix measure it, section 5.7]. Official adds Worker set-up (4–5 s per job
 [M, ARC era]), Node start per JavaScript action (87–147 ms [M]) and GitHub's cache until the cache
@@ -356,7 +366,14 @@ teardown are in the contract; conformance runs per backend. A microVM or Apple C
 backend declares `kernel: Separate`, `dir_entry: [VirtioFs]` or `[DiskImage]` and
 `snapshot_restore`: a new implementation of this trait and nothing else. Direct namespace and cgroup
 slots in the node agent, instead of a pod per sandbox, are a Kubernetes-backend candidate measured
-against warm pods (provision to first step under load, section 11).
+against warm pods (provision to first step under load, section 11). **Pool:** per class, a floor by
+hour plus the sandboxes `ensure`'s vector asks for plus one group's worth per auto-merge enqueue;
+idle members hold small requests and are resized in place at claim (stable on the cluster's
+Kubernetes 1.37); a deferred resize counts as a miss; delivery, queue, claim, attach and first
+process are timed. **Snapshots** (contract only, nothing built): a snapshot's digest joins the
+execution fingerprint; only the builder class takes one, from a pristine environment before any
+assignment; a restore supplies fresh identity, entropy, credentials and private writable storage,
+and is chosen only where measured faster than provisioning.
 
 ### 5.5 The job path
 
@@ -368,9 +385,12 @@ against warm pods (provision to first step under load, section 11).
    Obligations are plain commands (`cargo`, `cargo clippy`, `cargo doc`, `cargo nextest`) run through
    `velnor-ci` in a sandbox pre-cloned from a verified generation, planned by a resident planner;
    the agent observes them and signs one receipt per witness.
-3. **Actions jobs** (release, image, scheduled): the dispatcher holds every JIT identity, picks the
+3. **Placement** prefers, softly, the node whose agent advertises the generation, L0 manifests and
+   mirror head the work needs, ranked by predicted completion with queue wait; witnesses still need
+   distinct nodes and generations.
+4. **Actions jobs** (release, image, scheduled): the dispatcher holds every JIT identity, picks the
    node (warm state, site, class, reserved merge path), then acquires and hands over the job.
-4. **Report.** The fenced writer posts `Velnor / Verified` when every record of the head's vector is
+5. **Report.** The fenced writer posts `Velnor / Verified` when every record of the head's vector is
    satisfied under the active epoch.
 
 ### 5.6 Native actions
@@ -492,6 +512,8 @@ is well designed for this architecture.
   `ci.yml:97`); the exact package selection and features (a test passed under `-p a` and failed
   under `--workspace` [M]); the execution manifest (allowed environment, path prefix, modes,
   symlink targets).
+- **Enrolled keys** are computed from Git subtree ids plus the contract's single files and absent
+  paths; records also carry the digests of their log and JUnit output.
 - **Narrower keys need an enrolled contract.** A per-root or per-package key is used only after the
   read audit (section 6.4) has run in shadow on that obligation; a reviewed dependency contract in
   the trusted inventory names every path it may observe, directory contents and absent paths
@@ -523,6 +545,9 @@ is well designed for this architecture.
   different verified generation or cold, bound to the immutable inputs and the active epoch; the
   record passes only when every slot passes, and a receipt fills one slot of one record. Audit
   re-execution writes to an audit stream, never a slot. A failed record is shown, never reused.
+- **Splits** follow recorded durations from signed receipts (layout only): the union of shard ids
+  must equal the inventory, an unknown id gets a conservative estimate and runs, and a nextest test
+  group stays in one shard.
 - **Order.** nextest 0.9.151 is pinned (`mise.toml:24`) with no shuffled order configured, so the
   agent either lists a binary's tests and runs them in seeded batches through filter expressions, or
   runs a digest-pinned nextest patched with a seed option, whichever costs ≤ 1.5 s per binary
@@ -566,7 +591,7 @@ not, how that is detected, and the automatic fallback.
 | Reuse | (1) Key complete because | (2) Failure if not | (3) Detected by | (4) Automatic fallback |
 |---|---|---|---|---|
 | Whole-tree record (rebase-only push, re-run, identical group tree, same-SHA push) | The tree is every repository input; definition, fingerprint and executor equal; C5 runs anyway | A non-tree input changed: a tool, the kernel, an undeclared clock read | Execution fingerprint in the key; C5 classification; A1; A2 | Revoke by epoch; full run |
-| Per-root or per-package record | An enrolled, reviewed contract covering every possible observation, enforced by the read audit on every execution | A read the contract missed, on a branch no audited run took | The enforced audit on every execution and sample; the sibling-file canary; A1 | Enrolment revoked; whole-tree key |
+| Per-root or per-package record | An enrolled, reviewed contract covering every possible observation, enforced by the read audit on every execution | A read the contract missed, on a branch no audited run took | Only executions chosen independently of the key: the 2% sample, A1's key-independent re-runs and the nightly reuse-free run; the sibling-file canary | Enrolment revoked; whole-tree key |
 | Candidate record reused across pushes and PRs | Same key, Velnor-observed, two independent witnesses | A PR sandbox leaked state into a result | Sampled re-execution; trusted only after A1 | Candidate reuse off for that class |
 | `velnor verify` before the push | Same sealed Linux sandbox and key as CI | A developer machine's result | Only Velnor-executed results count; Mac runs never do | Runs in CI |
 | Warm compile over a generation | Section 7.3: inputs proven by content against the generation's manifest; every changed, added or removed path either declared by a unit's dep-info or the root builds cold; every unit cargo did not rebuild has dep-info inputs with unchanged blob ids | A stale `OUT_DIR`, build-script or proc-macro output, or an older-time file cargo skips | Until graduation the second witness builds cold and the binary digests must equal; A1's cold digests; the standing canaries of section 7.3 | Retire the generation; build cold |
@@ -577,9 +602,11 @@ not, how that is detected, and the automatic fallback.
 | Mirror checkout | The staged tree is hashed in full and must equal the requested tree before the first step | A stale, corrupt or concurrently refreshed base | The full check, every time | Fetch the commit from GitHub; rebuild the mirror from the site bundle |
 | Release promotion | Closure, release profile, target, tool image; the digest is in the receipt and the attestation | Wrong bytes published | Re-hash and `gh attestation verify` at publish; A1 rebuilds cold and compares | The release stops; nothing is rebuilt silently |
 
-**The read audit** is eBPF in the node agent on the exits of `openat`, `openat2`, `newfstatat`,
-`statx`, `readlinkat` and `getdents64`, filtered by the sandbox's cgroup, failed lookups (`ENOENT`)
-included, with paths resolved against the materialised tree; its overhead, with the tree hash, must
+**The read audit** resolves paths in the kernel through LSM hooks (opens, attribute and directory
+reads, failed lookups), filtered by the sandbox's cgroup, and a seccomp filter makes every path call
+it cannot see fail the witness: `access`, `faccessat2`, `execve` lookups, the legacy `open`, `stat`,
+`lstat`, `readlink` and `getdents`, and io_uring opens, which complete without a syscall exit. Paths
+resolve against the materialised tree; its overhead, with the tree hash, must
 stay within 3% of suite wall and 1.5 s per obligation at P50, measured in shadow. A
 backend without it keeps whole-tree keys. **Every per-root contract includes** each tracked file
 directly in the repository root and in every ancestor of the root (today `rustfmt.toml`,
@@ -609,7 +636,9 @@ planner's own inputs), so most heads that touch them keep narrow keys.
   first-parent commit (a group of two lands two) and reconciles gaps from Git history, so an
   intermediate commit with no push run is audited too. Each is rebuilt cold at the fixed path, its
   changed obligations re-run, and results and binary digests compared with its records and bound to
-  the commit. A1 has a reserved slot per site; its SLO, 2 h at P90 [T], holds at 95% utilisation; a
+  the commit. A1 picks no work by a narrowed key: narrow-key obligations re-run at the hit-sampling
+  rate whether or not their key changed, and one reuse-free run of the full inventory covers the tip
+  every night. A1 has a reserved slot per site; its SLO, 2 h at P90 [T], holds at 95% utilisation; a
   2 h lag alarms, and at 6 h it pages, the trusted scope stops advancing, the release waits and
   warm-compile reuse suspends. The push `Required` job reports A1 (section 8.1).
 - **Audit A2** runs nightly with the clock shifted 8 and 30 days ahead through a shim. **Degraded
@@ -653,7 +682,11 @@ pub trait BlobStore: Send + Sync {
 - **Invariants:** `actions/cache` semantics never change; Velnor's cache layer, not the backend,
   enforces scoping, PR writes never reaching `main` scope, immutable keys and content verification;
   a misconfigured, lagging, stalled or degraded store only makes things slower (a missing or corrupt
-  blob is a miss). The node agent holds credentials; jobs get presigned URLs.
+  blob is a miss). The node agent holds credentials; jobs get presigned URLs. `BlobStore` gains a
+  batched `find_missing` (answered from Velnor's index where a backend lacks it); a manifest or
+  record commits only after every blob it names is confirmed present and its last use renewed, so
+  eviction never leaves a record without bytes; L1 reads split into parallel ranges, hash-checked per
+  chunk, and lookups are batched across the 35 ms site link.
 - **Phase-1 cluster test** (plan ST06) before L1 carries any route: node loss and return with issue
   #9480's sequence; replication over WireGuard at 35 ms with existing-object backfill (#8768) and an
   `rc` resync; Linux fsync cost per durability mode; the 8.7 GiB snapshot against a 92 s cold build.
@@ -682,9 +715,13 @@ and the default branch, writes its own ref, and keys are immutable; conformance 
   subject commit); the step resolves again and uses it only for the same manifest.
 - **Receipt-minting obligations never restore `actions/cache`.** Tests: concurrent saves, an L0
   stale prefix beside an exact L1 entry, PR-to-`main` isolation, a disconnected site.
-- **Open:** whether GitHub Official can use a Velnor cache v2 endpoint (v2.338.2
-  `NodeScriptActionHandler.cs:54-83` names the route, permissions and Results URL); until verified,
-  Official uses GitHub's cache for acquired jobs: correct, slower.
+- **GitHub Official's cache** (verified at v2.338.2): Velnor writes the job message, so it points
+  `ResultsServiceUrl` at a node-agent endpoint; only actions' traffic follows it (the Worker's logs
+  use `system.github.results_endpoint`). The endpoint passes artifacts v4 calls through to GitHub
+  with the job's token, and its upload URL implements Azure Blob's Put Blob, Put Block and Put Block
+  List, which the stock save uses; a restore is one plain GET. It is re-qualified when the pinned
+  action moves; the reference role keeps GitHub's endpoints; until plan ST05 passes, acquired
+  Official jobs use GitHub's cache.
 
 ### 7.3 Compile reuse
 
@@ -707,7 +744,14 @@ path, with inputs proven by content, independently of cargo's freshness:
 3. If a path in Δ is outside every unit's declared inputs (dep-info, `rerun-if-changed`, the package
    directory of a script without directives), every workspace unit of that Cargo root builds cold;
    third-party units, whose inputs are the checksummed crate, features, profile, toolchain and
-   declared environment, are reused.
+   declared environment, are reused. A new `.rs` file is always outside them, and 64% of landed
+   commits add one [M, 137 of 213]. Behind lab B5 this narrows (landscape ruling X01b, as selection,
+   never proof): an added or removed path that meets no unit's traced read set (step 5) rebuilds
+   nothing by itself, one that meets a set rebuilds that unit and its dependants, and cargo still
+   plans on the real tree. It needs a complete trace of every unit of the root, or the root builds
+   cold; it is its own reuse class, so the second witness builds cold with equal digests until about
+   3,000 clean comparisons on such deltas per root, and the first digest disagreement restores
+   root-cold.
 4. Unchanged paths keep M_G's times; every path in Δ is stamped later than G's newest output.
 5. Each unit's read set is its dep-info plus every path its build script, proc macro or `rustc`
    opened, listed or failed to find while G was built, traced by the node agent. Before cargo runs,
@@ -741,7 +785,11 @@ path, with inputs proven by content, independently of cargo's freshness:
 ### 7.4 Node-local mirrors
 
 Each node keeps a bare mirror of every configured repository (decision 24), covering PR head refs,
-merge-group refs and tags, fetched on push webhooks with a periodic catch-up. New or wiped nodes
+merge-group refs and tags, fetched on push webhooks with a periodic catch-up. One writer per mirror
+per node (`flock`); at most one fetch runs and one waits, absorbing later requests and rechecking
+for the commit after the lock; explicit refspecs with `--atomic --no-auto-maintenance`, `gc.auto=0`
+and no pruning in place; a refresh is a new mirror swapped in, the old one deleted only after its
+readers are proven absent, which protects jobs that read `.git` through alternates. New or wiped nodes
 seed from a git bundle in the site store, not from GitHub. Mirrors are read-only to jobs.
 
 **Native checkout from the mirror,** with a target well under 1 s:
@@ -751,8 +799,10 @@ seed from a git bundle in the site store, not from GitHub. Mirrors are read-only
    never refreshed in place (a refresh makes a new base). Rewrite the paths whose blob or mode
    differs (deletions and symlinks included), each from a hash-verified blob.
 3. Before the first step, hash the whole staged tree (contents, modes, symlink targets) and require
-   it to equal the requested tree: about 0.1–0.3 s for the 110 MiB tree [E: SHA-1 at about 1 GB/s
-   per core, in parallel]. A sparse checkout verifies the selected paths against the tree filtered
+   it to equal the requested tree. The cost is per file, not per byte: 5,164 files and 37.3 MiB, read
+   cold because a reflink clone has no resident pages; 0.43 s on eight threads on a Mac [M, proxy],
+   unmeasured on a worker (BM13, a fresh clone, idle and loaded); stage 4's ≤ 1 s is the budget. A
+   delta-only hash needs a kernel-verified lower layer, which XFS lacks (no fs-verity). A sparse checkout verifies the selected paths against the tree filtered
    by the same patterns; submodules are verified as gitlinks and fetched only when the job asks,
    from that repository's mirror, verified the same way.
 4. Set times by the generation rule (section 7.3). A job that needs `.git` gets the read-only mirror
@@ -775,7 +825,8 @@ jobs, each still saving about 20 s.
 
 ### 7.5 Budgets
 
-The last three verified generations per root, then least-recently-used; 40% of a node's data
+The last three verified generations per root, then least-recently-used; a generation from a warm
+build is replaced by a cold one once its size passes a set multiple of the cold target; 40% of a node's data
 volume, alert at 70%. FI workers have one 3.5 TB data disk each, DE workers 32–50 TB (§B.1.4); a FI
 worker's RustFS drive is a second LV after the rebuild of section 7.1. The runner workspace's target is 10.6 GiB [M].
 Every store has garbage collection and a budget kept by Velnor; `mbx-cache` starts at 300 GiB per
@@ -873,7 +924,8 @@ P90 and paired false failures are ≤ 3%, then 4 and 15 min (at 8.1% false failu
 min, less 15.5% disturbed], above today's 2.44 entries an hour [M]. Speculation verifies the queue
 tip's ordered prefixes, up to four deep whatever the ruleset's depth, and single-ejection bypass
 trees at batch priority; a real group claiming a
-speculative record lifts it to the group's priority. **A group's tree equals the PR-tested tree**
+speculative record lifts it to the group's priority. Under ALLGREEN each prefix gets its own
+status, so the first failing prefix names the culprit and no bisection runs. **A group's tree equals the PR-tested tree**
 [M, replay of 172 entries] in 16% of groups today; with the PR verdict on `merge-tree(queue tip,
 head)` and auto-enqueue, 83% at 1 min, 74% at 2.5, 67% at 5 and 37% at 20; about 60% without
 auto-merge. Plan on 60–75%; no verdict depends on the rate. Agents enable auto-merge and stop
@@ -963,8 +1015,8 @@ qemu.
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1008 agent-hours of building and 120 of review,
-about 3.5 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 1044 agent-hours of building and 120 of review,
+about 3.6 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0
 comes first: an agent PR's cycle falls from 94 to about 34 min at P50 [E].
@@ -1016,7 +1068,7 @@ A missed milestone holds the next cohort until explained. Items are 2–8 agent-
 | Lab | What it runs | Pass | Default until then |
 |---|---|---|---|
 | A. GitHub semantics | A lab repository with a ruleset, a merge queue and a test App: no status; App `pending`; App `success`, then one more push; the context from a user token and from `GITHUB_TOKEN`; a status only on the test-merge SHA; a required Actions job with `if: false`; a skipped caller whose inner job is required; a dispatched run; two PRs at one SHA; queue entries with no report, `failure` and `success`; labels changed with `GITHUB_TOKEN`, an App token and a user token; the state-machine cases of section 8.2 | The no-status, pending, foreign-source and skipped-caller cases block; App `success` merges until the next push; a queue entry lands only on `success`; the read-back shows the App context required on both subjects | Today's gate, hardened and bound to 15368; the App only observes |
-| B. Build matrix | One idle worker, three repetitions: B1 dependency `opt-level` 0 and 3 against assertions on and off, whole suite; B2 reflink against overlayfs with 1, 4 and 6 sandboxes, the canaries of section 7.3, and digests against a cold build; B3 seeding, lockfile changes and the wait-or-fetch-or-cold crossover under load, by `mbx-cache`, file-delta sync and compressed layers; B4 incremental on and off over 300 replayed diffs and 20 planted failing edits | B2: every canary rebuilds and digests match; B3: a transport beats a cold build on more than 10% of requests; B4: zero differences | Reflink; cold second witness; `CARGO_INCREMENTAL=0` for receipts; the `opt-level` override with checks on, its gain uncounted |
+| B. Build matrix | One idle worker, three repetitions: B1 dependency `opt-level` 0 and 3 against assertions on and off, whole suite; B2 reflink against a read-only overlayfs lower layer with 1, 4 and 6 sandboxes, page cache per additional sandbox, bytes copied up per build (cargo's hard links copy up), the canaries of section 7.3, and digests against a cold build (a lower layer never replaces the full tree hash); B5 the narrowed step 3 over 300 diffs that add or remove a path plus planted cases (`foo/mod.rs` beside `foo.rs`, a new `tests/x.rs`, a file a build script globs or a proc macro lists, a new `clippy.toml`, `rustfmt.toml` or `.cargo/config.toml` below the root); B3 seeding, lockfile changes and the wait-or-fetch-or-cold crossover under load, by `mbx-cache`, file-delta sync, compressed layers and a signed chunk manifest of chunks ≥ 4 MiB; B4 incremental on and off over 300 replayed diffs and 20 planted failing edits | B2: every canary rebuilds and digests match; B5: every planted case rebuilds and every digest equals cold; B3: a transport beats a cold build on more than 10% of requests; B4: zero differences | Reflink; cold second witness; `CARGO_INCREMENTAL=0` for receipts; the `opt-level` override with checks on, its gain uncounted |
 | C. Shadow ledger | Beside production for 300 merges: C1 whole-tree and per-obligation hits of each merge group against the PR's records; C2 twins on two nodes against two runs 30 min apart, on 20 tests with seeded failure probabilities of 0.05–0.2 | C2: joint pass rates match (1−p)² | Groups derive their own vectors and execute every miss |
 | D. Docker class | The three Docker-needing binaries, 200 runs each, under a private privileged daemon, a rootless daemon and a microVM, on both backends | Equal pass, fail and skip sets; nothing one request leaves is visible to the next | A private privileged daemon per request, or refusal |
 
@@ -1045,16 +1097,20 @@ and cost.
 | S3 | **Head-to-head** (K02, K03, K25) | Arms: today's CI; **a strong conventional baseline** on the same workers (the official runner on persistent agents with a reflink-cloned warm target, crates mirror, baked tool image, gates on the cluster, auto-merge, ALLGREEN); Velnor with Official; Velnor Native; rented arms per owner question D22 | The publication rule below, on push-to-merge gross and net and on the verdict; every stage timed, `ensure` included |
 | S4 | Loaded replay (K04, K21) | The 2026-11-18 trace with other organisations' load, A1 and release preparation at production priority; then the reversal cases: a root or manifest edit, a cold toolchain, a lost worker, an ejected predecessor | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s |
 | S5 | Census (K06) | C5 classifier and read audit on `main` and the last 300 heads | Shares of C5 obligation-seconds and of heads with whole-tree keys published; goals restated from them |
-| S6 | Warm compile (K05) | 300 replayed diffs per root over a clone, cold page cache, idle and 70–90% load, with a cold control | Slower witness P90 ≤ 25 s for helper and generator, ≤ 40 s loaded; digests equal cold |
+| S6 | Warm compile (K05) | 300 replayed diffs per root over a clone, cold page cache, idle and 70–90% load, with a cold control; heads that add a source file reported separately | Slower witness P90 ≤ 25 s for helper and generator, ≤ 40 s loaded; digests equal cold |
 
 **Publication rule** (K22, pre-registered). Velnor is "fastest" against an arm only if paired
 arrival-block bootstrap intervals for the P50 and the P90 difference, at simultaneous 95%, lie
 strictly below zero, per class; each self-hosted pair is interleaved at least five times and
 reported as median and range. A tie, an unrun arm, a lost class or a win only in the light class
 narrows the sentence, and any false green or skipped work disqualifies the arm or configuration.
-No claim is made against Buildkite-style agents, rented runners or Bazel and Buck2 remote execution
-until S3 has run that arm; an RBE arm (Bazel `rules_rust` with a remote executor) is reported as a
-subgraph result for the cold-build lane only.
+No claim is made against an arm S3 has not run. The strong baseline (BM07) stands in for
+persistent agents such as Buildkite's and keeps the Actions hop, so it bounds them on stages 3–9
+only; "Velnor with Official" is the same-ledger, other-agent case. A rented arm runs with the
+vendor's recommended caches and phase 0 applied, or it is another handicapped baseline. Against
+Bazel and Buck2 remote execution the sentence excludes cold and wide builds unless BM10 ran; BM10
+runs only if one `cargo build --timings` of the cold runner root shows its longest dependency chain
+under 70% of the wall, and reports a subgraph result.
 
 Component labs carry the rest: twin independence (K08), group reuse and GitHub's share (K09, K10),
 hardware (K11), floor inventory (K12), page cache (K13), overhead (K14), graduation (K15), storage
@@ -1097,9 +1153,9 @@ where release bytes are built (D12).
 | D14 | Delete the engine crates from velnor-new once velnor-gen's workflow replaces the engine's CI? | The engine's orchestrator and renderer are about 275k lines | — | Only after checking for other consumers | day 8 |
 | D15 | Approve the recovery path for a bad Velnor release, with no admin merge? | A release that fails every job also blocks the PR that fixes it | — | Yes: redeploy the previous image digest; if none can verify, the pre-approved break-glass verifier writes a green only after two full cold passes on two nodes (section 5.9) | day 1 |
 | D16 | Does a `velnor:verify` label added while the PR was a draft start verification when it becomes ready? | An agent opens a draft, labels it early, then marks it ready; today nothing would run until it re-labels or pushes | — | Recommend yes: the label states intent and the reconciler can read it from state. Default no, the literal reading of decision 12's step 2 | day 2 |
-| D17 | Who may approve a reduction (an obligation or test removed from the inventory)? | A PR deletes a slow test file; the head plan lists fewer tests than `main`'s | — | Recommend: only the owner, through a signed inventory entry. Default: no reduction is accepted | day 3 |
+| D17 | Who may approve a reduction (an obligation or test removed from the inventory, or quarantined by owner exception)? | A PR deletes a slow test file; the head plan lists fewer tests than `main`'s | — | Recommend: only the owner, through a signed inventory entry. Default: no reduction is accepted | day 3 |
 | D18 | May Velnor land merges itself (a merge train that fast-forwards `main` by compare-and-swap after verifying the exact resulting tree), instead of GitHub's merge queue? Decision 7 keeps GitHub's queue | A green PR waits 19 s for GitHub to form its group and 26 s to merge it, even when the group's tree was verified seconds earlier | About 45 s per merge [M: medians of 19 s and 26 s], about half the 85 s goal estimate, more in bursts | Not now. Measure GitHub's share on 50–200 auto-merged PRs and shadow a compare-and-swap train for tree-match and latency; bring the numbers back before changing decision 7 | day 8 |
 | D19 | May Velnor compile and test a ready PR's pushes before the label, at idle priority, so the label finds the work done? Decision 12 says an unlabelled push starts nothing | An agent pushes, then labels 2 min later; today the label starts a 15–25 s compile and the tests | About 15–25 s off label-to-verdict [E], for about 5–10 runner-min per speculated head, 45% of which are superseded | No: keep decision 12. Use pre-push `velnor verify` (decision 10c) instead, which gives the same lookup when the agent asks for it | day 3 |
-| D20 | Rent one high-clock node per site (Ryzen 9950X or EPYC 4564P class) now, instead of after the test-floor fixes? | The workers are EPYC 9454P throughput parts; one rustc front end and the longest test run on one core | 1.3–1.5× on the compile and longest-test chain [E, I104]: helper class about 25 → 18 s | Rent one now for the hardware benchmark only (BM15); move the verdict classes onto it if the ratio is ≥ 1.15. Default: no rental | day 4 |
+| D20 | Rent high-clock nodes (Ryzen 9950X or EPYC 4564P class) now? A green waits for the slower of two witnesses on distinct nodes, so one node per site shortens only reds and A1 | The workers are EPYC 9454P throughput parts; one rustc front end and the longest test run on one core | 1.3–1.5× on the compile and longest-test chain [E, I104]: helper class about 25 → 18 s, only with two such nodes in the site | Rent one now for BM15's ratio, which also says whether both CPU models share one fingerprint; two per site only at a ratio ≥ 1.15. Default: no rental | day 4 |
 | D21 | After compile reuse graduates, may one compile feed both test witnesses (the second runs the first's digest-bound binary on another node)? | Today each witness compiles its own binary, so a stale build on one node is cross-checked by the other | No wall time; about 3 runner-min per merged PR | No: the second compile is the cross-check the two-witness rule and ruling Q12 rely on | day 7 |
 | D22 | May the benchmark rent comparator arms (one of Namespace, Blacksmith or Depot, and GitHub larger runners) and run velnor-new's replayed heads on them? | Without a rented arm, "fastest" can only mean faster than our own baselines | None directly; it decides how wide the claim can be | Yes, one rented arm and GitHub larger runners, measurement only, for about a week; nothing they produce counts as a verdict. Default: no rented arm, and the claim names only the arms run | day 5 |

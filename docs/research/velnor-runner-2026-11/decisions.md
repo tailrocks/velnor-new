@@ -67,7 +67,7 @@ in the design review. "Same as" marks a merged duplicate.
 | Id | Idea | Proposed by | Opposed by | Decision | Why |
 |---|---|---|---|---|---|
 | I018 | Classify cache group and trust pool from the scale-set JobAvailable message at offer time. | Gemini 4 Argon | Claude Opus 5.5, GPT-6.2-Astra | Rejected | For placement: an offer has no binding to a runner (`generatejitconfig` takes `{name, workFolder}`, evidence §F.1.3). Its `eventName` is still used to acquire merge-group jobs first. |
-| I019 | Pre-seed ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE with the pinned action tarballs. | Claude Opus 5.5, Claude Fable 5.2, Muse Wonder, Gemini 4 Carbon, Gemini 4 Argon | — | Adopted (phase 1) | Until the executor cutover only: it removes the action download, about 4.4 s per job (Claude Opus 5.5, measured). After the cutover no action is downloaded (N62). |
+| I019 | Pre-seed ACTIONS_RUNNER_ACTION_ARCHIVE_CACHE with the pinned action tarballs. | Claude Opus 5.5, Claude Fable 5.2, Muse Wonder, Gemini 4 Carbon, Gemini 4 Argon | — | Adopted (permanent, landscape ruling L08) | For `velnor-official` in both roles, since decision 20 makes it permanent (the earlier "until the executor cutover" is withdrawn): it removes the action download, about 4.4 s per job (Claude Opus 5.5, measured). After the cutover no action is downloaded (N62). |
 | I020 | Serve the Actions cache (and artifact) protocol from an in-cluster service through the standard env vars. | Claude Fable 5.2, Muse Wonder Full, Gemini 4 Carbon, Gemini 4 Argon | Claude Opus 5.5, GPT-6.2-Sol | Experiment-gated (phase 5) | Only for tools that speak the protocol themselves, such as BuildKit's `type=gha` cache: the native cache and artifact actions talk to cache service v2 and artifacts v4 and accelerate from the node and site stores by digest, so no JavaScript client needs emulation (N62). |
 | I021 | Use the official runner's job-started hook to bind trust scope, mount caches and refuse unauthorised jobs. | Claude Opus 5.5, Claude Fable 5.2, Muse Wonder, Gemini 4 Argon | — | Adopted (phases 1–2) | `velnor-job-start-hook` refuses unauthorised jobs under ARC. From phase 3 the dispatcher classifies the job before any pod sees it (N11). |
 | I022 | Send renewjob in parallel with job setup instead of blocking before the worker starts. | Gemini 4 Carbon | — | Rejected | The Listener starts no Worker before the first renewal succeeds (`JobDispatcher.cs:393-405`). One round trip is worth that guarantee. |
@@ -1028,10 +1028,47 @@ cluster test.
 
 **Unresolved, for an adjudicator** (each runs on its safe default): C02 (Buildkite-style agents),
 C03 (rented runners), C04 (RBE): no arm has run, so no claim names them; C12 (sandbox-start floor):
-budget ≤ 1 s P90 until P08 measures; C13 (full tree-hash cost): the full hash stays until BM13; X01
+budget ≤ 1 s P90 until P08 measures; C13 (full tree-hash cost): the full hash stays until BM13; X01 (settled by the landscape rulings, group 34)
 (raised in synthesis from O15 and G17): whether a complete trace of a C5-free execution, with
 listings, failed lookups and metadata, licenses a hit by the observed-input argument, against
 ruling Q5. Until ruled, narrow keys need reviewed contracts and step 3's root-cold rule stays.
+
+### Group 34: landscape rulings applied
+
+From `landscape-rulings.md` (C02, C03, C04, C12, C13, X01 and L01–L20). Credits as listed there.
+
+| # | Change | Credited | v3 section |
+|---|---|---|---|
+| 1 | Read audit: LSM path resolution; seccomp fails the witness on unseen path calls (`access`, `faccessat2`, `execve`, legacy calls, io_uring) | Adjudication | 6.4; plan V07 |
+| 2 | A trace cannot prove a key: vDSO clock reads, run-to-run variation (HashMap seed, reproduced) | Adjudication | 1.2 |
+| 3 | Tree hash is per file (5,164 files, 37.3 MiB, cold after a clone); delta hash needs dm-verity or a non-XFS store | Adjudication (C13) | 7.4; plan BM13 |
+| 4 | Step 3 fires on 64% of landed commits (137 of 213 add a `.rs` file); S6 reports that cohort | Adjudication (X01b) | 3, 7.3, 11 |
+| 5 | The Official cache route verified at v2.338.2; only action traffic follows `ResultsServiceUrl`; `Constants.cs:327` | Adjudication (L08, L09) | 5.3, 7.2 |
+| 6 | In-place resize is stable; idle pool members hold small requests | Adjudication (C12, L01) | 5.4; plan S01 |
+| 7 | Rented arm with vendor caches and phase 0; BM10 behind a `--timings` 70% rule | Adjudication (C03, C04) | 11; plan BM10 |
+| 8 | A1 picks no work by a narrowed key; nightly reuse-free run | GPT-6.2-Astra | 6.4, 6.5; plan V05 |
+| 9 | Official cache endpoint: Azure Blob upload, artifacts v4 pass-through, re-qualification | GPT-6.2-Astra | 7.2; plan ST05 |
+| 10 | Quarantine only with an equivalent blocking check; owner exception is a D17 reduction | GPT-6.2-Astra | 1.3, 13 |
+| 11 | Snapshot contract text | GPT-6.2-Astra | 5.4 |
+| 12 | D20 restated: one high-clock node per site cannot shorten a green | GPT-6.2-Astra | 13 |
+| 13 | Split rules: unknown ids, nextest groups, union equals inventory | GPT-6.2-Astra | 6.2 |
+| 14 | Action-archive cache for `velnor-official` in both roles; I019 limit withdrawn | Claude Opus 5.5 | 5.3; plan O01 |
+| 15 | Mirror writer rules | Claude Opus 5.5 | 7.4; plan C03 |
+| 16 | Pool sizing and stage timers; placement by advertised state | Claude Opus 5.5 | 5.4, 5.5; plan S01, X16 |
+| 17 | `find_missing`, present-before-commit, log and JUnit digests, subtree-id keys | Claude Opus 5.5 | 6.1, 7.1; plan ST03 |
+| 18 | First failing prefix names the culprit; no bisection | Claude Opus 5.5 | 8.3 |
+| 19 | Size-triggered cold reset; chunk-manifest transport in B3; ranged L1 reads | Claude Opus 5.5 | 7.1, 7.5, 10.3; plan C08 |
+| 20 | Lab B5 and the narrowed step 3 as its own reuse class | Gemini 4 Neon | 7.3, 10.3; plan C13 |
+| 21 | Lab B2: page cache per sandbox, copy-up bytes; a lower layer never replaces the full hash | Gemini 4 Neon | 10.3; plan BM12 |
+| 22 | Per-test discordance scoring, automatic issues and expiry | Gemini 4 Neon; Claude Opus 5.5 | 1.3; plan V16 |
+| 23 | Count image-input-key changes before any layer cache | Gemini 4 Neon; Claude Opus 5.5 | plan S04 |
+| 24 | Stage 3 is the build class on a pool hit; a Docker-class row; P08's report | Gemini 4 Carbon, Gemini 4 Argon | 3; plan P08 |
+| 25 | One sentence per comparator; cold and wide excluded against RBE unless BM10 ran | Claude Fable 5.2 | 11 |
+
+Rulings recorded without a further design change: C02 and C03 (direction only, no claim), C12
+(budget ≤ 1 s P90 on a hit), X01a (no for verdict keys; Q5 stands), L02, L10, L15 (already the
+design), L11 and L17 (rejected), L16 merge train (D18 stands), L19 (fetch only before the label;
+D19 stands, default no). Owner questions restated: D17 (now names quarantine) and D20.
 
 ## Design review
 
