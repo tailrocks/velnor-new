@@ -8,8 +8,8 @@ use velnor_model::{
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
-    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_locks,
-    trimmed_lane,
+    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
+    sources_locks, trimmed_lane,
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
@@ -220,6 +220,10 @@ fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
             }
             terms
         }
+        StepKind::SourcesFetchAll { lane, .. } => vec![format!(
+            "steps.{}.outputs.cache-hit != 'true'",
+            sources_step(lane)
+        )],
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         _ => Vec::new(),
     }
@@ -286,6 +290,9 @@ fn step_body(
         }
         StepKind::RustTargets(targets) => rustup("Add Rust targets", "target", targets),
         StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane.cache_debug),
+        StepKind::SourcesFetchAll { manifests, .. } => {
+            sources_fetch_all(manifests, lane.cache_debug)
+        }
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
