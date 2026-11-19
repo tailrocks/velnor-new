@@ -205,6 +205,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         .flat_map(|seen| seen.output_names().map(|name| (seen.id.as_str(), name)))
         .collect();
     let axes = matrix.as_ref().and_then(crate::matrix::axis_names);
+    let events = ctx.triggers.events();
     let mut scope = Scope {
         inputs: ctx.inputs,
         has_matrix: matrix.is_some(),
@@ -213,6 +214,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needs: &raw.needs,
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
+        events: &events,
     };
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
     let mut job = Job {
