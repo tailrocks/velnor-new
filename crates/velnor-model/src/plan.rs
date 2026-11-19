@@ -232,6 +232,8 @@ pub enum When {
     ScheduledOrPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
+    RestoreToolsUnlessLocal,
+    SaveToolsUnlessLocal,
     SaveBase,
     SaveBaseDecided,
     SaveSources,
@@ -281,6 +283,7 @@ pub enum CargoCommand {
     Doc,
     Deny {
         manifest: RepoPath,
+        config: Option<RepoPath>,
     },
     Machete,
 }

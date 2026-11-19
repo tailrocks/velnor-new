@@ -57,5 +57,6 @@ pub mod tests_run;
 pub mod ties;
 pub mod time;
 pub mod timings;
+pub mod tools_local;
 pub mod trusted_roots;
 pub mod write_request;

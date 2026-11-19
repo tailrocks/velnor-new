@@ -336,21 +336,21 @@ probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.151 (6b3
 [[qualified_tools]]
 id = "jactionlint-linux-x64"
 backend = { kind = "aqua", package = "jdx/jactionlint" }
-version = "2.4.0"
+version = "2.6.0"
 options = { kind = "default" }
 depends_on = []
 [[qualified_tools.platforms]]
 platform = "linux_x64"
 artifacts = [
-  { url = "https://github.com/jdx/jactionlint/releases/download/v2.4.0/jactionlint_2.4.0_linux_amd64.tar.gz", sha256 = "26ddba81db28fffc51163175c070ee1a9d1150260de4b5232f01d9b749f32d8e" },
+  { url = "https://github.com/jdx/jactionlint/releases/download/v2.6.0/jactionlint_2.6.0_linux_amd64.tar.gz", sha256 = "d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "45be858e531eb407bb7d841a5549c91f8fe1276f5e75f12131c5ea87376e1f39"
+install_tree_sha256 = "788eab0e6fc6285ca1857bba82990da92a6b00e0ae4183dc00c3afa372c2aeb8"
 [[qualified_tools.platforms.executables]]
 name = "jactionlint"
 path = "jactionlint"
-sha256 = "70e41eb37cdd89a305f9a433e230976732fe2ef5f674bbea8d68322ae583bdd0"
-probe = { kind = "version", expected = "2.4.0" }
+sha256 = "0793a4bcfd85a1cdf89296038fa86222c7a630bac2e7f0c988cbf2eb55f368c9"
+probe = { kind = "version", expected = "2.6.0" }
 
 [[qualified_tools]]
 id = "rust"

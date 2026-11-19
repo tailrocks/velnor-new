@@ -168,18 +168,15 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
     }));
     if !facts.tools.tools.is_empty() {
         steps.extend(
-            [
-                tools_restore(facts),
-                tools_install(facts),
-                mirror_step(facts),
-                tools_save(facts),
-            ]
-            .into_iter()
-            .flatten()
-            .map(|step| Step {
-                gate: policy_gate.clone(),
-                ..step
-            }),
+            tools_restore(facts)
+                .into_iter()
+                .chain(tools_install(facts))
+                .chain(mirror_step(facts))
+                .chain(tools_save(facts))
+                .map(|step| Step {
+                    gate: policy_gate.clone(),
+                    ..step
+                }),
         );
     }
     if facts.policy.deny {
@@ -187,6 +184,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
             lane.cargo(
                 CargoCommand::Deny {
                     manifest: root.manifest.clone(),
+                    config: facts.deny_configs.get(&root.manifest).cloned(),
                 },
                 None,
             )

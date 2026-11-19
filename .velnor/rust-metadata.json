@@ -1401,16 +1401,6 @@
               "requires_features": false
             },
             {
-              "name": "prune_tools",
-              "kinds": [
-                "test"
-              ],
-              "tests": true,
-              "doctest": false,
-              "source": "crates/velnor-actions-workflow-renderer/tests/prune_tools.rs",
-              "requires_features": false
-            },
-            {
               "name": "mbx_stats",
               "kinds": [
                 "test"
@@ -1418,16 +1408,6 @@
               "tests": true,
               "doctest": false,
               "source": "crates/velnor-actions-workflow-renderer/tests/mbx_stats.rs",
-              "requires_features": false
-            },
-            {
-              "name": "prune_state",
-              "kinds": [
-                "test"
-              ],
-              "tests": true,
-              "doctest": false,
-              "source": "crates/velnor-actions-workflow-renderer/tests/prune_state.rs",
               "requires_features": false
             },
             {
@@ -1498,16 +1478,6 @@
               "tests": true,
               "doctest": false,
               "source": "crates/velnor-actions-workflow-renderer/tests/cargo_source_handoff_public.rs",
-              "requires_features": false
-            },
-            {
-              "name": "premerge_event_proof_public",
-              "kinds": [
-                "test"
-              ],
-              "tests": true,
-              "doctest": false,
-              "source": "crates/velnor-actions-workflow-renderer/tests/premerge_event_proof_public.rs",
               "requires_features": false
             },
             {
@@ -2638,7 +2608,7 @@
         },
         {
           "name": "velnor-ci",
-          "version": "0.1.88",
+          "version": "0.1.89",
           "manifest": "crates/velnor-ci/Cargo.toml",
           "dependencies": [
             {
@@ -2812,7 +2782,7 @@
         },
         {
           "name": "velnor-gen",
-          "version": "0.1.88",
+          "version": "0.1.89",
           "manifest": "crates/velnor-gen/Cargo.toml",
           "dependencies": [
             {
@@ -3529,12 +3499,12 @@
     "crates/velnor-actions-orchestrator/Cargo.toml": "f4cac3488b400da62c8825c45a39efc7c91071159a3de6ecef3fb3ea86f666df",
     "crates/velnor-actions-rust/Cargo.toml": "ef5987ecae9083d12b876fc5f4cbfd6c31abeff5a147b7b4c62ea252cfdda68a",
     "crates/velnor-actions-tofu/Cargo.toml": "07f783ad6343158762250014686772d6cf9931023dcd4935f5f3efe3ce5b4318",
-    "crates/velnor-actions-workflow-renderer/Cargo.toml": "aea94e1896aaf4068a7d8f99e14f337b8415154baabc615b431582343db710f9",
+    "crates/velnor-actions-workflow-renderer/Cargo.toml": "04ab2b2d2671bb359ef828b7ee562780063b089b537ed78c02a620aefd233565",
     "crates/velnor-archive-guard/Cargo.toml": "11b400a4b66667dd198d30db59b8c744d1783a950ca701837943e5ea1a1bb572",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "2d3a39f8ed59778fde6136cf1b19bd9e000dd09ad60c6a0d73076340e75e4d9c",
+    "crates/velnor-ci/Cargo.toml": "26b870bbdde77720f2ceaf91cc208165231c7ba6a5a1bb49e551ca4b74f43fca",
     "crates/velnor-freshness/Cargo.toml": "0a04d78275fd4e4ab05fea8f272f51fb905c9bdce4c0395448c4da34cfe3ea0e",
-    "crates/velnor-gen/Cargo.toml": "090199d0c8e75690a9b2ce717520fae31227bf2e47f84b1a19e6ce92ccee1820",
+    "crates/velnor-gen/Cargo.toml": "101c1e45442762f1f96bc8fb6c22923c09da936c4ff8ed2d1ba13aa0afb46c15",
     "crates/velnor-local/Cargo.toml": "f5f297cde8406f2449b3eb796b67633ce63d862b7238d14eee521037534bd294",
     "crates/velnor-model/Cargo.toml": "81beeea9d092277193e6261630bac58c9e1cf354c97983761fdc74776a3486ef",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
@@ -3550,5 +3520,5 @@
     "crates/velnor-rust/Cargo.toml": "e94a06ddc959217f1d0e955626704344b1bde461c09dcf242505116b5990aa6b",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "08686636aae311744c5d44072e0488f517033491602ad53664954c3f2f8200dc"
+  "layout": "47280c8bf7e10ef6b579698d3c2e6ea9cf22143c4d08315e258f6cef09ba10eb"
 }

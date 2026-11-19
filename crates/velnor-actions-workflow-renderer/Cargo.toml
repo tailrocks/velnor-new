@@ -50,16 +50,8 @@ name = "product_release_binary_public"
 path = "tests/product_release_binary_public.rs"
 
 [[test]]
-name = "prune_tools"
-path = "tests/prune_tools.rs"
-
-[[test]]
 name = "mbx_stats"
 path = "tests/mbx_stats.rs"
-
-[[test]]
-name = "prune_state"
-path = "tests/prune_state.rs"
 
 [[test]]
 name = "rust_tree_digest_pin"
@@ -93,9 +85,6 @@ path = "tests/source_preview_loader_public.rs"
 name = "cargo_source_handoff_public"
 path = "tests/cargo_source_handoff_public.rs"
 
-[[test]]
-name = "premerge_event_proof_public"
-path = "tests/premerge_event_proof_public.rs"
 [[test]]
 name = "runner_draft_publication_public"
 path = "tests/runner_draft_publication_public.rs"

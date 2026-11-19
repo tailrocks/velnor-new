@@ -89,7 +89,7 @@ fn shared_gate<'a>(steps: impl Iterator<Item = &'a Step>) -> Option<Gate> {
 }
 
 fn manifest(step: &Step) -> RepoPath {
-    if let StepKind::Cargo(CargoCommand::Deny { manifest }) = &step.kind {
+    if let StepKind::Cargo(CargoCommand::Deny { manifest, .. }) = &step.kind {
         return manifest.clone();
     }
     step.directory.as_ref().map_or_else(

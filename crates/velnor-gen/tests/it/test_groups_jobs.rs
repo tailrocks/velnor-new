@@ -122,6 +122,27 @@ fn any_group_splits_the_root_into_an_archive_whatever_the_shape() -> TestResult 
 }
 
 #[test]
+fn every_test_job_reports_its_tests_and_the_cache_check_waits_for_it() -> TestResult {
+    let workflow = rendered(&format!("{DATABASE}\n{SHELL}"))?;
+    for id in ["rust-test-default", "rust-test-database", "rust-test-shell"] {
+        let group = job(&workflow, id)?;
+        let report = step(group, "Report cache telemetry")?;
+        assert_eq!(report["run"], ". \"$VELNOR_EXEC\" report", "{id}");
+        assert_eq!(
+            report["env"]["VELNOR_TESTS_RUN"], "${{ steps.test.outputs.tests_run }}",
+            "{id}"
+        );
+        assert!(names(group).contains(&"Upload cache metrics"), "{id}");
+        assert!(
+            needs(job(&workflow, "cache")?).contains(&id),
+            "{id}: {:?}",
+            needs(job(&workflow, "cache")?)
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn the_required_gate_covers_every_group_job() -> TestResult {
     let text = workflow(&view_with(&["Cargo.toml"], DATABASE, "0.1.82")?)?;
     let tree = document(&text)?;

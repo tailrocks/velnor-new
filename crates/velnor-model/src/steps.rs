@@ -77,6 +77,7 @@ pub enum StepKind {
     MbxRemote,
     MbxStore,
     MbxSeed,
+    ToolsLocal(ToolsLocalVerb),
     TestSetup {
         name: String,
         run: String,
@@ -102,6 +103,12 @@ pub enum StepKind {
         needs_max_bytes: usize,
         trusted_api: bool,
     },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ToolsLocalVerb {
+    Restore,
+    Save,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -280,7 +280,7 @@ jobs:
         run: 'mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4'
       - name: Prepare pinned attestation verifier
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
-        run: mise --no-config --no-env --no-hooks install gh@2.103.3
+        run: mise --no-config --no-env --no-hooks install gh@2.104.0
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
@@ -432,7 +432,7 @@ jobs:
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Dependency policy
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_deny == ''run'' }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-deny --locked check'
+        run: '. "$VELNOR_EXEC" run -- cargo-deny --config ''deny.toml'' --locked check'
       - name: Unused dependencies
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_machete == ''run'' }}'
         run: '. "$VELNOR_EXEC" run -- cargo machete'
