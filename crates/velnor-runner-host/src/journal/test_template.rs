@@ -54,48 +54,77 @@ impl Seed {
 }
 
 pub(super) fn seed(path: &Path, key: &str) -> Seed {
+    match root() {
+        Ok((root, stamp)) => seed_from(&root, &stamp, path, key),
+        Err(_) => Seed::Missing,
+    }
+}
+
+fn seed_from(root: &Path, stamp: &str, path: &Path, key: &str) -> Seed {
     if path.exists() {
         return Seed::Existing;
     }
-    let started = std::cell::Cell::new(false);
-    let attempt = || -> io::Result<bool> {
-        let (root, stamp) = root()?;
-        let template = root.join(stamp).join(key);
-        if !template.is_dir() {
-            return Ok(false);
-        }
-        let (parent, name) = base(path)?;
-        started.set(true);
+    let template = root.join(stamp).join(key);
+    if !template.is_dir() {
+        return Seed::Missing;
+    }
+    let Ok((parent, name)) = base(path) else {
+        return Seed::Missing;
+    };
+    match install(&template, parent, name) {
+        Ok(true) => Seed::Copied,
+        Ok(false) => Seed::Existing,
+        Err(_) => Seed::Missing,
+    }
+}
+
+fn install(template: &Path, parent: &Path, name: &str) -> io::Result<bool> {
+    let tag = std::process::id();
+    let staged = |suffix: &str| parent.join(format!(".{name}.seed-{tag}{suffix}"));
+    let result = (|| {
         for suffix in SUFFIXES {
             let source = template.join(format!("db{suffix}"));
             if source.exists() {
-                fs::copy(&source, parent.join(format!("{name}{suffix}")))?;
+                fs::copy(&source, staged(suffix))?;
             }
         }
-        Ok(true)
-    };
-    if let Ok(true) = attempt() {
-        return Seed::Copied;
+        for suffix in ["-wal", "-shm"] {
+            if staged(suffix).exists() {
+                fs::rename(staged(suffix), parent.join(format!("{name}{suffix}")))?;
+            }
+        }
+        match fs::hard_link(staged(""), parent.join(name)) {
+            Ok(()) => Ok(true),
+            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => Ok(false),
+            Err(error) => Err(error),
+        }
+    })();
+    for suffix in SUFFIXES {
+        fs::remove_file(staged(suffix)).ok();
     }
-    if !started.get() {
-        return Seed::Missing;
-    }
-    if let Ok((parent, name)) = base(path) {
-        for suffix in SUFFIXES {
+    if result.is_err() {
+        for suffix in ["-wal", "-shm"] {
             fs::remove_file(parent.join(format!("{name}{suffix}"))).ok();
         }
     }
-    Seed::Missing
+    result
 }
 
 pub(super) fn publish(path: &Path, key: &str) {
-    try_publish(path, key).ok();
+    if let Ok((root, stamp)) = root() {
+        publish_into(&root, &stamp, path, key).ok();
+    }
 }
 
-fn try_publish(path: &Path, key: &str) -> io::Result<()> {
-    let (root, stamp) = root()?;
+fn publish_into(root: &Path, stamp: &str, path: &Path, key: &str) -> io::Result<()> {
+    match fs::symlink_metadata(root) {
+        Ok(meta) if meta.is_dir() => {}
+        Ok(_) => return Err(io::Error::other("journal template root is not a directory")),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => fs::create_dir(root)?,
+        Err(error) => return Err(error),
+    }
     let (parent, name) = base(path)?;
-    let stamp_dir = root.join(&stamp);
+    let stamp_dir = root.join(stamp);
     fs::create_dir_all(&stamp_dir)?;
     let staging = stamp_dir.join(format!(".{key}.{}", std::process::id()));
     fs::remove_dir_all(&staging).ok();
@@ -112,8 +141,8 @@ fn try_publish(path: &Path, key: &str) -> io::Result<()> {
     if published.is_err() {
         fs::remove_dir_all(&staging).ok();
     }
-    for entry in fs::read_dir(&root)?.flatten() {
-        if entry.file_name().to_str() != Some(stamp.as_str()) {
+    for entry in fs::read_dir(root)?.flatten() {
+        if entry.file_name().to_str() != Some(stamp) {
             fs::remove_dir_all(entry.path()).ok();
         }
     }
@@ -122,24 +151,58 @@ fn try_publish(path: &Path, key: &str) -> io::Result<()> {
 
 mod tests {
     use super::super::{Journal, Outcome};
+    use super::{Seed, install, publish_into, seed_from};
 
     type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
-    async fn schema(journal: &Journal) -> TestResult<(i64, Vec<(String, String)>)> {
+    async fn schema(journal: &Journal) -> TestResult<(i64, Vec<String>)> {
         let connection = journal.connection().await?;
         let mut rows = connection.query("PRAGMA user_version", ()).await?;
         let version: i64 = rows.next().await?.ok_or("user_version")?.get(0)?;
         let mut rows = connection
-            .query(
-                "SELECT name, COALESCE(sql, '') FROM sqlite_schema ORDER BY name",
-                (),
-            )
+            .query("SELECT name FROM sqlite_schema ORDER BY name", ())
             .await?;
         let mut objects = Vec::new();
         while let Some(row) = rows.next().await? {
-            objects.push((row.get(0)?, row.get(1)?));
+            objects.push(row.get(0)?);
         }
         Ok((version, objects))
+    }
+
+    #[test]
+    fn a_symlinked_template_root_is_refused_and_its_target_is_not_pruned() -> TestResult {
+        let directory = tempfile::tempdir()?;
+        let target = directory.path().join("target");
+        std::fs::create_dir_all(target.join("victim"))?;
+        let root = directory.path().join("root");
+        std::os::unix::fs::symlink(&target, &root)?;
+        let db = directory.path().join("j.db");
+        std::fs::write(&db, b"x")?;
+        assert!(publish_into(&root, "stamp", &db, "key").is_err());
+        assert!(target.join("victim").exists());
+        assert!(!target.join("stamp").exists());
+        Ok(())
+    }
+
+    #[test]
+    fn an_install_that_loses_the_claim_reports_existing_and_leaves_no_staging() -> TestResult {
+        let directory = tempfile::tempdir()?;
+        let root = directory.path().join("root");
+        let source = directory.path().join("src.db");
+        std::fs::write(&source, b"template")?;
+        publish_into(&root, "stamp", &source, "key")?;
+        let target = directory.path().join("dest.db");
+        assert_eq!(seed_from(&root, "stamp", &target, "key"), Seed::Copied);
+        assert_eq!(std::fs::read(&target)?, b"template");
+        assert_eq!(seed_from(&root, "stamp", &target, "key"), Seed::Existing);
+        let template = root.join("stamp").join("key");
+        assert!(!install(&template, directory.path(), "dest.db")?);
+        let leftovers = std::fs::read_dir(directory.path())?
+            .flatten()
+            .filter(|entry| entry.file_name().to_string_lossy().contains(".seed-"))
+            .count();
+        assert_eq!(leftovers, 0);
+        Ok(())
     }
 
     #[tokio::test(flavor = "multi_thread")]
