@@ -91,7 +91,10 @@ fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String)
         let mut stale = Vec::new();
         collect_files(&base_only, &base_only, &mut stale);
         for file in stale {
-            let path = file.to_string_lossy().trim_end_matches(".fixture").to_owned();
+            let path = file
+                .to_string_lossy()
+                .trim_end_matches(".fixture")
+                .to_owned();
             fs::remove_file(repo.join(path)).unwrap_or_else(|e| unreachable!("{e}"));
         }
         copy_tree(&snapshot.join("head-only"), &repo);
@@ -140,7 +143,10 @@ fn apply_local(case: &Path, repo: &Path) {
     let mut appended = Vec::new();
     collect_files(&local.join("append"), &local.join("append"), &mut appended);
     for file in appended {
-        let path = file.to_string_lossy().trim_end_matches(".fixture").to_owned();
+        let path = file
+            .to_string_lossy()
+            .trim_end_matches(".fixture")
+            .to_owned();
         let mut text = read(&repo.join(&path));
         text.push_str(&read(&local.join("append").join(&file)));
         fs::write(repo.join(&path), text).unwrap_or_else(|e| unreachable!("{e}"));
