@@ -1070,6 +1070,27 @@ Rulings recorded without a further design change: C02 and C03 (direction only, n
 design), L11 and L17 (rejected), L16 merge train (D18 stands), L19 (fetch only before the label;
 D19 stands, default no). Owner questions restated: D17 (now names quarantine) and D20.
 
+### Group 35: Dagger ideas D01–D11 (`velnor-vs-dagger.md`)
+
+| Id | Idea | Decision, with its precondition | v3 section; plan |
+|---|---|---|---|
+| D01 | Call-identity keys as a canonical struct | Adopted: representation only; a new field is a miss | 6.1; DG01 |
+| D02 | Content key as telemetry | Adopted: no gate path reads it; it is D03's shadow phase | 11 (S5); DG02 |
+| D03 | Test run keyed by binary digests | Adopted behind its preconditions: lab R06 removes the commit stamp from the binary, twin builds give equal digests, about 3,000 clean D02 comparisons per kind; S1 plants an unchanged-binary data-file change. If R06 fails, D03 is dropped | 6.4; DG03 |
+| D04 | Reuse class per obligation | Adopted: tightens only; TTL for advice only | 6.1; DG04 |
+| D05 | Targets by URL | Adopted: the trust tier follows the signer class, never the URL | 5.3; DG05 |
+| D06 | Node-local request socket | Adopted for cluster agent shells, after the owner's answer on shell capacity; accepts no results | 5.3; DG06 |
+| D07 | Checks by name | Adopted: from the base commit's inventory; unknown names refused | 8.1; DG07 |
+| D08 | Generator freshness checks | Adopted: derived obligations; hand-written freshness jobs deleted | 8.1; DG08 |
+| D09 | Agent environments with worktrees | Adopted, Docker first; environments never mint; cluster environments wait on capacity | UX 5; DG09 |
+| D10 | Lockfile modes | Adopted: obligations resolve `frozen`; `velnor lock update` is the only `live` path | 6.1; DG10 |
+| D11 | OTel traces per request | Adopted: read-only | 1.1; DG11 |
+
+The rejected Dagger ideas stay rejected for the reasons in `velnor-vs-dagger.md` "Ideas to reject"
+(the engine as executor or sandbox, modules in SDK languages, Dagger Cloud, checks on every push,
+TTL reuse for evidence, client-written cache, semantic equivalence, dirty-tree sync, rerun until
+green, in-memory evidence, in-runner agents, credential-conditional reuse).
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the

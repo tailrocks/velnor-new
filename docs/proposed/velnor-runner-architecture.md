@@ -38,7 +38,9 @@ handicapped baselines]. After it passes: *the fastest measured push-to-merge on 
 velnor-new workload, at a stated resource budget, with the same verification contract*. The speed
 belongs to the verification system (ledger, label flow, mirrors, warm generations): PR and group
 verdicts run no Actions job, so the executor is off the verdict path; an executor claim needs its
-own race (section 11).
+own race (section 11). Every `ensure` is one OpenTelemetry trace (D11): plan, record resolution with
+its reason, provision, checkout, compile, each test binary, signing and the status write, exported
+over OTLP to a self-hosted collector; nothing in the gate reads it.
 
 | Measure | Today | Basis |
 |---|---|---|
@@ -287,6 +289,11 @@ pub enum Role { Production, Reference } // Reference: conformance, shadow, diff;
   the node agent. The command runs under `velnor-ci obligation exec`, which reports exits and the
   test inventory over a channel the sandbox cannot write, so the receipt comes from observation,
   not the Worker. This mode passes its own conformance cases before it may be selected.
+- **Targets** (D05). Clients name where work runs with `--target` or `VELNOR_TARGET` (`local`,
+  `k8s://de`, `k8s://fi`, `docker://host`), authenticated over mTLS with the agent identity; a URL
+  scheme maps to a declared capability set, and a result's trust tier comes from the signer class of
+  the node that executed it, never from the URL. On a cluster node, an agent shell reaches its own
+  node agent through a request-only socket (D06), which accepts requests, never results.
 - **Choice and identity.** `.velnor/` names the executor per job type or obligation kind, or
   globally, read from the base commit and limited to certified identities and digests, so a change
   takes effect only after it lands; Velnor never switches on failure. The identity is in every key,
@@ -537,6 +544,14 @@ is well designed for this architecture.
   the ledger resolves the vector against current, unrevoked records. An "instant" verdict
   (rebase-only push, identical group tree) needs zero C5 obligations and zero misses; otherwise the
   C5 set and the misses run.
+- **Key shape and reuse class** (Dagger ideas D01, D04, D10). A key is a canonical struct with named
+  fields (definition, inputs, fingerprint, executor, reuse class), digested over its encoding, so
+  `velnor explain` names the field that changed; a new field raises the key version (a miss, never
+  a hit). Each inventory obligation declares `reuse = content | per-request | never`; the planner
+  takes the stricter of that and the C5 classifier, and a TTL is used only for advice, never
+  evidence. Obligations resolve network inputs `frozen`, only from a committed lock through the
+  digest-checked mirrors; an unlocked input fails the obligation or makes it C5, and `velnor lock
+  update` is the only `live` path.
 
 ### 6.2 Verification records, witnesses, joins and scopes
 
@@ -598,6 +613,7 @@ not, how that is detected, and the automatic fallback.
 | `mbx-cache` units for a cold or mismatched node | mbx's per-crate keys | A missed input in mbx's key | A1; the builder's cold rebuilds; digests equal before a unit enters a generation | Server retired; plain cargo |
 | `actions/cache` entries | The user's key and version, resolved by the authoritative index with GitHub's scope and order | A user key that omits an input (as on GitHub) | Conformance against the official runner; content hash on every read | Treated as a miss; never used by a receipt-minting obligation |
 | Artifacts, binaries, tool and crate stores | Content address; pinned versions and lockfile checksums | Corruption; a store edited in place | Hash on read; read-only mounts (`EROFS`) | Refetch, rebuild, or rebuild the store |
+| Test run keyed by binary digests (D03; only after lab R06 removes the commit from the binary, twin builds give equal digests, and about 3,000 clean D02 comparisons per kind) | The run step's inputs are the bytes of every binary it executes, the enrolled runtime contract, the definition and the fingerprint; `include_bytes!` data is in the bytes | A stale warm build reproducing the old binary; a run-time read outside the contract | Lookup digests come only from twin builds with equal digests, one cold until compile reuse graduates; 2% re-execution; A1; S1 plants a data-file change that leaves the binary unchanged | The class is suspended; keys fall back to per-root or whole-tree |
 | Hedged copy of a slow shard | Every launched copy is a witness of the same key and must pass | A hang discarded as the losing copy | A cancelled, timed-out or lost copy fails the obligation (C4) | None needed: hedging cannot produce a green |
 | Mirror checkout | The staged tree is hashed in full and must equal the requested tree before the first step | A stale, corrupt or concurrently refreshed base | The full check, every time | Fetch the commit from GitHub; rebuild the mirror from the site bundle |
 | Release promotion | Closure, release profile, target, tool image; the digest is in the receipt and the attestation | Wrong bytes published | Re-hash and `gh attestation verify` at publish; A1 rebuilds cold and compares | The release stops; nothing is rebuilt silently |
@@ -850,6 +866,14 @@ it holds a gate slot, which the runner-minute accounting charges; when the tip's
 unclaimed, the job takes the audit's exclusive lease and runs it through the node agent's cold path
 instead of waiting, with the same signed evidence.
 
+**Checks by name** (D07, D08). `velnor check -l` lists the inventory's obligations by name
+(`clippy:generator`, `test:velnor-ci`), and `velnor check <name>` runs exactly that obligation's
+released command graph from the base commit; an unknown name is refused, and agents and hooks call
+names, not raw `cargo` arguments. Every generator in the inventory (velnor-gen's workflows and
+goldens, schema dumps) gets a derived freshness obligation (regenerate in the sandbox; any diff
+fails), a generator registered without one is an inventory error, and the hand-written freshness
+jobs are deleted when cohort 1 moves.
+
 **The obligation inventory** is the parity contract, not summary text. It is versioned, released
 with `velnor-ci`, and maps every check that blocks today (Plan, the lints, every Rust variant, the
 named and configuration checks, release prerequisites and the aggregated verdicts; evidence pack
@@ -1015,8 +1039,8 @@ qemu.
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1044 agent-hours of building and 120 of review,
-about 3.6 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 1126 agent-hours of building and 120 of review,
+about 3.9 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0
 comes first: an agent PR's cycle falls from 94 to about 34 min at P50 [E].
@@ -1096,7 +1120,7 @@ and cost.
 | S2 | **Control race** (K01, K26) | Velnor Native against GitHub Official on the same warm workers, mirrors, tool store and generation, separate executor keys; ≥ 30 interleaved pairs per job type at 15% and 80% CPU; the same race on today's ARC with phase 0 applied | Per-job-type deltas with intervals; an executor claim only at ≥ 5 s per job at P50 on ≥ 3 job types |
 | S3 | **Head-to-head** (K02, K03, K25) | Arms: today's CI; **a strong conventional baseline** on the same workers (the official runner on persistent agents with a reflink-cloned warm target, crates mirror, baked tool image, gates on the cluster, auto-merge, ALLGREEN); Velnor with Official; Velnor Native; rented arms per owner question D22 | The publication rule below, on push-to-merge gross and net and on the verdict; every stage timed, `ensure` included |
 | S4 | Loaded replay (K04, K21) | The 2026-11-18 trace with other organisations' load, A1 and release preparation at production priority; then the reversal cases: a root or manifest edit, a cold toolchain, a lost worker, an ejected predecessor | Verdict P90 ≤ 1.5× quiet; merge-path wait P90 ≤ 10 s |
-| S5 | Census (K06) | C5 classifier and read audit on `main` and the last 300 heads | Shares of C5 obligation-seconds and of heads with whole-tree keys published; goals restated from them |
+| S5 | Census (K06, D02) | C5 classifier and read audit on `main` and the last 300 heads; a content-key would-hit counter (equal binary digests under a different source key), telemetry only | Shares of C5 obligation-seconds and of heads with whole-tree keys published; goals restated from them |
 | S6 | Warm compile (K05) | 300 replayed diffs per root over a clone, cold page cache, idle and 70–90% load, with a cold control; heads that add a source file reported separately | Slower witness P90 ≤ 25 s for helper and generator, ≤ 40 s loaded; digests equal cold |
 
 **Publication rule** (K22, pre-registered). Velnor is "fastest" against an arm only if paired

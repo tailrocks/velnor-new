@@ -256,6 +256,24 @@ Verifying 3f9a2c1 (merged with queue tip 5ae9378) on site de
 Verified in 41 s. Push and label: the PR will reuse these results.
 ```
 
+**Run one check by name** (from the released inventory at the base commit; an unknown name is
+refused). `--target` picks where it runs: `local` (Docker on this machine), `k8s://de`, `k8s://fi`;
+the trust tier comes from the node that ran it, never from the target name:
+
+```console
+$ velnor check -l
+fmt  clippy:ci-helper  clippy:generator  test:velnor-ci  test:velnor-gen  fresh:workflows  …
+$ velnor check test:velnor-ci --target local
+✓ test:velnor-ci (412 tests) on local (advice only: a Mac result never counts)
+```
+
+**Agent environments** (proposed; Docker first, cluster environments wait on capacity): `velnor env
+new <task>` makes a worktree and a sticky sandbox with its own target directory, temp dirs and
+ports, and a command log; `velnor env push` publishes the branch. Environments never mint.
+`velnor mcp` offers `env`, `check`, `verify` and `explain` as MCP tools beside `--json`.
+`velnor lock update` is the only command that resolves inputs live; it opens a PR.
+`velnor trace <sha>` renders the request's trace (every stage timed).
+
 **Run a job locally** (on the Docker backend; work item P07):
 
 ```console
@@ -283,6 +301,8 @@ test:velnor-ci  RAN (2 witnesses: velnor-12, velnor-31)
 $ velnor explain 1412 clippy:generator
 clippy:generator  REUSED  record from PR #1409, trusted, epoch 4
   same: tree for generator/ (contract v3), toolchain 1.99.1, executor native@sha256:ab12…
+$ velnor explain 1415 test:velnor-gen
+test:velnor-gen  RAN  miss on one field: toolchain 1.99.1 → 1.99.2
 ```
 
 **Caches and mirrors:**

@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 1044 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.6 days of fleet time (1044 ÷ 12 builders ≈ 87 h). Coding does not set the dates.
+- **Total work:** about 1126 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.9 days of fleet time (1126 ÷ 12 builders ≈ 94 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -437,10 +437,21 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | C13 | Lab B5: narrowed step 3 | 300 replayed diffs that add or remove a path plus planted cases (`foo/mod.rs` beside `foo.rs`, a new `tests/x.rs`, a globbed or proc-macro-listed file, a new `clippy.toml`, `rustfmt.toml` or `.cargo/config.toml`); then the narrowed rule as its own reuse class with a cold second witness | C05, C06 | 10 | strong | Every planted case rebuilds; every digest equals cold | Root-cold rebuilds on added files, after graduation |
 | V16 | Flake scoring | Per-test discordance from witness pairs, A1 and the 2% sample; automatic issues; quarantine only with an equivalent blocking check shown on the same planted fault; automatic expiry back to blocking (L14) | V03, V05 | 6 | mid | A planted flake is scored and an issue opened; an expired quarantine blocks again | — |
 | S04 | Image-key census | Count image-input-key changes per week; build a per-scope layer cache only above 20 runner-min a day of image builds (L20) | B15 | 2 | cheap | The count published | — |
+| DG01 | Key struct (Dagger D01) | Canonical key struct with named fields and reuse class; `velnor explain` names the differing field | V01 | 6 | mid | Adding a field raises the key version; a changed field is named | — |
+| DG02 | Content-key telemetry (D02) | Per witness, the digest of every executed binary plus runtime inputs; would-hit counter in the shadow ledger and daily report; no gate path reads it | V02, DG01 | 4 | mid | Counts published per obligation kind | — |
+| DG03 | Run step keyed by binary digests (D03) | Split test obligations into build and run steps; run key from twin-build digests, the runtime contract, definition and fingerprint | R06, C12, DG02 | 12 | strong | Only after R06 removes the commit stamp, twin digests agree and about 3,000 clean D02 comparisons per kind; S1's unchanged-binary data-file edit turns red | — |
+| DG04 | Reuse class per obligation (D04) | a `reuse` class (content, per-request or never) in the inventory; the stricter of it and the classifier wins; TTL for advice only | G03, V12 | 5 | mid | A declaration can only tighten; the class is in the key | — |
+| DG05 | Targets (D05) | `--target` / `VELNOR_TARGET` (`local`, `k8s://de`, `k8s://fi`, `docker://host`), mTLS with the agent identity; scheme → capability set | P02, V02 | 4 | mid | The trust tier follows the signer class, never the URL | — |
+| DG06 | Node-local request socket (D06) | Request-only socket from cluster agent shells to their node agent; minting in a fresh sandbox over the committed tree | DG05, owner answer on shell capacity | 6 | mid | The socket accepts no results | — |
+| DG07 | Checks by name (D07) | `velnor check -l` and `velnor check <name>` from the base commit's inventory; hooks call names | G03 | 8 | mid | An unknown name is refused | — |
+| DG08 | Generator freshness (D08) | Register generators; derive a freshness obligation for each; refuse one without it | G03 | 4 | mid | A stale golden fails | The hand-written freshness jobs |
+| DG09 | Agent environments (D09) | `velnor env new/push`, per-environment target, temp dirs and ports, command log; `velnor mcp`; Docker first | DG05, P07 | 16 | mid | Environments never mint; parallel agents do not collide | — |
+| DG10 | Frozen resolution (D10) | Obligations resolve network inputs only from committed locks through the mirrors; `velnor lock update` opens a PR | C11, G03 | 8 | mid | An unlocked input fails or is C5, never a hit | — |
+| DG11 | OTel traces (D11) | One trace per `ensure` over OTLP to a self-hosted collector; `velnor trace`; `Velnor / Details` links it | V01, L02 | 10 | mid | Every stage of section 11 timed from traces | — |
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 150 items, about 1044 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 161 items, about 1126 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
