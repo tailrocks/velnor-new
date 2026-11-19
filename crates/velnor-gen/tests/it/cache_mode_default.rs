@@ -81,20 +81,20 @@ fn violations(text: &str, writers: &BTreeSet<String>) -> Result<Vec<String>, Box
             .get("steps")
             .map(|steps| steps.items().iter().filter(|step| saves(step)).collect())
             .unwrap_or_default();
-        let writes = matches!(mode, Some("write" | "write-only"));
+        let can_write = matches!(mode, Some("write" | "write-only"));
         match mode {
             None if job.get("uses").is_none() => found.push(format!("{id}: no cache-mode")),
-            _ if !savers.is_empty() && !writes => {
+            _ if !savers.is_empty() && !can_write => {
                 found.push(format!("{id}: saves the cache but its mode is {mode:?}"));
             }
-            _ if writes && savers.is_empty() && !writers.contains(id) => {
+            _ if can_write && savers.is_empty() && !writers.contains(id) => {
                 found.push(format!(
                     "{id}: writes the cache without a save step or a declaration"
                 ));
             }
             _ => {}
         }
-        if writes && !writers.contains(id) {
+        if can_write && !writers.contains(id) {
             for step in savers {
                 let gate = step
                     .get("if")
