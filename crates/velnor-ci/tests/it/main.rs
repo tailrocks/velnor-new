@@ -31,6 +31,7 @@ mod configuration_targets;
 mod crates_mirror;
 mod delta;
 mod delta_availability;
+mod delta_baseline;
 mod delta_binding;
 mod delta_freshness;
 mod delta_integrity;
