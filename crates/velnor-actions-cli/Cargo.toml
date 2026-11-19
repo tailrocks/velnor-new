@@ -101,7 +101,7 @@ generator = [
     "dep:rustix",
     "dep:velnor-actions-mise",
     "dep:velnor-actions-orchestrator",
-    "dep:velnor-actions-freshness",
+    "dep:velnor-freshness",
     "dep:clap",
     "dep:velnor-runner-host",
     "dep:tokio",
@@ -138,7 +138,7 @@ velnor-actions-mise = { version = "=0.1.82", path = "../velnor-actions-mise", op
 serde_json = { workspace = true, optional = true }
 velnor-actions-contract = { version = "=0.1.82", path = "../velnor-actions-contract", optional = true }
 velnor-actions-orchestrator = { version = "=0.1.82", path = "../velnor-actions-orchestrator", optional = true }
-velnor-actions-freshness = { version = "=0.1.82", path = "../velnor-actions-freshness", optional = true }
+velnor-freshness = { version = "=0.1.82", path = "../velnor-freshness", optional = true }
 clap = { version = "=4.6.7", features = ["derive"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]

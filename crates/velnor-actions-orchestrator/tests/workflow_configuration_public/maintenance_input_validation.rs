@@ -9,7 +9,7 @@ use super::super::scoped_workspace::TestResult;
 
 const SOURCE_ROOTS: [&str; 3] = [
     "crates/velnor-actions-cli/src",
-    "crates/velnor-actions-freshness/src",
+    "crates/velnor-freshness/src",
     "crates/velnor-archive-guard/src",
 ];
 
@@ -70,7 +70,7 @@ pub(super) fn assert_metadata_input_closures(root: &Path) -> TestResult {
         .as_array()
         .ok_or("missing Rust input rules")?;
     for package in [
-        "velnor-actions-freshness",
+        "velnor-freshness",
         "velnor-actions-mise",
         "velnor-actions-orchestrator",
     ] {
@@ -87,7 +87,7 @@ pub(super) fn assert_metadata_input_closures(root: &Path) -> TestResult {
         assert!(!globs.is_empty(), "missing complete inputs for {package}");
         assert_workspace_metadata(root, &globs)?;
         assert_package_inputs(root, package, &globs)?;
-        if package == "velnor-actions-freshness" {
+        if package == "velnor-freshness" {
             assert!(
                 !globs
                     .iter()
@@ -196,7 +196,7 @@ fn assert_workspace_metadata(root: &Path, globs: &[&str]) -> TestResult {
 
 fn assert_package_inputs(root: &Path, package: &str, globs: &[&str]) -> TestResult {
     let paths: &[&str] = match package {
-        "velnor-actions-freshness" => &[
+        "velnor-freshness" => &[
             ".velnor/version-policy.toml",
             ".cargo/mutants.toml",
             "deny.toml",

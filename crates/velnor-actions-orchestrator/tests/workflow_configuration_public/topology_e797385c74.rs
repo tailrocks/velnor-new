@@ -48,7 +48,7 @@ pub(super) const PACKAGES: [RealPackage; 20] = [
         dir: "crates/velnor-actions-cli",
         deps: &[
             ("velnor-actions-contract", Dep::Dev),
-            ("velnor-actions-freshness", Dep::Normal),
+            ("velnor-freshness", Dep::Normal),
             ("velnor-actions-mise", Dep::Dev),
             ("velnor-actions-orchestrator", Dep::Normal),
         ],
@@ -67,8 +67,8 @@ pub(super) const PACKAGES: [RealPackage; 20] = [
         forcing: Forcing::None,
     },
     RealPackage {
-        name: "velnor-actions-freshness",
-        dir: "crates/velnor-actions-freshness",
+        name: "velnor-freshness",
+        dir: "crates/velnor-freshness",
         deps: &[],
         forcing: Forcing::ManifestDirEscape,
     },

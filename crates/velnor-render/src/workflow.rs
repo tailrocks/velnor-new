@@ -6,7 +6,8 @@ use crate::rules::{
 };
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{
-    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT,
 };
 
 /// True for every event except a pull request from a fork.
@@ -85,6 +86,7 @@ fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
                 entry(
                     name,
                     if name == TESTS_RUN_OUTPUT
+                        || name == MERGE_GROUP_SKIP_OUTPUT
                         || name == TESTS_LISTED_OUTPUT
                         || name == TESTS_IGNORED_OUTPUT
                         || name == TESTS_BY_PACKAGE_OUTPUT

@@ -198,7 +198,7 @@ complete = true
 
 [[stacks.rust.inputs]]
 globs = [
-  "crates/velnor-actions-freshness/**",
+  "crates/velnor-freshness/**",
   ".velnor/version-policy.toml",
   ".cargo/mutants.toml",
   "Cargo.toml",
@@ -219,7 +219,7 @@ globs = [
   "crates/**/benches/*.rs",
   "crates/**/benches/*/main.rs",
 ]
-packages = ["velnor-actions-freshness"]
+packages = ["velnor-freshness"]
 complete = true
 
 [[stacks.rust.inputs]]

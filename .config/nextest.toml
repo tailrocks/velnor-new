@@ -104,7 +104,7 @@ threads-required = "num-test-threads"
 slow-timeout = { period = "30s", terminate-after = 4 }
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-ci) and test(preview_parity)'
+filter = 'package(=velnor-ci) and (test(preview_parity) | test(preview_admit) | test(preview_authority))'
 slow-timeout = { period = "60s", terminate-after = 10 }
 
 [[profile.ci.overrides]]

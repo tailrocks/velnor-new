@@ -76,15 +76,16 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
             reports_ignored: false,
             gate: None,
             plan_outputs: Vec::new(),
-            reports_ignored: false,
             steps: vec![Step {
                 kind: StepKind::SourcesLocks(locks),
                 directory: None,
                 target_dir: None,
                 when: When::Success,
+                skip_on_draft: false,
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,
+                skip_after_merge_group: None,
             }],
         }],
     };

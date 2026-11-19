@@ -148,9 +148,9 @@ jobs:
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
           restore-keys: |
-            velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles('Cargo.lock') }}-
+            velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-
             velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-
       - name: velnor-ci inputs restore
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -209,11 +209,6 @@ jobs:
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-actions-dbt --locked --message-format=json-render-diagnostics'
-      - name: Check velnor-actions-freshness alone
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' -p velnor-actions-freshness '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
-        run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-actions-freshness --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-gradle alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' -p velnor-actions-gradle '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
@@ -259,6 +254,11 @@ jobs:
         env:
           CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-ci --locked --message-format=json-render-diagnostics'
+      - name: Check velnor-freshness alone
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' -p velnor-freshness '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
+        run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo check -p velnor-freshness --locked --message-format=json-render-diagnostics'
       - name: Check velnor-gen alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && steps.plan.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' -p velnor-gen '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
         env:
@@ -385,12 +385,12 @@ jobs:
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
         with:
           path: target
-          key: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          key: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
       - id: target_key
         name: Record the target cache key
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') && steps.base.outputs.save == ''true'' && steps.plan.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || steps.plan.outputs.rust_root_mode) != ''none'' }}'
         env:
-          CACHE_KEY: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ hashFiles(''Cargo.lock'') }}-${{ github.sha }}-${{ github.run_id }}'
+          CACHE_KEY: 'velnor-tgt-rust.root.${{ runner.os }}-${{ runner.arch }}-${{ steps.prepare.outputs.compat }}-${{ steps.prepare.outputs.lock_root }}-${{ github.sha }}-${{ github.run_id }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
       - id: sources_fetch_0
         name: Fetch the sources of root 0

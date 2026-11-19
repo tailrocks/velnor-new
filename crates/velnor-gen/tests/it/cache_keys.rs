@@ -190,6 +190,8 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
                 directory: None,
                 target_dir: None,
                 when: When::Success,
+                skip_on_draft: false,
+                skip_after_merge_group: None,
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,

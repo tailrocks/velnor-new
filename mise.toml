@@ -171,7 +171,7 @@ TEST_MEMBERS="$(VELNOR_INTERNAL_OP=repo-policy-v1 \
   cargo --config build.jobs=2 run --quiet --locked --package velnor-actions-cli --bin velnor-actions)"
 printf "maintenance-phase: source-fetch\n"
 cargo fetch --locked
-for package in velnor-actions-freshness velnor-archive-guard; do
+for package in velnor-freshness velnor-archive-guard; do
   printf "maintenance-phase: %s\n" "$package"
   case " $TEST_MEMBERS " in
     *" $package "*)
