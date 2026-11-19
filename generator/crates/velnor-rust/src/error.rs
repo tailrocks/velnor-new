@@ -57,6 +57,16 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    LintToolUnpinned(String),
+    LintDuplicate(String),
+    LintKeyForeign {
+        kind: String,
+        key: &'static str,
+    },
+    UnknownTestGroupRoot(String),
+    TestGroupWithoutNextest(String),
+    TestGroupFilter(String),
+    PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
@@ -70,7 +80,9 @@ pub enum Reason {
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
     HelperSourceRelease,
+    MbxRemotePrivate(String),
     CargoCredentialProvider(String),
+    LockedUrlCredentials(String),
     TargetDirOutside(String),
     TargetDirOverlap(String),
     BuildDirKey(&'static str),
@@ -104,6 +116,28 @@ impl Reason {
         }
     }
 
+    fn fmt_test_groups(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::UnknownTestGroupRoot(root) => write!(
+                f,
+                "test_groups names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            Self::TestGroupWithoutNextest(name) => write!(
+                f,
+                "test group {name} belongs to a root with no nextest tests; a group runs a nextest filter from the root's archive"
+            ),
+            Self::TestGroupFilter(filter) => write!(
+                f,
+                "test_groups.filter {filter:?} is empty or has a character a generated one-command step cannot carry (a control character, a quote, $, a backtick, a backslash, |, &, ; or <); write nextest's and, or and not instead of &, | and !"
+            ),
+            Self::UnknownTestSetupRoot(root) => write!(
+                f,
+                "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_setup(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnpinnedTool(tool) => write!(
@@ -114,8 +148,15 @@ impl Reason {
                 f,
                 "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
             ),
+            Self::PrCiWithSkipDraft => f.write_str(
+                "pr_ci = \"label\" and skip_draft_pull_requests = true both decide what a draft pull request runs; remove skip_draft_pull_requests, because pr_ci = \"label\" already runs nothing on a draft",
+            ),
             Self::HelperSourceRelease => f.write_str(
                 "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
+            ),
+            Self::MbxRemotePrivate(cause) => write!(
+                f,
+                "cache.mbx_remote is refused: fork pull requests can restore that cache and this repository has private dependencies ({cause}); remove cache.mbx_remote"
             ),
             _ => Ok(()),
         }
@@ -129,6 +170,10 @@ impl Reason {
             Self::CargoCredentialProvider(key) => write!(
                 f,
                 "{key} names a program or alias that cargo runs when it publishes, with the release token in its environment; remove it, or use one of cargo:token, cargo:wincred, cargo:macos-keychain or cargo:libsecret"
+            ),
+            Self::LockedUrlCredentials(name) => write!(
+                f,
+                "{name} is locked from an https URL with credentials in it, which the private_sources token cannot replace, so git could not fetch it; lock it from a plain https URL (the token supplies the credentials) or an ssh URL"
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
@@ -145,6 +190,9 @@ impl Reason {
             Self::BuildDirKey(key) => write!(
                 f,
                 "{key} is not supported: the target cache cannot model a separate build directory, so remove it"
+            ),
+            Self::RustdocflagsString => f.write_str(
+                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
@@ -217,6 +265,9 @@ impl fmt::Display for Reason {
                 f,
                 "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
             ),
+            Self::UnknownTestGroupRoot(_)
+            | Self::TestGroupWithoutNextest(_)
+            | Self::TestGroupFilter(_) => self.fmt_test_groups(f),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
@@ -232,15 +283,23 @@ impl fmt::Display for Reason {
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
-            Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperSourceRelease => self.fmt_setup(f),
+            Self::UnpinnedTool(_)
+            | Self::HelperBox(_)
+            | Self::HelperSourceRelease
+            | Self::MbxRemotePrivate(_)
+            | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
+            | Self::LockedUrlCredentials(_)
             | Self::CapLints
             | Self::TargetDirOutside(_)
             | Self::TargetDirOverlap(_)
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
+            Self::LintToolUnpinned(_)
+            | Self::LintDuplicate(_)
+            | Self::LintKeyForeign { .. } => self.fmt_config(f),
             Self::InvalidPatch(key) => {
                 write!(
                     f,

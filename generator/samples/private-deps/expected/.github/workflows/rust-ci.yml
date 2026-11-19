@@ -18,8 +18,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base == null) }}'
 env:
   MISE_AUTO_INSTALL: 'false'
   RUSTUP_AUTO_INSTALL: '0'
@@ -127,7 +127,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -152,6 +152,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: ci-helper
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_ci_helper
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -160,8 +165,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_ci_helper
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -194,7 +199,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_ci_helper","root":"ci-helper","save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_ci_helper","root":null,"save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
         run: '. "$VELNOR_EXEC" report'
@@ -257,7 +262,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -279,6 +284,11 @@ jobs:
         run: '. "$VELNOR_EXEC" prepare'
       - name: velnor-ci check-metadata
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -287,8 +297,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_root
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -405,7 +415,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":null,"save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -469,7 +479,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -494,6 +504,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: ci-helper
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_ci_helper
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -502,8 +517,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_ci_helper
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -561,7 +576,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_ci_helper","root":"ci-helper","save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_ci_helper","root":null,"save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -625,7 +640,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -650,6 +665,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: crates/velnor-runner
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_crates_velnor_runner
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -658,8 +678,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_crates_velnor_runner
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -759,7 +779,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":null,"save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -823,7 +843,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -848,6 +868,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: generator
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_generator
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -856,8 +881,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_generator
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -933,7 +958,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_generator","root":"generator","save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_generator","root":null,"save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -997,7 +1022,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1022,6 +1047,11 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: local
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_local
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1030,8 +1060,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_local
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1095,7 +1125,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_local","root":"local","save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_local","root":null,"save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -1151,7 +1181,7 @@ jobs:
             ~/.rustup
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: '2026.11.10'
           cache: false
@@ -1173,6 +1203,11 @@ jobs:
         run: '. "$VELNOR_EXEC" prepare'
       - name: velnor-ci check-metadata
         run: '. "$VELNOR_EXEC" check-metadata'
+      - id: sources_locks
+        name: Hash the sources lockfiles
+        env:
+          SOURCES_LOCKS: '${{ hashFiles(''Cargo.lock'', ''ci-helper/Cargo.lock'', ''crates/velnor-runner/Cargo.lock'', ''generator/Cargo.lock'', ''local/Cargo.lock'') }}'
+        run: 'echo "hash=$SOURCES_LOCKS" >> "$GITHUB_OUTPUT"'
       - id: sources_root
         name: Restore the sources cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1181,8 +1216,8 @@ jobs:
             ~/.cargo/registry/index
             ~/.cargo/registry/cache
             ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-'
+          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-${{ steps.sources_locks.outputs.hash }}'
+          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-all.roots-'
       - id: target_root
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1195,16 +1230,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: ci-helper
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_ci_helper
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-${{ hashFiles(''ci-helper/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-ci_helper-'
       - id: target_ci_helper
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1217,16 +1242,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: crates/velnor-runner
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_crates_velnor_runner
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-${{ hashFiles(''crates/velnor-runner/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-crates_velnor_runner-'
       - id: target_crates_velnor_runner
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1239,16 +1254,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: generator
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_generator
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-${{ hashFiles(''generator/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-generator-'
       - id: target_generator
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1261,16 +1266,6 @@ jobs:
       - name: velnor-ci check-metadata
         working-directory: local
         run: '. "$VELNOR_EXEC" check-metadata'
-      - id: sources_local
-        name: Restore the sources cache
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: |
-            ~/.cargo/registry/index
-            ~/.cargo/registry/cache
-            ~/.cargo/git/db
-          key: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-${{ hashFiles(''local/Cargo.lock'') }}'
-          restore-keys: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-local-'
       - id: target_local
         name: Restore the target cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
@@ -1340,7 +1335,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"},{"family":"sources","restore_step":"sources_ci_helper","root":"ci-helper","save_step":"sources_save_ci_helper"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"},{"family":"sources","restore_step":"sources_crates_velnor_runner","root":"crates/velnor-runner","save_step":"sources_save_crates_velnor_runner"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"},{"family":"sources","restore_step":"sources_generator","root":"generator","save_step":"sources_save_generator"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"},{"family":"sources","restore_step":"sources_local","root":"local","save_step":"sources_save_local"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":null,"save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"},{"family":"target","restore_step":"target_ci_helper","root":"ci-helper","save_step":"save_target_ci_helper"},{"family":"target","restore_step":"target_crates_velnor_runner","root":"crates/velnor-runner","save_step":"save_target_crates_velnor_runner"},{"family":"target","restore_step":"target_generator","root":"generator","save_step":"save_target_generator"},{"family":"target","restore_step":"target_local","root":"local","save_step":"save_target_local"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
         run: '. "$VELNOR_EXEC" report'

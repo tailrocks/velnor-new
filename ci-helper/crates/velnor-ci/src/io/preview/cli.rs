@@ -18,7 +18,7 @@ fn environment() -> BTreeMap<String, String> {
     std::env::vars().collect()
 }
 
-fn required<'a>(vars: &'a BTreeMap<String, String>, key: &str) -> Res<&'a str> {
+pub(super) fn required<'a>(vars: &'a BTreeMap<String, String>, key: &str) -> Res<&'a str> {
     vars.get(key)
         .map(String::as_str)
         .filter(|value| !value.is_empty())

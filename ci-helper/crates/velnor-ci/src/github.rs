@@ -168,6 +168,14 @@ pub struct ApiWorkflowRun {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ApiMergeGroupRun {
+    pub event: String,
+    pub status: String,
+    pub head_sha: String,
+    pub conclusion: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ApiListedRun {
     pub id: u64,
     pub event: String,
@@ -258,6 +266,15 @@ pub fn statuses_path(repo: &Repo, sha: &str, page: u32) -> String {
 pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
     format!(
         "/repos/{repo}/actions/runs?head_sha={sha}&exclude_pull_requests=true&per_page=100&page={page}"
+    )
+}
+
+#[must_use]
+pub fn merge_group_runs_path(repo: &Repo, workflow_file: &str, sha: &str) -> String {
+    format!(
+        "/repos/{repo}/actions/workflows/{}/runs?head_sha={}&event=merge_group&status=success&per_page=100",
+        encode(workflow_file),
+        encode(sha)
     )
 }
 

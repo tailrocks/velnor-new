@@ -3,6 +3,7 @@
 
 //! The effects of the source preview helpers: the network, `gh`, and the file system.
 
+pub mod admit;
 pub mod cli;
 pub mod gh;
 pub mod install;
