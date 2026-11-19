@@ -8,7 +8,6 @@ use velnor_model::{Platform, RepoPath, RustMetadata};
 use crate::bundle::{ExtraBin, check_targets};
 use crate::check::{CheckPlan, plan_checks};
 use crate::error::ReleaseError;
-use crate::error_family::FamilyError;
 use crate::family::{FamilyPlan, plan_binaries_and_family};
 use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
@@ -37,6 +36,7 @@ pub struct ReleaseFiles {
     pub cargo_manifests: Option<BTreeSet<String>>,
     pub cargo_manifest_texts: BTreeMap<String, String>,
     pub bin_targets: Option<BTreeSet<(String, String, String)>>,
+    pub tracked_paths: Option<BTreeSet<String>>,
     pub rust_metadata: Option<BTreeMap<RepoPath, RustMetadata>>,
     pub workflow_names: Option<BTreeSet<String>>,
     pub push_workflows: Option<BTreeSet<String>>,
@@ -364,9 +364,6 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
-        if family.is_some() && !config.checks.is_empty() {
-            return Err(FamilyError::Unsupported { key: "[[checks]]" }.into());
-        }
         let checks = plan_checks(config.checks, &binaries)?;
         let roots = plan_roots(configs, files.rust_metadata.as_ref());
         Ok(ReleasePlan {

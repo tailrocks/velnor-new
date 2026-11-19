@@ -24,7 +24,7 @@ fn provenance(platform: &str, target: &str) -> Vec<String> {
     vec![
         format!("rustc --version > {name}.rustc"),
         format!(
-            "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {target} --arg asset {name} --rawfile rust {name}.rustc '{{schema: 1}} + capture(\"\\\\A(?<sha256>[0-9a-f]{{64}})  {name}\\\\n\\\\z\") + {{tag: $tag, version: $tag[5:], repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {name}.sha256 > {name}.provenance.json"
+            "jq -e -R -s --arg repository \"$REPOSITORY\" --arg commit \"$COMMIT\" --arg tag \"$TAG\" --arg target {target} --arg asset {name} --rawfile rust {name}.rustc '{{schema: 1}} + capture(\"\\\\A(?<sha256>[0-9a-f]{{64}})  \\\\Q\" + $asset + \"\\\\E\\\\n\\\\z\") + {{tag: $tag, version: $tag[5:], repository: $repository, commit: $commit, target: $target, asset: $asset, toolchain: {{rust: $rust[0:-1]}}}}' {name}.sha256 > {name}.provenance.json"
         ),
     ]
 }
@@ -223,5 +223,49 @@ fn provenance_is_written_only_for_a_strict_sidecar() -> TestResult {
         assert!(!ok, "accepted {bad:?}");
         assert!(json.is_empty(), "wrote provenance for {bad:?}");
     }
+    Ok(())
+}
+
+#[test]
+fn provenance_matches_a_versioned_asset_name_with_regex_metacharacters() -> TestResult {
+    use std::process::Command;
+
+    let toml = "[[binaries]]\npackage = \"app\"\nbin = \"rg\"\nformat = \"raw\"\nasset_name = \"{{ bin }}-{{ version }}-{{ platform }}\"\n";
+    let (_, tree) = render(&[APP], Some(toml))?;
+    let script = runs(job(&tree, "build-app-linux-x64")?)
+        .into_iter()
+        .find(|run| run.contains("provenance.json"))
+        .ok_or("no provenance step")?;
+    let digest = "b".repeat(64);
+    let dir = std::env::temp_dir().join(format!("velnor-raw-prov-meta-{}", std::process::id()));
+    std::fs::create_dir_all(&dir)?;
+    std::fs::write(
+        dir.join("rg-1.2.3+linux-linux-x64.sha256"),
+        format!("{digest}  rg-1.2.3+linux-linux-x64\n"),
+    )?;
+    std::fs::write(
+        dir.join("rg-1.2.3+linux-linux-x64.rustc"),
+        "rustc 1.99.0 (stub)\n",
+    )?;
+    let output = Command::new("/bin/sh")
+        .arg("-c")
+        .arg(script)
+        .current_dir(&dir)
+        .env("PATH", "/usr/bin:/bin")
+        .env("REPOSITORY", "o/r")
+        .env("COMMIT", "abc")
+        .env("TAG", "app-v1.2.3+linux")
+        .env("VERSION", "1.2.3+linux")
+        .output()?;
+    let produced = std::fs::read_to_string(dir.join("rg-1.2.3+linux-linux-x64.provenance.json"));
+    std::fs::remove_dir_all(&dir)?;
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let record: serde_json::Value = serde_json::from_str(&produced?)?;
+    assert_eq!(record["sha256"], digest);
+    assert_eq!(record["asset"], "rg-1.2.3+linux-linux-x64");
     Ok(())
 }
