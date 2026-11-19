@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 use crate::io::Repo;
@@ -28,6 +29,28 @@ fn mirror_setup_preserves_unowned_cargo_configuration() -> TestResult {
                 EXISTING
             );
         }
+    }
+    Ok(())
+}
+
+#[test]
+fn mirror_setup_reruns_from_a_read_only_installed_helper() -> TestResult {
+    let repo = Repo::empty("crates-mirror-read-only");
+    repo.write_unstaged("ca.pem", "fixture");
+    let installed = repo.root().join("installed/velnor-ci");
+    fs::create_dir_all(repo.root().join("installed"))?;
+    fs::copy(env!("CARGO_BIN_EXE_velnor-ci"), &installed)?;
+    fs::set_permissions(&installed, fs::Permissions::from_mode(0o555))?;
+    for _ in 0..2 {
+        let output = std::process::Command::new(&installed)
+            .args(["crates-mirror", "--registry", REGISTRY, "--cainfo"])
+            .arg(repo.root().join("ca.pem"))
+            .env("CARGO_HOME", repo.root().join("home"))
+            .env("RUNNER_TEMP", repo.root())
+            .env("GITHUB_ENV", repo.root().join("env"))
+            .env("GITHUB_PATH", repo.root().join("path"))
+            .output()?;
+        assert!(output.status.success(), "{output:?}");
     }
     Ok(())
 }

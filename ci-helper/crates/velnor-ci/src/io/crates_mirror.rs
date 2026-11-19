@@ -49,7 +49,16 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
         .and_then(|()| std::fs::rename(staged, &config))
         .map_err(|e| failed(&e))?;
     let executable = std::env::current_exe().map_err(|e| failed(&e))?;
-    std::fs::copy(executable, &wrapper).map_err(|e| failed(&e))?;
+    let staged_wrapper = directory.join("cargo.velnor-crates-mirror");
+    std::fs::remove_file(&staged_wrapper)
+        .or_else(|e| {
+            (e.kind() == std::io::ErrorKind::NotFound)
+                .then_some(())
+                .ok_or(e)
+        })
+        .and_then(|()| std::fs::copy(executable, &staged_wrapper).map(drop))
+        .and_then(|()| std::fs::rename(staged_wrapper, &wrapper))
+        .map_err(|e| failed(&e))?;
     super::append_to("GITHUB_PATH", &format!("{}\n", directory.display()))?;
     super::append_to(
         "GITHUB_ENV",

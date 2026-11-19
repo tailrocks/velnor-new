@@ -11,7 +11,12 @@ use super::crates_mirror_mise::{self as mise, LaunchPhase};
 
 const RUSTUP_ENV: &str = "VELNOR_CARGO_RUSTUP";
 const SAVED: &str = "velnor-cargo-real";
-const RESERVED: [&str; 3] = ["cargo", "config.toml", "config.toml.velnor-crates-mirror"];
+const RESERVED: [&str; 4] = [
+    "cargo",
+    "cargo.velnor-crates-mirror",
+    "config.toml",
+    "config.toml.velnor-crates-mirror",
+];
 
 pub(super) fn forward() -> Result<ExitStatus, CiError> {
     let wrapper = PathBuf::from(
