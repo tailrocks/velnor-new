@@ -185,6 +185,16 @@ fn offline_env() -> (String, Value) {
     )
 }
 
+pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
+    (
+        "CARGO_TARGET_DIR".to_owned(),
+        Value::Expr(format!(
+            "${{{{ github.workspace }}}}/{}",
+            target.as_str().replace("${{", "${{ '${{' }}")
+        )),
+    )
+}
+
 fn cache_debug_env() -> (String, Value) {
     (
         "CARGO_LOG".to_owned(),
