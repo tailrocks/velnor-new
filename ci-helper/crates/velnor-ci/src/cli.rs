@@ -8,8 +8,10 @@ use velnor_model::{InvalidId, RepoPath};
 
 mod gate;
 mod report;
+mod write_request;
 pub use gate::GateArgs;
 pub use report::ReportArgs;
+pub use write_request::WriteRequestArgs;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -59,6 +61,10 @@ pub enum Command {
         about = "On a push, write the step output skip=true to $GITHUB_OUTPUT when a merge_group run of this same workflow (GITHUB_WORKFLOW_REF) already succeeded on GITHUB_SHA, and skip=false otherwise. Fails safe: any other event, missing variable or API error writes skip=false and exits 0. Reads GITHUB_TOKEN, which needs actions: read"
     )]
     MergeGroupPassed,
+    #[command(
+        about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
+    )]
+    WriteRequest(WriteRequestArgs),
     #[command(
         about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
     )]

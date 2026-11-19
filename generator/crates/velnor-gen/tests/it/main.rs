@@ -28,6 +28,7 @@ mod drift;
 mod events;
 mod events_policy;
 mod facts;
+mod fixed_uses;
 mod fork_fence;
 mod freshness;
 mod golden;
@@ -58,6 +59,7 @@ mod job_setup;
 mod mise_safety;
 
 mod job_shape;
+mod job_trust_boundary;
 mod lock;
 mod lock_affected;
 mod lock_consistency;
