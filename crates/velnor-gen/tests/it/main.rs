@@ -189,6 +189,7 @@ mod reusable_defaults;
 mod reusable_workflows;
 mod rule_config;
 mod rules;
+mod rules_plan;
 mod rules_token;
 mod ruleset;
 mod rust_ci_doc_keys;

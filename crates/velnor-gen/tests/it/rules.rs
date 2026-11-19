@@ -7,14 +7,15 @@ use std::fs;
 use std::path::Path;
 
 use velnor_model::{
-    CommitSha, Concurrency, HelperRelease, HelperVersion, InputsCli, Job, JobId, Permissions,
-    Platform, PrRun, PullRequestType, RepoPath, RunnerLabel, Sha256, Step, StepKind, Triggers,
-    WORKFLOW_PATH, When, WorkflowPlan,
+    CommitSha, HelperRelease, HelperVersion, InputsCli, Platform, RepoPath, Sha256, StepKind,
+    WORKFLOW_PATH,
 };
 use velnor_render::{
     MAX_RUN_CHARACTERS, RenderedJob, RenderedStep, RenderedWorkflow, Rule, RuleViolation,
     check_rules, render, render_workflow,
 };
+
+pub(crate) use crate::rules_plan::plan;
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -66,53 +67,6 @@ fn release() -> Result<HelperRelease, Box<dyn Error>> {
             (Platform::MacosArm64, Sha256::new("b".repeat(64))?),
         ]),
     )?)
-}
-
-pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>> {
-    Ok(WorkflowPlan {
-        name: "Rust CI".to_owned(),
-        triggers: Triggers {
-            pull_request: vec![PullRequestType::Opened],
-            push_branch: None,
-            merge_group: false,
-            schedule: None,
-            workflow_dispatch: false,
-        },
-        concurrency: Concurrency::CancelOlderPullRequestRuns,
-        permissions: Permissions::default(),
-        fork_runner: RunnerLabel::new("ubuntu-latest")?,
-        hosted_runners: velnor_model::HostedRunners::new(vec![RunnerLabel::new("ubuntu-latest")?]),
-        jobs: vec![Job {
-            id: JobId::new("format")?,
-            name: None,
-            comment: None,
-            needs: Vec::new(),
-            when: When::Success,
-            pr: PrRun::Always,
-            runs_on: RunnerLabel::new("ubuntu-latest")?,
-            permissions: Permissions::default(),
-            timeout_minutes: 10,
-            gate: None,
-            plan_outputs: Vec::new(),
-            group_outputs: Vec::new(),
-            reports_ignored: false,
-            steps: kinds
-                .into_iter()
-                .map(|kind| Step {
-                    kind,
-                    directory: None,
-                    manifest: None,
-                    target_dir: None,
-                    when: When::Success,
-                    skip_on_draft: false,
-                    skip_after_merge_group: None,
-                    pr: PrRun::Always,
-                    gate: None,
-                    reads: None,
-                })
-                .collect(),
-        }],
-    })
 }
 
 #[test]
