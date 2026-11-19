@@ -10,9 +10,26 @@ use crate::error::CiError;
 pub(super) const CONFIG_ENV: &str = "VELNOR_CARGO_CONFIG";
 pub(super) const WRAPPER_ENV: &str = "VELNOR_CARGO_WRAPPER";
 pub(super) const REAL_ENV: &str = "VELNOR_CARGO_REAL";
+const DISABLE_ENV: &str = "VELNOR_CRATES_MIRROR";
 const MARKER: &str = "# velnor-ci crates-mirror owns this file\n";
 
 pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
+    match std::env::var(DISABLE_ENV) {
+        Ok(value) if value == "off" => {
+            return Ok(format!("crates mirror disabled by {DISABLE_ENV}=off\n"));
+        }
+        Ok(value) if !value.is_empty() => {
+            return Err(CiError::new(format!(
+                "{DISABLE_ENV} must be unset or exactly off, not {value:?}"
+            )));
+        }
+        Err(std::env::VarError::NotUnicode(_)) => {
+            return Err(CiError::new(format!(
+                "{DISABLE_ENV} must be unset or exactly off"
+            )));
+        }
+        Ok(_) | Err(std::env::VarError::NotPresent) => {}
+    }
     std::fs::File::open(&args.cainfo).map_err(|e| {
         CiError::new(format!(
             "cannot read crates mirror CA {}: {e}",

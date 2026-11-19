@@ -49,6 +49,12 @@ pub fn main() -> ExitCode {
 }
 
 async fn run(command: Command) -> std::io::Result<()> {
+    if matches!(
+        command,
+        Command::Up(_) | Command::Run(_) | Command::Build(_)
+    ) {
+        super::doctor::require_local(&DockerCli).await?;
+    }
     match command {
         Command::CacheServer(args) => run_cache_server(args).await,
         Command::ApiStub(args) => run_api_stub(args).await,
@@ -112,7 +118,7 @@ async fn up(args: UpArgs) -> std::io::Result<()> {
     let authority = match super::supervisor::start_with(&env.dir, pairs.as_ref(), &repo).await {
         Ok(authority) => authority,
         Err(error) => {
-            let _ = env.down().await;
+            env.down().await.ok();
             return Err(error);
         }
     };

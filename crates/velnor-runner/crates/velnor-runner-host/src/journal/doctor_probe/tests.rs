@@ -101,3 +101,26 @@ async fn uncertain_probe_with_a_quarantined_child_is_not_marked_stale() -> Resul
     assert_eq!(record.state(), DoctorProbeState::Recovering);
     Ok(())
 }
+
+#[tokio::test]
+async fn aborted_child_without_a_lease_row_is_recovered_as_stale() -> Result<(), HostError> {
+    let dir = tempfile::tempdir().map_err(|_| HostError::Path)?;
+    let path = dir.path().join("journal.db");
+    uncertain_ticket_with_aborted_child(&path).await?;
+    let journal = Journal::open(&path).await?;
+    let connection = journal.connection().await?;
+    connection
+        .execute("DELETE FROM host_operation_leases", ())
+        .await
+        .map_err(|_| HostError::Journal)?;
+    drop(connection);
+    drop(journal);
+    let journal = Journal::open(&path).await?;
+    journal.recover_after_restart_without_authority().await?;
+    let record = journal
+        .doctor_probe_request_by_nonce(NONCE)
+        .await?
+        .ok_or(HostError::Journal)?;
+    assert_eq!(record.state(), DoctorProbeState::Stale);
+    Ok(())
+}

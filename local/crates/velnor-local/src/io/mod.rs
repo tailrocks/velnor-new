@@ -184,10 +184,7 @@ impl CacheServer {
                 eprintln!("cache-server: the restore journal is not writable: {error:?}");
             }
         }
-        for record in gone {
-            let _ = fs::remove_file(self.archive(&record.blob)).await;
-            let _ = fs::remove_dir_all(self.config.dir.join("blocks").join(&record.blob)).await;
-        }
+        remove_gone(&self.config.dir, gone).await;
         Ok(json_response(200, &reply))
     }
 
@@ -392,5 +389,5 @@ fn json_response(status: u16, body: &Value) -> Response<Body> {
 }
 
 pub use index_file::{IndexLock, lock_index};
-use index_file::{read_index, recover_tombstones, remove_if_present, write_index};
+use index_file::{read_index, recover_tombstones, remove_gone, remove_if_present, write_index};
 pub use run::main;

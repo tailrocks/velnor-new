@@ -58,6 +58,8 @@ struct RawConfig {
     lint: Vec<crate::config_lint::RawLint>,
     #[serde(default)]
     test_groups: Vec<crate::config_test_groups::RawTestGroup>,
+    #[serde(default)]
+    test_lane: Vec<crate::config_test_lane::RawTestLane>,
 }
 
 #[derive(Deserialize)]
@@ -102,6 +104,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
+    let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
@@ -116,6 +119,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         },
         lint,
         test_groups,
+        test_lanes,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         mbx_remote: crate::config_cache::mbx_remote(raw.cache).map_err(invalid)?,

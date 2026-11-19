@@ -43,7 +43,7 @@ fn commit(repo: &Path, content: &str) -> String {
 fn sha256(content: &str) -> String {
     let digest = ring::digest::digest(&ring::digest::SHA256, content.as_bytes());
     digest.as_ref().iter().fold(String::new(), |mut hex, byte| {
-        let _ = write!(hex, "{byte:02x}");
+        write!(hex, "{byte:02x}").ok();
         hex
     })
 }

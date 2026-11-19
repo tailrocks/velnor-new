@@ -107,8 +107,8 @@ async fn environment_down_audits_exact_ids_and_keeps_other_environments() -> io:
         .await
         .is_err();
     let records = journal(&dir);
-    let _ = (&docker).docker(&["network", "rm", &foreign]).await;
-    let _ = (&docker).docker(&["network", "rm", &network]).await;
+    (&docker).docker(&["network", "rm", &foreign]).await.ok();
+    (&docker).docker(&["network", "rm", &network]).await.ok();
     if !gone_volume {
         (&docker).docker(&["volume", "rm", &volume]).await?;
     }
@@ -172,7 +172,7 @@ async fn environment_down_preserves_confirmed_removals_after_failure_and_appends
     let retried = env.down().await;
     let after = journal(&dir)?;
     for id in &ids {
-        let _ = (&docker).docker(&["network", "rm", id]).await;
+        (&docker).docker(&["network", "rm", id]).await.ok();
     }
     std::fs::remove_dir_all(&dir)?;
     assert!(failed.is_err_and(|error| error.to_string().contains("injected")));

@@ -43,7 +43,8 @@ impl Lane {
             slug: self.slug.clone(),
             need,
             from: self.from(),
-            package: None,
+            packages: Vec::new(),
+            unselected: false,
             group: None,
         }
     }
@@ -55,10 +56,31 @@ impl Lane {
         })
     }
 
-    fn package_gate(&self, package: PackageName) -> Gate {
+    fn package_gate(&self, packages: Vec<PackageName>) -> Gate {
         Gate {
-            package: Some(package),
+            packages,
             ..self.gate(GateNeed::PackageArgs)
+        }
+    }
+
+    /// The notice that stands in for a feature lane the plan did not select.
+    pub(crate) fn skipped_lane(
+        &self,
+        features: &[String],
+        packages: &[PackageName],
+        root: &RustRoot,
+    ) -> Step {
+        Step {
+            gate: Some(Gate {
+                unselected: true,
+                ..self.package_gate(packages.to_vec())
+            }),
+            directory: root.manifest.parent(),
+            when: When::NotCancelled,
+            ..step(StepKind::TestSetup {
+                name: format!("Skip test lane (features: {})", features.join(",")),
+                run: "echo 'skipped: no selected packages'".to_owned(),
+            })
         }
     }
 
@@ -78,7 +100,10 @@ impl Lane {
             CargoCommand::Machete => Some(self.gate(GateNeed::Machete)),
             CargoCommand::CheckAlone { ref package }
             | CargoCommand::TestTarget { ref package, .. } => {
-                Some(self.package_gate(package.clone()))
+                Some(self.package_gate(vec![package.clone()]))
+            }
+            CargoCommand::NextestFeatures { ref packages, .. } if !packages.is_empty() => {
+                Some(self.package_gate(packages.clone()))
             }
             _ => self.steps(),
         };

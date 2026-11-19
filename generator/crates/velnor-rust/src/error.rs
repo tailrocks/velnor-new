@@ -57,6 +57,9 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    UnknownTestLaneRoot(String),
+    TestLaneWithoutNextest(String),
+    UnknownTestLanePackage(String),
     Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {
@@ -278,6 +281,9 @@ impl fmt::Display for Reason {
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_) => self.fmt_test_groups(f),
+            Self::UnknownTestLaneRoot(_)
+            | Self::TestLaneWithoutNextest(_)
+            | Self::UnknownTestLanePackage(_) => self.fmt_test_lane(f),
             Self::UnknownTestSetupRoot(root) => write!(
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"

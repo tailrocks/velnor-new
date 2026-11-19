@@ -65,7 +65,7 @@ async fn down_needs_no_ps_or_kill_on_path() {
     let (reaped, exited) = mpsc::channel();
     std::thread::spawn(move || {
         let mut child = child;
-        let _ = reaped.send(child.wait());
+        reaped.send(child.wait()).ok();
     });
     std::fs::create_dir_all(dir.join("authority")).unwrap_or_else(|e| unreachable!("{e}"));
     std::fs::write(dir.join("authority/pid"), pid.to_string())
@@ -77,9 +77,10 @@ async fn down_needs_no_ps_or_kill_on_path() {
     let down = env.down().await;
     let stopped = exited.recv_timeout(Duration::from_secs(5)).is_ok();
     if !stopped {
-        let _ = Command::new("/bin/kill")
+        Command::new("/bin/kill")
             .args(["-KILL", &pid.to_string()])
-            .status();
+            .status()
+            .ok();
     }
     assert!(down.is_ok(), "{down:?}");
     assert!(stopped, "down did not stop the recorded authority");

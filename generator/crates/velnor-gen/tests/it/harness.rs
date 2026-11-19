@@ -225,3 +225,25 @@ fn a_recorded_sample_keeps_the_member_manifests_detection_reads() -> TestResult 
     );
     Ok(())
 }
+
+#[test]
+fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> TestResult {
+    let lane =
+        "[[test_lane]]\nroot = '.'\nfeatures = ['x']\npackages = ['a']\nfilter = 'test(~a)'\n";
+    let text = workflow(&view(Some(lane))?)?;
+    let step = text
+        .lines()
+        .find(|line| line.contains("--features ''x''"))
+        .ok_or("no feature lane step")?;
+    for excluded in ["a::custom", "a::defaulted", "a::bin/tool"] {
+        assert!(
+            step.contains(&format!("- binary_id(={excluded})")),
+            "{excluded}\n{step}"
+        );
+    }
+    assert!(
+        step.contains("-E \"(($TEST_FILTER) and (test(~a)))"),
+        "{step}"
+    );
+    Ok(())
+}
