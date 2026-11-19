@@ -92,12 +92,7 @@ const CACHE_RESTORE: [&str; 6] = [
     "fail-on-cache-miss",
     "lookup-only",
 ];
-const CACHE_SAVE: [&str; 4] = [
-    "path",
-    "key",
-    "upload-chunk-size",
-    "enableCrossOsArchive",
-];
+const CACHE_SAVE: [&str; 4] = ["path", "key", "upload-chunk-size", "enableCrossOsArchive"];
 const ATTEST: [&str; 11] = [
     "subject-path",
     "subject-digest",
