@@ -29,6 +29,7 @@ defaults:
     shell: 'bash -p {0}'
 jobs:
   # one job: .velnor/rust-ci-timings.json has no build times for this workspace
+  # jactionlint ignore=shellcheck
   rust:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
@@ -238,6 +239,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-trim:
     name: Cache maintenance
     needs:
@@ -302,6 +304,7 @@ jobs:
         env:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
+  # jactionlint ignore=shellcheck
   required:
     name: Required
     needs:
@@ -334,6 +337,7 @@ jobs:
           NEEDS_JSON: '${{ toJSON(needs) }}'
           GATE_SPEC: '--plan rust --job rust=always --tests rust=root'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
+  # jactionlint ignore=shellcheck
   cache:
     name: Cache
     needs:

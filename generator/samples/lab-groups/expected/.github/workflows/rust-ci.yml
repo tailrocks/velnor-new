@@ -28,6 +28,7 @@ defaults:
   run:
     shell: 'bash -p {0}'
 jobs:
+  # jactionlint ignore=shellcheck
   rust-plan:
     if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) }}'
     permissions:
@@ -74,6 +75,7 @@ jobs:
         name: velnor-ci plan
         run: '. "$VELNOR_EXEC" plan --explain'
   # shape = "groups" in .velnor/rust-ci.toml
+  # jactionlint ignore=shellcheck
   rust-lint-root:
     needs:
       - rust-plan
@@ -257,6 +259,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-test-root:
     needs:
       - rust-plan
@@ -442,6 +445,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-test-default-root:
     needs:
       - rust-plan
@@ -527,6 +531,7 @@ jobs:
           retention-days: 3
           overwrite: true
   # shape = "groups" in .velnor/rust-ci.toml
+  # jactionlint ignore=shellcheck
   rust-lint-lab:
     needs:
       - rust-plan
@@ -699,6 +704,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-test-lab:
     needs:
       - rust-plan
@@ -884,6 +890,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-test-default-lab:
     needs:
       - rust-plan
@@ -970,6 +977,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-inputs-audit:
     needs:
       - rust-plan
@@ -1122,6 +1130,7 @@ jobs:
           if-no-files-found: error
           retention-days: 3
           overwrite: true
+  # jactionlint ignore=shellcheck
   rust-trim:
     name: Cache maintenance
     needs:
@@ -1246,6 +1255,7 @@ jobs:
         env:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
+  # jactionlint ignore=shellcheck
   required:
     name: Required
     needs:
@@ -1285,6 +1295,7 @@ jobs:
           NEEDS_JSON: '${{ toJSON(needs) }}'
           GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-lint-root=lane:root --job rust-test-root=lane:root --job rust-test-default-root=lane:root --job rust-lint-lab=lane:lab --job rust-test-lab=lane:lab --job rust-test-default-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-test-default-root=root --tests rust-test-default-lab=lab'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
+  # jactionlint ignore=shellcheck
   cache:
     name: Cache
     needs:
