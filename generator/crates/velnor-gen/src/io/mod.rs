@@ -115,6 +115,7 @@ pub fn main() -> Exit {
         Command::Release(ReleaseCommand::RulesetDrift { live }) => {
             return ruleset::drift(&cli.root, live);
         }
+        Command::SuggestGroups => return suggest(&cli.root),
         Command::Generate | Command::Check => {}
     }
     match execute(&cli) {
@@ -135,6 +136,31 @@ pub fn main() -> Exit {
                     Drift::Stale(path) => println!("removed {path}"),
                     Drift::Foreign(path) | Drift::Unmarked(path) => println!("kept {path}"),
                 }
+            }
+            Exit::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("velnor-gen: {error}");
+            Exit::from(2)
+        }
+    }
+}
+
+fn suggest(path: &Path) -> Exit {
+    let result = toplevel(path)
+        .and_then(|root| read_view(&root, false))
+        .and_then(|(view, _)| crate::suggest_groups(&view).map_err(Error::Generate));
+    match result {
+        Ok((text, notes)) => {
+            for note in notes {
+                eprintln!("velnor-gen: {note}");
+            }
+            if text.is_empty() {
+                eprintln!(
+                    "velnor-gen: no test binary takes more than a third of its root's test time"
+                );
+            } else {
+                print!("{text}");
             }
             Exit::SUCCESS
         }

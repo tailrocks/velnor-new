@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
     RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain, WORKFLOWS_CONFIG_PATH,
 };
 
@@ -14,8 +14,7 @@ use crate::embedded::is_rust_source;
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::mise::{MISE_CONFIGS, MISE_LOCK};
-use crate::os_pins::pinned_for_runner;
-use crate::policy::DENY_CONFIG;
+use crate::policy::{deny_configs, policy_tools};
 use crate::private_sources::{private_suggestion, refuse_locked_credentials};
 use crate::reads::INPUTS_LOCK;
 use crate::roots::{CARGO_LOCK, is_cargo_config, is_cargo_lock, rust_roots};
@@ -160,18 +159,14 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     refuse_locked_credentials(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
-    let policy = policy_tools(view, config.runner.as_str())?;
+    let deny_configs = deny_configs(view, &rust_roots);
+    let policy = policy_tools(view, &deny_configs, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
     let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
-    let repository = match &view.repository {
-        RepositoryIdentity::Named(name) if config.full_run.is_hashed() => name.clone(),
-        RepositoryIdentity::Unhosted if config.full_run.is_hashed() => {
-            return Err(DetectError::UnhostedOrigin);
-        }
-        _ => String::new(),
-    };
+    let repository = repository_identity(view, &config)?;
     Ok(RepoFacts {
         policy,
+        deny_configs,
         repository,
         timings,
         timings_notes,
@@ -188,25 +183,13 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     })
 }
 
-const DENY_TOOL: &str = "cargo-deny";
-
-fn policy_tools(view: &RepoView, runner: &str) -> Result<PolicyTools, DetectError> {
-    let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
-    let deny = view.tracked_paths.contains(&DENY_CONFIG);
-    if deny && !pinned(DENY_TOOL) {
-        return Err(DetectError::invalid(
-            &DENY_CONFIG,
-            Reason::UnpinnedTool(DENY_TOOL),
-        ));
+fn repository_identity(view: &RepoView, config: &RustCiConfig) -> Result<String, DetectError> {
+    let hashed = config.full_run.is_hashed();
+    match &view.repository {
+        RepositoryIdentity::Named(name) if hashed => Ok(name.clone()),
+        RepositoryIdentity::Unhosted if hashed => Err(DetectError::UnhostedOrigin),
+        _ => Ok(String::new()),
     }
-    Ok(PolicyTools {
-        deny,
-        machete: pinned("cargo-machete"),
-    })
-}
-
-fn is_tool(name: &str, tool: &str) -> bool {
-    name.rsplit(['/', ':']).next() == Some(tool)
 }
 
 fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {

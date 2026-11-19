@@ -251,7 +251,10 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
     );
     let deny = with(&[("deny.toml", ""), ("mise.toml", DENY_MISE)], None)?;
     assert!(deny.contains("  policy:\n"), "{deny}");
-    assert!(deny.contains("cargo-deny --locked check"), "{deny}");
+    assert!(
+        deny.contains("cargo-deny --config ''deny.toml'' --locked check"),
+        "{deny}"
+    );
     assert!(!deny.contains("cargo machete"), "{deny}");
     assert!(deny.contains("      - policy\n"), "{deny}");
     let machete = with(

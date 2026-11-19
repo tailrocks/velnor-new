@@ -283,6 +283,7 @@ pub enum CargoCommand {
     Doc,
     Deny {
         manifest: RepoPath,
+        config: Option<RepoPath>,
     },
     Machete,
 }
