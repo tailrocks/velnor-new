@@ -3,7 +3,7 @@
 
 runner = "ubuntu-26.04-scale-set"
 exclude = ["fixtures/**"]
-required_check = "rust-required"
+required_check = "Required"
 helper = { path = "ci-helper" }
 
 [[inputs]]
