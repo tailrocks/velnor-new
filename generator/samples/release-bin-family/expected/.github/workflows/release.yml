@@ -27,7 +27,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -64,7 +64,7 @@ jobs:
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -105,7 +105,7 @@ jobs:
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           client-id: '${{ secrets.RELEASE_APP_ID }}'
           private-key: '${{ secrets.RELEASE_APP_PRIVATE_KEY }}'
@@ -150,7 +150,7 @@ jobs:
       - name: Install the Rust toolchain
         run: rustup toolchain install stable --profile minimal --no-self-update
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -193,7 +193,7 @@ jobs:
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           client-id: '${{ secrets.RELEASE_APP_ID }}'
           private-key: '${{ secrets.RELEASE_APP_PRIVATE_KEY }}'
@@ -242,7 +242,7 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
@@ -267,7 +267,7 @@ jobs:
       - id: app
         name: Create the release App token
         if: '${{ steps.newest.outputs.newest == ''true'' }}'
-        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510  # v3.3.0
+        uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc  # v3.4.0
         with:
           client-id: '${{ secrets.RELEASE_APP_ID }}'
           private-key: '${{ secrets.RELEASE_APP_PRIVATE_KEY }}'
@@ -470,7 +470,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Install velnor-ci 0.1.83
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c  # rust-ci-v0.1.83
+        uses: tailrocks/velnor-new/actions/setup-velnor@084386b55a4cd889ee6001260abb907877de0a53  # rust-ci-v0.1.83
         with:
           version: '0.1.83'
           sha256-linux-x64: '659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c'
