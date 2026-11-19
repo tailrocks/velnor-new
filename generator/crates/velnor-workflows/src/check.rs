@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use velnor_model::github_hosted;
 
 use crate::call::{call, refuse_step_keys};
+use crate::cases::cases;
 use crate::check_step::step;
 use crate::concurrency::concurrency;
 use crate::containers::{container, services};
@@ -91,7 +92,15 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         .map(|raw| concurrency(&format!("the workflow {file}"), raw))
         .transpose()?;
     let mut jobs: Vec<Job> = Vec::new();
-    for job in raw.job {
+    let mut raw_jobs = raw.job;
+    raw_jobs.extend(cases(
+        &file,
+        raw.hosted_runner.as_deref(),
+        raw.scale_set_runner.as_deref(),
+        raw.case,
+        &triggers,
+    )?);
+    for job in raw_jobs {
         let checked = self::job(job, &ctx, &jobs)?;
         jobs.push(checked);
     }
@@ -208,6 +217,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
     let mut job = Job {
         id,
+        name: raw.name.clone(),
         needs: raw.needs.clone(),
         condition,
         helper: raw.helper,
