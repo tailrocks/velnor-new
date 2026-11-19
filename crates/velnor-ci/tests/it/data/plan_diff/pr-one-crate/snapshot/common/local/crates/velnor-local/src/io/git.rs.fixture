@@ -1,0 +1,4 @@
+        let range = format!("{base}...{head}");
+        let bytes = self
+            .capped(
+                &[

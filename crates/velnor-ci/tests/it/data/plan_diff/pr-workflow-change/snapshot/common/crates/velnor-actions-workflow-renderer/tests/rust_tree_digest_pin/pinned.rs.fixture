@@ -1,0 +1,4 @@
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../scripts/derive-rust-tree-digest")
+}
+
+#[test]

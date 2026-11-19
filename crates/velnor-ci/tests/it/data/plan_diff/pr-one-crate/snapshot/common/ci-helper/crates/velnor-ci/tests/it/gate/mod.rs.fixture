@@ -1,0 +1,4 @@
+pub(crate) const GATE: &str = include_str!("../data/gate.json");
+pub(crate) const GREEN: &str = "21ec8b9ff9268c1e2445755d325906d26757babb";
+pub(crate) const RUNNING: &str = "25fd566dd0950e7db7a3d1e58d760ad73ca92c90";
+pub(crate) const RED: &str = "f4a062683f7e31e3c654c3beebaa6751463f6459";

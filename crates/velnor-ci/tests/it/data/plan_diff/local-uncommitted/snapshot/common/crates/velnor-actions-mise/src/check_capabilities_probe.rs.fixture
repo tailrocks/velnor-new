@@ -1,0 +1,4 @@
+        .ancestors()
+        .find(|path| {
+            path.extension()
+                .and_then(|value| value.to_str())

@@ -93,7 +93,7 @@ prepare_producer() {
 record_identity() {
   test "$(env "${scrub[@]}" /usr/bin/python3 -I -S scripts/generator-release/cargo-source-tree.py "$RUNNER_TEMP/stable-cargo-sources")" = "$STABLE_SOURCES_TREE"
   test "$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_ROOT_LOCK"
-  test "$(shasum -a 256 crates/velnor-runner/Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_RUNNER_LOCK"
+  test "$(shasum -a 256 Cargo.lock | cut -d ' ' -f 1)" = "$STABLE_SOURCES_RUNNER_LOCK"
   printf 'tree=%s\nroot_lock=%s\nrunner_lock=%s\nattempt=%s\n' "$STABLE_SOURCES_TREE" "$STABLE_SOURCES_ROOT_LOCK" "$STABLE_SOURCES_RUNNER_LOCK" "$STABLE_SOURCES_ATTEMPT" >> "$GITHUB_OUTPUT"
   printf 'upload_name=proof-linux-sources-%s\nupload_path=%s/stable-cargo-sources/\n' "$GITHUB_RUN_ATTEMPT" "$RUNNER_TEMP" >> "$GITHUB_OUTPUT"
 }
@@ -149,7 +149,7 @@ provenance() {
   evidence="$RUNNER_TEMP/source-qualification-artifacts/cargo-fetch-lock-identity.txt"
   grep -Fx "source_artifact_admitted=$admitted" "$evidence"
   grep -Fx "fetch_mode=Cargo.toml:$mode" "$evidence"
-  grep -Fx "fetch_mode=crates/velnor-runner/Cargo.toml:$mode" "$evidence"
+  grep -Fx "fetch_mode=Cargo.toml:$mode" "$evidence"
 }
 
 archive_guard() {

@@ -1,0 +1,5 @@
+const REST: &str = include_str!("github_history_fixtures/rest-pull-1179.json");
+const GRAPHQL: &str = include_str!("github_history_fixtures/graphql-pull-1179.json");
+
+#[test]
+fn landed_merge_oid_accepts_missing_or_matching_rest_merge_sha() {

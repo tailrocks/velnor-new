@@ -1,0 +1,25 @@
+    let repository = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("repository root missing")?;
+    let output = Command::new(mise)
+        .current_dir(repository)
+        .args(["which", executable, "--tool", tool])
+        .env("MISE_OFFLINE", "1")
+        .env("MISE_AUTO_INSTALL", "0")
+    let config: VelnorConfig = toml::from_str(include_str!("../../../../.velnor/config.toml"))?;
+    let mut digests = vec![
+        (
+            "bin/mise",
+        .current_dir(root)
+        .env_clear()
+        .env("PATH", path)
+        .env("RUNNER_TEMP", runner)
+        .current_dir(root)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .output()?;
+    Ok(json!({"schema": 1, "version": version, "repository": "tailrocks/velnor-new", "commit": &marker[..40], "targets": targets}).to_string())
+}
+
+pub(super) fn fixture() -> Result<(tempfile::TempDir, PathBuf, String), Box<dyn Error>> {

@@ -1,0 +1,33 @@
+pub(super) const DOCS_CONFIG: &str = concat!(
+    "\n[stacks.rust]\nnon_inputs = [\"docs/**\"]\n",
+    a5_complete_rule!()
+);
+    if let Some(parent) = file.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    fs::write(file, body)?;
+    Ok(())
+        .current_dir(root)
+        .status()?;
+    assert!(status.success(), "generate-lockfile failed");
+    Ok(())
+    let core = "core = { path = \"../../libs/core\" }\n";
+    let tables = [
+        ("libs/core", "core", String::new()),
+        ("libs/util", "util", String::new()),
+            "[dependencies]\nutil = { path = \"../../libs/util\" }\n".to_owned(),
+        ),
+        ("apps/a3", "a3", format!("[dev-dependencies]\n{core}")),
+        ("apps/a4", "a4", format!("[dependencies]\n{core}")),
+            "[features]\nextra = [\"dep:core\"]\n[dependencies]\ncore = { path = \"../../libs/core\", optional = true }\n"
+                .to_owned(),
+        ),
+        ("apps/a7", "a7", String::new()),
+        "pub const DATA: &str = include_str!(\"../../a1/data.txt\");\n",
+    )?;
+    put(
+        root,
+        "pub fn up() -> Option<&'static std::path::Path> {\n    std::path::Path::new(env!(\"CARGO_MANIFEST_DIR\")).parent()\n}\n",
+    )?;
+    put(root, "docs/guide.md", "guide\n")?;
+    put(root, "docs/data/schema.json", "{}\n")?;

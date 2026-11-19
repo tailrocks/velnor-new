@@ -1,0 +1,4 @@
+                || part == ".."
+                || part.bytes().any(|byte| {
+                    !(byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+                })

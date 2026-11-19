@@ -1,0 +1,4 @@
+        let created = format!("{}..{}", window.start_text(), window.query_end_text());
+        let mut runs = Vec::new();
+        let mut expected_total = None;
+        let mut previous_created = None::<String>;

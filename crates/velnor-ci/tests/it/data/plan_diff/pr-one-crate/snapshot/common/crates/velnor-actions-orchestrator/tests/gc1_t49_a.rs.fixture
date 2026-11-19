@@ -1,0 +1,8 @@
+        format!("{TOFU_PROVIDER_CACHE_BASE_EXPR}/has..dots"),
+    ] {
+        if tofu_providers_path_ok(&bad) {
+            return Err(fail(&format!("invalid provider path hydrated: {bad}")));
+        snapshot: FamilySnapshot::Files(vec!["../evil".to_owned()]),
+        compat: Vec::new(),
+    };
+    if prelude_for(std::slice::from_ref(&escape), false).is_ok()

@@ -1,0 +1,4 @@
+            && !path.contains("..")
+            && path.bytes().all(|byte| {
+                byte.is_ascii_alphanumeric() || matches!(byte, b'/' | b'.' | b'_' | b'-' | b'+')
+            })

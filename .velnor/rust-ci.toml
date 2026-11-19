@@ -8,7 +8,6 @@ mbx_shared_store = true
 docs = "post_merge"
 check_alone = "post_merge"
 pr_ci = "label"
-helper = { path = "ci-helper" }
 
 [[inputs]]
 glob = "scripts/ci-fixtures.sh"
@@ -41,3 +40,11 @@ run = "mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4"
 root = "."
 name = "Prepare pinned attestation verifier"
 run = "mise --no-config --no-env --no-hooks install gh@2.104.0"
+
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+packages = ["velnor-runner-host"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
+lint = true
+doc = true

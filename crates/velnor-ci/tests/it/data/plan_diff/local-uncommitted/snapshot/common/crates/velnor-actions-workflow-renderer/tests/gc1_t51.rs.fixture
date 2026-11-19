@@ -1,0 +1,27 @@
+const IDENTITY_SOURCE: &str = include_str!("../src/job_image_authority_identity.py");
+const REGISTRY_SOURCE: &str = include_str!("../src/job_image_authority_registry.py");
+const PUBLISH_SOURCE: &str = include_str!("../src/job_image_authority_publish.py");
+const RECORD_SOURCE: &str = include_str!("../src/job_image_authority_record.py");
+const OCI_SOURCE: &str = include_str!("../src/job_image_authority_oci.py");
+const TAR_SOURCE: &str = include_str!("../src/job_image_authority_tar.py");
+const AUTHORITY_MODULE: &str = concat!(
+    include_str!("../src/job_image_authority.rs"),
+    include_str!("../src/job_image_authority_verify.rs"),
+);
+
+const IDENTITY_FILE: &str = "job_image_authority_identity.py";
+#[path = "gc1_t51_identity.rs"]
+mod gc1_t51_identity;
+#[path = "gc1_t51_stream.rs"]
+mod gc1_t51_stream;
+#[path = "gc1_t51_trust.rs"]
+mod gc1_t51_trust;
+pub(crate) use gc1_t51_stream::*;
+
+#[path = "gc1_t51_argv.rs"]
+mod gc1_t51_argv;
+
+use gc1_t51_argv::*;
+#[path = "runner_family_fixed_publication.rs"]
+mod runner_family_fixed_publication;
+

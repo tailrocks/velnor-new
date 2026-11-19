@@ -1,0 +1,8 @@
+    fs::create_dir_all(output.parent().ok_or("fixture file has no parent")?)?;
+    fs::copy(input, output)?;
+    for file in [
+        ".gitignore",
+        .current_dir(root)
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_TERMINAL_PROMPT", "0")

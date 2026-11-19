@@ -121,7 +121,7 @@ Reconstruction used the Jobs API plus one top-level log per job. PR CI run IDs 4
 
 ## 3. The native Rust runner
 
-Put the executor in the existing nested `crates/velnor-runner` workspace. The system has two callers. A GitHub job needs faithful step execution. A verification request needs authoritative evidence for a tree. Generated jobs call the latter through the same interface as agent preflight.
+Put the executor in the existing nested `crates/velnor-runner-*` workspace. The system has two callers. A GitHub job needs faithful step execution. A verification request needs authoritative evidence for a tree. Generated jobs call the latter through the same interface as agent preflight.
 
 | Owner | Responsibility and boundary |
 |---|---|
@@ -172,7 +172,7 @@ Drain required evidence before `completejob` with actual conclusion, outputs, st
 Journal states are reserved → acquiring/uncertain → leased → executing → flushing → completing/uncertain → cleanup → released or quarantined. Persist the owned sandbox UID, generation and external effect IDs. On restart establish ownership, reconcile remote state and purge temporary data only after durable flush. Only the current fence can complete, publish or sign.
 Keep HTTPS peers and credential audiences bound to the job and advertised service. Fail closed on deprovisioning, unsupported protocol or a refresh that requires an unqualified build. Roll back to a qualified Rust version or drain the set.
 
-**Code provenance.** Keep velnor-new’s existing GitHub, core, qualification, image manifest, attestation and journal code where its contracts survive. In particular use `crates/velnor-runner/crates/velnor-runner-core/src/lifecycle.rs:9–52,159`. Replace its official-runner launch backend.
+**Code provenance.** Keep velnor-new’s existing GitHub, core, qualification, image manifest, attestation and journal code where its contracts survive. In particular use `crates/velnor-runner-core/src/lifecycle.rs:9–52,159`. Replace its official-runner launch backend.
 Select Apache-2.0 archive pieces by file and revision: scale-set session/refresh, expression syntax fixtures, step-outcome model, current wire DTOs and individual native adapters. Carry notices, verify licences of transcribed third-party pieces, import tests and record the source SHA in velnor-new. See `velnor-legacy/crates/velnor-runner/src/scaleset/session.rs:52,100,125,165`, `expression/mod.rs:1–14` and `execution/step_outcome.rs:21–71`.
 Write fresh typed wire boundaries, current protocol negotiation, job admission, sealed operation graph, Results outbox and differential driver. The archived protocol pins 2.337.0, and archived native performance has no measured baseline. No runtime, package, submodule or update process depends on the archive.
 
@@ -296,11 +296,11 @@ One full cold audit samples one independently defined control input and serves a
 
 **Choose a profile once per product input**
 
-The CI contract includes debug assertions, overflow behavior and the local-mode variant. `cargo test --release` also links test harnesses whose bytes differ from the shipped executable. The generator and helper release profiles use size optimisation, thin LTO and panic=abort. See `ci-helper/Cargo.toml:13–17`, `generator/Cargo.toml:35–39` and `crates/velnor-runner/Cargo.toml:74`.
+The CI contract includes debug assertions, overflow behavior and the local-mode variant. `cargo test --release` also links test harnesses whose bytes differ from the shipped executable. The generator and helper release profiles use size optimisation, thin LTO and panic=abort. See `Cargo.toml:13–17`, `Cargo.toml:35–39` and `Cargo.toml:74`.
 In the measured product release, the Linux generator build composite occupied 224 s and qualification 3.4 min. With two changing labelled heads, adding the same product-class lane to both is E 2 × (224+204) = 856 s of occupied work. Doing it once on the final changed product input is E 428 s, before savings from shared units.
 These numbers price a concrete Linux product lane. They are not a measurement of the isolated release compiler or a promise for every target. Phase 0 benchmarks debug tests, optimised tests, final binary linking and package smoke separately with the same cgroup.
 Keep debug verification for each changed input. Build the optimised product exactly once when its final identity is available, on the verified merge candidate if all inputs are fixed, otherwise on main. On main exercise the packaged bytes with installation, CLI/API and target-appropriate smoke tests, then seal them before release is eligible.
-The runner host embeds source SHA and helper digest and reads a Git object in `crates/velnor-runner/crates/velnor-runner-host/build.rs:30–43,55–79`. Normal PR/debug builds omit the release identity. A squash or rebase that changes the product’s embedded SHA requires the exact main build. Restricting the optimised lane to that identity avoids silently rebuilding a speculative binary.
+The runner host embeds source SHA and helper digest and reads a Git object in `crates/velnor-runner-host/build.rs:30–43,55–79`. Normal PR/debug builds omit the release identity. A squash or rebase that changes the product’s embedded SHA requires the exact main build. Restricting the optimised lane to that identity avoids silently rebuilding a speculative binary.
 For PRs, move any bookkeeping-only commit assertions into a cheap signed head binding and keep invariant code tests in a stable fixture. Until an actual SHA-sensitive test is migrated, re-execute its changed input. A tree-equivalent rebase then costs a proof lookup plus a fresh check write for all qualified PR obligations.
 
 **Test scheduling and the long case**
@@ -403,7 +403,7 @@ Fallback is an ETag-aware reconciliation poll on active/open PRs, e.g. every 30 
 **The release gate is an additional consumer**
 
 The existing ruleset requires `Required verdict` and `Required` without a bound integration in the captured snapshot. The current product eligibility body demands the latest same-SHA main push run of `.github/workflows/ci.yml`, correct attempt/authority and exactly one successful Actions job `Required`. See `.github/workflows/product-release.yml:81–86`.
-The released helper enumerates effective rules, checks commit membership, push runs and job names, and rejects a foreign App ID for a normal required check. Its PR-only exemption also rejects that check if it exists on the landed SHA, which can equal the queue SHA. See `ci-helper/crates/velnor-ci/src/gate.rs:15,83–99,127–159,241–243,277–289`.
+The released helper enumerates effective rules, checks commit membership, push runs and job names, and rejects a foreign App ID for a normal required check. Its PR-only exemption also rejects that check if it exists on the landed SHA, which can equal the queue SHA. See `crates/velnor-ci/src/gate.rs:15,83–99,127–159,241–243,277–289`.
 Ship the new helper, generator pins, rules and publisher as one compatibility migration. Explicitly recognise the pinned Velnor App proof, policy epoch, repository/subject and signed main manifest. Still require the genuine Actions 15368 push witness and all unrelated effective rules. Never turn a foreign-App check into an unchecked exemption.
 The protected main job independently verifies candidate receipts/output digests, obtains exact-SHA release evidence, signs the promotion record and returns its real conclusion through run-service. For a changed shipping identity it waits for the real optimised product proof, off the PR critical path.
 Shadow the new App context and witness on lab refs, exercise wrong App, wrong workflow path or run attempt, same-SHA group→push, duplicate `Required`, missing test and stale tag. Switch protections while admissions are held, read them back, then retire old PR writers.

@@ -1,0 +1,4 @@
+    include_str!("../../../../samples/helper-lock/view/.velnor/rust-ci.lock");
+pub(crate) const READY: &str = "needs.gate.outputs.ready == 'true'";
+pub(crate) const PUSH: &str = "github.event.workflow_run.event == 'push'";
+pub(crate) const DEFAULT_BRANCH: &str =

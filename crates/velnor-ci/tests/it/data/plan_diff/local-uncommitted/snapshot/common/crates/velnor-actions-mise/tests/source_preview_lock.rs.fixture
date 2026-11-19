@@ -1,0 +1,8 @@
+    let mut text = include_str!("../../../.velnor/generator.lock").to_owned();
+    write!(
+        &mut text,
+        "\n[planner-preview]\nschema = 3\nrepository = \"tailrocks/velnor-new\"\nversion = \"0.1.75\"\nsource_sha = \"{SOURCE}\"\ntag = \"sdk-preview-{SOURCE}\"\nrelease_id = 10\n"
+    let original = parse_generator_lock(include_str!("../../../.velnor/generator.lock"))?;
+    assert!(original.source_preview.is_none());
+    assert!(original.staged_source_preview.is_none());
+    let parsed = parse_generator_lock(&lock_text()?)?;

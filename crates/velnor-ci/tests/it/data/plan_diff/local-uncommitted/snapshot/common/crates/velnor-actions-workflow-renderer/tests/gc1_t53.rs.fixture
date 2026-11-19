@@ -1,0 +1,31 @@
+/// Decode one `run: "..."` double-quoted scalar from a step section. The
+/// emitter only escapes `\\` and `\"` inside single-line scripts, so any
+/// other escape fails the extraction loudly instead of silently mangling
+/// the script under test.
+#[path = "gc1_t53_cold.rs"]
+mod gc1_t53_cold;
+#[path = "gc1_t53_depth.rs"]
+mod gc1_t53_depth;
+#[cfg(target_os = "linux")]
+#[path = "gc1_t53_drift.rs"]
+mod gc1_t53_drift;
+#[path = "gc1_t53_env.rs"]
+mod gc1_t53_env;
+#[path = "gc1_t53_exit.rs"]
+mod gc1_t53_exit;
+#[path = "gc1_t53_expr.rs"]
+mod gc1_t53_expr;
+#[path = "gc1_t53_hostile.rs"]
+mod gc1_t53_hostile;
+#[path = "gc1_t53_import.rs"]
+mod gc1_t53_import;
+#[path = "gc1_t53_key.rs"]
+mod gc1_t53_key;
+#[path = "gc1_t53_meta.rs"]
+mod gc1_t53_meta;
+#[path = "gc1_t53_publish.rs"]
+mod gc1_t53_publish;
+#[cfg(target_os = "linux")]
+#[path = "gc1_t53_recover.rs"]
+mod gc1_t53_recover;
+

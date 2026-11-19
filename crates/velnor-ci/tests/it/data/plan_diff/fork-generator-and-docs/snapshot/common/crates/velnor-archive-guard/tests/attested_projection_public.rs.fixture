@@ -1,0 +1,4 @@
+const ARCHIVE: &[u8] = include_bytes!("fixtures/buildkit-attested-probe.oci.tar");
+
+#[test]
+fn projection_reports_deadline_after_output_begins() -> Result<(), Box<dyn std::error::Error>> {

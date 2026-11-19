@@ -49,7 +49,7 @@ removes the nested locks — likely dropped).
   `cargo metadata --no-deps`. The 4 runner packages are invisible:
   the nested workspace is excluded from root metadata and the helper
   scopes to metadata-known packages (zero gap findings under
-  `crates/velnor-runner/` and `fixtures/` — see runner-merge step).
+  `crates/velnor-runner-*/` and `fixtures/` — see runner-merge step).
 - `package-groups.json`: `velnor-actions-cli` + `velnor-archive-guard`
   are `tool`; the other 7 are `library`. Current edges are all
   `library→library` / `tool→library`: zero direction violations.
@@ -66,7 +66,7 @@ removes the nested locks — likely dropped).
 | Rule ID | Count | Detail |
 |---|---|---|
 | `layout-no-flat-crate-manifest` | 10 | 9 root crates + `velnor-runner/Cargo.toml` at `crates/*` (S4 wants `crates/<group>/<package>`) |
-| `layout-no-deep-crate-manifest` | 4 | Runner's 4 crates at `crates/velnor-runner/crates/*` (depth 3) |
+| `layout-no-deep-crate-manifest` | 4 | Runner's 4 crates at `crates/velnor-runner-*` (depth 3) |
 | `tests-dir-present` | 21 | Spurious pre-move: `crates/*/*` matches `src/`, `tests/`, `build_support/`, `.config/`, `crates/` as "packages"; resolves with grouped moves |
 | `ci-build-runs-on` | 6 | No workflow has a `build` job on `ubuntu-latest`; all 6 workflows generated → generator must emit it |
 | `layout-requires-rust-toolchain` | 1 | `rust-toolchain.toml` absent |
@@ -117,7 +117,7 @@ Notes:
   does not reduce SIZE — the 7 over-budget crates must split along
   module boundaries regardless.
 - Runner debt is unmeasured (helper-blind until the merge). Probe it
-  standalone (`check-gaps --root crates/velnor-runner` covers the
+  standalone (`check-gaps --root crates/velnor-runner-*` covers the
   registry-independent TEST/SIZE checks) before merging.
 
 ## Sequenced migration plan
@@ -157,7 +157,7 @@ unmoved `*_tests.rs`.
   reconciled), single deny/clippy gate; keep crate paths unchanged
   (relocation belongs to grouped moves).
 - Verify: root `cargo metadata` lists 13 packages; both old
-  (`crates/velnor-runner`) and new (root) `cargo check`/`nextest list`
+  (`crates/velnor-runner-*`) and new (root) `cargo check`/`nextest list`
   pass; gap counts for the 4 newly visible crates recorded (expect a
   one-time TEST/SIZE jump — the only allowed increase, pre-declared).
 - Contract (explicit only): delete nested lock/deny/clippy, remove the

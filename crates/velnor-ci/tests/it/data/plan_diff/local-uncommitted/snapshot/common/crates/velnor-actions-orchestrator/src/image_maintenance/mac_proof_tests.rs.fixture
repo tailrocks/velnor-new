@@ -1,0 +1,7 @@
+const ENVELOPE: &[u8] = include_bytes!("../../tests/fixtures/mac-proof/envelope.json");
+const BUNDLE: &[u8] = include_bytes!("../../tests/fixtures/mac-proof/envelope.sigstore.json");
+const MANIFEST: &[u8] = include_bytes!("../../tests/fixtures/mac-proof/manifest.json");
+const CONTEXT: &[u8] = include_bytes!("../../tests/fixtures/mac-proof/context.json");
+const SHA: &str = "ab624e88dc4e3577d2b76450da34d72c1f9db623";
+
+#[test]

@@ -1,10 +1,10 @@
 # Deferred: Velnor self-hosted execution
 
-**Status:** Historical / Superseded. The active runner specification is [macOS Scale Set runner](../proposed/macos-scaleset-runner.md). Active implementation lives in `crates/velnor-runner`. Clauses marked **Superseded** below are not normative. Workspace separation, no second task graph, no generator-adapter dependency, one task and cache authority, exact lock identities, durable recovery, truthful conclusions, and the ban on mounting the host home or the outer Docker socket into a job remain in force.
+**Status:** Historical / Superseded. The active runner specification is [macOS Scale Set runner](../proposed/macos-scaleset-runner.md). Active implementation lives in `crates/velnor-runner-*`. Clauses marked **Superseded** below are not normative. Workspace separation, no second task graph, no generator-adapter dependency, one task and cache authority, exact lock identities, durable recovery, truthful conclusions, and the ban on mounting the host home or the outer Docker socket into a job remain in force.
 
 ## 1. Entry condition
 
-Velnor Actions V1 provides a stack-generic workflow generator (`crates/velnor-actions-*`). The Runner Scale Set implementation is delivered in nested `crates/velnor-runner` under `docs/proposed/macos-scaleset-runner.md`. The self-hosted runner roadmap documented below is historical. All V1 entry gates have passed and dogfooding is active.
+Velnor Actions V1 provides a stack-generic workflow generator (`crates/velnor-actions-*`). The Runner Scale Set implementation is delivered in nested `crates/velnor-runner-*` under `docs/proposed/macos-scaleset-runner.md`. The self-hosted runner roadmap documented below is historical. All V1 entry gates have passed and dogfooding is active.
 
 V2/V3 versions follow the [Velnor version policy](../proposed/version-policy.md).
 `.velnor/runner.lock` has been created, pinned, and committed in the repository root.

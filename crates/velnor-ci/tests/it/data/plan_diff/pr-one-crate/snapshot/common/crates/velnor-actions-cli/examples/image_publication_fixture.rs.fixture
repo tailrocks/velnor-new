@@ -1,0 +1,20 @@
+#[path = "image_publication_fixture/crane.rs"]
+mod crane;
+#[path = "image_publication_fixture/digest.rs"]
+mod digest;
+#[path = "image_publication_fixture/family_registry.rs"]
+mod family_registry;
+#[path = "image_publication_fixture/pagination.rs"]
+mod pagination;
+#[path = "image_publication_fixture/registry.rs"]
+mod registry;
+#[path = "image_publication_fixture/runs.rs"]
+mod runs;
+#[path = "image_publication_fixture/snapshot.rs"]
+mod snapshot;
+use digest::hex;
+
+        let (source, main) = pair.split_once("...").ok_or("invalid comparison route")?;
+        if source
+            != state["source_commit"]
+                .as_str()

@@ -40,9 +40,8 @@ services, cancellation, and completion. A container is not a hosted VM.
 
 ## 2. Packages
 
-Nested virtual workspace `crates/velnor-runner/`, excluded from the root
-workspace members. Root `cargo --workspace` does not test it. Gates enumerate
-both workspaces.
+The runner packages (`crates/velnor-runner-*` and `crates/velnor-resource-probe`)
+are members of the root workspace.
 
 | Package | Owns | Must not own |
 |---|---|---|

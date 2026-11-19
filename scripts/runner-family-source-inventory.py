@@ -24,8 +24,8 @@ host_spec = importlib.util.spec_from_file_location("runner_host_inventory", Path
 host_inventory = importlib.util.module_from_spec(host_spec)
 host_spec.loader.exec_module(host_inventory)
 
-INVENTORY = "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_inventory.txt"
-ABSENCES = "crates/velnor-runner/crates/velnor-runner-image-manifest/src/runner_family_absences.txt"
+INVENTORY = "crates/velnor-runner-image-manifest/src/runner_family_inventory.txt"
+ABSENCES = "crates/velnor-runner-image-manifest/src/runner_family_absences.txt"
 TARGET = "x86_64-unknown-linux-musl"
 BINARIES = {"velnor-resource-probe", "velnor-storage-init", "velnor-job-start-hook"}
 
@@ -82,7 +82,7 @@ def private_target_file(value, release_root):
 
 
 def family_packages(metadata, root):
-    workspace = root / "crates/velnor-runner"
+    workspace = root
     if Path(metadata.get("workspace_root", "")).resolve() != workspace:
         raise native.InventoryError("runner workspace root mismatch")
     package_items = metadata.get("packages", [])
@@ -226,7 +226,7 @@ def inventory(root, metadata_path, artifacts_path, root_metadata_path, root_arti
         dep_text = dep_info.read_text()
         rule = dep_text.split("\n\n", 1)[0]
         for dependency in native.parse_make_prerequisites(rule, dep_info):
-            found = native.canonical_input(dependency, root / "crates/velnor-runner", root, target_dir, canonical_target, tracked)
+            found = native.canonical_input(dependency, root, root, target_dir, canonical_target, tracked)
             if not found:
                 raise native.InventoryError(f"runner compiler prerequisite is unbound: {dependency}")
             inputs.update(found)
@@ -249,7 +249,7 @@ def inventory(root, metadata_path, artifacts_path, root_metadata_path, root_arti
     inputs.update(host_paths)
     inputs.update(context_paths)
     absent = root_absent | context_absent
-    required = ["Cargo.toml", "Cargo.lock", "crates/velnor-runner/Cargo.toml", "crates/velnor-runner/Cargo.lock", ".velnor/runner.lock", "mise.toml", "mise.lock", "rust-toolchain.toml", "scripts/check-runner-image-candidate.sh", "scripts/runner-family-source-inventory.py", "scripts/runner-family-root-inventory.py", "scripts/runner-family-host-inventory.py", "scripts/native-image-candidate-inventory.py", "scripts/generator-release/source-qualification.sh", "scripts/generator-release/cargo-git-handoff.py", "scripts/generator-release/cargo-source-handoff.sh", INVENTORY, ABSENCES]
+    required = ["Cargo.toml", "Cargo.lock", "Cargo.toml", "Cargo.lock", ".velnor/runner.lock", "mise.toml", "mise.lock", "rust-toolchain.toml", "scripts/check-runner-image-candidate.sh", "scripts/runner-family-source-inventory.py", "scripts/runner-family-root-inventory.py", "scripts/runner-family-host-inventory.py", "scripts/native-image-candidate-inventory.py", "scripts/generator-release/source-qualification.sh", "scripts/generator-release/cargo-git-handoff.py", "scripts/generator-release/cargo-source-handoff.sh", INVENTORY, ABSENCES]
     required.extend(str(Path(item["manifest_path"]).resolve()) for item in packages.values())
     for value in required:
         found = native.canonical_input(value, root, root, target_dir, canonical_target, tracked)

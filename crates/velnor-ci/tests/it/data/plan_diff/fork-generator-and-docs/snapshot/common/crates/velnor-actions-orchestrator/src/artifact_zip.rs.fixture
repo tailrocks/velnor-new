@@ -1,0 +1,17 @@
+#[path = "artifact_zip_output.rs"]
+mod output;
+#[path = "artifact_zip_reader.rs"]
+mod reader;
+use reader::Archive;
+#[path = "artifact_zip_limits.rs"]
+mod limits;
+pub(crate) use limits::{NATIVE_MANIFEST_BYTES, ZipProfile, leaf_union_compressed_bound};
+const MAX_ENTRIES: usize = 4096;
+    !name.is_empty() && name != "." && name != ".." && !name.contains(['/', '\\', '\0', ':'])
+}
+
+pub(super) fn safe_evidence_name(name: &str, is_dir: bool) -> bool {
+                .all(|part| !part.is_empty() && part != "." && part != "..")
+    })
+}
+fn check() -> Result<(), OrchestratorError> {

@@ -1,0 +1,9 @@
+    let sample = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../../samples/helper-lock/view")
+        .join(LOCK_PATH.as_str());
+    assert_eq!(
+        pin_lock("0.1.79", COMMIT_FILE, SUMS)?,
+        (SUMS.to_owned(), "0.1.79/../../x"),
+        (String::new(), "0.1.79"),
+    ];
+    for (sums, version) in cases {

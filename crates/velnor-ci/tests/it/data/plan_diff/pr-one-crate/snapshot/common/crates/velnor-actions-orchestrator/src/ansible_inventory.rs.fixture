@@ -1,0 +1,5 @@
+        (&["python", "core:python"][..], "python_not_declared"),
+        (&["uv", "aqua:astral-sh/uv"][..], "uv_not_declared"),
+    ] {
+        if declared(keys)?.is_none() {
+            findings.push(code.to_owned());

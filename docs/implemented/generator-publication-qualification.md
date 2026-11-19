@@ -212,7 +212,7 @@ cargo run --locked -p velnor-actions-cli -- generate --output-dir /private/tmp/v
 The first preview attempt exposed uncached registry entries used by offline
 metadata inspection. `cargo fetch --locked` populated the root lockfile's
 cache, and the nested runner lockfile's cache was populated by
-`cargo fetch --manifest-path crates/velnor-runner/Cargo.toml --locked`. The
+`cargo fetch --manifest-path Cargo.toml --locked`. The
 same preview command then succeeded. Comparing its `.github` tree with the checked-in tree
 showed one changed path: `.github/actions/generator-release-publish/action.yml`.
 That exact generated file was copied from the successful preview, and its
