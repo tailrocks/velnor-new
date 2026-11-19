@@ -6,14 +6,31 @@ use crate::bundle::check_targets;
 use crate::error::ReleaseError;
 use crate::error_family::FamilyError;
 use crate::family_assets::check_asset_names;
-use crate::plan::{BinaryPlan, ReleaseFiles, ReleasePlan, manifest_of, plan_binaries};
+use crate::family_options::FamilyTrigger;
+use crate::plan::{BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, manifest_of, plan_binaries};
 use crate::release_plz::RootConfig;
 use crate::tag::{TagPattern, family};
-use crate::velnor_config::{Binary, VelnorConfig};
+use crate::velnor_config::{Binary, BinaryFormat, VelnorConfig};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FamilyPlan {
     pub tag_pattern: TagPattern,
+    pub trigger: FamilyTrigger,
+    pub checksums_file: Option<String>,
+    pub commit_file: bool,
+    pub attest: bool,
+}
+
+impl FamilyPlan {
+    #[must_use]
+    pub fn tag_affixes(&self) -> (String, String) {
+        let (before, after) = self
+            .tag_pattern
+            .as_str()
+            .split_once(crate::tag::VERSION)
+            .unwrap_or_default();
+        (before.to_owned(), after.to_owned())
+    }
 }
 
 pub(crate) fn plan_family(
@@ -35,8 +52,14 @@ pub(crate) fn plan_family(
             .ok_or_else(|| FamilyError::BinaryReleasedByReleasePlz {
                 package: binary.package.clone(),
             })?;
-        if let Some(key) = unsupported(binary) {
-            return Err(FamilyError::Unsupported { key }.into());
+        if let Some(error) = unsupported(binary) {
+            return Err(error.into());
+        }
+        if config.family.checksums_file.is_some() && binary.format == BinaryFormat::Raw {
+            return Err(FamilyError::ChecksumsNeedArchives {
+                package: binary.package.clone(),
+            }
+            .into());
         }
         check_targets(binary, &manifest_of(&root), files)?;
         binaries.push(BinaryPlan {
@@ -49,11 +72,11 @@ pub(crate) fn plan_family(
             asset_name: checked(binary, &tag_pattern)?,
             format: binary.format,
             libc: binary.libc,
-            smoke: false,
+            smoke: binary.smoke,
             commit_file: false,
             checksum_files: None,
             member_digests: None,
-            attest: binary.attest,
+            attest: false,
             profile: binary.profile.clone(),
             tag_pattern: tag_pattern.clone(),
         });
@@ -74,22 +97,53 @@ pub(crate) fn plan_family(
             }
         }
     }
-    Ok((FamilyPlan { tag_pattern }, binaries))
+    let plan = FamilyPlan {
+        tag_pattern,
+        trigger: config.family.trigger.unwrap_or(FamilyTrigger::WorkflowRun),
+        checksums_file: config.family.checksums_file.clone(),
+        commit_file: config.family.commit_file,
+        attest: config.family.attest,
+    };
+    Ok((plan, binaries))
 }
 
-fn unsupported(binary: &Binary) -> Option<&'static str> {
+fn unsupported(binary: &Binary) -> Option<FamilyError> {
+    let on_the_family = |key, instead| FamilyError::BinaryKeyBelongsToFamily { key, instead };
     if binary.attest {
-        Some("attest")
-    } else if binary.smoke {
-        Some("smoke")
+        Some(on_the_family("attest", "attest"))
     } else if binary.commit_file {
-        Some("commit_file")
-    } else if binary.checksum_files.is_some() {
-        Some("checksum_files")
+        Some(on_the_family("commit_file", "commit_file"))
     } else if binary.member_digests.is_some() {
-        Some("member_digests")
+        Some(on_the_family("member_digests", "checksums_file"))
+    } else if binary.checksum_files.is_some() {
+        Some(FamilyError::Unsupported {
+            key: "checksum_files",
+        })
     } else {
         None
+    }
+}
+
+pub(crate) fn check_trigger(
+    family: Option<&FamilyPlan>,
+    roots: &[RootPlan],
+) -> Result<(), ReleaseError> {
+    if family.is_none_or(|family| family.trigger != FamilyTrigger::TagPush) {
+        return Ok(());
+    }
+    let released = roots.iter().find_map(|root| {
+        root.packages
+            .iter()
+            .map(|(package, _)| package)
+            .chain(&root.inherited)
+            .next()
+    });
+    match released {
+        Some(package) => Err(FamilyError::TagPushWithReleasedPackage {
+            package: package.clone(),
+        }
+        .into()),
+        None => Ok(()),
     }
 }
 

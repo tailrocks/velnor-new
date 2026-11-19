@@ -26,10 +26,18 @@ fn an_unrelated_label_runs_nothing_whatever_the_pull_request_already_carries() -
 }
 
 fn group(tree: &Json, event: &Event) -> Result<String, Box<dyn std::error::Error>> {
+    expanded(tree, "/concurrency/group", event)
+}
+
+fn expanded(
+    tree: &Json,
+    pointer: &str,
+    event: &Event,
+) -> Result<String, Box<dyn std::error::Error>> {
     let template = tree
-        .pointer("/concurrency/group")
+        .pointer(pointer)
         .and_then(Json::as_str)
-        .ok_or("no group")?;
+        .ok_or_else(|| format!("no {pointer}"))?;
     let results = std::collections::BTreeMap::new();
     let resolve = context(event, &results, &[]);
     let mut out = String::new();
@@ -68,6 +76,35 @@ fn an_unrelated_label_gets_its_own_concurrency_group_and_cannot_cancel_the_run_i
             .pointer("/concurrency/group")
             .and_then(Json::as_str)
             .is_some_and(|text| text.contains("ignored"))
+    );
+    Ok(())
+}
+
+#[test]
+fn an_ignored_event_cannot_publish_a_check_named_required() -> TestResult {
+    let tree = label_workflow()?;
+    let name = |event: &Event| expanded(&tree, "/jobs/required/name", event);
+    for event in [
+        pull(false, &[]),
+        pull(false, &["ci:run"]),
+        labeled("ci:run", &["ci:run"]),
+        labeled("ci:auto", &["ci:auto"]),
+        edited(true, &[]),
+    ] {
+        assert_eq!(name(&event)?, "Required");
+    }
+    for event in [
+        labeled("bug", &["bug", "ci:run"]),
+        edited(false, &["ci:run"]),
+    ] {
+        let shown = name(&event)?;
+        assert_ne!(shown, "Required");
+        assert!(shown.starts_with("Required"), "{shown}");
+    }
+    let always = crate::yaml_tree::document(&render("0.1.86", "shape = \"lint-test\"\n")?)?;
+    assert_eq!(
+        always.pointer("/jobs/required/name").and_then(Json::as_str),
+        Some("Required")
     );
     Ok(())
 }

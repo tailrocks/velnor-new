@@ -10,15 +10,15 @@ use velnor_model::{
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
     cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
-    sources_locks, trimmed_lane,
+    sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
-use crate::budget_steps::{budget_outputs, budget_step};
+use crate::budget_steps::budget_step;
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
-    plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, all_conditions, check_name, condition, merge_group_skipped,
+    output, plan_read, plan_source, sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 use crate::permission_pairs;
@@ -60,6 +60,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
+        check_name: check_name(job.name.as_ref(), job.pr),
         comment: job.comment.clone(),
         env,
         needs: job.needs.iter().map(ToString::to_string).collect(),
@@ -87,7 +88,6 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
-            .chain(budget_outputs(job))
             .collect(),
         steps,
         ..RenderedJob::default()
@@ -165,6 +165,9 @@ fn rendered_steps(
         ));
     }
     rendered.push(step_body(step, audit, tests, lane));
+    if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
+        rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
+    }
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
             body.env.push(crate::cargo::target_dir_env(target));

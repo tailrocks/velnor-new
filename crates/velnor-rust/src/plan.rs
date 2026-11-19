@@ -18,7 +18,7 @@ use crate::error::{DetectError, Reason};
 use crate::lane::{
     Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
 };
-use crate::plan_budget::{budget_job, draft_guard, triggers};
+use crate::plan_budget::{draft_guard, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::root_jobs;
@@ -102,7 +102,6 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root, deltas));
     }
     apply_extensions(facts, &mut jobs, single);
-    jobs.extend(budget_job(facts));
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),

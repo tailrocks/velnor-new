@@ -8,7 +8,7 @@ use velnor_model::{Platform, RepoPath, RustMetadata};
 use crate::bundle::{ExtraBin, check_targets};
 use crate::check::{CheckPlan, plan_checks};
 use crate::error::ReleaseError;
-use crate::family::{FamilyPlan, plan_binaries_and_family};
+use crate::family::{FamilyPlan, check_trigger, plan_binaries_and_family};
 use crate::hazards::{
     cargo_config, nightly_manifest, shadowed_by_extensionless_config, symlink_on_config_path,
     toolchain_path,
@@ -375,6 +375,7 @@ impl ReleasePlan {
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
         let checks = plan_checks(config.checks, &binaries)?;
         let roots = plan_roots(configs, files.rust_metadata.as_ref());
+        check_trigger(family.as_ref(), &roots)?;
         Ok(ReleasePlan {
             roots,
             after: config.after,

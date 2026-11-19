@@ -91,8 +91,8 @@ fn a_secret_is_refused_in_a_workflow_with_any_other_trigger() -> TestResult {
             "\n[workflow.on.pull_request]\ntypes = [\"opened\"]\n[workflow.on.workflow_dispatch]\n",
         ),
         (
-            "schedule",
-            "\n[workflow.on]\nschedule = [\"23 4 * * 1\"]\n[workflow.on.workflow_dispatch]\n",
+            "pull_request",
+            "\n[workflow.on]\nschedule = [\"23 4 * * 1\"]\n[workflow.on.pull_request]\ntypes = [\"opened\"]\n",
         ),
         (
             "merge_group",
@@ -115,10 +115,7 @@ fn a_secret_is_refused_in_a_workflow_with_any_other_trigger() -> TestResult {
             message.contains("secrets.G3_CANARY") && message.contains(event),
             "{event}: {message}"
         );
-        assert!(
-            message.contains("workflow_dispatch alone"),
-            "{event}: {message}"
-        );
+        assert!(message.contains("push to tags"), "{event}: {message}");
     }
     Ok(())
 }
@@ -151,5 +148,125 @@ fn a_secret_name_is_upper_case_letters_digits_and_underscores_and_nothing_else_i
     ] {
         refusal(&config(DISPATCH, "", &secret_env(expression)))?;
     }
+    Ok(())
+}
+
+const SCHEDULE: &str = "\n[workflow.on]\nschedule = [\"23 4 * * *\"]\n";
+const GATE: &str = "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
+
+#[test]
+fn a_secret_is_allowed_on_trusted_events_only() -> TestResult {
+    let trusted = [
+        SCHEDULE.to_owned(),
+        format!("{SCHEDULE}[workflow.on.workflow_dispatch]\n"),
+        "\n[workflow.on.push]\ntags = [\"v*\"]\n".to_owned(),
+        "\n[workflow.on.push]\ntags = [\"v*\"]\n[workflow.on.workflow_dispatch]\n".to_owned(),
+    ];
+    for on in trusted {
+        let tree = rendered(&config(&on, "", &canary()))?;
+        let hold = steps(job(&tree, "hold")?);
+        assert_eq!(
+            hold[0].at(&["env", "CANARY"]).and_then(Node::text),
+            Some("${{ secrets.G3_CANARY }}"),
+            "{on}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn a_secret_is_refused_when_one_untrusted_event_can_start_the_workflow() -> TestResult {
+    let untrusted = [
+        (
+            "pull_request",
+            "[workflow.on.pull_request]\ntypes = [\"opened\"]\n",
+        ),
+        (
+            "merge_group",
+            "[workflow.on]\nmerge_group = true\nschedule = [\"23 4 * * *\"]\n",
+        ),
+        (
+            "workflow_run",
+            "[workflow.on.workflow_run]\nworkflows = [\"Build\"]\n",
+        ),
+        ("push", "[workflow.on.push]\nbranches = [\"main\"]\n"),
+        (
+            "push",
+            "[workflow.on.push]\nbranches = [\"main\"]\ntags = [\"v*\"]\n",
+        ),
+    ];
+    for (event, on) in untrusted {
+        let on = format!("\n[workflow.on.workflow_dispatch]\n{on}");
+        let on = if on.contains("[workflow.on]") {
+            on.replace("[workflow.on.workflow_dispatch]\n", "")
+        } else {
+            on
+        };
+        let message = refusal(&config(&on, "", &canary()))?;
+        assert!(message.contains(event), "{event}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_push_to_branches_reads_a_secret_only_behind_the_default_branch_gate() -> TestResult {
+    let push = "\n[workflow.on.push]\nbranches = [\"main\"]\n";
+    let gated = |condition: &str| config(push, &format!("if = \"{condition}\""), &canary());
+    for condition in [GATE.to_owned(), format!("{GATE} && github.actor != 'bot'")] {
+        rendered(&gated(&condition)).map_err(|error| format!("{condition}: {error}"))?;
+    }
+    rendered(&workflow(
+        &format!("if = \"{GATE}\""),
+        push,
+        "\n[[workflow.job]]\nid = \"hold\"\n[[workflow.job.step]]\nname = \"Hold\"\nrun = \"sleep 1\"\nenv = { CANARY = \"${{ secrets.G3_CANARY }}\" }\n",
+    ))?;
+    for condition in [
+        format!("{GATE} || true"),
+        format!("github.actor == 'x' || {GATE}"),
+        format!("github.actor == 'x && {} && y'", GATE.replace('\'', "''")),
+        format!("!({GATE})"),
+        "github.ref == 'refs/heads/main'".to_owned(),
+        GATE.replace("==", "!="),
+    ] {
+        let message =
+            refusal(&gated(&condition)).map_err(|error| format!("{condition}: {error}"))?;
+        assert!(message.contains("push"), "{condition}: {message}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_secret_stays_out_of_a_job_env_on_a_scheduled_workflow() -> TestResult {
+    let job_env = config(
+        SCHEDULE,
+        "env = { CANARY = \"${{ secrets.G3_CANARY }}\" }",
+        "",
+    );
+    let message = refusal(&job_env)?;
+    assert!(message.contains("env"), "job env: {message}");
+    let with = config(SCHEDULE, "", "").replace(
+        "run = \"sleep 1\"",
+        "uses = \"checkout\"\nwith = { token = \"${{ secrets.G3_CANARY }}\" }",
+    );
+    let message = refusal(&with)?;
+    assert!(message.contains("step env"), "with: {message}");
+    Ok(())
+}
+
+#[test]
+fn a_job_that_reads_a_secret_off_dispatch_holds_no_write_permission() -> TestResult {
+    let write = "permissions = { contents = \"write\" }";
+    let message = refusal(&config(SCHEDULE, write, &canary()))?;
+    assert!(
+        message.contains("contents") && message.contains("secret"),
+        "{message}"
+    );
+    rendered(&config(
+        SCHEDULE,
+        "permissions = { contents = \"read\" }",
+        &canary(),
+    ))?;
+    rendered(&config(SCHEDULE, write, ""))?;
+    rendered(&config(DISPATCH, write, &canary()))?;
     Ok(())
 }

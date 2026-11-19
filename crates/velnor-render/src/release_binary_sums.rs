@@ -16,46 +16,59 @@ pub(crate) fn steps(binary: &BinaryPlan) -> Vec<RenderedStep> {
     if binary.member_digests.is_none() {
         return Vec::new();
     }
-    let members = std::iter::once(binary.bin.as_str())
-        .chain(binary.extra_bins.iter().map(|extra| extra.bin.as_str()))
-        .collect::<Vec<_>>();
-    let archives: Vec<String> = binary
-        .platforms
+    digests(
+        &[binary],
+        BINARY_SUMS_FILE,
+        &format!(" of {}", binary.package),
+    )
+}
+
+pub(crate) fn digests(binaries: &[&BinaryPlan], file: &str, of: &str) -> Vec<RenderedStep> {
+    let members = |binary: &BinaryPlan| {
+        std::iter::once(binary.bin.clone())
+            .chain(binary.extra_bins.iter().map(|extra| extra.bin.clone()))
+            .collect::<Vec<_>>()
+    };
+    let archives = |binary: &BinaryPlan| -> Vec<String> {
+        binary
+            .platforms
+            .iter()
+            .map(|platform| asset(binary, *platform))
+            .collect()
+    };
+    let directories: Vec<String> = binaries
         .iter()
-        .map(|platform| asset(binary, *platform))
+        .flat_map(|binary| {
+            archives(binary)
+                .into_iter()
+                .map(|archive| word(binary, &format!("{UNPACKED}/{archive}")))
+        })
         .collect();
-    let directories = archives
-        .iter()
-        .map(|archive| word(binary, &format!("{UNPACKED}/{archive}")))
-        .collect::<Vec<_>>();
     let mut steps = vec![command(
-        format!(
-            "Make the folders to unpack the archives of {} in",
-            binary.package
-        ),
+        format!("Make the folders to unpack the archives{of} in"),
         format!("mkdir -p {}", directories.join(" ")),
     )];
-    steps.extend(
-        archives
-            .iter()
-            .zip(&directories)
-            .map(|(archive, directory)| {
-                command(
-                    format!("Unpack {archive}"),
-                    format!(
-                        "tar -xzf {} -C {directory} {}",
-                        word(binary, &format!("{DIST}/{archive}")),
-                        members.join(" ")
-                    ),
-                )
-            }),
-    );
-    let listed = archives
+    for binary in binaries {
+        for archive in archives(binary) {
+            let directory = word(binary, &format!("{UNPACKED}/{archive}"));
+            steps.push(command(
+                format!("Unpack {archive}"),
+                format!(
+                    "tar -xzf {} -C {directory} {}",
+                    word(binary, &format!("{DIST}/{archive}")),
+                    members(binary).join(" ")
+                ),
+            ));
+        }
+    }
+    let listed = binaries
         .iter()
-        .flat_map(|archive| {
-            members
-                .iter()
-                .map(move |member| word(binary, &format!("{archive}/{member}")))
+        .flat_map(|binary| {
+            archives(binary).into_iter().flat_map(move |archive| {
+                members(binary)
+                    .into_iter()
+                    .map(move |member| word(binary, &format!("{archive}/{member}")))
+            })
         })
         .collect::<Vec<_>>()
         .join(" ");
@@ -66,8 +79,8 @@ pub(crate) fn steps(binary: &BinaryPlan) -> Vec<RenderedStep> {
                 working_directory: Some(UNPACKED.to_owned()),
                 condition: Some(expression(&format!("runner.os {comparison} 'macOS'"))),
                 ..command(
-                    format!("Write {BINARY_SUMS_FILE}"),
-                    format!("{tool} {listed} > ../{DIST}/{BINARY_SUMS_FILE}"),
+                    format!("Write {file}"),
+                    format!("{tool} {listed} > ../{DIST}/{file}"),
                 )
             }
         }),

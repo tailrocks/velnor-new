@@ -6,11 +6,14 @@ mod base_expiry;
 mod bench_compare;
 mod bounded;
 mod budget;
+mod budget_history;
 mod budget_window;
 mod cache;
 mod cache_budget;
 mod cache_flow;
 mod cache_retention_flow;
+mod io_cold_foreign;
+mod io_gate;
 
 mod cache_safety;
 mod cache_upload;
