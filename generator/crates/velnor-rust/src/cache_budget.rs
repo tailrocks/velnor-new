@@ -132,14 +132,11 @@ pub fn target_family_prefix(prefix: &str) -> Option<&str> {
     (prefix.starts_with("velnor-tgt-") && hex(compat, 16)).then(|| &prefix[..=owner.len()])
 }
 
-#[must_use]
-pub fn budget_plan(
-    entries: &[CacheEntry],
-    open_prs: &BTreeSet<u64>,
-    now: Timestamp,
-    budget_bytes: u64,
-) -> Vec<CacheId> {
-    let mut groups: BTreeMap<(CacheFamily, &str, &str), Vec<&CacheEntry>> = BTreeMap::new();
+type Groups<'a> = BTreeMap<(CacheFamily, &'a str, &'a str), Vec<&'a CacheEntry>>;
+type Newest<'a> = BTreeMap<(&'a str, &'a str), ((Timestamp, CacheId), &'a str)>;
+
+fn ranked<'a>(entries: &'a [CacheEntry]) -> Groups<'a> {
+    let mut groups: Groups<'a> = BTreeMap::new();
     for entry in entries {
         if let Some((family, group)) = classify(&entry.key)
             && family != CacheFamily::Delta
@@ -150,69 +147,91 @@ pub fn budget_plan(
                 .push(entry);
         }
     }
-    let mut ranks = BTreeMap::new();
-    let mut current: BTreeMap<(&str, &str), ((Timestamp, CacheId), &str)> = BTreeMap::new();
-    for ((family, group, reference), members) in &mut groups {
+    for members in groups.values_mut() {
         members.sort_unstable_by_key(|entry| std::cmp::Reverse((entry.created_at, entry.id)));
-        for (rank, entry) in members.iter().enumerate() {
-            ranks.insert(entry.id, rank);
-        }
+    }
+    groups
+}
+
+fn newest_targets<'a>(groups: &Groups<'a>) -> Newest<'a> {
+    let mut newest: Newest<'a> = BTreeMap::new();
+    for ((family, group, reference), members) in groups {
         if *family == CacheFamily::Target
-            && let (Some(owner), Some(newest)) = (target_owner(group), members.first())
+            && let (Some(owner), Some(first)) = (target_owner(group), members.first())
         {
-            let stamp = (newest.created_at, newest.id);
-            let slot = current.entry((owner, *reference)).or_insert((stamp, group));
+            let stamp = (first.created_at, first.id);
+            let slot = newest.entry((owner, reference)).or_insert((stamp, group));
             if stamp > slot.0 {
                 *slot = (stamp, group);
             }
         }
     }
-    let stale_compat = |entry: &CacheEntry, group: &str| {
-        target_owner(group)
-            .and_then(|owner| current.get(&(owner, entry.reference.as_str())))
-            .is_some_and(|(_, newest)| *newest != group)
-    };
-    let mut candidates = Vec::new();
-    for entry in entries {
-        let tier = match classify(&entry.key) {
-            Some((CacheFamily::Sources, _)) if retired_sources(&entry.key) => 0,
-            Some((CacheFamily::Target, group)) if stale_compat(entry, group) => 0,
-            Some((CacheFamily::Delta, _)) => {
-                let Some(pr) = delta_pull_request(entry) else {
-                    continue;
-                };
-                if !open_prs.contains(&pr) {
-                    0
-                } else if entry.last_accessed_at <= now.saturating_sub(3 * DAY) {
-                    1
-                } else {
-                    4
-                }
-            }
-            Some((CacheFamily::Sources, _)) if entry.last_accessed_at > now.saturating_sub(DAY) => {
-                continue;
-            }
-            Some((CacheFamily::Target | CacheFamily::Sources, _))
-                if ranks.get(&entry.id).is_some_and(|rank| *rank >= 2) =>
-            {
-                2
-            }
-            Some((CacheFamily::Tools, _))
-                if ranks.get(&entry.id).is_some_and(|rank| *rank > 0)
-                    && entry.last_accessed_at <= now.saturating_sub(7 * DAY) =>
-            {
-                3
-            }
-            _ => continue,
-        };
-        candidates.push((
-            tier,
-            entry.last_accessed_at,
-            entry.created_at,
-            entry.id,
-            entry.size_in_bytes,
-        ));
+    newest
+}
+
+fn tier(
+    entry: &CacheEntry,
+    rank: usize,
+    newest: &Newest<'_>,
+    open_prs: &BTreeSet<u64>,
+    now: Timestamp,
+) -> Option<u8> {
+    let idle = |days: i64| entry.last_accessed_at <= now.saturating_sub(days * DAY);
+    match classify(&entry.key)? {
+        (CacheFamily::Sources, _) if retired_sources(&entry.key) => Some(0),
+        (CacheFamily::Target, group)
+            if target_owner(group)
+                .and_then(|owner| newest.get(&(owner, entry.reference.as_str())))
+                .is_some_and(|(_, current)| *current != group) =>
+        {
+            Some(0)
+        }
+        (CacheFamily::Delta, _) => {
+            let pr = delta_pull_request(entry)?;
+            Some(if !open_prs.contains(&pr) {
+                0
+            } else if idle(3) {
+                1
+            } else {
+                4
+            })
+        }
+        (CacheFamily::Sources, _) if !idle(1) => None,
+        (CacheFamily::Target | CacheFamily::Sources, _) if rank >= 2 => Some(2),
+        (CacheFamily::Tools, _) if rank > 0 && idle(7) => Some(3),
+        _ => None,
     }
+}
+
+#[must_use]
+pub fn budget_plan(
+    entries: &[CacheEntry],
+    open_prs: &BTreeSet<u64>,
+    now: Timestamp,
+    budget_bytes: u64,
+) -> Vec<CacheId> {
+    let groups = ranked(entries);
+    let newest = newest_targets(&groups);
+    let ranks: BTreeMap<CacheId, usize> = groups
+        .values()
+        .flat_map(|members| members.iter().enumerate())
+        .map(|(rank, entry)| (entry.id, rank))
+        .collect();
+    let mut candidates: Vec<_> = entries
+        .iter()
+        .filter_map(|entry| {
+            let rank = ranks.get(&entry.id).copied().unwrap_or(0);
+            tier(entry, rank, &newest, open_prs, now).map(|tier| {
+                (
+                    tier,
+                    entry.last_accessed_at,
+                    entry.created_at,
+                    entry.id,
+                    entry.size_in_bytes,
+                )
+            })
+        })
+        .collect();
     candidates.sort_unstable();
     let mut total: u128 = entries
         .iter()
