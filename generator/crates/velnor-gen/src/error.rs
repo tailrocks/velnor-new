@@ -25,6 +25,7 @@ pub enum GenerateError {
     MbxStoreHelperTooOld(HelperVersion),
     InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
+    FamilyTagHelperTooOld(HelperVersion),
     Metadata(MetadataFileError),
     Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
@@ -57,7 +58,7 @@ impl fmt::Display for GenerateError {
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
                 RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
             ),
-            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.84 or later"),
+            Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
             Self::InputsBuildHelperTooOld(version) => write!(
                 f,
@@ -66,6 +67,10 @@ impl fmt::Display for GenerateError {
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
+            ),
+            Self::FamilyTagHelperTooOld(version) => write!(
+                f,
+                "velnor-ci {version} cannot bind a family tag; pin velnor-ci 0.1.83 or later with `velnor-gen pin-helper 0.1.83`"
             ),
             Self::Metadata(error) => error.fmt(f),
             Self::Workflows(error) => error.fmt(f),

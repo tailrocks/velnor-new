@@ -32,7 +32,7 @@ pub(crate) const ATTEST_BUILD_PROVENANCE: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 
 pub(crate) const TEST_STEP_ID: &str = "test";
-pub(crate) const MISE_VERSION: &str = "2026.11.9";
+pub(crate) const MISE_VERSION: &str = "2026.11.10";
 const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 pub(crate) const CACHE_RESTORE: &str =
     "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";

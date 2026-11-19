@@ -82,6 +82,10 @@ pub enum Command {
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(
+        about = "Run in the directory of a Cargo root after the feature test lane: exit 1 unless the lane filter selects every test that exists only with the features, as cargo-nextest lists them. Lists the workspace three times (default features, the features, and the features under the filter) with cargo-nextest, so the build is the lane's own; ignored tests are exempt, and a listing error fails the guard"
+    )]
+    LaneGuard(LaneGuardArgs),
+    #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(crate::cli_cache::RestoredArgs),
@@ -113,6 +117,28 @@ pub struct CheckConfigurationsArgs {
         help = "JSON array of named feature configurations; without a file, check the default configuration"
     )]
     pub configurations: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct LaneGuardArgs {
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Comma-separated features the lane step passes to cargo"
+    )]
+    pub features: String,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "The lane's own nextest filter expression"
+    )]
+    pub filter: String,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Nextest binary id the lane never lists; repeatable"
+    )]
+    pub except_binary: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -199,7 +225,8 @@ pub struct CheckTagArgs {
 }
 
 pub use crate::cli_release::{
-    CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand, ReleaseGateArgs,
+    CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand,
+    ReleaseGateArgs,
 };
 
 #[derive(Debug, Args)]
