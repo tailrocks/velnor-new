@@ -85,6 +85,7 @@ mod plan_job_wait;
 mod policy_exceptions;
 mod release_branch_prefix;
 mod release_cargo_include;
+mod release_declared_after;
 mod release_fixture;
 mod release_hyphen_prefix;
 mod release_inputs;
