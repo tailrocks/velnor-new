@@ -244,12 +244,12 @@ fn the_invariant_flags_a_job_without_the_fence() -> TestResult {
         assert_eq!(unfenced(&workflow(bare))?.len(), 1, "{bare}");
     }
     let fence = format!("${{{{ {FENCE} }}}}");
-    assert!(
-        unfenced(&workflow(&format!(
-            "    uses: ./.github/workflows/y.yml\n    if: \"{fence}\"\n"
-        )))?
-        .is_empty()
+    let no_violation: Vec<String> = Vec::new();
+    let fenced_call = format!("    uses: ./.github/workflows/y.yml\n    if: \"{fence}\"\n");
+    assert_eq!(unfenced(&workflow(&fenced_call))?, no_violation);
+    assert_eq!(
+        unfenced(&workflow("    runs-on: ubuntu-latest\n"))?,
+        no_violation
     );
-    assert!(unfenced(&workflow("    runs-on: ubuntu-latest\n"))?.is_empty());
     Ok(())
 }

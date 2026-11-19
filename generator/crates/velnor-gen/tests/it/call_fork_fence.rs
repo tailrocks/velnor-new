@@ -32,10 +32,8 @@ fn fence_allows(event_name: &str, head_repository: &str, repository: &str) -> bo
         .trim_matches(|c| c == '(' || c == ')')
         .split("||")
         .any(|term| match term.trim() {
-            "true" => true,
-            "false" => false,
-            "!true" => false,
-            "!false" => true,
+            "true" | "!false" => true,
+            "false" | "!true" => false,
             other => unreachable!("{other}"),
         })
 }
