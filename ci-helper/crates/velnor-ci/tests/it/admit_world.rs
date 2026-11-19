@@ -25,6 +25,8 @@ pub(crate) const RUN: u64 = 5000;
 /// The neutral owner of the fixtures. The helper and the legacy script both take it from the run.
 pub(crate) const OWNER: &str = "octo-owner";
 pub(crate) const USER: &str = "/users/octo-owner";
+/// The neutral account id of the fixtures' release owner, which a deployment configures.
+pub(crate) const OWNER_ID: u64 = 4242;
 const PUBLICATION: &str = ".github/workflows/source-preview-publication.yml";
 const AUTHORITY: &str = "7777777777777777777777777777777777777777";
 
@@ -129,7 +131,8 @@ impl AdmitWorld {
                 format!("{REPO}/{SIGNER}@refs/tags/{tag}"),
             ),
             ("GITHUB_WORKFLOW_SHA", SOURCE.to_owned()),
-            ("GITHUB_ACTOR_ID", "139017".to_owned()),
+            ("RELEASE_OWNER_ID", OWNER_ID.to_string()),
+            ("GITHUB_ACTOR_ID", OWNER_ID.to_string()),
             ("GITHUB_TRIGGERING_ACTOR", OWNER.to_owned()),
             ("GITHUB_RUN_ID", RUN.to_string()),
             ("GITHUB_RUN_ATTEMPT", "1".to_owned()),
@@ -148,7 +151,7 @@ impl AdmitWorld {
         let mut cargo = lock_blob("[workspace.package]\nversion = \"0.1.82\"\n");
         cargo["path"] = json!("Cargo.toml");
         self.set(&format!("/contents/Cargo.toml?ref={SOURCE}"), cargo);
-        self.set(USER, json!({"id": 139_017, "login": OWNER}));
+        self.set(USER, json!({"id": OWNER_ID, "login": OWNER}));
         self.set(
             &format!("/actions/runs/{RUN}"),
             json!({"id": RUN, "run_attempt": 1, "head_sha": SOURCE, "head_branch": tag, "event": "push",
@@ -158,7 +161,7 @@ impl AdmitWorld {
         self.set(
             "/rulesets/26696396",
             json!({"id": 26_696_396, "target": "tag", "enforcement": "active",
-            "bypass_actors": [{"actor_id": 139_017, "actor_type": "User", "bypass_mode": "always"}],
+            "bypass_actors": [{"actor_id": OWNER_ID, "actor_type": "User", "bypass_mode": "always"}],
             "conditions": {"ref_name": {"include": ["refs/tags/sdk-preview-*"], "exclude": []}},
             "rules": [{"type": "creation"}]}),
         );

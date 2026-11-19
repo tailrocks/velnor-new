@@ -27,9 +27,26 @@ use super::json::{Field, Res, require};
 use super::{MAX_PAYLOAD, REPOSITORY, REPOSITORY_ID, SIGNER_WORKFLOW};
 use crate::error::CiError;
 
-/// The only account that may push a preview tag, by its immutable id. Its login is the
-/// run's `GITHUB_TRIGGERING_ACTOR`, which `admit_tag` checks against this account.
-pub const ACTOR_ID: u64 = 139_017;
+/// The input that names the only account that may push a preview tag, by its immutable
+/// numeric id. It has no default: this helper is generic, so the repository that runs it
+/// says who its release owner is. The account's login is the run's
+/// `GITHUB_TRIGGERING_ACTOR`, which `admit_tag` checks against this id.
+pub const RELEASE_OWNER_ID: &str = "RELEASE_OWNER_ID";
+
+/// The release owner's account id from `RELEASE_OWNER_ID`: a positive decimal number, or
+/// an error. Read before any request is made, so a missing id never reaches GitHub.
+pub fn release_owner_id(inputs: &Inputs) -> Res<u64> {
+    let text = inputs.vars.get(RELEASE_OWNER_ID).map_or("", String::as_str);
+    let digits = !text.is_empty() && text.bytes().all(|b| b.is_ascii_digit());
+    digits
+        .then(|| positive_text(text).ok())
+        .flatten()
+        .ok_or_else(|| {
+            CiError::new(format!(
+                "{RELEASE_OWNER_ID} is required: the release owner's numeric account id, a positive decimal number"
+            ))
+        })
+}
 const REPOSITORY_OWNER_ID: u64 = 78_806_509;
 
 /// What the job admitted: the metadata for the later jobs, and both payloads.
@@ -122,12 +139,13 @@ fn metadata(proof: &tag::Proof, source: &str, version: &str, run: (u64, u64)) ->
 
 /// Port of `admit`.
 pub fn admit(client: &dyn Client, inputs: &Inputs) -> Res<Admission> {
+    let owner_id = release_owner_id(inputs)?;
     inputs.authority()?;
     let source = inputs.req("GITHUB_SHA")?;
     require(super::json::is_hex(source, 40))?;
     verify_repository(client)?;
     let version = source_version(client, source)?;
-    let proof = tag::admit_tag(client, inputs, source, &version)?;
+    let proof = tag::admit_tag(client, inputs, owner_id, source, &version)?;
     let run = (
         decimal(inputs, "GITHUB_RUN_ID")?,
         decimal(inputs, "GITHUB_RUN_ATTEMPT")?,

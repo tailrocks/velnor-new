@@ -6,7 +6,7 @@ use std::collections::BTreeSet;
 use serde_json::{Value, json};
 
 use super::clock::{checked_time, tagger_time};
-use super::{ACTOR_ID, decimal};
+use super::decimal;
 use crate::preview::authority::Client;
 use crate::preview::authority::model::positive;
 use crate::preview::authority::modes::Inputs;
@@ -53,13 +53,13 @@ fn rule_types(record: &Value) -> Res<BTreeSet<Option<&str>>> {
 
 /// Port of `verify_tag_rules`: the two rulesets are active, the creation of preview tags is
 /// the owner's alone, and no preview tag can be changed or deleted.
-pub fn verify_tag_rules(client: &dyn Client) -> Res<()> {
+pub fn verify_tag_rules(client: &dyn Client, owner_id: u64) -> Res<()> {
     let creation = client.get(&format!("/rulesets/{CREATION_RULESET}"))?;
     let frozen = client.get(&format!("/rulesets/{IMMUTABLE_TAG_RULESET}"))?;
     for record in [&creation, &frozen] {
         require(record.at("target").is_s("tag") && record.at("enforcement").is_s("active"))?;
     }
-    let owner = json!([{"actor_id": ACTOR_ID, "actor_type": "User", "bypass_mode": "always"}]);
+    let owner = json!([{"actor_id": owner_id, "actor_type": "User", "bypass_mode": "always"}]);
     require(
         creation.at("id").is_u(CREATION_RULESET)
             && creation.at("bypass_actors") == &owner
@@ -167,7 +167,13 @@ pub struct Proof {
 /// Port of `admit_tag`: this run is the owner's push of the annotated tag
 /// `sdk-preview-<source>`, from the owner's account, on a repository whose rulesets
 /// keep the tag the owner's and unchanged.
-pub fn admit_tag(client: &dyn Client, inputs: &Inputs, source: &str, version: &str) -> Res<Proof> {
+pub fn admit_tag(
+    client: &dyn Client,
+    inputs: &Inputs,
+    owner_id: u64,
+    source: &str,
+    version: &str,
+) -> Res<Proof> {
     let tag = format!("sdk-preview-{source}");
     let reference = format!("{REPOSITORY}/{SIGNER_WORKFLOW}@refs/tags/{tag}");
     let var = |key: &str| inputs.vars.get(key).map_or("", String::as_str);
@@ -178,12 +184,12 @@ pub fn admit_tag(client: &dyn Client, inputs: &Inputs, source: &str, version: &s
             && var("GITHUB_REF") == format!("refs/tags/{tag}")
             && var("GITHUB_WORKFLOW_REF") == reference
             && var("GITHUB_WORKFLOW_SHA") == source
-            && var("GITHUB_ACTOR_ID") == ACTOR_ID.to_string(),
+            && var("GITHUB_ACTOR_ID") == owner_id.to_string(),
     )?;
-    // The login is the run's triggering actor; the account it names must be the pinned id.
+    // The login is the run's triggering actor; the account it names must be the configured release owner id.
     let login = Login::parse(var("GITHUB_TRIGGERING_ACTOR"))?;
     let owner = client.api(&login.path())?;
-    require(owner.at("id").is_u(ACTOR_ID) && owner.at("login").is_s(login.as_str()))?;
+    require(owner.at("id").is_u(owner_id) && owner.at("login").is_s(login.as_str()))?;
     let run_id = decimal(inputs, "GITHUB_RUN_ID")?;
     let attempt = decimal(inputs, "GITHUB_RUN_ATTEMPT")?;
     let run = client.get(&format!("/actions/runs/{run_id}"))?;
@@ -199,7 +205,7 @@ pub fn admit_tag(client: &dyn Client, inputs: &Inputs, source: &str, version: &s
             && head.at("id").is_u(REPOSITORY_ID),
     )?;
     let now = checked_time(run.at("created_at").text())?;
-    verify_tag_rules(client)?;
+    verify_tag_rules(client, owner_id)?;
     let tag_sha = tag_reference(client, source)?;
     let value = client.get(&format!("/git/tags/{tag_sha}"))?;
     require(

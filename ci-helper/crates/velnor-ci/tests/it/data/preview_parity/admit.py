@@ -95,6 +95,10 @@ for case in json.load(open(cases_path))["cases"]:
     owner = case["owner_login"]
     script = text.replace('OWNER_LOGIN = "' + pinned + '"', "OWNER_LOGIN = " + json.dumps(owner))
     script = script.replace('path == "/users/' + pinned + '"', 'path == "/users/' + owner + '"')
+    # It pins the owner's account id as `OWNER_ID = <number>` in the tag source; the case's
+    # configured RELEASE_OWNER_ID is the id the deployment is pinned to.
+    legacy_id = re.search(r"^OWNER_ID = (\d+)$", script, flags=re.M).group(1)
+    script = script.replace("OWNER_ID = " + legacy_id, "OWNER_ID = " + case["env"]["RELEASE_OWNER_ID"])
     namespace = {"__name__": "legacy_admit"}
     exec(compile(script, "admit", "exec"), namespace)
     ok = False

@@ -9,18 +9,18 @@ use serde_json::json;
 use velnor_ci::preview::login::Login;
 use velnor_ci::preview::net::api_allowed;
 
-use crate::admit_world::{AdmitWorld, USER};
+use crate::admit_world::{AdmitWorld, OWNER_ID, USER};
 use crate::preview_admit::helper;
 use crate::preview_world::R;
 
-/// The world of an owner whose login is `login`, on the same pinned account id.
+/// The world of an owner whose login is `login`, on the same configured account id.
 pub(crate) fn owned_by(login: &str) -> AdmitWorld {
     let mut world = AdmitWorld::new();
     world.api.remove(USER);
     login.clone_into(&mut world.owner);
     world.api.insert(
         format!("/users/{login}"),
-        json!({"id": 139_017, "login": login}),
+        json!({"id": OWNER_ID, "login": login}),
     );
     world
         .vars
@@ -76,7 +76,7 @@ fn the_account_must_be_the_pinned_id_under_the_actors_own_login() {
     let mut renamed = owned_by("octo-owner");
     renamed.set(
         "/users/octo-owner",
-        json!({"id": 139_017, "login": "someone"}),
+        json!({"id": OWNER_ID, "login": "someone"}),
     );
     assert!(helper(&renamed).0.is_err());
 }
