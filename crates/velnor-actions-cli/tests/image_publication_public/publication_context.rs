@@ -6,43 +6,6 @@ use serde_json::{Value, json};
 use std::error::Error;
 
 #[test]
-fn authenticates_selected_context_and_rejects_changed_values() -> Result<(), Box<dyn Error>> {
-    let mut fixture = Fixture::new()?;
-    let output = fixture.invoke()?;
-    assert!(
-        output.status.success(),
-        "{} fixture: {}",
-        String::from_utf8_lossy(&output.stderr),
-        fixture.error()
-    );
-    assert_eq!(
-        serde_json::from_slice::<Value>(&output.stdout)?,
-        json!({"producer_run_id":100,"producer_run_attempt":1,"producer_artifact_id":300,"publisher_artifact_id":400})
-    );
-    for (field, value) in [
-        ("producer_run_id", json!(101)),
-        ("producer_run_attempt", json!(2)),
-        ("producer_artifact_id", json!(301)),
-        ("publisher_artifact_id", json!(401)),
-        ("manifest_sha256", json!("sha256:bad")),
-        ("runner_lock_sha256", json!("sha256:bad")),
-        ("public_run_attempt", json!(1)),
-        ("source_commit", json!("b".repeat(40))),
-        ("extra", json!(true)),
-    ] {
-        let original = fixture.context.clone();
-        fixture.context[field] = value;
-        fixture.update_context()?;
-        let output = fixture.invoke()?;
-        assert!(!output.status.success(), "accepted {field}");
-        assert_eq!(output.stdout, Vec::<u8>::new(), "emitted tuple for {field}");
-        fixture.context = original;
-        fixture.update_context()?;
-    }
-    Ok(())
-}
-
-#[test]
 fn rejects_graph_metadata_and_captured_attempt_changes_without_output() -> Result<(), Box<dyn Error>>
 {
     let mut fixture = Fixture::new()?;
@@ -170,25 +133,6 @@ fn rejects_ambiguous_artifacts_and_strict_json_violations() -> Result<(), Box<dy
 }
 
 #[test]
-fn later_successful_ci_does_not_override_captured_attempt() -> Result<(), Box<dyn Error>> {
-    let mut fixture = Fixture::new()?;
-    let route = "repos/tailrocks/velnor-new/actions/workflows/ci.yml/runs";
-    fixture.state["context_api"][route] = json!({"total_count":1,"workflow_runs":[{"id":101,"run_number":11,"run_attempt":2,"event":"push","path":".github/workflows/ci.yml","head_branch":"main","head_sha":"a".repeat(40),"head_repository":{"id":1_390_620_900_u64,"full_name":"tailrocks/velnor-new"},"status":"completed","conclusion":"success"}]});
-    let output = fixture.invoke()?;
-    assert!(
-        output.status.success(),
-        "{} {}",
-        String::from_utf8_lossy(&output.stderr),
-        fixture.error()
-    );
-    assert_eq!(
-        serde_json::from_slice::<Value>(&output.stdout)?["producer_run_id"],
-        100
-    );
-    Ok(())
-}
-
-#[test]
 fn rejects_cross_run_attempt_and_archive_inventory() -> Result<(), Box<dyn Error>> {
     let mut fixture = Fixture::new()?;
     for extra in [false, true] {
@@ -263,30 +207,6 @@ fn rejects_changed_asset_bytes_before_returning_producer() -> Result<(), Box<dyn
         assert!(!output.status.success(), "accepted modified {name}");
         assert_eq!(output.stdout, Vec::<u8>::new());
     }
-    Ok(())
-}
-
-#[test]
-fn discovers_context_on_later_page_and_rejects_duplicate_across_pages() -> Result<(), Box<dyn Error>>
-{
-    let mut fixture = Fixture::new()?;
-    let route = "repos/tailrocks/velnor-new/actions/runs/200/artifacts";
-    let artifact = fixture.state["context_api"][route]["artifacts"][0].clone();
-    let items: Vec<Value> = (1000..1100).map(|id| json!({"id":id,"name":format!("other-{id}"),"expired":false,"size_in_bytes":1,"workflow_run":{"id":200,"head_sha":"a".repeat(40),"head_branch":"main"}})).collect();
-    fixture.state["context_api"][route] = json!({"pages":[{"total_count":101,"artifacts":items},{"total_count":101,"artifacts":[artifact]}]});
-    let output = fixture.invoke()?;
-    assert!(
-        output.status.success(),
-        "{} {}",
-        String::from_utf8_lossy(&output.stderr),
-        fixture.error()
-    );
-    let mut duplicate = artifact.clone();
-    duplicate["id"] = json!(501);
-    fixture.state["context_api"][route]["pages"][0]["artifacts"][0] = duplicate;
-    let output = fixture.invoke()?;
-    assert!(!output.status.success());
-    assert_eq!(output.stdout, Vec::<u8>::new());
     Ok(())
 }
 

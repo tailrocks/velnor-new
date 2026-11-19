@@ -280,7 +280,12 @@ fn view_from(
 ) -> Result<RepoView, Error> {
     let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
         .into_iter()
-        .filter(|path| !(symlinks.contains(path) && path.as_str().ends_with(".rs")))
+        .filter(|path| {
+            !symlinks.contains(path)
+                || !std::path::Path::new(path.as_str())
+                    .extension()
+                    .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+        })
         .collect();
     Ok(RepoView {
         repository: identity::repository_name(root),

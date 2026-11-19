@@ -12,6 +12,7 @@ mod archive;
 mod chain;
 mod delta;
 mod request;
+mod shape;
 mod strict;
 mod types;
 mod validate;

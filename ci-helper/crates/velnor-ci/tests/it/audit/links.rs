@@ -143,7 +143,7 @@ fn an_explicit_generated_directory_is_audited_with_its_own_inventory() {
         OUTPUT,
         "cargo:rerun-if-changed=../target/generated\ncargo:rerun-if-changed=../target/../target/generated\n",
     );
-    let built = std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let built = super::velnor_ci()
         .current_dir(repo.root())
         .args([
             "inputs",
@@ -248,7 +248,7 @@ fn a_live_link_with_parent_components_cannot_disguise_source_as_target() {
     unit(&repo, output, "cargo:rerun-if-changed=../../shared\n");
     build(&repo, output, Some(&target));
     let run = || {
-        std::process::Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        super::velnor_ci()
             .current_dir(repo.root())
             .env("CARGO_TARGET_DIR", &target)
             .args(["inputs", "audit", "--write"])

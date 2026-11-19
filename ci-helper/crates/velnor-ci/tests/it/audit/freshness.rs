@@ -2,7 +2,6 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fs::{self, File, FileTimes};
-use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::{audit, own_units, unit, workspace_below_the_root};
@@ -97,7 +96,7 @@ fn a_target_directory_containing_tracked_inputs_cannot_hide_changed_sources() {
         "shared/build.txt",
         UNIX_EPOCH + Duration::from_secs(4_000_000_000),
     );
-    let refused = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let refused = super::velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root())
         .args(["inputs", "audit", "--write"])
@@ -120,7 +119,7 @@ fn newer_configured_target_artifacts_do_not_hide_a_repository_read() {
         repo.set_mtime(artifact, UNIX_EPOCH + Duration::from_secs(4_000_000_000));
     }
     super::inventory::build(&repo, &output, Some(&repo.root().join("custom-target")));
-    let written = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let written = super::velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root().join("custom-target"))
         .args(["inputs", "audit", "--write"])
