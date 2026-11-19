@@ -164,7 +164,7 @@ fn a_ubuntu_label_without_a_version_is_not_github_hosted_and_gets_the_fork_fence
 fn follow_up(step: &str) -> String {
     workflow(
         "runner = \"velnor-linux\"",
-        "[workflow.on.workflow_run]\nworkflows = [\"CI\"]\nbranches = [\"main\"]",
+        "[workflow.on.workflow_run]\nworkflows = [\"Rust CI\"]\nbranches = [\"main\"]",
         &format!(
             "\n[[workflow.job]]\nid = \"check\"\nif = \"github.event.workflow_run.conclusion == 'success'\"\n\n[[workflow.job.step]]\nname = \"Check\"\nrun = \"echo ok\"\n{step}\n"
         ),

@@ -382,7 +382,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | C06 | Reproducibility audit | One commit cold on 2 nodes; digests per unit | C05 | 4 | mid | Equal, or the unit is listed and its dependants stay cold | — |
 | C07 | Compile-reuse shadow | Cold second witness; warm-against-cold digest comparisons per root | C05, V03 | 6 | strong | 3,000 clean per root, then the second witness moves to another generation | — |
 | C08 | mbx-cache head-to-head | Lab B3 crossover under load; kill rule; adds a signed chunk-manifest transport with chunks ≥ 4 MiB (L05) | C05 | 8 | mid | Measured; kept or deleted | mbx-cache if it loses |
-| C09 | Retire GitHub-cache caching | — | C05, cohort 4 | 3 | mid | 0 restores needed | `state-seal.yml`, `cache-prune.yml`, the seal code, `mbx cache import/export` steps |
+| C09 | Retire GitHub-cache caching | — | C05, cohort 4 | 3 | mid | 0 restores needed | the State seal workflow, `cache-prune.yml`, the seal code, `mbx cache import/export` steps |
 | C10 | Checkout verification | Sealed bases; full staged-tree hash; sparse, submodule and symlink rules | C03 | 6 | strong | Stale file, mode-only change, deletion and concurrent refresh all caught | — |
 | C11 | Upstream mirrors | Toolchains and mise tools by digest; a registry mirror per site | D8, ST01 | 8 | mid | 0 internet fetches on a hit | Per-job tool installs |
 

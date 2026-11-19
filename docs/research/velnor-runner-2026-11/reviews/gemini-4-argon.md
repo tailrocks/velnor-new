@@ -48,7 +48,7 @@ This is the model's own cross-critique of anonymised proposals, unedited except 
 ### 3. Missed bottlenecks or risks
 
 - **Merge-queue and agent-workflow delays outside single-run PR CI:** Proposal A never measures end-to-end push-to-merge time. It misses `max_entries_to_build = 2` in ruleset `24396608` (`evidence.md` §C.1 line 660), which capped throughput on Nov 18 to <2 merges/hour, misses that 0% of PRs use auto-merge, and misses agents pushing manual `main` catch-up merges into PR branches.
-- **Non-CI workflows saturating the 20-job GitHub Free hosted pool (`§1.2`, `§5.1`):** Moving the 8 `ci.yml` gate jobs to the cluster leaves `source-qualification.yml` (267 runs × 5 hosted jobs on 11-18, `evidence.md` T11 line 399, §C.1 line 628) and `job-image-candidate.yml` (306 runs on 11-18) saturating the org's 20 hosted slots and starving `state-seal.yml` and release workflows.
+- **Non-CI workflows saturating the 20-job GitHub Free hosted pool (`§1.2`, `§5.1`):** Moving the 8 `ci.yml` gate jobs to the cluster leaves `source-qualification.yml` (267 runs × 5 hosted jobs on 11-18, `evidence.md` T11 line 399, §C.1 line 628) and `job-image-candidate.yml` (306 runs on 11-18) saturating the org's 20 hosted slots and starving the State seal workflow and release workflows.
 - **Static 8-CPU pinning (`cpuManagerPolicy: static`, `request == limit == 8`, `§6.2`, `§8a` rank 1):** Pinning every build shard to 8 exclusive logical CPUs prevents heavy single-job compiles (`velnor-runner-host`) from bursting onto idle cores when a 96-thread node is only lightly loaded, slowing quiet-period builds.
 
 ### 4. Ideas worth taking

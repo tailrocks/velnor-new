@@ -3,6 +3,50 @@
 
 use crate::expression::is_identifier;
 
+pub const HELPER_COMMANDS: [&str; 37] = [
+    "report",
+    "bench",
+    "inputs",
+    "release-gate",
+    "gate",
+    "fetch-reports",
+    "check-tag",
+    "release",
+    "plan",
+    "merge-group-passed",
+    "write-request",
+    "resolve-qualification",
+    "prepare",
+    "crates-mirror",
+    "fetch",
+    "private-token-allowed",
+    "mbx-store",
+    "mbx-seed",
+    "tools-local",
+    "check-metadata",
+    "check-configurations",
+    "lane-guard",
+    "test-groups",
+    "restored",
+    "image",
+    "cache",
+    "run",
+    "sources",
+    "verify-runtime",
+    "verify-mac-proof",
+    "run-authority",
+    "admit-preview",
+    "timings",
+    "validate-artifact-id",
+    "install-gh",
+    "stage-bundle",
+    "qualification",
+];
+
+pub(crate) fn subcommand(run: &str) -> Option<String> {
+    shell_words(run).into_iter().nth(1)
+}
+
 /// Whether the command word of a `run` value is the `velnor-ci` helper.
 ///
 /// The value is split into shell words (quotes honoured), then leading

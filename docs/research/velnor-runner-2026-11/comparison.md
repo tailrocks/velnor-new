@@ -46,7 +46,7 @@ Verdict words are the models' own, as first submitted; "Hypotheses after the rev
 | Muse Wonder | Queue is the hosted gates (79% on 11-18). Zero-queue floor 10–11 min. Setup is about 20% of runner-minutes. | Cluster reads on 11-19 only (`kubectl top`, describe, configz). "I re-ran no gh timing query." | All timings: T1–T11, §B, §C. |
 | Muse Wonder Full | Hosted gate queue 5.8 min on a good day, 57.0 on a bad one. Fan-out 9.3–10.7 min. Three events per merge. | One queued run at 17:05Z, 20 of 20 recent runs cancelled, `kubectl top` and configz, code reads. | All timings: T1–T11, §B. |
 | Gemini 4 Carbon | Seven buckets: queue 79.4% (contended) or 36.3% (quiet) of wall; compile and tests each 33% of runner-minutes. | One millisecond-level job log, 4 pod start timings, `kubectl top` (0.06% CPU), lockfile scan, code trace of the cache misses. | T2, T4–T7, T9; also cites project issues #585 and #652. |
-| Gemini 4 Argon | Each hosted gate queue is 21–33% of the 11-18 wall. Per job: JS wrappers 12 s, toolchain 13 s, crate downloads 4–8 s. | One state-seal job log, node stats summary, code trace of three cache bugs. | T2–T11, §B. |
+| Gemini 4 Argon | Each hosted gate queue is 21–33% of the 11-18 wall. Per job: JS wrappers 12 s, toolchain 13 s, crate downloads 4–8 s. | One state seal job log, node stats summary, code trace of three cache bugs. | T2–T11, §B. |
 
 Agree:
 - All eight: the waiting is on GitHub-hosted gate jobs. Cluster jobs queue 0.2 min median (evidence §A T4, T5).
