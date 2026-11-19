@@ -81,9 +81,11 @@ pub(crate) fn locks_hash(manifests: &[&str]) -> Result<String, Box<dyn std::erro
                 directory: None,
                 target_dir: None,
                 when: When::Success,
+                skip_on_draft: false,
                 pr: PrRun::Always,
                 gate: None,
                 reads: None,
+                skip_after_merge_group: None,
             }],
         }],
     };

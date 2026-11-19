@@ -13,6 +13,8 @@ mod classify;
 mod compat;
 mod config;
 mod config_cache;
+
+mod config_ci;
 mod config_events;
 mod config_exclude;
 mod config_fork;
@@ -32,6 +34,7 @@ mod lock;
 mod lock_affected;
 mod lock_key;
 mod manifest_diff;
+mod merge_group_skip;
 mod metadata;
 mod metadata_file;
 mod mise;

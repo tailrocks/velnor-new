@@ -23,6 +23,21 @@ fork_runner = "ubuntu-24.04"
 
 `[cache] mbx_remote = "github-actions"` in `.velnor/rust-ci.toml` adds `jdx/mr-boxington-action` (pinned by full SHA) to every generated job that runs Cargo, right after the tools install and before any repository code runs. It uses the action's `github` backend in `objects` mode, keyed per job (`cache-key-suffix: github.job`). The action saves only after a successful push to the default branch; the generator also sets every `save-on-*` input to `"false"`, so a pull request or manual run only restores. The jobs get no write permission, no `id-token` and no secret, and the workflow sets no `MBX_REMOTE_*` variable. The action's post step still runs after the job's Cargo steps. It uses the runner's cache credential, not a repository token, and publishes nothing outside a push to the default branch. The table is off by default, and then the output is unchanged. Allowed values: `"github-actions"`. The key needs a helper release that knows it, because older helpers reject unknown keys.
 
+## Skip the push run after a merge queue run
+
+`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.82 or later.
+
+```toml
+[ci]
+skip_push_after_merge_group = true
+```
+
+The merge queue fast-forwards the commit it tested, so the push to the default branch has the SHA of the `merge_group` run. On such a push, the plan job (or the single job, right after its plan) runs `velnor-ci merge-group-passed`. That step asks the GitHub API for runs of this same workflow file with `event=merge_group`, `head_sha=$GITHUB_SHA` and a completed, successful conclusion, and writes `skip=true` when one exists. It reads `github.token` and the plan job gains `actions: read`, nothing more.
+
+When the flag is true, Format, Lint, Documentation, the single-crate checks, test setup, tests and doctests skip. Builds that warm the caches and every cache save keep running, so the caches stay warm. The `Required` gate then passes without test counts for this case only: the event is `push` and the plan job output `skip_push` is exactly `true`. Any other value, event or a failed job fails the gate as before.
+
+The step fails safe. A non-push event, a missing variable, an API error, an unreadable response, a missing run or a run that failed or is still going all write `skip=false`, and everything runs. The step is `continue-on-error`, so a crash also runs everything.
+
 ## Optional crates mirror
 
 The new generator accepts an explicit mirror in `.velnor/rust-ci.toml`. It is off when the table is absent. It applies only when the configured job runner exactly matches the mirror's runner label. Every emitted mirror step requires the actual runner context to report `runner.environment == 'self-hosted'` and excludes fork pull requests. Hosted runners do not use the mirror, regardless of their label; a missing or unrecognized runner environment also skips setup.

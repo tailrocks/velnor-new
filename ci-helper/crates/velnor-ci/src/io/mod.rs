@@ -23,6 +23,7 @@ mod git_witness;
 mod http;
 mod inputs;
 mod manifests;
+mod merge_group;
 mod plan;
 pub mod preview;
 pub mod pump;
@@ -188,6 +189,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::WriteRequest(args) => write_request::run(&args),
         Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),

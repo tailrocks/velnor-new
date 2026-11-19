@@ -268,6 +268,7 @@ pub struct RustCiConfig {
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
     pub mbx_remote: MbxRemote,
+    pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
 }
 
@@ -297,6 +298,22 @@ pub enum FullRun {
 pub enum MbxRemote {
     Off,
     GithubActions,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushAfterMergeGroup {
+    Run,
+    SkipWhenQueueRunPassed,
+}
+
+impl From<bool> for PushAfterMergeGroup {
+    fn from(skip: bool) -> Self {
+        if skip {
+            Self::SkipWhenQueueRunPassed
+        } else {
+            Self::Run
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -368,6 +385,7 @@ impl Default for RustCiConfig {
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
             mbx_remote: MbxRemote::Off,
+            push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
         }
     }
