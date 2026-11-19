@@ -43,7 +43,7 @@ fn build_output_counts_toward_the_root_target_data_budget() {
     assert_eq!(before, b"shared/greeting.txt\tapp\n");
 
     let mut index = 20;
-    write_dep_info_files(&repo, "rust/target/debug", "app/src/lib.rs", 7, &mut index);
+    write_dep_info_files(&repo, "rust/target/debug", "app/src/lib.rs", 63, &mut index);
     let output_path = "rust/target/debug/build/app-f000000000000004/output";
     let mut output = "cargo:warning=".to_owned();
     output.push_str(&"x".repeat(2 << 20));
@@ -53,7 +53,7 @@ fn build_output_counts_toward_the_root_target_data_budget() {
     assert_eq!(over_limit.status.code(), Some(1), "{over_limit:?}");
     let error = String::from_utf8_lossy(&over_limit.stderr);
     assert!(
-        error.contains("target data of one Cargo root exceeds 8388608 bytes"),
+        error.contains("target data of one Cargo root exceeds 67108864 bytes"),
         "{error}"
     );
     assert!(error.contains(output_path), "{error}");
