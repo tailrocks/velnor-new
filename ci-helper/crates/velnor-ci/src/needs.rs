@@ -19,7 +19,10 @@ pub(crate) enum Need<'f> {
         target: String,
         source: &'f RepoPath,
     },
-    Library(&'f PackageName),
+    Library {
+        name: &'f PackageName,
+        required: bool,
+    },
     Run(&'f PackageName),
 }
 
@@ -37,6 +40,7 @@ pub(crate) fn groups<'f>(
     platforms: &Platforms,
 ) -> Vec<Group<'f>> {
     let hosted = hosted(root, reached, platforms);
+    let required = required(root, reached, platforms);
     let mut groups: Vec<Group<'f>> = root
         .members
         .iter()
@@ -62,10 +66,50 @@ pub(crate) fn groups<'f>(
         let manifests: Vec<String> = manifests.iter().map(ToString::to_string).collect();
         Group {
             label: format!("path dependency {name} ({}", manifests.join(" or ")),
-            needs: vec![Need::Library(name), Need::Run(name)],
+            needs: vec![
+                Need::Library {
+                    name,
+                    required: manifests.iter().any(|m| required.contains(m.as_str())),
+                },
+                Need::Run(name),
+            ],
         }
     }));
     groups
+}
+
+fn required<'f>(
+    root: &'f RustRoot,
+    reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
+    platforms: &Platforms,
+) -> BTreeSet<&'f str> {
+    let firm = |dependency: &MemberDependency| {
+        !dependency.optional
+            && applies_to_target_build(dependency, platforms)
+            && applies_to_host_build(dependency, platforms)
+    };
+    let mut walk: Vec<&RepoPath> = root
+        .members
+        .iter()
+        .flat_map(|member| &member.dependencies)
+        .filter(|dependency| firm(dependency))
+        .map(|dependency| &dependency.manifest)
+        .collect();
+    let mut required = BTreeSet::new();
+    while let Some(manifest) = walk.pop() {
+        if let Some(package) = reached.get(manifest)
+            && required.insert(manifest.as_str())
+        {
+            walk.extend(
+                package
+                    .dependencies
+                    .iter()
+                    .filter(|dependency| dependency.kind != DependencyKind::Dev && firm(dependency))
+                    .map(|dependency| &dependency.manifest),
+            );
+        }
+    }
+    required
 }
 
 fn hosted<'f>(

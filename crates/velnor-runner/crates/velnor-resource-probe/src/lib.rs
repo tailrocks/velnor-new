@@ -9,7 +9,7 @@
     clippy::missing_errors_doc,
     reason = "documentation comments are intentionally absent from this codebase"
 )]
-mod capacity;
+pub mod capacity;
 mod cgroup;
 #[cfg(target_os = "linux")]
 pub mod cleanup_observation;

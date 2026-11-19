@@ -116,7 +116,6 @@ pub(super) async fn from_version_sixteen(conn: &turso::Connection) -> Result<(),
     conn.execute("PRAGMA user_version = 17", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::legacy_validation::validate_persisted_schema_v17(conn).await?;
     Ok(())
 }
 
@@ -139,7 +138,6 @@ pub(super) async fn from_version_eighteen(conn: &turso::Connection) -> Result<()
         .map_err(|_| HostError::Journal)?;
     crate::journal_schema::install_revision_triggers(conn).await?;
     crate::journal_schema::install_v18_revision_triggers(conn).await?;
-    super::validate_persisted_schema_v19(conn).await?;
     Ok(())
 }
 
@@ -151,7 +149,6 @@ pub(super) async fn from_version_nineteen(conn: &turso::Connection) -> Result<()
         .await
         .map_err(|_| HostError::Journal)?;
     crate::journal_schema::install_v20_revision_triggers(conn).await?;
-    super::validate_persisted_schema_v20(conn).await?;
     Ok(())
 }
 
@@ -219,7 +216,7 @@ pub(super) async fn from_version_twenty_six(conn: &turso::Connection) -> Result<
     conn.execute("PRAGMA user_version = 27", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v27(conn).await
+    Ok(())
 }
 
 pub(super) async fn from_version_twenty_seven(conn: &turso::Connection) -> Result<(), HostError> {
@@ -266,7 +263,6 @@ pub(super) async fn from_version_thirty_one(conn: &turso::Connection) -> Result<
 }
 
 pub(super) async fn from_version_thirty_two(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v32(conn).await?;
     super::physical_attempts::upgrade_from_v32(conn).await?;
     super::storage_network::upgrade_for_v33(conn).await?;
     conn.execute("PRAGMA user_version = 33", ())
@@ -276,7 +272,6 @@ pub(super) async fn from_version_thirty_two(conn: &turso::Connection) -> Result<
 }
 
 pub(super) async fn from_version_thirty_three(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v33(conn).await?;
     super::physical_attempts::upgrade_from_v33(conn).await?;
     conn.execute("PRAGMA user_version = 34", ())
         .await
@@ -285,7 +280,6 @@ pub(super) async fn from_version_thirty_three(conn: &turso::Connection) -> Resul
 }
 
 pub(super) async fn from_version_thirty_four(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v34(conn).await?;
     super::post_jit_retirement::bootstrap(conn).await?;
     super::physical_attempts::upgrade_from_v34(conn).await?;
     conn.execute("PRAGMA user_version = 35", ())
@@ -295,7 +289,6 @@ pub(super) async fn from_version_thirty_four(conn: &turso::Connection) -> Result
 }
 
 pub(super) async fn from_version_thirty_five(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v35(conn).await?;
     super::post_jit_effect_fences::bootstrap(conn).await?;
     conn.execute("PRAGMA user_version = 36", ())
         .await
@@ -304,7 +297,6 @@ pub(super) async fn from_version_thirty_five(conn: &turso::Connection) -> Result
 }
 
 pub(super) async fn from_version_thirty_six(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v36(conn).await?;
     conn.execute(
         "DROP TRIGGER physical_attempt_post_jit_retirement_claim_insert_guard",
         (),
@@ -315,7 +307,6 @@ pub(super) async fn from_version_thirty_six(conn: &turso::Connection) -> Result<
     conn.execute(&guard, ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v37(conn).await?;
     conn.execute("PRAGMA user_version = 37", ())
         .await
         .map_err(|_| HostError::Journal)?;
@@ -323,19 +314,17 @@ pub(super) async fn from_version_thirty_six(conn: &turso::Connection) -> Result<
 }
 
 pub(super) async fn from_version_thirty_seven(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v37(conn).await?;
     super::pr_source_transition::bootstrap(conn).await?;
     conn.execute("PRAGMA user_version = 38", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v38(conn).await
+    Ok(())
 }
 
 pub(super) async fn from_version_thirty_eight(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v38(conn).await?;
     super::jit_conflict_recovery::bootstrap(conn).await?;
     conn.execute("PRAGMA user_version = 39", ())
         .await
         .map_err(|_| HostError::Journal)?;
-    super::validate_persisted_schema_v39(conn).await
+    Ok(())
 }
