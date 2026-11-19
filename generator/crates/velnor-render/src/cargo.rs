@@ -87,6 +87,7 @@ fn cargo_command(
             features,
             filter,
             ci_profile,
+            ..
         } => nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::NextestRunArchive {
             file,

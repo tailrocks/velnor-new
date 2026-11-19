@@ -84,9 +84,19 @@ impl RootJobs<'_> {
     ) -> impl Iterator<Item = Step> {
         let lane = self.lane;
         let directory = self.root.manifest.parent();
-        commands
-            .into_iter()
-            .map(move |command| lane.cargo(command, directory.clone()))
+        commands.into_iter().flat_map(move |command| {
+            let skipped = match &command {
+                CargoCommand::NextestFeatures {
+                    features, packages, ..
+                } if !packages.is_empty() => {
+                    Some(lane.skipped_lane(features, packages, directory.clone()))
+                }
+                _ => None,
+            };
+            [Some(lane.cargo(command, directory.clone())), skipped]
+                .into_iter()
+                .flatten()
+        })
     }
 
     fn saves(&self, job: &JobId, archive: Option<RepoPath>, sources: bool) -> Vec<Step> {

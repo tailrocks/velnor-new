@@ -4,7 +4,9 @@
 use std::collections::BTreeSet;
 
 use serde::Deserialize;
-use velnor_model::{CargoCommand, FilterRef, RepoPath, RustCiConfig, RustRoot, TestLane};
+use velnor_model::{
+    CargoCommand, FilterRef, PackageName, RepoPath, RustCiConfig, RustRoot, TestLane,
+};
 
 use crate::config::CONFIG_PATH;
 use crate::error::{DetectError, Reason};
@@ -23,6 +25,8 @@ pub(crate) struct RawTestLane {
     lint: bool,
     #[serde(default)]
     doc: bool,
+    #[serde(default)]
+    packages: Vec<String>,
 }
 
 pub(crate) fn parse(raw: Vec<RawTestLane>) -> Result<Vec<TestLane>, Reason> {
@@ -57,13 +61,35 @@ fn lane(raw: RawTestLane) -> Result<TestLane, Reason> {
             value: filter.to_owned(),
         });
     }
+    let packages = lane_packages(&raw)?;
     Ok(TestLane {
         root,
         features: raw.features,
         filter: raw.filter,
         lint: raw.lint,
         doc: raw.doc,
+        packages,
     })
+}
+
+/// The packages a filtered lane takes its tests from. The plan narrows a pull
+/// request to the changed packages, so without them the generator cannot tell
+/// a lane with nothing to run from a lane whose filter is broken.
+fn lane_packages(raw: &RawTestLane) -> Result<Vec<PackageName>, Reason> {
+    let invalid = || Reason::InvalidValue {
+        key: "test_lane.packages",
+        value: raw.packages.join(","),
+    };
+    let mut seen = BTreeSet::new();
+    if (raw.filter.is_some() && raw.packages.is_empty())
+        || !raw.packages.iter().all(|name| seen.insert(name))
+    {
+        return Err(invalid());
+    }
+    raw.packages
+        .iter()
+        .map(|name| PackageName::new(name.clone()).map_err(|_| invalid()))
+        .collect()
 }
 
 fn feature_name(name: &str) -> bool {
@@ -114,6 +140,7 @@ pub(crate) fn commands(
             let features = || lane.features.clone();
             let test = CargoCommand::NextestFeatures {
                 features: features(),
+                packages: lane.packages.clone(),
                 filter: match &lane.filter {
                     Some(expr) => FilterRef::Expr {
                         expr: expr.clone(),
@@ -153,7 +180,16 @@ pub(crate) fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
             Some(root) if !root.members.iter().any(|m| uses_nextest(config, m)) => {
                 Reason::TestLaneWithoutNextest(name)
             }
-            Some(_) => continue,
+            Some(root) => {
+                let unknown = lane
+                    .packages
+                    .iter()
+                    .find(|package| !root.members.iter().any(|member| member.name == **package));
+                match unknown {
+                    Some(package) => Reason::UnknownTestLanePackage(package.to_string()),
+                    None => continue,
+                }
+            }
         };
         return Err(DetectError::invalid(&CONFIG_PATH, reason));
     }

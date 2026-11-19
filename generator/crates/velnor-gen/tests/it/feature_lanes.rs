@@ -6,7 +6,7 @@ use velnor_model::RepoPath;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
+const LANE: &str = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\npackages = ['package-0']\nfilter = 'test(~local::) or binary(local_host_public)'\n";
 const LANE_STEP: &str = "Test (features: local-mode)";
 
 fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
