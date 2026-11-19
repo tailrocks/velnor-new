@@ -13,8 +13,10 @@ mod header;
 mod helper_integrity;
 mod helper_steps;
 mod key_length;
+mod pinned_actions;
 mod release;
 mod release_binaries;
+mod release_family;
 mod release_finalize;
 mod release_outputs;
 mod release_steps;
@@ -29,6 +31,10 @@ use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH
 
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 use crate::events::{concurrency, triggers};
+pub use crate::pinned_actions::{
+    ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
+    PINNED_ACTIONS, PinnedAction,
+};
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
 pub use crate::rules::{

@@ -20,6 +20,7 @@ pub(crate) struct VelnorConfig {
     pub(crate) after: Vec<String>,
     pub(crate) pr_only_checks: Vec<String>,
     pub(crate) binaries: Vec<Binary>,
+    pub(crate) family_tag: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -39,6 +40,7 @@ struct Raw {
     pr_only_checks: Vec<String>,
     #[serde(default)]
     binaries: Vec<RawBinary>,
+    family_tag: Option<String>,
 }
 
 fn refuse_expressions(key: &str, values: &[&str]) -> Result<(), ReleaseError> {
@@ -62,6 +64,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
             after: None,
             pr_only_checks: Vec::new(),
             binaries: Vec::new(),
+            family_tag: None,
         },
     };
     let after = raw.after.unwrap_or_else(|| vec!["Rust CI".to_owned()]);
@@ -83,6 +86,13 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
     }) {
         return Err(ReleaseError::UnsafeRoot { root: root.clone() });
     }
+    refuse_expressions(
+        "family_tag",
+        &raw.family_tag
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+    )?;
     let binaries = raw
         .binaries
         .into_iter()
@@ -103,6 +113,7 @@ pub(crate) fn parse(text: Option<&str>) -> Result<VelnorConfig, ReleaseError> {
         after,
         pr_only_checks: raw.pr_only_checks,
         binaries,
+        family_tag: raw.family_tag,
     })
 }
 

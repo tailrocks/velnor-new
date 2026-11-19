@@ -18,8 +18,8 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
-  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+  group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) && github.event.pull_request.number || github.run_id }}'
+  cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && !(github.event.action == ''edited'' && github.event.changes.base.ref.from == null) }}'
 env:
   MISE_AUTO_INSTALL: 'false'
   RUSTUP_AUTO_INSTALL: '0'
@@ -83,12 +83,12 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - name: Add Rust components
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -101,7 +101,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         if: '${{ steps.plan.outcome == ''success'' && steps.plan.outputs.rust_root_mode != ''none'' }}'
@@ -277,12 +277,12 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         if: '${{ steps.plan.outcome == ''success'' && (steps.plan.outputs.rust_deny == ''run'' || steps.plan.outputs.rust_machete == ''run'') }}'
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.9'
+          version: '2026.11.10'
           cache: false
       - id: save_tools
         name: Save the tools cache
@@ -292,7 +292,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'
       - name: Dependency policy
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_deny == ''run'' }}'
         run: '. "$VELNOR_EXEC" run -- cargo-deny check'

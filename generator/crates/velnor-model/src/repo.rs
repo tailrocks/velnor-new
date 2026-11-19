@@ -56,6 +56,7 @@ pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
     pub rename: Option<String>,
@@ -214,6 +215,7 @@ pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: RepoPath,
 }
 

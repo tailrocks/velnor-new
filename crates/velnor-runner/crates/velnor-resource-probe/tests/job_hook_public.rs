@@ -7,6 +7,9 @@ mod job_hook_decisions;
 #[path = "job_hook_public/mountinfo_busy_host.rs"]
 mod mountinfo_busy_host;
 
+#[path = "job_hook_public/docker_root_free_bytes.rs"]
+mod docker_root_free_bytes;
+
 #[path = "job_hook_public/cleanup_record.rs"]
 mod cleanup_record;
 
