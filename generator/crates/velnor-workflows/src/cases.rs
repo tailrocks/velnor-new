@@ -119,7 +119,7 @@ fn pair(
         environment: None,
         timeout_minutes: case.timeout_minutes,
         concurrency: None,
-        permissions: BTreeMap::new(),
+        permissions: case.permissions.clone(),
         outputs: BTreeMap::new(),
         matrix: None,
         uses: None,

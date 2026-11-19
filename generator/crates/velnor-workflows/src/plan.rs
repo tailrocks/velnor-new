@@ -207,7 +207,44 @@ pub struct Step {
 pub enum Body {
     Run(String),
     Uses(Action),
+    Local(LocalAction),
     Helper(String),
+}
+
+/// A composite, Docker or JavaScript action kept in this repository. Only
+/// the qualification fixtures may be used as local actions.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LocalAction {
+    PostFail,
+    Docker,
+    Composite,
+}
+
+impl LocalAction {
+    pub const PATHS: [&'static str; 3] = [
+        "./qualification/actions/post-fail",
+        "./qualification/actions/docker",
+        "./qualification/actions/composite",
+    ];
+
+    #[must_use]
+    pub fn parse(path: &str) -> Option<Self> {
+        Some(match path {
+            "./qualification/actions/post-fail" => Self::PostFail,
+            "./qualification/actions/docker" => Self::Docker,
+            "./qualification/actions/composite" => Self::Composite,
+            _ => return None,
+        })
+    }
+
+    #[must_use]
+    pub fn path(self) -> &'static str {
+        match self {
+            Self::PostFail => Self::PATHS[0],
+            Self::Docker => Self::PATHS[1],
+            Self::Composite => Self::PATHS[2],
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
