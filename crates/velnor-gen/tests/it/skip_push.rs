@@ -58,15 +58,17 @@ fn knob_off_or_false_leaves_the_workflow_byte_identical() -> TestResult {
 
 #[test]
 fn knob_needs_a_helper_that_knows_the_command() -> TestResult {
-    for older in ["0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85", "0.1.87"] {
+    for older in [
+        "0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85", "0.1.87", "0.1.88", "0.1.101",
+    ] {
         let old = repo(&["Cargo.toml"], Some(KNOB), older)?;
         let error = expected_with_notes(&old)
             .err()
             .ok_or(format!("{older} accepted"))?
             .to_string();
-        assert!(error.contains("pin-helper 0.1.88"), "{older}: {error}");
+        assert!(error.contains("pin-helper 0.1.102"), "{older}: {error}");
     }
-    workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.88")?)?;
+    workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.102")?)?;
     Ok(())
 }
 
@@ -83,7 +85,7 @@ fn unknown_ci_key_is_refused() -> TestResult {
 
 #[test]
 fn single_job_asks_the_helper_after_the_plan_and_skips_only_checks() -> TestResult {
-    let text = workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.88")?)?;
+    let text = workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.102")?)?;
     let all = jobs(&text)?;
     let job = &all["rust"];
     let names: Vec<&str> = job["steps"]
@@ -131,7 +133,7 @@ fn planned_lanes_read_the_plan_job_flag_and_cache_jobs_keep_running() -> TestRes
     let text = workflow(&repo(
         &["Cargo.toml", "lab/Cargo.toml"],
         Some(KNOB),
-        "0.1.88",
+        "0.1.102",
     )?)?;
     let all = jobs(&text)?;
     let plan = &all["rust-plan"];
@@ -184,7 +186,7 @@ fn the_plan_job_holds_actions_read_only_and_nothing_gains_actions_write() -> Tes
     let text = workflow(&repo(
         &["Cargo.toml", "lab/Cargo.toml"],
         Some(KNOB),
-        "0.1.88",
+        "0.1.102",
     )?)?;
     let base = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], None, "0.1.88")?)?;
     let (all, before) = (jobs(&text)?, jobs(&base)?);
@@ -201,6 +203,26 @@ fn the_plan_job_holds_actions_read_only_and_nothing_gains_actions_write() -> Tes
             before[id]["permissions"]["actions"] == "write",
             "{id}"
         );
+    }
+    Ok(())
+}
+
+#[test]
+fn an_archive_consumer_job_is_not_started_after_a_passed_queue_run() -> TestResult {
+    let config: &[u8] =
+        b"[ci]\nskip_push_after_merge_group = true\n\n[[test_groups]]\nname = 'lab'\nroot = '.'\nfilter = 'all()'\n";
+    let all = jobs(&workflow(&repo(&["Cargo.toml"], Some(config), "0.1.102")?)?)?;
+    let consumers: Vec<&str> = all
+        .as_object()
+        .ok_or("jobs")?
+        .keys()
+        .filter(|id| id.starts_with("rust-test-"))
+        .map(String::as_str)
+        .collect();
+    assert!(consumers.contains(&"rust-test-lab"), "{consumers:?}");
+    for id in consumers {
+        let when = all[id]["if"].as_str().unwrap_or_default();
+        assert!(when.contains(PLANNED_SKIP), "{id}: {when}");
     }
     Ok(())
 }

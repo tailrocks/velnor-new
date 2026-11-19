@@ -294,13 +294,19 @@ fn pr_parts(pr: PrRun) -> Vec<String> {
     }
 }
 
-pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun) -> String {
-    let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
+pub(crate) fn admission(
+    when: When,
+    gate: Option<&Gate>,
+    pr: PrRun,
+    skip: Option<&PlanFrom>,
+) -> String {
+    let mut extra: Vec<String> = match gate.map(|gate| &gate.from) {
         Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
         Some(PlanFrom::WorkJob(_)) => vec![NOT_CANCELLED.to_owned()],
         _ => Vec::new(),
     };
-    match condition(when, gate, Setup::Before, pr, &plan_succeeded) {
+    extra.extend(skip.map(|from| merge_group_skipped(from, Setup::Before)));
+    match condition(when, gate, Setup::Before, pr, &extra) {
         Some(predicate) => format!(
             "${{{{ {ACTIVE_EVENT} && ({}) }}}}",
             predicate.trim_start_matches("${{ ").trim_end_matches(" }}")

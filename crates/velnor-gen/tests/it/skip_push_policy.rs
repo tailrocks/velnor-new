@@ -15,7 +15,7 @@ fn repo(roots: &[&str], config: &str) -> Result<RepoView, Box<dyn std::error::Er
     let lock = path(".velnor/rust-ci.lock")?;
     let old = String::from_utf8(repo.files[&lock].clone())?;
     repo.files
-        .insert(lock, old.replace("0.1.81", "0.1.97").into_bytes());
+        .insert(lock, old.replace("0.1.81", "0.1.102").into_bytes());
     for (name, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let name = RepoPath::new(name)?;
         repo.tracked_paths.insert(name.clone());

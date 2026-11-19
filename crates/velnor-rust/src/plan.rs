@@ -365,6 +365,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
+        skip_after_merge_group: None,
         plan_outputs: Vec::new(),
         group_outputs: Vec::new(),
         reports_ignored: facts

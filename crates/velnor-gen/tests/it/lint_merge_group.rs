@@ -26,7 +26,7 @@ fn repo(roots: &[&str], knob: bool) -> Result<RepoView, Box<dyn std::error::Erro
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let old = String::from_utf8(repo.files[&lock].clone())?;
     repo.files
-        .insert(lock, old.replace("0.1.81", "0.1.88").into_bytes());
+        .insert(lock, old.replace("0.1.81", "0.1.102").into_bytes());
     Ok(repo)
 }
 

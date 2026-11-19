@@ -13,6 +13,7 @@ use crate::{
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
 const HOSTED_HELPER: (u64, u64, u64) = (0, 1, 99);
+const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 102);
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -70,7 +71,7 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
-        && !release.version().at_least((0, 1, 88))
+        && !release.version().at_least(MERGE_GROUP_HELPER)
     {
         return Err(GenerateError::MergeGroupHelperTooOld(
             release.version().clone(),
