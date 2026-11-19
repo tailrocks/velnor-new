@@ -44,6 +44,10 @@ pub enum ReleaseCommand {
         about = "Make one release root retryable: read the versions the root's release-plz.toml would tag, look each tag up in the repository, write to --output the JSON of the releases already tagged at --commit in release-plz release -o json shape, and write done=true to $GITHUB_OUTPUT when every tag exists and one is at --commit, so the root needs no release-plz run. A tag on an earlier ancestor of --commit is an earlier release and is ignored. Exit 1 when a tag is on a commit that is not an ancestor of --commit. Reads GITHUB_TOKEN and RUSTUP_TOOLCHAIN"
     )]
     RootTags(RootTagsArgs),
+    #[command(
+        about = "Bind one family tag to the verified commit. Read the version of every named package from the cargo metadata files, exit 1 unless they are all one version, replace {{ version }} in the tag pattern with it, create the tag on the verified commit when it does not exist, and exit 1 unless the tag is on the verified commit itself. A published release of the tag on an earlier ancestor commit is no release (build=false); otherwise create the one draft release the tag needs. Print and write to $GITHUB_OUTPUT tag, commit and build. Reads GITHUB_TOKEN, which needs contents: write"
+    )]
+    FamilyTag(FamilyTagArgs),
 }
 
 #[derive(Debug, Args)]
@@ -70,6 +74,29 @@ pub struct RootTagsArgs {
         help = "File to write an empty release-plz release -o json to, which the release-plz step overwrites when it runs"
     )]
     pub empty_output: PathBuf,
+}
+
+#[derive(Debug, Args)]
+pub struct FamilyTagArgs {
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: String,
+    #[arg(
+        allow_hyphen_values = true,
+        long,
+        value_name = "SHA",
+        help = "Full SHA of the commit the release gate verified"
+    )]
+    pub verified_commit: String,
+    #[arg(allow_hyphen_values = true, long, help = "Tag with one {{ version }}")]
+    pub tag_pattern: String,
+    #[arg(
+        long = "package",
+        required = true,
+        help = "A package of the family; repeat"
+    )]
+    pub packages: Vec<String>,
+    #[arg(required = true, help = "Output files of cargo metadata --no-deps")]
+    pub metadata: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

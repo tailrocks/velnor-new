@@ -3,7 +3,7 @@
 
 use std::collections::BTreeMap;
 
-use super::{PackageCounts, SummaryTap, apply_runnable};
+use super::{Listing, PackageCounts, SummaryTap, apply_runnable};
 
 #[test]
 fn terminal_statuses_reconcile_with_nextest_summary() {
@@ -27,7 +27,14 @@ fn terminal_statuses_reconcile_with_nextest_summary() {
     let listed = BTreeMap::from([("kept".to_owned(), 10)]);
 
     assert_eq!(
-        apply_runnable(counts, Some(listed)).by_package,
+        apply_runnable(
+            counts,
+            Some(Listing {
+                packages: listed,
+                ignored: 0
+            })
+        )
+        .by_package,
         Some(BTreeMap::from([(
             "kept".to_owned(),
             PackageCounts { run: 9, listed: 10 },
@@ -46,7 +53,17 @@ fn unknown_status_poisons_package_counts() {
     let counts = tap.finish().expect("nextest summary");
     let listed = BTreeMap::from([("kept".to_owned(), 1)]);
 
-    assert_eq!(apply_runnable(counts, Some(listed)).by_package, None);
+    assert_eq!(
+        apply_runnable(
+            counts,
+            Some(Listing {
+                packages: listed,
+                ignored: 0
+            })
+        )
+        .by_package,
+        None
+    );
 }
 
 #[test]
@@ -70,7 +87,14 @@ fn real_nextest_output_reconciles_with_its_summary() {
     let listed = BTreeMap::from([("kept".to_owned(), 6)]);
 
     assert_eq!(
-        apply_runnable(counts, Some(listed)).by_package,
+        apply_runnable(
+            counts,
+            Some(Listing {
+                packages: listed,
+                ignored: 0
+            })
+        )
+        .by_package,
         Some(BTreeMap::from([(
             "kept".to_owned(),
             PackageCounts { run: 6, listed: 6 },

@@ -76,7 +76,7 @@ fn not_a_commit(tag: &PlainName, kind: &str) -> CiError {
     CiError::new(format!("tag {tag} names a {kind}, not a commit"))
 }
 
-fn full_sha(what: &str, sha: &str) -> Result<String, CiError> {
+pub(crate) fn full_sha(what: &str, sha: &str) -> Result<String, CiError> {
     if sha.len() == 40
         && sha
             .bytes()

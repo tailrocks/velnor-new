@@ -76,8 +76,13 @@ fn tofu_task_argv(
     strings_of(exec.argv(catalog)).map_err(|problem| OrchestratorError::Contract { problem })
 }
 
-pub(crate) fn deny_argv(roots: &[String]) -> Result<Vec<String>, OrchestratorError> {
-    velnor_actions_workflow_renderer::native_authority::support_commands::vectors::deny_argv(roots)
+pub(crate) fn deny_argv(
+    roots: &[String],
+    with_rust: bool,
+) -> Result<Vec<String>, OrchestratorError> {
+    velnor_actions_workflow_renderer::native_authority::support_commands::vectors::deny_argv(
+        roots, with_rust,
+    )
         .map_err(crate::verify::map_error)
 }
 pub(crate) fn machete_argv() -> Result<Vec<String>, OrchestratorError> {

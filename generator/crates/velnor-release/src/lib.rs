@@ -5,12 +5,15 @@ mod cargo_allowlist;
 mod collisions;
 mod error;
 mod error_cargo;
+mod error_family;
+mod family;
 mod git_ref;
 mod hazards;
 mod lock_version;
 mod members;
 mod mise;
 mod plan;
+mod reality;
 mod registry;
 mod release_plz;
 mod ruleset;
@@ -21,6 +24,8 @@ mod velnor_config;
 mod versions;
 
 pub use error::ReleaseError;
+pub use error_family::FamilyError;
+pub use family::FamilyPlan;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,
 };
