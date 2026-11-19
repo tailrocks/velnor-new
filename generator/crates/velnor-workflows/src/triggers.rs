@@ -33,6 +33,8 @@ const PULL_REQUEST_TYPES: [&str; 21] = [
     "auto_merge_enabled",
     "auto_merge_disabled",
 ];
+const EVERY_PATH: &str = "**";
+const MIN_SCHEDULE_GAP_MINUTES: u32 = 5;
 const WORKFLOW_RUN_TYPES: [&str; 3] = ["completed", "requested", "in_progress"];
 
 /// Reads `[workflow.on]` and the call inputs and outputs. Without an `on`
@@ -66,9 +68,17 @@ pub(crate) fn triggers(
         triggers.workflow_dispatch = Some(self::inputs(file, dispatch.input, true)?);
     }
     for cron in on.schedule {
-        if CronExpr::new(cron.clone()).is_err() || triggers.schedule.contains(&cron) {
+        let parsed = CronExpr::new(cron.clone())
+            .ok()
+            .filter(|_| !triggers.schedule.contains(&cron));
+        let Some(parsed) = parsed else {
             return refuse(format!(
                 "the schedule {cron:?} of {file} is not a unique five-field cron expression"
+            ));
+        };
+        if parsed.shortest_gap_minutes() < MIN_SCHEDULE_GAP_MINUTES {
+            return refuse(format!(
+                "the schedule {cron:?} of {file} runs more often than every {MIN_SCHEDULE_GAP_MINUTES} minutes, which is the shortest interval GitHub runs a schedule at; use at least 5 minutes between runs"
             ));
         }
         triggers.schedule.push(cron);
@@ -107,12 +117,17 @@ fn filtered(
                 "the push trigger of {file} needs branches or tags; an unfiltered push trigger is refused"
             ));
         }
+        let (paths, paths_ignore) = path_filters(file, "push", push.paths, push.paths_ignore)?;
         triggers.push = Some(Push {
-            branches: patterns(file, "push branches", push.branches)?,
+            branches: branch_patterns(file, "push branches", push.branches)?,
             tags: patterns(file, "push tags", push.tags)?,
+            paths,
+            paths_ignore,
         });
     }
     if let Some(request) = request {
+        let (paths, paths_ignore) =
+            path_filters(file, "pull_request", request.paths, request.paths_ignore)?;
         triggers.pull_request = Some(PullRequest {
             types: names(
                 file,
@@ -120,7 +135,9 @@ fn filtered(
                 request.types,
                 &PULL_REQUEST_TYPES,
             )?,
-            branches: patterns(file, "pull_request branches", request.branches)?,
+            branches: branch_patterns(file, "pull_request branches", request.branches)?,
+            paths,
+            paths_ignore,
         });
         if triggers
             .pull_request
@@ -146,7 +163,7 @@ fn filtered(
         triggers.workflow_run = Some(WorkflowRun {
             workflows: workflow_names(file, run.workflows)?,
             types,
-            branches: patterns(file, "workflow_run branches", run.branches)?,
+            branches: branch_patterns(file, "workflow_run branches", run.branches)?,
         });
     }
     Ok(())
@@ -181,6 +198,48 @@ fn workflow_names(file: &str, values: Vec<String>) -> Result<Vec<String>, Workfl
         }
     }
     Ok(values)
+}
+
+fn branch_patterns(
+    file: &str,
+    what: &str,
+    values: Vec<String>,
+) -> Result<Vec<String>, WorkflowsError> {
+    if values.iter().any(|value| value == EVERY_PATH) {
+        return refuse(format!(
+            "{what} of {file} has {EVERY_PATH:?}, which is redundant; omit branches to match every branch"
+        ));
+    }
+    patterns(file, what, values)
+}
+
+type PathFilters = (Vec<String>, Vec<String>);
+
+fn path_filters(
+    file: &str,
+    event: &str,
+    paths: Vec<String>,
+    ignored: Vec<String>,
+) -> Result<PathFilters, WorkflowsError> {
+    if !paths.is_empty() && !ignored.is_empty() {
+        return refuse(format!(
+            "the {event} trigger of {file} sets both paths and paths_ignore; GitHub allows one of them per trigger"
+        ));
+    }
+    if paths.iter().any(|value| value == EVERY_PATH) {
+        return refuse(format!(
+            "{event} paths of {file} has {EVERY_PATH:?}, which is redundant; omit paths to run on every change"
+        ));
+    }
+    if ignored.iter().any(|value| value == EVERY_PATH) {
+        return refuse(format!(
+            "{event} paths_ignore of {file} has {EVERY_PATH:?}, which ignores every file, so the workflow could never run"
+        ));
+    }
+    Ok((
+        patterns(file, &format!("{event} paths"), paths)?,
+        patterns(file, &format!("{event} paths_ignore"), ignored)?,
+    ))
 }
 
 fn patterns(file: &str, what: &str, values: Vec<String>) -> Result<Vec<String>, WorkflowsError> {

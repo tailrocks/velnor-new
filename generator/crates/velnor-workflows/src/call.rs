@@ -39,6 +39,7 @@ pub(crate) fn call(
     scope: &Scope<'_>,
 ) -> Result<Call, WorkflowsError> {
     let (target, callee) = target(id, uses, ctx)?;
+    fence_callee(id, uses, &target, ctx)?;
     let inputs = callee
         .map(|flow| match &flow.triggers.workflow_call {
             Some(call) => Ok(call),
@@ -90,6 +91,42 @@ pub(crate) fn call(
             .map(|call| call.outputs.iter().map(|out| out.name.clone()).collect())
             .unwrap_or_default(),
     })
+}
+
+fn fence_callee(
+    id: &str,
+    uses: &str,
+    target: &CallTarget,
+    ctx: &Context<'_>,
+) -> Result<(), WorkflowsError> {
+    let started_by_a_pull_request = ctx.triggers.pull_request.is_some() || ctx.triggers.merge_group;
+    let outside = match target {
+        CallTarget::Local(_) | CallTarget::Pinned(_) => true,
+        CallTarget::Declared(file) => ctx
+            .workflows
+            .iter()
+            .find(|flow| &flow.file == file)
+            .is_some_and(|flow| calls_outside(flow, ctx.workflows)),
+    };
+    if started_by_a_pull_request && outside {
+        return refuse(format!(
+            "job {id} calls {uses}, which runs jobs this model cannot check or put behind the fork fence, from a workflow that a pull_request or merge_group event starts; call a workflow declared earlier in this file instead, or start this workflow from push, schedule, workflow_dispatch or workflow_call only"
+        ));
+    }
+    Ok(())
+}
+
+fn calls_outside(flow: &Workflow, declared: &[Workflow]) -> bool {
+    flow.jobs
+        .iter()
+        .filter_map(|job| job.call.as_ref())
+        .any(|call| match &call.target {
+            CallTarget::Local(_) | CallTarget::Pinned(_) => true,
+            CallTarget::Declared(file) => declared
+                .iter()
+                .find(|other| &other.file == file)
+                .is_some_and(|other| calls_outside(other, declared)),
+        })
 }
 
 fn target<'a>(

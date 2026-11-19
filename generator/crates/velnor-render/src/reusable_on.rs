@@ -42,13 +42,23 @@ pub(crate) fn on(triggers: &Triggers) -> Yaml {
     if let Some(push) = &triggers.push {
         items.push(entry(
             "push",
-            filters(&[("branches", &push.branches), ("tags", &push.tags)]),
+            filters(&[
+                ("branches", &push.branches),
+                ("tags", &push.tags),
+                ("paths", &push.paths),
+                ("paths-ignore", &push.paths_ignore),
+            ]),
         ));
     }
     if let Some(request) = &triggers.pull_request {
         items.push(entry(
             "pull_request",
-            filters(&[("types", &request.types), ("branches", &request.branches)]),
+            filters(&[
+                ("types", &request.types),
+                ("branches", &request.branches),
+                ("paths", &request.paths),
+                ("paths-ignore", &request.paths_ignore),
+            ]),
         ));
     }
     if triggers.merge_group {

@@ -20,8 +20,15 @@ pub struct Workflow {
     pub runner: String,
     pub fork_runner: String,
     pub condition: Option<String>,
+    pub concurrency: Option<Concurrency>,
     pub triggers: Triggers,
     pub jobs: Vec<Job>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Concurrency {
+    pub group: String,
+    pub cancel_in_progress: bool,
 }
 
 /// The events that start a workflow. Every field that is empty, `None` or
@@ -47,12 +54,16 @@ pub struct WorkflowCall {
 pub struct Push {
     pub branches: Vec<String>,
     pub tags: Vec<String>,
+    pub paths: Vec<String>,
+    pub paths_ignore: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PullRequest {
     pub types: Vec<String>,
     pub branches: Vec<String>,
+    pub paths: Vec<String>,
+    pub paths_ignore: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -110,6 +121,7 @@ pub struct Job {
     pub runner: Option<String>,
     pub environment: Option<String>,
     pub timeout_minutes: u16,
+    pub concurrency: Option<Concurrency>,
     pub permissions: Vec<(String, String)>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<Matrix>,

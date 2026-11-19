@@ -5,7 +5,7 @@ use crate::declared_fixture::{TestResult, job, refusal, rendered_file};
 use crate::yaml_tree::Node;
 
 /// `leaf` is a reusable workflow; `caller` runs it from a job.
-const CONFIG: &str = r#"
+pub(crate) const CONFIG: &str = r#"
 [[workflow]]
 file = "leaf"
 name = "Leaf"

@@ -18,6 +18,9 @@ on:
       - main
     tags:
       - 'rust-ci-v*'
+    paths-ignore:
+      - 'docs/**'
+      - '**.md'
   pull_request:
     types:
       - opened
@@ -25,8 +28,15 @@ on:
       - reopened
     branches:
       - main
+    paths:
+      - 'crates/**'
+      - Cargo.lock
+      - '.velnor/**'
   merge_group: {}
 permissions: {}
+concurrency:
+  group: '${{ github.workflow }}-${{ github.head_ref || github.run_id }}'
+  cancel-in-progress: true
 jobs:
   plan:
     permissions:
@@ -50,6 +60,9 @@ jobs:
       attestations: write
       contents: read
       id-token: write
+    concurrency:
+      group: 'assets-${{ github.workflow }}-${{ github.ref }}'
+      cancel-in-progress: false
     uses: './.github/workflows/build-assets.yml'
     with:
       dry_run: false

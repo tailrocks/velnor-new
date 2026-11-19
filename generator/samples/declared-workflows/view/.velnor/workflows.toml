@@ -69,6 +69,10 @@ name = "Release checks"
 runner = "velnor-linux-x64"
 fork_runner = "ubuntu-latest"
 
+[workflow.concurrency]
+group = "${{ github.workflow }}-${{ github.head_ref || github.run_id }}"
+cancel_in_progress = true
+
 [workflow.on]
 merge_group = true
 schedule = ["23 4 * * 1"]
@@ -85,10 +89,12 @@ default = "quick"
 [workflow.on.push]
 branches = ["main"]
 tags = ["rust-ci-v*"]
+paths_ignore = ["docs/**", "**.md"]
 
 [workflow.on.pull_request]
 types = ["opened", "synchronize", "reopened"]
 branches = ["main"]
+paths = ["crates/**", "Cargo.lock", ".velnor/**"]
 
 [[workflow.job]]
 id = "plan"
@@ -109,6 +115,7 @@ needs = ["plan"]
 if = "github.event_name == 'push' || github.event_name == 'workflow_dispatch'"
 uses = "build-assets"
 permissions = { contents = "read", id-token = "write", attestations = "write" }
+concurrency = { group = "assets-${{ github.workflow }}-${{ github.ref }}" }
 with = { version = "${{ github.sha }}", dry_run = false }
 
 [[workflow.job]]

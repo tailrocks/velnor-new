@@ -7,10 +7,13 @@ use velnor_model::github_hosted;
 
 use crate::call::{call, refuse_step_keys};
 use crate::check_step::step;
+use crate::concurrency::concurrency;
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope, check_condition, is_identifier};
 use crate::matrix::matrix;
-use crate::plan::{Body, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Workflow};
+use crate::plan::{
+    Body, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Triggers, Workflow,
+};
 use crate::raw::{RawJob, RawStep, RawWorkflow};
 use crate::triggers::triggers;
 
@@ -37,6 +40,7 @@ pub(crate) struct Context<'a> {
     pub(crate) condition: Option<&'a str>,
     pub(crate) inputs: &'a [&'a str],
     pub(crate) workflows: &'a [Workflow],
+    pub(crate) triggers: &'a Triggers,
 }
 
 pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflow, WorkflowsError> {
@@ -79,7 +83,12 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         condition: raw.condition.as_deref(),
         inputs: &input_names,
         workflows: earlier,
+        triggers: &triggers,
     };
+    let workflow_concurrency = raw
+        .concurrency
+        .map(|raw| concurrency(&format!("the workflow {file}"), raw))
+        .transpose()?;
     let mut jobs: Vec<Job> = Vec::new();
     for job in raw.job {
         let checked = self::job(job, &ctx, &jobs)?;
@@ -100,6 +109,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         name: raw.name,
         runner,
         fork_runner,
+        concurrency: workflow_concurrency,
         triggers,
         jobs,
         file,
@@ -159,6 +169,10 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         ));
     }
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
+    let job_concurrency = raw
+        .concurrency
+        .map(|raw| concurrency(&format!("job {id}"), raw))
+        .transpose()?;
     let runner = raw
         .runner
         .as_deref()
@@ -192,6 +206,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         runner,
         environment: raw.environment.clone(),
         timeout_minutes,
+        concurrency: job_concurrency,
         permissions: raw.permissions.clone().into_iter().collect(),
         outputs: Vec::new(),
         matrix,

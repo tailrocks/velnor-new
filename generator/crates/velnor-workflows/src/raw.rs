@@ -21,6 +21,7 @@ pub(crate) struct RawWorkflow {
     pub(crate) fork_runner: Option<String>,
     #[serde(rename = "if")]
     pub(crate) condition: Option<String>,
+    pub(crate) concurrency: Option<RawConcurrency>,
     pub(crate) on: Option<RawOn>,
     #[serde(default)]
     pub(crate) input: Vec<RawInput>,
@@ -58,6 +59,10 @@ pub(crate) struct RawPush {
     pub(crate) branches: Vec<String>,
     #[serde(default)]
     pub(crate) tags: Vec<String>,
+    #[serde(default)]
+    pub(crate) paths: Vec<String>,
+    #[serde(default)]
+    pub(crate) paths_ignore: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -67,6 +72,18 @@ pub(crate) struct RawPullRequest {
     pub(crate) types: Vec<String>,
     #[serde(default)]
     pub(crate) branches: Vec<String>,
+    #[serde(default)]
+    pub(crate) paths: Vec<String>,
+    #[serde(default)]
+    pub(crate) paths_ignore: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct RawConcurrency {
+    pub(crate) group: String,
+    #[serde(default)]
+    pub(crate) cancel_in_progress: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -114,6 +131,7 @@ pub(crate) struct RawJob {
     pub(crate) runner: Option<String>,
     pub(crate) environment: Option<String>,
     pub(crate) timeout_minutes: Option<u16>,
+    pub(crate) concurrency: Option<RawConcurrency>,
     #[serde(default)]
     pub(crate) permissions: BTreeMap<String, String>,
     #[serde(default)]

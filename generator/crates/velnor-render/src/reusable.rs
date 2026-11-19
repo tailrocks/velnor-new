@@ -3,19 +3,20 @@
 
 use velnor_model::{HelperRelease, github_hosted};
 use velnor_workflows::{
-    Action, Body, CallTarget, CallValue, Env, Job, MatrixSource, Step, Workflow, WorkflowsPlan,
+    Action, Body, CallTarget, CallValue, Concurrency, Env, Job, MatrixSource, Step, Workflow,
+    WorkflowsPlan,
 };
 
 use crate::reusable_on::on;
 use crate::rules::{
-    MAX_WORKFLOW_BYTES, RenderedJob, RenderedMatrix, RenderedMatrixSource, RenderedStep,
-    RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
+    MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, RenderedWorkflow, Rule, RuleViolation, Value, check_rules,
 };
 use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
     UPLOAD_ARTIFACT, install_helper,
 };
-use crate::workflow::yaml_job;
+use crate::workflow::{yaml_concurrency, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 
 pub const REUSABLE_HEADER: &str =
@@ -43,21 +44,27 @@ fn render_one(
             .collect(),
     };
     check_rules(&rendered)?;
-    let document = [
+    let mut document = vec![
         entry("name", text(&workflow.name)),
         entry("on", on(&workflow.triggers)),
         entry("permissions", Yaml::Map(Vec::new())),
-        entry(
-            "jobs",
-            Yaml::Map(
-                rendered
-                    .jobs
-                    .iter()
-                    .map(|job| (job.id.clone(), yaml_job(job)))
-                    .collect(),
-            ),
-        ),
     ];
+    document.extend(workflow.concurrency.as_ref().map(|concurrency| {
+        entry(
+            "concurrency",
+            yaml_concurrency(&rendered_concurrency(concurrency)),
+        )
+    }));
+    document.push(entry(
+        "jobs",
+        Yaml::Map(
+            rendered
+                .jobs
+                .iter()
+                .map(|job| (job.id.clone(), yaml_job(job)))
+                .collect(),
+        ),
+    ));
     let file = format!("{REUSABLE_HEADER}{}", emit(&document));
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![RuleViolation {
@@ -69,6 +76,13 @@ fn render_one(
     Ok((format!(".github/workflows/{}.yml", workflow.file), file))
 }
 
+fn rendered_concurrency(concurrency: &Concurrency) -> RenderedConcurrency {
+    RenderedConcurrency {
+        group: concurrency.group.clone(),
+        cancel_in_progress: concurrency.cancel_in_progress,
+    }
+}
+
 fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> RenderedJob {
     let installs = job.helper.then(|| install_helper(helper));
     let runs_on = job.runner.as_ref().unwrap_or(&workflow.runner).clone();
@@ -76,6 +90,7 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
         id: job.id.clone(),
         needs: job.needs.clone(),
         condition: condition(workflow.condition.as_deref(), job.condition.as_deref()),
+        concurrency: job.concurrency.as_ref().map(rendered_concurrency),
         environment: job.environment.clone(),
         uses: job.call.as_ref().map(|call| call_path(&call.target)),
         with: job

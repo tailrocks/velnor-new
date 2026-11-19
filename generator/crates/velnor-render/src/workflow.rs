@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::{RenderedJob, RenderedMatrix, RenderedMatrixSource, RenderedStep, Value};
+use crate::rules::{
+    RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource, RenderedStep, Value,
+};
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 
@@ -30,16 +32,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         items.push(entry("permissions", pairs(&job.permissions)));
     }
     if let Some(concurrency) = &job.concurrency {
-        items.push(entry(
-            "concurrency",
-            Yaml::Map(vec![
-                entry("group", Yaml::Expr(concurrency.group.clone())),
-                entry(
-                    "cancel-in-progress",
-                    Yaml::Bool(concurrency.cancel_in_progress),
-                ),
-            ]),
-        ));
+        items.push(entry("concurrency", yaml_concurrency(concurrency)));
     }
     if !job.outputs.is_empty() {
         items.push(entry("outputs", yaml_outputs(&job.outputs)));
@@ -68,6 +61,16 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
+}
+
+pub(crate) fn yaml_concurrency(concurrency: &RenderedConcurrency) -> Yaml {
+    Yaml::Map(vec![
+        entry("group", Yaml::Expr(concurrency.group.clone())),
+        entry(
+            "cancel-in-progress",
+            Yaml::Bool(concurrency.cancel_in_progress),
+        ),
+    ])
 }
 
 fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
