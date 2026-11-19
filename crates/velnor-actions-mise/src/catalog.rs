@@ -63,7 +63,7 @@ pub const MR_BOXINGTON_VERSION: &str = "1.29.2";
 pub const GH_VERSION: &str = "2.104.0";
 pub use velnor_actions_contract::config::jactionlint_verifier::JACTIONLINT_VERSION;
 pub const SHELLCHECK_VERSION: &str = "0.11.0";
-pub const NEXTEST_VERSION: &str = "0.9.151";
+pub const NEXTEST_VERSION: &str = "0.9.152";
 pub const OPENTOFU_VERSION: &str = "1.13.9";
 pub const OPENTOFU_SHA256_LINUX_AMD64: &str =
     "b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857";
