@@ -255,48 +255,6 @@ fn a_missing_or_byte_different_expected_file_is_a_mismatch() -> TestResult {
 }
 
 #[test]
-fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestResult {
-    let config: toml::Table = fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.velnor/config.toml"),
-    )?
-    .parse()?;
-    let listed: BTreeSet<String> = config
-        .get("checks")
-        .and_then(toml::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|check| check.get("id").and_then(toml::Value::as_str) == Some("generator-samples"))
-        .filter_map(|check| check.get("inputs").and_then(toml::Value::as_array))
-        .flatten()
-        .filter_map(toml::Value::as_str)
-        .filter(|input| input.starts_with("generator/samples/"))
-        .map(str::to_owned)
-        .collect();
-    let mut present = BTreeSet::new();
-    for sample in sample_dirs(&samples())? {
-        for path in expected_with_notes(&load(&sample)?)
-            .map(|(files, _)| files)?
-            .keys()
-        {
-            if matches!(
-                Path::new(path.as_str())
-                    .extension()
-                    .and_then(|e| e.to_str()),
-                Some("yml" | "yaml")
-            ) {
-                let name = sample.file_name().unwrap_or_default().to_string_lossy();
-                present.insert(format!("generator/samples/{name}/expected/{path}"));
-            }
-        }
-    }
-    assert_eq!(
-        present, listed,
-        "add or remove the workflow path in the inputs of the generator-samples check in .velnor/config.toml"
-    );
-    Ok(())
-}
-
-#[test]
 fn a_sample_without_metadata_for_one_of_its_roots_is_rejected() -> TestResult {
     let sample = std::env::temp_dir().join(format!("velnor-gen-golden-{}", std::process::id()));
     if sample.exists() {

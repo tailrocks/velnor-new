@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::plan::Steps;
-use velnor_ci::plan::{explain, group_outputs, outputs, warnings, weakened};
+use velnor_ci::plan::{explain, outputs, warnings, weakened, workspace_group_outputs};
 use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, SelectionReason,
     SkipReason, StepNeed, Weakening, WorkspaceGroup,
@@ -298,7 +298,7 @@ fn a_group_runs_when_any_of_its_roots_is_selected() {
     let groups = vec![group];
     let none = BTreeMap::from([(path("tools/a/Cargo.toml"), RustSelection::None)]);
     assert_eq!(
-        group_outputs(&groups, &none),
+        workspace_group_outputs(&groups, &none),
         "rust_group_tools_mode=none\n"
     );
     let some = BTreeMap::from([(
@@ -309,12 +309,15 @@ fn a_group_runs_when_any_of_its_roots_is_selected() {
         )])),
     )]);
     assert_eq!(
-        group_outputs(&groups, &some),
+        workspace_group_outputs(&groups, &some),
         "rust_group_tools_mode=some\n"
     );
     let all = BTreeMap::from([(
         path("tools/a/Cargo.toml"),
         RustSelection::All(AllTrigger::UnknownPath(path("docs/goals.md"))),
     )]);
-    assert_eq!(group_outputs(&groups, &all), "rust_group_tools_mode=all\n");
+    assert_eq!(
+        workspace_group_outputs(&groups, &all),
+        "rust_group_tools_mode=all\n"
+    );
 }

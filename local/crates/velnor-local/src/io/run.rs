@@ -102,7 +102,9 @@ async fn down(dir: &Path) -> std::io::Result<()> {
 }
 
 async fn up(args: UpArgs) -> std::io::Result<()> {
-    let env = Environment::at(&args.environment.dir, DockerCli).await?;
+    let env = Environment::at(&args.environment.dir, DockerCli)
+        .await?
+        .with_labels(&args.environment.label);
     let repo = fs::canonicalize(&args.repo).await?;
     let pairs = super::supervisor::pairs(&args.environment).await?;
     println!("velnor-local: {}", runner_mode(pairs.as_ref()));
@@ -178,6 +180,12 @@ async fn run_api_stub(args: ApiStubArgs) -> std::io::Result<()> {
         cache_dir: args.cache_dir,
         default_branch: args.default_branch,
         diff_limit_bytes: args.diff_limit_bytes,
+        local_setup: args.local_setup_velnor,
+        job_cache_admin: args.job_cache_admin,
+        token_key: match &args.token_key {
+            Some(path) => Some(fs::read(path).await?),
+            None => None,
+        },
         standin: args.standin.map(|address| {
             Arc::new(api_stub::HttpStandIn::new(&address)) as Arc<dyn api_stub::StandIn>
         }),

@@ -10,9 +10,10 @@ use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 pub(crate) const TAG_PATTERN_HELPER: (u64, u64, u64) = (0, 1, 80);
 pub(crate) const RELEASED_VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
 pub(crate) const TAGGED_COMMIT_HELPER: (u64, u64, u64) = (0, 1, 81);
+pub(crate) const RECORD_RECOVERY_HELPER: (u64, u64, u64) = (0, 1, 92);
 pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
-const APP_TOKEN_COMMIT: &str = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
-const APP_TOKEN_VERSION: &str = "v3.3.0";
+pub(crate) const APP_TOKEN_COMMIT: &str = "f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc";
+pub(crate) const APP_TOKEN_VERSION: &str = "v3.4.0";
 pub(crate) const APP_TOKEN_OUTPUT: &str = "${{ steps.app.outputs.token }}";
 
 pub(crate) fn expression(condition: &str) -> String {

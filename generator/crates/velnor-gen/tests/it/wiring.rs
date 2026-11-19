@@ -191,26 +191,20 @@ fn the_policy_lane_runs_each_tool_only_when_its_output_says_run() -> TestResult 
 }
 
 #[test]
-fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult {
+fn a_single_job_workflow_gives_the_policy_lane_the_rust_jobs_plan() -> TestResult {
     let mut files = view(&["Cargo.toml"], None)?;
     track(&mut files, "deny.toml", "")?;
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let text = text(&files)?;
-    let job = text
-        .lines()
-        .skip_while(|line| *line != "  policy:")
-        .skip(1)
-        .take_while(|line| line.starts_with("   "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(!job.contains("needs:"), "{job}");
-    assert!(job.contains(r#""$VELNOR_EXEC" plan"#), "{job}");
+    let job = policy_job(&text);
+    assert!(job.contains("needs:\n      - rust\n"), "{job}");
+    assert!(!job.contains(r#""$VELNOR_EXEC" plan"#), "{job}");
     let deny = step(&job, "Dependency policy").join("\n");
-    assert!(deny.contains("steps.plan.outcome == 'success'"), "{deny}");
     assert!(
-        deny.contains("steps.plan.outputs.rust_deny == 'run'"),
+        deny.contains("needs.rust.outputs.rust_deny == 'run'"),
         "{deny}"
     );
+    assert!(!deny.contains("steps.plan."), "{deny}");
     Ok(())
 }
 
@@ -242,11 +236,13 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let job = policy_job(&text(&files)?);
     assert!(
-        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny check"#),
+        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny --config 'deny.toml' --locked check"#),
         "{job}"
     );
     assert!(
-        job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' check"),
+        job.contains(
+            "cargo-deny --manifest-path 'lab/Cargo.toml' --config 'deny.toml' --locked check"
+        ),
         "{job}"
     );
     Ok(())
@@ -325,7 +321,7 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         .split("\n  rust-inputs-audit:\n")
         .nth(1)
         .ok_or("no audit job")?
-        .split("\n  rust-trim:\n")
+        .split("\n  # jactionlint ignore=shellcheck\n  rust-trim:\n")
         .next()
         .ok_or("no audit job")?;
     assert!(

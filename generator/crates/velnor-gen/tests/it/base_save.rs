@@ -16,7 +16,7 @@ pub(crate) fn pinned(version: &str, config: &str) -> Result<RepoView, Box<dyn st
     repo.tracked_paths.insert(LOCK_PATH);
     repo.files.insert(
         LOCK_PATH,
-        pin_lock(version, COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock(version, COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     Ok(repo)
 }
@@ -188,9 +188,9 @@ fn the_one_job_lane_saves_after_tests_and_input_audit_and_only_on_the_default_br
         .position(|name| name == "Test")
         .ok_or("no test")?;
     assert!(build < tested && tested < audit);
-    let saved: Vec<&str> = order[audit + 1..audit + 7]
+    let saved: Vec<&str> = order[audit + 1..audit + 8]
         .iter()
-        .map(String::as_str)
+        .filter_map(|name| (!name.starts_with("Fetch")).then_some(name.as_str()))
         .collect();
     assert_eq!(
         saved,

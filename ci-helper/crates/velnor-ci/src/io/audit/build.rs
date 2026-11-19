@@ -23,6 +23,8 @@ use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
 use invocation::Invocation;
 
+const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
+
 struct Builder<'a> {
     directory: &'a Path,
     repository: PathBuf,
@@ -170,6 +172,19 @@ impl Builder<'_> {
         Ok(before)
     }
 
+    fn target_directory(&self) -> Option<&Path> {
+        self.workspaces
+            .iter()
+            .filter_map(|workspace| {
+                let root = fs::canonicalize(&workspace.workspace_root).ok()?;
+                self.location
+                    .starts_with(&root)
+                    .then_some((root.components().count(), workspace))
+            })
+            .max_by_key(|(depth, _)| *depth)
+            .map(|(_, workspace)| workspace.target_directory.as_path())
+    }
+
     fn run(
         &self,
         command: &[String],
@@ -185,9 +200,15 @@ impl Builder<'_> {
             .map_err(|error| {
                 CiError::new(format!("cannot establish build filesystem clock: {error}"))
             })?;
-        let status = Command::new(&command[0])
-            .args(&command[1..])
-            .current_dir(self.directory)
+        let mut build = Command::new(&command[0]);
+        build.args(&command[1..]).current_dir(self.directory);
+        if Invocation::new(command).cargo
+            && std::env::var_os(TARGET_VARIABLE).is_none()
+            && let Some(target) = self.target_directory()
+        {
+            build.env(TARGET_VARIABLE, target);
+        }
+        let status = build
             .status()
             .map_err(|e| CiError::new(format!("cannot run build command: {e}")))?;
         self.record(

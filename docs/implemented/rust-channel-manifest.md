@@ -1,6 +1,6 @@
 # Verified Rust installs (channel-manifest digest)
 
-- State: implemented (this pull request); the pinned tree digest is implemented in fci/p3-tree-digest; the channel-manifest normal form was removed in favour of the overwrite (owner standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv row X44)
+- State: implemented (this pull request); the pinned tree digest is implemented in fci/p3-tree-digest; the channel-manifest normal form was removed in favour of the overwrite
 - Specification: [hard decision 4](../hard-decisions.md#4-tool-versions-come-from-the-projects-mise-config)
   (Trade-offs: `core:rust` lock entries carry no checksum),
   [consumer Rust setup](consumer-rust-setup.md)
@@ -96,7 +96,7 @@ first version of this step did exactly that.
      directory at that path fails the step. A missing manifest is recreated.
      The verified bytes also bind the downloads the job's later
      `rustup component add` and `rustup target add` take from the installed
-     manifest (decisions.tsv X44, SEC-6);
+     manifest (SEC-6);
    - it requires the toolchain directory to hold exactly those files with
      exactly those bytes, apart from rustup's own bookkeeping regular files
      directly under `lib/rustlib` (`components`, `manifest-*`, `multirust-*`,
@@ -130,8 +130,7 @@ first version of this step did exactly that.
      offline. The pin is selected by the job's expected
      Rust version and target, never by the restored `components` file or the
      toolchain directory name. The owned-home steps render the target
-     `x86_64-unknown-linux-gnu`. Other host triples have no pin row yet (owner
-     standing grant 2026-11-02, velnor-fast-ci GOAL.md; decisions.tsv X35): a
+     `x86_64-unknown-linux-gnu`. Other host triples have no pin row yet: a
      `toolchains/` directory holding exactly one entry named
      `<version>-<a>-<b>-<c>` that is not `<version>-<target>` (for example
      `aarch64-unknown-linux-gnu`, `aarch64-apple-darwin`,
@@ -180,7 +179,7 @@ first version of this step did exactly that.
    channel manifest as the manifest entry. A manifest-form token in the
    tools-cache static digest keeps entries stored before this change, whose
    manifest holds rustup's rewritten bytes, from being restored.
-   Residual risks (cache decision 10, decisions.tsv X35 and X44): the content
+   Residual risks (cache decision 10): the content
    of `multirust-config.toml` is unbound (denial of service only); for a
    version and target with no pin row, and for a toolchain directory of
    another host triple,

@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod archive;
+
 use velnor_model::{
     CargoCommand, HelperCommand, Job, JobId, RepoFacts, RepoPath, Shape, ShapeDecision, Step,
     StepKind, When,
@@ -10,11 +12,7 @@ use crate::audit_job::{AuditLocation, audit_when};
 use crate::base_cache::{save_steps, saving_run};
 use crate::lane::Lane;
 use crate::members::{Member, check_alone, lint};
-use crate::mise::nextest_tool;
-use crate::plan::{
-    CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, LINT_JOB, RUST_JOB, TEST_JOB, head, job, mirror_step,
-    setup_units, step, tools_restore,
-};
+use crate::plan::{LINT_JOB, RUST_JOB, TEST_JOB, job, setup_units, step};
 use crate::units::Unit;
 
 const ARCHIVE_ID: JobId = JobId::from_static("nextest-archive");
@@ -114,6 +112,11 @@ impl RootJobs<'_> {
     }
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
+        let steps = if self.unit.grouped {
+            steps
+        } else {
+            crate::test_setup::inserted(self.facts, &self.unit.roots[0], self.lane, steps)
+        };
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
             needs: self
@@ -153,21 +156,28 @@ impl RootJobs<'_> {
     }
 
     fn member_steps(&self, member: &Member, steps: Vec<Step>) -> Vec<Step> {
-        crate::test_setup::inserted(self.facts, &member.root, &member.lane, steps)
+        if self.unit.grouped {
+            crate::test_setup::inserted(self.facts, &member.root, &member.lane, steps)
+        } else {
+            steps
+        }
     }
 
-    fn skip_on_draft(&self, step: Step) -> Step {
+    fn heavy(&self, step: Step) -> Step {
         Step {
-            skip_on_draft: self.facts.config.skip_draft_pull_requests
-                && matches!(
-                    step.kind,
-                    StepKind::Cargo(
-                        CargoCommand::NextestBuild
-                            | CargoCommand::NextestRun { .. }
-                            | CargoCommand::TestTarget { .. }
-                            | CargoCommand::Doctest
-                    )
-                ),
+            pr: if matches!(
+                step.kind,
+                StepKind::Cargo(
+                    CargoCommand::NextestBuild
+                        | CargoCommand::NextestRun { .. }
+                        | CargoCommand::TestTarget { .. }
+                        | CargoCommand::Doctest
+                )
+            ) {
+                crate::plan::full(self.facts)
+            } else {
+                step.pr
+            },
             ..step
         }
     }
@@ -185,8 +195,8 @@ impl RootJobs<'_> {
         let tests = self
             .cargo(member, member.tests(self.facts))
             .into_iter()
-            .map(|step| self.skip_on_draft(step))
-            .collect::<Vec<_>>();
+            .map(|step| self.heavy(step))
+            .collect();
         self.member_steps(member, tests)
     }
 
@@ -209,7 +219,7 @@ impl RootJobs<'_> {
                 steps.extend(
                     self.cargo(member, vec![CargoCommand::NextestBuild])
                         .into_iter()
-                        .map(|step| self.skip_on_draft(step))
+                        .map(|step| self.heavy(step))
                         .map(saving_run),
                 );
             }
@@ -217,7 +227,7 @@ impl RootJobs<'_> {
                 steps.extend(self.tests_of(member));
             }
             steps.extend(self.audit());
-            steps.extend(saves);
+            steps.extend(saves.iter().cloned());
         } else if saves.is_empty() {
             for member in &self.members {
                 steps.extend(self.tests_of(member));
@@ -240,7 +250,7 @@ impl RootJobs<'_> {
                     .cargo(member, workspace)
                     .into_iter()
                     .chain(self.cargo(member, after))
-                    .map(|step| self.skip_on_draft(step))
+                    .map(|step| self.heavy(step))
                     .collect();
                 steps.extend(self.member_steps(member, member_steps));
             }
@@ -248,7 +258,7 @@ impl RootJobs<'_> {
             steps.extend(saves);
         }
         Job {
-            skip_on_draft: false,
+            pr: crate::plan::quick(self.facts),
             ..self.lane_job(job_id, steps)
         }
     }
@@ -273,10 +283,10 @@ impl RootJobs<'_> {
         }
         let mut jobs = vec![Job {
             comment,
-            skip_on_draft: false,
+            pr: crate::plan::quick(self.facts),
             ..self.lane_job(lint_id, steps)
         }];
-        if archive && self.nextest() {
+        if archive && self.nextest() && self.facts.config.private_sources.is_none() {
             jobs.extend(self.archived_tests());
         } else if !tests.is_empty() {
             let test_id = self.id(TEST_JOB);
@@ -284,10 +294,7 @@ impl RootJobs<'_> {
             let saves = self.saves(&test_id, None, true);
             let saving = self.nextest() && !saves.is_empty();
             if saving {
-                for member in &self.members {
-                    if !member.nextest {
-                        continue;
-                    }
+                for member in self.members.iter().filter(|member| member.nextest) {
                     steps.extend(
                         self.cargo(member, vec![CargoCommand::NextestBuild])
                             .into_iter()
@@ -325,59 +332,5 @@ impl RootJobs<'_> {
             gate: self.lane.steps(),
             ..step(kind)
         }
-    }
-
-    fn archived_tests(&self) -> [Job; 2] {
-        let member = &self.members[0];
-        let build_id = self.id(TEST_JOB);
-        let artifact = self.id(ARCHIVE_ID).to_string();
-        let mut build = self.setup(&build_id);
-        build.extend(self.cargo(
-            member,
-            vec![CargoCommand::NextestArchive { file: ARCHIVE_FILE }],
-        ));
-        build.push(self.gated(StepKind::UploadArchive {
-            name: artifact.clone(),
-            file: member.root.manifest.sibling(&ARCHIVE_FILE),
-        }));
-        build.extend(self.cargo(member, member.built_without_nextest(self.facts)));
-        build.extend(self.audit());
-        build.extend(self.saves(
-            &build_id,
-            Some(member.root.manifest.sibling(&ARCHIVE_FILE)),
-            true,
-        ));
-        let mut group = head(self.facts, CHECKOUT_DEPTH);
-        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
-        group.extend(tools_restore(self.facts).map(|restore| Step {
-            gate: self.lane.steps(),
-            ..restore
-        }));
-        group.push(self.gated(StepKind::InstallTools {
-            only: nextest_tool(&self.facts.tools).map(str::to_owned),
-        }));
-        group.extend(mirror_step(self.facts).map(|step| self.gated(step.kind)));
-        group.push(self.gated(StepKind::DownloadArchive {
-            name: artifact,
-            into: member.root.manifest.parent(),
-        }));
-        group.extend(
-            self.cargo(
-                member,
-                vec![CargoCommand::NextestRunArchive {
-                    file: ARCHIVE_FILE,
-                    filter: member.filter(self.facts),
-                    ci_profile: member.root.nextest_ci_profile,
-                }],
-            )
-            .into_iter()
-            .map(|step| Step {
-                when: When::Success,
-                ..step
-            }),
-        );
-        let mut group_job = self.lane_job(self.id(DEFAULT_GROUP_JOB), group);
-        group_job.needs.push(build_id.clone());
-        [self.lane_job(build_id, build), group_job]
     }
 }

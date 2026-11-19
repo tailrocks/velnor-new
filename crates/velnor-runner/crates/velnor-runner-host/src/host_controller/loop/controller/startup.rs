@@ -17,6 +17,7 @@ use crate::{
         VerifiedWorkerImages, prepare_worker_images, startup_storage_profile,
     },
     launch_blocking::ListenFault,
+    reconcile::Reconcile,
 };
 
 use super::super::setup;
@@ -45,6 +46,7 @@ pub(super) struct StartupInputs<'a> {
 pub(super) struct StartupResources {
     pub(super) worker_images: VerifiedWorkerImages,
     pub(super) admission_ready: bool,
+    pub(super) hold_log: HoldLog,
 }
 
 pub(super) async fn prepare_startup(
@@ -61,11 +63,15 @@ pub(super) async fn prepare_startup(
         image_authority,
     } = inputs;
 
-    let legacy_reconcile = crate::launch::reconcile_gate(journal, docker).await?;
+    let legacy = crate::launch::evaluate_gate(journal, docker, current, state).await?;
     eprintln!(
         "legacy_reconcile={}",
-        crate::launch::gate_line(&legacy_reconcile)
+        crate::launch::gate_line(&legacy.decision)
     );
+    let mut hold_log = HoldLog::default();
+    if !admission_after(true, &legacy.decision) && hold_log.on_hold(&legacy.hold_lines) {
+        print_hold_lines(&legacy.hold_lines);
+    }
     setup::configure_shared_capacity(journal, current).await?;
     journal.bootstrap_header_authority().await?;
     journal.validate_header_authority().await?;
@@ -87,7 +93,7 @@ pub(super) async fn prepare_startup(
 
     let worker_images =
         prepare_worker_images(docker, journal, selected_engine, image_authority).await?;
-    let admission_ready = finish_startup(
+    let storage_ready = finish_startup(
         FinishInputs {
             current,
             state,
@@ -99,10 +105,92 @@ pub(super) async fn prepare_startup(
         &worker_images,
     )
     .await?;
+    // The gate is ANDed outside the storage profile: `storage_ready` keeps meaning "storage ok",
+    // and a Hold leaves admission closed while every other startup step above still ran.
+    let admission_ready = admission_after(storage_ready, &legacy.decision);
     Ok(StartupResources {
         worker_images,
         admission_ready,
+        hold_log,
     })
+}
+
+/// The single decision point for opening admission, shared by startup and the storage-profile
+/// retry: storage must be ready AND the legacy gate must say Advertise. A Hold, and a gate that
+/// could not be evaluated at all, never open admission.
+pub(super) fn admission_after(storage_ready: bool, gate: &Reconcile) -> bool {
+    storage_ready && matches!(gate, Reconcile::Advertise { .. })
+}
+
+/// Re-runs the legacy gate for the storage-profile retry. True only when the gate says Advertise;
+/// an evaluation error is closed, never open. Logs each hold (rate limited) and the heal.
+///
+/// The retry only runs while admission is closed, so an open host never re-checks the gate. That
+/// is acceptable because nothing but tests writes legacy rows (`begin_launch` has no live caller).
+pub(super) async fn legacy_admission(
+    journal: &Journal,
+    docker: &Docker,
+    config: &HostConfig,
+    state: &Path,
+    log: &mut HoldLog,
+) -> bool {
+    let report = match crate::launch::evaluate_gate(journal, docker, config, state).await {
+        Ok(report) => report,
+        Err(error) => {
+            eprintln!(
+                "legacy reconcile gate could not be evaluated; admission stays closed: {error:?}"
+            );
+            return false;
+        }
+    };
+    if admission_after(true, &report.decision) {
+        if log.on_open() {
+            eprintln!("legacy hold cleared; admission reopened");
+        }
+        return true;
+    }
+    eprintln!(
+        "admission closed by legacy reconciliation ({})",
+        crate::launch::gate_line(&report.decision)
+    );
+    if log.on_hold(&report.hold_lines) {
+        print_hold_lines(&report.hold_lines);
+    }
+    false
+}
+
+fn print_hold_lines(lines: &[String]) {
+    for line in lines {
+        eprintln!("{line}");
+    }
+}
+
+const HOLD_REPEAT_TICKS: u32 = 10;
+
+/// Rate limit for `legacy_hold` lines: print when the set of lines changes, and again every
+/// `HOLD_REPEAT_TICKS` unchanged ticks (about 5 minutes at the 30 s retry cadence).
+#[derive(Debug, Default)]
+pub(super) struct HoldLog {
+    last: Option<Vec<String>>,
+    unchanged_ticks: u32,
+}
+
+impl HoldLog {
+    pub(super) fn on_hold(&mut self, lines: &[String]) -> bool {
+        let unchanged = self.last.as_deref() == Some(lines);
+        if unchanged && self.unchanged_ticks + 1 < HOLD_REPEAT_TICKS {
+            self.unchanged_ticks += 1;
+            return false;
+        }
+        self.last = Some(lines.to_vec());
+        self.unchanged_ticks = 0;
+        true
+    }
+
+    fn on_open(&mut self) -> bool {
+        self.unchanged_ticks = 0;
+        self.last.take().is_some()
+    }
 }
 
 pub(in crate::host_controller::loop_driver) struct FinishInputs<'a> {
@@ -172,3 +260,7 @@ async fn prepare_storage_profile(
         Ok(false)
     }
 }
+
+#[cfg(test)]
+#[path = "startup/tests.rs"]
+mod tests;

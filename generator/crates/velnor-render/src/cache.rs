@@ -1,8 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CacheKeySegment, CachePath, RepoPath};
+use velnor_model::{CacheKey, CacheKeySegment, CachePath, LOCK_OUTPUT_PREFIX, RepoPath};
 
+use crate::gate::SOURCES_LOCKS_STEP;
 use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
@@ -32,6 +33,12 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             CacheKeySegment::TargetOwner { job, root } => format!("{job}.{root}.{HOST}"),
             CacheKeySegment::Compat => format!("${{{{ steps.{PREPARE_STEP}.outputs.compat }}}}"),
             CacheKeySegment::Locks(paths) => hash_files(paths),
+            CacheKeySegment::RootLock(root) => {
+                format!("${{{{ steps.{PREPARE_STEP}.outputs.{LOCK_OUTPUT_PREFIX}{root} }}}}")
+            }
+            CacheKeySegment::SourcesLocks => {
+                format!("${{{{ steps.{SOURCES_LOCKS_STEP}.outputs.hash }}}}")
+            }
             CacheKeySegment::Mise => format!("mise{mise_version}"),
             CacheKeySegment::Commit => COMMIT.to_owned(),
             CacheKeySegment::RunId => RUN_ID.to_owned(),
@@ -48,12 +55,12 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
     }
 }
 
-fn hash_files(paths: &[RepoPath]) -> String {
-    let arguments: Vec<String> = paths
+pub(crate) fn hash_files(paths: &[RepoPath]) -> String {
+    let patterns: Vec<String> = paths
         .iter()
         .map(|path| string_expression(&glob_literal(path.as_str())))
         .collect();
-    format!("${{{{ hashFiles({}) }}}}", arguments.join(", "))
+    format!("${{{{ hashFiles({}) }}}}", patterns.join(", "))
 }
 
 pub(crate) fn glob_literal(text: &str) -> String {

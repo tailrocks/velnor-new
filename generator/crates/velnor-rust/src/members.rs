@@ -53,9 +53,8 @@ impl Member {
             .collect()
     }
 
-    pub(crate) fn filter(&self, facts: &RepoFacts) -> FilterRef {
-        let direct: Vec<String> = self
-            .root
+    pub(crate) fn direct_binaries(&self, facts: &RepoFacts) -> Vec<String> {
+        self.root
             .members
             .iter()
             .flat_map(|entry| {
@@ -65,7 +64,11 @@ impl Member {
                     .filter(|harness| runs_in_direct_step(&facts.config, entry, harness))
                     .map(|harness| binary_id(&entry.name, harness))
             })
-            .collect();
+            .collect()
+    }
+
+    pub(crate) fn filter(&self, facts: &RepoFacts) -> FilterRef {
+        let direct = self.direct_binaries(facts);
         if direct.is_empty() {
             FilterRef::All
         } else {

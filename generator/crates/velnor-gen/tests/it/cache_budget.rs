@@ -15,7 +15,7 @@ fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
         "src" => resolve_cache_key(
             &CacheKey::Sources {
                 host: Host,
-                root: cache_root("Cargo.toml"),
+                lane: cache_root("Cargo.toml"),
             },
             id,
         ),
@@ -151,7 +151,7 @@ fn groups_unknown_keys_ties_order_and_byte_overflow_keep_their_contract() {
     isolated.id = 201;
     entries.push(isolated);
     let deleted = plan(&entries, 0);
-    assert_eq!(deleted.len(), 4);
+    assert_eq!(deleted.len(), 6);
     assert!(deleted.iter().all(|id| *id < 200));
     let mut malformed = base(300, "tgt");
     malformed.key.push_str("-bad");
@@ -239,7 +239,12 @@ fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
             "github.run_id" => id.to_string(),
             "steps.prepare.outputs.compat" => "b".repeat(16),
             "steps.restored.outputs.base8" => "12345678".to_owned(),
-            expression if expression.starts_with("hashFiles(") => format!("{id:064x}"),
+            expression
+                if expression.starts_with("hashFiles(")
+                    || expression == "steps.sources_locks.outputs.hash" =>
+            {
+                format!("{id:064x}")
+            }
             _ => unreachable!("{expression}"),
         };
         resolved.push_str(&value);
@@ -278,4 +283,67 @@ fn renderer_target_keys_keep_two_versions_for_every_job_and_root() {
         })
         .collect();
     assert_eq!(plan(&obsolete, 20), Vec::<u64>::new());
+}
+
+#[test]
+fn retired_per_root_sources_entries_are_deleted_within_any_budget() {
+    let shared = |id: u64| entry(id, "src", 10 * DAY);
+    let retired = |id: u64| {
+        let mut old = entry(id, "src", 10 * DAY);
+        old.key = old.key.replace("all.roots", "root");
+        old
+    };
+    assert_ne!(shared(1).key, retired(1).key);
+    let entries = [
+        shared(1),
+        shared(2),
+        shared(3),
+        retired(11),
+        retired(12),
+        retired(13),
+    ];
+    assert_eq!(plan(&entries, 0), [11, 12, 13, 1]);
+    assert_eq!(plan(&entries, 1_000), [11, 12, 13]);
+}
+
+fn with_compat(id: u64, compat: char) -> CacheEntry {
+    let mut entry = base(id, "tgt");
+    entry.key = entry
+        .key
+        .replace(&"b".repeat(16), &compat.to_string().repeat(16));
+    entry
+}
+
+#[test]
+fn a_target_entry_of_an_older_compatibility_family_is_deleted_whatever_the_budget() {
+    let entries = [
+        with_compat(1, 'a'),
+        with_compat(2, 'a'),
+        with_compat(3, 'b'),
+        with_compat(4, 'b'),
+    ];
+    assert_eq!(plan(&entries, u64::MAX), [1, 2]);
+    assert_eq!(plan(&entries, 0), [1, 2]);
+    assert_eq!(
+        plan(&[with_compat(2, 'a'), with_compat(1, 'b')], u64::MAX),
+        [1]
+    );
+    let mut other_job = with_compat(5, 'a');
+    other_job.key =
+        target_key(5, "rust-lint", "Cargo.toml").replace(&"b".repeat(16), &"a".repeat(16));
+    assert_eq!(
+        plan(&[other_job, with_compat(3, 'b')], u64::MAX),
+        Vec::<u64>::new()
+    );
+}
+
+#[test]
+fn a_sources_lock_restored_within_a_day_survives_even_when_two_newer_locks_exist() {
+    let entries = [base(1, "src"), base(2, "src"), base(3, "src")];
+    assert_eq!(plan(&entries, 0), [1]);
+    for (idle, expected) in [(DAY - 1, vec![]), (DAY, vec![1]), (2 * DAY, vec![1])] {
+        let mut restored = entries.clone();
+        restored[0].last_accessed_at = NOW - idle;
+        assert_eq!(plan(&restored, 0), expected, "idle {idle}");
+    }
 }

@@ -26,6 +26,8 @@ mod schema;
 mod session_refresh;
 mod source_authorization;
 mod sql;
+#[cfg(test)]
+mod test_template;
 mod transaction;
 mod worker_volume;
 
@@ -59,6 +61,10 @@ pub(crate) use connection::{
 };
 pub(crate) use connection::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
+};
+pub(crate) use connection::{
+    ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode, ScaleSetDeleteRecord,
+    ScaleSetDeleteTarget, ScaleSetDeleted,
 };
 pub(crate) use connection::{
     UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,

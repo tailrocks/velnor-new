@@ -11,6 +11,7 @@ mod guards;
 mod identity;
 mod inventory;
 mod links;
+mod managed_target;
 mod migration;
 mod optional;
 mod partial;
@@ -357,6 +358,16 @@ pub(super) fn path_dependency_units_in(repo: &Repo, target: &str) {
 }
 
 fn prepare_path_dependency_outputs(repo: &Repo, target: &str) {
+    unit(
+        repo,
+        &format!("{target}/deps/side-000000000000000e.d"),
+        "out.d: vendor/side/src/lib.rs\n",
+    );
+    unit(
+        repo,
+        &format!("{target}/.fingerprint/side-000000000000000e/lib-side"),
+        "",
+    );
     let target_directory = repo.root().join("target");
     for output in [
         format!("{target}/build/mid-0000000000000004/output"),

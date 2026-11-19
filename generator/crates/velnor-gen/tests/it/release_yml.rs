@@ -14,13 +14,14 @@ use crate::release_fixture::{
     APP, DEFAULT_BRANCH, GREEN, PUSH, READY, Root, app, conjuncts, dashed, jobs, release_view,
     steps, two_binaries, two_roots, uses,
 };
+use crate::release_unguarded::expected_release;
 use crate::yaml_tree::Node;
 
 const NEWEST: &str = "github.event.workflow_run.head_sha == github.sha";
 
 type TestResult = Result<(), Box<dyn Error>>;
 fn package_of<'a>(id: &str, packages: &[&'a str]) -> Result<&'a str, Box<dyn Error>> {
-    let rest = ["build-", "sums-", "publish-"]
+    let rest = ["build-", "sums-", "verify-", "publish-"]
         .iter()
         .find_map(|kind| id.strip_prefix(kind))
         .ok_or("not a binary job")?;
@@ -233,13 +234,13 @@ fn release_yml_is_refused_without_a_pinned_helper_and_with_a_broken_release_plz_
     view.files.remove(&LOCK_PATH);
     view.tracked_paths.remove(&LOCK_PATH);
     assert_eq!(
-        expected_files(&view).err(),
+        expected_release(&view).err(),
         Some(GenerateError::HelperNotPinned)
     );
     let mut view = release_view(&[], Some("[[binaries]]\npackage = \"app\"\n"))?;
     view.files.remove(&RepoPath::new("release-plz.toml")?);
     assert_eq!(
-        expected_files(&view).err(),
+        expected_release(&view).err(),
         Some(GenerateError::Release(
             ReleaseError::MissingReleasePlzToml {
                 root: ".".to_owned()
@@ -258,7 +259,7 @@ fn release_yml_refuses_a_root_that_would_add_a_second_command() -> TestResult {
     };
     let view = release_view(&[weird], Some(&format!("roots = [{root:?}]\n")))?;
     assert!(matches!(
-        expected_files(&view),
+        expected_release(&view),
         Err(GenerateError::Rules(_))
     ));
     Ok(())

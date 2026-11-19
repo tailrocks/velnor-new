@@ -22,7 +22,7 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
     {
         return Ok(());
     }
-    let mut names = std::collections::BTreeSet::new();
+    let mut names = std::collections::BTreeMap::new();
     for config in ["mise.toml", ".mise.toml"] {
         let Some(bytes) = view.files.get(&path(config)?) else {
             continue;
@@ -36,15 +36,15 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
         names.extend(
             tools
                 .filter_map(|line| line.split_once(" = "))
-                .map(|(name, _)| name.trim().trim_matches('"').to_owned()),
+                .map(|(name, value)| (name.trim().trim_matches('"').to_owned(), requested(value))),
         );
     }
     let mut lock = String::new();
-    for name in &names {
+    for (name, version) in &names {
         for platform in ["linux-x64", "macos-arm64"] {
             write!(
                 lock,
-                "[[tools.\"{name}\"]]\nversion = \"1\"\n\n[tools.\"{name}\".\"platforms.{platform}\"]\nurl = \"https://example.invalid/{name}\"\n\n"
+                "[[tools.\"{name}\"]]\nversion = \"{version}\"\n\n[tools.\"{name}\".\"platforms.{platform}\"]\nurl = \"https://example.invalid/{name}\"\n\n"
             )?;
         }
     }
@@ -54,6 +54,19 @@ pub(crate) fn lock_pinned_tools(view: &mut RepoView) -> Result<(), Box<dyn Error
     view.tracked_paths.insert(mise_lock.clone());
     view.files.insert(mise_lock, lock.into_bytes());
     Ok(())
+}
+
+fn requested(value: &str) -> String {
+    let quoted = |text: &str| {
+        text.strip_prefix('"')
+            .map(|rest| rest.split('"').next().unwrap_or("").to_owned())
+    };
+    value
+        .split("version = ")
+        .nth(1)
+        .and_then(|rest| quoted(rest.trim_start()))
+        .or_else(|| quoted(value.trim()))
+        .unwrap_or_else(|| "1".to_owned())
 }
 
 pub(crate) fn path(text: &str) -> Result<RepoPath, Box<dyn Error>> {
@@ -77,6 +90,7 @@ pub(crate) fn package(
                     name: PackageName::new(*name)?,
                     kind: *kind,
                     platform: None,
+                    optional: false,
                     manifest: Some(path(manifest)?),
                     features: Vec::new(),
                     rename: None,

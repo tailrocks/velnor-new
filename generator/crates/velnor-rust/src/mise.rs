@@ -8,6 +8,7 @@ use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
+use crate::lint_tools::applies;
 use crate::mise_lock::{is_rustup_tool, lock_platform, prebuilt_platforms};
 use crate::toml_file::table;
 
@@ -92,7 +93,16 @@ pub fn tool_pins(files: &BTreeMap<RepoPath, Vec<u8>>) -> Result<ToolPins, Detect
 fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
     let parsed = table(bytes).map_err(|reason| DetectError::invalid(config, reason))?;
     let unknown = parsed.keys().find(|key| {
-        !["tools", "settings", "min_version", "tasks", "wrappers"].contains(&key.as_str())
+        ![
+            "tools",
+            "settings",
+            "min_version",
+            "tasks",
+            "task_templates",
+            "vars",
+            "wrappers",
+        ]
+        .contains(&key.as_str())
     });
     let settings = parsed.get("settings").and_then(Value::as_table);
     let unknown_setting = settings.and_then(|settings| {
@@ -104,22 +114,32 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
         .and_then(|settings| settings.get("cargo"))
         .and_then(Value::as_table)
         .and_then(|cargo| cargo.keys().find(|key| key.as_str() != "binstall"));
+    let vars_directive = parsed
+        .get("vars")
+        .and_then(Value::as_table)
+        .and_then(|vars| vars.keys().find(|key| key.starts_with('_')));
     let postinstall = parsed
         .get("tools")
         .and_then(Value::as_table)
         .is_some_and(|tools| tools.values().any(runs_a_command));
-    let templates = parsed.values().any(has_template);
+    let templates = parsed
+        .iter()
+        .filter(|(key, _)| !matches!(key.as_str(), "tasks" | "task_templates"))
+        .any(|(_, value)| has_template(value));
     if let Some(name) = unknown
         .or(unknown_setting)
         .or(unknown_cargo_setting)
+        .or(vars_directive)
         .map(String::as_str)
         .or(postinstall.then_some("tools.postinstall"))
-        .or(templates.then_some("template"))
     {
         return Err(DetectError::invalid(
             config,
             Reason::MiseOverridesFlags(name.to_owned()),
         ));
+    }
+    if templates {
+        return Err(DetectError::invalid(config, Reason::MiseTemplate));
     }
     Ok(())
 }
@@ -186,15 +206,8 @@ fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
     let Some(platform) = lock_platform(&facts.config.runner) else {
         return Ok(());
     };
-    let os = platform.split('-').next().unwrap_or(platform);
     let source_built = facts.tools.tools.iter().find(|(name, pin)| {
-        let filtered_out = !pin.os_filters.is_empty()
-            && pin.os_filters.len() == pin.requested.len()
-            && pin
-                .os_filters
-                .values()
-                .all(|names| !names.iter().any(|filter| filter == os));
-        !is_rustup_tool(name) && !filtered_out && !pin.prebuilt.contains(platform)
+        !is_rustup_tool(name) && applies(pin, Some(platform)) && !pin.prebuilt.contains(platform)
     });
     match source_built {
         Some((tool, _)) => Err(DetectError::ToolNotPrebuilt {

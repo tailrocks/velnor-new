@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use serde::Deserialize;
 use velnor_model::{
-    HelperRelease, RepoPath, RepoView, RootSlug, RustCiConfig, RustRoot, Shape, WorkspaceGroup,
+    GroupRoot, HelperRelease, RepoPath, RepoView, RootSlug, RustCiConfig, RustRoot, Shape,
+    WorkspaceGroup,
 };
 
 use crate::config::CONFIG_PATH;
@@ -99,6 +100,11 @@ pub(crate) fn check(
     for group in &config.workspace_groups {
         check_target_dir(view, group, rust_roots)?;
         for manifest in &group.roots {
+            if config.test_groups.iter().any(|test| {
+                matches!(&test.root, GroupRoot::Folder(folder) if *folder == manifest.parent())
+            }) {
+                return Err(invalid(Reason::GroupTestGroups(manifest.clone())));
+            }
             if !rust_roots.iter().any(|root| &root.manifest == manifest) {
                 return Err(invalid(Reason::UnknownGroupRoot(manifest.clone())));
             }

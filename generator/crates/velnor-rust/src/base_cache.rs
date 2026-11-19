@@ -4,8 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    Access, BaseExpiry, CacheKey, HelperCommand, Host, Job, JobId, PermissionScope, Permissions,
-    RepoFacts, RepoPath, Step, StepKind, TrimFamily, When,
+    Access, BaseExpiry, CacheKey, CacheRoot, HelperCommand, Host, Job, JobId, LockIdentity,
+    PermissionScope, Permissions, RepoFacts, RepoPath, RootSlug, RustRoot, Step, StepKind,
+    TrimFamily, When,
 };
 
 use crate::lane::Lane;
@@ -15,9 +16,76 @@ use crate::units::Unit;
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
+const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 86);
+const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
+
+pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
+    let lock = if facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(MEMBER_LOCK_HELPER))
+    {
+        LockIdentity::Members
+    } else {
+        LockIdentity::File
+    };
+    CacheRoot::new(&root.manifest, root.target_dir.clone()).with_lock_identity(lock)
+}
 
 pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
+}
+
+pub const MAX_SOURCE_ROOTS: usize = 16;
+
+#[must_use]
+pub fn source_roots_over_limit(facts: &RepoFacts) -> Option<usize> {
+    (writes_base(facts)
+        && !fetches_all_roots_at_once(facts)
+        && facts.rust_roots.len() > MAX_SOURCE_ROOTS)
+        .then_some(facts.rust_roots.len())
+}
+
+fn fetches_all_roots_at_once(facts: &RepoFacts) -> bool {
+    facts
+        .helper
+        .as_ref()
+        .is_some_and(|helper| helper.version().at_least(SOURCES_FETCH_HELPER))
+}
+
+fn sources_fetches(facts: &RepoFacts, lane: &RootSlug) -> Vec<Step> {
+    let fetch = |kind, directory| Step {
+        directory,
+        when: When::FetchSources,
+        ..step(kind)
+    };
+    if fetches_all_roots_at_once(facts) {
+        return vec![fetch(
+            StepKind::SourcesFetchAll {
+                lane: lane.clone(),
+                manifests: facts
+                    .rust_roots
+                    .iter()
+                    .map(|root| root.manifest.clone())
+                    .collect(),
+            },
+            None,
+        )];
+    }
+    facts
+        .rust_roots
+        .iter()
+        .enumerate()
+        .map(|(position, other)| {
+            fetch(
+                StepKind::SourcesFetch {
+                    lane: lane.clone(),
+                    position,
+                },
+                other.manifest.parent(),
+            )
+        })
+        .collect()
 }
 
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
@@ -47,6 +115,17 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
     std::iter::once(step(restore)).chain(replan).collect()
 }
 
+pub(crate) fn sources_locks(facts: &RepoFacts) -> Step {
+    let mut locks: Vec<RepoPath> = facts
+        .rust_roots
+        .iter()
+        .map(|root| root.manifest.sibling(&RepoPath::from_static("Cargo.lock")))
+        .collect();
+    locks.sort();
+    locks.dedup();
+    step(StepKind::SourcesLocks(locks))
+}
+
 pub(crate) fn saving_run(run: Step) -> Step {
     Step {
         when: When::SavingRun,
@@ -72,7 +151,7 @@ pub(crate) fn save_steps(
     if !writes_base(facts) {
         return Vec::new();
     }
-    let cache_root = unit.cache_root();
+    let cache_root = unit.cache_root(facts);
     let target = CacheKey::Target {
         job: job.clone(),
         root: cache_root.clone(),
@@ -94,6 +173,7 @@ pub(crate) fn save_steps(
                     .collect(),
                 target: unit.target_dir.clone(),
                 archive,
+                budget_bytes: facts.config.cache_budget_bytes,
             })
         },
         Step {
@@ -102,11 +182,12 @@ pub(crate) fn save_steps(
         },
     ];
     if sources {
+        steps.extend(sources_fetches(facts, cache_root.slug()));
         steps.push(Step {
             when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
-                root: cache_root,
+                lane: cache_root,
             }))
         });
     }
@@ -149,7 +230,7 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         name: Some("Cache maintenance".to_owned()),
         needs,
         when: When::SaveBase,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Actions, Access::Write),
             (PermissionScope::PullRequests, Access::Read),

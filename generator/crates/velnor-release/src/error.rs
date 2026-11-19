@@ -45,6 +45,11 @@ pub enum ReleaseError {
         package: String,
         bin: String,
     },
+    InvalidProfile(String, String),
+    InvalidAssetName {
+        package: String,
+        template: String,
+    },
     EmptyAfter,
     EmptyRoots,
     EmptyPlatforms {
@@ -56,6 +61,20 @@ pub enum ReleaseError {
     VersionEndsInLock(String, String),
     DuplicateBinary {
         package: String,
+    },
+    KeyNeedsFormat {
+        package: String,
+        key: &'static str,
+        format: &'static str,
+    },
+    MuslNeedsLinux {
+        package: String,
+    },
+    InvalidCheck(String, crate::check::CheckProblem),
+    InvalidBundle {
+        package: String,
+        entry: String,
+        reason: &'static str,
     },
     DuplicatePackage {
         root: String,
@@ -202,6 +221,10 @@ pub enum ReleaseError {
     RootWithoutCargoManifest {
         root: String,
     },
+    NestedReleasePlzRoot {
+        root: String,
+    },
+    Family(crate::error_family::FamilyError),
     UnknownWorkflow {
         name: String,
     },
@@ -223,7 +246,7 @@ pub enum ReleaseError {
     },
 }
 
-fn subject(package: Option<&String>) -> String {
+pub(crate) fn subject(package: Option<&String>) -> String {
     package.map_or_else(
         || "the [workspace] table".to_owned(),
         |name| format!("package {name}"),
@@ -291,25 +314,9 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: binary {package} is not a released [[package]] in any release-plz.toml"
             ),
-            Self::UnknownPlatform { package, platform } => write!(
-                f,
-                ".velnor/release.toml: binary {package} names unknown platform {platform:?}"
-            ),
-            Self::InvalidBinName { package, bin } => write!(
-                f,
-                ".velnor/release.toml: binary {package} names bin {bin:?}, which is not a valid binary name"
-            ),
             Self::EmptyAfter => write!(
                 f,
                 ".velnor/release.toml: after must name at least one non-blank workflow"
-            ),
-            Self::EmptyPlatforms { package } => write!(
-                f,
-                ".velnor/release.toml: binary {package} must name at least one platform"
-            ),
-            Self::DuplicateBinary { package } => write!(
-                f,
-                ".velnor/release.toml: package {package} has more than one [[binaries]] entry"
             ),
             Self::UnsafeRoot { root } => write!(
                 f,
@@ -367,11 +374,6 @@ impl ReleaseError {
             } => write!(
                 f,
                 "{root}/release-plz.toml: {field} must not be false for {}",
-                subject(package.as_ref())
-            ),
-            Self::PublishWithGitOnly { root, package } => write!(
-                f,
-                "{root}/release-plz.toml: {} sets publish = true together with git_only = true, which release-plz refuses",
                 subject(package.as_ref())
             ),
             Self::ExecutableConfig { root, key } => write!(

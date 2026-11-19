@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, StepNeed, Unread,
-    Weakening, WorkspaceGroup,
+    Weakening, WorkspaceGroup, group_output_name,
 };
-use velnor_rust::{CONFIG_PATH, PolicyRuns};
+use velnor_rust::{CONFIG_PATH, GroupPlan, PolicyRuns};
 
 use crate::error::CiError;
 use crate::escape::{escape, inert};
@@ -63,7 +63,7 @@ pub fn outputs(
 }
 
 #[must_use]
-pub fn group_outputs(
+pub fn workspace_group_outputs(
     groups: &[WorkspaceGroup],
     selections: &BTreeMap<RepoPath, RustSelection>,
 ) -> String {
@@ -83,6 +83,38 @@ pub fn group_outputs(
                 })
                 .unwrap_or("none");
             format!("rust_{}_mode={mode}\n", group.gate)
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn group_outputs(groups: &[GroupPlan]) -> String {
+    groups
+        .iter()
+        .map(|group| {
+            format!(
+                "{}={}\n",
+                group_output_name(&RootSlug::of(&group.root), &group.name),
+                lane(group.decision.run)
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn group_explanation(groups: &[GroupPlan]) -> String {
+    groups
+        .iter()
+        .map(|group| {
+            format!(
+                "test group {} ({}): {}: {}\n",
+                inert(group.name.as_str()),
+                inert(group.root.as_str()),
+                lane(group.decision.run),
+                escape(&group.decision.reason, false)
+            )
         })
         .collect::<Vec<String>>()
         .concat()

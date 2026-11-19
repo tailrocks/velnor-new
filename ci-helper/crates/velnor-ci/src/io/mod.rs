@@ -3,7 +3,10 @@
 
 mod activity;
 mod archive_witness;
+mod artifact_api;
+mod artifact_unzip;
 mod audit;
+mod budget;
 mod build_inputs;
 mod cache;
 pub mod cache_api;
@@ -15,26 +18,41 @@ mod configurations;
 mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
+mod fetch;
+mod fetch_credentials;
+mod fetch_reports;
+mod fetch_toolchain;
 mod git;
 mod git_witness;
 mod groups;
 mod http;
+mod image_candidate;
 mod inputs;
 mod manifests;
+mod merge_group;
 mod plan;
+mod plan_request;
+pub mod preview;
+mod private_check;
 pub mod pump;
+mod qualification;
 mod recording;
+mod registry;
 mod release;
 mod report;
 mod report_checkout;
 mod report_inputs;
 mod required;
+mod resolve_qualification;
 mod restored;
 mod run;
 mod setup;
+mod small;
+mod sources;
 mod timings;
 mod unit_platforms;
 mod units;
+mod write_request;
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -49,7 +67,8 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
+    DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
+    SourcesCommand, TestGroupsCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -57,7 +76,9 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
+use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
+use crate::test_groups;
 use clap::{CommandFactory, FromArgMatches};
 
 const TOKEN_VARIABLE: &str = "GITHUB_TOKEN";
@@ -66,7 +87,7 @@ const OUTPUT_VARIABLE: &str = "GITHUB_OUTPUT";
 const SUMMARY_VARIABLE: &str = "GITHUB_STEP_SUMMARY";
 const EVENT_VARIABLE: &str = "GITHUB_EVENT_NAME";
 const SOURCE_LIMIT: u64 = 1 << 20;
-const SOURCE_TOTAL_LIMIT: u64 = 8 << 20;
+const SOURCE_TOTAL_LIMIT: u64 = 64 << 20;
 const SCHEDULED: &str = "schedule";
 const DEFAULT_API: &str = "https://api.github.com";
 const UNKNOWN_COMMIT: &str = "unknown";
@@ -107,6 +128,15 @@ pub fn main() -> ExitCode {
     if let Command::Run(args) = &cli.command {
         return run::run(args);
     }
+    if let Command::Sources(SourcesCommand::Fetch(args)) = &cli.command {
+        return sources::fetch(args);
+    }
+    if let Command::LaneGuard(args) = &cli.command {
+        return lane_guard::run(args);
+    }
+    if let Command::TestGroups(TestGroupsCommand::Check(args)) = &cli.command {
+        return test_groups::run(args);
+    }
     match run(cli) {
         Ok(output) => {
             print!("{output}");
@@ -116,6 +146,17 @@ pub fn main() -> ExitCode {
             eprintln!("{}", stderr_line(&error.to_string()));
             ExitCode::FAILURE
         }
+    }
+}
+
+fn budget_limit() -> Result<Option<u64>, CiError> {
+    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
+        Ok(text) if !text.trim().is_empty() => text
+            .trim()
+            .parse()
+            .map(Some)
+            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
+        _ => Ok(None),
     }
 }
 
@@ -140,7 +181,13 @@ fn run_decide(args: DecideArgs) -> Result<String, CiError> {
     } else {
         let counts = activity::activity()?
             .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
-        cache::decide_counts(&counts, &target, args.archive.as_deref(), now_seconds())?
+        cache::decide_counts(
+            &counts,
+            &target,
+            args.archive.as_deref(),
+            now_seconds(),
+            budget_limit()?,
+        )?
     };
     append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
     Ok(decision.report)
@@ -151,6 +198,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
+        Command::Bench(BenchCommand::Budget(args)) => budget::run_budget(&args),
         Command::Inputs(InputsCommand::Save(args)) => {
             save_inputs(&current_dir()?, &args.target_dir)
         }
@@ -175,12 +223,27 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Preflight(args)) => release::run_preflight(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
+        Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::MergeGroupPassed => Ok(merge_group::run()),
+        Command::WriteRequest(args) => write_request::run(&args),
+        Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::Qualification(QualificationCommand::Compare(args)) => {
+            qualification::run_compare(&args)
+        }
+        Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::Image(ImageCommand::VerifyCandidate(args)) => {
+            image_candidate::verify_candidate(&args)
+        }
+        Command::Fetch(args) => fetch::fetch(&args),
+        Command::PrivateTokenAllowed => private_check::run(),
         Command::MbxStore => crate::mbx_store::setup(),
+        Command::MbxSeed => crate::mbx_seed::setup(),
+        Command::ToolsLocal(args) => crate::tools_local::setup(args.verb, &args.key),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
@@ -189,24 +252,27 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
-        Command::Restored(args) => {
-            let root = current_dir()?;
-            let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
-            let targets = if configured.is_empty() {
-                every_root_target(&root)
-            } else {
-                configured
-                    .iter()
-                    .map(|target| cache_paths::validated(&root, target))
-                    .collect::<Result<Vec<_>, _>>()?
-            };
-            let expiry = expire_old_bases(&targets, now_seconds())?;
-            append_outputs(&format!("expired={}\n", expiry.expired))?;
-            let ties = cold_on_failure(&targets, "restored", || break_time_ties(&root))?;
-            Ok(expiry.report + &ties)
+        Command::Restored(args) => small::run_restored(args),
+        Command::ValidateArtifactId => small::run_validate_artifact_id(),
+        Command::InstallGh(args) => small::run_install_gh(&args),
+        Command::StageBundle => small::run_stage_bundle(),
+        Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
+        Command::VerifyMacProof => preview::cli::verify_mac_proof(),
+        Command::RunAuthority(args) => preview::cli::run_authority(&args),
+        Command::AdmitPreview => preview::admit::admit_preview(),
+        Command::Run(_) | Command::Sources(_) => {
+            Err(CiError::new("run and sources are handled before commands"))
         }
-        Command::Run(_) => Err(CiError::new("run is handled before commands")),
+        Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
+        Command::TestGroups(_) => Err(CiError::new("test-groups is handled before commands")),
     }
+}
+
+pub(super) fn env_path(variable: &str) -> Result<std::path::PathBuf, CiError> {
+    std::env::var_os(variable)
+        .filter(|value| !value.is_empty())
+        .map(std::path::PathBuf::from)
+        .ok_or_else(|| CiError::new(format!("{variable} is not set")))
 }
 
 fn now_seconds() -> i64 {

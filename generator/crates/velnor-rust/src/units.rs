@@ -5,6 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_model::{CacheRoot, RepoFacts, RepoPath, RootSlug, RustRoot};
 
+use crate::base_cache::cache_root;
 use crate::roots::CARGO_LOCK;
 
 pub(crate) struct Unit {
@@ -34,7 +35,7 @@ impl Unit {
         }
     }
 
-    pub(crate) fn cache_root(&self) -> CacheRoot {
+    pub(crate) fn cache_root(&self, facts: &RepoFacts) -> CacheRoot {
         let mut locks: Vec<RepoPath> = self
             .roots
             .iter()
@@ -42,7 +43,7 @@ impl Unit {
             .collect();
         locks.sort();
         match self.roots.first() {
-            Some(root) if !self.grouped => CacheRoot::new(&root.manifest, self.target_dir.clone()),
+            Some(root) if !self.grouped => cache_root(facts, root),
             _ => CacheRoot::group(
                 self.slug.clone(),
                 self.slug.to_string(),

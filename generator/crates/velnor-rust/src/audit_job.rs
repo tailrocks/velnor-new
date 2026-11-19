@@ -23,7 +23,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Opti
     };
     let families: Vec<JobId> = units
         .iter()
-        .map(|unit| target_family(jobs, unit).unwrap_or(AUDIT_JOB))
+        .map(|unit| target_family(facts, jobs, unit).unwrap_or(AUDIT_JOB))
         .collect();
     let mut steps = setup_units(facts, units, &lane, &families);
     steps.extend(units.iter().flat_map(|unit| {
@@ -40,7 +40,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Opti
     steps.push(step(StepKind::Helper(HelperCommand::InputsAudit)));
     Some(Job {
         when,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         needs: vec![PLAN_JOB],
         steps,
         ..job(facts, AUDIT_JOB)
@@ -50,8 +50,8 @@ pub(crate) fn audit_job(facts: &RepoFacts, units: &[Unit], jobs: &[Job]) -> Opti
 /// The audit builds every target, so it restores, read-only, the target cache
 /// of the last lane that saves this root (the one that builds the tests) and
 /// starts warm instead of building cold.
-fn target_family(jobs: &[Job], unit: &Unit) -> Option<JobId> {
-    let cache_root = unit.cache_root();
+fn target_family(facts: &RepoFacts, jobs: &[Job], unit: &Unit) -> Option<JobId> {
+    let cache_root = unit.cache_root(facts);
     jobs.iter()
         .flat_map(|job| &job.steps)
         .filter_map(|step| match &step.kind {

@@ -4,18 +4,21 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    MbxStore, PackageName, PermissionScope, Permissions, PullRequestType, RepoFacts, RootSlug,
-    RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Timings, Toolchain, Triggers, When,
-    WorkflowPlan,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, FullRun, HelperCommand, Host, Job,
+    JobId, MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
+    PullRequestType, PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision,
+    Step, StepKind, TargetName, Timings, Toolchain, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::restored;
+use crate::base_cache::{restored, sources_locks};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
-use crate::lane::{Lane, PLAN_JOB, plan_job, policy_job, used_outputs};
+use crate::lane::{
+    Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
+};
+use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs, has_gate};
 use crate::root_jobs::root_jobs;
 use crate::schedule::schedule;
@@ -25,19 +28,32 @@ use crate::units::{Unit, units};
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
 pub(crate) const TEST_JOB: JobId = JobId::from_static("rust-test");
+pub(crate) const MBX_SEED_HELPER: (u64, u64, u64) = (0, 1, 86);
+pub(crate) const TOOLS_LOCAL_HELPER: (u64, u64, u64) = (0, 1, 89);
 pub(crate) const DEFAULT_GROUP_JOB: JobId = JobId::from_static("rust-test-default");
 pub(crate) const HELPER_JOB: JobId = JobId::from_static("rust-helper");
+pub(crate) const BUDGET_JOB: JobId = JobId::from_static(velnor_model::BUDGET_JOB);
 pub(crate) const CHECKOUT_DEPTH: u32 = 1;
 pub(crate) const PLAN_DEPTH: u32 = 2;
+const BUDGET_RUNS: usize = 10;
+const BUDGET_TIMEOUT_MINUTES: u16 = 10;
 const TIE_BREAKING_HELPER: (u64, u64, u64) = (0, 1, 81);
+const IGNORED_COUNT_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     let units = units(facts);
-    let many = units.len() > 1;
+    let suffixed = units.len() > 1;
     let decisions: Vec<ShapeDecision> = units
         .iter()
-        .map(|unit| decide_shape(facts.config.shape, timings(facts, unit).as_ref()))
+        .map(|unit| {
+            let decision = decide_shape(facts.config.shape, timings(facts, unit).as_ref());
+            if unit.grouped {
+                decision
+            } else {
+                crate::config_test_groups::archive_shape(facts, &unit.roots[0], decision)
+            }
+        })
         .collect();
     let helper_root = facts.config.helper.as_ref().and_then(|path| {
         facts
@@ -54,58 +70,118 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .zip(decisions)
         .flat_map(|(unit, decision)| {
             let lane = Lane::root(unit.gate.clone(), single);
-            root_jobs(facts, unit, decision, many || unit.grouped, &lane)
+            root_jobs(facts, unit, decision, suffixed, &lane)
         })
         .collect();
     jobs.extend(audit_job(facts, &units, &jobs));
     if facts.policy.any() {
         jobs.push(policy_job(facts, &Lane::policy(single)));
     }
-    let draft_guard = facts
-        .config
-        .skip_draft_pull_requests
-        .then(|| step(StepKind::FailOnDraftRun));
+    jobs.extend(crate::lint_jobs::lint_jobs(facts));
+    let draft_guard = draft_guard(facts);
     let gate = has_gate(facts);
-    if !single {
+    if single {
+        if gate {
+            expose_in_single(&mut jobs);
+        }
+        expose_read_outputs(&mut jobs, &RUST_JOB);
+    } else {
         let mut used = used_outputs(&jobs);
         if gate {
             used.extend(gate_outputs(&jobs));
             used.sort();
             used.dedup();
         }
-        jobs.insert(0, plan_job(facts, used));
-    } else if gate {
-        expose_in_single(&mut jobs);
+        jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
     }
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root));
     }
     if facts.config.cache_debug == CacheDebug::On {
-        upload_cargo_logs(&mut jobs);
+        crate::cargo_log::upload(&mut jobs);
     }
+    crate::private_fetch::insert(facts.config.private_sources.as_ref(), &mut jobs);
+    if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
+        add_mbx_remote(&mut jobs);
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
+        crate::merge_group_skip::apply(&mut jobs, single);
+    }
+    crate::docs_post_merge::apply(facts, &mut jobs);
+    jobs.extend(budget_job(facts));
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
-        triggers: Triggers {
-            pull_request: PullRequestType::ALL
-                .into_iter()
-                .chain(
-                    facts
-                        .config
-                        .skip_draft_pull_requests
-                        .then_some(PullRequestType::ConvertedToDraft),
-                )
-                .collect(),
-            push_branch: Some(facts.config.default_branch.clone()),
-            merge_group: true,
-            schedule: schedule(facts),
-            workflow_dispatch: true,
+        triggers: triggers(facts),
+        concurrency: match facts.config.pr_ci {
+            PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
+            PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
         },
-        concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         fork_runner: facts.config.fork_runner.clone(),
         jobs,
     }
+}
+
+fn triggers(facts: &RepoFacts) -> Triggers {
+    Triggers {
+        pull_request: PullRequestType::ALL
+            .into_iter()
+            .chain(
+                facts
+                    .config
+                    .skip_draft_pull_requests
+                    .then_some(PullRequestType::ConvertedToDraft),
+            )
+            .chain((facts.config.pr_ci == PrCi::Label).then_some(PullRequestType::Labeled))
+            .collect(),
+        push_branch: Some(facts.config.default_branch.clone()),
+        merge_group: true,
+        schedule: schedule(facts),
+        workflow_dispatch: true,
+    }
+}
+
+fn draft_guard(facts: &RepoFacts) -> Option<Step> {
+    match facts.config.pr_ci {
+        PrCi::Label => Some(step(StepKind::DraftNotice)),
+        PrCi::Always => facts
+            .config
+            .skip_draft_pull_requests
+            .then(|| step(StepKind::FailOnDraftRun)),
+    }
+}
+
+fn budget_job(facts: &RepoFacts) -> Option<Job> {
+    if !facts.config.budget.is_some_and(|budget| budget.enabled()) {
+        return None;
+    }
+    let mut steps = vec![step(StepKind::Checkout {
+        depth: CHECKOUT_DEPTH,
+        sparse: None,
+    })];
+    steps.extend(
+        facts
+            .helper
+            .iter()
+            .map(|release| step(StepKind::InstallHelper(release.clone()))),
+    );
+    steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
+    Some(Job {
+        name: Some("Speed budget".to_owned()),
+        when: if facts.config.full_run == FullRun::Off {
+            When::DefaultBranchPush
+        } else {
+            When::Scheduled
+        },
+        permissions: Permissions(BTreeMap::from([
+            (PermissionScope::Actions, Access::Read),
+            (PermissionScope::Contents, Access::Read),
+        ])),
+        timeout_minutes: BUDGET_TIMEOUT_MINUTES,
+        steps,
+        ..job(facts, BUDGET_JOB)
+    })
 }
 
 fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
@@ -156,8 +232,8 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
-    let mut steps = vec![step(StepKind::Checkout { depth })];
+pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -> Vec<Step> {
+    let mut steps = vec![step(StepKind::Checkout { depth, sparse })];
     steps.extend(
         facts
             .helper
@@ -166,39 +242,18 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
     );
     if facts.config.mbx_store == MbxStore::Shared {
         steps.push(step(StepKind::MbxStore));
+        if facts
+            .helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
+        {
+            steps.push(step(StepKind::MbxSeed));
+        }
     }
     steps
 }
 
-pub(crate) fn mirror_step(facts: &RepoFacts) -> Option<Step> {
-    facts
-        .config
-        .crates_mirror
-        .as_ref()
-        .filter(|mirror| mirror.runner == facts.config.runner)
-        .map(|mirror| step(StepKind::CratesMirror(mirror.clone())))
-}
-
-pub(crate) fn tools_cache_key() -> CacheKey {
-    CacheKey::Tools { host: Host }
-}
-
-pub(crate) fn tools_restore(facts: &RepoFacts) -> Option<Step> {
-    (!facts.tools.tools.is_empty()).then(|| step(StepKind::CacheRestore(tools_cache_key())))
-}
-
-pub(crate) fn tools_save(facts: &RepoFacts) -> Option<Step> {
-    (!facts.tools.tools.is_empty()).then(|| Step {
-        when: When::SaveToolsOnDefaultBranch,
-        ..step(StepKind::CacheSave(tools_cache_key()))
-    })
-}
-
-pub(crate) fn tools_install(facts: &RepoFacts) -> Option<Step> {
-    (!facts.tools.tools.is_empty()).then(|| step(StepKind::InstallTools { only: None }))
-}
-
-fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
+pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
     let mut steps = Vec::new();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
         let mut components: Vec<String> = declared
@@ -235,6 +290,7 @@ pub(crate) fn setup_units(
     families: &[JobId],
 ) -> Vec<Step> {
     let root = &units[0].roots[0];
+    let roots: Vec<RustRoot> = units.iter().flat_map(|unit| unit.roots.clone()).collect();
     let mut steps = head(
         facts,
         if lane.plan.is_none() {
@@ -242,18 +298,18 @@ pub(crate) fn setup_units(
         } else {
             CHECKOUT_DEPTH
         },
+        lane.plan
+            .as_ref()
+            .and_then(|_| crate::sparse::paths(facts, &roots)),
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
-    let mut toolchain: Vec<Step> = [
-        mirror_step(facts),
-        tools_restore(facts),
-        tools_install(facts),
-    ]
-    .into_iter()
-    .flatten()
-    .collect();
+    let mut toolchain: Vec<Step> = mirror_step(facts)
+        .into_iter()
+        .chain(tools_restore(facts))
+        .chain(tools_install(facts))
+        .collect();
     if !facts.tools.tools.is_empty() {
         toolchain.extend(mirror_step(facts));
     }
@@ -267,25 +323,26 @@ pub(crate) fn setup_units(
         toolchain.extend(tools_save(facts));
         toolchain.push(prepare);
     }
-    for (unit, family) in units.iter().zip(families) {
+    for (index, (unit, family)) in units.iter().zip(families).enumerate() {
         for member in &unit.roots {
             toolchain.push(Step {
                 directory: member.manifest.parent(),
                 ..step(StepKind::Helper(HelperCommand::CheckMetadata))
             });
         }
-        let cache_root = unit.cache_root();
-        toolchain.extend([
-            step(StepKind::CacheRestore(CacheKey::Sources {
+        let cache_root = unit.cache_root(facts);
+        if index == 0 {
+            toolchain.push(sources_locks(facts));
+            toolchain.push(step(StepKind::CacheRestore(CacheKey::Sources {
                 host: Host,
-                root: cache_root.clone(),
-            })),
-            step(StepKind::CacheRestore(CacheKey::Target {
-                job: family.clone(),
-                root: cache_root,
-                host: Host,
-            })),
-        ]);
+                lane: cache_root.clone(),
+            })));
+        }
+        toolchain.push(step(StepKind::CacheRestore(CacheKey::Target {
+            job: family.clone(),
+            root: cache_root,
+            host: Host,
+        })));
     }
     if breaks_ties(facts) {
         toolchain.extend(restore_file_times(units));
@@ -298,29 +355,27 @@ pub(crate) fn setup_units(
     steps
 }
 
-fn upload_cargo_logs(jobs: &mut [Job]) {
+fn add_mbx_remote(jobs: &mut [Job]) {
     for job in jobs {
-        if job
+        if !job
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::Cargo(_)))
         {
-            let gate = job
-                .steps
-                .iter()
-                .find(|step| {
-                    matches!(
-                        step.kind,
-                        StepKind::Helper(HelperCommand::Restored(..))
-                            | StepKind::RestoredTargets { .. }
-                    )
-                })
-                .and_then(|step| step.gate.clone());
-            job.steps.push(Step {
-                when: When::CacheDebug,
-                gate,
-                ..step(StepKind::UploadCargoLog)
-            });
+            continue;
+        }
+        if let Some(at) = job
+            .steps
+            .iter()
+            .position(|step| matches!(step.kind, StepKind::InstallTools { .. }))
+        {
+            let installed = &job.steps[at];
+            let cache = Step {
+                gate: installed.gate.clone(),
+                pr: installed.pr,
+                ..step(StepKind::MbxRemote)
+            };
+            job.steps.insert(at + 1, cache);
         }
     }
 }
@@ -368,6 +423,21 @@ fn timings(facts: &RepoFacts, unit: &Unit) -> Option<Timings> {
     Some(total)
 }
 
+pub(crate) fn quick(facts: &RepoFacts) -> PrRun {
+    match facts.config.pr_ci {
+        PrCi::Label => PrRun::Quick,
+        PrCi::Always => PrRun::Always,
+    }
+}
+
+pub(crate) fn full(facts: &RepoFacts) -> PrRun {
+    match facts.config.pr_ci {
+        PrCi::Label => PrRun::Requested,
+        PrCi::Always if facts.config.skip_draft_pull_requests => PrRun::Ready,
+        PrCi::Always => PrRun::Always,
+    }
+}
+
 pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
     Job {
         id,
@@ -375,12 +445,17 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
         comment: None,
         needs: Vec::new(),
         when: When::Success,
-        skip_on_draft: facts.config.skip_draft_pull_requests,
+        pr: full(facts),
         runs_on: facts.config.runner.clone(),
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         timeout_minutes: facts.config.timeout_minutes,
         gate: None,
         plan_outputs: Vec::new(),
+        group_outputs: Vec::new(),
+        reports_ignored: facts
+            .helper
+            .as_ref()
+            .is_some_and(|helper| helper.version().at_least(IGNORED_COUNT_HELPER)),
         steps: Vec::new(),
     }
 }
@@ -393,6 +468,8 @@ pub(crate) fn step(kind: StepKind) -> Step {
         target_dir: None,
         when: When::Success,
         skip_on_draft: false,
+        skip_after_merge_group: None,
+        pr: PrRun::Always,
         gate: None,
         reads: None,
     }
