@@ -3,7 +3,7 @@
 
 use velnor_model::{HelperRelease, HelperVersion, MbxStore, PrCi, PushAfterMergeGroup, RepoFacts};
 
-use crate::{BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
+use crate::{BUDGET_HELPER, TEST_LANE_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -37,14 +37,8 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts
-        .config
-        .test_lanes
-        .iter()
-        .any(|lane| lane.filter.is_some())
-        && !release.version().at_least((0, 1, 86))
-    {
-        return Err(GenerateError::LaneGuardHelperTooOld(
+    if !facts.config.test_lanes.is_empty() && !release.version().at_least(TEST_LANE_HELPER) {
+        return Err(GenerateError::TestLaneHelperTooOld(
             release.version().clone(),
         ));
     }
