@@ -94,14 +94,7 @@ impl RootJobs<'_> {
 
     fn lane_job(&self, id: JobId, steps: Vec<Step>) -> Job {
         let mut steps = crate::test_setup::inserted(self.facts, self.root, self.lane, steps);
-        if steps
-            .iter()
-            .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
-        {
-            steps.extend(crate::delta_cache::save(
-                self.facts, self.root, self.lane, &id,
-            ));
-        }
+        crate::delta_cache::append(&mut steps, self.facts, self.root, self.lane, &id);
         Job {
             permissions: crate::base_cache::lane_permissions(self.facts),
             needs: self

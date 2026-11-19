@@ -29,6 +29,21 @@ pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId, lane: &La
     .collect()
 }
 
+pub(crate) fn append(
+    steps: &mut Vec<Step>,
+    facts: &RepoFacts,
+    root: &RustRoot,
+    lane: &Lane,
+    job: &JobId,
+) {
+    if steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
+    {
+        steps.extend(save(facts, root, lane, job));
+    }
+}
+
 pub(crate) fn save(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId) -> Vec<Step> {
     if !supported(facts, root, lane.deltas) {
         return Vec::new();
