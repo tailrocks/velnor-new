@@ -61,6 +61,10 @@ pub(crate) use connection::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
 };
 pub(crate) use connection::{
+    ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode, ScaleSetDeleteRecord,
+    ScaleSetDeleteTarget, ScaleSetDeleted,
+};
+pub(crate) use connection::{
     UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
     UnboundRetirementPhase,
 };

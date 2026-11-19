@@ -45,6 +45,12 @@ async fn a_renewed_claim_extends_its_lease_and_still_records_progress() -> TestR
         .validate_unbound_retirement_claim(&claim)
         .await
         .map_err(|e| format!("validate: {e:?}"))?;
+    for role in ["runner", "dind"] {
+        let name = format!("w{}-{role}", FAILED.nonce());
+        scope
+            .record_unbound_container_absent(&claim, role, &name)
+            .await?;
+    }
     scope
         .record_unbound_retirement_phase(
             &claim,

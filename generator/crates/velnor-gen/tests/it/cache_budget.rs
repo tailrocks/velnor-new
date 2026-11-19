@@ -15,7 +15,7 @@ fn entry(id: u64, family: &str, age: i64) -> CacheEntry {
         "src" => resolve_cache_key(
             &CacheKey::Sources {
                 host: Host,
-                root: cache_root("Cargo.toml"),
+                lane: cache_root("Cargo.toml"),
             },
             id,
         ),
@@ -239,7 +239,12 @@ fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
             "github.run_id" => id.to_string(),
             "steps.prepare.outputs.compat" => "b".repeat(16),
             "steps.restored.outputs.base8" => "12345678".to_owned(),
-            expression if expression.starts_with("hashFiles(") => format!("{id:064x}"),
+            expression
+                if expression.starts_with("hashFiles(")
+                    || expression == "steps.sources_locks.outputs.hash" =>
+            {
+                format!("{id:064x}")
+            }
             _ => unreachable!("{expression}"),
         };
         resolved.push_str(&value);
@@ -278,4 +283,25 @@ fn renderer_target_keys_keep_two_versions_for_every_job_and_root() {
         })
         .collect();
     assert_eq!(plan(&obsolete, 20), Vec::<u64>::new());
+}
+
+#[test]
+fn retired_per_root_sources_entries_are_deleted_within_any_budget() {
+    let shared = |id: u64| entry(id, "src", 10 * DAY);
+    let retired = |id: u64| {
+        let mut old = entry(id, "src", 10 * DAY);
+        old.key = old.key.replace("all.roots", "root");
+        old
+    };
+    assert_ne!(shared(1).key, retired(1).key);
+    let entries = [
+        shared(1),
+        shared(2),
+        shared(3),
+        retired(11),
+        retired(12),
+        retired(13),
+    ];
+    assert_eq!(plan(&entries, 0), [11, 12, 13, 1]);
+    assert_eq!(plan(&entries, 1_000), [11, 12, 13]);
 }

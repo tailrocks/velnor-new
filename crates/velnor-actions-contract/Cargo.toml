@@ -15,7 +15,6 @@ path = "tests/velnor_contract.rs"
 
 [lib]
 doctest = false
-test = false
 
 [lints]
 workspace = true

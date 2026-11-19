@@ -2,13 +2,15 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::future::Future;
 use std::path::Path;
 
 use reqwest::Client;
+use serde_json::Value;
 
 use crate::compile_identity::CompiledReleaseIdentity;
 use crate::error::HostError;
-use crate::helper_supervisor::ChecksumTarget;
+use crate::helper_supervisor::{SubjectCheck, SubjectRef};
 use crate::resource_probe_release::runner_manifest;
 use velnor_runner_image_manifest::RunnerImageManifest;
 
@@ -75,31 +77,27 @@ pub(super) async fn fetch_verified_for(
     if expected_manifest_sha.is_some_and(|expected| expected != manifest_digest) {
         return Err(HostError::Identity);
     }
-    let bundles = github::attestations(client, pat, &checksum_asset.digest).await?;
-    let mut valid = 0_usize;
-    for bundle in bundles {
-        if crate::helper_supervisor::verify_checksum_target(
-            identity.helper_sha256(),
-            ChecksumTarget {
-                state_directory,
-                bundle: &bundle,
-                checksum_bytes: &checksum_bytes,
-                source_sha,
-                authority_sha: source_sha,
-                checksum_digest,
-                target_name: MANIFEST,
-                target_digest: manifest_digest,
-            },
-        )
-        .await
-        .is_ok()
-        {
-            valid = valid.checked_add(1).ok_or(HostError::Identity)?;
-        }
-    }
-    if valid != 1 {
-        return Err(HostError::Identity);
-    }
+    let checksum_bundles = github::attestations(client, pat, &checksum_asset.digest).await?;
+    let manifest_bundles = github::attestations(client, pat, &manifest_asset.digest).await?;
+    let verifier = HelperVerifier {
+        identity,
+        state_directory,
+        source_sha,
+    };
+    admit_attestations(
+        &verifier,
+        &checksum_bundles,
+        &manifest_bundles,
+        SubjectRef {
+            name: CHECKSUMS,
+            digest: checksum_digest,
+        },
+        SubjectRef {
+            name: MANIFEST,
+            digest: manifest_digest,
+        },
+    )
+    .await?;
     let manifest = runner_manifest::parse_for_source(&manifest_bytes, source_sha, runner_lock)?;
     persist_manifest(state_directory, source_sha, &manifest_bytes)?;
     Ok(VerifiedRunnerRelease {
@@ -108,6 +106,69 @@ pub(super) async fn fetch_verified_for(
         manifest,
         projections: tokio::sync::Mutex::default(),
     })
+}
+
+pub(super) trait SubjectVerifier {
+    fn verify(
+        &self,
+        bundle: &Value,
+        subject: SubjectRef<'_>,
+        peer_subject: SubjectRef<'_>,
+    ) -> impl Future<Output = Result<(), HostError>> + Send;
+}
+
+struct HelperVerifier<'a> {
+    identity: &'a CompiledReleaseIdentity,
+    state_directory: &'a Path,
+    source_sha: &'a str,
+}
+
+impl SubjectVerifier for HelperVerifier<'_> {
+    async fn verify(
+        &self,
+        bundle: &Value,
+        subject: SubjectRef<'_>,
+        peer_subject: SubjectRef<'_>,
+    ) -> Result<(), HostError> {
+        crate::helper_supervisor::verify_subject(
+            self.identity.helper_sha256(),
+            SubjectCheck {
+                state_directory: self.state_directory,
+                bundle,
+                source_sha: self.source_sha,
+                authority_sha: self.source_sha,
+                subject,
+                peer_subject,
+            },
+        )
+        .await
+    }
+}
+
+pub(super) async fn admit_attestations(
+    verifier: &impl SubjectVerifier,
+    checksum_bundles: &[Value],
+    manifest_bundles: &[Value],
+    checksum: SubjectRef<'_>,
+    manifest: SubjectRef<'_>,
+) -> Result<(), HostError> {
+    verify_every(verifier, checksum_bundles, checksum, manifest).await?;
+    verify_every(verifier, manifest_bundles, manifest, checksum).await
+}
+
+async fn verify_every(
+    verifier: &impl SubjectVerifier,
+    bundles: &[Value],
+    subject: SubjectRef<'_>,
+    peer_subject: SubjectRef<'_>,
+) -> Result<(), HostError> {
+    if bundles.is_empty() {
+        return Err(HostError::Identity);
+    }
+    for bundle in bundles {
+        verifier.verify(bundle, subject, peer_subject).await?;
+    }
+    Ok(())
 }
 
 fn parse_checksums(bytes: &[u8]) -> Result<BTreeMap<String, String>, HostError> {
@@ -246,3 +307,7 @@ fn persist_manifest(
 ) -> Result<(), HostError> {
     Err(HostError::Path)
 }
+
+#[cfg(test)]
+#[path = "runner_release/tests.rs"]
+mod tests;

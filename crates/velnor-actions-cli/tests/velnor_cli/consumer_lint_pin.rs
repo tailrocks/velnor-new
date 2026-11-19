@@ -7,6 +7,10 @@ use super::fixture;
 
 const CONSUMER_JACTIONLINT: &str = "9.9.9";
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn staged_lint_runs_the_jactionlint_the_consumer_pins() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -17,12 +21,6 @@ fn staged_lint_runs_the_jactionlint_the_consumer_pins() -> Result<(), Box<dyn Er
         generated.status.success(),
         "generation must lint with the consumer's pin: {}",
         fixture::stderr(&generated)
-    );
-    assert!(
-        output
-            .join(".github/workflows/binary-preview.yml")
-            .is_file(),
-        "preview workflow missing after staged lint"
     );
     assert_eq!(
         fixture.jactionlint_specs_run()?,

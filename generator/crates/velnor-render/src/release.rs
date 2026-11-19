@@ -7,6 +7,8 @@ use velnor_model::{HelperRelease, RELEASE_WORKFLOW_PATH, RepoPath};
 use velnor_release::{ReleasePlan, TAG_JOB_BASE_MINUTES, publish_budget_minutes};
 
 use crate::release_binaries::binary_jobs;
+use crate::release_checks::{publish_stage, tag_needs, tag_stage};
+use crate::release_family::family_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
@@ -47,8 +49,14 @@ pub fn render_release(
     if !collisions.is_empty() {
         return Err(collisions);
     }
-    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper), tag_job];
-    jobs.extend(binary_jobs(plan, helper));
+    let mut jobs = vec![gate(plan, helper), release_pr(plan, helper)];
+    jobs.extend(tag_stage(plan));
+    jobs.push(tag_job);
+    jobs.extend(match &plan.family {
+        Some(family) => family_jobs(plan, family, helper),
+        None => binary_jobs(plan, helper),
+    });
+    jobs.extend(publish_stage(plan));
     jobs.extend(finalize_job(plan, helper));
     let rendered = RenderedWorkflow { jobs };
     check_rules(&rendered)?;
@@ -207,7 +215,7 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     }
 }
 
-fn only_while_newest(steps: &mut [RenderedStep]) {
+pub(crate) fn only_while_newest(steps: &mut [RenderedStep]) {
     let after_newest = steps
         .iter()
         .position(|step| step.id.as_deref() == Some("newest"))
@@ -256,7 +264,7 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         }),
         permissions: permissions(&scopes),
         outputs: plan
-            .binaries
+            .tagged_binaries()
             .iter()
             .map(|binary| binary.package.clone())
             .chain(without_binary(plan, helper))
@@ -265,6 +273,10 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
                 (package, output)
             })
             .chain(commit_outputs(plan, helper))
+            .collect(),
+        needs: [String::from("gate")]
+            .into_iter()
+            .chain(tag_needs(plan))
             .collect(),
         timeout_minutes: u16::try_from(
             u64::from(TAG_JOB_BASE_MINUTES).saturating_add(publish_budget_minutes(&plan.roots)),
@@ -324,7 +336,7 @@ fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {
     }
 }
 
-fn newest_check() -> RenderedStep {
+pub(crate) fn newest_check() -> RenderedStep {
     RenderedStep {
         id: Some("newest".to_owned()),
         name: "Check that the verified commit is still the newest on the default branch".to_owned(),

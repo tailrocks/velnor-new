@@ -133,6 +133,12 @@ async fn volume_progress_cannot_be_recorded_before_container_progress() -> TestR
         seed::text(&journal, RESERVATION, FAILED.reservation).await?,
         CHARGED
     );
+    for role in ["runner", "dind"] {
+        let name = format!("w{}-{role}", FAILED.nonce());
+        scope
+            .record_unbound_container_absent(&claim, role, &name)
+            .await?;
+    }
     scope
         .record_unbound_retirement_phase(&claim, UnboundRetirementPhase::ContainersAbsent, &digest)
         .await?;

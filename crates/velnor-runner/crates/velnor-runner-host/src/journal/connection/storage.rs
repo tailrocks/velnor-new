@@ -235,6 +235,14 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
     if has_charged_outside_sessions(connection, None, &sessions).await? {
         return Ok(true);
     }
+    let scale_set_deletes = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM connection_scale_set_deletes WHERE state IN ('requested', 'uncertain')",
+    )
+    .await?;
+    if scale_set_deletes != 0 {
+        return Ok(true);
+    }
     let operation_leases = scalar_count(
         connection,
         "SELECT COUNT(*) FROM host_operation_leases WHERE state != 'released'",
@@ -266,8 +274,6 @@ pub(super) async fn has_connection_work(
             .await?)
 }
 
-/// A connection's live scale-set session: the `session` intent, its
-/// `bound` create row and the header allocation charged for it.
 #[expect(
     clippy::struct_field_names,
     reason = "these fields form one immutable connection and session identity"
@@ -302,7 +308,6 @@ pub(super) async fn bound_sessions(
     Ok(sessions)
 }
 
-/// True when a header allocation is charged that no listed bound session owns.
 pub(super) async fn has_charged_outside_sessions(
     connection: &turso::Connection,
     connection_id: Option<&str>,
@@ -315,19 +320,21 @@ pub(super) async fn has_charged_outside_sessions(
     if rows.next().await.map_err(|_| HostError::Journal)?.is_none() {
         return Ok(false);
     }
-    Ok(crate::journal::capacity_header::load(connection)
-        .await?
+    let ledger = crate::journal::capacity_header::load(connection).await?;
+    let unsettled = ledger.unsettled_allocations();
+    Ok(ledger
         .charged_allocations()
         .iter()
         .filter(|allocation| {
             connection_id.is_none_or(|id| allocation.connection_id().as_str() == id)
         })
         .any(|allocation| {
-            !sessions.iter().any(|session| {
-                allocation.connection_id().as_str() == session.connection_id
-                    && allocation.scale_set_id() == session.scale_set_id
-                    && allocation.session_id() == session.session_id
-            })
+            unsettled.contains(allocation)
+                || !sessions.iter().any(|session| {
+                    allocation.connection_id().as_str() == session.connection_id
+                        && allocation.scale_set_id() == session.scale_set_id
+                        && allocation.session_id() == session.session_id
+                })
         }))
 }
 
