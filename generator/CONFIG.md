@@ -140,7 +140,7 @@ A repository with any `[[test_groups]]` splits each root that has a group into t
 
 ## Non-Rust lint jobs
 
-A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs one command or one pinned action. It has `contents: read` and no other permission, no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and the only action a lint job adds to the fixed list is `asamarts/alint`, accepted at one pinned commit.
+A `[[lint]]` entry adds one job to the generated workflow for a check that is not a Cargo lane. Each entry becomes the job `lint-<id>`. The job checks out the repository at depth 1, installs only the tools it names, and runs commands. It has `contents: read` and no other permission, no `needs` (it starts with the plan job, not after it), and the same fork fence as every other job: a pull request from a fork runs it on `fork_runner`. A generated `run:` value is one command with no shell logic, and a lint job adds no action to the fixed list: every tool it runs comes from `mise.toml`, checksummed in `mise.lock`. A lint job runs on every ready pull request, also when `pr_ci` is `label`.
 
 ```toml
 [[lint]]
@@ -169,12 +169,14 @@ timeout_minutes = 5
 | `timeout_minutes` | all | 1 to 360, default 10. |
 | `config` | `jactionlint`, `alint` | Configuration file. Required for `alint`. |
 | `probe` | `alint` | A script run with `bash` after alint, for rules alint cannot express. |
-| `task` | `mise-task` | The mise task, run as `mise run --skip-tools <task>`. |
-| `tools` | `mise-task` | Tools from `mise.toml` to install before the task. The task runs with `--skip-tools`, so a tool it needs and `tools` lacks fails the job instead of being installed unpinned. |
+| `task` | `mise-task` | The mise task, run as `mise run --force --skip-tools <task>`, so a task with fresh `sources` and `outputs` still runs. It must be a key of `[tasks]` in `mise.toml` or a file in a mise task folder (`mise-tasks`, `.mise-tasks`, `mise/tasks`, `.mise/tasks`, `.config/mise/tasks`); generation fails otherwise. |
+| `tools` | `mise-task` | Tools from `mise.toml` to install before the task. The task runs with `--skip-tools`, so a tool it needs and `tools` lacks fails the job instead of being installed unpinned. Generation fails when the task, or a task it reaches through `depends`, declares a tool in its own `tools` table that this list does not name, because the runner's own binary of that name would run instead. The tools a task script calls without declaring them, and the headers of task files, are not read. |
 
-`jactionlint` is the version pinned in `mise.toml` (and its checksum in `mise.lock`); generation fails when `mise.toml` does not pin it. It checks the repository with `--strict-exit --no-online`. It runs ShellCheck when `mise.toml` pins `shellcheck`, and turns it off otherwise. A path or task name that is not made of letters, digits and `_-./:@`, or that starts with `-`, is refused, because it is written into a command.
+`jactionlint` is the version pinned in `mise.toml` (and its checksum in `mise.lock`); generation fails when `mise.toml` does not pin it. It checks the repository with `--strict-exit --no-online`. It runs ShellCheck when `mise.toml` pins `shellcheck`, and turns it off otherwise. When the repository has a workflow step that uses `actions/github-script`, jactionlint checks its script only with `node` on `PATH`, so generation fails unless `mise.toml` pins `node`; a pinned `node` is installed next to `jactionlint`. A path or task name that is not made of letters, digits and `_-./:@`, or that starts with `-`, is refused, because it is written into a command.
 
-`alint` runs with `fail-on-warning`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
+`alint` is the version pinned in `mise.toml` (for example `"github:asamarts/alint" = "0.22.1"`) with the archive digest of every platform in `mise.lock`, so the digest is the repository's own and no upstream installer runs. It runs `alint --format github --config <config> --fail-on-warning check .`, so a warning fails the job. The file named by `config` or `probe` is not checked at generation time; a missing file fails the job, and so the `Required` check.
+
+Every tool a lint entry needs is checked at generation. The tool must be pinned in `mise.toml` by its basename (`jactionlint`) or in full (`aqua:owner/tool/jactionlint`); a basename that matches two configured tools is refused until the entry names one in full. At least one of its requests must apply to the runner's operating system (the `os` key of the pin), and `mise.lock` must hold an entry that covers every version requested for that system. A `shellcheck` pin that is filtered out for the runner is treated as absent.
 
 ### One required check
 

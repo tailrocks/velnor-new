@@ -3,8 +3,8 @@
 
 use velnor_model::{Job, LintCommand, LintJob, LintKind, RepoFacts, Step, StepKind};
 
-use crate::config_lint::{JACTIONLINT, SHELLCHECK, tool_key};
-use crate::plan::{CHECKOUT_DEPTH, job, step};
+use crate::lint_tools::{ALINT, JACTIONLINT, NODE, SHELLCHECK, usable};
+use crate::plan::{CHECKOUT_DEPTH, job, quick, step};
 
 pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
     facts
@@ -16,43 +16,43 @@ pub(crate) fn lint_jobs(facts: &RepoFacts) -> Vec<Job> {
 }
 
 fn resolved(facts: &RepoFacts, name: &str) -> String {
-    tool_key(&facts.tools, name).unwrap_or(name).to_owned()
+    usable(&facts.tools, &facts.config.runner, name)
+        .unwrap_or(name)
+        .to_owned()
 }
 
 fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
+    let only = |names: Vec<String>| {
+        vec![step(StepKind::InstallTools {
+            only: Some(names.join(" ")),
+        })]
+    };
     match &lint.kind {
         LintKind::Jactionlint { .. } => {
             let mut tools = vec![resolved(facts, JACTIONLINT)];
-            tools.extend(shellcheck(facts).then(|| resolved(facts, SHELLCHECK)));
-            vec![step(StepKind::InstallTools {
-                only: Some(tools.join(" ")),
-            })]
+            tools.extend(available(facts, SHELLCHECK).then(|| resolved(facts, SHELLCHECK)));
+            tools.extend(available(facts, NODE).then(|| resolved(facts, NODE)));
+            only(tools)
         }
-        LintKind::Alint { .. } => Vec::new(),
+        LintKind::Alint { .. } => only(vec![resolved(facts, ALINT)]),
         LintKind::MiseTask { tools, .. } if tools.is_empty() => {
             vec![step(StepKind::InstallMise)]
         }
-        LintKind::MiseTask { tools, .. } => vec![step(StepKind::InstallTools {
-            only: Some(
-                tools
-                    .iter()
-                    .map(|tool| resolved(facts, tool))
-                    .collect::<Vec<_>>()
-                    .join(" "),
-            ),
-        })],
+        LintKind::MiseTask { tools, .. } => {
+            only(tools.iter().map(|tool| resolved(facts, tool)).collect())
+        }
     }
 }
 
-fn shellcheck(facts: &RepoFacts) -> bool {
-    tool_key(&facts.tools, SHELLCHECK).is_some()
+fn available(facts: &RepoFacts, name: &str) -> bool {
+    usable(&facts.tools, &facts.config.runner, name).is_some()
 }
 
 fn commands(facts: &RepoFacts, lint: &LintJob) -> Vec<LintCommand> {
     match &lint.kind {
         LintKind::Jactionlint { config } => vec![LintCommand::Jactionlint {
             config: config.clone(),
-            shellcheck: shellcheck(facts),
+            shellcheck: available(facts, SHELLCHECK),
         }],
         LintKind::Alint { config, probe } => std::iter::once(LintCommand::Alint {
             config: config.clone(),
@@ -77,6 +77,7 @@ fn lint_job(facts: &RepoFacts, lint: &LintJob) -> Job {
     Job {
         name: Some(lint.name.clone()),
         timeout_minutes: lint.timeout_minutes,
+        pr: quick(facts),
         steps,
         ..job(facts, lint.id.clone())
     }
