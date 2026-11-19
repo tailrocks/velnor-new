@@ -4,7 +4,7 @@
 use std::error::Error;
 use std::fs;
 
-use super::setup_action::{Install, TestResult, program};
+use super::setup_action::{ARCHIVE, Install, TestResult, program};
 
 fn read_only_cache_installs_privately(install: &Install, leaf: &str) -> TestResult {
     use std::os::unix::fs::PermissionsExt;
@@ -56,7 +56,7 @@ pub(crate) fn seed_entry(
     let cache = install.work.join("cache");
     let entry = cache.join("velnor-ci/1.2.3/x64");
     fs::create_dir_all(&entry)?;
-    Ok((cache, entry.join("velnor-ci")))
+    Ok((cache, entry.join(ARCHIVE)))
 }
 
 #[test]
@@ -118,15 +118,16 @@ fn a_tampered_cache_entry_is_rejected_by_the_sha256_and_replaced_by_a_download()
 
     let install = Install::new("cache-tampered")?;
     let (cache, entry) = seed_entry(&install)?;
-    fs::write(&entry, b"#!/bin/sh\necho tampered\n")?;
+    fs::write(&entry, b"tampered archive\n")?;
     fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
+    let archive = fs::read(install.archive_path())?;
     let status = install.run(Some(&cache), None)?;
     let copy = install.installed();
     let republished = fs::read(&entry);
     fs::remove_dir_all(&install.work)?;
     assert!(status.success());
     assert_eq!(copy?, install.binary);
-    assert_eq!(republished?, install.binary);
+    assert_eq!(republished?, archive);
     Ok(())
 }
 
@@ -164,7 +165,7 @@ fn a_special_file_in_the_tool_cache_is_not_read_and_the_download_is_used() -> Te
     let install = Install::new("cache-fifo")?;
     let entry = install.work.join("cache/velnor-ci/1.2.3/x64");
     fs::create_dir_all(&entry)?;
-    let fifo = entry.join("velnor-ci");
+    let fifo = entry.join(ARCHIVE);
     assert!(
         Command::new("/usr/bin/mkfifo")
             .arg(&fifo)

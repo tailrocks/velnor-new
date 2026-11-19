@@ -3,7 +3,6 @@
 
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
-use std::process::Command;
 
 use super::{audit, own_units_in, unit, workspace_below_the_root};
 use crate::io::Repo;
@@ -235,7 +234,7 @@ fn the_rustc_the_environment_selects_is_the_one_queried() {
     .unwrap_or_else(|e| unreachable!("{e}"));
     fs::set_permissions(&rustc, fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let output = super::velnor_ci()
         .current_dir(repo.root())
         .env("RUSTC", &rustc)
         .args(["inputs", "audit", "--write"])
@@ -265,7 +264,7 @@ fn audit_with_rustc(repo: &Repo, script: &str) -> std::process::Output {
         shims.display(),
         std::env::var("PATH").unwrap_or_default()
     );
-    Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    super::velnor_ci()
         .current_dir(repo.root())
         .env("PATH", path)
         .args(["inputs", "audit", "--write"])

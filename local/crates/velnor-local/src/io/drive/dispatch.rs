@@ -45,6 +45,7 @@ pub async fn dispatch<E: Engine + Copy + Send>(
         outcomes: Vec::new(),
         tag: "dispatch",
         fork_heads: BTreeSet::new(),
+        pin: None,
     };
     driver
         .send(event.name, event.payload, event.git_ref, event.sha)

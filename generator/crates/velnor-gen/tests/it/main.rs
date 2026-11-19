@@ -117,7 +117,14 @@ mod pr_ci_labels;
 mod pr_ci_sim;
 mod private_sources;
 mod private_sources_phase;
+<<<<<<< HEAD
 mod qualification;
+||||||| 6c1a14cdfc
+mod qualification_engine;
+=======
+mod qualification_engine;
+mod release_assets_setup_action;
+>>>>>>> origin/main
 mod release_branch_prefix;
 mod release_cargo_include;
 mod release_checks;
