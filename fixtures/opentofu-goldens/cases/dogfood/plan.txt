@@ -306,7 +306,7 @@ Workflow to generate
   Critical path: stack/rust/ci-helper/crates/velnor-ci/build/default -> stack/rust/ci-helper/crates/velnor-ci/nextest/default (2 tasks)
   Clippy memory groups: 2; barriers: 1
   Cache layers: Mise tools, Cargo sources, MBX compilation objects
-  Jactionlint: 2.4.0 pinned, profile default
+  Jactionlint: 2.6.0 pinned, profile default
   Action pins: 9
     - actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
     - actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9

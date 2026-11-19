@@ -179,15 +179,6 @@
       "expires": "2026-12-03"
     },
     {
-      "key": "jactionlint",
-      "held_version": "2.4.0",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v2.6.0 published 2026-11-12T18:02:50Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
       "key": "opentofu",
       "held_version": "1.13.8",
       "owner": "Alexey Zhokhov",
@@ -302,10 +293,10 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v2.6.0",
       "name": "jactionlint",
-      "pinned": "2.4.0",
-      "qualified": "2.4.0",
+      "pinned": "2.6.0",
+      "qualified": "2.6.0",
       "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
