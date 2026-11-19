@@ -82,7 +82,15 @@ async fn conformance(args: ConformanceArgs) -> std::io::Result<()> {
         let text = std::fs::read_to_string(args.conformance.join(format!("{probe}.json"))).ok()?;
         serde_json::from_str(&text).ok()
     };
-    let (lines, reproduced) = crate::conformance::report(&logs, &stored);
+    let values = |log: &str| {
+        let event = log.strip_suffix(".log").unwrap_or(log);
+        std::fs::read_to_string(args.dir.join("events").join(format!("{event}.json")))
+            .ok()
+            .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
+            .map(|payload| crate::conformance::run_values(&payload))
+            .unwrap_or_default()
+    };
+    let (lines, reproduced) = crate::conformance::report(&logs, &stored, &values);
     for line in &lines {
         println!("velnor-local: {line}");
     }

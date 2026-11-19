@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use serde_json::{Value, json};
-use velnor_local::conformance::{differences, observations, report};
+use velnor_local::conformance::{
+    Values, differences, observations, report, run_values as run_values_of,
+};
 
 const LOG: &str = r#"[probe / observe] Running: Run ./.github/actions/probe
 | {
@@ -19,6 +21,10 @@ const LOG: &str = r#"[probe / observe] Running: Run ./.github/actions/probe
 |   "not": "an observation"
 | }
 "#;
+
+fn no_values(_: &str) -> Values {
+    Values::new()
+}
 
 #[test]
 fn an_observation_is_read_from_the_job_log_between_the_lines_of_other_jobs() {
@@ -42,7 +48,7 @@ fn each_stored_leg_is_reported_as_reproduced_different_or_not_observed() {
         })
     };
     let logs = [("1-workflow_dispatch.log".to_owned(), LOG.to_owned())];
-    let (lines, reproduced) = report(&logs, &stored);
+    let (lines, reproduced) = report(&logs, &stored, &no_values);
     assert_eq!(
         lines,
         [
@@ -53,7 +59,7 @@ fn each_stored_leg_is_reported_as_reproduced_different_or_not_observed() {
     assert!(!reproduced);
     let changed = LOG.replace(r#""hit": "true""#, r#""hit": "false""#);
     let logs = [("2-push.log".to_owned(), changed)];
-    let (lines, reproduced) = report(&logs, &stored);
+    let (lines, reproduced) = report(&logs, &stored, &no_values);
     assert_eq!(
         lines[0],
         "cache-keys / default-branch (2-push.log): 1 differences\n    hit: GitHub \"true\", local \"false\""
@@ -68,9 +74,9 @@ fn each_stored_leg_is_reported_as_reproduced_different_or_not_observed() {
         })
     };
     let logs = [("1-workflow_dispatch.log".to_owned(), LOG.to_owned())];
-    assert!(report(&logs, &only).1);
+    assert!(report(&logs, &only, &no_values).1);
     let unknown = |_: &str| None;
-    let (lines, reproduced) = report(&logs, &unknown);
+    let (lines, reproduced) = report(&logs, &unknown, &no_values);
     assert_eq!(
         lines,
         ["cache-keys / default-branch: not stored in conformance/cache-keys.json"]
@@ -83,7 +89,7 @@ fn a_key_on_one_side_only_is_a_difference_and_a_run_with_no_observation_reproduc
     let stored = json!({"claims": {"ac": "string", "sub": "string"}});
     let observed = json!({"claims": {"sub": "string", "defaultRef": "string"}});
     assert_eq!(
-        differences(&stored, &observed),
+        differences(&stored, &observed, &Values::new()),
         [
             "claims.ac: GitHub only \"string\"",
             "claims.defaultRef: local only \"string\"",
@@ -91,7 +97,84 @@ fn a_key_on_one_side_only_is_a_difference_and_a_run_with_no_observation_reproduc
     );
     let stored = |_: &str| Some(json!({"legs": {}}));
     let logs = [("1-push.log".to_owned(), "| no observation here".to_owned())];
-    let (lines, reproduced) = report(&logs, &stored);
+    let (lines, reproduced) = report(&logs, &stored, &no_values);
     assert_eq!(lines, Vec::<String>::new());
     assert!(!reproduced);
+}
+
+fn run_values(git_ref: &str) -> Values {
+    [
+        ("repository", "tailrocks/velnor-lab"),
+        ("ref", git_ref),
+        ("defaultRef", "refs/heads/main"),
+    ]
+    .into_iter()
+    .map(|(name, value)| (name.to_owned(), value.to_owned()))
+    .collect()
+}
+
+#[test]
+fn a_wrong_ref_fails_and_the_run_ref_passes() {
+    let stored = json!({"claims": {"ref": "${ref}", "repository": "${repository}"}});
+    let values = run_values("refs/pull/7/merge");
+    let right =
+        json!({"claims": {"ref": "refs/pull/7/merge", "repository": "tailrocks/velnor-lab"}});
+    let wrong = json!({"claims": {"ref": "refs/heads/main", "repository": "tailrocks/velnor-lab"}});
+    assert_eq!(differences(&stored, &right, &values), Vec::<String>::new());
+    assert_eq!(
+        differences(&stored, &wrong, &values),
+        ["claims.ref: GitHub \"refs/pull/7/merge\", local \"refs/heads/main\""]
+    );
+}
+
+#[test]
+fn a_wrong_repository_or_default_ref_fails_and_a_scope_list_is_compared_by_value() {
+    let stored = json!({
+        "cache_scopes": [{"permission": 3, "scope": "${ref}"}, {"permission": 1, "scope": "${defaultRef}"}],
+        "claims": {"defaultRef": "${defaultRef}", "repository": "${repository}"}
+    });
+    let values = run_values("refs/heads/feature");
+    let observed = json!({
+        "cache_scopes": [{"permission": 3, "scope": "refs/heads/feature"}, {"permission": 1, "scope": "refs/heads/develop"}],
+        "claims": {"defaultRef": "refs/heads/develop", "repository": "someone/else"}
+    });
+    assert_eq!(
+        differences(&stored, &observed, &values),
+        [
+            "cache_scopes: GitHub [{\"permission\":3,\"scope\":\"refs/heads/feature\"},{\"permission\":1,\"scope\":\"refs/heads/main\"}], local [{\"permission\":3,\"scope\":\"refs/heads/feature\"},{\"permission\":1,\"scope\":\"refs/heads/develop\"}]",
+            "claims.defaultRef: GitHub \"refs/heads/main\", local \"refs/heads/develop\"",
+            "claims.repository: GitHub \"tailrocks/velnor-lab\", local \"someone/else\"",
+        ]
+    );
+}
+
+#[test]
+fn a_volatile_field_is_compared_by_type_so_a_different_timestamp_passes() {
+    let stored = json!({"claims": {"exp": "number", "iss": "string", "job_id": "string"}});
+    let observed = json!({"claims": {"exp": 1_700_000_000, "iss": "https://token.example", "job_id": "string"}});
+    assert_eq!(
+        differences(&stored, &observed, &Values::new()),
+        Vec::<String>::new()
+    );
+    let wrong_type = json!({"claims": {"exp": "string", "iss": "string", "job_id": "string"}});
+    assert_eq!(
+        differences(&stored, &wrong_type, &Values::new()),
+        ["claims.exp: GitHub \"number\", local \"string\""]
+    );
+}
+
+#[test]
+fn the_run_values_come_from_the_payload_the_driver_wrote() {
+    let repository = json!({"full_name": "tailrocks/velnor-lab", "default_branch": "main"});
+    let push = json!({"repository": repository, "ref": "refs/heads/probe-1-events"});
+    assert_eq!(
+        run_values_of(&push),
+        run_values("refs/heads/probe-1-events")
+    );
+    let open = json!({"repository": repository, "number": 7,
+        "pull_request": {"number": 7, "merged": false, "base": {"ref": "main"}}});
+    assert_eq!(run_values_of(&open), run_values("refs/pull/7/merge"));
+    let merged = json!({"repository": repository, "number": 7,
+        "pull_request": {"number": 7, "merged": true, "base": {"ref": "main"}}});
+    assert_eq!(run_values_of(&merged), run_values("refs/heads/main"));
 }
