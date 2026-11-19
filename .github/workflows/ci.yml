@@ -1544,7 +1544,7 @@ jobs:
       - *s11
       - *s8
       - name: Prepare pinned attestation verifier
-        run: mise --no-config --no-env --no-hooks install gh@2.105.0
+        run: mise --no-config --no-env --no-hooks install gh@2.104.0
       - *s12
       - *s13
       - *s21

@@ -233,6 +233,15 @@
       "expires": "2026-12-03"
     },
     {
+      "key": "gh",
+      "held_version": "2.104.0",
+      "owner": "Alexey Zhokhov",
+      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
+      "reason": "v2.105.0 published 2026-11-18T00:18:35Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); gh 2.104.0 (published 2026-11-12T19:03:51Z, outside the window) is the qualified pin. The move to 2.105.0 is tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
+      "granted": "2026-11-19",
+      "expires": "2026-12-03"
+    },
+    {
       "key": "nextest",
       "held_version": "0.9.151",
       "owner": "Alexey Zhokhov",
@@ -284,10 +293,10 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v2.105.0",
       "name": "gh",
-      "pinned": "2.105.0",
-      "qualified": "2.105.0",
+      "pinned": "2.104.0",
+      "qualified": "2.104.0",
       "source": "https://api.github.com/repos/cli/cli/releases/latest",
-      "status": "current"
+      "status": "held"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
