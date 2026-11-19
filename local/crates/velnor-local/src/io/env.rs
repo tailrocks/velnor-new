@@ -64,7 +64,7 @@ impl<E: Engine> Environment<E> {
             digest.as_ref()[..4]
                 .iter()
                 .fold("velnor-local-".to_owned(), |mut name, byte| {
-                    let _ = write!(name, "{byte:02x}");
+                    write!(name, "{byte:02x}").ok();
                     name
                 });
         Ok(Self {
@@ -137,7 +137,7 @@ impl<E: Engine> Environment<E> {
         self.down().await?;
         let started = self.start_all(repo, args, &local).await;
         if started.is_err() {
-            let _ = self.down().await;
+            self.down().await.ok();
         }
         started
     }

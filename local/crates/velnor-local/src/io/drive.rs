@@ -229,7 +229,7 @@ async fn session<'a>(
             Proxy::authorized(&authority.address, &authority.token)
         }
         Err(error) => {
-            let _ = env.down().await;
+            env.down().await.ok();
             return (Vec::new(), up_at, clock.elapsed().as_secs_f64(), Err(error));
         }
     };

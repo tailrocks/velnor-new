@@ -143,7 +143,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
                     let merge_ref = format!("refs/pull/{number}/merge");
                     self.git(&["update-ref", &merge_ref, &merge]).await?;
                 } else {
-                    let _ = self.git(&["merge", "--abort"]).await;
+                    self.git(&["merge", "--abort"]).await.ok();
                 }
                 rebased = true;
             }
@@ -159,7 +159,7 @@ impl<E: Engine + Copy + Send> Driver<'_, E> {
             let (base_sha, number) = (self.pulls[at].base_sha.clone(), self.pulls[at].number);
             let after = self.pulls[at].head_sha.clone();
             if self.merge_commit(&base_sha, &after).await.is_err() {
-                let _ = self.git(&["merge", "--abort"]).await;
+                self.git(&["merge", "--abort"]).await.ok();
                 println!(
                     "velnor-local {}: pull request {number} has a merge conflict, so no pull_request event",
                     self.tag
