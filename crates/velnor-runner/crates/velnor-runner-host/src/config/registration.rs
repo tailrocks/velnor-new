@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_runner_github::{RegistrationScope, RunnerGroup};
+use velnor_runner_github::{RegistrationScope, RunnerGroup, workflow_run::VerifiedRepositoryScope};
 
 use super::RepositoryConnection;
 use super::connection::{valid_group_name, valid_repo_part};
@@ -51,6 +51,13 @@ impl RepositoryConnection {
     }
 
     pub(crate) fn select_runner_group(&self, groups: &[RunnerGroup]) -> Result<i64, HostError> {
+        if groups
+            .iter()
+            .enumerate()
+            .any(|(index, group)| groups[..index].iter().any(|prior| prior.id == group.id))
+        {
+            return Err(HostError::Identity);
+        }
         let mut candidates: Vec<&RunnerGroup> = match self.runner_group.as_deref() {
             Some(name) => groups.iter().filter(|group| group.name == name).collect(),
             None => groups.iter().filter(|group| group.is_default).collect(),
@@ -62,6 +69,16 @@ impl RepositoryConnection {
             return Err(HostError::Identity);
         }
         Ok(group.id)
+    }
+
+    pub(crate) fn matches_scope(&self, scope: &VerifiedRepositoryScope) -> bool {
+        self.repository
+            .split_once('/')
+            .is_some_and(|(owner, repo)| {
+                scope.id() == self.repository_id
+                    && scope.owner().eq_ignore_ascii_case(owner)
+                    && scope.name().eq_ignore_ascii_case(repo)
+            })
     }
 
     pub(super) fn validate_registration(&self) -> bool {

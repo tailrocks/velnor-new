@@ -18,7 +18,7 @@ use crate::listen::{Link, link_from_admin};
 mod support;
 
 use support::{
-    create_connection_scale_set, map_host, map_repository, map_session, open_admin,
+    CreateIds, create_connection_scale_set, map_host, map_repository, map_session, open_admin,
     revalidate_repository_scope, selected_group_id, selector_valid,
 };
 
@@ -129,14 +129,16 @@ pub(crate) async fn ensure_connection_scale_set(
     )
     .map_err(|error| map_session(error, &transport))?;
 
-    let set = match (
-        lookup_action(record.state(), matches!(&found, ScaleSetFound::Found(_))),
-        found,
-    ) {
+    let exists = matches!(&found, ScaleSetFound::Found(_));
+    let organization = binding.organization.is_some();
+    let set = match (lookup_action(record.state(), exists, organization), found) {
         (ScaleSetLookupAction::Create, ScaleSetFound::NotFound) => {
             create_connection_scale_set(
-                pat,
-                &scope,
+                CreateIds {
+                    pat,
+                    scope: &scope,
+                    adopt_on_conflict: !organization,
+                },
                 &mut transport,
                 admin.expose_token(),
                 &scoped,
@@ -176,9 +178,13 @@ enum ScaleSetLookupAction {
     Hold,
 }
 
-fn lookup_action(state: ScaleSetCreateState, found: bool) -> ScaleSetLookupAction {
+fn lookup_action(
+    state: ScaleSetCreateState,
+    found: bool,
+    organization: bool,
+) -> ScaleSetLookupAction {
     match (state, found) {
-        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) => {
+        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, true) if !organization => {
             ScaleSetLookupAction::Adopt
         }
         (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
@@ -245,3 +251,6 @@ pub fn product_runner_groups(
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
 }
+
+#[cfg(test)]
+mod tests;

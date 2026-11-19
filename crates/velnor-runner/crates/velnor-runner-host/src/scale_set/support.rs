@@ -26,7 +26,7 @@ pub(super) fn open_admin(
     binding: &RepositoryConnection,
 ) -> Result<(Recording, velnor_runner_github::AdminConnection), EnsureError> {
     let target = binding.registration_target().map_err(map_host)?;
-    if scope.owner() != binding_owner(binding)? {
+    if !binding.matches_scope(scope) {
         return Err(EnsureError::Rejected);
     }
     let mut transport = Recording::new(HttpsTransport::new(GITHUB_API).map_err(map_host)?);
@@ -162,21 +162,25 @@ fn step_for(path: &str) -> &'static str {
 }
 
 pub(super) async fn create_connection_scale_set(
-    pat: &str,
-    scope: &VerifiedRepositoryScope,
+    ids: CreateIds<'_>,
     transport: &mut Recording,
     admin_token: &str,
     scoped: &ConnectionJournal,
     request: &ScaleSetCreateRequest,
     record: &crate::journal::ScaleSetCreateRecord,
 ) -> Result<EnsuredSet, EnsureError> {
-    revalidate_repository_scope(pat, scope)?;
-    create_and_verify(pat, scope, transport, admin_token, scoped, request, record).await
+    revalidate_repository_scope(ids.pat, ids.scope)?;
+    create_and_verify(ids, transport, admin_token, scoped, request, record).await
+}
+
+pub(super) struct CreateIds<'a> {
+    pub(super) pat: &'a str,
+    pub(super) scope: &'a VerifiedRepositoryScope,
+    pub(super) adopt_on_conflict: bool,
 }
 
 async fn create_and_verify<T: Transport>(
-    pat: &str,
-    scope: &VerifiedRepositoryScope,
+    ids: CreateIds<'_>,
     transport: &mut Recording<T>,
     admin_token: &str,
     scoped: &ConnectionJournal,
@@ -207,9 +211,12 @@ async fn create_and_verify<T: Transport>(
                 .record_scale_set_create_no_effect(claim, no_effect)
                 .await
                 .map_err(map_host)?;
+            if !ids.adopt_on_conflict {
+                return Err(EnsureError::Uncertain);
+            }
             return adopt_scale_set_after_conflict(
-                pat,
-                scope,
+                ids.pat,
+                ids.scope,
                 transport,
                 admin_token,
                 scoped,
@@ -314,14 +321,6 @@ async fn adopt_scale_set_after_conflict<T: Transport>(
 
 fn scale_set_label_names(view: &ScaleSetView) -> Vec<String> {
     view.labels.iter().map(|label| label.name.clone()).collect()
-}
-
-fn binding_owner(binding: &RepositoryConnection) -> Result<&str, EnsureError> {
-    binding
-        .repository
-        .split_once('/')
-        .map(|pair| pair.0)
-        .ok_or(EnsureError::Rejected)
 }
 
 pub(super) fn selected_group_id(

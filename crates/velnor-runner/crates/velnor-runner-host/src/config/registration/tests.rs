@@ -4,6 +4,7 @@
 use velnor_runner_github::{
     Exchange, Method, RegistrationTokenCall, RunnerGroup, SessionRequest, Transport, TransportFail,
     registration_token,
+    workflow_run::{RepositoryTarget, VerifiedRepositoryScope, get_repository_scope},
 };
 
 use super::RegistrationTarget;
@@ -230,5 +231,55 @@ fn the_p5_plan_values_register_at_org_level_in_the_velnor_ci_group() -> R {
     ];
     assert_eq!(connection.select_runner_group(&org_groups)?, 4);
     assert!(connection.select_runner_group(&org_groups[..1]).is_err());
+    Ok(())
+}
+
+#[test]
+fn a_reused_group_id_is_rejected_whichever_group_is_selected() -> R {
+    let connection = connection()?.with_organization_group("acme", Some("velnor-host"))?;
+    let mut reused = groups();
+    reused.push(group(9, "other", false));
+    assert!(connection.select_runner_group(&reused).is_err());
+    let default = connection.clone().with_organization_group("acme", None)?;
+    assert!(default.select_runner_group(&reused).is_err());
+    assert_eq!(default.select_runner_group(&groups())?, 1);
+    Ok(())
+}
+
+struct Repository(&'static str);
+
+impl Transport for Repository {
+    fn exchange(&mut self, _request: &SessionRequest) -> Result<Exchange, TransportFail> {
+        Ok(Exchange {
+            status: 200,
+            body: self.0.as_bytes().to_vec(),
+        })
+    }
+}
+
+fn scope(body: &'static str) -> Result<VerifiedRepositoryScope, Box<dyn std::error::Error>> {
+    Ok(get_repository_scope(
+        &mut Repository(body),
+        RepositoryTarget {
+            id: 42,
+            owner: "acme",
+            name: "repo",
+        },
+        "pat",
+    )?)
+}
+
+#[test]
+fn the_verified_scope_must_match_the_binding_ignoring_ascii_case() -> R {
+    let connection = connection()?;
+    let canonical = r#"{"id":42,"name":"Repo","full_name":"ACME/Repo","owner":{"login":"ACME"},"private":true}"#;
+    assert!(connection.matches_scope(&scope(canonical)?));
+    let other = r#"{"id":42,"name":"repo","full_name":"acme/repo","owner":{"login":"acme"},"private":true}"#;
+    let mut foreign = connection.clone();
+    "acme/repo-b".clone_into(&mut foreign.repository);
+    assert!(!foreign.matches_scope(&scope(other)?));
+    let mut moved = connection;
+    moved.repository_id = 43;
+    assert!(!moved.matches_scope(&scope(other)?));
     Ok(())
 }
