@@ -42,7 +42,9 @@ pub enum Command {
         about = "The required check: read the needs context from NEEDS_JSON, and the spec in the variable --spec-env names, and the plan outputs of the plan job the spec names, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and every package that listed tests in a selected test job ran at least one. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
     )]
     Gate(GateArgs),
-    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    #[command(
+        about = "Exit 1 unless the tag is rust-ci-v or tools-v followed by the version of this program"
+    )]
     CheckTag(CheckTagArgs),
     #[command(
         subcommand,
@@ -61,6 +63,10 @@ pub enum Command {
         about = "Write the crates mirror under $RUNNER_TEMP and install a Cargo wrapper for every working directory and Cargo home"
     )]
     CratesMirror(CratesMirrorArgs),
+    #[command(
+        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
+    )]
+    MbxStore,
     #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
@@ -261,6 +267,11 @@ pub struct CompareArgs {
     pub a: PathBuf,
     #[arg(help = "Metrics file of the second run")]
     pub b: PathBuf,
+    #[arg(
+        long,
+        help = "Compare runs of different workflows or events and label the output with the workload caveat; runs of different repositories are never compared"
+    )]
+    pub allow_different_populations: bool,
 }
 
 #[derive(Debug, Args)]
