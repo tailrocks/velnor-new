@@ -310,9 +310,9 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
                 if binary.attest { "verify" } else { "sums" },
                 binary.package
             )]
-                .into_iter()
-                .chain(publish_needs(plan, binary))
-                .collect(),
+            .into_iter()
+            .chain(publish_needs(plan, binary))
+            .collect(),
         )
     }
 }
