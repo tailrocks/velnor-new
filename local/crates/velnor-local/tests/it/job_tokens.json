@@ -1,0 +1,42 @@
+{
+  "public_key": "MIIBCgKCAQEApQNLI/gOPs/QIpaAoK9NO+KQYGWcHUt7/ajsuGPfLiqxI32sCs+wWZQgKBG1oaIss0TPXze6f1nYggOiZ9LW9g0XNoOYLlZyNGH0y33tYoxqDQ1fFwHa185pTbAMfHmSxC5CT+qpV8jpZqXiOR/kjUsjkjWmYofjAvJbBtgMWlJPF7wF6KRYAWVZplzL6668i5Gpar3l3w7xNcdG02CUJBU1oPm5ctyqyn76zpRMfcwdew7nVX7Wfdk4qOlwoOiZUOTjy0kdXSMEBiW7p62VnUFZB/RabfgRkMSNxhTZlyFnNpqf0nxHA3A2tSfmFGNFgiMr/m0VIiCu44Ch5QM78QIDAQAB",
+  "header": "{\"alg\":\"RS256\",\"typ\":\"JWT\"}",
+  "tokens": {
+    "push-actions-write": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"push\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":4102444800}",
+      "signature": "CYBE5OHkyI2eI-wLtb3r9gmBlSO9cN96glfo7HtsFGLLIUjELWFJIVVebbty7pqe045MojVBaQ23LdTHhPM2q-9MikJCz63Oh6p9bgfHNf_HAwI36dOiBU8uGH_7bueWFx4iBjxcrEzAfjL-GE8Wp8qJv11qyAJD2OsC0oaFD1XtVsK6wuqqEAUKdePmuqb58bLiKFdn2ddWNnw4H1On56deTedsqWf5dfe2ZsAy_nJsllSSzK5xv6ESVbi78_GBcRZ13fWIjAhMBUYnAS6bb0fok9YrW11JxI0ntV5Ija_d7-P4CIAiS1lt-OesFA4wQJ5UZ-HjbOwvtk5O0EpRgw"
+    },
+    "push-actions-read": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"push\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"read\",\"exp\":4102444800}",
+      "signature": "SqVPP_Sqa2iXpNjrcVqVE63GFDpgZV5P8HGzZSB783UPP_wxd0-yDhNWxUlZyb_PJ1iNZG8kSgCDw_mCbz7_Zz2vIWwJmfCdp7oEdA1j3oKaCxHq1Rj3KfZ3DoQb1eDZo3fXuOXnKjlVw2qXLCDc35EGpQxD32pCygPYi5XfkNwqMOn3ErHhemm6qgmMwr4sxDLBsPuyRoxORAnCiJSStJQuBmMMikMw_N30rAJeohGf9LSmA5CTv1u9nTthOtA98PAokrcA5VIlShWbEoHAVZir-_6E8W13qoFG08fE7VpHhcMwOxbsLKileNZ2p8rhNTXlk2y7RWT7W7NxjTncFA"
+    },
+    "pull-request-actions-write": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"pull_request\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":4102444800}",
+      "signature": "FbeMqLNBQ4Mu0UjVCQAe0BmdQ5rWkwhGFbXAcF1m02SWDG6VBHW1_dEcVVV9fNGkGEkOoiXGo7T6lmjF8zlmLBx99R7VKeq0_D6CX8ALN8e7J5cTeaNrQddsFDRBEtMxlqmfMdFIKW0CkvP6hvsEZRPIBsny1XNsxCSYD_akuUz6gz_R2RlBnLodYW2KFrCfhQZw4dHrvaDLXgYlvjlLYP_BFVWw8B1HsBNIMzeJ3wsrmHjG0QFuHsylQV7UAPa5vFvDGJeJMwzF_aBuxPE8JEXgRnZ43fs5kzWnrCpHZiMr3FHhS8ZGklIu-BZrKRA6gV8Sy3cWei3OaWpaGQ754A"
+    },
+    "pull-request-target-actions-write": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"pull_request_target\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":4102444800}",
+      "signature": "b_OpP-bra-EAJTfSh_6R6iITKqLIXsxIJPTfwWBEwcULVp3CFIJhMXUG_cgoI1F7hXEVDgWcCt2HxAEU8KuaJf8iEAEfCfq9d0hIZyi9NWvZPZXwC4hlWAnSwcjTRNFLtT5EsVmYiVdM8-xV2l1zWOGDKRP9BpaZWQl0X0TvGLbRLEsI1LxylelT7hf9FouUyNcfGTCljeBOaJu8PfhpKOGXVjI-zpgPbAog-fp6UjEOIekL8DkDWJC5k-Xs5Oebyejt62BzEbRh6P6Y4kjv_t9Y6INWG59SxPQ05PX3m5o1otm7g0f0s3Yunksw6214FL6VXxnd7KY0XQObsX7CCg"
+    },
+    "schedule-actions-write": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"schedule\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":4102444800}",
+      "signature": "D-u1deNxIIKK3Kg21DQe0ZVcIeEAVWzf69jw5jrjKt-8cMoM6UCQ84e0vEy2z2vP8Iy5UkB5Ed7vR7wPaXwksvFc45JHoEtlMawLWzOVXw93wBSzUacoJtigR7vJV6b5Y0u13GCcLN7iAiMj90Mx_sMJuuZPcRrLP94InwfWbya4cWYopEu6qJlc2xIUBgwPQcpnsv8YWeIMTHpzSmkyVAkxkMqErWhj1hMUsR_9BC7T_z6bMphmD99x5XW-KP1Y0SE9wnQ1feVLaeD958nnccSqMdPyD85u0Bj2NmP_EHDaVkGUV6tXT_PV2oIGGXSQNK3LYM_NeAI0pv9ZYUKYag"
+    },
+    "expired": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"push\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":1000}",
+      "signature": "MUy1zAnILTOnOZOcPZvPUjec5KlQpouDsrfQXPZLqfgay5UuQ1hZauX66A28DNbHgSTUBJ_pK3GbQroQakq5d74xOmVt3nL9aETTTA-Be0rj75McNzTan_RxhZc6ZnqOF14Rt8rWli6ELPKBBklPz8y1DwmY-xcRsRlGWXT-AFTbCkJfiFzFH4XuULYJv0S5cQSFP9ILf9obeF_EesBig9a-NE5eW_nQR1vwaZj3RhDRruDNieAflI3Q6hzI1yN_pxgNRVVU4t9qeOD8ZVywUxUDn9rxO3TBv-d8W1Y6QvSSvwqW36rWiFhj3U4bQDvE4gbXL8leTuTGA05IdFgh9w"
+    },
+    "other-repository": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/other\",\"event\":\"push\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":4102444800}",
+      "signature": "Ari5fs0WXi9e6Joutid-PevM2q2X-21zITCiIptrrKiSy2Pf-0nukfx1dHZ-SwKUFLQRWndUctjf6xAFFIKF9cjan8XVummKb_Z8goD2lKPbxEuBbXqtbiX9xHyWWkuVod0IktVIyvFtw_2jgLEu1cxeZVyXSC0TUFyG5c_fn4v3mMYrCvfvOapP6vwNynQqXiIo9GvaGs_iKd_F03mxmvsQtDXFQ6eXwZuNCk6AzFH8TvjWYVFwXXZq86s6KstHALqM-UsUjDSbRAzfFq7FpOnEOAbZ3jOJKP69PlmPIqfnO8Ua1itIc_eT-znPrnU3yE9b0UA1p7mjuixUNQdQwQ"
+    },
+    "wrong-marker": {
+      "claims": "{\"velnor\":\"cache\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"push\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":4102444800}",
+      "signature": "iccjL_yd993GeW7-NCLIADbWPBQN6FQxkDctSchPre-IfmXgCZL5bpm8yZ1QskcX5cM034d5HreX8sHN8mlYHnacp7Nuu7AYGNNu58h5SW797wV2X4VsxdSFhKIhq7NKZ1yyBJoelPhzLXMzXvsOgutzpqVyQ9uW2A3IiVtSGWhRwCm1rUwwHIpRilYwmxihJ6XAJfc-k8RW6EVUE4woE7GyOnob6NE7OE9YZoY4x5AHlgSqD6BFeaK9dQsKUnHxYB1s97TCaijsseYH30QMjbw-HhLNkXXrtmPxoB5lFjeD-vMYlZtM4ffMvlpDACFR3acVDy_Wbu1zjk4HKdoB3w"
+    },
+    "tampered": {
+      "claims": "{\"velnor\":\"job-cache-admin\",\"repository\":\"tailrocks/velnor-lab\",\"event\":\"push\",\"job\":\"cache-maintenance\",\"runid\":\"1\",\"actions\":\"write\",\"exp\":4102444800}",
+      "signature": "SqVPP_Sqa2iXpNjrcVqVE63GFDpgZV5P8HGzZSB783UPP_wxd0-yDhNWxUlZyb_PJ1iNZG8kSgCDw_mCbz7_Zz2vIWwJmfCdp7oEdA1j3oKaCxHq1Rj3KfZ3DoQb1eDZo3fXuOXnKjlVw2qXLCDc35EGpQxD32pCygPYi5XfkNwqMOn3ErHhemm6qgmMwr4sxDLBsPuyRoxORAnCiJSStJQuBmMMikMw_N30rAJeohGf9LSmA5CTv1u9nTthOtA98PAokrcA5VIlShWbEoHAVZir-_6E8W13qoFG08fE7VpHhcMwOxbsLKileNZ2p8rhNTXlk2y7RWT7W7NxjTncFA"
+    }
+  }
+}

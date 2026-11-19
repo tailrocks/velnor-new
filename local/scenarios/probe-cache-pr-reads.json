@@ -1,5 +1,6 @@
 {
   "description": "The cache-pr-reads probe of the lab: dispatches on a base branch, the default branch and a head branch, then a pull request from the head into the base.",
+  "fresh_cache": true,
   "steps": [
     {
       "commit": {

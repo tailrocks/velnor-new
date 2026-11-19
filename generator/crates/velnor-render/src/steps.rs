@@ -8,13 +8,17 @@ use velnor_model::{
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
-use crate::base_steps::{cache_budget, cache_decide, cache_trim, lane_outputs, trimmed_lane};
+use crate::base_steps::{
+    cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_locks,
+    trimmed_lane,
+};
 use crate::cache::{path_text, render_key};
 use crate::cargo::{ArtifactFormat, CargoLane, cargo_step, reports_tests};
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
     plan_source, sources_step, verdict_step,
 };
+use crate::helper_steps::restored_step;
 use crate::permission_pairs;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
@@ -227,10 +231,23 @@ fn rendered_steps(
 
 fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
     match kind {
-        StepKind::CacheSave(CacheKey::Sources { root, .. }) => vec![format!(
+        StepKind::CacheSave(CacheKey::Sources { lane, .. }) => vec![format!(
             "steps.{}.outputs.cache-hit != 'true'",
-            sources_step(root.slug())
+            sources_step(lane.slug())
         )],
+        StepKind::SourcesFetch { lane, position } => {
+            let mut terms = vec![format!(
+                "steps.{}.outputs.cache-hit != 'true'",
+                sources_step(lane)
+            )];
+            if let Some(previous) = position.checked_sub(1) {
+                terms.push(format!(
+                    "steps.{}.outcome == 'success'",
+                    crate::gate::sources_fetch_step(previous)
+                ));
+            }
+            terms
+        }
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         _ => Vec::new(),
     }
@@ -286,15 +303,15 @@ fn step_body(
             archive,
             manifests,
         } => cache_decide(target, archive.as_ref(), manifests),
-        StepKind::RestoredTargets { expiry, targets } => {
-            crate::helper_steps::restored_step(*expiry, targets)
-        }
+        StepKind::RestoredTargets { expiry, targets } => restored_step(*expiry, targets),
+        StepKind::SourcesLocks(locks) => sources_locks(locks),
         StepKind::CacheResult(lanes) => crate::cache_upload::result(lanes),
         StepKind::CacheVerify { lane, family } => crate::cache_upload::verify(lane, *family),
         StepKind::CacheTrim { lane, family } => cache_trim(lane, *family),
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
         StepKind::RustComponents(components) => rustup_add("component", components),
         StepKind::RustTargets(targets) => rustup_add("target", targets),
+        StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane.cache_debug),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
@@ -303,6 +320,7 @@ fn step_body(
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
+        StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
