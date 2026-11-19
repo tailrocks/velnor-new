@@ -324,6 +324,8 @@ jobs:
       sources_key: '${{ steps.sources_xtask_key.outputs.key }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: '${{ github.workspace }}/xtask/target'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -424,33 +426,24 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/xtask/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_xtask_mode || needs.rust-plan.outputs.rust_xtask_mode) != ''none'' && (steps.replan.outputs.rust_xtask_docs || needs.rust-plan.outputs.rust_xtask_docs) == ''run'' && (steps.replan.outputs.rust_xtask_package_args || needs.rust-plan.outputs.rust_xtask_package_args) != '''' }}'
         working-directory: xtask
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/xtask/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check xtask alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_xtask_package_args || needs.rust-plan.outputs.rust_xtask_package_args)), '' -p xtask '') || contains(format('' {0} '', (steps.replan.outputs.rust_xtask_package_args || needs.rust-plan.outputs.rust_xtask_package_args)), '' --workspace '')) }}'
         working-directory: xtask
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/xtask/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p xtask --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: xtask
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/xtask/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: xtask
         env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/xtask/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_xtask_test_filter || needs.rust-plan.outputs.rust_xtask_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save

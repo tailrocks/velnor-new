@@ -311,6 +311,8 @@ jobs:
       sources_key: '${{ steps.sources_tools_key.outputs.key }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: '${{ github.workspace }}/tools/target'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -411,33 +413,24 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/tools/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_tools_mode || needs.rust-plan.outputs.rust_tools_mode) != ''none'' && (steps.replan.outputs.rust_tools_docs || needs.rust-plan.outputs.rust_tools_docs) == ''run'' && (steps.replan.outputs.rust_tools_package_args || needs.rust-plan.outputs.rust_tools_package_args) != '''' }}'
         working-directory: tools
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/tools/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check tools alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_tools_package_args || needs.rust-plan.outputs.rust_tools_package_args)), '' -p tools '') || contains(format('' {0} '', (steps.replan.outputs.rust_tools_package_args || needs.rust-plan.outputs.rust_tools_package_args)), '' --workspace '')) }}'
         working-directory: tools
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/tools/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p tools --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: tools
-        env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/tools/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: tools
         env:
-          CARGO_TARGET_DIR: '${{ github.workspace }}/tools/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_tools_test_filter || needs.rust-plan.outputs.rust_tools_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
