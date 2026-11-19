@@ -244,3 +244,6 @@ pub fn product_runner_groups(
     list_runner_groups(&mut transport, admin.expose_token())
         .map_err(|err| map_session(err, &transport))
 }
+
+#[cfg(test)]
+mod tests;
