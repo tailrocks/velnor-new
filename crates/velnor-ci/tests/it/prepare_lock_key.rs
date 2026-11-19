@@ -232,3 +232,36 @@ fn a_member_the_metadata_does_not_list_keeps_its_version() {
     let unlisted = key(&workspace("0.1.85", "1.0.229"), &["app"]);
     assert_ne!(listed, unlisted);
 }
+
+fn legacy_workspace(root_version: &'static str, registry_version: &'static str) -> String {
+    format!(
+        "[root]\nname = \"app\"\nversion = \"{root_version}\"\ndependencies = [\"serde\"]\n{}",
+        entry(&registry("serde", registry_version))
+    )
+}
+
+#[test]
+fn a_root_version_bump_in_a_legacy_lock_keeps_the_lock_key() {
+    let members = ["app"];
+    assert_eq!(
+        key(&legacy_workspace("0.1.83", "1.0.229"), &members),
+        key(&legacy_workspace("0.1.85", "1.0.229"), &members)
+    );
+}
+
+#[test]
+fn a_registry_version_change_in_a_legacy_lock_moves_the_lock_key() {
+    let members = ["app"];
+    assert_ne!(
+        key(&legacy_workspace("0.1.83", "1.0.229"), &members),
+        key(&legacy_workspace("0.1.83", "1.0.230"), &members)
+    );
+}
+
+#[test]
+fn a_legacy_root_that_the_metadata_does_not_list_keeps_its_version() {
+    assert_ne!(
+        key(&legacy_workspace("0.1.83", "1.0.229"), &["core"]),
+        key(&legacy_workspace("0.1.85", "1.0.229"), &["core"])
+    );
+}
