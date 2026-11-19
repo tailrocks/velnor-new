@@ -7,6 +7,7 @@ pub(super) async fn migrate_to_current(
     conn: &turso::Connection,
     mut version: i64,
 ) -> Result<(), HostError> {
+    validate_starting_schema(conn, version).await?;
     while version != super::JOURNAL_VERSION {
         let expected = expected_next_version(version).ok_or(HostError::Journal)?;
         let step = migration_step(conn, version)?;
@@ -17,6 +18,31 @@ pub(super) async fn migrate_to_current(
         }
     }
     Ok(())
+}
+
+/// Validates the journal exactly as found, once, before any migration step
+/// rewrites it. Steps then run unvalidated: they only see state this driver
+/// produced, and `bootstrap` validates the final schema once.
+async fn validate_starting_schema(conn: &turso::Connection, version: i64) -> Result<(), HostError> {
+    match version {
+        32 => super::validate_persisted_schema_v32(conn).await,
+        33 => super::validate_persisted_schema_v33(conn).await,
+        34 => super::validate_persisted_schema_v34(conn).await,
+        35 => super::validate_persisted_schema_v35(conn).await,
+        36 => super::validate_persisted_schema_v36(conn).await,
+        37 => super::validate_persisted_schema_v37(conn).await,
+        38 => super::validate_persisted_schema_v38(conn).await,
+        39 => super::validate_persisted_schema_v39(conn).await,
+        40 => super::validate_persisted_schema_v40(conn).await,
+        41 => super::validate_persisted_schema_v41(conn).await,
+        42 => super::validate_persisted_schema_v42(conn).await,
+        43 => super::validate_persisted_schema_v43(conn).await,
+        44 => super::validate_persisted_schema_v44(conn).await,
+        45 => super::validate_persisted_schema_v45(conn).await,
+        46 | 47 => super::validate_persisted_schema_v46(conn).await,
+        50 => super::validate_persisted_schema_v50(conn).await,
+        _ => Ok(()),
+    }
 }
 
 type MigrationStep<'a> =
@@ -77,6 +103,13 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
         49 => Box::pin(super::jit_tombstone_completion::migrate(conn)),
         50 => Box::pin(super::unbound_retirement::migrate_v50_to_v51(conn)),
         51 => Box::pin(super::unbound_retirement::migrate_v51_to_v52(conn)),
+        52 => Box::pin(super::execution_authorization::migrate_v52_to_v53(conn)),
+        53 => Box::pin(super::pre_jit_cleanup::migrate_v53_to_v54(conn)),
+        54 => Box::pin(super::post_jit_effect_fences::migrate_v54_to_v55(conn)),
+        55 => Box::pin(super::unbound_retirement::migrate_v55_to_v56(conn)),
+        56 => Box::pin(super::doctor_probe::migrate_v56_to_v57(conn)),
+        57 => Box::pin(super::scale_set_delete::migrate_v57_to_v58(conn)),
+        58 => Box::pin(super::scale_set_unverified::migrate_v58_to_v59(conn)),
         _ => return Err(HostError::Journal),
     };
     Ok(step)
@@ -84,10 +117,27 @@ fn migration_step(conn: &turso::Connection, version: i64) -> Result<MigrationSte
 
 pub(super) const fn expected_next_version(version: i64) -> Option<i64> {
     match version {
-        0..=8 | 10..=51 => Some(version + 1),
+        0..=8 | 10..=58 => Some(version + 1),
         9 => Some(11),
         _ => None,
     }
+}
+
+#[cfg(test)]
+pub(in crate::journal) async fn migrate_historical_to(
+    conn: &turso::Connection,
+    target: i64,
+) -> Result<(), HostError> {
+    let mut version = super::journal_version(conn).await?;
+    while version < target {
+        let expected = expected_next_version(version).ok_or(HostError::Journal)?;
+        migration_step(conn, version)?.await?;
+        version = super::journal_version(conn).await?;
+        if version != expected {
+            return Err(HostError::Journal);
+        }
+    }
+    Ok(())
 }
 
 #[cfg(test)]

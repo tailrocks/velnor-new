@@ -51,6 +51,8 @@ fn request<'a>(state: &'a Path, policy: Option<&'a Path>) -> ConnectRequest<'a> 
         branches: vec!["main".to_owned()],
         tag_prefixes: Vec::new(),
         pull_request_rules: Vec::new(),
+        organization: None,
+        runner_group: None,
         platform: "linux/amd64",
         max_jobs: Some(1),
         docker_context: Some("orbstack"),
@@ -153,5 +155,84 @@ fn repeat_connect_with_a_different_job_authority_policy_is_rejected_without_stor
         std::fs::read_to_string(state.join("host.toml"))?,
         configured
     );
+    Ok(())
+}
+
+const P5_REPOSITORY_ID: i64 = 1_390_620_900;
+
+fn p5_request(state: &Path) -> ConnectRequest<'_> {
+    ConnectRequest {
+        connection_id: "velnor-new",
+        repo: "tailrocks/velnor-new",
+        repository_id: P5_REPOSITORY_ID,
+        scale_set: "ubuntu-26.04-velnor-scale-set",
+        scale_set_labels: vec![
+            "velnor".to_owned(),
+            "ubuntu-26.04-velnor-scale-set".to_owned(),
+        ],
+        events: vec!["push".to_owned(), "pull_request".to_owned()],
+        branches: vec!["p5/velnor-host-canary".to_owned()],
+        pull_request_rules: vec![format!(
+            "*:{P5_REPOSITORY_ID}:main:{P5_REPOSITORY_ID}:p5/velnor-host-canary"
+        )],
+        organization: Some("tailrocks"),
+        runner_group: Some("velnor-ci"),
+        max_jobs: Some(2),
+        ..request(state, None)
+    }
+}
+
+#[test]
+fn the_p5_org_scale_set_connection_is_accepted_and_recorded()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    let request = p5_request(&state);
+    assert_eq!(connect(&keychain, &request, "token-0"), Ok(()));
+
+    let config = HostConfig::parse(&std::fs::read_to_string(state.join("host.toml"))?)?;
+    let connection = config
+        .connection(&ConnectionId::parse("velnor-new")?)
+        .ok_or("connection missing")?;
+    assert_eq!(connection.organization.as_deref(), Some("tailrocks"));
+    assert_eq!(connection.runner_group.as_deref(), Some("velnor-ci"));
+    assert_eq!(connection.repository, "tailrocks/velnor-new");
+    assert_eq!(connection.repository_id, P5_REPOSITORY_ID);
+    assert_eq!(connection.scale_set.name(), "ubuntu-26.04-velnor-scale-set");
+    assert_eq!(
+        connection.scale_set.labels(),
+        ["velnor", "ubuntu-26.04-velnor-scale-set"]
+    );
+
+    assert_eq!(connect(&keychain, &request, "token-1"), Ok(()));
+    assert_eq!(keychain.stored(), vec![b"token-1".to_vec()]);
+    Ok(())
+}
+
+#[test]
+fn a_runner_group_needs_an_organization_that_owns_the_repository()
+-> Result<(), Box<dyn std::error::Error>> {
+    let temp = tempfile::tempdir()?;
+    let state = temp.path().canonicalize()?;
+    let keychain = FakeKeychain::default();
+    let no_org = ConnectRequest {
+        organization: None,
+        ..p5_request(&state)
+    };
+    assert_eq!(
+        connect(&keychain, &no_org, "token-0"),
+        Err(ConnectError::Config)
+    );
+    let foreign = ConnectRequest {
+        organization: Some("someone-else"),
+        ..p5_request(&state)
+    };
+    assert_eq!(
+        connect(&keychain, &foreign, "token-0"),
+        Err(ConnectError::Config)
+    );
+    assert_eq!(keychain.stored(), Vec::<Vec<u8>>::new());
+    assert!(!state.join("host.toml").exists());
     Ok(())
 }

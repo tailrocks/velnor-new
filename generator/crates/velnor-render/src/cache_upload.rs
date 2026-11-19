@@ -33,7 +33,7 @@ pub(crate) fn record(kind: &StepKind, saved: &RenderedStep) -> Option<RenderedSt
 pub(crate) fn key_id(key: &CacheKey) -> Option<String> {
     match key {
         CacheKey::Target { .. } => Some(TARGET_KEY_OUTPUT.to_owned()),
-        CacheKey::Sources { root, .. } => Some(format!("{}_key", sources_step(root.slug()))),
+        CacheKey::Sources { lane, .. } => Some(format!("{}_key", sources_step(lane.slug()))),
         _ => None,
     }
 }

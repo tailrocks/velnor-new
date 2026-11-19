@@ -22,6 +22,8 @@ pub(crate) struct CancelledObservation {
     pub(crate) stops: usize,
     pub(crate) volumes_left: usize,
     pub(crate) present_left: usize,
+    pub(crate) network_left: usize,
+    pub(crate) network: String,
     pub(crate) phase: String,
     pub(crate) lease: String,
     pub(crate) initializer: String,
@@ -31,16 +33,18 @@ pub(crate) struct CancelledObservation {
 impl CancelledObservation {
     pub(crate) fn encode(&self) -> String {
         format!(
-            "OBS {} {} {} {} {} {} {} {} {}",
+            "OBS {} {} {} {} {} {} {} {} {} {} {}",
             self.helpers_left,
             self.unmounted_left,
             self.stops,
             self.volumes_left,
             self.present_left,
+            self.network_left,
             self.phase,
             self.lease,
             self.initializer,
-            self.reservation
+            self.reservation,
+            self.network
         )
     }
 
@@ -51,18 +55,20 @@ impl CancelledObservation {
             .map(|(_, rest)| rest)?;
         let mut fields = line.split(' ');
         let mut count = || fields.next()?.parse::<usize>().ok();
-        let (helpers_left, unmounted_left, stops, volumes_left, present_left) =
-            (count()?, count()?, count()?, count()?, count()?);
+        let (helpers_left, unmounted_left, stops, volumes_left, present_left, network_left) =
+            (count()?, count()?, count()?, count()?, count()?, count()?);
         Some(Self {
             helpers_left,
             unmounted_left,
             stops,
             volumes_left,
             present_left,
+            network_left,
             phase: fields.next()?.to_owned(),
             lease: fields.next()?.to_owned(),
             initializer: fields.next()?.to_owned(),
             reservation: fields.next()?.to_owned(),
+            network: fields.next()?.to_owned(),
         })
     }
 }
@@ -75,7 +81,7 @@ async fn query_first(conn: &turso::Connection, sql: &str) -> TestResult<String> 
     })
 }
 
-async fn journal_state(journal_path: &Path) -> TestResult<[String; 4]> {
+async fn journal_state(journal_path: &Path) -> TestResult<[String; 5]> {
     let db = turso::Builder::new_local(journal_path.to_str().ok_or("journal path utf8")?)
         .build()
         .await?;
@@ -85,6 +91,7 @@ async fn journal_state(journal_path: &Path) -> TestResult<[String; 4]> {
         query_first(&conn, "SELECT state FROM host_operation_leases WHERE singleton = 1").await?,
         query_first(&conn, "SELECT state FROM capacity_reservations WHERE id = 2").await?,
         query_first(&conn, "SELECT remove_state || '/' || abort_state FROM capacity_reservation_storage_initialization WHERE reservation_id = 2").await?,
+        query_first(&conn, "SELECT create_state || '/' || remove_state FROM capacity_reservation_networks WHERE reservation_id = 2").await?,
     ])
 }
 
@@ -97,9 +104,67 @@ fn scenario_done(stub: &super::LocalDockerStub, expect_success: bool) -> TestRes
     })
 }
 
+async fn prove_storage(journal_path: &Path) -> TestResult<()> {
+    let db = turso::Builder::new_local(journal_path.to_str().ok_or("journal path utf8")?)
+        .build()
+        .await?;
+    let conn = db.connect()?;
+    let mut guards = Vec::new();
+    let mut rows = conn
+        .query(
+            "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND sql LIKE '%NEW.storage_cleanup_proven = 1%'",
+            (),
+        )
+        .await?;
+    while let Some(row) = rows.next().await? {
+        guards.push(row.get::<String>(0)?);
+    }
+    drop(rows);
+    for guard in guards {
+        conn.execute(&format!("DROP TRIGGER {guard}"), ()).await?;
+    }
+    conn.execute(
+        "UPDATE capacity_reservation_provisioning_state SET storage_cleanup_proven = 1 WHERE reservation_id = 2",
+        (),
+    )
+    .await?;
+    Ok(())
+}
+
+async fn wait_terminal(
+    stub: &super::LocalDockerStub,
+    journal_path: &Path,
+    state_dir: &Path,
+    storage_proven: bool,
+    expect_success: bool,
+) -> TestResult<bool> {
+    let mut observer = None;
+    for _ in 0..3000 {
+        let done = if storage_proven {
+            journal_state(journal_path).await?[4] == "created/removed"
+        } else {
+            scenario_done(stub, expect_success)?
+                && if expect_success {
+                    matches!(
+                        journal_state(journal_path).await?[3].as_str(),
+                        "-" | "removed/not_requested"
+                    )
+                } else {
+                    seed::retry_committed(state_dir, &mut observer).await?
+                }
+        };
+        if done {
+            return Ok(true);
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    Ok(false)
+}
+
 pub(crate) fn run_cancelled_before_start_scenario(
     specs: &[HelperSpec],
     expect_success: bool,
+    storage_proven: bool,
 ) -> TestResult<CancelledObservation> {
     let temp = tempfile::tempdir()?;
     let state_dir = temp.path().canonicalize()?;
@@ -112,7 +177,7 @@ pub(crate) fn run_cancelled_before_start_scenario(
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()?;
-    let [phase, lease, reservation, initializer] = runtime.block_on(async {
+    let [phase, lease, reservation, initializer, network] = runtime.block_on(async {
         let journal = seed::seed_completed_launch_with(&journal_path, &connection, 2).await?;
         let instance_id = helper_seed::seed_helper_rows(
             &journal_path,
@@ -123,6 +188,9 @@ pub(crate) fn run_cancelled_before_start_scenario(
             }),
         )
         .await?;
+        if storage_proven {
+            prove_storage(&journal_path).await?;
+        }
         stub.state
             .lock()
             .map_err(|_| "stub state poisoned")?
@@ -138,24 +206,14 @@ pub(crate) fn run_cancelled_before_start_scenario(
             &state_dir,
         )
         .await?;
-        let mut observer = None;
-        let mut reached = false;
-        for _ in 0..3000 {
-            let done = scenario_done(&stub, expect_success)?
-                && if expect_success {
-                    matches!(
-                        journal_state(&journal_path).await?[3].as_str(),
-                        "-" | "removed/not_requested"
-                    )
-                } else {
-                    seed::retry_committed(&state_dir, &mut observer).await?
-                };
-            if done {
-                reached = true;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        let reached = wait_terminal(
+            &stub,
+            &journal_path,
+            &state_dir,
+            storage_proven,
+            expect_success,
+        )
+        .await?;
         if !reached {
             let _outcome = worker.shutdown().await;
             return Err("cancelled-run scenario did not reach its terminal condition".into());
@@ -169,12 +227,15 @@ pub(crate) fn run_cancelled_before_start_scenario(
     let guard = stub.state.lock().map_err(|_| "stub state poisoned")?;
     let (helpers_left, unmounted_left, stops, volumes_left) = guard.volumes.counts();
     let present_left = guard.volumes.present_count();
+    let network_left = guard.volumes.network_left();
     Ok(CancelledObservation {
         helpers_left,
         unmounted_left,
         stops,
         volumes_left,
         present_left,
+        network_left,
+        network,
         phase,
         lease,
         initializer,

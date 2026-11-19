@@ -10,8 +10,8 @@ use velnor_model::{
     AllTrigger, ChangeSet, EventKind, RepoFacts, RepoPath, RustRoot, RustSelection,
 };
 use velnor_rust::{
-    cargo_files, detect, introduced, member_sources, optional_steps, policy_runs, root_sources,
-    select_event, selects_by_diff, tests_expected, unknown_paths, unread_packages,
+    cargo_files, detect, introduced, member_sources, optional_steps, plan_groups, policy_runs,
+    root_sources, select_event, selects_by_diff, tests_expected, unknown_paths, unread_packages,
 };
 
 use super::{
@@ -22,8 +22,10 @@ use crate::cli::{BaseFile, PlanArgs};
 use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::event::{Event, check_default_branch, parse_event};
-use crate::plan::{Steps, explain, outputs, tests_outputs, warnings, weakened};
-use crate::summary::summary;
+use crate::plan::{
+    Steps, explain, group_explanation, group_outputs, outputs, tests_outputs, warnings, weakened,
+};
+use crate::summary::{group_summary, summary};
 
 const EVENT_PATH_VARIABLE: &str = "GITHUB_EVENT_PATH";
 const LOCK_FILE: &str = "Cargo.lock";
@@ -33,6 +35,9 @@ fn ci(error: impl std::fmt::Display) -> CiError {
 }
 
 pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
+    if let (Some(mode), Some(request)) = (args.mode, &args.request) {
+        return super::plan_request::run(args, mode, request);
+    }
     let checkout = read_recorded_checkout(&current_dir()?).map_err(ci)?;
     let facts = detect(&checkout.view).map_err(ci)?;
     let event = read_event()?;
@@ -41,37 +46,10 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     }
     let name = std::env::var(EVENT_VARIABLE).ok();
     let full = args.full || name.as_deref() == Some(SCHEDULED);
-    let (selections, changes) = choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
-    let steps = facts
-        .rust_roots
-        .iter()
-        .map(|whole| {
-            let selection = selections.get(&whole.manifest);
-            if matches!(selection, Some(RustSelection::None)) {
-                return Ok((
-                    whole.manifest.clone(),
-                    optional_steps(whole, &BTreeMap::new(), true),
-                ));
-            }
-            let root = &scoped(whole, selection);
-            let found = if matches!(selection, Some(RustSelection::Some(_))) {
-                member_sources(&facts, root, &checkout.view.tracked_paths)
-            } else {
-                root_sources(&facts, root, &checkout.view.tracked_paths)
-            };
-            let steps = match found {
-                None => optional_steps(root, &BTreeMap::new(), true),
-                Some(paths) => match read_sources(&checkout.root, &paths) {
-                    Ok(Some(sources)) => optional_steps(root, &sources, full),
-                    Ok(None) | Err(GenError::NotRegular(_)) => {
-                        optional_steps(root, &BTreeMap::new(), true)
-                    }
-                    Err(error) => return Err(ci(error)),
-                },
-            };
-            Ok((whole.manifest.clone(), steps))
-        })
-        .collect::<Result<Steps, CiError>>()?;
+    let (selections, changes, kind) =
+        choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
+    let groups = plan_groups(&facts, kind, &changes.paths, &selections);
+    let steps = plan_steps(&facts, &checkout, &selections, full)?;
     let everything = selections.values().any(|selection| {
         matches!(selection, RustSelection::All(trigger) if !matches!(trigger, AllTrigger::MostPackages(_)))
     });
@@ -89,11 +67,12 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             (root.manifest.clone(), tests)
         })
         .collect();
-    let outputs = outputs(&selections, &steps, policy)? + &tests_outputs(&expected);
+    let outputs =
+        outputs(&selections, &steps, policy)? + &tests_outputs(&expected) + &group_outputs(&groups);
     append_outputs(&outputs)?;
     append_to(
         SUMMARY_VARIABLE,
-        &summary(&facts.rust_roots, &selections, &steps),
+        &(summary(&facts.rust_roots, &selections, &steps) + &group_summary(&groups)),
     )?;
     let new = introduced(&facts, &changes);
     let report = if args.explain {
@@ -102,11 +81,50 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
             &steps,
             &unknown_paths(&facts, &changes),
             &unread_packages(&facts, &changes),
-        ) + &weakened(&facts.weakenings, &new)
+        ) + &group_explanation(&groups)
+            + &weakened(&facts.weakenings, &new)
     } else {
         outputs
     };
     Ok(report + &warnings(&new))
+}
+
+fn plan_steps(
+    facts: &velnor_model::RepoFacts,
+    checkout: &Checkout,
+    selections: &BTreeMap<RepoPath, RustSelection>,
+    full: bool,
+) -> Result<Steps, CiError> {
+    facts
+        .rust_roots
+        .iter()
+        .map(|whole| {
+            let selection = selections.get(&whole.manifest);
+            if matches!(selection, Some(RustSelection::None)) {
+                return Ok((
+                    whole.manifest.clone(),
+                    optional_steps(whole, &BTreeMap::new(), true),
+                ));
+            }
+            let root = &scoped(whole, selection);
+            let found = if matches!(selection, Some(RustSelection::Some(_))) {
+                member_sources(facts, root, &checkout.view.tracked_paths)
+            } else {
+                root_sources(facts, root, &checkout.view.tracked_paths)
+            };
+            let steps = match found {
+                None => optional_steps(root, &BTreeMap::new(), true),
+                Some(paths) => match read_sources(&checkout.root, &paths) {
+                    Ok(Some(sources)) => optional_steps(root, &sources, full),
+                    Ok(None) | Err(GenError::NotRegular(_)) => {
+                        optional_steps(root, &BTreeMap::new(), true)
+                    }
+                    Err(error) => return Err(ci(error)),
+                },
+            };
+            Ok((whole.manifest.clone(), steps))
+        })
+        .collect()
 }
 
 fn event_kind(name: Option<&str>, manual: bool) -> EventKind {
@@ -127,7 +145,7 @@ fn choose(
     facts: &RepoFacts,
     name: Option<&str>,
     event: Option<&Event>,
-) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet), CiError> {
+) -> Result<(BTreeMap<RepoPath, RustSelection>, ChangeSet, EventKind), CiError> {
     let kind = if args.full {
         EventKind::WorkflowDispatch
     } else {
@@ -138,7 +156,8 @@ fn choose(
     } else {
         None
     };
-    Ok(select_event(facts, kind, || diff))
+    let (selections, changes) = select_event(facts, kind, || diff);
+    Ok((selections, changes, kind))
 }
 
 fn changes(

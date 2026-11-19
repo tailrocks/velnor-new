@@ -1,0 +1,153 @@
+# One reusable workflow, one workflow that every event can start, and one that follows it.
+
+[[workflow]]
+file = "build-assets"
+name = "Build assets"
+
+[[workflow.input]]
+name = "version"
+description = "Version to build"
+
+[[workflow.input]]
+name = "dry_run"
+description = "Build without publishing"
+type = "boolean"
+default = true
+
+[[workflow.output]]
+name = "artifact_id"
+description = "Artifact that holds the assets"
+value = "build.artifact_id"
+
+[[workflow.job]]
+id = "build"
+timeout_minutes = 20
+permissions = { contents = "read", id-token = "write", attestations = "write" }
+outputs = { artifact_id = "steps.upload.outputs.artifact-id" }
+
+[[workflow.job.step]]
+uses = "checkout"
+
+[[workflow.job.step]]
+uses = "mise"
+
+[[workflow.job.step]]
+name = "Build"
+run = "cargo build --release --locked"
+env = { VERSION = "${{ inputs.version }}" }
+
+[[workflow.job.step]]
+id = "upload"
+uses = "upload-artifact"
+with = { name = "assets", path = "target/release/app" }
+
+[[workflow.job.step]]
+uses = "attest"
+with = { subject-path = "target/release/app" }
+
+[[workflow.job]]
+id = "smoke"
+needs = ["build"]
+if = "needs.build.result == 'success'"
+timeout_minutes = 10
+
+[workflow.job.matrix]
+fail_fast = false
+
+[workflow.job.matrix.axes]
+os = ["ubuntu-24.04", "macos-15"]
+profile = ["debug", "release"]
+
+[[workflow.job.step]]
+name = "Smoke test"
+run = "echo smoke"
+env = { OS = "${{ matrix.os }}", PROFILE = "${{ matrix.profile }}" }
+
+[[workflow]]
+file = "release-checks"
+name = "Release checks"
+runner = "velnor-linux-x64"
+fork_runner = "ubuntu-latest"
+
+[workflow.concurrency]
+group = "${{ github.workflow }}-${{ github.head_ref || github.run_id }}"
+cancel_in_progress = true
+
+[workflow.on]
+merge_group = true
+schedule = ["23 4 * * 1"]
+
+[workflow.on.workflow_dispatch]
+
+[[workflow.on.workflow_dispatch.input]]
+name = "mode"
+description = "How much to check"
+type = "choice"
+options = ["quick", "full"]
+default = "quick"
+
+[workflow.on.push]
+branches = ["main"]
+tags = ["rust-ci-v*"]
+paths_ignore = ["docs/**", "**.md"]
+
+[workflow.on.pull_request]
+types = ["opened", "synchronize", "reopened"]
+branches = ["main"]
+paths = ["crates/**", "Cargo.lock", ".velnor/**"]
+
+[[workflow.job]]
+id = "plan"
+timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+uses = "checkout"
+
+[[workflow.job.step]]
+name = "Show the mode"
+run = "printenv MODE"
+env = { MODE = "${{ inputs.mode }}" }
+
+[[workflow.job]]
+id = "assets"
+needs = ["plan"]
+if = "github.event_name == 'push' || github.event_name == 'workflow_dispatch'"
+uses = "build-assets"
+permissions = { contents = "read", id-token = "write", attestations = "write" }
+concurrency = { group = "assets-${{ github.workflow }}-${{ github.ref }}" }
+with = { version = "${{ github.sha }}", dry_run = false }
+
+[[workflow.job]]
+id = "verify"
+needs = ["assets"]
+environment = "release"
+timeout_minutes = 15
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+uses = "download-artifact"
+with = { artifact-ids = "${{ needs.assets.outputs.artifact_id }}" }
+
+[[workflow.job.step]]
+name = "Check the assets"
+run = "ls -l"
+continue_on_error = true
+
+[[workflow]]
+file = "release-follow-up"
+name = "Release follow-up"
+
+[workflow.on.workflow_run]
+workflows = ["Release checks"]
+branches = ["main"]
+
+[[workflow.job]]
+id = "notify"
+if = "github.event.workflow_run.conclusion == 'success'"
+timeout_minutes = 5
+
+[[workflow.job.step]]
+name = "Report"
+run = "echo released"
+env = { REPOSITORY = "${{ github.repository }}" }

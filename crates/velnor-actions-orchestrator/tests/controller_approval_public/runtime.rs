@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{error::Error, io};
+use std::{error::Error, fs, io, path::Path};
 
 use serde_json::Value;
 use velnor_actions_orchestrator::{prepare, render_staged_tree};
@@ -31,42 +31,70 @@ fn rendered_ci(approvals: &str, lock: &str) -> Result<String, Box<dyn Error>> {
         .ok_or_else(|| io::Error::other("rendered ci workflow missing").into())
 }
 
+fn pinned(name: &str) -> Result<String, Box<dyn Error>> {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    Ok(fs::read_to_string(root.join(".velnor").join(name))?)
+}
+
+fn str_at<'a>(value: &'a Value, pointer: &str) -> Result<&'a str, Box<dyn Error>> {
+    value
+        .pointer(pointer)
+        .and_then(Value::as_str)
+        .ok_or_else(|| format!("{pointer} missing from pinned approvals").into())
+}
+
 #[test]
-fn shipped_controller_081_accepts_its_lock_and_renders_qualified_identities()
+fn shipped_controller_accepts_its_lock_and_renders_qualified_identities()
 -> Result<(), Box<dyn Error>> {
-    let approvals = include_str!("../../../../.velnor/controller-approvals.json");
-    let lock = include_str!("../../../../.velnor/generator.lock");
-    let value: Value = serde_json::from_str(approvals)?;
-    assert_eq!(value["active"]["version"], "0.1.81");
-    assert_eq!(
-        value["active"]["commit"],
-        "7d9340921fbe06bb23ca5f02c071c65870c39277"
-    );
+    let approvals = pinned("controller-approvals.json")?;
+    let lock = pinned("generator.lock")?;
+    let value: Value = serde_json::from_str(&approvals)?;
+    let version = str_at(&value, "/active/version")?;
+    let commit = str_at(&value, "/active/commit")?;
     assert!(value["staged"].is_null());
-    let ci = rendered_ci(approvals, lock)?;
-    assert_runtime_identities(
-        &ci,
-        "2026.11.1",
-        [
-            "7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9",
-            "9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627",
-            "ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0",
-        ],
-    )?;
-    for hash in [
-        "f08dd0330bb47b59f0e34d8c024a6e08d2eac5c12949d6d11fe904a46263cd1e",
-        "1038d59dcb0c91d520509fb91f868084fd0e27e32be0940188f20b55671c286e",
-        "6cf672259dd777e469538f456e3b9736b9fc24488cbd66db434b4424324dee58",
-    ] {
-        assert!(lock.contains(hash), "qualified SDK target missing: {hash}");
-    }
     assert!(
-        ci.contains("2.103.3"),
-        "qualified GitHub CLI identity missing"
+        lock.contains(&format!("version = \"{version}\"\ncommit = \"{commit}\"")),
+        "generator.lock does not pin the active release {version}"
     );
-    assert!(ci.contains("f08dd0330bb47b59f0e34d8c024a6e08d2eac5c12949d6d11fe904a46263cd1e"));
-    assert!(ci.contains("/v0.1.81/velnor-actions-0.1.81-x86_64-unknown-linux-gnu"));
-    let stale = fixture(Some(approvals), BASE_LOCK)?;
+    let binaries = value
+        .pointer("/active/binaries")
+        .and_then(Value::as_array)
+        .ok_or_else(|| io::Error::other("active binaries missing"))?;
+    for binary in binaries {
+        let artifact = str_at(binary, "/artifact")?;
+        let sha256 = str_at(binary, "/sha256")?;
+        assert!(
+            lock.contains(artifact) && lock.contains(sha256),
+            "qualified SDK target missing: {artifact}"
+        );
+    }
+    let runtime = value
+        .pointer("/active/mise_runtime")
+        .and_then(Value::as_array)
+        .ok_or_else(|| io::Error::other("active mise_runtime missing"))?;
+    let runtime_version = str_at(
+        runtime
+            .first()
+            .ok_or_else(|| io::Error::other("mise_runtime is empty"))?,
+        "/version",
+    )?;
+    let runtime_hashes: Vec<&str> = runtime
+        .iter()
+        .map(|entry| str_at(entry, "/sha256"))
+        .collect::<Result<_, _>>()?;
+    let runtime_hashes: [&str; 3] = runtime_hashes
+        .try_into()
+        .map_err(|_| io::Error::other("expected three mise runtime targets"))?;
+    let ci = rendered_ci(&approvals, &lock)?;
+    assert_runtime_identities(&ci, runtime_version, runtime_hashes)?;
+    let linux_sha256 = str_at(&value, "/active/binaries/0/sha256")?;
+    assert!(ci.contains(linux_sha256));
+    let gh = str_at(&value, "/active/gh")?;
+    assert!(ci.contains(gh), "qualified GitHub CLI identity missing");
+    assert!(ci.contains(&format!(
+        "/v{version}/velnor-actions-{version}-x86_64-unknown-linux-gnu"
+    )));
+    let stale = fixture(Some(approvals.as_str()), BASE_LOCK)?;
     assert!(prepare_error(stale.path())?.contains("lock_mismatch"));
     Ok(())
 }

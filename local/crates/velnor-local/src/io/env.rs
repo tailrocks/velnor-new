@@ -2,63 +2,36 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt::Write as _;
-use std::future::Future;
 use std::io;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::time::Duration;
 
 use serde_json::Value;
 use tokio::fs;
-use tokio::io::AsyncWriteExt;
-use tokio::process::Command;
 
-use super::probe::wait_for;
+use super::local_ci::LocalCi;
 use super::proxy::Proxy;
-use crate::authority::AGENTS_PATH;
 use crate::cli::EnvironmentArgs;
+use crate::jit::labels;
 use crate::side::Side;
+
+mod engine;
+mod ready;
 
 pub(super) use crate::doctor::STANDIN_IMAGE;
 use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
-pub(super) const RUNNER_LABELS: &str = "ubuntu-latest,ubuntu-22.04,ubuntu-24.04,ubuntu-26.04,ubuntu-22.04-arm,ubuntu-24.04-arm,ubuntu-26.04-arm";
-const READY_TIMEOUT: Duration = Duration::from_secs(60);
+pub use engine::{DockerCli, Engine};
+pub(super) use engine::{program, words};
+pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
-
-pub trait Engine: Sync {
-    fn docker(&self, args: &[&str]) -> impl Future<Output = io::Result<String>> + Send;
-    fn logged(&self, args: &[&str], log: &Path) -> impl Future<Output = io::Result<bool>> + Send;
-}
-
-#[derive(Debug)]
-pub struct DockerCli;
-
-impl Engine for DockerCli {
-    async fn docker(&self, args: &[&str]) -> io::Result<String> {
-        let stdout = program("docker", args, None).await?;
-        Ok(String::from_utf8_lossy(&stdout).trim().to_owned())
-    }
-
-    async fn logged(&self, args: &[&str], log: &Path) -> io::Result<bool> {
-        let log = std::fs::File::create(log)?;
-        let status = Command::new("docker")
-            .args(args)
-            .kill_on_drop(true)
-            .stdin(Stdio::null())
-            .stdout(log.try_clone()?)
-            .stderr(log)
-            .status()
-            .await?;
-        Ok(status.success())
-    }
-}
 
 #[derive(Debug)]
 pub struct Environment<E> {
     pub name: String,
     pub dir: PathBuf,
+    labels: String,
     engine: E,
+    ready_timeout: Duration,
 }
 
 #[derive(Debug)]
@@ -77,32 +50,8 @@ impl Addresses {
     }
 }
 
-pub(super) fn words(text: &'static str) -> Vec<&'static str> {
-    text.split_whitespace().collect()
-}
-
-pub(super) async fn program(
-    program: &str,
-    args: &[&str],
-    input: Option<&[u8]>,
-) -> io::Result<Vec<u8>> {
-    let mut child = Command::new(program)
-        .args(args)
-        .stdin(input.map_or_else(Stdio::null, |_| Stdio::piped()))
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true)
-        .spawn()?;
-    if let (Some(input), Some(mut stdin)) = (input, child.stdin.take()) {
-        stdin.write_all(input).await?;
-    }
-    let output = child.wait_with_output().await?;
-    if output.status.success() {
-        return Ok(output.stdout);
-    }
-    let error = String::from_utf8_lossy(&output.stderr);
-    let failed = format!("{program} {}: {}", args.join(" "), error.trim());
-    Err(io::Error::other(failed))
+fn strs(values: &[String]) -> Vec<&str> {
+    values.iter().map(String::as_str).collect()
 }
 
 impl<E: Engine> Environment<E> {
@@ -118,7 +67,29 @@ impl<E: Engine> Environment<E> {
                     let _ = write!(name, "{byte:02x}");
                     name
                 });
-        Ok(Self { name, dir, engine })
+        Ok(Self {
+            name,
+            dir,
+            labels: labels(&[]),
+            engine,
+            ready_timeout: READY_TIMEOUT,
+        })
+    }
+
+    #[must_use]
+    pub fn with_labels(mut self, extra: &[String]) -> Self {
+        self.labels = labels(extra);
+        self
+    }
+
+    #[must_use]
+    pub const fn with_ready_timeout(mut self, ready_timeout: Duration) -> Self {
+        self.ready_timeout = ready_timeout;
+        self
+    }
+
+    pub(super) fn labels(&self) -> &str {
+        &self.labels
     }
 
     async fn docker(&self, constant: &'static str, values: &[&str]) -> io::Result<String> {
@@ -162,15 +133,21 @@ impl<E: Engine> Environment<E> {
     }
 
     pub async fn up(&self, repo: &Path, args: &EnvironmentArgs) -> io::Result<Addresses> {
+        let local = super::local_ci::flags(args).await?;
         self.down().await?;
-        let started = self.start_all(repo, args).await;
+        let started = self.start_all(repo, args, &local).await;
         if started.is_err() {
             let _ = self.down().await;
         }
         started
     }
 
-    async fn start_all(&self, repo: &Path, args: &EnvironmentArgs) -> io::Result<Addresses> {
+    async fn start_all(
+        &self,
+        repo: &Path,
+        args: &EnvironmentArgs,
+        local: &LocalCi,
+    ) -> io::Result<Addresses> {
         super::pair::private_folder(&self.dir.join("keys")).await?;
         for directory in ["cache", "api"] {
             fs::create_dir_all(self.dir.join(directory)).await?;
@@ -184,16 +161,19 @@ impl<E: Engine> Environment<E> {
         super::keys::control(&token).await?;
         let checkout = format!("{}:/repo:ro", repo.display());
         let state = mount("api", "/api");
+        let der = mount("keys/token.pub.der", "/keys/token.pub.der:ro");
         let control = mount("keys/control", "/keys/control:ro");
         let data = mount("cache", "/data");
-        self.side("", args.containers(args.runners)).await?;
+        self.side("", args.containers(args.runners), local).await?;
         let stub = words(
             "api-stub --listen 0.0.0.0:80 --repo /repo --dir /api --cache-dir /data --standin runner-server:80 \
-             --control-listen 0.0.0.0:81 --control-token /keys/control",
+             --control-listen 0.0.0.0:81 --control-token /keys/control --token-key /keys/token.pub.der",
         );
         let mounts = [
             "-v",
             &checkout,
+            "-v",
+            &der,
             "-v",
             &state,
             "-v",
@@ -203,21 +183,30 @@ impl<E: Engine> Environment<E> {
             LOCAL_IMAGE,
         ];
         let branch = ["--default-branch", &args.default_branch];
+        let admin: &[&str] = if args.job_cache_admin {
+            &["--job-cache-admin"]
+        } else {
+            &[]
+        };
         self.start(
             "api",
             "run -d --network-alias api-stub -p 127.0.0.1::81 -e GIT_CONFIG_COUNT=1 \
              -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=*",
-            &[&mounts[..], &stub, &branch].concat(),
+            &[&mounts[..], &stub, &branch, admin, &strs(&local.stub)[..]].concat(),
         )
         .await?;
         if args.fork_runners > 0 {
-            self.side("fork-", args.containers(args.fork_runners))
-                .await?;
+            self.side(
+                "fork-",
+                args.containers(args.fork_runners),
+                &LocalCi::default(),
+            )
+            .await?;
         }
         self.ready(args).await
     }
 
-    async fn side(&self, prefix: &str, runners: u16) -> io::Result<()> {
+    async fn side(&self, prefix: &str, runners: u16, local: &LocalCi) -> io::Result<()> {
         let label = format!("velnor-local={}", self.name);
         let network = self.network(Side::of_role(prefix));
         self.docker("network create", &["--label", &label, &network])
@@ -242,7 +231,7 @@ impl<E: Engine> Environment<E> {
             "run -d --network-alias runner-server -e Runner.Server__GitServerUrl=http://github.localhost \
              -e Runner.Server__GitApiServerUrl=http://api-stub \
              -e Runner.Server__RSASignatureKeyPath=/keys/token.pem",
-            &["-v", &pem, STANDIN_IMAGE],
+            &[&strs(&local.standin)[..], &["-v", &pem, STANDIN_IMAGE]].concat(),
         )
         .await?;
         let der = mount(&format!("{keys}/token.pub.der"), "/keys/token.pub.der:ro");
@@ -268,83 +257,22 @@ impl<E: Engine> Environment<E> {
         for number in 1..=runners {
             let register = format!(
                 "./config.sh --unattended --url http://github.localhost/runner/server \
-                 --token anything --name {}-{prefix}runner-{number} --labels {RUNNER_LABELS} \
+                 --token anything --name {}-{prefix}runner-{number} --labels {} \
                  && exec ./run.sh",
-                self.name
+                self.name, self.labels
             );
             self.start(
                 &format!("{prefix}runner-{number}"),
                 "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1",
-                &[RUNNER_IMAGE, "sh", "-c", &register],
+                &[
+                    &strs(&local.runner)[..],
+                    &[RUNNER_IMAGE, "sh", "-c", &register],
+                ]
+                .concat(),
             )
             .await?;
         }
         Ok(())
-    }
-
-    pub(super) async fn published(&self, role: &str) -> io::Result<String> {
-        let container = format!("{}-{role}", self.name);
-        let ports = self.docker("port", &[&container, "81/tcp"]).await?;
-        let address = ports
-            .lines()
-            .find_map(|line| line.trim().parse::<SocketAddr>().ok());
-        address
-            .map(|address| address.to_string())
-            .ok_or_else(|| io::Error::other(format!("{role} publishes no port: {ports}")))
-    }
-
-    pub(super) async fn published_if_present(&self, role: &str) -> io::Result<Option<String>> {
-        let filter = format!("name=^/{}-{role}$", self.name);
-        let listed = self.docker("ps -aq --filter", &[&filter]).await?;
-        if listed.trim().is_empty() {
-            return Ok(None);
-        }
-        self.published(role).await.map(Some)
-    }
-
-    async fn ready(&self, args: &EnvironmentArgs) -> io::Result<Addresses> {
-        let token = fs::read_to_string(self.dir.join("keys/control")).await?;
-        let stub = self.published("api").await?;
-        let fork = if args.fork_runners > 0 {
-            Some(Proxy::authorized(
-                &self.published("fork-cache").await?,
-                &token,
-            ))
-        } else {
-            None
-        };
-        let addresses = Addresses {
-            cache: Proxy::authorized(&self.published("cache").await?, &token),
-            fork,
-            stub: Proxy::authorized(&stub, &token),
-            stub_url: format!("http://{stub}"),
-            token,
-        };
-        let deadline = tokio::time::Instant::now() + READY_TIMEOUT;
-        let sides: Vec<_> = [("", &addresses.cache, args.containers(args.runners))]
-            .into_iter()
-            .chain(
-                addresses
-                    .fork
-                    .as_ref()
-                    .map(|fork| ("fork-", fork, args.containers(args.fork_runners))),
-            )
-            .collect();
-        for (prefix, proxy, _) in &sides {
-            let what = format!("{prefix}runner.server");
-            wait_for(proxy, AGENTS_PATH, deadline, &what).await?;
-        }
-        for (prefix, proxy, runners) in sides {
-            for number in 1..=runners {
-                let path = format!(
-                    "/_apis/v1/Message/isagentonline?name={}-{prefix}runner-{number}",
-                    self.name
-                );
-                let what = format!("{prefix}runner {number}");
-                wait_for(proxy, &path, deadline, &what).await?;
-            }
-        }
-        Ok(addresses)
     }
 
     pub async fn down(&self) -> io::Result<[usize; 3]> {
