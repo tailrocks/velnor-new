@@ -391,11 +391,8 @@ fn a_symlinked_rust_source_fails_closed_instead_of_being_skipped() -> TestResult
     view.symlinks.insert(linked);
     let facts = detect(&view)?;
     assert_eq!(
-        facts
-            .compile_inputs
-            .get(&None)
-            .map(std::collections::BTreeSet::len),
-        Some(1)
+        facts.compile_inputs.get(&None),
+        Some(&BTreeSet::from([name("app")]))
     );
     Ok(())
 }
