@@ -117,3 +117,48 @@ fn the_plain_image_the_driver_selects_is_built_from_that_dockerfile() {
         std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR")).join(LOCAL)).ok()
     );
 }
+
+/// What the image gives a job's environment: every `ENV` key, and every instruction that names
+/// `mise` or sets `PATH`. A job inherits these from the image, so a difference between the plain
+/// and the production image shows up as a job that passes in one and fails in the other.
+fn job_environment(text: &str) -> BTreeSet<String> {
+    text.lines()
+        .map(str::trim)
+        .filter(|line| !line.starts_with('#'))
+        .flat_map(|line| {
+            let env = line.strip_prefix("ENV ").map(|rest| {
+                let key = rest.split(['=', ' ']).next().unwrap_or_default();
+                format!("ENV {key}")
+            });
+            let activation = (line.contains("mise") || line.contains("PATH="))
+                .then(|| line.trim_end_matches(['\\', ' ']).to_owned());
+            env.into_iter().chain(activation)
+        })
+        .collect()
+}
+
+fn user_command(text: &str) -> &str {
+    let at = text
+        .find("useradd")
+        .unwrap_or_else(|| unreachable!("no useradd"));
+    text[at..].lines().next().unwrap_or_default()
+}
+
+#[test]
+fn the_plain_runner_image_gives_jobs_the_environment_the_production_image_gives() {
+    let production = job_environment(&dockerfile(PRODUCTION));
+    let local = job_environment(&dockerfile(LOCAL));
+    assert_eq!(
+        local, production,
+        "plain and production disagree on the PATH, mise activation and ENV a job inherits"
+    );
+}
+
+#[test]
+fn the_plain_runner_user_is_the_production_user() {
+    let (local, production) = (dockerfile(LOCAL), dockerfile(PRODUCTION));
+    for flag in ["--uid 1000", "--gid 1000", "--shell /bin/bash"] {
+        assert!(user_command(&production).contains(flag), "{flag}");
+        assert!(user_command(&local).contains(flag), "plain image: {flag}");
+    }
+}

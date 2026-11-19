@@ -6,12 +6,18 @@
 FROM ubuntu:26.04@sha256:c098726dd9b9733f3e885f8de0ef375206a311b0a317eadc40d347b1115fb944
 ARG RUNNER_VERSION=2.338.0
 ARG RUNNER_SHA256=628b4a7258487b80c1d3c221095a7ded349f5ae0175fd3dfab708d07428f041b
-ENV DEBIAN_FRONTEND=noninteractive
+ARG DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates curl git sudo unzip xz-utils \
     && apt-get install -y --no-install-recommends build-essential clang cmake git-lfs jq libclang-dev libssl-dev netcat-openbsd perl pkg-config protobuf-compiler python3 zstd \
     && rm -rf /var/lib/apt/lists/*
-RUN useradd -m -u 1001 runner && echo "runner ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/runner
+# The runner user is the production one (uid 1000, bash). The production image sets no ENV, PATH or
+# mise activation, so a job starts from the same environment here; tests/it/plain_image.rs checks it.
+RUN if id ubuntu >/dev/null 2>&1; then userdel --remove ubuntu; fi \
+    && if getent group ubuntu >/dev/null; then groupdel ubuntu; fi \
+    && groupadd --gid 1000 runner \
+    && useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash runner \
+    && echo "runner ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/runner
 WORKDIR /home/runner
 RUN curl -fsSL -o runner.tar.gz "https://github.com/actions/runner/releases/download/v${RUNNER_VERSION}/actions-runner-linux-arm64-${RUNNER_VERSION}.tar.gz" \
     && echo "${RUNNER_SHA256}  runner.tar.gz" | sha256sum -c - \
