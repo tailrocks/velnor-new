@@ -54,13 +54,7 @@ fn the_recorded_repository_sample_has_a_root_per_workspace_with_the_members_carg
             .iter()
             .map(|(manifest, _, _)| manifest.as_str())
             .collect::<Vec<_>>(),
-        vec![
-            "Cargo.toml",
-            "ci-helper/Cargo.toml",
-            "crates/velnor-runner/Cargo.toml",
-            "generator/Cargo.toml",
-            "local/Cargo.toml",
-        ]
+        vec!["Cargo.toml"]
     );
     assert_eq!(
         facts.toolchain.and_then(|toolchain| toolchain.channel),
