@@ -3,11 +3,11 @@
 
 use std::error::Error;
 
-use velnor_gen::expected_files;
 use velnor_model::RELEASE_WORKFLOW_PATH;
 use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
+use crate::release_unguarded::expected_release;
 use crate::release_yml_binaries::{job, runs};
 use crate::yaml_tree::{Node, parse};
 use velnor_gen::GenerateError;
@@ -25,7 +25,7 @@ pub(crate) fn render_with(
     let mut view = release_view(roots, Some(config))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
-    let text = expected_files(&view)?
+    let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
     Ok(parse(&text)?)
@@ -225,7 +225,7 @@ fn a_package_named_like_another_packages_commit_output_is_refused_at_generation(
     )?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
-    let Err(GenerateError::Rules(violations)) = expected_files(&view) else {
+    let Err(GenerateError::Rules(violations)) = expected_release(&view) else {
         return Err("rendered".into());
     };
     assert_eq!(violations.len(), 1);
@@ -248,7 +248,7 @@ fn an_assetless_package_named_like_another_packages_commit_output_is_refused_at_
     let mut view = release_view(&[APP, SHADOW], Some("roots = [\".\", \"tools\"]\n"))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
-    let Err(GenerateError::Rules(violations)) = expected_files(&view) else {
+    let Err(GenerateError::Rules(violations)) = expected_release(&view) else {
         return Err("rendered".into());
     };
     assert_eq!(violations.len(), 1);

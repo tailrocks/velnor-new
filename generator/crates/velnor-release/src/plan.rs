@@ -21,7 +21,7 @@ use crate::registry::check_publish_registries_in_text;
 use crate::release_plz::{RootConfig, read, root_of};
 use crate::tag::{PACKAGE_WILDCARD, TagPattern};
 use crate::timeout::{TOKEN_LIFETIME_MINUTES, TOKEN_MARGIN_MINUTES};
-use crate::velnor_config::{VelnorConfig, parse};
+use crate::velnor_config::{BinaryFormat, VelnorConfig, parse};
 
 #[derive(Debug, Clone, Default)]
 pub struct ReleaseFiles {
@@ -57,6 +57,7 @@ pub struct BinaryPlan {
     pub bin: String,
     pub root: String,
     pub platforms: Vec<Platform>,
+    pub format: BinaryFormat,
     pub profile: Option<String>,
     pub tag_pattern: TagPattern,
 }
@@ -239,6 +240,7 @@ pub(crate) fn plan_binaries(
             bin: binary.bin.clone(),
             root,
             platforms: binary.platforms.clone(),
+            format: binary.format,
             profile: binary.profile.clone(),
             tag_pattern,
         });
@@ -270,8 +272,8 @@ pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
 fn plan_roots(
     configs: Vec<RootConfig>,
     metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
-) -> Result<Vec<RootPlan>, ReleaseError> {
-    let roots: Vec<RootPlan> = configs
+) -> Vec<RootPlan> {
+    configs
         .into_iter()
         .map(|config| {
             let inherited = inherited_packages(&config, metadata);
@@ -290,15 +292,16 @@ fn plan_roots(
                 workspace_tags: config.workspace_tags,
             }
         })
-        .collect();
-    if metadata.is_some() {
-        let minutes = publish_budget_minutes(&roots);
-        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
-        if minutes > limit {
-            return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
-        }
+        .collect()
+}
+
+pub fn check_publish_budget(roots: &[RootPlan]) -> Result<(), ReleaseError> {
+    let minutes = publish_budget_minutes(roots);
+    let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+    if minutes > limit {
+        return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
     }
-    Ok(roots)
+    Ok(())
 }
 
 impl ReleasePlan {
@@ -363,7 +366,7 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
-        let roots = plan_roots(configs, files.rust_metadata.as_ref())?;
+        let roots = plan_roots(configs, files.rust_metadata.as_ref());
         Ok(ReleasePlan {
             roots,
             after: config.after,

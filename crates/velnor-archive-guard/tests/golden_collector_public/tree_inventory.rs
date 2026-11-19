@@ -108,6 +108,10 @@ fn rejects_a_golden_file_whose_executable_mode_changed() -> Result<(), Box<dyn E
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "the old engine's OpenTofu-golden collector accepts x86-64 ELF candidates by design (binary_format.rs:55); P4 runs velnor-gen workflows"
+)]
 #[test]
 fn rejects_an_invalid_manifest_before_capture_without_changing_cases() -> Result<(), Box<dyn Error>>
 {

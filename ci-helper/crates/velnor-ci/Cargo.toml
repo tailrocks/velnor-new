@@ -3,12 +3,15 @@
 
 [package]
 name = "velnor-ci"
-version = "0.1.85"
+version = "0.1.88"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 publish = false
 autotests = false
+
+[package.metadata.cargo-machete]
+ignored = ["flate2"]
 
 [lints]
 workspace = true
@@ -33,16 +36,21 @@ serde_json = { version = "=1.0.154" }
 libc = "=0.2.191"
 nix = { version = "=0.31.3", default-features = false, features = ["signal", "fs", "user"] }
 signal-hook = { version = "=0.3.18", default-features = false, features = ["iterator"] }
-velnor-gen = { version = "=0.1.85", path = "../../../generator/crates/velnor-gen" }
+velnor-gen = { version = "=0.1.88", path = "../../../generator/crates/velnor-gen" }
 velnor-model = { version = "=0.0.0", path = "../../../generator/crates/velnor-model" }
 velnor-release = { version = "=0.0.0", path = "../../../generator/crates/velnor-release" }
 velnor-rust = { version = "=0.0.0", path = "../../../generator/crates/velnor-rust" }
 ureq = { version = "=3.5.2", default-features = false, features = ["rustls"] }
+blake3 = { version = "=1.8.7" }
 sha2 = { version = "=0.11.1" }
 toml = { version = "=1.1.8" }
 base64 = { version = "=0.23.1" }
 miniz_oxide = { version = "=0.9.1", default-features = false, features = ["with-alloc"] }
+zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
+# Selects zip's pure-Rust deflate backend through feature unification; the archive is read through `zip`.
+flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 
 [dev-dependencies]
 ring = { version = "=0.17.14", default-features = false }
 nix = { version = "=0.31.3", default-features = false, features = ["signal"] }
+velnor-render = { version = "=0.0.0", path = "../../../generator/crates/velnor-render" }

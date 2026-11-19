@@ -6,9 +6,9 @@ use std::fs;
 use std::path::Path;
 
 use velnor_render::{
-    ALINT, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
-    DOCKER_SETUP_BUILDX, PINNED_ACTIONS, PinnedAction, RenderedJob, RenderedStep, RenderedWorkflow,
-    Rule, Value, check_rules, render_workflow,
+    ACTIONS_CACHE, ALINT, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH,
+    DOCKER_LOGIN, DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
+    RenderedJob, RenderedStep, RenderedWorkflow, Rule, Value, check_rules, render_workflow,
 };
 
 use crate::release_fixture::app;
@@ -55,12 +55,15 @@ fn at(pin: &PinnedAction, reference: &str) -> String {
     format!("{}@{reference}", pin.action)
 }
 
-const NEW_ACTIONS: [PinnedAction; 5] = [
+const NEW_ACTIONS: [PinnedAction; 8] = [
     ATTEST_BUILD_PROVENANCE,
     ALINT,
     DOCKER_LOGIN,
     DOCKER_SETUP_BUILDX,
     DOCKER_BUILD_PUSH,
+    GITHUB_SCRIPT,
+    MR_BOXINGTON,
+    ACTIONS_CACHE,
 ];
 
 #[test]
@@ -110,6 +113,30 @@ fn a_new_action_is_accepted_only_at_its_pinned_commit() {
             "{}",
             pin.action
         );
+    }
+}
+
+#[test]
+fn the_pins_match_the_commits_already_used_in_the_repository() {
+    let expected = [
+        (
+            GITHUB_SCRIPT,
+            "3a2844b7e9c422d3c10d287c895573f7108da1b3",
+            "v9.0.0",
+        ),
+        (
+            MR_BOXINGTON,
+            "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
+            "v1.7.3",
+        ),
+        (
+            ACTIONS_CACHE,
+            "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+            "v6.1.0",
+        ),
+    ];
+    for (pin, commit, tag) in expected {
+        assert_eq!((pin.commit, pin.tag), (commit, tag), "{}", pin.action);
     }
 }
 

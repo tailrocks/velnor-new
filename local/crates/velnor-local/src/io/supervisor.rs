@@ -4,6 +4,7 @@
 mod host;
 mod online;
 mod pid;
+mod process;
 
 use std::io;
 use std::net::SocketAddr;
@@ -13,7 +14,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use nix::errno::Errno;
-use nix::sys::signal::kill;
+use nix::sys::signal::{Signal, kill};
 use nix::unistd::Pid;
 use tokio::fs;
 use tokio::net::TcpListener;
@@ -34,6 +35,7 @@ use crate::pairs::DECISIONS;
 use crate::side::Side;
 use host::{LOG, PID, PLAN, POLICY, read_policy, runner_dir, store_policy};
 use pid::recorded_pid;
+use process::{command_of, send};
 
 const START_TIMEOUT: Duration = Duration::from_secs(20);
 const STOP_TIMEOUT: Duration = Duration::from_secs(120);
@@ -208,26 +210,6 @@ async fn launch(
     }
 }
 
-async fn command_of(pid: &str) -> io::Result<Option<String>> {
-    let output = Command::new("ps")
-        .args(["-p", pid, "-o", "command="])
-        .stdin(Stdio::null())
-        .output()
-        .await?;
-    if output.status.success() {
-        let line = String::from_utf8_lossy(&output.stdout);
-        return Ok(Some(line.trim().to_owned()));
-    }
-    if output.status.code() == Some(1) && output.stderr.is_empty() {
-        return Ok(None);
-    }
-    let error = String::from_utf8_lossy(&output.stderr);
-    Err(io::Error::other(format!(
-        "ps -p {pid} -o command=: {}",
-        error.trim()
-    )))
-}
-
 async fn ours(pid: &str, dir: &Path, binary: &str) -> io::Result<bool> {
     let expected = format!("{binary} supervise --dir {}", dir.display());
     Ok(command_of(pid).await?.is_some_and(|line| {
@@ -245,7 +227,7 @@ async fn stop_host(dir: &Path, pid: Option<String>) -> io::Result<Option<String>
         .await?
         .is_some_and(|line| line.ends_with(&expected))
     {
-        program("kill", &["-KILL", &pid], None).await?;
+        send(&pid, Signal::SIGKILL)?;
     }
     forget(&runner.join(PID)).await?;
     let log = fs::read_to_string(runner.join(LOG))
@@ -281,11 +263,11 @@ pub(super) fn alive(pid: &str) -> bool {
 }
 
 async fn terminate(dir: &Path, pid: &str, binary: &str) -> io::Result<()> {
-    for signal in ["-TERM", "-KILL"] {
+    for signal in [Signal::SIGTERM, Signal::SIGKILL] {
         if !ours(pid, dir, binary).await? {
             break;
         }
-        program("kill", &[signal, pid], None).await?;
+        send(pid, signal)?;
         let deadline = tokio::time::Instant::now() + STOP_TIMEOUT;
         while ours(pid, dir, binary).await? && tokio::time::Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(100)).await;
@@ -328,7 +310,9 @@ pub(super) async fn stop(dir: &Path) -> io::Result<Option<String>> {
 }
 
 pub(super) async fn serve(args: SuperviseArgs) -> io::Result<()> {
-    let env = Environment::at(&args.dir, DockerCli).await?;
+    let env = Environment::at(&args.dir, DockerCli)
+        .await?
+        .with_labels(&args.label);
     let dir = authority_dir(&env.dir);
     let token = fs::read_to_string(env.dir.join("keys/authority")).await?;
     let token = token.trim().to_owned();

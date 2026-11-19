@@ -103,12 +103,12 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "asamarts/alint",
       "latest": "v0.22.1",
-      "pinned_sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0",
-      "pinned_version": "v0.21.0",
-      "qualified_sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0",
-      "qualified_version": "v0.21.0",
+      "pinned_sha": "5054852d00d47affc9ea71440240147d9999f4d3",
+      "pinned_version": "v0.22.1",
+      "qualified_sha": "5054852d00d47affc9ea71440240147d9999f4d3",
+      "qualified_version": "v0.22.1",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
@@ -125,12 +125,12 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "jdx/mise-action",
       "latest": "v5.2.9",
-      "pinned_sha": "f5be966e4a917d54244728e6a5fdcd1d93a35e6c",
-      "pinned_version": "v5.2.6",
-      "qualified_sha": "f5be966e4a917d54244728e6a5fdcd1d93a35e6c",
-      "qualified_version": "v5.2.6",
+      "pinned_sha": "236a21c3b91f5db6d4e174b348674a0f0caac06d",
+      "pinned_version": "v5.2.9",
+      "qualified_sha": "236a21c3b91f5db6d4e174b348674a0f0caac06d",
+      "qualified_version": "v5.2.9",
       "source": "https://api.github.com/repos/jdx/mise-action/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
@@ -179,42 +179,6 @@
       "expires": "2026-12-03"
     },
     {
-      "key": "jactionlint",
-      "held_version": "2.4.0",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v2.6.0 published 2026-11-12T18:02:50Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
-      "key": "opentofu",
-      "held_version": "1.13.8",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v1.13.9 published 2026-11-05T19:09:38Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
-      "key": "asamarts/alint",
-      "held_version": "v0.21.0",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v0.22.1 published 2026-11-11T20:16:13Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
-      "key": "jdx/mise-action",
-      "held_version": "v5.2.6",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v5.2.9 published 2026-11-15T16:43:58Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-07..2026-11-21): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
       "key": "mr-boxington",
       "held_version": "1.29.2",
       "owner": "Alexey Zhokhov",
@@ -234,10 +198,10 @@
     },
     {
       "key": "gh",
-      "held_version": "2.103.3",
+      "held_version": "2.104.0",
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v2.104.0 published 2026-11-12T19:03:51Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-16..2026-11-30): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
+      "reason": "v2.105.0 published 2026-11-18T00:18:35Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); gh 2.104.0 (published 2026-11-12T19:03:51Z, outside the window) is the qualified pin. The move to 2.105.0 is tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
       "granted": "2026-11-19",
       "expires": "2026-12-03"
     },
@@ -249,15 +213,6 @@
       "reason": "v0.9.152 published 2026-11-13T22:33:23Z is within the 3-day default_cooldown_days window (.velnor/version-policy.toml); the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-16..2026-11-30): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
       "granted": "2026-11-19",
       "expires": "2026-12-03"
-    },
-    {
-      "key": "actions/create-github-app-token",
-      "held_version": "v3.3.0",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v3.4.0 is newer upstream and not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531.",
-      "granted": "2026-11-18",
-      "expires": "2026-12-02"
     }
   ],
   "tools": [
@@ -291,10 +246,10 @@
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
-      "latest": "v2.104.0",
+      "latest": "v2.105.0",
       "name": "gh",
-      "pinned": "2.103.3",
-      "qualified": "2.103.3",
+      "pinned": "2.104.0",
+      "qualified": "2.104.0",
       "source": "https://api.github.com/repos/cli/cli/releases/latest",
       "status": "held"
     },
@@ -302,10 +257,10 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v2.6.0",
       "name": "jactionlint",
-      "pinned": "2.4.0",
-      "qualified": "2.4.0",
+      "pinned": "2.6.0",
+      "qualified": "2.6.0",
       "source": "https://api.github.com/repos/jdx/jactionlint/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
@@ -329,10 +284,10 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "latest": "v1.13.9",
       "name": "opentofu",
-      "pinned": "1.13.8",
-      "qualified": "1.13.8",
+      "pinned": "1.13.9",
+      "qualified": "1.13.9",
       "source": "https://api.github.com/repos/opentofu/opentofu/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",

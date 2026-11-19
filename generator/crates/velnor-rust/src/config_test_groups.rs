@@ -14,7 +14,7 @@ use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
 
 pub(crate) const DEFAULT_NAME: &str = "default";
-const NAME_MAX_LENGTH: usize = 40;
+pub(crate) const NAME_MAX_LENGTH: usize = 40;
 const FORBIDDEN_CHARACTERS: [char; 8] = ['"', '$', '`', '\\', '|', '&', ';', '<'];
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const THREADS_RANGE: std::ops::RangeInclusive<u16> = 1..=256;
@@ -179,14 +179,14 @@ fn check(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectErr
                 group.name.to_string(),
             )));
         }
-        if !seen.insert((group.name.clone(), root.manifest.clone())) {
+        if !seen.insert((
+            group.name.as_str().to_ascii_lowercase(),
+            root.manifest.clone(),
+        )) {
             return Err(invalid(Reason::InvalidValue {
                 key: "test_groups.name",
                 value: group.name.to_string(),
             }));
-        }
-        if !group.paths.is_empty() || !group.events.is_empty() {
-            return Err(invalid(Reason::TestGroupSelection(group.name.to_string())));
         }
     }
     Ok(())

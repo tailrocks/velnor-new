@@ -11,7 +11,7 @@ members = [
     "crates/velnor-actions-workflow-renderer",
     "crates/velnor-actions-orchestrator",
     "crates/velnor-actions-cli",
-    "crates/velnor-actions-freshness",
+    "crates/velnor-freshness",
     "crates/velnor-actions-tofu",
     "crates/velnor-actions-ansible",
     "crates/velnor-actions-bun",

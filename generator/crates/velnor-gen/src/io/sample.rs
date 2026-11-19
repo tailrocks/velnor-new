@@ -7,7 +7,7 @@ use std::io::{ErrorKind, Write};
 use std::path::{Path, PathBuf};
 
 use velnor_model::{RepoPath, RepoView};
-use velnor_rust::{MetadataError, cargo_files, manifests, wanted_files};
+use velnor_rust::{MetadataError, cargo_files, is_plain_source, manifests, wanted_files};
 
 use crate::expected_with_notes;
 
@@ -63,7 +63,7 @@ pub fn recorded_files(
     wanted.extend(manifests(tracked));
     files
         .into_iter()
-        .filter(|(path, _)| wanted.contains(path))
+        .filter(|(path, bytes)| wanted.contains(path) && !is_plain_source(path, bytes))
         .collect()
 }
 

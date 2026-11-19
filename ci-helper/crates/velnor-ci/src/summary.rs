@@ -8,6 +8,8 @@ use velnor_model::{
     SelectionReason, StepNeed,
 };
 
+use velnor_rust::GroupPlan;
+
 use crate::plan::Steps;
 
 fn cell(text: &str) -> String {
@@ -104,4 +106,29 @@ pub fn summary(
         lines.push(String::new());
     }
     lines.join("\n") + "\n"
+}
+
+fn group_cell(text: &str) -> String {
+    text.split('*').map(cell).collect::<Vec<_>>().join("\\*")
+}
+
+#[must_use]
+pub fn group_summary(groups: &[GroupPlan]) -> String {
+    if groups.is_empty() {
+        return String::new();
+    }
+    let mut lines = vec![
+        "| Test group | Root | Plan | Reason |".to_owned(),
+        "|---|---|---|---|".to_owned(),
+    ];
+    lines.extend(groups.iter().map(|group| {
+        format!(
+            "| {} | {} | {} | {} |",
+            cell(group.name.as_str()),
+            cell(group.root.as_str()),
+            if group.decision.run { "run" } else { "skip" },
+            group_cell(&group.decision.reason)
+        )
+    }));
+    lines.join("\n") + "\n\n"
 }

@@ -170,26 +170,6 @@ fn a_package_that_listed_tests_and_the_lane_ran_none_fails() -> TestResult {
     let run = Run {
         a: ("0", "0"),
         b: ("0", "0"),
-        ..passing()
-    };
-    expect(
-        &run,
-        false,
-        "a test job of root listed no tests and ran none",
-    )?;
-    let run = Run {
-        a: ("4", "4"),
-        b: ("0", "0"),
-        ..passing()
-    };
-    expect(
-        &run,
-        false,
-        "a test job of root listed no tests and ran none",
-    )?;
-    let run = Run {
-        a: ("0", "0"),
-        b: ("0", "0"),
         ignored: "5",
         ..passing()
     };

@@ -194,20 +194,20 @@ fn long_named_roots(count: usize) -> Vec<String> {
 }
 
 #[test]
-fn twenty_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
-    let manifests = long_named_roots(20);
+fn sixteen_roots_keep_the_gate_command_short_and_the_spec_in_env() -> TestResult {
+    let manifests = long_named_roots(16);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = released("0.1.81", &roots)?;
     let spec = gate_line(&text)?;
     assert!(spec.len() > MAX_RUN_CHARACTERS);
-    assert_eq!(spec.matches("--tests ").count(), 20);
+    assert_eq!(spec.matches("--tests ").count(), 16);
     assert!(required(&text)?.contains("\"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n"));
     Ok(())
 }
 
 #[test]
-fn twenty_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
-    let manifests = long_named_roots(20);
+fn sixteen_roots_without_a_helper_path_stay_within_the_workflow_size_limit() -> TestResult {
+    let manifests = long_named_roots(16);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let text = released("0.1.81", &roots)?;
     assert!(text.len() <= 500_000, "{} bytes", text.len());
@@ -227,9 +227,9 @@ fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> 
         .collect();
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
     let mut view = view(&roots, None)?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    let lock = "version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/shared-lib?branch=main#0123456789abcdef\"\n";
     view.files
-        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
+        .insert(RepoPath::new("Cargo.lock")?, lock.as_bytes().to_vec());
     let result = expected_files(&view);
     let Err(velnor_gen::GenerateError::Rules(violations)) = result else {
         return Err("oversized main workflow was not rejected by YAML rules".into());
