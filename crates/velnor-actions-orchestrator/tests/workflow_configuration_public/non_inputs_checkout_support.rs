@@ -76,10 +76,6 @@ pub(super) fn rust_repo(
     Ok(repo)
 }
 
-pub(super) fn exclusion(glob: &str) -> String {
-    format!("/*\n!/{glob}")
-}
-
 fn rendered_rust_job(glob: &str) -> Result<Job, Box<dyn Error>> {
     let repo = rust_repo(WorkflowPolicy::ConsumerV1, Some(glob))?;
     let jobs = finalized_jobs(&prepare(repo.path())?)?;

@@ -321,11 +321,35 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
     $1 == "parent" { parents = parents (parents ? " " : "") $2 }
     END { print parents }
   ')"
-  if [ "$merge_parents" != "$PR_BASE_SHA $PR_HEAD_SHA" ]; then
+  read -r merge_parent_base merge_parent_head merge_parent_extra <<<"$merge_parents"
+  if [ -z "$merge_parent_head" ] || [ -n "$merge_parent_extra" ] \
+    || [ "$merge_parent_head" != "$PR_HEAD_SHA" ]; then
     echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
     exit 1
   fi
-  for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}" "${PR_BASE_SHA}^{commit}"; do
+  if [ -z "${PR_BASE_REF-}" ] || ! GIT_OPTIONAL_LOCKS=0 git check-ref-format --branch "$PR_BASE_REF" >/dev/null 2>&1 \
+    || [[ "$PR_BASE_REF" == -* ]] || [[ "$PR_BASE_REF" == *@\{* ]]; then
+    echo 'FATAL: pull_request event lacks a valid base branch name' >&2
+    exit 1
+  fi
+  base_history="$RUNNER_TEMP/base-branch-history.git"
+  rm -rf "$base_history"
+  GIT_OPTIONAL_LOCKS=0 git init --quiet --bare "$base_history"
+  base_history_git() {
+    GIT_OPTIONAL_LOCKS=0 GIT_NO_LAZY_FETCH=1 git --git-dir="$base_history" "$@"
+  }
+  base_history_git fetch --quiet --no-tags --filter=tree:0 \
+    "$(GIT_OPTIONAL_LOCKS=0 git remote get-url origin)" '+refs/heads/'"$PR_BASE_REF"':refs/velnor/pr-base-tip'
+  if ! base_history_git merge-base --is-ancestor "${merge_parent_base}^{commit}" refs/velnor/pr-base-tip 2>/dev/null; then
+    echo 'FATAL: pull request merge first parent is not on the base branch; trigger a new pull request event for the current merge' >&2
+    exit 1
+  fi
+  if [ "$merge_parent_base" != "$PR_BASE_SHA" ] \
+    && ! base_history_git merge-base --is-ancestor "${PR_BASE_SHA}^{commit}" "${merge_parent_base}^{commit}" 2>/dev/null; then
+    echo 'FATAL: pull request merge parents do not match the event base and head; trigger a new pull request event for the current merge' >&2
+    exit 1
+  fi
+  for rev in 'HEAD^1' 'HEAD^2' "${PR_HEAD_SHA}^{commit}"; do
     if ! GIT_OPTIONAL_LOCKS=0 git cat-file -e "$rev" 2>/dev/null; then
       GIT_OPTIONAL_LOCKS=0 git fetch --no-tags --depth=2 origin "$GITHUB_SHA"
       break
@@ -333,13 +357,14 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
   done
   pr_head_commit="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_HEAD_SHA}^{commit}")"
   pr_head_tree="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_HEAD_SHA}^{tree}")"
-  pr_base_commit="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_BASE_SHA}^{commit}")"
-  pr_base_tree="$(GIT_OPTIONAL_LOCKS=0 git rev-parse "${PR_BASE_SHA}^{tree}")"
+  pr_base_commit="$(base_history_git rev-parse "${PR_BASE_SHA}^{commit}")"
+  pr_base_tree="$(base_history_git log -1 --format=%T "${PR_BASE_SHA}^{commit}")"
+  rm -rf "$base_history"
   merge_parent_1="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^1')"
   merge_parent_2="$(GIT_OPTIONAL_LOCKS=0 git rev-parse 'HEAD^2')"
   test "$pr_head_commit" = "$PR_HEAD_SHA"
   test "$pr_base_commit" = "$PR_BASE_SHA"
-  test "$merge_parent_1" = "$PR_BASE_SHA"
+  test "$merge_parent_1" = "$merge_parent_base"
   test "$merge_parent_2" = "$PR_HEAD_SHA"
 fi
 GIT_OPTIONAL_LOCKS=0 git status --porcelain=v1 --untracked-files=all >"$evidence/checkout-status.txt"
@@ -393,7 +418,7 @@ expected_mise=2026.11.1
 expected_rust=1.99.1
 expected_mbx=1.29.2
 expected_nextest=0.9.151
-expected_jactionlint=2.4.0
+expected_jactionlint=2.6.0
 expected_shellcheck=0.11.0
 if [ "$mise_version" != "$expected_mise" ] || [ "$rust" != "$expected_rust" ] \
   || [ "$mbx" != "$expected_mbx" ] || [ "$nextest" != "$expected_nextest" ] \
@@ -727,7 +752,7 @@ validator_jactionlint="$(MISE_NO_CONFIG=1 mise --no-config --no-env --no-hooks c
   -f mise.toml tools.jactionlint)"
 validator_shellcheck="$(MISE_NO_CONFIG=1 mise --no-config --no-env --no-hooks config get \
   -f mise.toml tools.shellcheck)"
-if [ "$validator_jactionlint" != 2.4.0 ] || [ "$validator_shellcheck" != 0.11.0 ]; then
+if [ "$validator_jactionlint" != 2.6.0 ] || [ "$validator_shellcheck" != 0.11.0 ]; then
   printf 'FATAL: committed validator Mise pins differ from qualification pins\n' >"$log"
   printf '1\n' >"$status_file"
   exit 1
@@ -786,18 +811,18 @@ if [ "$command_status" -eq 0 ]; then
   if MISE_NO_CONFIG=1 MISE_BACKENDS_JACTIONLINT=github:jdx/jactionlint \
     MISE_BACKENDS_SHELLCHECK=github:koalaman/shellcheck \
     mise --no-config --no-env --no-hooks which --tool \
-    jactionlint@2.4.0 jactionlint >"$evidence/logs/jactionlint-which.log" 2>&1; then
+    jactionlint@2.6.0 jactionlint >"$evidence/logs/jactionlint-which.log" 2>&1; then
     jactionlint_which="$(cat "$evidence/logs/jactionlint-which.log")"
     if [ -f "$jactionlint_which" ] && [ ! -L "$jactionlint_which" ] \
       && [ -x "$jactionlint_which" ] \
       && MISE_NO_CONFIG=1 MISE_BACKENDS_JACTIONLINT=github:jdx/jactionlint \
       MISE_BACKENDS_SHELLCHECK=github:koalaman/shellcheck \
       mise --no-config --no-env --no-hooks exec \
-      jactionlint@2.4.0 -- jactionlint --version \
+      jactionlint@2.6.0 -- jactionlint --version \
       >"$evidence/logs/jactionlint-version.log" 2>&1 \
       && IFS= read -r jactionlint_version \
         <"$evidence/logs/jactionlint-version.log" \
-      && [ "$jactionlint_version" = 2.4.0 ]; then
+      && [ "$jactionlint_version" = 2.6.0 ]; then
       if ! jactionlint_binary_sha="$(sha256sum "$jactionlint_which" | awk '{print $1}')" \
         || [[ ! "$jactionlint_binary_sha" =~ ^[0-9a-f]{64}$ ]]; then
         identity_status=1

@@ -42,7 +42,6 @@ const CONTROL_GID: u32 = 0;
 const CONTROL_DIRECTORY_MODE: u32 = 0o555;
 const CONTROL_FILE_MODE: u32 = 0o444;
 const CONTROL_FILE_LIMIT: usize = 8 * 1024;
-const BTRFS_SUPER_MAGIC: u64 = 0x9123_683e;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 struct DirectoryIdentity {
@@ -212,7 +211,6 @@ fn compare_runner_directory(
     expected: &ExecutionChannelDirectory,
     observed: &DirectoryIdentity,
 ) -> Result<(), ProbeError> {
-    let btrfs = observed.filesystem_type_magic == BTRFS_SUPER_MAGIC;
     if observed.inode != expected.inode
         || observed.owner_uid != expected.owner_uid
         || observed.owner_gid != expected.owner_gid
@@ -223,9 +221,8 @@ fn compare_runner_directory(
         || observed.mount_source != expected.mount_source
         || observed.mount_device_major != expected.mount_device_major
         || observed.mount_device_minor != expected.mount_device_minor
-        || (!btrfs
-            && (observed.statx_device_major != expected.statx_device_major
-                || observed.statx_device_minor != expected.statx_device_minor))
+        || observed.statx_device_major != expected.statx_device_major
+        || observed.statx_device_minor != expected.statx_device_minor
         || observed.read_only
     {
         return Err(ProbeError::Invalid("publication_channel_binding"));
@@ -338,5 +335,65 @@ fn publication_file(
         filesystem_type_magic: identity.filesystem_type_magic,
         filesystem_id: identity.filesystem_id,
         readback_sha256: lower_hex(&Sha256::digest(bytes)),
+    }
+}
+
+#[cfg(test)]
+mod btrfs_binding_tests {
+    use super::*;
+
+    fn expected(statx_minor: u32) -> ExecutionChannelDirectory {
+        ExecutionChannelDirectory {
+            target: "/opt/velnor/control".to_owned(),
+            inode: 256,
+            owner_uid: CONTROL_UID,
+            owner_gid: CONTROL_GID,
+            mode: CONTROL_DIRECTORY_MODE,
+            mount_id: 7,
+            statx_mount_id: 7,
+            mount_root: "/".to_owned(),
+            mount_source: "/dev/vda1".to_owned(),
+            mount_device_major: 0,
+            mount_device_minor: 40,
+            statx_device_major: 0,
+            statx_device_minor: statx_minor,
+            filesystem_type_magic: crate::filesystem::BTRFS_SUPER_MAGIC,
+            filesystem_type_name: "btrfs".to_owned(),
+            filesystem_id: 9,
+            read_only: false,
+            executable_mount: false,
+        }
+    }
+
+    fn observed(statx_minor: u32) -> DirectoryIdentity {
+        let e = expected(statx_minor);
+        DirectoryIdentity {
+            inode: e.inode,
+            owner_uid: e.owner_uid,
+            owner_gid: e.owner_gid,
+            mode: e.mode,
+            mount_id: e.mount_id,
+            statx_mount_id: e.statx_mount_id,
+            mount_device_major: e.mount_device_major,
+            mount_device_minor: e.mount_device_minor,
+            statx_device_major: e.statx_device_major,
+            statx_device_minor: e.statx_device_minor,
+            filesystem_type_magic: e.filesystem_type_magic,
+            filesystem_type_name: e.filesystem_type_name,
+            filesystem_id: e.filesystem_id,
+            mount_root: e.mount_root,
+            mount_source: e.mount_source,
+            read_only: false,
+        }
+    }
+
+    #[test]
+    fn btrfs_same_subvolume_is_accepted() {
+        assert!(compare_runner_directory(&expected(41), &observed(41)).is_ok());
+    }
+
+    #[test]
+    fn btrfs_other_subvolume_with_same_inode_is_refused() {
+        assert!(compare_runner_directory(&expected(41), &observed(42)).is_err());
     }
 }

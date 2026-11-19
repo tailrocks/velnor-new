@@ -17,7 +17,7 @@ use std::io::{self, Read, Write};
 use std::process::ExitCode;
 use std::time::Instant;
 
-use verifier::{InlineVerifyRequest, verify_inline_checksum_target};
+use verifier::{InlineVerifyRequest, verify_inline_subject};
 
 const PLATFORM_ENV_KEY: &str = "__CF_USER_TEXT_ENCODING";
 
@@ -55,7 +55,7 @@ async fn run() -> Result<(), ()> {
     let deadline = Instant::now() + verifier::VERIFY_DEADLINE;
     let response = tokio::time::timeout(
         verifier::VERIFY_DEADLINE,
-        verify_inline_checksum_target(request, deadline),
+        verify_inline_subject(request, deadline),
     )
     .await
     .map_err(|_| ())?
