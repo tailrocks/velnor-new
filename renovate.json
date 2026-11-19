@@ -40,6 +40,12 @@
   ],
   "packageRules": [
     {
+      "description": "ci.yml's mise-action `version:` input is read by Renovate as a jdx/mise release tag, so it is looked up. The tag is written v-prefixed (v2026.11.1) because the bare form 404s; mise-action strips the v. Bumps are not proposed: the input is paired with a pinned sha256, and a version-only bump would fail checksum verification.",
+      "matchManagers": ["github-actions"],
+      "matchPackageNames": ["jdx/mise"],
+      "enabled": false
+    },
+    {
       "description": "Cargo majors need explicit migration review (VER-3.2: incompatible = migration, never silent).",
       "matchManagers": ["cargo"],
       "matchUpdateTypes": ["major"],
