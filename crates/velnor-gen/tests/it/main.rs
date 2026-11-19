@@ -59,6 +59,7 @@ mod delta_helper;
 mod detect;
 mod doc_steps;
 mod docs_run;
+mod draft_skip_matrix;
 mod drift;
 mod events;
 mod events_policy;
