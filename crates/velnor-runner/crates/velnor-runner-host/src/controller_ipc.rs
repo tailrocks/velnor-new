@@ -12,6 +12,7 @@ pub use client::{
     ConnectionSetupReceipt, RunnerGroupReceipt, SelectedSetReceipt,
     wait_for_connection_setup_receipt,
 };
+pub use client::{CreatedSetDeletion, delete_created_scale_set};
 pub use client::{SessionObservation, SessionObservationStatistics, wait_for_session_observation};
 pub use client::{
     reactivate_connection_if_drained, run_doctor_probe, wait_for_connection_detached,

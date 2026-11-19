@@ -164,7 +164,7 @@ fn cargo_home_is_where_the_sources_cache_lands() -> Result<(), Box<dyn Error>> {
     let repo = sources_repo()?;
     let sq = render(repo.path())?.sq;
     for job in producer_ids(&sq) {
-        let home = resolved_cargo_home(&sq, &job, RUNNER_TEMP_EXPR)?;
+        let home = resolved_cargo_home(&sq, &job, "/home/runner/work/_temp")?;
         let steps = steps_of(&sq, &job)?;
         let restore = only(
             &positions(steps, |s| uses_prefix(s, "actions/cache/restore@")),

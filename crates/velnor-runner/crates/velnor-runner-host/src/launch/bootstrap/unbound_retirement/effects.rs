@@ -16,6 +16,7 @@ impl ReadyEffects<'_> {
                     self.absent_container(&container.role, &container.name)
                         .await?,
                 );
+                self.record_absent(&container.role, &container.name).await?;
                 continue;
             };
             let present = self.authorized(inspect_container(self.docker, id)).await?;
@@ -33,6 +34,7 @@ impl ReadyEffects<'_> {
                     Some(id),
                     "already_absent",
                 ));
+                self.record_absent(&container.role, &container.name).await?;
                 continue;
             };
             self.validate_container(&inspected, &container.role, &container.name, id)?;
@@ -78,11 +80,18 @@ impl ReadyEffects<'_> {
                 Some(id),
                 "removed_and_absent",
             ));
+            self.record_absent(&container.role, &container.name).await?;
         }
         if let Some(helper) = self.claim.initializer() {
             observations.push(Box::pin(self.remove_initializer(helper)).await?);
         }
         Ok(observations)
+    }
+
+    async fn record_absent(&self, role: &str, name: &str) -> Result<(), HostError> {
+        self.scope
+            .record_unbound_container_absent(self.claim, role, name)
+            .await
     }
 
     async fn absent_container(&self, role: &str, name: &str) -> Result<Observation, HostError> {

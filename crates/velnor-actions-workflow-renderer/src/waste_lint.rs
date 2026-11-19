@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 use std::fmt::{Display, Formatter};
 
-use velnor_actions_contract::{HomeKey, Job, JobEnv, JobTimeout, Step};
+use velnor_actions_contract::{HomeKey, Job};
 
 use crate::RenderError;
 
@@ -297,26 +297,4 @@ pub(crate) fn bind_and_check(jobs: &mut BTreeMap<String, Job>) -> Result<(), Ren
     crate::rust_job_env::bind(jobs);
     crate::cache_doctor::check(jobs)?;
     check(jobs)
-}
-
-pub(crate) fn bind_and_check_standalone(id: &str, steps: &[Step]) -> Result<JobEnv, RenderError> {
-    let job = Job {
-        display_name: id.to_owned(),
-        runs_on: String::new(),
-        check_runner: None,
-        timeout_minutes: JobTimeout::DEFAULT,
-        needs: Vec::new(),
-        condition: None,
-        permissions: None,
-        cache_access: velnor_actions_contract::CacheAccess::Read,
-        environment: None,
-        services: Vec::new(),
-        outputs: BTreeMap::new(),
-        env: JobEnv::Unset,
-        steps: steps.to_vec(),
-    };
-    let mut jobs = BTreeMap::from([(id.to_owned(), job)]);
-    crate::rust_job_env::bind(&mut jobs);
-    check(&jobs)?;
-    Ok(jobs.get(id).map_or(JobEnv::Unset, |bound| bound.env))
 }

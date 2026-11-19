@@ -163,3 +163,82 @@ fn the_inputs_lock_becomes_facts_and_a_bad_line_or_an_unknown_package_is_an_erro
     }
     Ok(())
 }
+
+fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
+    let view = repo(
+        vec![(
+            "Cargo.toml",
+            vec![
+                lib("app", "crates/app/Cargo.toml")?,
+                lib("tool", "crates/tool/Cargo.toml")?,
+                lib("reader", "crates/reader/Cargo.toml")?,
+                lib("left", "crates/left/Cargo.toml")?,
+            ],
+        )],
+        files,
+    )?;
+    let facts = detect(&view)?;
+    let selected = |changed_file: &str| {
+        let changes = velnor_model::ChangeSet {
+            paths: BTreeSet::from([path(changed_file)]),
+            base_files: BTreeMap::new(),
+            head_files: BTreeMap::new(),
+        };
+        match velnor_rust::select(&facts, &changes).into_values().next() {
+            Some(RustSelection::Some(map)) => map.keys().map(ToString::to_string).collect(),
+            Some(RustSelection::All(_)) => vec!["*".to_owned()],
+            _ => Vec::new(),
+        }
+    };
+    for (file, expected) in check {
+        assert_eq!(&selected(file), expected, "{file}");
+    }
+    Ok(())
+}
+
+#[test]
+fn a_file_a_crate_embeds_selects_it_without_an_inputs_lock_line() -> TestResult {
+    embedding(
+        &[
+            (
+                "crates/app/src/lib.rs",
+                "const A: &str = include_str!(\"../../../docs/guide.md\");\nconst H: &[u8] = include_bytes!(\"../../../shared/header.h\");",
+            ),
+            (
+                "crates/tool/src/lib.rs",
+                "const H: &str = include_str!(\"../../../shared/header.h\");",
+            ),
+            (
+                "crates/reader/src/lib.rs",
+                "const B: &str = include_str!(\"../../left/src/banner.txt\");",
+            ),
+            ("crates/left/src/lib.rs", ""),
+        ],
+        &[
+            ("docs/guide.md", &["app"]),
+            ("shared/header.h", &["app", "tool"]),
+            ("crates/left/src/banner.txt", &["left", "reader"]),
+            ("docs/other.md", &[]),
+        ],
+    )
+}
+
+#[test]
+fn an_embedded_path_that_cannot_be_resolved_selects_its_crate_on_any_change() -> TestResult {
+    embedding(
+        &[
+            (
+                "crates/reader/src/lib.rs",
+                "include!(concat!(env!(\"CARGO_MANIFEST_DIR\"), \"/x.rs\"));",
+            ),
+            (
+                "crates/app/src/lib.rs",
+                "include_str!(\"../../../docs/guide.md\");",
+            ),
+        ],
+        &[
+            ("docs/guide.md", &["app", "reader"]),
+            ("docs/other.md", &["reader"]),
+        ],
+    )
+}

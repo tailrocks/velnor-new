@@ -2,9 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::os::unix::fs::DirBuilderExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use rustix::fs::{Mode, OFlags};
+
+pub(crate) fn user_home() -> Option<PathBuf> {
+    let home = PathBuf::from(std::env::var_os("HOME")?);
+    home.is_absolute().then_some(home)
+}
 
 pub(crate) fn create_private_dir_all(path: &Path) -> std::io::Result<()> {
     let mut builder = std::fs::DirBuilder::new();

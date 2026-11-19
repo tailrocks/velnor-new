@@ -121,12 +121,19 @@ pub(in crate::journal::schema::execution_authorization::ddl) const V27_PROOF_TRA
     ),
 ];
 
+pub(in crate::journal::schema::execution_authorization::ddl) const V52_PUBLISHED_FILE_GUARD: &str = r"CREATE TRIGGER IF NOT EXISTS execution_proof_published_file_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_file_inode != NEW.challenge_file_inode OR OLD.challenge_file_bytes != NEW.challenge_file_bytes OR OLD.challenge_file_uid != NEW.challenge_file_uid OR OLD.challenge_file_gid != NEW.challenge_file_gid OR OLD.challenge_file_mode != NEW.challenge_file_mode) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END";
+pub(in crate::journal::schema::execution_authorization::ddl) const V52_PUBLISHED_MOUNT_GUARD: &str = r"CREATE TRIGGER IF NOT EXISTS execution_proof_published_mount_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_mount_id != NEW.challenge_mount_id OR OLD.challenge_device_major != NEW.challenge_device_major OR OLD.challenge_device_minor != NEW.challenge_device_minor OR OLD.challenge_statx_device_major != NEW.challenge_statx_device_major OR OLD.challenge_statx_device_minor != NEW.challenge_statx_device_minor) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END";
+pub(in crate::journal::schema::execution_authorization::ddl) const V52_PUBLISHED_FILESYSTEM_GUARD: &str = r"CREATE TRIGGER IF NOT EXISTS execution_proof_published_filesystem_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_fs_type_magic != NEW.challenge_fs_type_magic OR OLD.challenge_filesystem_id != NEW.challenge_filesystem_id OR OLD.challenge_filesystem_instance_digest != NEW.challenge_filesystem_instance_digest OR OLD.challenge_read_only != NEW.challenge_read_only OR OLD.challenge_no_copy != NEW.challenge_no_copy) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END";
+
 pub(in crate::journal::schema::execution_authorization::ddl) const PROOF_TRANSITION_GUARDS: &[(
     &str,
     &str,
 )] = &[
     V27_PROOF_TRANSITION_GUARDS[0],
-    V27_PROOF_TRANSITION_GUARDS[2],
+    (
+        "execution_proof_source_immutable_guard",
+        "CREATE TRIGGER IF NOT EXISTS execution_proof_source_immutable_guard BEFORE UPDATE ON connection_execution_proofs WHEN (OLD.source_digest IS NOT NULL AND OLD.source_digest IS NOT NEW.source_digest) OR (OLD.source_json IS NOT NULL AND OLD.source_json IS NOT NEW.source_json) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END",
+    ),
     V27_PROOF_TRANSITION_GUARDS[3],
     V27_PROOF_TRANSITION_GUARDS[4],
     (
@@ -143,15 +150,15 @@ pub(in crate::journal::schema::execution_authorization::ddl) const PROOF_TRANSIT
     ),
     (
         "execution_proof_published_file_guard",
-        "CREATE TRIGGER IF NOT EXISTS execution_proof_published_file_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_file_inode != NEW.challenge_file_inode OR OLD.challenge_file_bytes != NEW.challenge_file_bytes OR OLD.challenge_file_uid != NEW.challenge_file_uid OR OLD.challenge_file_gid != NEW.challenge_file_gid OR OLD.challenge_file_mode != NEW.challenge_file_mode) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END",
+        "CREATE TRIGGER IF NOT EXISTS execution_proof_published_file_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_file_inode IS NOT NEW.challenge_file_inode OR OLD.challenge_file_bytes IS NOT NEW.challenge_file_bytes OR OLD.challenge_file_uid IS NOT NEW.challenge_file_uid OR OLD.challenge_file_gid IS NOT NEW.challenge_file_gid OR OLD.challenge_file_mode IS NOT NEW.challenge_file_mode) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END",
     ),
     (
         "execution_proof_published_mount_guard",
-        "CREATE TRIGGER IF NOT EXISTS execution_proof_published_mount_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_mount_id != NEW.challenge_mount_id OR OLD.challenge_device_major != NEW.challenge_device_major OR OLD.challenge_device_minor != NEW.challenge_device_minor OR OLD.challenge_statx_device_major != NEW.challenge_statx_device_major OR OLD.challenge_statx_device_minor != NEW.challenge_statx_device_minor) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END",
+        "CREATE TRIGGER IF NOT EXISTS execution_proof_published_mount_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_mount_id IS NOT NEW.challenge_mount_id OR OLD.challenge_device_major IS NOT NEW.challenge_device_major OR OLD.challenge_device_minor IS NOT NEW.challenge_device_minor OR OLD.challenge_statx_device_major IS NOT NEW.challenge_statx_device_major OR OLD.challenge_statx_device_minor IS NOT NEW.challenge_statx_device_minor) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END",
     ),
     (
         "execution_proof_published_filesystem_guard",
-        "CREATE TRIGGER IF NOT EXISTS execution_proof_published_filesystem_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_fs_type_magic != NEW.challenge_fs_type_magic OR OLD.challenge_filesystem_id != NEW.challenge_filesystem_id OR OLD.challenge_filesystem_instance_digest != NEW.challenge_filesystem_instance_digest OR OLD.challenge_read_only != NEW.challenge_read_only OR OLD.challenge_no_copy != NEW.challenge_no_copy) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END",
+        "CREATE TRIGGER IF NOT EXISTS execution_proof_published_filesystem_guard BEFORE UPDATE ON connection_execution_proofs WHEN OLD.challenge_state = 'published' AND (OLD.challenge_fs_type_magic IS NOT NEW.challenge_fs_type_magic OR OLD.challenge_filesystem_id IS NOT NEW.challenge_filesystem_id OR OLD.challenge_filesystem_instance_digest IS NOT NEW.challenge_filesystem_instance_digest OR OLD.challenge_read_only IS NOT NEW.challenge_read_only OR OLD.challenge_no_copy IS NOT NEW.challenge_no_copy) BEGIN SELECT RAISE(ABORT, 'invalid execution proof transition'); END",
     ),
     V27_PROOF_TRANSITION_GUARDS[6],
     V27_PROOF_TRANSITION_GUARDS[7],
@@ -160,6 +167,46 @@ pub(in crate::journal::schema::execution_authorization::ddl) const PROOF_TRANSIT
     V27_PROOF_TRANSITION_GUARDS[10],
     V27_PROOF_TRANSITION_GUARDS[11],
 ];
+
+pub(in crate::journal::schema::execution_authorization::ddl) const PROOF_TRANSITION_GUARDS_CHANGED_AT_V53:
+    &[&str] = &[
+    "execution_proof_source_immutable_guard",
+    "execution_proof_published_file_guard",
+    "execution_proof_published_mount_guard",
+    "execution_proof_published_filesystem_guard",
+];
+
+pub(in crate::journal::schema::execution_authorization::ddl) fn v52_proof_transition_guards()
+-> Vec<(&'static str, &'static str)> {
+    PROOF_TRANSITION_GUARDS
+        .iter()
+        .map(|(name, sql)| match *name {
+            "execution_proof_source_immutable_guard" => (*name, V27_PROOF_TRANSITION_GUARDS[2].1),
+            "execution_proof_published_file_guard" => (*name, V52_PUBLISHED_FILE_GUARD),
+            "execution_proof_published_mount_guard" => (*name, V52_PUBLISHED_MOUNT_GUARD),
+            "execution_proof_published_filesystem_guard" => (*name, V52_PUBLISHED_FILESYSTEM_GUARD),
+            _ => (*name, *sql),
+        })
+        .collect()
+}
+
+pub(in crate::journal::schema::execution_authorization::ddl) async fn upgrade_v53(
+    connection: &turso::Connection,
+) -> Result<(), crate::error::HostError> {
+    for name in PROOF_TRANSITION_GUARDS_CHANGED_AT_V53 {
+        connection
+            .execute(&format!("DROP TRIGGER IF EXISTS {name}"), ())
+            .await
+            .map_err(|_| crate::error::HostError::Journal)?;
+    }
+    for (_, statement) in PROOF_TRANSITION_GUARDS {
+        connection
+            .execute(statement, ())
+            .await
+            .map_err(|_| crate::error::HostError::Journal)?;
+    }
+    Ok(())
+}
 
 pub(in crate::journal::schema::execution_authorization::ddl) async fn bootstrap_proof_transition_guards(
     connection: &turso::Connection,

@@ -1,0 +1,100 @@
+{
+  "build_directory": "/repo/target",
+  "metadata": null,
+  "packages": [
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/host#0.1.0",
+      "keywords": [],
+      "license": null,
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/host/Cargo.toml",
+      "metadata": null,
+      "name": "host",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": null,
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "host",
+          "src_path": "/repo/crates/host/src/main.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.0"
+    },
+    {
+      "authors": [],
+      "categories": [],
+      "default_run": null,
+      "dependencies": [],
+      "description": null,
+      "documentation": null,
+      "edition": "2024",
+      "features": {},
+      "homepage": null,
+      "id": "path+file:///repo/crates/helper#0.1.0",
+      "keywords": [],
+      "license": null,
+      "license_file": null,
+      "links": null,
+      "manifest_path": "/repo/crates/helper/Cargo.toml",
+      "metadata": null,
+      "name": "helper",
+      "publish": null,
+      "readme": null,
+      "repository": null,
+      "rust_version": null,
+      "source": null,
+      "targets": [
+        {
+          "crate_types": [
+            "bin"
+          ],
+          "doc": true,
+          "doctest": false,
+          "edition": "2024",
+          "kind": [
+            "bin"
+          ],
+          "name": "helper",
+          "src_path": "/repo/crates/helper/src/main.rs",
+          "test": true
+        }
+      ],
+      "version": "0.1.0"
+    }
+  ],
+  "resolve": null,
+  "target_directory": "/repo/target",
+  "version": 1,
+  "workspace_default_members": [
+    "path+file:///repo/crates/host#0.1.0",
+    "path+file:///repo/crates/helper#0.1.0"
+  ],
+  "workspace_members": [
+    "path+file:///repo/crates/host#0.1.0",
+    "path+file:///repo/crates/helper#0.1.0"
+  ],
+  "workspace_root": "/repo"
+}
