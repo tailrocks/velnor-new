@@ -240,6 +240,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
+            selection_name: None,
             steps: vec![Step {
                 kind: StepKind::CacheSave(key.clone()),
                 directory: None,

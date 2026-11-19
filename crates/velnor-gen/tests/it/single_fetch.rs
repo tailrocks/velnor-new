@@ -218,6 +218,7 @@ fn render_fetch(manifests: Vec<RepoPath>) -> Result<String, Box<dyn std::error::
             permissions: Permissions::default(),
             timeout_minutes: 10,
             reports_ignored: false,
+            selection_name: None,
             gate: None,
             skip_after_merge_group: None,
             plan_outputs: Vec::new(),

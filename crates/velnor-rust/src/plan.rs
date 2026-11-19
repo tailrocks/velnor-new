@@ -18,7 +18,7 @@ use crate::error::{DetectError, Reason};
 use crate::lane::{
     Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
 };
-use crate::plan_budget::{draft_guard, triggers};
+use crate::plan_budget::{draft_guard, expose_selection, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::root_jobs;
@@ -98,6 +98,7 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         used.dedup();
         jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
     }
+    expose_selection(facts, &mut jobs, single, &units);
     if let Some(root) = helper_root {
         jobs.insert(1, helper_job(facts, root, deltas));
     }
@@ -373,6 +374,7 @@ pub(crate) fn job(facts: &RepoFacts, id: JobId) -> Job {
             .helper
             .as_ref()
             .is_some_and(|helper| helper.version().at_least(IGNORED_COUNT_HELPER)),
+        selection_name: None,
         steps: Vec::new(),
     }
 }

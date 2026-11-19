@@ -194,6 +194,38 @@ setup_seconds = 0
 
 `pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it measures the run that executes it so far, collects the successful first attempts of the generated workflow before it for each kind of event (ten runs in the window with the running one), compares the median of that window and the running run with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
 
+### Limits per selection
+
+A push to the default branch does very different work depending on what the plan selected: a push that changes no package runs nothing but the gate and takes under a minute, and a push that changes a core crate tests every crate that depends on it and takes ten times as long. One median of all of them flaps. The budget therefore measures each kind of run against the runs of the same selection:
+
+| Selection | The plan wrote | Table |
+|---|---|---|
+| full | `rust_<root>_mode=all` for some root | `[budget.full]` |
+| affected | `some` for some root and `all` for none | `[budget.affected]` |
+| none | `none` for every root | `[budget.none]` |
+
+```toml
+[budget]
+main_wall_seconds = 900        # the fallback of every selection that has no key of its own
+
+[budget.full]
+main_wall_seconds = 1200
+runner_seconds = 1500
+
+[budget.affected]
+main_wall_seconds = 800
+
+[budget.none]
+main_wall_seconds = 90
+runner_seconds = 120
+```
+
+A mode table takes the same four keys as `[budget]`. A key the table leaves out takes the plain key of `[budget]`, so the plain keys keep working as the limit of every selection. A key set to `0` in a mode table switches that check off for that selection only. A table holding a limit enables the budget even when every plain key is `0`.
+
+The run that executes the budget job is judged against the earlier successful first attempts of its own selection, and against nothing else: the window of ten holds only runs of that selection, so a full run after nothing but affected runs has only itself in its window and passes when it is inside its own limit. The report prints one line of medians for each selection.
+
+The selection is recorded in the title of the budget job, because the REST API returns the title of a job of a past run and returns no step output. The generated job is titled `Speed budget (full)`, `Speed budget (affected)`, `Speed budget (none)` or `Speed budget (unknown)`, from the `rust_<root>_mode` outputs of the job that runs `velnor-ci plan`; the budget job therefore needs that job. A run whose budget job has no title of this form, such as every run made before the workflow was regenerated, belongs to an unmeasured group that is judged by the plain keys only and is never mixed into the window of a known selection. The generator writes the title, and the per-mode tables, only for a pinned `velnor-ci` release of at least `0.1.104`, and refuses a mode table under an older pin.
+
 The check fails closed. A budget for a kind of run there is none of is a failure, not a pass, and so is a budget whose runs do not carry a measurement it needs. The report is printed before the check fails, so that the breach is read next to the medians it broke.
 
 A budget is a number the project measures, not a number it guesses: set every key to the median of the relevant runs plus a quarter, so that a run of ordinary noise stays inside the budget. The job prints the wall and runner seconds of the run so far next to the budget, so that a breach can be read next to the numbers it broke.

@@ -104,7 +104,7 @@ The numbers in [`goals.md`](goals.md) section "Targets" are the budget: a run th
 - `Cache` fails on compiled-but-cached crates and failed saves. `Cache maintenance` enforces `cache_budget_bytes`.
 - `velnor-ci bench collect` turns a run into a metrics file, and `velnor-ci bench compare` prints a table for two of them. Use them to compare runs before and after a change.
 
-Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the run that executes it, and the median of that run and the last successful runs before it, with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, also when a job before it was skipped and only when the required check succeeded, and never fails the required check. A run that failed is not a sample, so a breach ends with the next run that is fast again.
+Set the `budget` table (see Settings) to turn four of these into a check. The `rust-budget` job compares the run that executes it, and the median of that run and the last successful runs before it, with the wall-time, runner-time and setup-time limits you set, and fails on a breach or on a measurement it does not have. It runs on the default branch or the scheduled run, never on a pull request, also when a job before it was skipped and only when the required check succeeded, and never fails the required check. A run that failed is not a sample, so a breach ends with the next run that is fast again. A push that selects nothing and a push that selects a core crate differ by a factor of ten, so the median of both is meaningless: `[budget.full]`, `[budget.affected]` and `[budget.none]` set limits per selection, and a run is compared only with earlier runs that made the same selection (see `generator/CONFIG.md`).
 
 ## Settings
 
@@ -132,7 +132,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |
 | `cache_budget_bytes` | `8000000000` | cache budget, at most 8 GB |
-| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed, checked by `rust-budget` (needs `velnor-ci` 0.1.92) |
+| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed, checked by `rust-budget` (needs `velnor-ci` 0.1.92). `[budget.full]`, `[budget.affected]` and `[budget.none]` take the same keys for runs whose plan selected everything, some packages or none, and each kind of run is measured against runs of its own selection (needs `velnor-ci` 0.1.104) |
 | `cache_check_blocks` | `false` | the `Cache` check joins `Required` |
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |

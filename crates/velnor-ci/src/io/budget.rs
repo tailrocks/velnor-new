@@ -94,7 +94,7 @@ fn reason(evaluation: &budget::Evaluation) -> String {
     for breach in &evaluation.breaches {
         lines.push(format!(
             "the {} {} of the {} is {}s, above the budget {}s",
-            breach.population.name(),
+            breach.group().name(),
             breach.measure.name(),
             breach.source.name(),
             breach.value,
@@ -114,6 +114,7 @@ fn write_summary(report: &str) -> Result<(), CiError> {
 fn write_current_report(budget: &SpeedBudget, current: &Current) -> Result<(), CiError> {
     let report = budget::current_report(
         budget,
+        current.sample.selection,
         current.sample.wall_seconds,
         current.sample.runner_seconds,
     );
