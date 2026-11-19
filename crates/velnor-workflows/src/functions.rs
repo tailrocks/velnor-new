@@ -23,9 +23,9 @@ pub(crate) fn check_functions(
     condition: bool,
 ) -> Result<(), WorkflowsError> {
     for name in names {
-        let named = |list: &[&str]| list.iter().any(|known| known.eq_ignore_ascii_case(name));
-        let available = named(&EVERYWHERE)
-            || (condition && named(&STATUS))
+        let listed = |list: &[&str]| list.iter().any(|known| known.eq_ignore_ascii_case(name));
+        let available = listed(&EVERYWHERE)
+            || (condition && listed(&STATUS))
             || (scope.level == Level::Step && HASH_FILES.eq_ignore_ascii_case(name));
         if !available {
             return refuse(format!(

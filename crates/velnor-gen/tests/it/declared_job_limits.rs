@@ -19,9 +19,12 @@ fn input(name: &str) -> String {
 }
 
 fn dispatch(names: impl Iterator<Item = String>) -> String {
-    let inputs: String = names
-        .map(|name| format!("\n[[workflow.on.workflow_dispatch.input]]\nname = \"{name}\"\n"))
-        .collect();
+    let mut inputs = String::new();
+    for name in names {
+        inputs.push_str(&format!(
+            "\n[[workflow.on.workflow_dispatch.input]]\nname = \"{name}\"\n"
+        ));
+    }
     workflow(
         "",
         &format!("\n[workflow.on.workflow_dispatch]\n{inputs}"),
