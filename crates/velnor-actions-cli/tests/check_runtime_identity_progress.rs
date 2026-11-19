@@ -3,6 +3,10 @@
 
 use super::*;
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn failed_check_streams_sanitized_progress() -> Result<(), Box<dyn Error>> {
     let fixture = Fixture::new()?;

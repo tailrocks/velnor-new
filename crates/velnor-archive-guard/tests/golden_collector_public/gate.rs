@@ -9,6 +9,10 @@ use super::support::{
     Harness, copy_executable, copy_tree, diagnostics_candidate, dogfood_plan_difference,
 };
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "the old engine's OpenTofu-golden collector accepts x86-64 ELF candidates by design (binary_format.rs:55); P4 runs velnor-gen workflows"
+)]
 #[test]
 fn repository_golden_gate_accepts_matching_and_rejects_changed_oracle() -> Result<(), Box<dyn Error>>
 {

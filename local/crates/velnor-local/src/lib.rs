@@ -10,6 +10,7 @@ pub mod images;
 pub mod io;
 pub mod jit;
 pub mod pairs;
+pub mod pin;
 pub mod protocol;
 pub mod rest;
 pub mod scenario;

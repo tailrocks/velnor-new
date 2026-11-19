@@ -9,8 +9,8 @@ use velnor_model::{
 
 use crate::cache::render_key;
 use crate::cache_upload::{SOURCES_KEY_OUTPUT, key_id};
-use crate::gate::BASE_STEP;
 use crate::gate::sources_save_step;
+use crate::gate::{BASE_STEP, SOURCES_LOCKS_STEP};
 use crate::release_steps::shell_word;
 use crate::rules::{RenderedStep, Value};
 
@@ -49,6 +49,19 @@ pub(crate) fn cache_decide(
     }
 }
 
+pub(crate) fn sources_locks(locks: &[RepoPath]) -> RenderedStep {
+    RenderedStep {
+        id: Some(SOURCES_LOCKS_STEP.to_owned()),
+        name: "Hash the sources lockfiles".to_owned(),
+        env: vec![(
+            "SOURCES_LOCKS".to_owned(),
+            Value::Expr(crate::cache::hash_files(locks)),
+        )],
+        run: Some("echo \"hash=$SOURCES_LOCKS\" >> \"$GITHUB_OUTPUT\"".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
     cache_lane_outputs(steps)
         .into_iter()
@@ -58,9 +71,9 @@ pub(crate) fn lane_outputs(steps: &[Step]) -> Vec<(String, String)> {
                     render_key(key).restore_keys.pop()?
                 }
                 CacheLaneOutput::BaseSave => format!("${{{{ steps.{BASE_STEP}.outputs.save }}}}"),
-                CacheLaneOutput::SourcesSaved(CacheKey::Sources { root, .. }) => format!(
+                CacheLaneOutput::SourcesSaved(CacheKey::Sources { lane, .. }) => format!(
                     "${{{{ steps.{}.outcome == 'success' }}}}",
-                    sources_save_step(root.slug())
+                    sources_save_step(lane.slug())
                 ),
                 CacheLaneOutput::SourcesSaved(_) => return None,
                 CacheLaneOutput::SavedKey(key) => {
@@ -155,11 +168,73 @@ pub(crate) fn audited_save(
             step.kind,
             StepKind::CacheDecide { .. } | StepKind::CacheSave(CacheKey::Target { .. })
         );
-    let extra = audited.then(|| "${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned());
+    let extra = if audited {
+        Some("${{ steps.restored.outputs.expired != 'true' || needs.rust-inputs-audit.result == 'success' }}".to_owned())
+    } else if matches!(step.kind, StepKind::CacheSave(CacheKey::Sources { .. })) {
+        fetched(job)
+    } else {
+        None
+    };
     for body in &mut bodies {
         body.condition = crate::gate::all_conditions(body.condition.take(), extra.clone());
     }
     bodies
+}
+
+fn fetched(job: &velnor_model::Job) -> Option<String> {
+    job.steps
+        .iter()
+        .filter_map(|step| match &step.kind {
+            StepKind::SourcesFetch { position, .. } => {
+                Some((*position, crate::gate::sources_fetch_step(*position)))
+            }
+            StepKind::SourcesFetchAll { .. } => {
+                Some((0, crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()))
+            }
+            _ => None,
+        })
+        .max_by_key(|(position, _)| *position)
+        .map(|(_, id)| format!("${{{{ steps.{id}.outcome == 'success' }}}}"))
+}
+
+pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
+    let roots: Vec<String> = manifests
+        .iter()
+        .map(|manifest| {
+            manifest.parent().map_or_else(
+                || ".".to_owned(),
+                |directory| crate::release_steps::shell_word(&format!("./{directory}")),
+            )
+        })
+        .collect();
+    RenderedStep {
+        env: cache_debug
+            .then(crate::cargo::cache_debug_env)
+            .into_iter()
+            .collect(),
+        id: Some(crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()),
+        name: "Fetch the sources of every root".to_owned(),
+        continue_on_error: true,
+        run: Some(format!(
+            "velnor-ci sources fetch --roots {}",
+            roots.join(" ")
+        )),
+        ..RenderedStep::default()
+    }
+}
+
+pub(crate) fn sources_fetch(position: usize, cache_debug: bool) -> RenderedStep {
+    RenderedStep {
+        env: cache_debug
+            .then(crate::cargo::cache_debug_env)
+            .into_iter()
+            .collect(),
+        id: Some(crate::gate::sources_fetch_step(position)),
+        name: format!("Fetch the sources of root {position}"),
+        continue_on_error: true,
+        run: Some(format!("{} cargo fetch --locked", crate::steps::RUN)),
+        ..RenderedStep::default()
+    }
 }
 
 pub(crate) fn job_setup(job: &velnor_model::Job) -> (bool, bool) {

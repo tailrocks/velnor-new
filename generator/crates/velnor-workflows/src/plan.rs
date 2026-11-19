@@ -125,8 +125,6 @@ pub struct Job {
     pub permissions: Vec<(String, String)>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<Matrix>,
-    pub container: Option<Container>,
-    pub services: Vec<Service>,
     pub steps: Vec<Step>,
     pub call: Option<Call>,
 }
@@ -155,24 +153,6 @@ pub enum CallValue {
     Boolean(bool),
     Number(u64),
     Expression(String),
-}
-
-/// A job-level `container:`; the image is pinned by digest.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Container {
-    pub image: String,
-    pub options: Option<String>,
-    pub env: Vec<(String, String)>,
-}
-
-/// A service container; the image is pinned by digest and `options` carries a health check.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Service {
-    pub name: String,
-    pub image: String,
-    pub ports: Vec<String>,
-    pub options: String,
-    pub env: Vec<(String, String)>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

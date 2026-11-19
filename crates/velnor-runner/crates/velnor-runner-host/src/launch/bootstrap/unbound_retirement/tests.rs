@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "tests/absence.rs"]
+mod absence;
 #[path = "tests/bound_attachments.rs"]
 mod bound_attachments;
 #[path = "tests/completion_settlement.rs"]
