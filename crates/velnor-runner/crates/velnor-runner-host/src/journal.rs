@@ -98,8 +98,8 @@ pub(crate) use image_import::{
     ImageImportIdentity, ImageImportObservation, ImageImportRequest, ImageImportState,
 };
 pub(crate) use scale_set_create::{
-    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateNoEffect,
-    ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
+    CreatedScaleSetResponse, ExistingScaleSetObservation, ScaleSetCreateClaim,
+    ScaleSetCreateNoEffect, ScaleSetCreateRecord, ScaleSetCreateRequest, ScaleSetCreateState,
 };
 pub(crate) use source_authorization::AssignedAcquireResult;
 pub(crate) use source_authorization::SourceAuthorizationResult;
