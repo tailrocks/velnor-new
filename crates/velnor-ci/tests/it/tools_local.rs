@@ -25,6 +25,16 @@ fn node(name: &str) -> Node {
     Node { _repo: repo, root }
 }
 
+fn sealed<T>(node: &Node, restore: impl FnOnce() -> T) -> T {
+    let store = node.root.join("store");
+    fs::set_permissions(&store, fs::Permissions::from_mode(0o555))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = restore();
+    fs::set_permissions(&store, fs::Permissions::from_mode(0o755))
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    outcome
+}
+
 fn put(home: &Path) {
     let tool = home.join(".local/share/mise/installs/cosign/3.0.0/bin");
     fs::create_dir_all(&tool).unwrap_or_else(|e| unreachable!("{e}"));
@@ -49,7 +59,7 @@ fn go(node: &Node, verb: Verb, key: &str, event: &str, home: &str) -> Outcome {
         verb,
         key,
         event_name: event,
-        git_ref: if event == "push" {
+        git_ref: if matches!(event, "push" | "schedule" | "workflow_dispatch") {
             "refs/heads/main"
         } else {
             "refs/pull/1/merge"
@@ -69,7 +79,9 @@ fn a_trusted_save_is_restored_whole_on_a_pull_request() {
     let saved = go(&node, Verb::Save, KEY, "push", "home");
     assert!(matches!(saved, Outcome::Saved { .. }), "{saved:?}");
     fs::create_dir_all(node.root.join("fresh")).unwrap_or_else(|e| unreachable!("{e}"));
-    let restored = go(&node, Verb::Restore, KEY, "pull_request", "fresh");
+    let restored = sealed(&node, || {
+        go(&node, Verb::Restore, KEY, "pull_request", "fresh")
+    });
     assert!(restored.hit(), "{restored:?}");
     let cosign = node
         .root
@@ -115,17 +127,12 @@ fn an_entry_without_its_marker_or_for_another_key_is_a_miss_and_copies_nothing()
     let node = node("tools-local-miss");
     put(&node.root.join("home"));
     fs::create_dir_all(node.root.join("fresh")).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(
-        go(&node, Verb::Restore, KEY, "pull_request", "fresh"),
-        Outcome::Miss
-    );
+    let miss = || go(&node, Verb::Restore, KEY, "pull_request", "fresh");
+    assert_eq!(sealed(&node, miss), Outcome::Miss);
     go(&node, Verb::Save, KEY, "push", "home");
     fs::remove_file(node.root.join("store/tools").join(KEY).join(".complete"))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(
-        go(&node, Verb::Restore, KEY, "pull_request", "fresh"),
-        Outcome::Miss
-    );
+    assert_eq!(sealed(&node, miss), Outcome::Miss);
     assert_eq!(
         go(&node, Verb::Restore, "other-key", "push", "fresh"),
         Outcome::Miss
@@ -178,4 +185,117 @@ fn a_world_writable_or_missing_store_is_not_used() {
         Outcome::Rejected(_)
     ));
     assert!(message(&Outcome::Miss).contains("no entry"));
+}
+
+#[test]
+fn an_untrusted_restore_refuses_a_store_the_job_can_write() {
+    let node = node("tools-local-writable-seed");
+    put(&node.root.join("home"));
+    go(&node, Verb::Save, KEY, "push", "home");
+    fs::create_dir_all(node.root.join("fresh")).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        go(&node, Verb::Restore, KEY, "pull_request", "fresh"),
+        Outcome::Rejected("writable by this job")
+    );
+    assert!(!node.root.join("fresh/.rustup").exists());
+    assert!(go(&node, Verb::Restore, KEY, "push", "fresh").hit());
+}
+
+#[test]
+fn a_default_branch_dispatch_saves_like_a_push() {
+    let node = node("tools-local-dispatch");
+    put(&node.root.join("home"));
+    assert!(matches!(
+        go(&node, Verb::Save, KEY, "workflow_dispatch", "home"),
+        Outcome::Saved { .. }
+    ));
+}
+
+#[test]
+fn concurrent_saves_of_one_key_publish_one_complete_entry() {
+    let node = node("tools-local-concurrent");
+    put(&node.root.join("home"));
+    let outcomes: Vec<Outcome> = std::thread::scope(|scope| {
+        let handles: Vec<_> = (0..4)
+            .map(|_| scope.spawn(|| go(&node, Verb::Save, KEY, "push", "home")))
+            .collect();
+        handles
+            .into_iter()
+            .map(|handle| handle.join().unwrap_or(Outcome::Failed("panicked")))
+            .collect()
+    });
+    assert!(
+        outcomes
+            .iter()
+            .all(|outcome| !matches!(outcome, Outcome::Failed(_) | Outcome::Rejected(_))),
+        "{outcomes:?}"
+    );
+    assert!(outcomes.iter().any(|o| matches!(o, Outcome::Saved { .. })));
+    let mut names: Vec<String> = fs::read_dir(node.root.join("store/tools"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .map(|entry| entry.file_name().to_string_lossy().into_owned())
+        .collect();
+    names.sort();
+    assert_eq!(names, [KEY]);
+    assert_eq!(
+        go(&node, Verb::Save, KEY, "push", "home"),
+        Outcome::AlreadySaved
+    );
+}
+
+#[test]
+fn a_key_another_job_is_saving_is_left_to_it() {
+    let node = node("tools-local-busy");
+    put(&node.root.join("home"));
+    let lock = node.root.join("store/tools").join(format!(".lock-{KEY}"));
+    fs::create_dir_all(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(go(&node, Verb::Save, KEY, "push", "home"), Outcome::Busy);
+    assert!(!node.root.join("store/tools").join(KEY).exists());
+    fs::remove_dir(&lock).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(matches!(
+        go(&node, Verb::Save, KEY, "push", "home"),
+        Outcome::Saved { .. }
+    ));
+    assert!(!lock.exists());
+}
+
+#[test]
+fn abandoned_staging_trees_are_swept_and_active_ones_are_kept() {
+    let node = node("tools-local-sweep");
+    put(&node.root.join("home"));
+    let tools = node.root.join("store/tools");
+    let age = |path: &Path| {
+        let old = std::time::SystemTime::now() - std::time::Duration::from_hours(2);
+        fs::File::open(path)
+            .and_then(|file| file.set_modified(old))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    };
+    for name in [".staging-k0-dead", ".staging-k0-live", ".lock-k0"] {
+        fs::create_dir_all(tools.join(name).join("payload"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+    }
+    age(&tools.join(".staging-k0-dead"));
+    age(&tools.join(".lock-k0"));
+    assert!(matches!(
+        go(&node, Verb::Save, KEY, "push", "home"),
+        Outcome::Saved { .. }
+    ));
+    assert!(!tools.join(".staging-k0-dead").exists());
+    assert!(!tools.join(".lock-k0").exists());
+    assert!(tools.join(".staging-k0-live/payload").is_dir());
+}
+
+#[test]
+fn a_save_that_cannot_copy_is_an_error_and_leaves_nothing_behind() {
+    let node = node("tools-local-failed");
+    fs::create_dir_all(node.root.join("bare")).unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = go(&node, Verb::Save, KEY, "push", "bare");
+    assert_eq!(outcome, Outcome::Failed("the copy to the store failed"));
+    assert!(message(&outcome).starts_with("::error::"));
+    let left: Vec<_> = fs::read_dir(node.root.join("store/tools"))
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .flatten()
+        .collect();
+    assert!(left.is_empty(), "{left:?}");
 }
