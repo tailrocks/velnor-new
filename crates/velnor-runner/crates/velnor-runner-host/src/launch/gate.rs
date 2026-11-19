@@ -158,9 +158,7 @@ struct GithubSources {
 }
 
 const LIVE: GithubSources = GithubSources {
-    credential: |binding| {
-        binding.credential_ref.load()
-    },
+    credential: |binding| binding.credential_ref.load(),
     list: observe_scale_set_runners,
 };
 
