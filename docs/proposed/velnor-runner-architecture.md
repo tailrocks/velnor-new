@@ -1007,7 +1007,8 @@ An agent's verification runs through Velnor, on warm cluster nodes in the gate's
 sandbox, so it counts; a Mac result is advice only; agents ask the ledger before running anything;
 and the label then mostly finds the work done. The gate's meaning and decisions 1–24 do not change.
 
-- **Front end.** `velnor cargo` takes the `mise.toml` cargo wrapper slot, and a per-user daemon,
+- **Front end.** `velnor cargo` takes the `mise.toml` cargo wrapper slot from `mbx` (which missed 10
+  of 10 workspace units locally [M, Carbon]), and a per-user daemon,
   `velnord`, keeps state (≤ 50 ms added per call at P90 [T]). Verbs: `velnor verify`, `velnor ship`,
   `velnor check <name>`, `velnor resolve`, `velnor wait`. A command the planner maps to an inventory
   obligation (its argv shape, package selection and features) is *counting*; anything else is
@@ -1049,7 +1050,8 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
 - **The `interactive` class** sits between gate and PR work, with a per-identity budget (30 CPU-min
   an hour, then demoted to PR class), never touching the merge, gate or A1 reservations.
 - **The PR verdict becomes a lookup:** the label resolves the head's own vector; hits read, misses
-  and C5 run; its floor is the C5 critical path plus about 3 s [E]. Continuous verification of
+  and C5 run; its floor is the C5 critical path plus about 3 s [E], which falls to about 3 s on the
+  helper and generator class once plan T08 injects the clock. Continuous verification of
   unpushed commits would start work no one asked for, so it is owner question D23, default off.
 
 ## 9. The cluster

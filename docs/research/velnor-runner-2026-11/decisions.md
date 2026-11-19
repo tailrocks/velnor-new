@@ -1152,6 +1152,15 @@ mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
 | `velnor plan --json` | Adopted as `velnor resolve --json` | 8.6; UX 5 |
 | Three trust levels | Folded into T0–T3 (T0 and T1 are both diagnostics) | 8.6 |
 
+### Group 41: agent-native answer by Gemini 4 Carbon
+
+| Idea | Decision | v3 section; plan |
+|---|---|---|
+| Replace the `mbx` wrapper locally | Adopted: `velnor cargo` takes the slot; `mbx`'s wrapper deleted (decision 18) | 8.6; AN01 |
+| A27 clear C5 clock reads | Already plan T08; the lookup floor on the helper class falls to about 3 s | 8.6 |
+| A22 matrix oracle | Merged into AN11's lab | AN11 |
+| Q-AN1 arm64 worker, Q-AN4 dedicated agent worker | Merged into D26 and D25 | 13 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
