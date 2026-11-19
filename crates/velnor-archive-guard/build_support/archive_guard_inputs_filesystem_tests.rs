@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{root_identity_matches, ufs};
+use crate::archive_guard_inputs::fingerprint;
 use rustix::fs::AtFlags;
 use std::error::Error;
 use std::fs::{self, File};
@@ -60,5 +61,37 @@ fn root_identity_comparison_accepts_sibling_churn_only_for_nonfinal_ancestors()
         "nonfinal ancestor accepted a mode change"
     );
 
+    Ok(())
+}
+
+#[test]
+fn watched_paths_name_only_inputs_that_exist() -> Result<(), Box<dyn Error>> {
+    let temp = tempfile::tempdir()?;
+    let root = temp.path().canonicalize()?;
+    fs::set_permissions(&root, fs::Permissions::from_mode(0o700))?;
+    fs::create_dir(root.join("scripts"))?;
+    fs::create_dir(root.join("src"))?;
+    fs::write(root.join("Cargo.toml"), "[workspace]\n")?;
+    fs::write(root.join("src/lib.rs"), "")?;
+    fs::write(root.join("present.toml"), "")?;
+    fs::write(
+        root.join("scripts/archive-guard-inputs.txt"),
+        "file Cargo.toml\ntree src\noptional present.toml\noptional absent.toml\n",
+    )?;
+
+    let (without, watched) = fingerprint(&root)?;
+    let missing: Vec<_> = watched.iter().filter(|path| !path.exists()).collect();
+    assert!(
+        missing.is_empty(),
+        "cargo reruns the build script on every build when a watched path is missing: {missing:?}"
+    );
+    assert!(watched.contains(&root.join("present.toml")));
+
+    fs::write(root.join("absent.toml"), "")?;
+    let (with, _) = fingerprint(&root)?;
+    assert_ne!(
+        without, with,
+        "an optional input appearing must change the fingerprint"
+    );
     Ok(())
 }

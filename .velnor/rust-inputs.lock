@@ -1,5 +1,3 @@
-.cargo/config	velnor-archive-guard
-.cargo/config.toml	velnor-archive-guard
 .mise-version	velnor-archive-guard
 .velnor/runner.lock	velnor-local
 .velnor/runner.lock	velnor-runner-host
@@ -29,7 +27,6 @@ generator/CONFIG.md	velnor-gen
 generator/samples/helper-lock/view/.velnor/rust-ci.lock	velnor-ci
 generator/samples/helper-lock/view/.velnor/rust-ci.lock	velnor-gen
 generator/samples/helper-source/view/.velnor/rust-ci.lock	velnor-gen
-rust-toolchain	velnor-archive-guard
 rust-toolchain.toml	velnor-archive-guard
 scripts/archive-guard-build-namespace.sh	velnor-archive-guard
 scripts/archive-guard-inputs.txt	velnor-archive-guard

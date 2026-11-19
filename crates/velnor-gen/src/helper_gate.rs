@@ -38,18 +38,22 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             runner: facts.config.runner.to_string(),
         });
     }
-    if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 82)) {
+    // helper-gate: first in tools-v0.1.90 via 85f4392434
+    if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 90)) {
         return Err(GenerateError::TestGroupsHelperTooOld(
             release.version().clone(),
         ));
     }
-    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
+    // helper-gate: first in tools-v0.1.88 via e061b56eac
+    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 88)) {
         return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
     }
-    if facts.config.docs_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 88)) {
+    // helper-gate: first in tools-v0.1.97 via e25d599090
+    if facts.config.docs_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 97)) {
         return Err(GenerateError::DocsHelperTooOld(release.version().clone()));
     }
-    if facts.config.check_alone_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 91))
+    // helper-gate: first in tools-v0.1.97 via e25d599090
+    if facts.config.check_alone_run == DocsRun::PostMerge && !release.version().at_least((0, 1, 97))
     {
         return Err(GenerateError::CheckAloneHelperTooOld(
             release.version().clone(),
@@ -66,7 +70,8 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
+    // helper-gate: first in tools-v0.1.88 via eb3f4deda4
+    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 88)) {
         return Err(GenerateError::PrivateSourcesHelperTooOld(
             release.version().clone(),
         ));

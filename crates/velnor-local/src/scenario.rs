@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::collections::BTreeMap;
+use std::io;
 use std::path::{Component, Path, PathBuf};
+use std::process::Output;
 
 use serde::Deserialize;
 
@@ -194,6 +196,36 @@ pub fn with_path(list: Option<&str>, path: &str) -> String {
     }
 }
 
+/// What the velnor-ci report of one run came to. Only `Failed` fails the run:
+/// a velnor-ci that is not installed is a warning.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Metrics {
+    Written(PathBuf),
+    NotFound,
+    Failed(String),
+}
+
+/// Maps the result of running `velnor-ci bench collect` to its report.
+#[must_use]
+pub fn metrics_of(
+    program: &Path,
+    collected: io::Result<Output>,
+    written: bool,
+    path: PathBuf,
+) -> Metrics {
+    match collected {
+        Ok(done) if done.status.success() && written => Metrics::Written(path),
+        Ok(done) if done.status.success() => Metrics::Failed(format!(
+            "{} exited 0 but wrote no {}",
+            program.display(),
+            path.display()
+        )),
+        Ok(done) => Metrics::Failed(String::from_utf8_lossy(&done.stderr).trim().to_owned()),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Metrics::NotFound,
+        Err(error) => Metrics::Failed(format!("{}: {error}", program.display())),
+    }
+}
+
 #[derive(Debug)]
 pub struct Outcome {
     pub id: u64,
@@ -201,7 +233,7 @@ pub struct Outcome {
     pub event: String,
     pub conclusion: &'static str,
     pub started: Option<u64>,
-    pub metrics: Result<PathBuf, String>,
+    pub metrics: Metrics,
     pub caches: Vec<String>,
     pub trusted: bool,
 }
@@ -237,17 +269,21 @@ pub fn restores(journal: &str, run: u64, jobs: &[crate::standin::Job]) -> Vec<St
 impl Outcome {
     #[must_use]
     pub fn passed(&self) -> bool {
-        self.conclusion == "success" && (self.metrics.is_ok() || !self.trusted)
+        self.conclusion == "success"
+            && (!self.trusted || !matches!(self.metrics, Metrics::Failed(_)))
     }
 
     #[must_use]
     pub fn line(&self) -> String {
-        let metrics = match &self.metrics {
-            Ok(path) => format!("metrics {}", path.display()),
-            Err(_) if !self.trusted => {
+        let metrics = match (&self.metrics, self.trusted) {
+            (Metrics::Written(path), _) => format!("metrics {}", path.display()),
+            (_, false) => {
                 "untrusted, so no metrics file: the API stub cannot see its stand-in".to_owned()
             }
-            Err(error) => format!("no metrics file: {error}"),
+            (Metrics::NotFound, true) => {
+                "warning: velnor-ci not found; skipping the report".to_owned()
+            }
+            (Metrics::Failed(error), true) => format!("no metrics file: {error}"),
         };
         format!(
             "run {} {} ({}): {}, {metrics}",

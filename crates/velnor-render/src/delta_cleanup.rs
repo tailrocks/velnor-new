@@ -13,7 +13,8 @@ pub const DELTA_CLEANUP_PATH: RepoPath = CACHE_TRIM_WORKFLOW_PATH;
 
 #[must_use]
 pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
-    if !helper.version().at_least((0, 1, 81)) {
+    // helper-gate: first in tools-v0.1.95 via 7f16e1fe15
+    if !helper.version().at_least((0, 1, 95)) {
         return None;
     }
     let job = RenderedJob {
@@ -45,7 +46,7 @@ pub fn delta_cleanup(helper: &HelperRelease, workflow: &str) -> Option<String> {
         ],
         ..RenderedJob::default()
     };
-    Some(crate::header::seal(
+    Some(crate::seal(
         GENERATED_HEADER,
         &emit(&[
             entry("name", text("Rust cache cleanup")),

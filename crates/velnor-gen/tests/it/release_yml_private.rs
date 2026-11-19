@@ -23,7 +23,7 @@ fn release(private: bool) -> Result<serde_json::Value, Box<dyn Error>> {
         format!("full_run = \"off\"\n{section}").into_bytes(),
     );
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.86").into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.88").into_bytes());
     let mut files = expected_files(&view)?;
     let text = files
         .remove(&RELEASE_WORKFLOW_PATH)

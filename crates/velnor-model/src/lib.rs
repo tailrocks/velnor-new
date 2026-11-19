@@ -14,6 +14,7 @@ mod mise;
 mod plan;
 mod repo;
 mod repo_config;
+mod sealed;
 mod selection;
 mod steps;
 mod test_group;
@@ -55,6 +56,7 @@ pub use repo::{
     SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
     ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
+pub use sealed::{Owner, VELNOR_GEN_MARKER, lf_normalized, owner_of, seal};
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
     RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
