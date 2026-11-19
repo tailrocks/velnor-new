@@ -228,15 +228,7 @@ pub fn verdict(
                     ));
                 }
             }
-            // The default job and the group jobs each run part of one package:
-            // `run` adds up, and `listed` is the most any job saw.
-            let mut lane: BTreeMap<&str, PackageCounts> = BTreeMap::new();
-            for (name, package) in counts.iter().flatten().flat_map(|job| &job.packages) {
-                let total = lane.entry(name).or_default();
-                total.run = total.run.saturating_add(package.run);
-                total.listed = total.listed.max(package.listed);
-            }
-            for (name, package) in lane {
+            for (name, package) in lane_package_totals(counts.iter().flatten()) {
                 if package.listed > 0 && package.run == 0 {
                     out.problems.push(format!(
                         "package {name} of {slug} listed {} tests and ran none",
@@ -248,6 +240,18 @@ pub fn verdict(
     }
     out.passed = out.problems.is_empty();
     out
+}
+
+fn lane_package_totals<'a>(
+    jobs: impl Iterator<Item = &'a TestCounts>,
+) -> BTreeMap<&'a str, PackageCounts> {
+    let mut totals: BTreeMap<&str, PackageCounts> = BTreeMap::new();
+    for (name, package) in jobs.flat_map(|job| &job.packages) {
+        let total = totals.entry(name).or_default();
+        total.run = total.run.saturating_add(package.run);
+        total.listed = total.listed.max(package.listed);
+    }
+    totals
 }
 
 #[must_use]
