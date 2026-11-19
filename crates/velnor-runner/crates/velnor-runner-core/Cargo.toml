@@ -9,6 +9,10 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[[test]]
+name = "capacity_public"
+path = "tests/capacity_public.rs"
+
 [lib]
 doctest = false
 test = false
