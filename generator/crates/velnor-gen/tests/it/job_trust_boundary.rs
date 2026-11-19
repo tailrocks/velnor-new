@@ -8,8 +8,21 @@ use serde_json::Value;
 use crate::facts::TestResult;
 use crate::golden::{sample_dirs, samples};
 
-const SECRET_MARKERS: [&str; 4] = ["GITHUB_TOKEN", "GH_TOKEN", "github.token", "secrets."];
-const VERDICT_MARKERS: [&str; 2] = ["velnor-ci verify", "cache verify"];
+const SECRET_MARKERS: [&str; 5] = [
+    "GITHUB_TOKEN",
+    "GH_TOKEN",
+    "github.token",
+    "ACTIONS_RUNTIME_TOKEN",
+    "secrets.",
+];
+const VERDICT_MARKERS: [&str; 6] = [
+    "velnor-ci verify",
+    "velnor-ci gate",
+    "velnor-ci cache check",
+    "cache verify",
+    "$VELNOR_EXEC\" gate ",
+    "$VELNOR_EXEC\" cache check ",
+];
 
 fn text(value: &Value) -> String {
     value.to_string()
@@ -23,9 +36,12 @@ fn runs_repository_code(step: &Value) -> bool {
         || step["uses"].as_str().is_some_and(|u| u.starts_with("./"))
 }
 
-fn needs_a_clean_job(step: &Value, job: &Value) -> Option<&'static str> {
+fn needs_a_clean_job(step: &Value, inherited: &str) -> Option<&'static str> {
     let own = text(step);
-    if SECRET_MARKERS.iter().any(|m| own.contains(m)) || text(&job["env"]).contains("secrets.") {
+    if SECRET_MARKERS
+        .iter()
+        .any(|m| own.contains(m) || inherited.contains(m))
+    {
         return Some("carries a token");
     }
     let run = step["run"].as_str().unwrap_or_default();
@@ -38,13 +54,18 @@ fn needs_a_clean_job(step: &Value, job: &Value) -> Option<&'static str> {
 pub(crate) fn violations(workflow: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     let parsed: Value = serde_saphyr::from_str(workflow)?;
     let mut found = Vec::new();
+    let workflow_env = text(&parsed["env"]);
     for (id, job) in parsed["jobs"].as_object().ok_or("jobs")? {
+        let inherited = format!("{workflow_env}{}", text(&job["env"]));
         let mut executed = false;
         for step in job["steps"].as_array().map_or(&[][..], Vec::as_slice) {
-            if executed && let Some(why) = needs_a_clean_job(step, job) {
+            let runs_code = runs_repository_code(step);
+            if (executed || runs_code)
+                && let Some(why) = needs_a_clean_job(step, &inherited)
+            {
                 found.push(format!("{id}: {} {why}", step["name"]));
             }
-            executed |= runs_repository_code(step);
+            executed |= runs_code;
         }
     }
     Ok(found)
@@ -75,6 +96,47 @@ fn a_token_step_after_a_cargo_step_is_a_violation() -> TestResult {
     assert_eq!(
         violations(workflow)?,
         vec!["j: \"publish\" carries a token".to_owned()]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_step_that_runs_repository_code_and_carries_a_token_is_a_violation() -> TestResult {
+    let workflow = "jobs:\n  j:\n    steps:\n      - name: build\n        env:\n          GITHUB_TOKEN: ${{ github.token }}\n        run: cargo build\n";
+    assert_eq!(
+        violations(workflow)?,
+        vec!["j: \"build\" carries a token".to_owned()]
+    );
+    Ok(())
+}
+
+#[test]
+fn a_token_in_the_workflow_or_job_environment_reaches_every_step() -> TestResult {
+    let steps =
+        "      - name: build\n        run: cargo build\n      - name: after\n        run: echo\n";
+    let expected = vec![
+        "j: \"build\" carries a token".to_owned(),
+        "j: \"after\" carries a token".to_owned(),
+    ];
+    let workflow_level =
+        format!("env:\n  GH_TOKEN: ${{{{ github.token }}}}\njobs:\n  j:\n    steps:\n{steps}");
+    let job_level = format!(
+        "jobs:\n  j:\n    env:\n      GITHUB_TOKEN: ${{{{ github.token }}}}\n    steps:\n{steps}"
+    );
+    assert_eq!(violations(&workflow_level)?, expected);
+    assert_eq!(violations(&job_level)?, expected);
+    Ok(())
+}
+
+#[test]
+fn the_generated_gate_and_cache_check_commands_are_verdicts() -> TestResult {
+    let workflow = "jobs:\n  j:\n    steps:\n      - name: build\n        run: cargo build\n      - name: gate\n        run: '. \"$VELNOR_EXEC\" gate --spec-env GATE_SPEC'\n      - name: check\n        run: '. \"$VELNOR_EXEC\" cache check --success \"$CACHE_OK\"'\n";
+    assert_eq!(
+        violations(workflow)?,
+        vec![
+            "j: \"gate\" produces a verdict".to_owned(),
+            "j: \"check\" produces a verdict".to_owned()
+        ]
     );
     Ok(())
 }

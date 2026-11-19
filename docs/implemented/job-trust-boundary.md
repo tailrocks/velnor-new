@@ -17,11 +17,15 @@ only as artifacts, which the receiving job validates.
 ## What velnor-gen enforces
 
 `generator/crates/velnor-gen/tests/it/job_trust_boundary.rs` reads every
-generated workflow in `generator/samples/*/expected/` and fails when a step that
-follows a repository-code step in the same job carries a token
-(`GITHUB_TOKEN`, `GH_TOKEN`, `github.token`, `secrets.`) or produces a verdict
-(`velnor-ci verify`, `velnor-ci cache verify`). A step counts as repository code
-when it runs `cargo`, `velnor-ci run --`, `mise run`, or a local action.
+generated workflow in `generator/samples/*/expected/` and fails when a step
+that runs repository code, or follows a repository-code step in the same job,
+carries a token or produces a verdict. A token is `GITHUB_TOKEN`, `GH_TOKEN`,
+`github.token`, `ACTIONS_RUNTIME_TOKEN` or `secrets.`, in the step or in the
+workflow or job `env` the step inherits. A verdict is `velnor-ci gate` or
+`velnor-ci cache check` (as `"$VELNOR_EXEC" gate` and
+`"$VELNOR_EXEC" cache check`), or `velnor-ci verify`. A step counts as
+repository code when it runs `cargo`, `"$VELNOR_EXEC" run `, `mise run`, or a
+local action.
 
 ## Where the generated workflows put the boundary
 
@@ -33,15 +37,23 @@ when it runs `cargo`, `velnor-ci run --`, `mise run`, or a local action.
 
 ## Remaining same-job gaps
 
-These steps follow repository code in the same job. None carries a token or
-produces a verdict, so the test passes, but the rule is not met in full.
+These steps follow repository code in the same job. The test does not flag
+them, because the generated YAML carries no token marker for them, but the rule
+is not met in full.
 
 - Cache publication in the root jobs: `actions/cache/save` for the target and
   sources caches runs after the tests. A build script can tamper with the
   directory before the save. The trusted base cache is written by the `cache`
-  job (#1035); the per-job saves are the gap.
+  job; the per-job saves are the gap.
+- Runner-injected credentials: `actions/upload-artifact`, `actions/cache/save`
+  and `actions/cache/restore` run as JavaScript actions that receive
+  `ACTIONS_RUNTIME_TOKEN`. The generated lane jobs run them after Cargo, so a
+  process left running by repository code can read that token from the action's
+  environment. The token only reaches the run's artifact and cache services.
+  Closing this needs the uploads to move into a job that runs no repository
+  code.
 - Helper calls after repository code: `velnor-ci inputs save`, `cache decide`
   and `report` run from the launcher copied before the tests. The launcher can
-  be replaced between steps (#1109). These steps hold no token. A wrong
-  `cache decide` can only make a save more or less likely, and the save above is
-  the gap that matters.
+  be replaced between steps. These steps hold no token. A wrong `cache decide`
+  can only make a save more or less likely, and the cache save above is the gap
+  that matters.
