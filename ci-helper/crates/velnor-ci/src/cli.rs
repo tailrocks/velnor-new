@@ -8,9 +8,11 @@ use velnor_model::{InvalidId, RepoPath};
 
 mod gate;
 mod report;
+mod resolve_qualification;
 mod write_request;
 pub use gate::GateArgs;
 pub use report::ReportArgs;
+pub use resolve_qualification::ResolveQualificationArgs;
 pub use write_request::WriteRequestArgs;
 
 #[derive(Debug, Parser)]
@@ -61,6 +63,10 @@ pub enum Command {
         about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
     )]
     WriteRequest(WriteRequestArgs),
+    #[command(
+        about = "On a workflow_dispatch qualification run, resolve the predecessor the request names: re-read that run attempt through the GitHub API (default branch, event, conclusion, workflow path, repository), walk its receipt artifacts, derive the source delta from git for useful_delta, and write $RUNNER_TEMP/velnor/qualification-cache-admission.json. Writes nothing for a phase with no predecessor. Reads GH_TOKEN (or GITHUB_TOKEN) and GITHUB_API_URL; run in the checkout"
+    )]
+    ResolveQualification(ResolveQualificationArgs),
     #[command(
         about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
     )]

@@ -33,6 +33,7 @@ pub mod release_preflight;
 pub mod report;
 mod report_caches;
 pub mod required;
+pub mod resolve_qualification;
 pub mod rulesets;
 pub mod scope;
 pub mod setup;
