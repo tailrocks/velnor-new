@@ -24,6 +24,7 @@ mod compare;
 mod configuration_targets;
 mod crates_mirror;
 mod event;
+mod fetch_reports;
 mod gate;
 mod inputs;
 mod io;
