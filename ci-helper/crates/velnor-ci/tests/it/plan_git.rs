@@ -114,7 +114,7 @@ fn an_unstaged_source_edit_after_a_docs_only_merge_selects_everything() {
         selected(&clean),
         "Cargo.toml: none\ntools/Cargo.toml: none\n"
     );
-    repo.write("b/src/lib.rs", "pub fn broken( {\n");
+    repo.write_unstaged("b/src/lib.rs", "pub fn broken( {\n");
     let output = pull_request(&repo);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(selected(&output), EVERYTHING);
