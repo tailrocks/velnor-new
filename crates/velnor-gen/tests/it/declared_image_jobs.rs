@@ -14,23 +14,52 @@ fn image_job(extra: &str) -> String {
     )
 }
 
-#[test]
-fn an_image_job_renders_the_registry_and_attestation_permissions() -> TestResult {
-    let tree = rendered(&image_job(
-        "permissions = { packages = \"write\", attestations = \"read\", id-token = \"write\" }\n",
-    ))?;
-    let permissions = job(&tree, "publish-images")?
-        .get("permissions")
-        .ok_or("no permissions")?;
-    assert_eq!(permissions.keys(), ["attestations", "id-token", "packages"]);
-    for (scope, access) in [
-        ("packages", "write"),
-        ("attestations", "read"),
-        ("id-token", "write"),
-    ] {
-        assert_eq!(permissions.get(scope).and_then(Node::text), Some(access));
+/// Asserts that the rendered job has exactly `scopes` as its permissions and
+/// `environment` as its environment. Both roles come from the publication
+/// table in docs/proposed/image-publication-contract.md.
+fn assert_role_shape(extra: &str, scopes: &[(&str, &str)], environment: &str) -> TestResult {
+    let tree = rendered(&image_job(extra))?;
+    let image = job(&tree, "publish-images")?;
+    assert_eq!(
+        image.get("environment").and_then(Node::text),
+        Some(environment)
+    );
+    let permissions = image.get("permissions").ok_or("no permissions")?;
+    let mut names: Vec<&str> = scopes.iter().map(|(scope, _)| *scope).collect();
+    names.sort_unstable();
+    assert_eq!(permissions.keys(), names);
+    for (scope, access) in scopes {
+        assert_eq!(permissions.get(scope).and_then(Node::text), Some(*access));
     }
     Ok(())
+}
+
+#[test]
+fn the_publish_role_renders_its_contract_permissions() -> TestResult {
+    assert_role_shape(
+        "environment = \"images\"\npermissions = { contents = \"read\", actions = \"read\", packages = \"write\", id-token = \"write\", attestations = \"write\" }\n",
+        &[
+            ("contents", "read"),
+            ("actions", "read"),
+            ("packages", "write"),
+            ("id-token", "write"),
+            ("attestations", "write"),
+        ],
+        "images",
+    )
+}
+
+#[test]
+fn the_promote_role_renders_its_contract_permissions() -> TestResult {
+    assert_role_shape(
+        "environment = \"images\"\npermissions = { contents = \"read\", packages = \"write\", attestations = \"read\" }\n",
+        &[
+            ("contents", "read"),
+            ("packages", "write"),
+            ("attestations", "read"),
+        ],
+        "images",
+    )
 }
 
 #[test]
@@ -59,7 +88,10 @@ fn a_job_environment_renders_before_permissions_and_must_not_be_empty() -> TestR
     );
     let keys = image.keys();
     let at = |name: &str| keys.iter().position(|key| *key == name);
-    assert!(at("environment") < at("permissions"), "{keys:?}");
+    let (Some(environment), Some(permissions)) = (at("environment"), at("permissions")) else {
+        return Err(format!("{keys:?}: environment and permissions must both render").into());
+    };
+    assert!(environment < permissions, "{keys:?}");
     let message = refusal(&image_job("environment = \" \"\n"))?;
     assert!(message.contains("environment"), "{message}");
     Ok(())

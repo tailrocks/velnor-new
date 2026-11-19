@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, StepKind};
+use velnor_model::{
+    Access, CargoCommand, HelperCommand, Job, PermissionScope, PlanFrom, RepoFacts, StepKind,
+};
 
 use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, step};
@@ -46,7 +48,7 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
     for job in jobs.iter_mut() {
         let from = if !single {
             PlanFrom::Job(PLAN_JOB)
-        } else if job.id == RUST_JOB {
+        } else if job.id == RUST_JOB || is_lint_job(job) {
             PlanFrom::ThisJob
         } else if job.needs.contains(&RUST_JOB) {
             PlanFrom::Job(RUST_JOB)
@@ -56,8 +58,8 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
         for step in job.steps.iter_mut().filter(|step| is_check(&step.kind)) {
             step.skip_after_merge_group = Some(from.clone());
         }
-        if !single && is_lint_job(job) {
-            skip_lint_job(job, &from);
+        if is_lint_job(job) {
+            skip_lint_job(job, &from, single);
         }
     }
 }
@@ -68,8 +70,8 @@ fn is_lint_job(job: &Job) -> bool {
         .any(|step| matches!(step.kind, StepKind::Lint(_)))
 }
 
-fn skip_lint_job(job: &mut Job, from: &PlanFrom) {
-    if !job.needs.contains(&PLAN_JOB) {
+fn skip_lint_job(job: &mut Job, from: &PlanFrom, single: bool) {
+    if !single && !job.needs.contains(&PLAN_JOB) {
         job.needs.push(PLAN_JOB);
     }
     for step in &mut job.steps {
@@ -80,9 +82,9 @@ fn skip_lint_job(job: &mut Job, from: &PlanFrom) {
 /// Asks the helper, right after the plan, whether a `merge_group` run of this
 /// workflow already passed on this commit. `required` names the job of that run
 /// whose success counts while the run is still going.
-pub(crate) fn ask(jobs: &mut [Job], single: bool, required: &str) {
+pub(crate) fn ask(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
+    let required = facts.config.required_check.as_str();
     let asker = if single { RUST_JOB } else { PLAN_JOB };
-    let mut inserted = false;
     for job in jobs.iter_mut().filter(|job| job.id == asker) {
         if let Some(at) = job
             .steps
@@ -98,15 +100,54 @@ pub(crate) fn ask(jobs: &mut [Job], single: bool, required: &str) {
             job.permissions
                 .0
                 .insert(PermissionScope::Actions, Access::Read);
-            inserted = true;
         }
     }
-    // `apply` has already marked the checks, so a missing asker must stop the
-    // generation rather than leave conditions that name a step that is not there.
-    assert!(
-        inserted,
-        "merge-group skip: no {asker} job has a plan step to ask the helper after"
-    );
+    if let Some(release) = facts.helper.as_ref().filter(|_| single) {
+        for job in jobs.iter_mut().filter(|job| is_lint_job(job)) {
+            job.steps.splice(
+                0..0,
+                [
+                    step(StepKind::InstallHelper(release.clone())),
+                    step(StepKind::MergeGroupPassed {
+                        required: required.to_owned(),
+                    }),
+                ],
+            );
+            job.permissions
+                .0
+                .insert(PermissionScope::Actions, Access::Read);
+        }
+    }
+    assert_skips_resolve(jobs);
+}
+
+/// `apply` marks steps before `ask` inserts the `merge-group-passed` steps they
+/// read. Every mark must name a job that holds that step, or generation stops:
+/// a missing step would leave a condition that evaluates empty and silently
+/// disables the skip.
+fn assert_skips_resolve(jobs: &[Job]) {
+    for job in jobs {
+        for step in &job.steps {
+            let Some(from) = &step.skip_after_merge_group else {
+                continue;
+            };
+            let reader = match from {
+                PlanFrom::ThisJob => Some(job),
+                PlanFrom::Job(id) | PlanFrom::WorkJob(id) => jobs.iter().find(|job| &job.id == id),
+            };
+            let asked = reader.is_some_and(|reader| {
+                reader
+                    .steps
+                    .iter()
+                    .any(|step| matches!(step.kind, StepKind::MergeGroupPassed { .. }))
+            });
+            assert!(
+                asked,
+                "merge-group skip: {} reads no merge-group-passed step in the job it names",
+                job.id
+            );
+        }
+    }
 }
 
 #[cfg(test)]
@@ -169,9 +210,12 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "plan step to ask")]
-    fn skipping_refuses_a_shape_where_the_asker_step_was_not_inserted() {
-        let mut jobs = [job(RUST_JOB, vec![StepKind::Cargo(CargoCommand::FmtCheck)])];
-        ask(&mut jobs, true, "required");
+    #[should_panic(expected = "reads no merge-group-passed step")]
+    fn a_skip_naming_a_missing_merge_group_step_stops_generation() {
+        let mut marked = step(StepKind::Cargo(CargoCommand::FmtCheck));
+        marked.skip_after_merge_group = Some(PlanFrom::ThisJob);
+        let mut jobs = [job(RUST_JOB, vec![StepKind::Cargo(CargoCommand::Doc)])];
+        jobs[0].steps.push(marked);
+        assert_skips_resolve(&jobs);
     }
 }

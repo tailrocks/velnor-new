@@ -69,7 +69,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .map_err(|e| failed(&e))?
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
-    let workspaces = workspaces(&facts, &checkout.root)?;
+    let workspaces = workspaces(&facts, &checkout.root, options.inherit_target_dir)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
     let chosen = selected(&facts, &shared, options.root.as_deref())?;
