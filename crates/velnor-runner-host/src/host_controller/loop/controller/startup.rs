@@ -63,7 +63,7 @@ pub(super) async fn prepare_startup(
         image_authority,
     } = inputs;
 
-    let legacy = crate::launch::evaluate_gate(journal, docker, current, state).await?;
+    let legacy = crate::launch::evaluate_gate(journal, docker, current).await?;
     eprintln!(
         "legacy_reconcile={}",
         crate::launch::gate_line(&legacy.decision)
@@ -131,10 +131,9 @@ pub(super) async fn legacy_admission(
     journal: &Journal,
     docker: &Docker,
     config: &HostConfig,
-    state: &Path,
     log: &mut HoldLog,
 ) -> bool {
-    let report = match crate::launch::evaluate_gate(journal, docker, config, state).await {
+    let report = match crate::launch::evaluate_gate(journal, docker, config).await {
         Ok(report) => report,
         Err(error) => {
             eprintln!(
