@@ -12,13 +12,24 @@ use velnor_rust::{INPUTS_LOCK, parse_inputs_lock};
 use crate::error::CiError;
 use crate::inputs::{
     INPUTS_FILE, RESTORE_WITNESS, SNAPSHOT, SavedInput, Tracked, TrackedFile, format_inputs,
-    is_representable, parse_inputs, parse_ls_files, plan_restore, with_worktree_blobs,
+    is_representable, parse_ls_files, plan_restore, with_worktree_blobs,
 };
 use crate::scope::Scope;
 
 pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
-    let (top, tracked) = worktree_files(root)?;
+    let CapturedInputs {
+        top,
+        tracked,
+        source_identity: identity,
+        ..
+    } = capture_inputs(root, false)?;
     let path = root.join(target).join(INPUTS_FILE);
+    if std::env::var("EXPECTED_SOURCE_IDENTITY")
+        .is_ok_and(|expected| identity.is_empty() || expected != identity)
+    {
+        super::delta_snapshot::replace(&path, None)?;
+        return Ok("saved nothing: source identity changed or unavailable\n".to_owned());
+    }
     if tracked.unverifiable_links > 0 {
         match fs::remove_file(&path) {
             Ok(()) => {}
@@ -50,7 +61,7 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         fs::create_dir_all(parent)
             .map_err(|e| CiError::new(format!("cannot create {}: {e}", parent.display())))?;
     }
-    fs::write(&path, format_inputs(&saved))
+    fs::write(&path, super::input_snapshot::encode(&identity, &saved))
         .map_err(|e| CiError::new(format!("cannot write {}: {e}", path.display())))?;
     Ok(format!(
         "saved {} tracked files and {} symlinks to {}; left out: {} not in the worktree, {} with a path the file cannot hold, {} submodules not checked out\n",
@@ -61,6 +72,30 @@ pub fn save_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         tracked.unsupported,
         tracked.submodules
     ))
+}
+
+pub(super) struct CapturedInputs {
+    pub top: PathBuf,
+    pub tracked: Tracked,
+    pub source_identity: String,
+    pub sources: Tracked,
+}
+
+pub(super) fn capture_inputs(root: &Path, strict: bool) -> Result<CapturedInputs, CiError> {
+    let top = tracked_paths(root)?.top;
+    let mut tracked = top_level_files(&top, &Scope::default(), strict)?;
+    let source_identity = super::delta_source::identity_of(&tracked).unwrap_or_default();
+    let sources = tracked.clone();
+    let scope = scope_of(root, &top)?;
+    tracked.files.retain(|file| scope.contains(&file.path));
+    tracked.links.retain(|file| scope.contains(&file.path));
+    tracked.absent.retain(|path| scope.contains(path));
+    Ok(CapturedInputs {
+        top,
+        tracked,
+        source_identity,
+        sources,
+    })
 }
 
 pub(super) fn input_witness(tracked: &Tracked) -> String {
@@ -121,7 +156,7 @@ pub fn restore_inputs(root: &Path, target: &Path) -> Result<String, CiError> {
         }
         Err(e) => return Err(CiError::new(format!("cannot read {}: {e}", path.display()))),
     };
-    let saved = parse_inputs(&text)?;
+    let saved = super::input_snapshot::decode(&text)?.inputs;
     let (top, tracked) = worktree_files(root)?;
     fs::write(
         root.join(target).join(RESTORE_WITNESS),
@@ -184,6 +219,17 @@ pub(super) fn tracked_paths(root: &Path) -> Result<TrackedPaths, CiError> {
     })
 }
 
+pub(super) fn source_files(root: &Path) -> Result<Tracked, CiError> {
+    let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
+    let top = String::from_utf8(top)
+        .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?;
+    top_level_files(
+        Path::new(top.trim_end_matches(['\n', '\r'])),
+        &Scope::default(),
+        true,
+    )
+}
+
 pub(super) fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError> {
     let top = git(root, &["rev-parse", "--show-toplevel"], None)?;
     let top = PathBuf::from(
@@ -191,7 +237,7 @@ pub(super) fn worktree_files(root: &Path) -> Result<(PathBuf, Tracked), CiError>
             .map_err(|e| CiError::new(format!("git rev-parse printed non-UTF-8: {e}")))?
             .trim_end_matches(['\n', '\r']),
     );
-    let tracked = top_level_files(&top, &scope_of(root, &top)?)?;
+    let tracked = top_level_files(&top, &scope_of(root, &top)?, false)?;
     Ok((top, tracked))
 }
 
@@ -211,7 +257,7 @@ fn scope_of(root: &Path, top: &Path) -> Result<Scope, CiError> {
     Ok(Scope::new(prefix.trim_end_matches(['\n', '\r']), listed))
 }
 
-fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
+fn top_level_files(root: &Path, scope: &Scope, strict: bool) -> Result<Tracked, CiError> {
     let mut index = parse_ls_files(&git(
         root,
         &["ls-files", "-s", "-z", "--recurse-submodules"],
@@ -227,6 +273,8 @@ fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
                 mode: worktree_mode(&metadata, &file.mode),
                 ..file
             }),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => absent.push(file.path),
+            _ if strict => return Err(CiError::new("tracked source is not a regular file")),
             _ => absent.push(file.path),
         }
     }
@@ -249,8 +297,15 @@ fn top_level_files(root: &Path, scope: &Scope) -> Result<Tracked, CiError> {
     let mut links = Vec::with_capacity(index.links.len());
     let mut unverifiable_links = index.unverifiable_links;
     for link in index.links {
-        let Ok(target) = fs::read_link(root.join(&link.path)) else {
-            continue;
+        let target = match fs::read_link(root.join(&link.path)) {
+            Ok(target) => target,
+            Err(error) if strict && error.kind() != std::io::ErrorKind::NotFound => {
+                return Err(CiError::new("tracked source is not a symlink"));
+            }
+            Err(_) => {
+                absent.push(link.path);
+                continue;
+            }
         };
         match target.to_str() {
             Some(text) if is_representable(text) => links.push(TrackedFile {

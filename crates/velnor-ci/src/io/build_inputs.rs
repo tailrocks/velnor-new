@@ -30,8 +30,11 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
         }
     }
     let tracked = tracked_among(root, &files);
-    check_runtime_configs(&roots, &files, &tracked, &recorded_dirs)
+    let targets = check_runtime_configs(&roots, &files, &tracked, &recorded_dirs)
         .map_err(|e| CiError::new(e.to_string()))?;
+    for target in targets {
+        super::delta_paths::untracked(&root.join(target.as_str()), "target")?;
+    }
     let inside = repo_profile(&files).map_err(|e| CiError::new(e.to_string()))?;
     let outside = external_config_profile(&external_configs(root)?).map_err(CiError::new)?;
     Ok(format!("{inside}{outside}"))

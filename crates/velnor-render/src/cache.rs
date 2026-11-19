@@ -9,7 +9,6 @@ use crate::steps::{MISE_VERSION, PREPARE_STEP};
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMMIT: &str = "${{ github.sha }}";
 const RUN_ID: &str = "${{ github.run_id }}";
-const DELTA_BASE: &str = "${{ steps.restored.outputs.base8 }}";
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedKey {
     pub key: String,
@@ -42,7 +41,10 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             CacheKeySegment::Mise => format!("mise{mise_version}"),
             CacheKeySegment::Commit => COMMIT.to_owned(),
             CacheKeySegment::RunId => RUN_ID.to_owned(),
-            CacheKeySegment::DeltaBase => DELTA_BASE.to_owned(),
+            CacheKeySegment::PullRequest => "pr${{ github.event.pull_request.number }}".to_owned(),
+            CacheKeySegment::DeltaBase(root) => {
+                format!("${{{{ steps.delta_base_{root}.outputs.base8 }}}}")
+            }
         })
         .collect();
     RenderedKey {
@@ -118,5 +120,6 @@ pub(crate) fn path_text(path: &CachePath) -> String {
         CachePath::CargoRegistryCache => "~/.cargo/registry/cache".to_owned(),
         CachePath::CargoGitDb => "~/.cargo/git/db".to_owned(),
         CachePath::Target(directory) => directory.to_string(),
+        CachePath::Delta(root) => root.delta_dir(),
     }
 }

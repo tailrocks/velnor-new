@@ -238,7 +238,10 @@ fn resolve_cache_key(key: &CacheKey, id: u64) -> String {
             "github.sha" => "c".repeat(40),
             "github.run_id" => id.to_string(),
             "steps.prepare.outputs.compat" => "b".repeat(16),
-            "steps.restored.outputs.base8" => "12345678".to_owned(),
+            "steps.restored.outputs.base8" | "steps.delta_base_root.outputs.base8" => {
+                "12345678".to_owned()
+            }
+            "github.event.pull_request.number" => "1".to_owned(),
             expression
                 if expression.starts_with("hashFiles(")
                     || expression == "steps.sources_locks.outputs.hash" =>

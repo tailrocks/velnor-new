@@ -25,7 +25,7 @@ struct Api {
 
 impl Api {
     fn new() -> Self {
-        let entries = (1..=101).map(|id| json!({"id":id,"key":format!("velnor-dlt-rust-root-Linux-X64-0123456789abcdef-12345678-{id}"),"ref":"refs/pull/101/merge","created_at":"2026-11-17T00:00:00Z","last_accessed_at":"2026-11-17T00:00:00Z","size_in_bytes":10})).collect();
+        let entries = (1..=101).map(|id| json!({"id":id,"key":format!("velnor-dlt-pr101-rust.root.Linux-X64-0123456789abcdef-12345678-{id}"),"ref":"refs/pull/101/merge","created_at":"2026-11-17T00:00:00Z","last_accessed_at":"2026-11-17T00:00:00Z","size_in_bytes":10})).collect();
         Self {
             entries: RefCell::new(entries),
             prs: (1..=101).map(|number| json!({"number":number})).collect(),

@@ -57,6 +57,10 @@ name = "runner_platform_public"
 path = "tests/runner_platform_public.rs"
 
 [[test]]
+name = "daemon_lock_public"
+path = "tests/daemon_lock_public.rs"
+
+[[test]]
 name = "release_lock_public"
 path = "tests/release_lock_public.rs"
 

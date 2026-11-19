@@ -35,8 +35,8 @@ rumdl = "0.3.0"
 cargo-deny = "0.20.2"
 "github:bnjbvr/cargo-machete" = "0.9.2"
 opentofu = "1.13.9"
-# Release PRs and tags: release-plz.toml at the repository root and under
-# crates/velnor-runner; velnor-gen reads this pin when it plans releases.
+# Release PRs and tags: release-plz.toml at the repository root (the tools and
+# runner groups); velnor-gen reads this pin when it plans releases.
 "aqua:release-plz/release-plz" = "0.4.3"
 
 [settings]
