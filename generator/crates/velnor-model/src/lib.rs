@@ -32,7 +32,7 @@ pub use plan::{
     Access, BUILD_TESTS_STEP, CargoCommand, Concurrency, FilterRef, Gate, GateNeed, Job, LINT_STEP,
     MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope, Permissions, PlanFrom, PlanRef,
     PullRequestType, Shape, ShapeDecision, Step, TEST_STEP, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan,
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,

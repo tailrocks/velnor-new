@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use velnor_model::{
     GateNeed, JobCondition, JobId, MERGE_GROUP_SKIP_OUTPUT, RootSlug, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
+    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
 const SCHEDULE: &str = "schedule";
@@ -57,6 +57,7 @@ pub(crate) const PACKAGE_COUNTS_LIMIT: usize = 1_000_000;
 pub struct TestCounts {
     pub run: u64,
     pub listed: u64,
+    pub ignored: Option<u64>,
     pub packages: BTreeMap<String, PackageCounts>,
 }
 
@@ -310,6 +311,11 @@ pub fn verdict(
             ));
         } else {
             for job in counts.iter().flatten() {
+                if job.listed == 0 && job.run == 0 && job.ignored == Some(0) {
+                    out.problems.push(format!(
+                        "a test job of {slug} listed no tests and ran none, though its selected packages have tests"
+                    ));
+                }
                 for (name, package) in &job.packages {
                     if package.listed > 0 && package.run == 0 {
                         out.problems.push(format!(
@@ -374,9 +380,14 @@ fn counts(need: Option<&Need>) -> Option<TestCounts> {
     if run != summed_run || listed != summed_listed {
         return None;
     }
+    let ignored = match need.outputs.get(TESTS_IGNORED_OUTPUT).map(String::as_str) {
+        None | Some("") => None,
+        Some(text) => Some(number(text)?),
+    };
     Some(TestCounts {
         run,
         listed,
+        ignored,
         packages,
     })
 }

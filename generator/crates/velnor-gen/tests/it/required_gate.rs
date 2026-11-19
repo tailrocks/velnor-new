@@ -37,16 +37,17 @@ fn selected() -> Outputs {
     ]
 }
 
-struct Run {
+pub(crate) struct Run {
     outputs: Outputs,
     results: Vec<(&'static str, &'static str)>,
-    count: Option<&'static str>,
-    listed: Option<&'static str>,
+    pub(crate) count: Option<&'static str>,
+    pub(crate) listed: Option<&'static str>,
+    pub(crate) ignored: Option<&'static str>,
     packages: Option<String>,
     event: Option<&'static str>,
 }
 
-fn passing() -> Run {
+pub(crate) fn passing() -> Run {
     Run {
         outputs: selected(),
         results: vec![
@@ -59,12 +60,13 @@ fn passing() -> Run {
         ],
         count: Some("12"),
         listed: Some("12"),
+        ignored: Some("0"),
         packages: None,
         event: Some("pull_request"),
     }
 }
 
-fn with(mut run: Run, edit: impl FnOnce(&mut Run)) -> Run {
+pub(crate) fn with(mut run: Run, edit: impl FnOnce(&mut Run)) -> Run {
     edit(&mut run);
     run
 }
@@ -89,7 +91,11 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
                 .collect();
         }
         if *job == "rust-test" {
-            for (name, value) in [("tests_run", run.count), ("tests_listed", run.listed)] {
+            for (name, value) in [
+                ("tests_run", run.count),
+                ("tests_listed", run.listed),
+                ("tests_ignored", run.ignored),
+            ] {
                 if let Some(value) = value {
                     need.outputs.insert(name.to_owned(), value.to_owned());
                 }
@@ -110,7 +116,7 @@ fn judge(run: &Run) -> Result<(bool, String), Box<dyn std::error::Error>> {
     Ok((verdict.passed, verdict.table()))
 }
 
-fn expect(run: &Run, passes: bool, mention: &str) -> TestResult {
+pub(crate) fn expect(run: &Run, passes: bool, mention: &str) -> TestResult {
     let (green, table) = judge(run)?;
     assert_eq!(green, passes, "{mention}\n{table}");
     assert!(table.contains(mention), "{mention}\n{table}");
@@ -191,7 +197,7 @@ fn a_job_the_plan_did_not_schedule_may_be_skipped_and_a_success_is_a_warning() -
 }
 
 #[test]
-fn tests_that_were_listed_but_none_ran_fails_and_a_lane_with_no_tests_passes() -> TestResult {
+fn tests_that_were_listed_but_none_ran_fails() -> TestResult {
     let run = with(passing(), |run| {
         run.count = Some("0");
         run.listed = Some("3");
@@ -201,11 +207,6 @@ fn tests_that_were_listed_but_none_ran_fails_and_a_lane_with_no_tests_passes() -
         false,
         "package pkg of root listed 3 tests and ran none",
     )?;
-    let run = with(passing(), |run| {
-        run.count = Some("0");
-        run.listed = Some("0");
-    });
-    expect(&run, true, "Required: pass")?;
     let run = with(passing(), |run| {
         run.count = Some("2");
         run.listed = Some("9");

@@ -4,7 +4,8 @@
 use crate::rules::{RenderedJob, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{
-    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT,
 };
 
 const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
@@ -56,6 +57,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
                             if name == TESTS_RUN_OUTPUT
                                 || name == MERGE_GROUP_SKIP_OUTPUT
                                 || name == TESTS_LISTED_OUTPUT
+                                || name == TESTS_IGNORED_OUTPUT
                                 || name == TESTS_BY_PACKAGE_OUTPUT
                             {
                                 Yaml::Unread(value)
