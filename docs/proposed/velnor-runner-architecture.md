@@ -650,6 +650,10 @@ rebuilt the same 6 workspace crates at every new path, and without clones mbx us
   served from it, or while it saves at least 20 runner-minutes a day; otherwise it is retired
   (owner-approved, N54). The honest alternative: incremental warmers make nodes rarely cold, and
   copying a snapshot moves about the same 8.7 GiB.
+- **Race a fill against a build.** When a node lacks the generation a job needs, the agent starts
+  both a local delta build and a fill from `mbx-cache` or a peer's snapshot, picks the predicted
+  winner's result and cancels the other: a duplicate kept because it is faster (a fill took 39.9 s
+  against a 92 s cold build, and 43.4 s against 67.4 s on a lockfile change [M]), at batch cost.
 - **Reflink against overlayfs, a hard-linked immutable `deps/` base, or other shared inodes** is
   pending ruling Q16: clones do not share page cache, so each build sandbox's cache counts inside
   its own memory limit; the head-to-head decides.

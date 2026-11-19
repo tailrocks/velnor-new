@@ -316,6 +316,7 @@ in the design review. "Same as" marks a merged duplicate.
 | N95 | Parse every protocol message strictly: an unknown field is logged and alerted, never silently dropped. | Gemini 4 Neon (Rust-only round) | — | Adopted (v3) | Protocol drift shows on the first message that carries it, not after a behaviour change. |
 | N96 | The compile jobserver's width follows the node's free CPUs at sandbox start (16 up to 64), while nextest's threads stay at the class's fixed CPU count. | Gemini 4 Neon | — | Adopted (v3) | A lone PR on an idle node builds faster without changing any key: compile parallelism changes no output, and the test thread count stays in the key. |
 | N97 | Split every looped test (40, 12, 10, 6 and 4 cases) into one test per case and drop `test-threads=1` once tests use private temp directories and ports. | Gemini 4 Neon; earlier I059 | — | Adopted (v3) | The loops, not the cases, set today's floor. |
+| N98 | Race a local delta build against a cross-node fill when a node lacks the needed generation; the first verified result wins and the other is cancelled. | Muse Wonder Full (Rust-only round) | — | Adopted (v3) | A duplicate kept because it is faster, with the numbers: a fill took 39.9 s against a 92 s cold build, and 43.4 s against 67.4 s on a lockfile change [M]. |
 
 
 ## Load-bearing decisions
@@ -718,6 +719,19 @@ default, marked "pending ruling" in the design.
 | Overlay sandboxes, six per worker, sharing page cache | Recorded under pending ruling Q16 | — |
 | Per-organisation floors and disk caps | Already in v3 as quotas and store budgets | — |
 | Agents' workspaces hosted on the cluster | Not adopted in v3 | Outside this design's scope; agents verify through `velnor verify` |
+
+### Group 19: what v3 takes from Muse Wonder Full
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| Race a local rebuild against a cross-node fetch, chosen by prediction | Adopted (N98) | A duplicate that is measurably faster |
+| Label-flow states as conformance cases | Adopted in the corpus (design §5.7) | — |
+| A custom `verified` profile (opt-level 2, assertions on, unwind, no LTO) shared by tests and shipped bytes | Recorded under pending ruling Q6 | Debug tests plus release bytes once is the safe default |
+| An always-failing guard job beside a label `if:` | Not needed: the App check is the safe default for Q2 | — |
+| Sandboxes carved as cgroup slots by a privileged agent instead of a pod per job | Recorded as a Kubernetes-backend option behind the platform trait | The core does not care how a backend makes a sandbox |
+| The Worker evaluates expressions twice, with a compare mode | Recorded as evidence for pending ruling Q4 | — |
+| File-delta sync as the default cross-node transport | Recorded under pending ruling Q16 | `mbx-cache` keeps its owner-approved threshold |
+| Every landed tree in full within 24 h | Superseded by A1 within 2 h at P90 | — |
 
 ## Design review
 
