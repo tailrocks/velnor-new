@@ -1,0 +1,12 @@
+        None => std::env::current_dir()?.join(manifest),
+    })
+}
+
+    let expected = std::env::current_dir()?.join(RELATIVE_MANIFEST);
+    let commands = [
+        MetadataDiscovery::new(PathBuf::from(RELATIVE_MANIFEST))?.command(&catalog)?,
+        MetadataQualification::new(PathBuf::from(RELATIVE_MANIFEST))?.command(&catalog)?,
+        assert_eq!(command.cwd(), expected.parent().map(PathBuf::from).as_ref());
+    }
+    Ok(())
+}

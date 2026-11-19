@@ -1,0 +1,4 @@
+            || workflow_path.contains("..")
+            || !source_ref.starts_with("refs/heads/")
+            || !source_ref
+                .bytes()

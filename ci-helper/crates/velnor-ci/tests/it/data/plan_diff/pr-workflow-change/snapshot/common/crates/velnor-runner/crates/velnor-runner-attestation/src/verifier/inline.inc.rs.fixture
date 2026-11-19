@@ -1,0 +1,4 @@
+                    .all(|component| !component.is_empty() && component != "." && component != "..")
+        })
+    {
+        return Err("state directory is malformed or exceeds byte limit".into());

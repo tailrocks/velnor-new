@@ -1,0 +1,13 @@
+    include_bytes!("../../../../../images/runner/ubuntu-26.04/Dockerfile");
+
+pub(super) struct GitFixture {
+    root: PathBuf,
+            .parent()
+            .ok_or("fixture source has no parent")?
+            .join("decoy");
+        let path = std::env::var_os("PATH").ok_or("PATH is unavailable")?;
+        let output = Command::new("git")
+        fs::create_dir_all(lock_path.parent().ok_or("runner lock has no parent")?)?;
+        fs::write(&lock_path, valid_lock())?;
+
+        let indexed = self.git(&["ls-files", "--", ".velnor/runner.lock"])?;

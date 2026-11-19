@@ -1,0 +1,4 @@
+    if normalized.split('/').any(|seg| seg == "..") {
+        return Err(ContractError::identity("path", "parent_traversal"));
+    }
+    Ok(normalized)

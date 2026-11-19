@@ -1,0 +1,55 @@
+        if name.to_bytes() == b"." || name.to_bytes() == b".." {
+            continue;
+        }
+        *discovered += 1;
+    let parent = open_directory(root, path.parent().unwrap_or_else(|| Path::new("")))?;
+    validate_directory(&parent, true)?;
+    let name = c_string(
+        name.to_str()
+            .ok_or_else(|| invalid("source path is not UTF-8"))?,
+        &parent,
+        name.as_c_str(),
+        OFlags::RDONLY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    let named = ufs::statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)?;
+    if Identity::from_stat(&before) != Identity::from_stat(&named) {
+        return Err(invalid("archive input file changed while opening").into());
+    }
+    let named = ufs::statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)?;
+    if Identity::from_stat(&before) != Identity::from_stat(&after)
+        || Identity::from_stat(&before) != Identity::from_stat(&named)
+        || u64::try_from(bytes.len())? > limit
+        path.parent().unwrap_or_else(|| Path::new("")),
+        &parent,
+    )?;
+    Ok(bytes)
+}
+            return Err(invalid("archive input parent path is unsafe").into());
+        };
+        let name = c_string(
+            part.to_str()
+            return Err(invalid("archive input parent changed during verification").into());
+        }
+        current = next;
+    }
+fn openat_directory(parent: &File, name: &CStr) -> Result<File, Box<dyn Error>> {
+    let fd = ufs::openat(
+        parent,
+        name,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::NONBLOCK | OFlags::CLOEXEC,
+        Mode::empty(),
+    let parent = open_directory(root, relative.parent().unwrap_or_else(|| Path::new("")))?;
+    let name = c_string(
+        relative
+            .file_name()
+    let named = ufs::statat(&parent, name.as_c_str(), AtFlags::SYMLINK_NOFOLLOW)?;
+    if Identity::from_stat(&held) != Identity::from_stat(&named) {
+        return Err(invalid("source tree directory changed during verification").into());
+    }
+        return Err(invalid("archive input parent changed during verification").into());
+    }
+    Ok(())
+}
+#[path = "archive_guard_inputs_filesystem_tests.rs"]
+mod tests;
+

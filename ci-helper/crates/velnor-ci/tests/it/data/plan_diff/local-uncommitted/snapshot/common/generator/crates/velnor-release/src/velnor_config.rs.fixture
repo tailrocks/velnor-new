@@ -1,0 +1,4 @@
+                || root.split('/').any(|part| matches!(part, "" | "." | "..")))
+    }) {
+        return Err(ReleaseError::UnsafeRoot { root: root.clone() });
+    }

@@ -1,0 +1,7 @@
+pub const BOOTSTRAP: &str = include_str!("source_preview/source_preview_bootstrap.py");
+pub const STAGE_VERIFIER: &str = include_str!("source_preview/source_preview_stage_verify.py");
+pub const RUNTIME_VERIFIER: &str = include_str!("source_preview/source_preview_runtime.py");
+pub const SEALED_EXECUTOR: &str = include_str!("source_preview/source_preview_run_verified.py");
+
+use std::{ffi::OsString, path::Path};
+

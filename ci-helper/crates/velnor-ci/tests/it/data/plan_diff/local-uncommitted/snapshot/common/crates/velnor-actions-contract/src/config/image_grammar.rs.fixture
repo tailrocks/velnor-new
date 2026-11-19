@@ -1,0 +1,8 @@
+        && !segment.contains("..")
+        && bytes.iter().all(|b| {
+            b.is_ascii_lowercase() || b.is_ascii_digit() || matches!(b, b'-' | b'_' | b'.')
+        })
+        || path.split('/').any(|c| matches!(c, "" | "." | ".."))
+        || !path.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_' | b'.' | b'/' | b'+' | b'@')
+        });

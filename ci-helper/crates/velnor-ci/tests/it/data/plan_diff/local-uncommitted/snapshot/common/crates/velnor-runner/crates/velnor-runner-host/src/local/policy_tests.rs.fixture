@@ -1,0 +1,4 @@
+        "../x",
+        ".hidden",
+    ] {
+        assert!(Policy::load(state.path(), name).is_err(), "{name}");

@@ -1,0 +1,31 @@
+    pub(super) parent: OwnedFd,
+    pub(super) scope: OwnedFd,
+    pub(super) key: OperationKey,
+    pub(super) generation: i64,
+        parent,
+        scope,
+        key,
+        generation,
+    validate_private_directory(&parent)?;
+    validate_private_directory(&scope)?;
+    let container_hash = Sha256::digest(container_id.as_bytes());
+    let name = format!(
+    parent: &OwnedFd,
+    name: &str,
+    started: Instant,
+    deadline: Instant,
+    match mkdirat(parent, name, expected_mode(DIRECTORY_MODE)) {
+        Ok(()) => {
+            check_capture_state(started, deadline, cancelled)?;
+            fsync(parent).map_err(|_| HostError::Path)?;
+            check_capture_state(started, deadline, cancelled)?;
+        }
+        Err(error) if error == rustix::io::Errno::EXIST => {
+        parent,
+        name,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+        || matches!(key.connection_id.as_str(), "." | "..")
+        || key.intent_id <= 0
+        || generation <= 0
+        || !matches!(role, "runner" | "dind")

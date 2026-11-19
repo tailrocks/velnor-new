@@ -1,0 +1,17 @@
+#[path = "homebrew_install_command_failure.rs"]
+mod command_failure;
+pub(in crate::homebrew::install) use command_failure::run_command;
+
+    let parent = path
+        .parent()
+        .ok_or_else(|| invalid("file_parent_missing"))?;
+    let name = path
+        .file_name()
+        parent,
+        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NOFOLLOW | OFlags::CLOEXEC,
+        Mode::empty(),
+    )
+        && value != ".."
+        && !value.contains('/')
+        && !value.contains('\\')
+        && !value.bytes().any(|byte| byte.is_ascii_control())

@@ -1,0 +1,11 @@
+            "..".to_owned()
+        } else {
+            config_dir
+                .rsplit_once('/')
+                .map_or_else(|| ".".to_owned(), |(parent, _)| parent.to_owned())
+        }
+    }
+
+            .all(|segment| !segment.is_empty() && segment != "." && segment != "..")
+}
+

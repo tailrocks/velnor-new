@@ -1,0 +1,4 @@
+            .any(|part| part.is_empty() || part == "." || part == "..")
+        || volume_root.ends_with('/') && volume_root != "/"
+        || expected_root.ends_with('/') && expected_root != "/"
+    {

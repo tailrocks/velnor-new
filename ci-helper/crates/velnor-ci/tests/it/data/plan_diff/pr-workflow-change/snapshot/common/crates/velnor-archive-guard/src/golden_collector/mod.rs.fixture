@@ -1,0 +1,4 @@
+    let caller = env::current_dir().map_err(CollectorError::operational)?;
+    Ok(Arguments {
+        mode,
+        root: absolute(root, "--root", &caller)?,

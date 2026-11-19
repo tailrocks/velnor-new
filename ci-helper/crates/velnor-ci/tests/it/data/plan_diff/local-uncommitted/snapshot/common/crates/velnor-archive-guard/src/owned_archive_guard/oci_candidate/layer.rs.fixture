@@ -1,0 +1,4 @@
+            ".." => return Err(OciCandidateError("oci_layer_path_unsafe")),
+            value => parts.push(value),
+        }
+    }

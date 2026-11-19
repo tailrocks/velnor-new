@@ -1,0 +1,16 @@
+            .current_dir(&rig.workspace)
+            .env_remove("CARGO_TARGET_DIR")
+            .output()?;
+        assert!(
+            .current_dir(&self.workspace)
+            .output()?;
+        if !output.status.success() {
+            return Err(String::from_utf8_lossy(&output.stderr).into_owned().into());
+        fs::create_dir_all(path.parent().ok_or("path has no parent")?)?;
+        fs::write(path, content)?;
+        Ok(())
+    }
+            .current_dir(&self.workspace)
+            .envs(env)
+            .env("PATH", path)
+            .env("RUNNER_TEMP", self.temp.path())

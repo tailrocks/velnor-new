@@ -1,0 +1,4 @@
+        include_str!("../../../scripts/generator-release/preflight-release-tag.sh")
+    )
+}
+

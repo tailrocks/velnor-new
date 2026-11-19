@@ -1,0 +1,4 @@
+            .current_dir(&repository)
+            .env(TOOLCHAIN, &toolchain);
+        for variable in PROGRAM_VARIABLES {
+            command.env_remove(variable);

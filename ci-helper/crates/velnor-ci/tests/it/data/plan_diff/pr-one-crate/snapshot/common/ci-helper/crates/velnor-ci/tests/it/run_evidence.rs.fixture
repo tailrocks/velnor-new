@@ -1,0 +1,28 @@
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .env("CARGO_HOME", temp.join("cargo-home"))
+            .output()
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .output()
+            .expect("capture");
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .env("GITHUB_OUTPUT", temp.join("outputs"))
+            .output()
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp);
+        for selector in selectors {
+            command.env(
+                .current_dir(&temp)
+                .env("RUNNER_TEMP", &temp)
+                .env(key, std::ffi::OsString::from_vec(vec![byte]))
+                .output()
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .output()
+            .expect("capture");
+            .current_dir(&temp)
+            .env("RUNNER_TEMP", &temp)
+            .env("GITHUB_OUTPUT", temp.join("outputs"))
+            .output()

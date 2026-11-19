@@ -1,0 +1,8 @@
+        && !route.contains("..");
+    let plain_accept = accept
+        .bytes()
+        .all(|b| b.is_ascii_alphanumeric() || b"-._+/".contains(&b));
+    fs::create_dir_all(path.parent().unwrap_or_else(|| Path::new("."))).map_err(io)?;
+    let mut builder = fs::DirBuilder::new();
+    #[cfg(unix)]
+    std::os::unix::fs::DirBuilderExt::mode(&mut builder, 0o700);
