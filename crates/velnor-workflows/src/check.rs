@@ -20,6 +20,7 @@ use crate::plan::{
     Workflow,
 };
 use crate::raw::{RawJob, RawStep, RawWorkflow};
+use crate::secret_events::untrusted;
 use crate::triggers::triggers;
 
 const RESERVED_FILES: [&str; 2] = ["rust-ci", "release"];
@@ -223,6 +224,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
         events: ctx.triggers.events(),
+        untrusted_events: untrusted(ctx.triggers, [ctx.condition, raw.condition.as_deref()]),
     };
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
     let JobExtras { env, cache_mode } = job_env(
@@ -299,6 +301,9 @@ fn fill_steps(
     }
     require_permissions(&job.id, &steps, &job.permissions)?;
     job_limits::write_token(&job.id, &steps, &job.permissions)?;
+    if scope.events != ["workflow_dispatch"] {
+        job_limits::secret_without_write(&job.id, &steps, &job.permissions)?;
+    }
     job.outputs = outputs
         .into_iter()
         .map(|(name, value)| Ok((name.clone(), output(&job.id, &name, &value, &steps)?)))

@@ -18,8 +18,8 @@ const SUMS: &str = "SHA256SUMS";
 const BINARY_SUMS: &str = "BINARY-SHA256SUMS";
 const COMMIT: &str = "COMMIT";
 const BUILDS: [&str; 2] = ["build-linux-x64", "build-linux-arm64"];
-const WRITE_SUMS: &str = "env -C dist sha256sum ";
-const WRITE_BINARY_SUMS: &str = "env -C binary sha256sum ";
+const WRITE_SUMS: &str = "sha256sum COMMIT ";
+const WRITE_BINARY_SUMS: &str = "sha256sum velnor-ci-";
 
 fn parse(path: &str) -> Result<Value, Box<dyn Error>> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -125,10 +125,10 @@ fn checksums_cover(
 ) -> TestResult {
     let listed: BTreeSet<String> = runs(workflow, "checksums")?
         .into_iter()
-        .find(|run| run.starts_with(WRITE_SUMS) && run.ends_with("> dist/SHA256SUMS"))
+        .find(|run| run.starts_with(WRITE_SUMS) && run.ends_with("> SHA256SUMS"))
         .map(|run| {
             run.split_whitespace()
-                .skip(4)
+                .skip(1)
                 .map(str::to_owned)
                 .collect::<Vec<_>>()
         })
@@ -144,10 +144,10 @@ fn checksums_cover(
         workflow,
         "checksums",
         WRITE_BINARY_SUMS,
-        "> dist/BINARY-SHA256SUMS",
+        "> ../dist/BINARY-SHA256SUMS",
     )?
     .split_whitespace()
-    .skip(4)
+    .skip(1)
     .take_while(|word| *word != ">")
     .map(str::to_owned)
     .collect();

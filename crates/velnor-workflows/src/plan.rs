@@ -211,7 +211,10 @@ pub enum MatrixSource {
         from_job: String,
         from_output: String,
     },
-    Axes(Vec<(String, Vec<String>)>),
+    Axes {
+        axes: Vec<(String, Vec<String>)>,
+        include: Vec<Vec<(String, String)>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -222,6 +225,7 @@ pub struct Step {
     pub body: Body,
     pub with: Vec<(String, Env)>,
     pub continue_on_error: bool,
+    pub working_directory: Option<String>,
     pub env: Vec<(String, Env)>,
 }
 
