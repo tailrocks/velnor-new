@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use velnor_model::github_hosted;
 
-use crate::cases::cases;
 use crate::call::{call, refuse_step_keys};
+use crate::cases::cases;
 use crate::check_step::step;
 use crate::concurrency::concurrency;
 use crate::error::{WorkflowsError, refuse};

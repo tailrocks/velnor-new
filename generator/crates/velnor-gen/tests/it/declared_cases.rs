@@ -112,7 +112,10 @@ fn each_case_has_a_hosted_and_a_scale_set_job_with_the_same_suffix() -> TestResu
         ]
     );
     let name = |id: &str| job(&tree, id).map(|body| body.get("name").and_then(Node::text));
-    assert_eq!(name("js-hosted")?, Some("JavaScript actions / GitHub hosted"));
+    assert_eq!(
+        name("js-hosted")?,
+        Some("JavaScript actions / GitHub hosted")
+    );
     assert_eq!(
         name("js-scale-set")?,
         Some("JavaScript actions / Velnor Scale Set")
@@ -198,7 +201,11 @@ fn a_case_needs_a_mode_input_that_offers_its_modes() -> TestResult {
 fn the_pair_runners_must_be_one_hosted_and_one_not() -> TestResult {
     for (from, to, needle) in [
         ("hosted_runner = \"ubuntu-24.04\"", "", "hosted_runner"),
-        ("scale_set_runner = \"ubuntu-26.04-scale-set\"", "", "scale_set_runner"),
+        (
+            "scale_set_runner = \"ubuntu-26.04-scale-set\"",
+            "",
+            "scale_set_runner",
+        ),
         (
             "hosted_runner = \"ubuntu-24.04\"",
             "hosted_runner = \"my-box\"",
