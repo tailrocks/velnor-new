@@ -140,7 +140,10 @@ fn a_pinned_action_takes_only_its_own_inputs_and_needs_its_required_ones() -> Te
         ("checkout", "with = { Fetch-Depth = \"1\", ref = \"main\" }"),
         ("upload-artifact", "with = { path = \"dist\" }"),
         ("cache-restore", "with = { path = \"x\", key = \"k\" }"),
-        ("github-script", "with = { script = \"console.log('one')\" }"),
+        (
+            "github-script",
+            "with = { script = \"console.log('one')\" }",
+        ),
     ] {
         rendered(&steps_of(action, with, read))?;
     }
@@ -228,7 +231,8 @@ fn a_github_script_token_must_be_a_secret_reference() -> TestResult {
         message.contains("github-token") && message.contains("github-script"),
         "{message}"
     );
-    let reference = "with = { script = \"console.log('x')\", github-token = \"${{ github.token }}\" }";
+    let reference =
+        "with = { script = \"console.log('x')\", github-token = \"${{ github.token }}\" }";
     rendered(&steps_of("github-script", reference, read))?;
     Ok(())
 }
