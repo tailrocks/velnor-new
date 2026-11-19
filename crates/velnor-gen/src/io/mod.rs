@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::ffi::{OsStr, OsString};
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
@@ -12,17 +12,14 @@ pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
 use velnor_model::{RepoPath, RepoView};
-use velnor_rust::{
-    METADATA_PATH, build_script_sources, is_rust_source, manifests, metadata_roots,
-    reduce_metadata, wanted_files,
-};
+use velnor_rust::METADATA_PATH;
 
 mod check;
 mod error;
-mod exit;
 mod identity;
 mod pin;
 pub use identity::repository_name;
+mod read;
 mod recorded;
 mod ruleset;
 mod sample;
@@ -30,19 +27,19 @@ mod tracked;
 mod workflows;
 
 use crate::cli::{Cli, Command, ReleaseCommand};
-use crate::{Drift, notes, plan_generate};
-use check::cargo_metadata;
+use crate::{Drift, check_tag, notes, plan_generate};
 pub use check::check_metadata;
 pub use error::Error;
-use exit::{finish, tag_verdict};
 use pin::pin_helper;
 pub use pin::write_lock;
+pub use read::{add_manifests, read_files, view_of};
+use read::{read_tracked, read_view, regular_file};
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
     recording_of, relocate_metadata, write_sample,
 };
-use tracked::{tracked, tracked_sizes};
+use tracked::tracked_sizes;
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[must_use]
@@ -63,6 +60,32 @@ where
         .version(version_text())
         .try_get_matches_from(args)?;
     Cli::from_arg_matches(&matches)
+}
+
+fn tag_verdict(tag: &str) -> Exit {
+    match check_tag(env!("CARGO_PKG_VERSION"), tag) {
+        Ok(message) => {
+            println!("{message}");
+            Exit::SUCCESS
+        }
+        Err(message) => {
+            eprintln!("velnor-gen: {message}");
+            Exit::from(1)
+        }
+    }
+}
+
+fn finish(result: Result<String, Error>) -> Exit {
+    match result {
+        Ok(message) => {
+            println!("{message}");
+            Exit::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("velnor-gen: {error}");
+            Exit::from(2)
+        }
+    }
 }
 
 #[must_use]
@@ -251,113 +274,6 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
     let root = toplevel(path)?;
     let view = read_view(&root, false)?.0;
     Ok(Checkout { root, view })
-}
-
-type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
-
-fn view_from(
-    root: &Path,
-    tracked_paths: BTreeSet<RepoPath>,
-    symlinks: BTreeSet<RepoPath>,
-) -> Result<RepoView, Error> {
-    let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
-        .into_iter()
-        .filter(|path| !(symlinks.contains(path) && is_rust_source(path)))
-        .collect();
-    Ok(RepoView {
-        repository: identity::repository_name(root),
-        files: read_files(root, &wanted)?,
-        tracked_paths,
-        symlinks,
-        rust_metadata: BTreeMap::new(),
-    })
-}
-
-fn read_tracked(root: &Path) -> Result<RepoView, Error> {
-    let (tracked_paths, symlinks) = tracked(root)?;
-    view_from(root, tracked_paths, symlinks)
-}
-
-fn read_view(root: &Path, keep_metadata: bool) -> Result<Recorded, Error> {
-    let (tracked_paths, symlinks) = tracked(root)?;
-    view_of(root, tracked_paths, symlinks, keep_metadata)
-}
-
-pub fn view_of(
-    root: &Path,
-    tracked_paths: BTreeSet<RepoPath>,
-    symlinks: BTreeSet<RepoPath>,
-    keep_metadata: bool,
-) -> Result<Recorded, Error> {
-    let mut view = view_from(root, tracked_paths, symlinks)?;
-    let mut recorded = BTreeMap::new();
-    // Manifests under the samples folder are recorded data, never roots of the checkout.
-    let sample_prefix = format!("{SAMPLES}/");
-    let roots = metadata_roots(&view).map_err(Error::Detect)?;
-    for manifest in roots
-        .into_iter()
-        .filter(|manifest| !manifest.as_str().starts_with(&sample_prefix))
-    {
-        let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
-            *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
-        });
-        if known {
-            continue;
-        }
-        let output = cargo_metadata(root, &manifest)?;
-        let (workspace, metadata) = reduce_metadata(root, &output).map_err(Error::Metadata)?;
-        if keep_metadata {
-            recorded.insert(workspace.clone(), output);
-        }
-        view.rust_metadata.insert(workspace, metadata);
-    }
-    let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
-    view.files.extend(read_files(root, &roots)?);
-    for source in build_script_sources(&view) {
-        view.files
-            .extend(read_files(root, std::slice::from_ref(&source))?);
-    }
-    add_manifests(&mut view, |paths| read_files(root, paths))?;
-    Ok((view, recorded))
-}
-
-pub fn add_manifests(
-    view: &mut RepoView,
-    read: impl FnOnce(&[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error>,
-) -> Result<(), Error> {
-    for (manifest, bytes) in read(&manifests(&view.tracked_paths))? {
-        view.files.entry(manifest).or_insert(bytes);
-    }
-    Ok(())
-}
-
-pub fn read_files(root: &Path, paths: &[RepoPath]) -> Result<BTreeMap<RepoPath, Vec<u8>>, Error> {
-    let mut files = BTreeMap::new();
-    for path in paths {
-        if let Some(file) = regular_file(root, path)? {
-            let bytes = fs::read(&file).map_err(|e| Error::File(file, e))?;
-            files.insert(path.clone(), bytes);
-        }
-    }
-    Ok(files)
-}
-
-fn regular_file(root: &Path, path: &RepoPath) -> Result<Option<PathBuf>, Error> {
-    let parts: Vec<&str> = path.as_str().split('/').collect();
-    let mut current = root.to_path_buf();
-    for (index, part) in parts.iter().enumerate() {
-        current.push(part);
-        let metadata = match fs::symlink_metadata(&current) {
-            Ok(metadata) => metadata,
-            Err(error) if error.kind() == ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(Error::File(current, error)),
-        };
-        let last = index + 1 == parts.len();
-        if (last && !metadata.is_file()) || (!last && !metadata.is_dir()) {
-            return Err(Error::NotRegular(path.clone()));
-        }
-    }
-    Ok(Some(current))
 }
 
 fn program(directory: &Path, name: &str, args: &[&OsStr]) -> Result<Vec<u8>, Error> {

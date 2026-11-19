@@ -3,10 +3,28 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::{CheckoutScope, RepoPath, RepoView};
-use velnor_rust::{bytes_outside_lanes, detect};
+use velnor_model::{CheckoutScope, FullRun, OnMain, RepoPath, RepoView};
+use velnor_rust::{
+    bytes_outside_lanes, detect, silent_build_scripts, suggest_groups as suggested_groups,
+};
 
 use crate::{GenerateError, SPARSE_HINT_HELPER};
+
+pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
+
+pub fn notes(view: &RepoView) -> Result<Vec<String>, GenerateError> {
+    let config = detect(view)?.config;
+    let blind = config.on_main == OnMain::Affected && config.full_run == FullRun::Off;
+    Ok(blind
+        .then(|| NO_FULL_RUN_NOTE.to_owned())
+        .into_iter()
+        .chain(
+            silent_build_scripts(view)
+                .iter()
+                .map(velnor_rust::SilentBuildScript::note),
+        )
+        .collect())
+}
 
 pub const SPARSE_SUGGESTION_BYTES: u64 = 100 * 1024 * 1024;
 
@@ -29,4 +47,9 @@ pub fn sparse_note(
                 SPARSE_HINT_HELPER.2
             )
         }))
+}
+
+pub fn suggest_groups(view: &RepoView) -> Result<(String, Vec<String>), GenerateError> {
+    let facts = detect(view)?;
+    Ok((suggested_groups(&facts), facts.timings_notes))
 }
