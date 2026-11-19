@@ -994,6 +994,8 @@ executor = "hosted"
 id = "generator-samples"
 task = "lint-generator-samples"
 inputs = [
+  "generator/samples/declared-workflow/expected/.github/workflows/preview-authority.yml",
+  "generator/samples/declared-workflow/expected/.github/workflows/rust-ci.yml",
   "generator/samples/full-run-cron/expected/.github/workflows/rust-ci.yml",
   "generator/samples/full-run-nightly/expected/.github/workflows/rust-ci.yml",
   "generator/samples/full-run-off/expected/.github/workflows/rust-ci.yml",
@@ -1009,6 +1011,8 @@ inputs = [
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/release.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/reusable-workflows/expected/.github/workflows/native-checks.yml",
+  "generator/samples/reusable-workflows/expected/.github/workflows/rust-ci.yml",
   "generator/samples/policy-lane/expected/.github/workflows/rust-ci.yml",
   "generator/samples/private-deps/expected/.github/workflows/rust-ci.yml",
   "generator/samples/on-main-everything/expected/.github/workflows/rust-ci.yml",

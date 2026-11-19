@@ -950,6 +950,7 @@ dependencies = [
  "velnor-release",
  "velnor-render",
  "velnor-rust",
+ "velnor-workflows",
 ]
 
 [[package]]
@@ -973,6 +974,7 @@ dependencies = [
  "serde_json",
  "velnor-model",
  "velnor-release",
+ "velnor-workflows",
 ]
 
 [[package]]
@@ -985,6 +987,14 @@ dependencies = [
  "toml",
  "url",
  "velnor-model",
+]
+
+[[package]]
+name = "velnor-workflows"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "toml",
 ]
 
 [[package]]

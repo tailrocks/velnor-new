@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{RenderedJob, RenderedMatrix, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 
@@ -65,10 +65,14 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
             ),
         ));
     }
-    items.extend([
-        entry("runs-on", runs_on(job)),
-        entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
-    ]);
+    items.push(entry("runs-on", runs_on(job)));
+    if let Some(matrix) = &job.matrix {
+        items.push(entry("strategy", yaml_matrix(matrix)));
+    }
+    items.extend([entry(
+        "timeout-minutes",
+        Yaml::Int(u64::from(job.timeout_minutes)),
+    )]);
     items.extend([entry(
         "steps",
         Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
@@ -77,6 +81,21 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
+}
+
+fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
+    let mut items = Vec::new();
+    if let Some(fail_fast) = matrix.fail_fast {
+        items.push(entry("fail-fast", Yaml::Bool(fail_fast)));
+    }
+    if let Some(max_parallel) = matrix.max_parallel {
+        items.push(entry("max-parallel", Yaml::Int(u64::from(max_parallel))));
+    }
+    items.push(entry(
+        "matrix",
+        Yaml::Expr(format!("${{{{ fromJSON({}) }}}}", matrix.from_output)),
+    ));
+    Yaml::Map(items)
 }
 
 fn runs_on(job: &RenderedJob) -> Yaml {
