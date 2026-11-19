@@ -20,12 +20,6 @@ const EXPECTED_TARGETS: [&str; 3] = [
     "x86_64-apple-darwin",
 ];
 
-pub fn validate_qualification_manifest(path: &std::path::Path) -> Result<(), String> {
-    manifest::read(path)
-        .map(|_| ())
-        .map_err(|error| format!("candidate manifest validation: {error}"))
-}
-
 pub fn validate_qualification_output_bindings(
     manifest_path: &std::path::Path,
     workflow_root: &std::path::Path,
