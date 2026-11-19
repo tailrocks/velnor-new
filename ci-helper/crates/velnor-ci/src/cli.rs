@@ -68,6 +68,10 @@ pub enum Command {
     )]
     Fetch(FetchArgs),
     #[command(
+        about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY and its head sha is the queue entry's sha. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork, a sha mismatch or anything else, so that no token is created"
+    )]
+    PrivateTokenAllowed,
+    #[command(
         about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
     )]
     MbxStore,

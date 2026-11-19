@@ -7,13 +7,39 @@ use crate::release_steps::{APP_TOKEN_COMMIT, APP_TOKEN_VERSION, shell_word};
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 
 pub(crate) const TOKEN_STEP: &str = "private-token";
-const FORK_FREE: &str = "${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}";
+pub(crate) const CHECK_STEP: &str = "private-check";
+const TOKEN_ALLOWED: &str = "${{ (github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true') || (github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)) }}";
 
 pub(crate) fn render(kind: &StepKind) -> RenderedStep {
     match kind {
+        StepKind::PrivateCheck { .. } => check(),
         StepKind::PrivateToken { sources, .. } => token(sources),
         StepKind::PrivateFetch { manifests, .. } => fetch(manifests),
         _ => RenderedStep::default(),
+    }
+}
+
+fn check() -> RenderedStep {
+    RenderedStep {
+        id: Some(CHECK_STEP.to_owned()),
+        name: "Check that the merge queue entry is not from a fork".to_owned(),
+        condition: Some("${{ github.event_name == 'merge_group' }}".to_owned()),
+        env: vec![
+            (
+                "GITHUB_TOKEN".to_owned(),
+                Value::Expr("${{ github.token }}".to_owned()),
+            ),
+            (
+                "VELNOR_API_URL".to_owned(),
+                Value::Expr("${{ github.api_url }}".to_owned()),
+            ),
+            (
+                "VELNOR_MERGE_GROUP_HEAD_REF".to_owned(),
+                Value::Expr("${{ github.event.merge_group.head_ref }}".to_owned()),
+            ),
+        ],
+        run: Some("velnor-ci private-token-allowed".to_owned()),
+        ..RenderedStep::default()
     }
 }
 
@@ -21,7 +47,7 @@ fn token(sources: &PrivateSources) -> RenderedStep {
     RenderedStep {
         id: Some(TOKEN_STEP.to_owned()),
         name: "Create a read-only token for the private repositories".to_owned(),
-        condition: Some(FORK_FREE.to_owned()),
+        condition: Some(TOKEN_ALLOWED.to_owned()),
         uses: Some(format!("{APP_TOKEN_ACTION}@{APP_TOKEN_COMMIT}")),
         uses_comment: Some(APP_TOKEN_VERSION.to_owned()),
         with: vec![

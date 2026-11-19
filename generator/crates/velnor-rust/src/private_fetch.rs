@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CacheKey, CargoCommand, Job, PrivateSources, RepoPath, RootSlug, Step, StepKind,
+    Access, CacheKey, CargoCommand, Job, PermissionScope, PrivateSources, RepoPath, RootSlug, Step,
+    StepKind,
 };
 
 use crate::plan::step;
@@ -28,6 +29,9 @@ pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
             .collect();
         let gate = job.steps[first].gate.clone();
         let phase = [
+            StepKind::PrivateCheck {
+                cached: cached.clone(),
+            },
             StepKind::PrivateToken {
                 sources: sources.clone(),
                 cached: cached.clone(),
@@ -39,6 +43,9 @@ pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
             ..step(kind)
         });
         job.steps.splice(first..first, phase);
+        job.permissions
+            .0
+            .insert(PermissionScope::PullRequests, Access::Read);
     }
 }
 

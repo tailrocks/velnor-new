@@ -4,6 +4,7 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use crate::cli::FetchArgs;
 use crate::error::CiError;
@@ -35,7 +36,10 @@ pub(super) fn fetch(args: &FetchArgs) -> Result<String, CiError> {
     let token = std::env::var(TOKEN_VARIABLE)
         .ok()
         .filter(|token| !token.is_empty());
-    let client = token.clone().map(api_client).transpose()?;
+    let client = token
+        .clone()
+        .map(|token| api_client(token, super::http::DEFAULT_TIMEOUT))
+        .transpose()?;
     let outcome = fetch_with(args, token.as_deref());
     let revocation = client.map_or(Ok(()), |github| {
         github.delete(REVOKE_PATH).map_err(|e| {
@@ -72,16 +76,12 @@ fn fetch_with(args: &FetchArgs, token: Option<&str>) -> Result<(), CiError> {
     )
 }
 
-fn api_client(token: String) -> Result<impl GitHubWrite, CiError> {
+pub(super) fn api_client(token: String, timeout: Duration) -> Result<impl GitHubWrite, CiError> {
     let api = std::env::var(API_VARIABLE)
         .ok()
         .filter(|api| api.starts_with("https://") || api.starts_with("http://127.0.0.1"))
         .ok_or_else(|| CiError::new(format!("set {API_VARIABLE} to github.api_url")))?;
-    Ok(super::http::HttpGitHub::new(
-        api,
-        token,
-        super::http::DEFAULT_TIMEOUT,
-    ))
+    Ok(super::http::HttpGitHub::new(api, token, timeout))
 }
 
 fn run_fetches(

@@ -55,12 +55,13 @@ fn assert_phase(
 ) -> TestResult {
     let compiling = cargo_commands(steps);
     assert_eq!(token + 1, fetch);
+    let check = token.checked_sub(1).ok_or("no step before the token")?;
     assert!(compiling.iter().all(|index| *index > fetch), "{job}");
     for (index, step) in steps.iter().enumerate() {
         let rendered = step.to_string();
         assert_eq!(
             rendered.contains("private-token"),
-            index == fetch || index == token,
+            index == fetch || index == token || index == check,
             "{rendered}"
         );
         assert_eq!(
@@ -230,7 +231,7 @@ fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches(
             .filter_map(|s| s["id"].as_str())
             .filter(|id| id.starts_with("sources_"))
             .collect();
-        let guards = [&steps[token], &steps[token + 1]]
+        let guards = [&steps[token], &steps[token + 1], &steps[token - 1]]
             .map(|step| step["if"].as_str().unwrap_or_default().to_owned());
         if restores.is_empty() {
             assert!(guards.iter().all(|g| !g.contains("cache-hit")), "{job}");
@@ -250,6 +251,7 @@ fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches(
             assert!(misses(guard, &[])?, "{guard}");
         }
         assert!(guards[0].contains("head.repo.full_name == github.repository"));
+        assert_eq!(steps[token - 1]["id"], "private-check", "{job}");
     }
     assert!(checked > 0, "{text}");
     Ok(())
@@ -293,5 +295,53 @@ fn the_dependency_policy_job_fetches_before_cargo_deny_resolves_the_graph() -> T
         }
     }
     assert_eq!(checked, 1, "{text}");
+    Ok(())
+}
+
+#[test]
+fn a_merge_queue_entry_gets_the_token_only_when_the_check_before_it_allows_it() -> TestResult {
+    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.86")?;
+    let text = workflow(&repo)?;
+    let mut checked = 0;
+    for job in jobs(&text)? {
+        let steps = job["steps"].as_array().ok_or("steps missing")?;
+        let Some(token) = steps.iter().position(|s| s["id"] == "private-token") else {
+            continue;
+        };
+        checked += 1;
+        let check = steps
+            .iter()
+            .position(|s| s["id"] == "private-check")
+            .ok_or("no check step")?;
+        assert_eq!(check + 1, token, "{job}");
+        let check = &steps[check];
+        let run = check["run"].as_str().ok_or("check run missing")?;
+        assert!(run.ends_with("private-token-allowed"), "{run}");
+        assert_eq!(
+            check["if"].as_str().map(|g| g.contains("'merge_group'")),
+            Some(true)
+        );
+        assert_eq!(
+            check["env"]["VELNOR_MERGE_GROUP_HEAD_REF"],
+            "${{ github.event.merge_group.head_ref }}"
+        );
+        assert_eq!(check["env"]["GITHUB_TOKEN"], "${{ github.token }}");
+        assert_eq!(check["env"]["VELNOR_API_URL"], "${{ github.api_url }}");
+        assert!(
+            !check.to_string().contains("DEPS_APP_PRIVATE_KEY"),
+            "{check}"
+        );
+        let guard = steps[token]["if"].as_str().ok_or("token guard missing")?;
+        assert!(
+            guard.contains("github.event_name == 'merge_group' && steps.private-check.outputs.allowed == 'true'"),
+            "{guard}"
+        );
+        assert!(
+            guard.contains("github.event_name != 'merge_group' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)"),
+            "{guard}"
+        );
+        assert_eq!(job["permissions"]["pull-requests"], "read", "{job}");
+    }
+    assert!(checked > 0, "{text}");
     Ok(())
 }

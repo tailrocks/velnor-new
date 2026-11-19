@@ -31,12 +31,17 @@ fn script(path: &Path, body: &str) -> TestResult {
     Ok(())
 }
 
-struct Api {
-    url: String,
-    requests: Arc<Mutex<Vec<String>>>,
+pub(crate) struct Api {
+    pub(crate) url: String,
+    pub(crate) requests: Arc<Mutex<Vec<String>>>,
 }
 
 fn serve(status: u16) -> Result<Api, Box<dyn Error>> {
+    serve_body(status, "")
+}
+
+pub(crate) fn serve_body(status: u16, body: &str) -> Result<Api, Box<dyn Error>> {
+    let body = body.to_owned();
     let listener = TcpListener::bind("127.0.0.1:0")?;
     let url = format!("http://{}", listener.local_addr()?);
     let requests = Arc::new(Mutex::new(Vec::new()));
@@ -59,7 +64,8 @@ fn serve(status: u16) -> Result<Api, Box<dyn Error>> {
             drop(
                 stream.write_all(
                     format!(
-                        "HTTP/1.1 {status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        "HTTP/1.1 {status} X\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+                        body.len()
                     )
                     .as_bytes(),
                 ),

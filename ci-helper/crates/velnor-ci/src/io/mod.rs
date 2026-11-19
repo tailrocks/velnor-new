@@ -22,6 +22,7 @@ mod http;
 mod inputs;
 mod manifests;
 mod plan;
+mod private_check;
 pub mod pump;
 mod recording;
 mod release;
@@ -181,6 +182,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
         Command::Fetch(args) => fetch::fetch(&args),
+        Command::PrivateTokenAllowed => private_check::run(),
         Command::MbxStore => crate::mbx_store::setup(),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
