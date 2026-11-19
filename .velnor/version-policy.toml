@@ -24,11 +24,11 @@ max_exception_days = 14
 mise = "2026.11.1"
 rust = "1.99.1"
 mr-boxington = "1.29.2"
-gh = "2.103.3"
+gh = "2.104.0"
 jactionlint = "2.4.0"
 shellcheck = "0.11.0"
 nextest = "0.9.151"
-opentofu = "1.13.8"
+opentofu = "1.13.9"
 release-plz = "0.4.3"
 crane = "0.22.1"
 bun = "1.4.4"
@@ -40,9 +40,9 @@ supported = ["ubuntu-26.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.2.6"
-sha = "f5be966e4a917d54244728e6a5fdcd1d93a35e6c"
-reviewed = "2026-11-03"
+version = "v5.2.9"
+sha = "236a21c3b91f5db6d4e174b348674a0f0caac06d"
+reviewed = "2026-11-19"
 
 [[actions]]
 name = "actions/checkout"
@@ -82,9 +82,9 @@ reviewed = "2026-10-26"
 
 [[actions]]
 name = "asamarts/alint"
-version = "v0.21.0"
-sha = "d61e4c802b02ac811224b35c59a62cfe5176f4d0"
-reviewed = "2026-11-02"
+version = "v0.22.1"
+sha = "5054852d00d47affc9ea71440240147d9999f4d3"
+reviewed = "2026-11-19"
 
 [[actions]]
 name = "aws-actions/configure-aws-credentials"
@@ -109,9 +109,9 @@ reviewed = "2026-10-20"
 
 [[actions]]
 name = "actions/create-github-app-token"
-version = "v3.3.0"
-sha = "64ab729a6294000f5aa4a4bc0b73d1f32bc45510"
-reviewed = "2026-10-18"
+version = "v3.4.0"
+sha = "f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc"
+reviewed = "2026-11-18"
 
 [[actions]]
 name = "actions/github-script"

@@ -11,7 +11,7 @@ members = [
     "crates/velnor-actions-workflow-renderer",
     "crates/velnor-actions-orchestrator",
     "crates/velnor-actions-cli",
-    "crates/velnor-actions-freshness",
+    "crates/velnor-freshness",
     "crates/velnor-actions-tofu",
     "crates/velnor-actions-ansible",
     "crates/velnor-actions-bun",
@@ -31,7 +31,7 @@ thiserror = { version = "=2.0.21" }
 [workspace.package]
 edition = "2024"
 rust-version = "1.99"
-version = "0.1.81"
+version = "0.1.82"
 license = "Apache-2.0"
 
 [workspace.lints.rust]

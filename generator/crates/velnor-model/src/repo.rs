@@ -6,7 +6,8 @@ use std::fmt;
 
 use crate::cron::CronExpr;
 use crate::helper::HelperRelease;
-use crate::ids::{JobId, PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
+use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
+use crate::lint::LintJob;
 use crate::plan::Shape;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -56,6 +57,7 @@ pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
     pub rename: Option<String>,
@@ -101,6 +103,7 @@ pub struct RepoFacts {
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
+    pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
     pub weakenings: Vec<Weakening>,
@@ -214,6 +217,7 @@ pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: RepoPath,
 }
 
@@ -246,6 +250,9 @@ pub struct RustCiConfig {
     pub runner: RunnerLabel,
     pub fork_runner: RunnerLabel,
     pub crates_mirror: Option<CratesMirror>,
+    pub private_sources: Option<PrivateSources>,
+    pub mbx_store: MbxStore,
+    pub docs_run: DocsRun,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -256,6 +263,7 @@ pub struct RustCiConfig {
     pub nextest_harnesses: Vec<(PackageName, TargetName)>,
     pub default_branch: String,
     pub skip_draft_pull_requests: bool,
+    pub pr_ci: PrCi,
     pub on_main: OnMain,
     pub full_run: FullRun,
     pub helper: Option<RepoPath>,
@@ -263,7 +271,10 @@ pub struct RustCiConfig {
     pub cache_budget_bytes: u64,
     pub cache_check_blocks: bool,
     pub cache_debug: CacheDebug,
+    pub mbx_remote: MbxRemote,
+    pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
 }
 
@@ -274,49 +285,7 @@ pub struct TestSetup {
     pub run: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TestGroup {
-    pub name: JobId,
-    pub filter: String,
-    pub needs: Vec<TestNeed>,
-    pub test_threads: Option<u16>,
-    pub timeout_minutes: Option<u16>,
-    pub runner: Option<RunnerLabel>,
-    pub paths: Vec<PathGlob>,
-    pub events: Vec<GroupEvent>,
-    pub root: GroupRoot,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum TestNeed {
-    Docker,
-    Cargo,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GroupEvent {
-    PullRequest,
-    Push,
-    MergeGroup,
-    Schedule,
-    WorkflowDispatch,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GroupRoot {
-    OnlyRoot,
-    Folder(Option<RepoPath>),
-}
-
-impl TestGroup {
-    #[must_use]
-    pub fn belongs_to(&self, root: &RustRoot, root_count: usize) -> bool {
-        match &self.root {
-            GroupRoot::OnlyRoot => root_count == 1,
-            GroupRoot::Folder(folder) => *folder == root.manifest.parent(),
-        }
-    }
-}
+use crate::test_group::TestGroup;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnMain {
@@ -334,6 +303,34 @@ pub enum FullRun {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MbxRemote {
+    Off,
+    GithubActions,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushAfterMergeGroup {
+    Run,
+    SkipWhenQueueRunPassed,
+}
+
+impl From<bool> for PushAfterMergeGroup {
+    fn from(skip: bool) -> Self {
+        if skip {
+            Self::SkipWhenQueueRunPassed
+        } else {
+            Self::Run
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrCi {
+    Always,
+    Label,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheDebug {
     Off,
     On,
@@ -342,6 +339,24 @@ pub enum CacheDebug {
 impl From<bool> for CacheDebug {
     fn from(on: bool) -> Self {
         if on { Self::On } else { Self::Off }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DocsRun {
+    Always,
+    PostMerge,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MbxStore {
+    Private,
+    Shared,
+}
+
+impl From<bool> for MbxStore {
+    fn from(shared: bool) -> Self {
+        if shared { Self::Shared } else { Self::Private }
     }
 }
 
@@ -364,6 +379,9 @@ impl Default for RustCiConfig {
             runner: RunnerLabel::from_static("ubuntu-latest"),
             fork_runner: RunnerLabel::from_static("ubuntu-latest"),
             crates_mirror: None,
+            private_sources: None,
+            mbx_store: MbxStore::Private,
+            docs_run: DocsRun::Always,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),
@@ -374,6 +392,7 @@ impl Default for RustCiConfig {
             nextest_harnesses: Vec::new(),
             default_branch: "main".to_owned(),
             skip_draft_pull_requests: false,
+            pr_ci: PrCi::Always,
             on_main: OnMain::Affected,
             full_run: FullRun::Nightly,
             helper: None,
@@ -381,7 +400,10 @@ impl Default for RustCiConfig {
             cache_budget_bytes: 8_000_000_000,
             cache_check_blocks: false,
             cache_debug: CacheDebug::Off,
+            mbx_remote: MbxRemote::Off,
+            push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            lint: Vec::new(),
             test_groups: Vec::new(),
         }
     }
@@ -392,4 +414,12 @@ pub struct CratesMirror {
     pub runner: RunnerLabel,
     pub registry: String,
     pub cainfo: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PrivateSources {
+    pub app_id: String,
+    pub private_key: String,
+    pub owner: String,
+    pub repositories: Vec<String>,
 }

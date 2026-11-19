@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use super::product_release_binary_hash_fixture::{install_shasum_double, sha256};
+use serde_json::from_str;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::Write as _;
@@ -8,9 +10,6 @@ use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-use super::product_release_binary_hash_fixture::{install_shasum_double, sha256};
-use serde_json::from_str;
 use tempfile::TempDir;
 use velnor_actions_contract::{RoutingWorkflow, Step, StepKind};
 use velnor_actions_workflow_renderer::render::RenderedFile;
@@ -113,9 +112,10 @@ impl BinaryReleaseFixture {
         fs::write(&build_log, "")?;
         fs::write(&shasum_log, "")?;
         copy_release_inputs(&workspace)?;
-
         let request = Schema2WorkflowRequest {
+            scale_set_jobs: std::collections::BTreeSet::new(),
             runner_image_family: None,
+            pr_ci: velnor_actions_contract::PrCiMode::Off,
             version: env!("CARGO_PKG_VERSION").to_owned(),
             hosted_label: "ubuntu-26.04".to_owned(),
             scale_set: Schema2WorkflowRequest::canonical_scale_set()?,

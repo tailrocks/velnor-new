@@ -34,6 +34,10 @@ doctest = false
 name = "velnor_runner_cli"
 path = "src/lib.rs"
 
+[[test]]
+name = "home_resolution_public"
+path = "tests/home_resolution_public.rs"
+
 [[bin]]
 name = "velnor-host"
 path = "src/main.rs"
