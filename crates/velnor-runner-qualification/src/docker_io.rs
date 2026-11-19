@@ -9,6 +9,9 @@ use futures_util::StreamExt;
 use crate::error::QualificationError as HostError;
 use crate::{OUTPUT_LIMIT, deadline};
 
+#[cfg(test)]
+mod log_frames_tests;
+
 pub(super) async fn wait_success(
     docker: &bollard::Docker,
     id: &str,
@@ -35,7 +38,7 @@ pub(super) async fn wait_success(
 
 const RAW_LIMIT: usize = 64 * 1024;
 
-pub async fn read_logs(
+pub(super) async fn read_logs(
     docker: &bollard::Docker,
     id: &str,
     timeout: Duration,

@@ -10,7 +10,7 @@ use std::io::{Read, Write};
 use std::os::unix::net::UnixListener;
 use std::time::Duration;
 
-use velnor_runner_qualification::read_logs;
+use crate::docker_io::read_logs;
 
 fn frame(kind: u8, payload: &[u8]) -> Vec<u8> {
     let mut bytes = vec![kind, 0, 0, 0];
@@ -19,7 +19,7 @@ fn frame(kind: u8, payload: &[u8]) -> Vec<u8> {
     bytes
 }
 
-fn logs(body: Vec<u8>) -> Result<Vec<u8>, velnor_runner_qualification::QualificationError> {
+fn logs(body: Vec<u8>) -> Result<Vec<u8>, crate::error::QualificationError> {
     let directory = std::fs::canonicalize(std::env::temp_dir())
         .unwrap()
         .join(format!("lf{}", rand_tag()));
