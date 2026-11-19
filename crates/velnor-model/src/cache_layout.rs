@@ -21,7 +21,8 @@ pub enum CacheKeySegment {
     Mise,
     Commit,
     RunId,
-    DeltaBase,
+    PullRequest,
+    DeltaBase(RootSlug),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -49,15 +50,26 @@ impl CacheKeySegment {
 
 impl CacheKey {
     #[must_use]
+    pub const fn tag(&self) -> &'static str {
+        match self {
+            Self::Tools { .. } => "tools",
+            Self::Sources { .. } => "src",
+            Self::Target { .. } => "tgt",
+            Self::Delta { .. } => "dlt",
+        }
+    }
+
+    #[must_use]
     pub fn layout(&self) -> CacheKeyLayout {
         use CacheKeySegment::{
-            Commit, Compat, DeltaBase, Host, Lock, Mise, RunId, SourcesLocks, TargetOwner, Text,
+            Commit, Compat, DeltaBase, Host, Lock, Mise, PullRequest, RunId, SourcesLocks,
+            TargetOwner, Text,
         };
         let (segments, fallback_lengths): (Vec<_>, &'static [usize]) = match self {
             Self::Tools { .. } => (
                 vec![
                     Text("velnor".into()),
-                    Text("tools".into()),
+                    Text(self.tag().into()),
                     Host,
                     Mise,
                     Lock(RepoPath::from_static("mise.lock")),
@@ -67,7 +79,7 @@ impl CacheKey {
             Self::Sources { .. } => (
                 vec![
                     Text("velnor".into()),
-                    Text("src".into()),
+                    Text(self.tag().into()),
                     Host,
                     Text(SHARED_SOURCES_OWNER.into()),
                     SourcesLocks,
@@ -77,7 +89,7 @@ impl CacheKey {
             Self::Target { job, root, .. } => (
                 vec![
                     Text("velnor".into()),
-                    Text("tgt".into()),
+                    Text(self.tag().into()),
                     TargetOwner {
                         job: job.clone(),
                         root: root.slug().clone(),
@@ -92,15 +104,17 @@ impl CacheKey {
             Self::Delta { job, root, .. } => (
                 vec![
                     Text("velnor".into()),
-                    Text("dlt".into()),
-                    Text(job.to_string()),
-                    Text(root.slug().to_string()),
-                    Host,
+                    Text(self.tag().into()),
+                    PullRequest,
+                    TargetOwner {
+                        job: job.clone(),
+                        root: root.slug().clone(),
+                    },
                     Compat,
-                    DeltaBase,
+                    DeltaBase(root.slug().clone()),
                     RunId,
                 ],
-                &[7],
+                &[6],
             ),
         };
         CacheKeyLayout {

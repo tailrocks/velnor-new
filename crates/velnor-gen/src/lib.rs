@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 pub mod cli;
+mod delta_cache;
 mod drifts;
 mod error;
 mod helper_gate;
 pub mod io;
+mod plan_render;
 mod release;
 mod reusable;
 mod workflow_triggers;
@@ -20,12 +22,14 @@ pub use velnor_workflows::HELPER_COMMANDS;
 use std::collections::BTreeMap;
 use std::io::Write;
 
-use velnor_model::{FullRun, OnMain, RepoPath, RepoView};
+use velnor_model::{CacheKey, FullRun, OnMain, RepoPath, RepoView, StepKind};
 use velnor_render::render;
 use velnor_rust::{
-    METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
-    silent_build_scripts, source_roots_over_limit, suggest_groups as suggested_groups,
+    METADATA_PATH, check_tools, detect, metadata_file, silent_build_scripts,
+    source_roots_over_limit, suggest_groups as suggested_groups,
 };
+
+use crate::plan_render::plan_and_render;
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
@@ -79,16 +83,24 @@ pub fn expected_with_notes(
     if let Some(roots) = source_roots_over_limit(&facts) {
         return Err(GenerateError::TooManySourceRoots(roots));
     }
-    let plan = plan(&facts);
-    check_required_check(&facts, &plan)?;
-    let mut files = render(&plan).map_err(GenerateError::Rules)?;
+    let (plan, mut files, budget_notes) = plan_and_render(view, &facts)?;
     files.extend(reusable::reusable_workflows(view, helper)?);
+    if plan
+        .jobs
+        .iter()
+        .flat_map(|job| &job.steps)
+        .any(|step| matches!(step.kind, StepKind::CacheSave(CacheKey::Delta { .. })))
+        && let Some(cleanup) = velnor_render::delta_cleanup(helper, &plan.name)
+    {
+        files.insert(velnor_render::DELTA_CLEANUP_PATH, cleanup);
+    }
     let (release, release_notes) = release::release_workflow(view, &facts, helper, &files)?;
     files.extend(release);
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
     notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
+    notes.extend(budget_notes);
     Ok((files, notes))
 }
 

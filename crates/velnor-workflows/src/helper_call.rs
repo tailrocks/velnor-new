@@ -3,7 +3,7 @@
 
 use crate::expression::is_identifier;
 
-pub const HELPER_COMMANDS: [&str; 37] = [
+pub const HELPER_COMMANDS: [&str; 38] = [
     "report",
     "bench",
     "inputs",
@@ -28,6 +28,7 @@ pub const HELPER_COMMANDS: [&str; 37] = [
     "lane-guard",
     "test-groups",
     "restored",
+    "delta",
     "image",
     "cache",
     "run",
