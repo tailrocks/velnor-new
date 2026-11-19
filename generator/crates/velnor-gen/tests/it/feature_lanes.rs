@@ -154,12 +154,138 @@ fn a_feature_lane_that_is_not_one_safe_command_is_rejected() -> TestResult {
             "test_lane.filter",
         ),
         (format!("{LANE}extra = 1\n"), "extra"),
+        (format!("{LANE}lint = 'yes'\n"), "expected a boolean"),
+        (format!("{LANE}doc = 1\n"), "expected a boolean"),
     ] {
         let repo = view(&["Cargo.toml", "tools/Cargo.toml"], Some(config.as_bytes()))?;
         let error = workflow(&repo)
             .err()
             .ok_or_else(|| format!("the configuration was accepted: {config}"))?;
         assert!(error.to_string().contains(mention), "{config}: {error}");
+    }
+    Ok(())
+}
+
+const FULL_LANE: &str =
+    "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\nlint = true\ndoc = true\n";
+
+fn run_of(
+    jobs: &serde_json::Value,
+    name: &str,
+    job: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let found: Vec<_> = steps_named(jobs, name)
+        .into_iter()
+        .filter(|(id, ..)| id == job)
+        .collect();
+    assert_eq!(found.len(), 1, "{name} in {job}: {found:?}");
+    Ok(found[0].2["run"].as_str().ok_or("no run")?.to_owned())
+}
+
+#[test]
+fn a_lane_with_lint_and_doc_runs_clippy_and_rustdoc_with_the_features_in_the_same_job() -> TestResult
+{
+    let jobs = jobs_of(FULL_LANE)?;
+    let clippy = run_of(&jobs, "Lint (features: local-mode)", "rust-root")?;
+    let default_clippy = run_of(&jobs, "Lint", "rust-root")?;
+    assert_eq!(
+        clippy,
+        default_clippy.replace(" -- -D warnings", " --features 'local-mode' -- -D warnings"),
+        "the lane clippy is the default clippy plus the features"
+    );
+    assert!(!default_clippy.contains("--features"), "{default_clippy}");
+    let doc = run_of(&jobs, "Documentation (features: local-mode)", "rust-root")?;
+    let default_doc = run_of(&jobs, "Documentation", "rust-root")?;
+    assert_eq!(doc, format!("{default_doc} --features 'local-mode'"));
+    assert!(!default_doc.contains("--features"), "{default_doc}");
+    let lane = steps_named(&jobs, LANE_STEP);
+    assert_eq!(lane.len(), 1, "{lane:?}");
+    for name in [
+        "Lint (features: local-mode)",
+        "Documentation (features: local-mode)",
+    ] {
+        let step = &steps_named(&jobs, name)[0];
+        assert_eq!(step.2["working-directory"], lane[0].2["working-directory"]);
+    }
+    Ok(())
+}
+
+#[test]
+fn lint_and_doc_are_independent_and_default_to_off() -> TestResult {
+    let only_lint = jobs_of(&FULL_LANE.replace("doc = true\n", ""))?;
+    assert_eq!(
+        steps_named(&only_lint, "Lint (features: local-mode)").len(),
+        1
+    );
+    assert_eq!(
+        steps_named(&only_lint, "Documentation (features: local-mode)").len(),
+        0
+    );
+    let only_doc = jobs_of(&FULL_LANE.replace("lint = true\n", ""))?;
+    assert_eq!(
+        steps_named(&only_doc, "Lint (features: local-mode)").len(),
+        0
+    );
+    assert_eq!(
+        steps_named(&only_doc, "Documentation (features: local-mode)").len(),
+        1
+    );
+    let neither = jobs_of(LANE)?;
+    assert_eq!(
+        steps_named(&neither, "Lint (features: local-mode)").len(),
+        0
+    );
+    assert_eq!(
+        steps_named(&neither, "Documentation (features: local-mode)").len(),
+        0
+    );
+    let off = jobs_of(&format!("{LANE}lint = false\ndoc = false\n"))?;
+    assert_eq!(off, neither);
+    Ok(())
+}
+
+#[test]
+fn the_verdict_job_needs_the_job_that_runs_the_lane_checks() -> TestResult {
+    for shape in ["", "shape = 'groups'\n"] {
+        let jobs = jobs_of(&format!("{shape}{FULL_LANE}"))?;
+        let needs: Vec<_> = jobs["required"]["needs"]
+            .as_array()
+            .ok_or("no needs")?
+            .iter()
+            .filter_map(|need| need.as_str())
+            .collect();
+        for name in [
+            "Lint (features: local-mode)",
+            "Documentation (features: local-mode)",
+        ] {
+            let found = steps_named(&jobs, name);
+            assert_eq!(found.len(), 1, "{shape}{name}: {found:?}");
+            assert!(
+                needs.contains(&found[0].0.as_str()),
+                "{shape}{name}: {needs:?}"
+            );
+        }
+    }
+    Ok(())
+}
+
+#[test]
+fn in_every_shape_the_lane_checks_run_in_the_job_that_has_rust() -> TestResult {
+    for (shape, job) in [
+        ("one-job", "rust-root"),
+        ("lint-test", "rust-test-root"),
+        ("groups", "rust-test-root"),
+    ] {
+        let jobs = jobs_of(&format!("shape = '{shape}'\n{FULL_LANE}"))?;
+        for name in [
+            LANE_STEP,
+            "Lint (features: local-mode)",
+            "Documentation (features: local-mode)",
+        ] {
+            let found = steps_named(&jobs, name);
+            assert_eq!(found.len(), 1, "{shape} {name}: {found:?}");
+            assert_eq!(found[0].0, job, "{shape} {name}");
+        }
     }
     Ok(())
 }

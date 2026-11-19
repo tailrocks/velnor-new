@@ -3561,7 +3561,7 @@
     "generator/crates/velnor-render/Cargo.toml": "1e9ca9a4d844a19706fda946bf26199f5504c4df28a648744ae7dbc7ed41d3d0",
     "generator/crates/velnor-rust/Cargo.toml": "045ecdb81a82213da85f70eed353ece26939f117ec8055b8472ff960e37830e4",
     "generator/crates/velnor-workflows/Cargo.toml": "aba8d5129a681b5953e17129bfc73116de30ad20cddb29097f1e44a8a29952e0",
-    "local/Cargo.toml": "bd6ac606771cf64a687785d9f2174c07f3a2539ba18e103ae77813158355eb48",
+    "local/Cargo.toml": "0ae24916efc81311b855c477da4a63bc1ce462f588da7270fc75c66dd4a66079",
     "local/crates/velnor-cache-rules/Cargo.toml": "f3c549575677f1bb0241725787ea1458f5754cf0e36fa0dedc6ed18ece9996aa",
     "local/crates/velnor-local/Cargo.toml": "d6c37d4efee766f87f78e45ec36d93cc4d1d845ecb4117f0ec8b53d6eed51724"
   },
