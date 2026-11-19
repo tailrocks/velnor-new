@@ -45,6 +45,11 @@ pub struct ApiStubArgs {
         help = "Answer the download of tailrocks/velnor-new with the local variant of setup-velnor, which installs the velnor-ci that velnor-local mounted. `up` sets it with --velnor-ci-binary and nothing else does"
     )]
     pub local_setup_velnor: bool,
+    #[arg(
+        long,
+        help = "Serve cache listing and deletion on the job port as well, for workflows whose cache maintenance job calls `velnor-ci cache budget`. Any bearer token is accepted there, so a job of any scope can list and delete the caches of every scope. Without it only the control port serves them and the job port answers 403"
+    )]
+    pub job_cache_admin: bool,
     #[command(flatten)]
     pub control: ControlArgs,
 }

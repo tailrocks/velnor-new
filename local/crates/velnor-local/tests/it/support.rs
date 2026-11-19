@@ -185,6 +185,22 @@ impl Stub {
         Self::build(repo, dir, cache_dir, false)
     }
 
+    /// A stub started with `--job-cache-admin`.
+    pub(crate) fn job_cache_admin(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
+        let mut stub = Self::build(repo, dir, cache_dir, false);
+        stub.stub = ApiStub::new(ApiStubConfig {
+            repo: repo.to_owned(),
+            dir: dir.to_owned(),
+            cache_dir: cache_dir.to_owned(),
+            default_branch: "main".to_owned(),
+            diff_limit_bytes: 1 << 20,
+            standin: None,
+            local_setup: false,
+            job_cache_admin: true,
+        });
+        stub
+    }
+
     pub(crate) fn local_setup(repo: &Path, dir: &Path, cache_dir: &Path) -> Self {
         Self::build(repo, dir, cache_dir, true)
     }
@@ -200,6 +216,7 @@ impl Stub {
                 diff_limit_bytes: 1 << 20,
                 standin: None,
                 local_setup,
+                job_cache_admin: false,
             }),
         }
     }
@@ -216,6 +233,7 @@ impl Stub {
                 diff_limit_bytes: 1 << 20,
                 standin: Some(standin),
                 local_setup: false,
+                job_cache_admin: false,
             }),
         }
     }
@@ -226,12 +244,23 @@ impl Stub {
     }
 
     pub(crate) async fn call(&self, method: &str, path_and_query: &str) -> Reply {
+        self.call_with(method, path_and_query, None).await
+    }
+
+    /// A call that carries `bearer` as the `Authorization` token, as a job's helper does.
+    pub(crate) async fn call_as(&self, method: &str, path_and_query: &str, bearer: &str) -> Reply {
+        self.call_with(method, path_and_query, Some(bearer)).await
+    }
+
+    async fn call_with(&self, method: &str, path_and_query: &str, bearer: Option<&str>) -> Reply {
         let mut request = Request::builder()
             .method(method)
             .uri(path_and_query)
             .header("host", "api.localhost");
         if self.control {
             request = request.header("authorization", "Bearer test-control");
+        } else if let Some(bearer) = bearer {
+            request = request.header("authorization", format!("Bearer {bearer}"));
         }
         let request = request
             .body(

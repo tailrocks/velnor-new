@@ -61,6 +61,11 @@ pub struct EnvironmentArgs {
         help = "Runner label to register besides the built-in ubuntu-* ones, so a workflow whose runs-on names another label (for example ubuntu-26.04-scale-set) runs unchanged; repeatable or comma separated; letters, digits, '.', '_' and '-' only"
     )]
     pub label: Vec<String>,
+    #[arg(
+        long,
+        help = "Start the API stub with --job-cache-admin: jobs can list and delete the cache entries of every scope through the GitHub cache API, which the cache maintenance job of a workflow needs (`velnor-ci cache budget`). Off by default: the job port then refuses both with 403 and only the control port serves them"
+    )]
+    pub job_cache_admin: bool,
 }
 
 pub fn runner_label(text: &str) -> Result<String, String> {
@@ -88,6 +93,7 @@ impl Default for EnvironmentArgs {
             velnor_host: None,
             velnor_ci_binary: None,
             label: Vec::new(),
+            job_cache_admin: false,
         }
     }
 }

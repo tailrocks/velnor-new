@@ -59,3 +59,31 @@ async fn a_plain_runner_registers_the_extra_labels() {
         "{registrations:?}"
     );
 }
+
+#[tokio::test]
+async fn the_api_stub_serves_job_cache_administration_only_when_asked() {
+    for (asked, expected) in [(false, false), (true, true)] {
+        let dir = temp_dir(&format!("environment-job-cache-admin-{asked}"));
+        let docker = FakeDocker::default();
+        let env = Environment::at(&dir, &docker)
+            .await
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        let args = EnvironmentArgs {
+            job_cache_admin: asked,
+            ..plain(&dir)
+        };
+        assert!(env.up(&dir, &args).await.is_err());
+        let stubs: Vec<String> = docker
+            .started()
+            .iter()
+            .filter(|call| call.iter().any(|arg| arg == "api-stub"))
+            .map(|call| call.join(" "))
+            .collect();
+        assert_eq!(stubs.len(), 1, "{stubs:?}");
+        assert_eq!(
+            stubs[0].contains("--job-cache-admin"),
+            expected,
+            "{stubs:?}"
+        );
+    }
+}

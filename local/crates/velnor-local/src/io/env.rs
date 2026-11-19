@@ -170,11 +170,16 @@ impl<E: Engine> Environment<E> {
             LOCAL_IMAGE,
         ];
         let branch = ["--default-branch", &args.default_branch];
+        let admin: &[&str] = if args.job_cache_admin {
+            &["--job-cache-admin"]
+        } else {
+            &[]
+        };
         self.start(
             "api",
             "run -d --network-alias api-stub -p 127.0.0.1::81 -e GIT_CONFIG_COUNT=1 \
              -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=*",
-            &[&mounts[..], &stub, &branch, &strs(&local.stub)[..]].concat(),
+            &[&mounts[..], &stub, &branch, admin, &strs(&local.stub)[..]].concat(),
         )
         .await?;
         if args.fork_runners > 0 {

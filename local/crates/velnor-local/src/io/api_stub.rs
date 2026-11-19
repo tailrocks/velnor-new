@@ -37,6 +37,9 @@ pub struct ApiStubConfig {
     pub diff_limit_bytes: usize,
     pub standin: Option<std::sync::Arc<dyn StandIn>>,
     pub local_setup: bool,
+    /// Serve the cache list and delete on the job port too. Off, only the control port serves
+    /// them (#1208), so a job cannot touch the caches of another scope.
+    pub job_cache_admin: bool,
 }
 
 #[derive(Debug)]
@@ -67,7 +70,8 @@ impl ApiStub {
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {
         let route = rest::route(request.method().as_str(), request.uri().path());
-        if matches!(route, Api::CacheList | Api::CacheDelete { .. }) {
+        if !self.config.job_cache_admin && matches!(route, Api::CacheList | Api::CacheDelete { .. })
+        {
             return super::json_response(
                 403,
                 &json!({"message": "this path is served only on the control port"}),
