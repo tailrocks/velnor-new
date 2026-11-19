@@ -29,6 +29,7 @@ pub(crate) fn member(package: &str, directory: &str, dependencies: &[(&str, &str
                 name: name(package),
                 kind: DependencyKind::Normal,
                 platform: None,
+                optional: false,
                 manifest: path(&format!("{directory}/Cargo.toml")),
             })
             .collect(),
@@ -78,8 +79,10 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         timings: BTreeMap::new(),
         timings_notes: Vec::new(),
         private_sources: None,
+        private_suggestion: None,
         unowned,
         policy: PolicyTools::default(),
+        deny_configs: BTreeMap::new(),
         weakenings: Vec::new(),
     }
 }

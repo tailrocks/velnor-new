@@ -20,6 +20,7 @@ fn uses(
             name: PackageName::new(*name)?,
             kind: DependencyKind::Normal,
             platform: None,
+            optional: false,
             manifest: None,
             features: Vec::new(),
             rename: None,

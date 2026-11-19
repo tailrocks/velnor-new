@@ -43,7 +43,6 @@ pub(super) async fn versioned_recovery_sql(
 }
 
 pub(super) async fn migrate_v45_to_v46(conn: &turso::Connection) -> Result<(), HostError> {
-    super::validate_persisted_schema_v45(conn).await?;
     for (_, _, sql) in ddl::objects() {
         conn.execute(&sql, ())
             .await

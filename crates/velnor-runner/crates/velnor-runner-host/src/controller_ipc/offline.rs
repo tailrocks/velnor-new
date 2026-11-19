@@ -12,6 +12,9 @@ use crate::docker_client::connect_unix;
 use crate::error::HostError;
 use crate::journal::Journal;
 
+mod scale_set_delete;
+pub(super) use scale_set_delete::scale_set_delete;
+
 use super::server::read_drain_token;
 use super::wire::{Request, SOCKET_NAME, Target};
 
@@ -25,6 +28,8 @@ pub(super) fn call(state: &Path, request: &Request) -> Result<bool, HostError> {
             | Request::ConnectionSetupStatus { .. }
             | Request::ConnectionCensusStart { .. }
             | Request::ConnectionCensusStatus { .. }
+            | Request::ScaleSetDeleteStart { .. }
+            | Request::ScaleSetDeleteStatus { .. }
     ) {
         return Err(HostError::Lock);
     }
@@ -89,6 +94,8 @@ fn with_journal(state: &Path, request: &Request) -> Result<bool, HostError> {
         | Request::ConnectionSetupStatus { .. }
         | Request::ConnectionCensusStart { .. }
         | Request::ConnectionCensusStatus { .. }
+        | Request::ScaleSetDeleteStart { .. }
+        | Request::ScaleSetDeleteStatus { .. }
         | Request::ControllerReadiness { .. } => {
             return Err(HostError::Lock);
         }
@@ -183,6 +190,8 @@ fn request_token(request: &Request) -> &str {
         | Request::ConnectionSetupStatus { .. }
         | Request::ConnectionCensusStart { .. }
         | Request::ConnectionCensusStatus { .. }
+        | Request::ScaleSetDeleteStart { .. }
+        | Request::ScaleSetDeleteStatus { .. }
         | Request::ControllerReadiness { .. } => "",
     }
 }
@@ -207,6 +216,8 @@ fn marker_path(state: &Path, request: &Request) -> std::path::PathBuf {
         | Request::ConnectionSetupStatus { .. }
         | Request::ConnectionCensusStart { .. }
         | Request::ConnectionCensusStatus { .. }
+        | Request::ScaleSetDeleteStart { .. }
+        | Request::ScaleSetDeleteStatus { .. }
         | Request::ControllerReadiness { .. } => state.join(SOCKET_NAME),
     }
 }

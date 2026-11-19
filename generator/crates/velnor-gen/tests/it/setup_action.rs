@@ -115,7 +115,6 @@ fn the_binary_on_path_is_a_private_copy_that_a_change_to_the_tool_cache_cannot_r
         .env("VERSION", "1.2.3")
         .env("SHA256_LINUX_X64", digest)
         .env("SHA256_LINUX_ARM64", "")
-        .env("SHA256_MACOS_ARM64", "")
         .env("RELEASES", format!("file://{}", releases.display()))
         .env("RUNNER_OS", "Linux")
         .env("RUNNER_ARCH", "X64")
@@ -225,7 +224,6 @@ impl Install {
             .env("VERSION", "1.2.3")
             .env("SHA256_LINUX_X64", digest)
             .env("SHA256_LINUX_ARM64", "")
-            .env("SHA256_MACOS_ARM64", "")
             .env(
                 "RELEASES",
                 format!("file://{}", self.work.join("releases").display()),

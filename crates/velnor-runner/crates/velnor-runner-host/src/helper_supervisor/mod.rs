@@ -15,7 +15,7 @@ use crate::error::HostError;
 mod path;
 mod request;
 mod snapshot;
-pub(super) use request::ChecksumTarget;
+pub(super) use request::{SubjectCheck, SubjectRef};
 
 const HELPER_DEADLINE: Duration = Duration::from_secs(90);
 const KILL_REAP_DEADLINE: Duration = Duration::from_secs(2);
@@ -34,9 +34,9 @@ struct CapturedOutput {
     exceeded: bool,
 }
 
-pub(super) async fn verify_checksum_target(
+pub(super) async fn verify_subject(
     expected_helper_sha256: &[u8; 32],
-    target: ChecksumTarget<'_>,
+    target: SubjectCheck<'_>,
 ) -> Result<(), HostError> {
     let input = request::encode(&target)?;
     let helper = path::open_verified(expected_helper_sha256)?;
@@ -102,7 +102,7 @@ async fn supervise_inner(
     if !status.success()
         || stdout.exceeded
         || stderr.exceeded
-        || stdout.bytes != br#"{"schema":2,"result":"verified"}"#
+        || stdout.bytes != br#"{"schema":3,"result":"verified"}"#
     {
         return Err(HostError::Identity);
     }

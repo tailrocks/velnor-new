@@ -1,5 +1,4 @@
 Cargo.lock
 Cargo.toml
 app/Cargo.toml
-tools/Cargo.lock
 tools/Cargo.toml

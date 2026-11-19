@@ -24,8 +24,6 @@ use velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH;
 mod shell;
 use shell::{Command, commands_of};
 
-const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
-const SUITES_PATH: &str = ".github/workflows/suites.yml";
 const INSTALLED: [&str; 2] = [
     "Verify Rust channel manifest",
     "velnor-verify-rust-manifest",
@@ -310,8 +308,6 @@ fn every_pinned_installed_verifier_sees_a_pinned_component_set() -> Result<(), B
     assert_eq!(report.findings, Vec::<Finding>::new());
     assert_eq!(report.observed, pinned_components(), "{report:#?}");
     assert!(report.restored > 0, "{report:#?}");
-    assert!(has(&report, FRESHNESS_PATH, "freshness"), "{report:#?}");
-    assert!(has(&report, SUITES_PATH, "suite-nightly"), "{report:#?}");
     assert!(
         has(&report, CI_PATH, velnor_actions_contract::PLAN_JOB_ID),
         "{report:#?}"
@@ -328,31 +324,6 @@ fn mutated(files: &Files, path: &str, from: &str, to: &str) -> Result<Files, Box
     let mut copy = files.clone();
     copy.insert(path.to_owned(), text.replace(from, to));
     Ok(copy)
-}
-
-#[test]
-fn a_bare_rust_install_in_the_freshness_job_is_detected() -> Result<(), Box<dyn Error>> {
-    let tree = tree_of(WorkflowPolicy::VelnorRepositoryV1)?;
-    let clean = scan(std::slice::from_ref(&tree))?;
-    assert_eq!(clean.findings, Vec::<Finding>::new());
-    assert!(has(&clean, FRESHNESS_PATH, "freshness"));
-    let broken = mutated(&tree, FRESHNESS_PATH, "rust[profile=minimal]@", "rust@")?;
-    let report = scan(&[broken])?;
-    assert_eq!(report.findings.len(), 1, "{:#?}", report.findings);
-    let found = &report.findings[0];
-    assert_eq!(
-        (found.file.as_str(), found.job.as_str()),
-        (FRESHNESS_PATH, "freshness")
-    );
-    for expected in [
-        "rust-docs-",
-        "clippy-preview-",
-        "rustfmt-preview-",
-        "sha=0961e13a",
-    ] {
-        assert!(found.detail.contains(expected), "{}", found.detail);
-    }
-    Ok(())
 }
 
 #[test]

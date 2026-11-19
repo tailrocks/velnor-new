@@ -10,6 +10,7 @@ use clap::Parser;
 use velnor_runner_host::{READINESS_BUDGET, Readiness, doctor_json, status_json};
 
 use crate::args::{Cli, Command, CredentialAction, DaemonAction, JournalAction};
+use crate::state_directory::user_home;
 
 mod connect;
 mod connect_authority;
@@ -45,7 +46,12 @@ pub fn run() -> ExitCode {
 }
 
 fn dispatch(cli: &Cli) -> ExitCode {
-    let state = state_dir(cli.state.as_deref());
+    if let Command::Compare { evidence, .. } = &cli.command {
+        return compare_command(evidence.as_deref());
+    }
+    let Some(state) = state_dir(cli.state.as_deref()) else {
+        return home_unresolved();
+    };
     match &cli.command {
         Command::Status { json } => print_status(&state, *json),
         Command::Doctor { probe } => print_doctor(&state, *probe),
@@ -74,6 +80,8 @@ fn dispatch(cli: &Cli) -> ExitCode {
             branches: args.branches.clone(),
             tag_prefixes: args.tag_prefixes.clone(),
             pull_request_rules: args.pull_request_rules.clone(),
+            organization: args.organization.as_deref(),
+            runner_group: args.runner_group.as_deref(),
             platform: &args.platform,
             max_jobs: args.max_jobs,
             docker_context: args.docker_context.as_deref(),
@@ -89,7 +97,7 @@ fn dispatch(cli: &Cli) -> ExitCode {
         },
         Command::Service { action } => crate::service::service(*action, &state),
         Command::Daemon { action } => daemon(&state, *action),
-        Command::Compare { evidence, .. } => compare_command(evidence.as_deref()),
+        Command::Compare { .. } => ExitCode::from(1),
         Command::Disconnect {
             connection_id,
             wait,
@@ -114,15 +122,16 @@ fn local(state: Option<&Path>) -> ExitCode {
     }
 }
 
-fn state_dir(override_path: Option<&Path>) -> PathBuf {
+fn state_dir(override_path: Option<&Path>) -> Option<PathBuf> {
     if let Some(path) = override_path {
-        return path.to_path_buf();
+        return Some(path.to_path_buf());
     }
-    let home = std::env::var_os("HOME").map(PathBuf::from);
-    home.map_or_else(
-        || PathBuf::from("."),
-        |dir| dir.join("Library/Application Support/Velnor"),
-    )
+    Some(user_home()?.join("Library/Application Support/Velnor"))
+}
+
+pub(crate) fn home_unresolved() -> ExitCode {
+    eprintln!("HOME must be an absolute path.");
+    ExitCode::from(1)
 }
 
 fn print_status(state: &Path, json: bool) -> ExitCode {
@@ -165,7 +174,10 @@ fn observe(state: &Path) -> Readiness {
 }
 
 fn logs(follow: bool) -> ExitCode {
-    let path = crate::service::log_dir().join("host.log");
+    let Some(log_dir) = crate::service::log_dir() else {
+        return home_unresolved();
+    };
+    let path = log_dir.join("host.log");
     if follow {
         if !path.is_file() {
             eprintln!("log missing");

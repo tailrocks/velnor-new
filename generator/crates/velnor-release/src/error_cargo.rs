@@ -3,7 +3,7 @@
 
 use std::fmt;
 
-use crate::error::ReleaseError;
+use crate::error::{ReleaseError, subject};
 
 impl ReleaseError {
     pub(crate) fn fmt_cargo(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -131,7 +131,24 @@ impl ReleaseError {
                 f,
                 "mise.toml selects release-plz {first} and {second}; every selector must resolve to one version"
             ),
-            _ => Ok(()),
+            Self::PublishWithGitOnly { root, package } => write!(
+                f,
+                "{root}/release-plz.toml: {} sets publish = true together with git_only = true, which release-plz refuses",
+                subject(package.as_ref())
+            ),
+            Self::NestedReleasePlzRoot { root } => write!(
+                f,
+                "{root}/release-plz.toml: release root {root} is not the git root, and release-plz 0.4.3 cannot update or open a release PR from a root below the git root (it fails with \"failed to open repository\" because it looks for the git repository in the manifest directory, whatever git_only or publish say); fold the packages of {root} into the git-root Cargo workspace and release them from the root release-plz.toml with one [[package]] entry and git_tag_name per package"
+            ),
+            Self::InvalidProfile(package, profile) => write!(
+                f,
+                ".velnor/release.toml: binary {package} names profile {profile:?}, which is not a Cargo profile this generator can build with (use letters, digits, `-` and `_`, starting with a letter or `_`, and not dev, test, bench, debug, doc, build-override, package, deps, examples, build or incremental)"
+            ),
+            Self::Family(error) => write!(f, "{error}"),
+            Self::InvalidCheck(check, problem) => {
+                write!(f, ".velnor/release.toml: check {check:?} {problem}")
+            }
+            _ => self.fmt_binary(f),
         }
     }
 }

@@ -726,7 +726,7 @@ checksum = "3a3b425286980a367278453f3b6d28cdcb134b574e5a35824a6ff5eebad50bb6"
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.83"
+version = "0.1.90"
 dependencies = [
  "clap",
  "serde-saphyr",
@@ -737,6 +737,7 @@ dependencies = [
  "velnor-release",
  "velnor-render",
  "velnor-rust",
+ "velnor-workflows",
 ]
 
 [[package]]
@@ -760,6 +761,7 @@ dependencies = [
  "serde_json",
  "velnor-model",
  "velnor-release",
+ "velnor-workflows",
 ]
 
 [[package]]
@@ -771,6 +773,15 @@ dependencies = [
  "sha2",
  "toml",
  "url",
+ "velnor-model",
+]
+
+[[package]]
+name = "velnor-workflows"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "toml",
  "velnor-model",
 ]
 

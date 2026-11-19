@@ -1,11 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::rules::{RenderedJob, RenderedStep, Value};
+use crate::rules::{
+    RenderedConcurrency, RenderedContainer, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, Value,
+};
 use crate::yaml::{Yaml, entry, text};
-use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
+use velnor_model::{
+    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT,
+};
 
-const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
+/// True for every event except a pull request from a fork.
+pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     let mut items = Vec::new();
@@ -30,53 +37,148 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         items.push(entry("permissions", pairs(&job.permissions)));
     }
     if let Some(concurrency) = &job.concurrency {
-        items.push(entry(
-            "concurrency",
-            Yaml::Map(vec![
-                entry("group", Yaml::Expr(concurrency.group.clone())),
-                entry(
-                    "cancel-in-progress",
-                    Yaml::Bool(concurrency.cancel_in_progress),
-                ),
-            ]),
-        ));
+        items.push(entry("concurrency", yaml_concurrency(concurrency)));
     }
     if !job.outputs.is_empty() {
+        items.push(entry("outputs", yaml_outputs(&job.outputs)));
+    }
+    if job.uses.is_none() {
+        items.push(entry("runs-on", runs_on(job)));
+    }
+    if let Some(container) = &job.container {
+        items.push(entry("container", yaml_container(container)));
+    }
+    if !job.services.is_empty() {
         items.push(entry(
-            "outputs",
+            "services",
             Yaml::Map(
-                job.outputs
+                job.services
                     .iter()
-                    .map(|(name, value)| {
-                        let value = value.clone();
-                        entry(
-                            name,
-                            if name == TESTS_RUN_OUTPUT
-                                || name == TESTS_LISTED_OUTPUT
-                                || name == TESTS_BY_PACKAGE_OUTPUT
-                            {
-                                Yaml::Unread(value)
-                            } else {
-                                Yaml::Expr(value)
-                            },
-                        )
-                    })
+                    .map(|(name, service)| entry(name, yaml_container(service)))
                     .collect(),
             ),
         ));
     }
-    items.extend([
-        entry("runs-on", runs_on(job)),
-        entry("timeout-minutes", Yaml::Int(u64::from(job.timeout_minutes))),
-    ]);
-    items.extend([entry(
-        "steps",
-        Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
-    )]);
-    match &job.comment {
-        Some(comment) => Yaml::Noted(comment.clone(), Box::new(Yaml::Map(items))),
+    if let Some(matrix) = &job.matrix {
+        items.push(entry("strategy", yaml_matrix(matrix)));
+    }
+    if let Some(uses) = &job.uses {
+        items.push(entry("uses", text(uses)));
+        if !job.with.is_empty() {
+            items.push(entry("with", values(&job.with)));
+        }
+    } else {
+        items.push(entry(
+            "timeout-minutes",
+            Yaml::Int(u64::from(job.timeout_minutes)),
+        ));
+        if !job.env.is_empty() {
+            items.push(entry("env", values(&job.env)));
+        }
+        items.extend([entry(
+            "steps",
+            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+        )]);
+    }
+    match job_notes(job) {
+        Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
+}
+
+pub(crate) fn yaml_concurrency(concurrency: &RenderedConcurrency) -> Yaml {
+    Yaml::Map(vec![
+        entry("group", Yaml::Expr(concurrency.group.clone())),
+        entry(
+            "cancel-in-progress",
+            Yaml::Bool(concurrency.cancel_in_progress),
+        ),
+    ])
+}
+
+fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
+    Yaml::Map(
+        outputs
+            .iter()
+            .map(|(name, value)| {
+                let value = value.clone();
+                entry(
+                    name,
+                    if name == TESTS_RUN_OUTPUT
+                        || name == MERGE_GROUP_SKIP_OUTPUT
+                        || name == TESTS_LISTED_OUTPUT
+                        || name == TESTS_IGNORED_OUTPUT
+                        || name == TESTS_BY_PACKAGE_OUTPUT
+                    {
+                        Yaml::Unread(value)
+                    } else {
+                        Yaml::Expr(value)
+                    },
+                )
+            })
+            .collect(),
+    )
+}
+
+fn yaml_container(container: &RenderedContainer) -> Yaml {
+    let mut items = vec![entry("image", text(&container.image))];
+    if !container.env.is_empty() {
+        items.push(entry("env", pairs(&container.env)));
+    }
+    if !container.ports.is_empty() {
+        items.push(entry(
+            "ports",
+            Yaml::Seq(container.ports.iter().map(|port| text(port)).collect()),
+        ));
+    }
+    if let Some(options) = &container.options {
+        items.push(entry("options", text(options)));
+    }
+    Yaml::Map(items)
+}
+
+fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
+    let mut items = Vec::new();
+    if let Some(fail_fast) = matrix.fail_fast {
+        items.push(entry("fail-fast", Yaml::Bool(fail_fast)));
+    }
+    if let Some(max_parallel) = matrix.max_parallel {
+        items.push(entry("max-parallel", Yaml::Int(u64::from(max_parallel))));
+    }
+    items.push(entry(
+        "matrix",
+        match &matrix.source {
+            RenderedMatrixSource::Output(from) => {
+                Yaml::Expr(format!("${{{{ fromJSON({from}) }}}}"))
+            }
+            RenderedMatrixSource::Axes(axes) => Yaml::Map(
+                axes.iter()
+                    .map(|(name, values)| {
+                        entry(
+                            name,
+                            Yaml::Seq(values.iter().map(|value| text(value)).collect()),
+                        )
+                    })
+                    .collect(),
+            ),
+        },
+    ));
+    Yaml::Map(items)
+}
+
+fn job_notes(job: &RenderedJob) -> Option<String> {
+    let launches_helper = job.steps.iter().any(|step| {
+        step.run
+            .as_deref()
+            .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
+    });
+    let notes: Vec<&str> = job
+        .comment
+        .as_deref()
+        .into_iter()
+        .chain(launches_helper.then_some(crate::helper_integrity::SHELLCHECK_IGNORE))
+        .collect();
+    (!notes.is_empty()).then(|| notes.join("\n"))
 }
 
 fn runs_on(job: &RenderedJob) -> Yaml {
@@ -156,7 +258,7 @@ fn values(items: &[(String, Value)]) -> Yaml {
                     Value::Int(number) => Yaml::Int(*number),
                     Value::Bool(flag) => Yaml::Bool(*flag),
                 };
-                let yaml = if key.starts_with("VELNOR_HELPER") && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > 100 && !text.contains('\n')) {
+                let yaml = if (key.starts_with("VELNOR_HELPER") || key == "SOURCES_LOCKS") && matches!(value, Value::Text(text) | Value::Expr(text) if text.len() > 100 && !text.contains('\n')) {
                     Yaml::Shared(Box::new(yaml))
                 } else {
                     yaml
