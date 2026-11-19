@@ -84,32 +84,11 @@ fn setup_archives(script: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
         .collect())
 }
 
-#[test]
-fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_checksums() -> TestResult
-{
-    let action = parse(ACTION)?;
-    let workflow = parse(WORKFLOW)?;
-    let script = action_script(&action)?;
-    let expected = setup_archives(script)?;
-    assert!(
-        expected
-            .iter()
-            .all(|name| name.starts_with("velnor-ci-") && name.ends_with(".tar.gz")),
-        "{expected:?}"
-    );
-
-    let targets: BTreeSet<String> = workflow["jobs"]["build"]["strategy"]["matrix"]["include"]
-        .as_array()
-        .ok_or("the build job has no matrix")?
-        .iter()
-        .filter_map(|entry| entry["target"].as_str().map(str::to_owned))
-        .collect();
-    let script_triples: BTreeSet<String> = between(script, "triple=", ';')
-        .into_iter()
-        .map(str::to_owned)
-        .collect();
-    assert_eq!(targets, script_triples);
-
+fn archives_produced(
+    workflow: &Value,
+    targets: &BTreeSet<String>,
+    expected: &BTreeSet<String>,
+) -> Result<BTreeSet<String>, Box<dyn Error>> {
     let archiving: Vec<&Value> = workflow["jobs"]["build"]["steps"]
         .as_array()
         .ok_or("the build job has no steps")?
@@ -136,21 +115,19 @@ fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_check
                 .map(move |target| name.replace("$TARGET", target))
         })
         .collect();
-    assert!(produced.is_superset(&expected), "{produced:?} {expected:?}");
+    assert!(produced.is_superset(expected), "{produced:?} {expected:?}");
     assert_eq!(produced.len(), 2 * targets.len(), "{produced:?}");
 
-    let published = names(
-        run_starting(&workflow, "release", "gh release create", "")?,
-        "dist/",
-    );
-    let wanted: BTreeSet<String> = produced
-        .iter()
-        .cloned()
-        .chain([SUMS, BINARY_SUMS, COMMIT].map(str::to_owned))
-        .collect();
-    assert_eq!(published, wanted);
+    Ok(produced)
+}
 
-    let listed: BTreeSet<String> = runs(&workflow, "checksums")?
+fn checksums_cover(
+    workflow: &Value,
+    published: &BTreeSet<String>,
+    produced: &BTreeSet<String>,
+    expected: &BTreeSet<String>,
+) -> TestResult {
+    let listed: BTreeSet<String> = runs(workflow, "checksums")?
         .into_iter()
         .find(|run| run.starts_with("sha256sum ") && run.ends_with("> SHA256SUMS"))
         .map(|run| {
@@ -168,7 +145,7 @@ fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_check
     assert_eq!(listed, without_sums);
 
     let binary: BTreeSet<String> = run_starting(
-        &workflow,
+        workflow,
         "checksums",
         "sha256sum ",
         "> ../dist/BINARY-SHA256SUMS",
@@ -178,7 +155,7 @@ fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_check
     .take_while(|word| *word != ">")
     .map(str::to_owned)
     .collect();
-    for name in &expected {
+    for name in expected {
         assert!(binary.contains(&format!("{name}/velnor-ci")), "{binary:?}");
     }
     assert_eq!(binary.len(), produced.len(), "{binary:?}");
@@ -224,5 +201,49 @@ fn the_release_tag_prefixes_the_setup_action_tries_start_the_release_workflow() 
             .iter()
             .all(|prefix| pushed.contains(prefix.as_str()))
     );
+    Ok(())
+}
+
+#[test]
+fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_checksums() -> TestResult
+{
+    let action = parse(ACTION)?;
+    let workflow = parse(WORKFLOW)?;
+    let script = action_script(&action)?;
+    let expected = setup_archives(script)?;
+    assert!(
+        expected
+            .iter()
+            .all(|name| name.starts_with("velnor-ci-") && name.ends_with(".tar.gz")),
+        "{expected:?}"
+    );
+
+    let targets: BTreeSet<String> = workflow["jobs"]["build"]["strategy"]["matrix"]["include"]
+        .as_array()
+        .ok_or("the build job has no matrix")?
+        .iter()
+        .filter_map(|entry| entry["target"].as_str().map(str::to_owned))
+        .collect();
+    let script_triples: BTreeSet<String> = between(script, "triple=", ';')
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    assert_eq!(targets, script_triples);
+
+    let produced = archives_produced(&workflow, &targets, &expected)?;
+
+    let published = names(
+        run_starting(&workflow, "release", "gh release create", "")?,
+        "dist/",
+    );
+    let wanted: BTreeSet<String> = produced
+        .iter()
+        .cloned()
+        .chain([SUMS, BINARY_SUMS, COMMIT].map(str::to_owned))
+        .collect();
+    assert_eq!(published, wanted);
+
+    checksums_cover(&workflow, &published, &produced, &expected)?;
+
     Ok(())
 }
