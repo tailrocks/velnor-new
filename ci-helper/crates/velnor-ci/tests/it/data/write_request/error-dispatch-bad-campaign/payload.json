@@ -1,0 +1,12 @@
+{
+ "ref": "refs/heads/main",
+ "inputs": {
+  "campaign": "Camp_1",
+  "phase": "cold"
+ },
+ "repository": {
+  "full_name": "tailrocks/velnor-new",
+  "default_branch": "main"
+ },
+ "workflow": ".github/workflows/ci.yml"
+}

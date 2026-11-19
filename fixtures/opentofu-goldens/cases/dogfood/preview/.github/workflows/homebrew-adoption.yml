@@ -47,7 +47,7 @@ jobs:
       plan_attempt: ${{ github.run_attempt }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -114,7 +114,7 @@ jobs:
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"
@@ -182,7 +182,7 @@ jobs:
     if: ${{ !cancelled() }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           cache: "false"
           cache_save: "false"

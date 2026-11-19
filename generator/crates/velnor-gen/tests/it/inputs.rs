@@ -25,6 +25,7 @@ fn dependency(
         name: PackageName::new(name)?,
         kind,
         platform: None,
+        optional: false,
         manifest: manifest.map(path).transpose()?,
         features: Vec::new(),
         rename: None,

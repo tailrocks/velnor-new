@@ -69,7 +69,7 @@ jobs:
           VELNOR_SOURCE_SHA: ${{ inputs.source_sha }}
         run: "set -eu\n: \"${VELNOR_SOURCE_SHA:?}\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-dind:linux-amd64 images/dind"
       - name: Setup Mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -192,7 +192,7 @@ jobs:
     if: always() && (inputs.release_action == 'complete' || (inputs.release_action == 'build' && (needs.attest-images.result == 'success')))
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
+        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9

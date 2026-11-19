@@ -16,6 +16,12 @@ static KEYCHAIN_INTERACTION: Mutex<()> = Mutex::new(());
 
 pub struct NormalizedSecret(Zeroizing<Vec<u8>>);
 
+impl NormalizedSecret {
+    pub(crate) fn into_bytes(self) -> Zeroizing<Vec<u8>> {
+        self.0
+    }
+}
+
 impl std::fmt::Debug for NormalizedSecret {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str("NormalizedSecret([REDACTED])")
