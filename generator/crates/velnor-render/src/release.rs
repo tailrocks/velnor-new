@@ -334,7 +334,7 @@ fn record(plan: &ReleasePlan, helper: &HelperRelease, files: &[String]) -> Rende
             "RUSTUP_TOOLCHAIN".to_owned(),
             Value::Text(TOOLCHAIN.to_owned()),
         ));
-        run.push_str(&format!(" --app={RELEASE_APP_SLUG} {}", record_configs(plan)));
+        run = format!("{run} --app={RELEASE_APP_SLUG} {}", record_configs(plan));
     }
     RenderedStep {
         id: Some("record".to_owned()),
