@@ -97,10 +97,11 @@ fn emit_state_seal(
     let mbx_jobs = crate::mbx_gc_policy::jobs_with_mbx_objects(&sealed.jobs);
     let mut document = document::workflow_to_yaml(&sealed.ir, &sealed.shared, ctx, &mbx_jobs)?;
     let cache_outputs = crate::cache_plan_outputs::consumed(&sealed.jobs, false)?;
-    let plan_attempt_read = sealed.jobs.iter().any(|(id, job)| {
-        crate::document_env::plan_attempt_value(id, job, &sealed.jobs)
-            .is_some_and(|value| value.contains("needs.plan.outputs.plan_attempt"))
-    });
+    let plan_attempt_read = ctx.rust_ci
+        || sealed.jobs.iter().any(|(id, job)| {
+            crate::document_env::plan_attempt_value(id, job, &sealed.jobs)
+                .is_some_and(|value| value.contains("needs.plan.outputs.plan_attempt"))
+        });
     matrix::attach_state_seal_plan_outputs(&mut document, &cache_outputs, plan_attempt_read)?;
     let bytes = fallback::render_checked_workflow(
         STATE_SEAL_WORKFLOW_PATH,
