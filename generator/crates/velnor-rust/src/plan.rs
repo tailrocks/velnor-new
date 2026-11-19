@@ -4,14 +4,14 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CacheRoot, CargoCommand, Concurrency, HelperCommand, Host, Job,
-    JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
-    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
-    TargetName, Toolchain, Triggers, When, WorkflowPlan,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType, RepoFacts,
+    RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
+    PushAfterMergeGroup, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::{restored, sources_locks};
+use crate::base_cache::{cache_root, restored, sources_locks};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -287,7 +287,7 @@ pub(crate) fn setup_roots(
         toolchain.push(prepare);
     }
     for (index, (root, family)) in roots.iter().zip(families).enumerate() {
-        let cache_root = CacheRoot::new(&root.manifest, root.target_dir.clone());
+        let cache_root = cache_root(facts, root);
         toolchain.push(Step {
             directory: root.manifest.parent(),
             ..step(StepKind::Helper(HelperCommand::CheckMetadata))

@@ -13,10 +13,11 @@ mod selection;
 mod steps;
 mod verdict;
 
-pub use cache::{CacheKey, CachePath, CacheRoot, Host};
+pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
 pub use cache_layout::{
-    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, RUNNER_ARCH_MAX_LENGTH,
-    RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, json_char_bytes, json_string_bytes,
+    CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
+    RUNNER_ARCH_MAX_LENGTH, RUNNER_OS_MAX_LENGTH, SHARED_SOURCES_OWNER, json_char_bytes,
+    json_string_bytes,
 };
 pub use cache_outputs::{
     BASE_PREFIX_OUTPUT, BASE_SAVE_OUTPUT, CacheLaneOutput, SOURCES_PREFIX_OUTPUT,
