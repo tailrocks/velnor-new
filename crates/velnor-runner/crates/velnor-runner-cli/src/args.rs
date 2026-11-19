@@ -172,6 +172,12 @@ pub struct ConnectArgs {
     /// Pull request rule: `NUMBER:BASE_REPOSITORY_ID:BASE_BRANCH:HEAD_REPOSITORY_ID:HEAD_BRANCH`. Use `*` for any number.
     #[arg(long = "pull-request-rule")]
     pub pull_request_rules: Vec<String>,
+    /// Register the scale set at organization level for this organization (must own `--repo`).
+    #[arg(long = "org")]
+    pub organization: Option<String>,
+    /// Organization runner group, by name. Requires `--org`. Defaults to the Default group.
+    #[arg(long = "runner-group", requires = "organization")]
+    pub runner_group: Option<String>,
     /// Container platform.
     #[arg(long)]
     pub platform: String,

@@ -1,15 +1,74 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::process::ExitCode;
+use std::collections::{BTreeMap, BTreeSet};
+use std::process::{Command, ExitCode, Stdio};
+
+use serde::Deserialize;
 
 use crate::cli::LaneGuardArgs;
 use crate::error::CiError;
 use crate::escape::escape;
-use crate::nextest_list::{Case, TestKey, list};
 
 const PREFIX: &str = "velnor-ci lane-guard";
 const LISTED_LIMIT: usize = 50;
+
+type TestKey = (String, String);
+
+#[derive(Debug, Deserialize)]
+struct Listing {
+    #[serde(rename = "rust-suites")]
+    suites: BTreeMap<String, Suite>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Suite {
+    #[serde(default)]
+    testcases: BTreeMap<String, Case>,
+}
+
+#[derive(Debug, Deserialize)]
+struct Case {
+    #[serde(default)]
+    ignored: bool,
+    #[serde(rename = "filter-match")]
+    filter_match: FilterMatch,
+}
+
+#[derive(Debug, Deserialize)]
+struct FilterMatch {
+    status: String,
+}
+
+impl Listing {
+    fn parse(bytes: &[u8]) -> Result<Self, CiError> {
+        serde_json::from_slice(bytes).map_err(|e| {
+            CiError::new(format!(
+                "{PREFIX}: cargo-nextest list returned invalid JSON: {e}"
+            ))
+        })
+    }
+
+    fn cases(&self) -> impl Iterator<Item = (TestKey, &Case)> {
+        self.suites.iter().flat_map(|(binary, suite)| {
+            suite
+                .testcases
+                .iter()
+                .map(move |(name, case)| ((binary.clone(), name.clone()), case))
+        })
+    }
+
+    fn keys(&self) -> BTreeSet<TestKey> {
+        self.cases().map(|(key, _)| key).collect()
+    }
+
+    fn selected(&self) -> BTreeSet<TestKey> {
+        self.cases()
+            .filter(|(_, case)| case.filter_match.status == "matches")
+            .map(|(key, _)| key)
+            .collect()
+    }
+}
 
 #[must_use]
 pub fn run(args: &LaneGuardArgs) -> ExitCode {
@@ -38,9 +97,9 @@ fn guard(args: &LaneGuardArgs) -> Result<String, CiError> {
     };
     let features = ["--features".to_owned(), args.features.clone()];
     let selection = ["-E".to_owned(), format!("({}){excluded}", args.filter)];
-    let default = list(PREFIX, &default_filter)?;
-    let universe = list(PREFIX, &[default_filter.as_slice(), &features].concat())?;
-    let selected = list(PREFIX, &[features.as_slice(), &selection].concat())?;
+    let default = list(&default_filter)?;
+    let universe = list(&[default_filter.as_slice(), &features].concat())?;
+    let selected = list(&[features.as_slice(), &selection].concat())?;
     let default_keys = default.keys();
     let selected_keys = selected.selected();
     let feature_only: Vec<(TestKey, &Case)> = universe
@@ -56,6 +115,33 @@ fn guard(args: &LaneGuardArgs) -> Result<String, CiError> {
         return Ok(success(&args.features, feature_only.len()));
     }
     Err(CiError::new(failure(args, &missing)))
+}
+
+fn list(extra: &[String]) -> Result<Listing, CiError> {
+    let output = Command::new("cargo-nextest")
+        .args([
+            "nextest",
+            "list",
+            "--workspace",
+            "--locked",
+            "--ignore-default-filter",
+            "--message-format",
+            "json",
+        ])
+        .args(extra)
+        .stderr(Stdio::inherit())
+        .output()
+        .map_err(|e| CiError::new(format!("{PREFIX}: cannot run cargo-nextest: {e}")))?;
+    if !output.status.success() {
+        let exit = output
+            .status
+            .code()
+            .map_or_else(|| "signal".to_owned(), |code| format!("exit {code}"));
+        return Err(CiError::new(format!(
+            "{PREFIX}: cargo-nextest list failed ({exit})"
+        )));
+    }
+    Listing::parse(&output.stdout)
 }
 
 fn success(features: &str, checked: usize) -> String {

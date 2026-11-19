@@ -34,6 +34,7 @@ mod setup;
 mod timings;
 mod unit_platforms;
 mod units;
+mod write_request;
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -182,11 +183,14 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Preflight(args)) => release::run_preflight(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
+        Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::WriteRequest(args) => write_request::run(&args),
         Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::MbxStore => crate::mbx_store::setup(),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),

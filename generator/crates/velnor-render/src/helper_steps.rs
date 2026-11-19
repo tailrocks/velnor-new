@@ -84,6 +84,14 @@ pub(crate) fn mirror_step(mirror: &CratesMirror) -> RenderedStep {
 }
 }
 
+pub(crate) fn mbx_store_step() -> RenderedStep {
+    RenderedStep {
+        name: "velnor-ci mbx-store".to_owned(),
+        run: Some("velnor-ci mbx-store".to_owned()),
+        ..RenderedStep::default()
+    }
+}
+
 pub(crate) fn restored_step(
     expiry: velnor_model::BaseExpiry,
     targets: &[RepoPath],

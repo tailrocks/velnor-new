@@ -8,8 +8,10 @@ use velnor_model::{InvalidId, RepoPath};
 
 mod gate;
 mod report;
+mod write_request;
 pub use gate::GateArgs;
 pub use report::ReportArgs;
+pub use write_request::WriteRequestArgs;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -42,7 +44,9 @@ pub enum Command {
         about = "The required check: read the needs context from NEEDS_JSON, and the spec in the variable --spec-env names, and the plan outputs of the plan job the spec names, then exit 1 unless every job the plan scheduled succeeded, no job it did not schedule failed, and every package that listed tests in a selected test job ran at least one. Fails when the plan job failed, a plan output is missing or invalid, a job is missing from needs, or a result is cancelled or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
     )]
     Gate(GateArgs),
-    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    #[command(
+        about = "Exit 1 unless the tag is rust-ci-v or tools-v followed by the version of this program"
+    )]
     CheckTag(CheckTagArgs),
     #[command(
         subcommand,
@@ -54,6 +58,10 @@ pub enum Command {
     )]
     Plan(PlanArgs),
     #[command(
+        about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
+    )]
+    WriteRequest(WriteRequestArgs),
+    #[command(
         about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
     )]
     Prepare,
@@ -61,6 +69,10 @@ pub enum Command {
         about = "Write the crates mirror under $RUNNER_TEMP and install a Cargo wrapper for every working directory and Cargo home"
     )]
     CratesMirror(CratesMirrorArgs),
+    #[command(
+        about = "Use the runner's shared MBX store: when VELNOR_MBX_SHARED_DIR names an absolute, existing, symlink-free, writable directory and the event is trusted (a push or schedule on the default branch), append MBX_CACHE_DIR and a pod-private MBX_SHIMS_DIR under $RUNNER_TEMP to $GITHUB_ENV. Every other event, and a directory that fails a check (with a warning), keeps MBX's per-job store"
+    )]
+    MbxStore,
     #[command(
         about = "Run after the tools are installed, in the directory of a Cargo root: exit 1 unless .velnor/rust-metadata.json is exactly what velnor-gen generate writes for that root, which reads cargo metadata --no-deps --offline"
     )]
@@ -256,7 +268,8 @@ pub struct CheckTagArgs {
 }
 
 pub use crate::cli_release::{
-    CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand, ReleaseGateArgs,
+    CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand,
+    ReleaseGateArgs,
 };
 
 #[derive(Debug, Args)]

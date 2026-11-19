@@ -139,7 +139,7 @@ fn cargo_command(
             vec![],
         ),
         CargoCommand::Deny { manifest } => deny(manifest),
-        CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
+        CargoCommand::Machete => ("Unused dependencies".into(), "cargo machete".into(), vec![]),
     }
 }
 
@@ -170,6 +170,16 @@ fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)
         .collect::<Vec<_>>()
         .join(" "),
         vec![],
+    )
+}
+
+pub(crate) fn target_dir_env(target: &RepoPath) -> (String, Value) {
+    (
+        "CARGO_TARGET_DIR".to_owned(),
+        Value::Expr(format!(
+            "${{{{ github.workspace }}}}/{}",
+            target.as_str().replace("${{", "${{ '${{' }}")
+        )),
     )
 }
 
