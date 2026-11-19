@@ -155,6 +155,7 @@ pub(super) fn prepare_specs(
 
 pub(super) fn audit_validator_command(
     command: &ValidatorCommand,
+    catalog: &ToolCatalog,
     subjects: &mut Vec<InstallSubject>,
     blocking: &mut Vec<String>,
 ) {
@@ -173,7 +174,14 @@ pub(super) fn audit_validator_command(
                     continue;
                 }
                 for spec in specs {
-                    match validator_subject(&spec) {
+                    // A validator that needs `cargo` installs the project Rust
+                    // toolchain exactly like a Rust lane, audited against the catalog.
+                    let unquoted = catalog.materialize(&spec.replace(['\'', '"'], ""));
+                    let rust = unquoted
+                        .starts_with("rust[")
+                        .then(|| subject_for_install_spec(&unquoted, catalog))
+                        .flatten();
+                    match validator_subject(&spec).or(rust) {
                         Some(subject) => subjects.push(subject),
                         None => blocking.push(format!("unauditable_install_spec:{spec}")),
                     }
