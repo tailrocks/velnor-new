@@ -96,10 +96,14 @@ fn decide(runs: Value, jobs: Value, recheck: Value) -> Result<String, Box<dyn Er
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
+fn gate() -> String {
+    crate::rust_ci_gate_golden::gate_job_name()
+}
+
 fn good_jobs() -> Value {
     jobs(&[
         job("rust-lint", 102, "success"),
-        job("rust-required", 102, "success"),
+        job(&gate(), 102, "success"),
     ])
 }
 
@@ -150,10 +154,7 @@ fn image_publication_rejects_an_ambiguous_or_shifting_rust_required_job()
     for (label, jobs, reason) in [
         (
             "duplicate",
-            jobs(&[
-                job("rust-required", 102, "success"),
-                job("rust-required", 102, "success"),
-            ]),
+            jobs(&[job(&gate(), 102, "success"), job(&gate(), 102, "success")]),
             "exactly one `rust-required` job",
         ),
         (
@@ -163,12 +164,12 @@ fn image_publication_rejects_an_ambiguous_or_shifting_rust_required_job()
         ),
         (
             "red",
-            jobs(&[job("rust-required", 102, "failure")]),
+            jobs(&[job(&gate(), 102, "failure")]),
             "has no `success` conclusion",
         ),
         (
             "other run",
-            jobs(&[job("rust-required", 99, "success")]),
+            jobs(&[job(&gate(), 99, "success")]),
             "not on the selected Rust CI run",
         ),
         ("malformed", json!({"jobs": []}), "incorrect format"),

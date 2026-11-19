@@ -51,9 +51,9 @@ case "$url" in
     printf '[{"jobs":[%s]}]\n' "$(jobs 101 Required success)" ;;
   repos/tailrocks/velnor-new/actions/runs/102/attempts/1/jobs*)
     case "$VELNOR_FAKE_RUST_JOB" in
-      duplicate) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 102 rust-required success)" "$(jobs 102 rust-required success)" ;;
+      duplicate) printf '[{"jobs":[%s,%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" success)" "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" success)" ;;
       absent) printf '[{"jobs":[%s]}]\n' "$(jobs 102 rust-lint success)" ;;
-      *) printf '[{"jobs":[%s]}]\n' "$(jobs 102 rust-required "${VELNOR_FAKE_RUST_JOB:-success}")" ;;
+      *) printf '[{"jobs":[%s]}]\n' "$(jobs 102 "$VELNOR_FAKE_GATE_JOB" "${VELNOR_FAKE_RUST_JOB:-success}")" ;;
     esac ;;
   *) echo "unexpected request: $url" >&2; exit 3 ;;
 esac
@@ -152,6 +152,10 @@ pub(crate) fn run_gate_script(
         .current_dir(&work)
         .env("PATH", path)
         .env("GH_TOKEN", "token")
+        .env(
+            "VELNOR_FAKE_GATE_JOB",
+            crate::rust_ci_gate_golden::gate_job_name(),
+        )
         .env("GITHUB_REPOSITORY", REPOSITORY)
         .env("GITHUB_REF", "refs/heads/main")
         .env(

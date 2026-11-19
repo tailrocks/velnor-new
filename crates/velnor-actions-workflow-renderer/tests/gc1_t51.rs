@@ -202,8 +202,9 @@ pub(crate) fn rust_ci_runs_json() -> String {
 }
 
 pub(crate) fn rust_ci_jobs_json() -> String {
+    let name = crate::rust_ci_gate_golden::gate_job_name();
     format!(
-        "[{{\"jobs\":[{{\"name\":\"rust-required\",\"run_id\":78,\"run_attempt\":1,\"head_sha\":\"{SOURCE_SHA}\",\"head_branch\":\"main\",\"status\":\"completed\",\"conclusion\":\"success\"}}]}}]"
+        "[{{\"jobs\":[{{\"name\":\"{name}\",\"run_id\":78,\"run_attempt\":1,\"head_sha\":\"{SOURCE_SHA}\",\"head_branch\":\"main\",\"status\":\"completed\",\"conclusion\":\"success\"}}]}}]"
     )
 }
 

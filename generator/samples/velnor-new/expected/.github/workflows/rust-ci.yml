@@ -1632,7 +1632,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
   required:
-    name: Required
+    name: rust-required
     needs:
       - rust-plan
       - rust-root
