@@ -5,7 +5,6 @@ runner = "ubuntu-26.04-scale-set"
 exclude = ["fixtures/**"]
 required_check = "Required"
 mbx_shared_store = true
-helper = { path = "ci-helper" }
 
 [[inputs]]
 glob = "scripts/ci-fixtures.sh"
