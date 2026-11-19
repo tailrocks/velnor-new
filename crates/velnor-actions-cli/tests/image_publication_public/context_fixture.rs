@@ -200,10 +200,6 @@ impl Fixture {
         fs::write(self.root.join("assets").join(name), bytes)?;
         Ok(())
     }
-    pub(super) fn error(&self) -> String {
-        fs::read_to_string(self.root.join("home/image-publication-fixture-error"))
-            .unwrap_or_default()
-    }
     pub(super) fn invoke(&self) -> Result<Output, Box<dyn Error>> {
         fs::write(
             self.root.join("home/fixture-state.json"),

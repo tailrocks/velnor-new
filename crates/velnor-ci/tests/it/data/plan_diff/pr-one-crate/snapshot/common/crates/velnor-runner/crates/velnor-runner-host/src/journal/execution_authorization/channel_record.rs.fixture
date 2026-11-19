@@ -1,0 +1,4 @@
+            .all(|component| component != "." && component != "..")
+        && !root.chars().any(char::is_control)
+}
+

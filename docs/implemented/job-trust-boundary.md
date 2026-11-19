@@ -16,7 +16,7 @@ only as artifacts, which the receiving job validates.
 
 ## What velnor-gen enforces
 
-`generator/crates/velnor-gen/tests/it/job_trust_boundary.rs` reads every
+`crates/velnor-gen/tests/it/job_trust_boundary.rs` reads every
 generated workflow in `generator/samples/*/expected/` and fails when a step
 that runs repository code, or follows a repository-code step in the same job,
 carries a token or produces a verdict. A token is `GITHUB_TOKEN`, `GH_TOKEN`,

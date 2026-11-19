@@ -4,7 +4,7 @@
 
 This document establishes the authoritative sources of truth for GitHub Actions protocols, runner execution, scale set listeners, and runner environment images. For artifact upload semantics, see the [pinned action source reference](github-actions-artifact-reference.md). For installation token transport, see the [official token compatibility reference](github-installation-token-reference.md).
 
-When designing workflows in the Velnor V1 generator or implementing runner infrastructure in `crates/velnor-runner`, developers and agents must **always check the original GitHub Actions source code for compatibility** and never guess protocol contracts or operational semantics.
+When designing workflows in the Velnor V1 generator or implementing runner infrastructure in `crates/velnor-runner-*`, developers and agents must **always check the original GitHub Actions source code for compatibility** and never guess protocol contracts or operational semantics.
 
 ---
 
@@ -191,7 +191,7 @@ change; Velnor emits no new aliases into composite `action.yml` files.
    - Do not rely on third-party summaries or stale documentation when the official source is available.
 
 3. **Traceability in Design & Implementation**:
-   - Every protocol decision, compatibility shim elimination, or runner contract in `crates/velnor-runner` must cite the specific source file and mechanism in `actions/runner` or `actions/scaleset`.
+   - Every protocol decision, compatibility shim elimination, or runner contract in `crates/velnor-runner-*` must cite the specific source file and mechanism in `actions/runner` or `actions/scaleset`.
    - Reference updates and version bumps must be accompanied by compatibility verification against updated upstream sources.
 
 ---

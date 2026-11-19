@@ -9,7 +9,7 @@ use std::{
     process::{Command, Output},
 };
 
-#[path = "../../../test_support/root_cargo_lock.rs"]
+#[path = "../../../velnor-test-support/root_cargo_lock.rs"]
 mod root_cargo_lock;
 
 const EXPECTED_NEEDS: [&str; 7] = [

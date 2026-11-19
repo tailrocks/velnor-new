@@ -564,9 +564,9 @@ fd76b1c988a147bc39d9533ac3c65940f258e2b2:fixtures/parity/minimal-cargo/expected/
 fd76b1c988a147bc39d9533ac3c65940f258e2b2:fixtures/parity/multi-crate/expected/plan-v1.json:generic-api-key:1
 
 # Reason: snakeoil RSA test key from the tough TUF test fixtures, not used anywhere real
-# 2 finding(s); rules: private-key; files: crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem (2)
-761f8d8c02e208f9f1d85b5af3a83851613557e7:crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
-f84d94ccb9b183aa253baa5c87693fe65de23e9d:crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
+# 2 finding(s); rules: private-key; files: crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem (2)
+761f8d8c02e208f9f1d85b5af3a83851613557e7:crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
+f84d94ccb9b183aa253baa5c87693fe65de23e9d:crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
 
 # Reason: hex signature/digest value in recorded qualification evidence, not a credential
 # 1 finding(s); rules: generic-api-key; files: docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json (1)
@@ -2577,8 +2577,8 @@ f4aaf7b0ec5ab5585585d6cd3a74f371ca4c22d8:fixtures/parity/multi-crate/expected/pl
 f53081d700d18e5f42723d5237679c4bccf72a78:fixtures/parity/multi-crate/expected/plan-v1.json:generic-api-key:1
 
 # Reason: Tough test-only snakeoil fixture; exact source row and prior fixture review
-# 1 finding(s); rules: private-key; files: crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem (1)
-3e30cae62535cae224dacfcb40f66992020c636b:crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
+# 1 finding(s); rules: private-key; files: crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem (1)
+3e30cae62535cae224dacfcb40f66992020c636b:crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
 
 # Reason: generated task-execution manifest IDs, digests, and bounded tool/path flags; exact source rows reviewed
 # 51 finding(s); rules: generic-api-key; files: .github/velnor/task-execution-manifest-v1.json (51)
@@ -2945,7 +2945,7 @@ crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs
 crates/velnor-actions-contract/src/workflow/qualification_cache_lineage_tests.rs:generic-api-key:79
 crates/velnor-actions-mise/tests/impl_mise_env_policy.rs:generic-api-key:295
 crates/velnor-actions-orchestrator/src/merge_request_tests.rs:generic-api-key:288
-crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
+crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem:private-key:1
 docs/implemented/evidence/freshness-2026-10-20/qualification/mise-crypto-admission.json:generic-api-key:176
 docs/implemented/freshness-evidence-2026-10-08.md:generic-api-key:73
 docs/reviews/ci-performance-owned-source-publication.json:generic-api-key:114

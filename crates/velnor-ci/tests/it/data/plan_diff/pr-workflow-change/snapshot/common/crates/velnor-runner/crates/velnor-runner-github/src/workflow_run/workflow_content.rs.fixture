@@ -1,0 +1,4 @@
+        || filename == ".."
+        || matches!(filename, ".yml" | ".yaml")
+        || !std::path::Path::new(filename)
+            .extension()

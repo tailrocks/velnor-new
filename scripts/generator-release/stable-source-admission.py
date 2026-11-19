@@ -28,7 +28,7 @@ def admit():
     for field in ("SOURCES_TREE", "SOURCES_ROOT_LOCK", "SOURCES_RUNNER_LOCK"):
         if not re.fullmatch(r"[0-9a-f]{64}", value[field]):
             raise ValueError("source digest")
-    if sha("Cargo.lock") != value["SOURCES_ROOT_LOCK"] or sha("crates/velnor-runner/Cargo.lock") != value["SOURCES_RUNNER_LOCK"]:
+    if sha("Cargo.lock") != value["SOURCES_ROOT_LOCK"] or sha("Cargo.lock") != value["SOURCES_RUNNER_LOCK"]:
         raise ValueError("source locks")
     digest = value["SOURCES_DIGEST"]
     digest = digest if digest.startswith("sha256:") else "sha256:" + digest

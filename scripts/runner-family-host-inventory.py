@@ -7,14 +7,14 @@ import hashlib
 import os
 from pathlib import Path
 
-HOST_BUILD = "crates/velnor-runner/crates/velnor-runner-host/build.rs"
+HOST_BUILD = "crates/velnor-runner-host/build.rs"
 HOST_BUILD_SHA256 = "698d48bc9909d422b51b47ce463afa43678c0fa79f9bab6388c8501397001571"
-HOST_MANIFEST = "crates/velnor-runner/crates/velnor-runner-host/Cargo.toml"
-HOST_IDENTITY = "crates/velnor-runner/crates/velnor-runner-host/src/compile_identity.rs"
+HOST_MANIFEST = "crates/velnor-runner-host/Cargo.toml"
+HOST_IDENTITY = "crates/velnor-runner-host/src/compile_identity.rs"
 
 
 def host_packages(metadata, root, native):
-    workspace = root / "crates/velnor-runner"
+    workspace = root
     if Path(metadata.get("workspace_root", "")).resolve() != workspace:
         raise native.InventoryError("qualifier workspace root mismatch")
     items = metadata.get("packages", [])

@@ -1,0 +1,4 @@
+            .current_dir(root)
+            .env_clear()
+            .env("PATH", &self.path)
+            .env("HOME", &self.home)

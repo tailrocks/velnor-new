@@ -1,0 +1,4 @@
+    for target in ["spare/../cache-output", "cache-output/../cache-output"] {
+        let result = check(&[observed_pair(target, "identical")?]);
+        assert!(
+            result.as_ref().err().is_some_and(|error| error

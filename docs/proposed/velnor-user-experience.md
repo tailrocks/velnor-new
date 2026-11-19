@@ -312,7 +312,7 @@ Compared outcomes, outputs, env, annotations, cache and artifact effects: 0 diff
 ```console
 $ velnor explain 1412 test:velnor-ci
 test:velnor-ci  RAN (2 witnesses: velnor-12, velnor-31)
-  changed input  ci-helper/crates/velnor-ci/src/plan.rs
+  changed input  crates/velnor-ci/src/plan.rs
 $ velnor explain 1412 clippy:generator
 clippy:generator  REUSED  record from PR #1409, trusted, epoch 4
   same: tree for generator/ (contract v3), toolchain 1.99.1, executor native@sha256:ab12…
@@ -350,7 +350,7 @@ Conformance native = official: 100% (de, fi, docker)        last official releas
 | | Checks | Why |
 |---|---|---|
 | Reused | 29 | same key verified in PR #1409 and on main |
-| Ran twice | 12 | inputs changed (ci-helper/crates/velnor-ci) |
+| Ran twice | 12 | inputs changed (crates/velnor-ci) |
 | Fresh | 1 | reads the clock: always runs |
 Dropped tests: none. (A test missing compared with main fails the check unless the owner signed it.)
 ```

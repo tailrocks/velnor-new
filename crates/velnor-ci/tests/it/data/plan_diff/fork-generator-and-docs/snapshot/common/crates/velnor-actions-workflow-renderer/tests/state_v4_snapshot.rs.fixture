@@ -1,0 +1,13 @@
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(target, text)?;
+    Ok(())
+        .current_dir(repo)
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .status()?;
+        .current_dir(repo)
+        .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_WORKSPACE", repo)
+        .env("GITHUB_OUTPUT", &output)

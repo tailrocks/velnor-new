@@ -1,0 +1,13 @@
+    let evil_layer = tar_archive(&[("../evil", b"x".as_slice())]);
+    let evil_config = config_for(&sha256_hex(&evil_layer));
+    let evil_manifest = manifest_for(&evil_config, &evil_layer);
+    let evil_index = index_for(&evil_manifest);
+        ("tar_member", "../evil"),
+        ("tar_member", "/abs"),
+        ("tar_member", ""),
+        ("tar_member", "."),
+        ("tar_member", "a/../../b"),
+        ("tar_layer", "../evil"),
+        ("tar_layer", "/abs"),
+    ] {
+        let marker = if mode == "tar_member" {

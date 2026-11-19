@@ -1,0 +1,4 @@
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let committed = files_of_repo(&root)?;
+    let writers = check_files("committed", &committed);
+    for name in COMMITTED_WORKFLOWS {

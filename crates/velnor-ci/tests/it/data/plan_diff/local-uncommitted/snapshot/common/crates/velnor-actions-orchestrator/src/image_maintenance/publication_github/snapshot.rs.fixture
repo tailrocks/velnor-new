@@ -1,0 +1,8 @@
+#[path = "snapshot_inventory.rs"]
+mod inventory;
+
+const HEX: &[u8; 16] = b"0123456789abcdef";
+            .any(|part| part.is_empty() || part == "." || part == "..")
+    {
+        return Err(internal("image_publication_source_archive"));
+    }

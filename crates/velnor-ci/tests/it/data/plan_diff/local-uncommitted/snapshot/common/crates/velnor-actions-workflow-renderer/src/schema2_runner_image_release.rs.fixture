@@ -1,0 +1,17 @@
+#[path = "schema2_runner_image_release/attest.rs"]
+mod attest;
+#[path = "schema2_runner_image_release/authority.rs"]
+mod authority;
+#[path = "schema2_runner_image_release/release.rs"]
+mod release;
+
+use super::super::{
+            include_str!("../../../scripts/runner-family-discovery.sh"),
+            include_str!("../../../scripts/resolve-runner-family-publication.sh").replace(
+                "source \"$(dirname \"${BASH_SOURCE[0]}\")/runner-family-discovery.sh\"",
+                "",
+            ),
+#[path = "schema2_runner_image_release/context.rs"]
+mod context;
+
+fn publish_job(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {

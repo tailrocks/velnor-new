@@ -155,10 +155,10 @@ alint validate-config
 alint check --fail-on-warning
 cargo deny check
 bash scripts/check-freshness.sh
-cargo fmt --manifest-path crates/velnor-runner/Cargo.toml --all -- --check
-cargo clippy --manifest-path crates/velnor-runner/Cargo.toml --locked --all-targets -- -D warnings
-cargo nextest run --manifest-path crates/velnor-runner/Cargo.toml --locked --no-tests fail
-cargo deny --manifest-path crates/velnor-runner/Cargo.toml check
+cargo fmt --manifest-path Cargo.toml --all -- --check
+cargo clippy --manifest-path Cargo.toml --locked --all-targets -- -D warnings
+cargo nextest run --manifest-path Cargo.toml --locked --no-tests fail
+cargo deny --manifest-path Cargo.toml check
 ```
 
 T01 verification commands (this task): `git rev-parse HEAD`, `git status --short`,

@@ -1,0 +1,4 @@
+    let empty_program = concat!(
+        r#"if type != "array" then error("ci_run_listing_invalid") "#,
+        r#"elif length == 0 then error("ci_run_listing_invalid") "#,
+        r#"elif any(.[]; type != "object") then error("ci_run_listing_invalid") "#,

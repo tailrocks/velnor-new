@@ -1,0 +1,16 @@
+        fs::create_dir_all(file.parent().unwrap_or(Path::new("")))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        fs::write(file, text).unwrap_or_else(|e| unreachable!("{e}"));
+        self
+            .current_dir(&self.0)
+            .env_remove("RUSTUP_TOOLCHAIN");
+        if let Some(toolchain) = toolchain {
+            command.env("RUSTUP_TOOLCHAIN", toolchain);
+        .current_dir(&checkout.0)
+        .env("RUSTUP_TOOLCHAIN", toolchain)
+        .env("RUSTC_WRAPPER", "must-be-removed")
+        .env("VELNOR_TEST_WRAPPER_MARKER", &marker)
+        .current_dir(&checkout.0)
+        .env("RUSTUP_TOOLCHAIN", "stable")
+        .env("PATH", path)
+        .output()

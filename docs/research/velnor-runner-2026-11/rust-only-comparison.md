@@ -341,7 +341,7 @@ Each question gives the positions, the evidence each cites, and what would settl
 ### Q2. Which object may be the required check: App check run, App commit status, Actions job, or caller job?
 
 - Opus: App check run bound by `integration_id`. Astra, Sol: App commit status (Astra adds required-reviewer witness; Sol managed topic refs). Fable: Actions job behind caller plus App `Velnor / Ledger`. Muse Wonder, Argon: Actions job that fails closed. Muse Wonder Full: `if:` job plus failing guard job. Neon: caller job, App check later. Carbon: Actions `Required` plus App `velnor/verdict`.
-- Evidence: `ci-helper/crates/velnor-ci/src/gate.rs:15,127-159,277-288` and `product-release.yml:86` require exactly one Actions `Required` job in the main push run (cited by Opus, Fable, Astra, Sol, Muse Wonder, Muse Wonder Full, Neon, Argon). Astra and Sol note a foreign-App check is rejected by the gate today.
+- Evidence: `crates/velnor-ci/src/gate.rs:15,127-159,277-288` and `product-release.yml:86` require exactly one Actions `Required` job in the main push run (cited by Opus, Fable, Astra, Sol, Muse Wonder, Muse Wonder Full, Neon, Argon). Astra and Sol note a foreign-App check is rejected by the gate today.
 - Settle: owner choice of the release-gate contract; lab test that a failing-closed job, a status and a check each block merge and queue entry.
 
 ### Q3. Do GitHub App webhooks fire when a label is changed with `GITHUB_TOKEN`?

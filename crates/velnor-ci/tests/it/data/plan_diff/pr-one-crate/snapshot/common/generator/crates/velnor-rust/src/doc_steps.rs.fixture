@@ -1,0 +1,16 @@
+    let own = root.manifest.parent();
+    let nested: Vec<Option<RepoPath>> = facts
+        .rust_roots
+        .iter()
+        .map(|other| other.manifest.parent())
+        .filter(|other| *other != own && contains(own.as_ref(), other.as_ref()))
+        .collect();
+    let members: Vec<Option<RepoPath>> = root
+            let config_base = path.parent().and_then(|folder| folder.parent());
+            if is_cargo_config(path) {
+                return contains(config_base.as_ref(), own.as_ref()) || config_base == own;
+            }
+            ".." => {
+                parts.pop()?;
+            }
+            part => parts.push(part),

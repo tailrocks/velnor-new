@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+[tools]
+rust = "1.99.1"
+
+[env]
+mr_boxington = true

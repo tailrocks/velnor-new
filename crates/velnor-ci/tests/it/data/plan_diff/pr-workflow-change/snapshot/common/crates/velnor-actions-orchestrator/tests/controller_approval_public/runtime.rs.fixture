@@ -1,0 +1,8 @@
+    let approvals = include_str!("../../../../.velnor/controller-approvals.json");
+    let lock = include_str!("../../../../.velnor/generator.lock");
+    let value: Value = serde_json::from_str(approvals)?;
+    assert_eq!(value["active"]["version"], "0.1.80");
+    assert_eq!(
+#[path = "runtime_plan.rs"]
+mod plan_runtime;
+

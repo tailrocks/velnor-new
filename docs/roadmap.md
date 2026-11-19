@@ -58,7 +58,7 @@ gh api graphql --paginate -f query='query($endCursor:String){repository(owner:"t
 
 1. Read [the goals](goals.md) and this file.
 2. Run the query. The query prints the issues in order of how many issues they block, most first. Pick the first one.
-3. Run at most three issues at the same time. Two issues run together only when they change different top-level folders (`generator/`, `ci-helper/`, `local/`, `crates/`) or different repositories.
+3. Run at most three issues at the same time. Two issues run together only when they change different crates or different repositories.
 4. For each issue, follow "One issue" below.
 5. Run the query again and continue. The run is finished when the query prints nothing. Then print the open issues with the label `owner-action` and the open issues with the label `blocked`.
 
@@ -82,7 +82,7 @@ Every agent shares one GitHub token, and its API limit is 5000 calls an hour. Fr
 1. Never poll GitHub in a loop. Watch a run with `gh run watch <id> --interval 180`, and a pull request with `gh pr checks <number> --watch --interval 180`. The default interval is 3 seconds for `gh run watch` and 10 seconds for `gh pr checks --watch`. Run one watcher, owned by the orchestrator.
 2. When GraphQL is rate-limited, `gh pr review` and `gh pr create` fail. Use REST instead. Post a review with `gh api -X POST repos/tailrocks/velnor-new/pulls/<number>/reviews -f event=COMMENT -F body=@<file>`. Create a pull request with `gh api -X POST repos/tailrocks/velnor-new/pulls -f title=<title> -f head=<branch> -f base=main -F body=@<file>`.
 3. A plain `cargo nextest run --workspace` fails about 100 tests in `velnor-actions-cli`, `velnor-actions-mise` and `velnor-archive-guard`. They need environment variables that only `scripts/verify-local.sh` sets. Run that script, or test only the crates you touch. These failures are not regressions.
-4. On a heavily loaded machine, a test can reach a nextest `slow-timeout` and be terminated, so its completion and cleanup are not established. Investigate that failure or quarantine the test. Never merge on the assumption that it was timing, and never weaken the timeout to hide it. The `slow-timeout = { period = "2s", terminate-after = 1 }` setting is in the nextest config of two workspaces: `generator/` and `ci-helper/`. `local/` and `crates/velnor-runner/` set none. To check a timeout, copy `.config/nextest.toml` with a longer timeout, and prove the timing on CI.
+4. On a heavily loaded machine, a test can reach a nextest `slow-timeout` and be terminated, so its completion and cleanup are not established. Investigate that failure or quarantine the test. Never merge on the assumption that it was timing, and never weaken the timeout to hide it. The `slow-timeout = { period = "2s", terminate-after = 1 }` setting is a `.config/nextest.toml` override for `velnor-ci`, `velnor-gen`, `velnor-model`, `velnor-release`, `velnor-render` and `velnor-rust`. The other crates set none. To check a timeout, copy `.config/nextest.toml` with a longer timeout, and prove the timing on CI.
 
 ## The project board
 

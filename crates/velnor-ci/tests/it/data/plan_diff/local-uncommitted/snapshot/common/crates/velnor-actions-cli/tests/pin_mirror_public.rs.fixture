@@ -1,0 +1,20 @@
+#[path = "pin_mirror_public_fixture.rs"]
+mod fixture;
+
+#[path = "pin_mirror_public_sources.rs"]
+mod sources;
+
+use fixture::{
+    let real = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join(POLICY);
+    fs::remove_file(fixture.path(POLICY))?;
+    std::os::unix::fs::symlink("schema=1", fixture.path(POLICY))?;
+        "a..b",
+        "HEAD@{0}",
+        "a b",
+        "r\u{e9}f",
+    assert!(!outcome.success, "symlinked base parent accepted");
+    assert!(outcome.row("pin-diff", "fail", "HEAD").is_some());
+    assert_eq!(outcome.rows_of("pin-diff", "info").len(), 0);
+    Ok(())

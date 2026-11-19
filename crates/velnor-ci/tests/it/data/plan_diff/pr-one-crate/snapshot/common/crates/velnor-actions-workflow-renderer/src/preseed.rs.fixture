@@ -1,0 +1,12 @@
+#[path = "preseed_digest.rs"]
+mod digest;
+#[path = "preseed_mbx.rs"]
+mod mbx;
+#[path = "preseed_order.rs"]
+mod order;
+
+pub use digest::{source_bound_helper_digest, source_bound_helper_digest_input};
+                && !rest.split('/').any(|seg| seg.is_empty() || seg == "..")
+                && !rest.chars().any(|ch| ch.is_whitespace() || ch.is_control())
+                && !rest.contains("${{") =>
+        {

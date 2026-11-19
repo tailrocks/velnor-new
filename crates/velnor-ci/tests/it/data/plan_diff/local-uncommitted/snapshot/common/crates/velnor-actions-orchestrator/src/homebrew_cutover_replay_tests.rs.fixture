@@ -1,0 +1,15 @@
+    let captured: CommitResponse = serde_json::from_slice(include_bytes!(
+        "github_history_fixtures/cutover-tap-base-git-commit.json"
+    ))
+    .expect("captured Tap commit DTO");
+    let two_parents: CommitResponse = serde_json::from_slice(include_bytes!(
+        "github_history_fixtures/rest-git-commit.json"
+    ))
+    .expect("captured two-parent PR head DTO");
+    assert!(
+        validate_landed_commit(
+            &two_parents,
+        "two-parent commit"
+    );
+}
+

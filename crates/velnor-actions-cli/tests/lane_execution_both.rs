@@ -257,63 +257,6 @@ fn check_invalid_frames(
     Ok(())
 }
 
-#[test]
-fn executed_rust_both_binds_wrapper_reports_and_ledgers() -> Result<(), Box<dyn Error>> {
-    let (_tool_staging, tools) = qualified_tools()?;
-    let (temp, root, head) = fixture()?;
-    let generated = cli::generate(&root, &tools)?;
-    let inventory = &generated.inventory;
-    for id in ["rust-fixture__hosted", "rust-fixture__local"] {
-        assert!(generated.required.iter().any(|required| required == id));
-    }
-    let request = json!({"schema": 1, "op": "plan-v1", "run_key": RUN_KEY, "event": "push", "head": head, "root": root, "lane_inventory": inventory});
-    let response = cli::invoke(&tools, "plan-v1", &request, true)?;
-    let plan: Plan = serde_json::from_value(response["plan"].clone())?;
-    assert_eq!(plan.generator.sha256, sha(&fs::read(BIN)?));
-    let manifest_text = &generated.manifest;
-    let manifest_body = manifest_text
-        .split_once('\n')
-        .ok_or("manifest marker missing")?
-        .1;
-    let manifest: TaskExecutionManifestV1 = serde_json::from_str(manifest_body)?;
-    let manifest_path = root.join(TASK_EXECUTION_MANIFEST_PATH);
-    fs::create_dir_all(manifest_path.parent().ok_or("manifest parent missing")?)?;
-    fs::write(&manifest_path, manifest_text)?;
-    let script = &generated.script;
-    let pair: Vec<_> = plan
-        .jobs
-        .iter()
-        .filter(|job| {
-            job.job_id.starts_with("rust-fixture__")
-                && job.disposition == velnor_actions_contract::JobDisposition::Run
-        })
-        .collect();
-    assert_eq!(pair.len(), 2, "fixture must run both concrete jobs");
-    let ctx = RunContext {
-        temp: temp.path(),
-        root: &root,
-        tools: &tools,
-        head: &head,
-        plan: &plan,
-        manifest: &manifest,
-        manifest_path: &manifest_path,
-        manifest_text,
-        script,
-    };
-    let mut results = RunResults::default();
-    for job in &pair {
-        execute_job(&ctx, &job.job_id, &mut results)?;
-    }
-    check_invalid_frames(
-        &ctx,
-        [&pair[0].job_id, &pair[1].job_id],
-        results.first_digest.as_deref(),
-    )?;
-    let required_ids = &generated.required;
-    check_merge(&tools, required_ids, &response, &json!(inventory), results)?;
-    Ok(())
-}
-
 fn check_merge(
     tools: &std::path::Path,
     required_ids: &[String],

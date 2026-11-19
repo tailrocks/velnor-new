@@ -19,7 +19,7 @@ The first step of a run is `velnor-ci plan`. It lists the changed files, finds t
 
 ### One job by default
 
-The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots and test groups only. A second job costs start-up time, so the generator adds one only when it pays (`generator/crates/velnor-rust/src/shape.rs`).
+The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots and test groups only. A second job costs start-up time, so the generator adds one only when it pays (`crates/velnor-rust/src/shape.rs`).
 
 | `shape` | Jobs | Chosen when |
 |---|---|---|
@@ -48,7 +48,7 @@ The tests are built once and handed on as a nextest archive. `rust-test-default`
 
 ## Caches
 
-Three families hold the work between runs. Each key is built from one typed value in `generator/crates/velnor-model/src/cache.rs`, never from a hand-written string.
+Three families hold the work between runs. Each key is built from one typed value in `crates/velnor-model/src/cache.rs`, never from a hand-written string.
 
 | Family | Key holds | Restored from | Saved by |
 |---|---|---|---|
@@ -141,7 +141,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
 | `private_sources` | none | private dependencies, see above |
-| `crates_mirror` | none | a crates mirror for a self-hosted runner |
+| `crates_mirror` | none | a crates mirror for a self-hosted runner (needs `velnor-ci` 0.1.93) |
 | `runner` | `"ubuntu-latest"` | the runner label of every job |
 | `fork_runner` | `"ubuntu-latest"` | the hosted runner for fork pull requests when `runner` is self-hosted |
 | `timeout_minutes` | `30` | job time limit, 1 to 360 |

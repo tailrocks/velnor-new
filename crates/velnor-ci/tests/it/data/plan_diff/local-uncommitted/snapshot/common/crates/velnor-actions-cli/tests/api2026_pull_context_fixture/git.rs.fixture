@@ -1,0 +1,4 @@
+            .current_dir(&self.paths.repo)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("HOME", &self.paths.home)
