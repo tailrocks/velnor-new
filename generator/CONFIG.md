@@ -149,18 +149,21 @@ filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_p
 
 `filter` is optional. It is a nextest filterset that the generator joins to the plan's selection with `and`, so a lane never runs a test the plan did not select. Without it the lane re-runs the whole selected set with the features. Every generated `run:` value is one command with no shell syntax, so the filterset is one quoted argument and must not contain `|`, `&`, `;`, `<`, a quote, `$`, a backtick, a backslash, a line break or one of the words `if`, `for`, `while`, `case` and `coproc`. Write the nextest operators as words: `or` for `|`, `and` for `&` and `not` for `!`. Binaries that run with `cargo test` because their harness is off stay out of the lane, as they stay out of the default step.
 
-`lint` and `doc` are optional booleans, `false` by default. A lane without them renders exactly as before. `lint = true` adds a clippy step named `Lint (features: local-mode)` and `doc = true` adds a rustdoc step named `Documentation (features: local-mode)`. Each runs the root's default command with `--features '<features>'` added, so clippy keeps `--workspace --all-targets --locked ... -- -D warnings` and rustdoc keeps `--workspace --no-deps --locked` with `-D warnings` for rustdoc. The steps follow the lane's test step in the same job, in the same folder and with the same target directory, so the build cache is shared. They are steps of a job that the `required` job already needs, so a failure there fails the gate. Format checks need no features and stay in the default lint step.
+`lint` and `doc` are optional booleans, `false` by default. A lane without them renders exactly as before. `lint = true` adds a clippy step named `Lint (features: local-mode)` and `doc = true` adds a rustdoc step named `Documentation (features: local-mode)`. Each runs the root's default command with `--features '<features>'` added, so clippy keeps `--workspace --all-targets --locked ... -- -D warnings` and rustdoc keeps `--workspace --no-deps --locked` with `-D warnings` for rustdoc. The steps follow the lane's test step in the same job, in the same folder and with the same target directory, so the build cache is shared. They are steps of a job that the `required` job already needs, so a failure there fails the gate. Format checks need no features and stay in the default lint step. Lanes of one root that name the same features, in any order, share one lint step and one rustdoc step, because those commands cover the whole workspace and ignore `filter`. The step appears after the first lane that sets `lint` or `doc`.
 
 ```toml
 [[test_lane]]
 root = "crates/velnor-runner-*"
 features = ["local-mode"]
+packages = ["velnor-runner-host"]
 filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
 lint = true
 doc = true
 ```
 
-A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. It needs velnor-ci 0.1.86 or later, and `velnor-gen generate` refuses an older pin when a lane has a `filter`. A lane without a `filter` runs every selected test and has no guard.
+A lane with a `filter` gets a second step, `Test lane guard (features: ...)`, right after the lane step. It runs `velnor-ci lane-guard --features '...' --filter '...'`, with one `--except-binary` for each `harness = false` binary that the root runs with `cargo test`, and it runs under the same condition as the lane step. The guard asks cargo-nextest to list the workspace with and without the features and under the filter. It fails the job when a test exists only with the features, is not ignored, and falls outside `filter`, and it names each such test with its binary id. A listing error also fails the guard. A lane without a `filter` runs every selected test and has no guard.
+
+The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key it does not know, so any `[[test_lane]]` needs velnor-ci 0.1.93 or later, the first release that accepts the key and runs `lane-guard`. `velnor-gen generate` refuses an older pin when the file has a lane, filtered or not.
 
 ## Unused dependencies
 

@@ -54,6 +54,7 @@ mod drift;
 mod events;
 mod events_policy;
 mod facts;
+mod feature_lane_dedup;
 mod feature_lane_scope;
 mod feature_lanes;
 mod fixed_uses;
