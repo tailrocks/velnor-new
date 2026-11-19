@@ -44,6 +44,7 @@ pub struct JobGrant {
     pub velnor: String,
     pub repository: String,
     pub event: String,
+    pub runid: String,
     pub actions: String,
     pub exp: u64,
 }

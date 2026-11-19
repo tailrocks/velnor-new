@@ -3,21 +3,63 @@
 
 //! Cache administration on the job port mirrors GitHub: a job lists and deletes `actions/caches`
 //! only with `actions: write` on an event that is not a pull request. runner.server hands such a
-//! job a signed grant as `github.token`; `--job-cache-admin` grants every job instead.
+//! job a signed grant as `github.token`, and the grant counts only for a run the driver's ledger
+//! admits; `--job-cache-admin` grants every job instead.
+
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use serde_json::{Value, json};
+use velnor_local::io::api_stub::{Answer, StandIn};
 
 use super::{CACHES, LIMIT, archives, keys};
 use crate::support::{Harness, MAIN, PULL_2, Stub, job_token, temp_dir};
 
-fn stub(harness: &Harness, name: &str, override_all: bool) -> Stub {
+const RUNS: &str = "/_apis/v1/Message/workflow/runs";
+const SHA: &str = "0123456789abcdef0123456789abcdef01234567";
+
+#[derive(Debug)]
+struct Runs(Vec<u8>);
+
+impl StandIn for Runs {
+    fn get<'a>(&'a self, path: &'a str) -> Answer<'a> {
+        Box::pin(std::future::ready((path == RUNS).then(|| self.0.clone())))
+    }
+}
+
+fn run(event: &str, git_ref: &str) -> Value {
+    json!([{"id": 1, "fileName": ".github/workflows/cache.yml", "eventName": event, "ref": git_ref, "sha": SHA}])
+}
+
+fn recorded(event: &str, git_ref: &str, existing: &[u64]) -> Value {
+    json!({"id": format!("1-{event}"), "side": "trusted", "event": event, "ref": git_ref, "sha": SHA, "workflow": null, "existing": existing})
+}
+
+fn bound(harness: &Harness, name: &str, runs: Option<&Value>, ledger: Option<&[Value]>) -> Stub {
     let (repo, state) = (
         temp_dir(&format!("{name}-repo")),
         temp_dir(&format!("{name}-state")),
     );
+    let folder = ledger.map(|entries| {
+        let folder: PathBuf = state.join("authority");
+        std::fs::create_dir_all(&folder).unwrap_or_else(|e| unreachable!("{e}"));
+        let lines = entries.iter().map(Value::to_string).collect::<Vec<_>>();
+        std::fs::write(folder.join("ledger.jsonl"), lines.join("\n"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        folder
+    });
+    let standin =
+        runs.map(|runs| Arc::new(Runs(runs.to_string().into_bytes())) as Arc<dyn StandIn>);
+    Stub::job_grants(&repo, &state, harness.dir(), (standin, folder))
+}
+
+fn stub(harness: &Harness, name: &str, override_all: bool) -> Stub {
     if override_all {
-        Stub::job_cache_admin(&repo, &state, harness.dir())
-    } else {
-        Stub::job_grants(&repo, &state, harness.dir())
+        let repo = temp_dir(&format!("{name}-repo"));
+        return Stub::job_cache_admin(&repo, &temp_dir(&format!("{name}-state")), harness.dir());
     }
+    let dispatched = [recorded("push", MAIN, &[])];
+    bound(harness, name, Some(&run("push", MAIN)), Some(&dispatched))
 }
 
 async fn seeded(name: &str) -> Harness {
@@ -124,6 +166,7 @@ fn runner_server_grants_a_job_on_its_calculated_permission_whether_or_not_the_jo
     assert!(snippet.contains("actionsPermission == \"read\""));
     assert!(snippet.contains("new Claim(\"actions\", actionsPermission)"));
     assert!(snippet.contains("!wevent.StartsWith(\"pull_request\")"));
+    assert!(snippet.contains("new Claim(\"runid\", runid.ToString())"));
 }
 
 #[tokio::test]
@@ -141,7 +184,14 @@ async fn a_pull_request_job_with_actions_write_gets_403() {
 #[tokio::test]
 async fn a_schedule_job_with_actions_write_is_granted_like_a_push() {
     let harness = seeded("job-admin-schedule").await;
-    let stub = stub(&harness, "job-admin-schedule", false);
+    let dispatched = [recorded("schedule", MAIN, &[])];
+    let runs = run("schedule", MAIN);
+    let stub = bound(
+        &harness,
+        "job-admin-schedule",
+        Some(&runs),
+        Some(&dispatched),
+    );
     let listed = stub
         .call_as("GET", CACHES, &job_token("schedule-actions-write"))
         .await;
@@ -190,4 +240,55 @@ async fn the_control_token_does_not_unlock_the_job_port() {
     let harness = seeded("job-admin-control").await;
     let stub = stub(&harness, "job-admin-control", false);
     refused(&stub, &harness, Some("test-control")).await;
+}
+
+#[tokio::test]
+async fn a_forged_push_run_the_driver_never_dispatched_gets_403() {
+    let harness = seeded("job-admin-forged").await;
+    let token = job_token("push-actions-write");
+    let forged = run("push", MAIN);
+    let pull_request = [recorded("pull_request", PULL_2, &[])];
+    for (name, ledger) in [
+        ("job-admin-forged-pr", &pull_request[..]),
+        ("job-admin-forged-empty", &[][..]),
+    ] {
+        let stub = bound(&harness, name, Some(&forged), Some(ledger));
+        refused(&stub, &harness, Some(&token)).await;
+    }
+}
+
+#[tokio::test]
+async fn a_grant_claiming_push_for_a_run_the_ledger_records_as_a_pull_request_gets_403() {
+    let harness = seeded("job-admin-relabelled").await;
+    let runs = run("pull_request", PULL_2);
+    let dispatched = [recorded("pull_request", PULL_2, &[])];
+    let stub = bound(
+        &harness,
+        "job-admin-relabelled",
+        Some(&runs),
+        Some(&dispatched),
+    );
+    refused(&stub, &harness, Some(&job_token("push-actions-write"))).await;
+}
+
+#[tokio::test]
+async fn a_stale_grant_for_a_run_older_than_the_ledger_entry_gets_403() {
+    let harness = seeded("job-admin-stale").await;
+    let runs = run("push", MAIN);
+    let dispatched = [recorded("push", MAIN, &[1])];
+    let stub = bound(&harness, "job-admin-stale", Some(&runs), Some(&dispatched));
+    refused(&stub, &harness, Some(&job_token("push-actions-write"))).await;
+}
+
+#[tokio::test]
+async fn without_the_ledger_or_runner_server_no_grant_counts() {
+    let harness = seeded("job-admin-unbound").await;
+    let token = job_token("push-actions-write");
+    let (runs, dispatched) = (run("push", MAIN), [recorded("push", MAIN, &[])]);
+    for (name, runs, ledger) in [
+        ("job-admin-no-ledger", Some(&runs), None),
+        ("job-admin-no-standin", None, Some(&dispatched[..])),
+    ] {
+        refused(&bound(&harness, name, runs, ledger), &harness, Some(&token)).await;
+    }
 }
