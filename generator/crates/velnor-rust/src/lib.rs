@@ -86,7 +86,7 @@ pub use base_cache::{MAX_SOURCE_ROOTS, source_roots_over_limit};
 pub use build_profile::{BuildProfile, build_profile, rustc_release};
 pub use build_script::{SilentBuildScript, build_script_sources, silent_build_scripts};
 pub use compat::{BUILD_DRIVER, COMPAT_SCHEMA, CompatInputs, compat};
-pub use config::{CONFIG_PATH, ci_debuginfo};
+pub use config::{CONFIG_PATH, KEYS, ci_debuginfo};
 pub use credentials::reject_release_credential_hooks;
 pub use detect::{cargo_files, detect, manifests, metadata_roots, wanted_files};
 pub use doc_steps::{member_sources, optional_steps, root_sources};

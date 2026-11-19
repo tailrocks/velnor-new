@@ -33,7 +33,7 @@ Method: claims checked against `evidence.md` (T/B/C/E/F sections) and cited code
 - **Baselines are sums of medians from different cohorts.** 16.0 (11-17 PR, T5) + 12.8 (11-17 merge_group) added as stages of one PR. Medians do not add; cohorts differ; review/enqueue time is zero by construction. G's timelines and E's landed-commit check show that gap is minutes to tens of minutes. "Honest push-to-merge today" was never measured.
 - **"1,000 workflow runs saturated the 20-job hosted limit."** T11 counts runs *created* 11-18 (CI 348, image candidate 306, qualification 267) and 86 queued (25 non-CI). No evidence ties a 20-concurrent limit to this org or equates run count with concurrency. G flags the public-repo exemption as open; B states it as fact.
 - **CCD topology as measured fact.** "8 CCDs × 6 cores × 32 MB L3" asserted from the model string. B §1.6: CPU model, SMT, NUMA *not observable* read-only, in no owner doc. The pinning config (`reservedSystemCPUs: "0-5,48-53"`, 7 clean CCDs) breaks silently if enumeration differs.
-- **State seal softened.** T9d: producer failed 16/18 (7 tip, 9 Clippy/checks); root/runner **0/18**. B's ancestor-or-equal promotion cures only the 7; the 9 mean the producer pipeline is red half the time. Deleting `state-seal.yml` sidesteps this.
+- **State seal softened.** T9d: producer failed 16/18 (7 tip, 9 Clippy/checks); root/runner **0/18**. B's ancestor-or-equal promotion cures only the 7; the 9 mean the producer pipeline is red half the time. Deleting the State seal workflow sidesteps this.
 
 ### Missed bottlenecks or risks
 
