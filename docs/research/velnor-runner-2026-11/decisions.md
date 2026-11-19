@@ -296,6 +296,11 @@ in the design review. "Same as" marks a merged duplicate.
 | N75 | A syscall read audit per sandbox (path syscalls including `ENOENT` results) as the check that a key is complete; a read outside the key's paths demotes the receipt to exact-tree scope. | Claude Opus 5.5 | GPT-6.2-Astra and GPT-6.2-Sol: observed reads cannot prove completeness | Adopted (v3) | Used as detection, never as the argument for skipping: keys stay input-addressed over the full tree (Q5's safe default), and the audit only demotes. Astra and Sol's objection is why it detects rather than licenses. |
 | N76 | Release binaries are scanned for banned legacy endpoint paths; Velnor reports as its runner version the newest official release it has passed. | Claude Opus 5.5 | — | Adopted (v3) | Turns decision 3 into a check, and GitHub's 63-day version window into a conformance deadline. |
 | N77 | Batch work (builder, speculation, audits) in `cpu.idle` cgroups, frozen with `cgroup.freeze` under memory pressure instead of killed. | Claude Opus 5.5 | — | Adopted (v3) | Keeps the reserved merge path's latency while batch work uses idle CPU. |
+| N78 | Release promotion by digest: release-profile bytes built once per closure key at merge time, qualified once on the exact bytes, packed and attested once; a tag runs one job (gate, fetch by digest, re-hash, `gh attestation verify`, publish) in about 15 s. | Claude Fable 5.2 (Rust-only round); also Claude Opus 5.5, Gemini 4 Carbon, Gemini 4 Argon | — | Adopted (v3) | Measured profile trade-off: testing the release build costs 320.8 / 365.7 CPU-s for `generator` / `ci-helper`, against 191.9 / 282.8 for debug tests plus release bytes built once, and a release-profile test build shares only 15 of 90 crates with the shipped binary (`panic = "abort"` against unwinding). Releases today take 190–434 s (tools) and 4,105–6,238 s (product) [M]. Where the bytes are built is pending ruling Q6; the merge group is the safe default. |
+| N79 | Patch the commit into a fixed-size section after link instead of `option_env!("VELNOR_COMMIT")`, so release bytes recompile only when their closure changes. | Claude Fable 5.2 | Claude Opus 5.5 (build in the group, whose SHA becomes main's); GPT-6.2-Astra (an exact main build) | Experiment-gated (v3) | Pending ruling Q6. About half of all merges touch `generator/` or `ci-helper/`, so the other half stop rebuilding both tools. |
+| N80 | The landed merge group's build output becomes the next generation; it is trusted when audit A1's cold rebuild of the same commit gives equal digests. | Claude Fable 5.2 | — | Adopted (v3) | Removes the builder's separate compile of every `main` advance (v2 compiled each change three times: PR, group and builder). |
+| N81 | Audit A2: nightly runs with the clock shifted 8 and 30 days ahead through a shim. | Claude Fable 5.2 | — | Adopted (v3) | Finds time-dependent failures before the date arrives; receipts of wall-clock tests already expire in 24 h. |
+| N82 | The harness is tested by mutants (at least 95% of about 30 killed), a protocol surface diff of about 40 files runs per official release, and a production-path canary runs every 10 min per site. | Claude Fable 5.2 | — | Adopted (v3) | Ten planted differences (v2) were too few to trust a green comparison; the canary reads every effect back through the API, and three failures in a row page the owner. |
 
 
 ## Load-bearing decisions
@@ -615,6 +620,22 @@ default, marked "pending ruling" in the design.
 | Third-party compiles counted at 2,260 of 463 crates (4.9×) | Recorded in the audit (design §4) | A second count beside 2,106 of 475 |
 | Incremental compilation on from phase 2 | Not adopted yet: pending ruling Q17 | Needs a non-incremental audit of equality |
 | Twin execution of changed obligations on two nodes | Adopted (N20 as amended) | Today's two pre-merge runs |
+
+### Group 13: what v3 takes from Claude Fable 5.2
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| Release promotion by digest; a tag job of about 15 s | Adopted (N78) | Releases rebuild today: 190–434 s and 4,105–6,238 s [M] |
+| Profile measurement R3: 320.8 / 365.7 CPU-s to test the release build against 191.9 / 282.8 for debug tests plus release bytes once; 15 of 90 crates shared | Adopted: debug tests, release bytes once (N78); where is pending ruling Q6 | Testing the release build costs more and still does not test the shipped panic strategy |
+| Commit stamped after link | Experiment-gated (N79), pending ruling Q6 | Half of all merges stop rebuilding both tools |
+| Merge-group output harvested as the next generation | Adopted (N80) | Removes the third compile of every change |
+| A1 per landed commit; A2 nightly with the clock shifted 8 and 30 days | Adopted (N81) | A stale generation and time bombs are both found early |
+| Harness mutants, a protocol surface diff of about 40 files, a 10-min production-path canary | Adopted (N82) | The comparator itself must be shown to catch differences |
+| Background steps (105 uses), sparse checkout (44 uses), input-level refusal, `create-github-app-token` | Adopted in the executor scope and the action set (design §5.6) | v2's executor scope missed them |
+| The duplicate-work audit's numbers: 2,106 builds of 475 crates per run, 6.3–21.7 GB per job discarded, state seal 683 s per push, source qualification 1,007 s per event | Recorded in the design's audit (§4) | The basis for each reuse |
+| Hedged test shards past P95 | Adopted as a duplicate kept for speed | First result wins, at batch cost |
+| `Velnor / Required` behind a skipped reusable-workflow caller, plus a second App check | Not adopted: pending ruling Q1; the App check alone is the safe default | The caller pattern rests on observed, undocumented behaviour |
+| Two-slice executor cutover | Superseded by per-job-type migration (decision 16) | — |
 
 ## Design review
 

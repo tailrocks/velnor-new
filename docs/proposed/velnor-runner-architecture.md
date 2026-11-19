@@ -199,7 +199,7 @@ keep deliberately.
 | 20 | Source preview build, tag rebuilds, product release | `main` push, tag | yes | preview 410–534 s per push; tools 190–434 s; product 4,105–6,238 s | R promote by digest | Release promotion (section 8.4) |
 | 21 | macOS and Darwin legs | `main` push, release | — | 1,063–1,406 s per push | E (paused, decision 9) | — |
 | 22 | `VELNOR_COMMIT` forces both tools to rebuild per commit | every merge | no, by construction | two tool builds per merge | E | Commit stamped after link (pending ruling Q6) |
-| 23 | Per-node rebuilds of `main` by warmers | after every merge | yes | about 120 incremental builds an hour | R once per site | Builder and storage tiers |
+| 23 | Per-node rebuilds of `main` by warmers | after every merge | yes | about 120 incremental builds an hour | R: the landed merge group's build output is the next generation, trusted when A1's cold rebuild gives equal digests | Generations by content |
 | 24 | GitHub cache save and restore | many | — | 1.92 GB restore 44–61 s | E from the verification path | Storage tiers (section 7) |
 | 25 | A Docker daemon in every pod | every job | — | 3–4 s per job; 57 probe failures an hour | E | Docker only for the three binaries that need it |
 | 26 | Conformance pairs, cold audit A1, speculation | lab, batch | yes | — | K | Measured to pay: they buy confidence or wall time at batch priority |
@@ -410,13 +410,20 @@ compares; velnor-new's `qualification.yml` is its seed.
 - **Pass criteria.** After normalisation, exact equality of step outcomes and conclusions, outputs,
   contexts and env, expression results, annotations and summaries, cache and artifact effects,
   post-step order and results, and cancellation and timeout outcomes. Any other difference fails the
-  case unless an owner-signed allow-list entry covers it. The gate is 100% per backend, and the
-  harness must catch every planted mutant before its green counts.
+  case unless an owner-signed allow-list entry covers it. The gate is 100% per backend. The harness
+  is itself tested: it must kill at least 95% of about 30 executor mutants (a swapped post-step
+  order, a dropped masker encoder, a changed shell flag) before its green counts.
 - **When.** On every change to an executor, a native action or the protocol code, as a blocking
   check; nightly; within hours of each official release (Velnor reports as its runner version the
   newest official release it has passed, so GitHub's 63-day version window becomes a conformance
-  deadline); and as sampled shadow runs of real velnor-new jobs. Every release binary is also
-  scanned for the banned legacy endpoint paths, so a legacy API cannot ship by accident.
+  deadline); and as sampled shadow runs of real velnor-new jobs. Each new official release also gets
+  a protocol surface diff, the source diff between two tags restricted to about 40 files (the
+  broker, run-service and Results clients, the job dispatcher, the step runner, the execution
+  context, command handling), and a canary runs every 10 min in each site through the production
+  path: checkout, a cache and an artifact round trip, an OIDC token, an attestation of a scratch
+  subject, a step summary, a background step and a cancel, each read back through the API; three
+  failures in a row page the owner. Every release binary is also scanned for the banned legacy
+  endpoint paths, so a legacy API cannot ship by accident.
 - **Per-job-type gate** (decision 16): a job type moves only after its cases pass at 100% on the
   Kubernetes backend, its replayed real-commit pairs show no unexplained difference, and every step
   made to fail is red exactly as on the oracle (section 11).
@@ -553,6 +560,8 @@ not, how that is detected, and the automatic fallback.
   re-run, comparing results and test-binary digests with the warm path, within 2 h of landing at P90
   [T]; a stale generation can therefore serve only the merges inside that window. Then 2% sampled
   re-execution once a class has about 3,000 clean comparisons.
+- **Audit A2.** Nightly, and with the clock shifted 8 and 30 days ahead through a shim, so a test
+  that fails only with time (an expiring fixture, a date boundary) is found before the date arrives.
 - **Degraded mode.** With the ledger unreachable nothing is satisfied by lookup: obligations run
   fresh. Slow, never wrong.
 
@@ -740,13 +749,25 @@ merges decides, with a kill below 70%. Agents enable auto-merge and stop catch-u
 
 ### 8.4 Release: build once, promote by digest
 
-A release never rebuilds (decision 10). Where release bytes are built and which profile tests use
-are pending ruling Q6 and Q7; the safe default: tests stay in the debug profile, and release-profile
-bytes are built once per closure key in the merge group, qualified once on the exact bytes
-(`--version`, `check-tag`, the black-box suites), packed deterministically with `SHA256SUMS`, and
-attested once. A tag runs one job: gate, fetch by digest, re-hash, `gh attestation verify`, publish.
-The macOS legs are paused (decision 9); `aarch64-unknown-linux-musl` is cross-compiled and smoke-run
-under user-mode qemu.
+A release never rebuilds (decision 10). Which profile tests use was measured [M, `generator` and
+`ci-helper`, cargo 1.99.1, CPU-seconds]: a release-profile test build shares only 15 of 90 crates
+with the release binary, because the binary uses `panic = "abort"` and tests need unwinding.
+
+| Option | CPU per cold build, `generator` / `ci-helper` | What is tested |
+|---|---|---|
+| Test the release build | 320.8 / 365.7 CPU-s | optimised code without debug assertions; still not the shipped panic strategy or musl |
+| Debug tests, release bytes built once | 191.9 / 282.8 CPU-s | today's coverage, and the shipped bytes get their own checks |
+
+Where release bytes are built is pending ruling Q6; the safe default: tests stay in the debug
+profile, and release-profile bytes are built once per closure key in the merge group, qualified once
+on the exact bytes (`--version`, `check-tag`, the black-box suites that today run only after the
+merge), packed deterministically with `SHA256SUMS`, and attested once. A tag runs one job: gate,
+fetch by digest, re-hash, `gh attestation verify`, publish: about 15 s instead of 190–434 s for the
+tools and 4,105–6,238 s for a product release [M]. `option_env!("VELNOR_COMMIT")` makes every commit
+a new compile input; with the commit patched after link into a fixed-size section, release bytes
+recompile only when their closure changes, about half of all merges (also pending Q6). The macOS
+legs are paused (decision 9); `aarch64-unknown-linux-musl` is cross-compiled and smoke-run under
+user-mode qemu.
 
 ### 8.5 Tests and the floor
 
@@ -760,6 +781,8 @@ under user-mode qemu.
 - **Dependency `opt-level`** cut the slowest test class's CPU by 66% with assertions off in
   dependencies; with them on it is unmeasured (pending ruling Q7), so assertions stay on until a
   four-way matrix decides.
+- **Hedged shards.** A test shard still running past its P95 is raced by a restart on another node,
+  and the first result wins; a duplicate kept because it is faster, at batch cost.
 
 ## 9. The cluster
 
