@@ -5,6 +5,8 @@
 mod extended;
 #[path = "runner_image_qualification_fixture.rs"]
 mod fixture;
+#[path = "runner_image_qualification_public/archive_socket.rs"]
+mod archive_socket;
 #[path = "runner_image_qualification_public/runtime.rs"]
 mod runtime;
 #[path = "runner_image_qualification_public/source.rs"]
