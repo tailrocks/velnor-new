@@ -56,6 +56,7 @@ mod io_record;
 mod io_record_boundaries;
 
 mod job_setup;
+mod job_setup_env;
 mod mise_safety;
 
 mod job_shape;
@@ -65,6 +66,7 @@ mod lock_affected;
 mod lock_consistency;
 mod main_and_scheduled;
 mod metadata_file;
+mod mise_install;
 mod mise_names;
 mod needs_size;
 mod needs_size_plan;
