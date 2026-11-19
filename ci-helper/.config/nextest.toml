@@ -6,10 +6,6 @@ test-threads = 1
 status-level = "all"
 final-status-level = "flaky"
 
-# These tests start real cargo, rustup or mise child processes (fetch from a
-# mirror, build a workspace). They take 0.5-1.6 s on an idle runner, so the
-# 2 s speed limit below kills them whenever the machine is busy. 30 s keeps
-# the limit meaningful for them and leaves every other test at 2 s.
 [profile.default]
 test-threads = 1
 slow-timeout = { period = "2s", terminate-after = 1 }
