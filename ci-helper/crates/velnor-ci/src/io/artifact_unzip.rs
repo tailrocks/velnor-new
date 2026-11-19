@@ -134,21 +134,21 @@ fn copy_member(
     budget: &Budget,
     drawn: &mut u64,
 ) -> io::Result<u64> {
-    let mut chunk = [0_u8; 64 << 10];
+    let mut chunk = vec![0_u8; 64 << 10];
     let mut copied = 0_u64;
     loop {
         let read = from.read(&mut chunk)?;
         if read == 0 {
             return Ok(copied);
         }
-        let read = read as u64;
-        if !budget.take(read) {
+        let size = read as u64;
+        if !budget.take(size) {
             return Err(io::Error::other(
                 "the extraction budget for all report artifacts is used up",
             ));
         }
-        *drawn += read;
-        to.write_all(&chunk[..read as usize])?;
-        copied += read;
+        *drawn += size;
+        to.write_all(&chunk[..read])?;
+        copied += size;
     }
 }
