@@ -149,10 +149,9 @@ fn set_promotion_source(
     state["source_files"][".velnor/config.toml"] =
         json!(super::records::encode_base64(config.as_bytes()));
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let manifest = fs::read_to_string(root.join("crates/velnor-runner/Cargo.toml"))?
+    let manifest = fs::read_to_string(root.join("Cargo.toml"))?
         .replace("version = \"0.1.0\"", "version = \"1.2.3\"");
-    state["source_files"]["crates/velnor-runner/Cargo.toml"] =
-        json!(super::records::encode_base64(manifest.as_bytes()));
+    state["source_files"]["Cargo.toml"] = json!(super::records::encode_base64(manifest.as_bytes()));
     if case == PromotionCase::ValidEncodedPath {
         let config = promotion_config_with_version_file(
             "runner",
@@ -239,9 +238,9 @@ fn apply_promotion_rejection(state: &mut Value, case: PromotionCase) -> Result<(
         }
         PromotionCase::WrongVersionDeclaration => {
             let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-            let text = fs::read_to_string(root.join("crates/velnor-runner/Cargo.toml"))?
+            let text = fs::read_to_string(root.join("Cargo.toml"))?
                 .replace("version = \"0.1.0\"", "version = \"9.8.7\"");
-            state["source_files"]["crates/velnor-runner/Cargo.toml"] =
+            state["source_files"]["Cargo.toml"] =
                 json!(super::records::encode_base64(text.as_bytes()));
         }
         PromotionCase::WrongImageDeclaration => {
@@ -258,7 +257,7 @@ fn apply_promotion_rejection(state: &mut Value, case: PromotionCase) -> Result<(
 }
 
 pub(super) fn promotion_config(id: &str, repository: &str) -> Result<String, Box<dyn Error>> {
-    promotion_config_with_version_file(id, repository, "crates/velnor-runner/Cargo.toml")
+    promotion_config_with_version_file(id, repository, "Cargo.toml")
 }
 
 fn promotion_config_with_version_file(

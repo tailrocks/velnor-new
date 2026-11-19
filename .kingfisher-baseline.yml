@@ -12,7 +12,7 @@ fingerprint_algorithm: kingfisher-v1
 repositories:
 - id: git://github.com/tailrocks/velnor-new
   findings:
-  - path: ./crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
+  - path: ./crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
     fingerprint: '3870778852293062565'
     rule_id: betterleaks.private-key
     line: 1
@@ -90,13 +90,13 @@ repositories:
     line: 302
     first_seen_at: 2026-10-22T00:00:00+00:00
     last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-runner/crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
+  - path: crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
     fingerprint: '17024251161024570094'
     rule_id: betterleaks.private-key
     line: 1
     first_seen_at: 2026-10-22T00:00:00+00:00
     last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-runner/crates/velnor-runner-host/src/launch/completion/diagnostics/runner_logs/tests/projection.rs
+  - path: crates/velnor-runner-host/src/launch/completion/diagnostics/runner_logs/tests/projection.rs
     fingerprint: '7916316234911776429'
     rule_id: betterleaks.generic-credential-uri
     line: 31

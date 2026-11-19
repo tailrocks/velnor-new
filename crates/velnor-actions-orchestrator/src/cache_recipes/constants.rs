@@ -66,7 +66,7 @@ pub(super) const RUNNER_HOST_BUILD_ARGV: &[&str] = &[
     "build",
     "--locked",
     "--manifest-path",
-    "crates/velnor-runner/Cargo.toml",
+    "Cargo.toml",
     "--release",
     "--package",
     "velnor-runner-cli",
@@ -77,7 +77,7 @@ pub(super) const RESOURCE_PROBE_MUSL_BUILD_ARGV: &[&str] = &[
     "build",
     "--locked",
     "--manifest-path",
-    "crates/velnor-runner/Cargo.toml",
+    "Cargo.toml",
     "--package",
     "velnor-resource-probe",
     "--bin",
@@ -90,7 +90,7 @@ pub(super) const RESOURCE_PROBE_RELEASE_GNU_BUILD_ARGV: &[&str] = &[
     "build",
     "--locked",
     "--manifest-path",
-    "crates/velnor-runner/Cargo.toml",
+    "Cargo.toml",
     "--package",
     "velnor-runner-host",
     "--bin",
@@ -103,7 +103,7 @@ pub(super) const RESOURCE_PROBE_RELEASE_NEXTEST_ARGV: &[&str] = &[
     "run",
     "--locked",
     "--manifest-path",
-    "crates/velnor-runner/Cargo.toml",
+    "Cargo.toml",
     "--package",
     "velnor-runner-host",
     "--test",
@@ -122,7 +122,6 @@ pub(super) const WORKSPACE_SOURCE_INPUTS: &[&str] = &[
 pub(super) const RUNNER_SOURCE_INPUTS: &[&str] = &[
     "Cargo.lock",
     "Cargo.toml",
-    "crates/velnor-runner/Cargo.toml",
 ];
 pub(super) const NATIVE_IMAGE_SOURCE_INPUTS: &[&str] = &[
     ".git",

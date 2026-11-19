@@ -340,7 +340,7 @@ validate_local_cargo_closure() {
               "$repository/crates/velnor-archive-guard"|\
                 "$repository/crates/velnor-actions-mise"|\
                 "$repository/crates/velnor-actions-contract"|\
-                "$repository/crates/velnor-runner/crates/velnor-runner-image-manifest") ;;
+                "$repository/crates/velnor-runner-image-manifest") ;;
               *) fail "local Cargo dependency is outside the source closure: $package_path" ;;
             esac
             ;;

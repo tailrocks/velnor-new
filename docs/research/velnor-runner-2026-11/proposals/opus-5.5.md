@@ -92,7 +92,7 @@ Provenance tags: **[M]** I measured it in this session (method given); **[EP]** 
 
 **`runner-host` (median 330 s).** Setup 39 s, building test executables 81 s, tests 192 s (p90 417), teardown 13 s. Clippy (68 s) and docs (59 s) run in parallel with the tests **[M]**.
 
-The test step lasts as long as its single slowest test, `launch::bootstrap::unbound_retirement::tests::shape::an_initializer_that_was_not_proven_absent_is_not_claimed` (`crates/velnor-runner/crates/velnor-runner-host/src/launch/bootstrap/unbound_retirement/tests/shape.rs:98`):
+The test step lasts as long as its single slowest test, `launch::bootstrap::unbound_retirement::tests::shape::an_initializer_that_was_not_proven_absent_is_not_claimed` (`crates/velnor-runner-host/src/launch/bootstrap/unbound_retirement/tests/shape.rs:98`):
 - In job 134191420609 the step took 270.9 s and that test took 270.8 s. In job 134191420582 the step took 203.5 s and the test 203.4 s **[M, logs]**.
 - Run alone on an M5 Max, it took 124.5 s wall and 108 s of user CPU. One iteration of its helper takes 21.8 s, and the test runs six iterations **[M, `bench/slowtest.sh`]**.
 - A CPU sample (macOS `sample`) shows the time going to `turso_parser` AST `clone`/`drop`, `parse_expr`, `Connection::prepare` and `translate` **[M]**.
@@ -286,7 +286,7 @@ per site:  velnor-cache L2 = mbx cache server (filesystem backend on NVMe, GitHu
 
 ### 5.1 Selection
 
-Move velnor-new to velnor-gen (#1290); its `velnor-ci inputs` audit already reads cargo dep-info (`ci-helper/crates/velnor-ci/src/cli.rs:200-216`).
+Move velnor-new to velnor-gen (#1290); its `velnor-ci inputs` audit already reads cargo dep-info (`crates/velnor-ci/src/cli.rs:200-216`).
 - Select by package graph plus measured reads, not by coarse globs.
 - Expected: 3 packages for the median PR, 6 at p75 and all 30 at p90, when infra files change [M, `reuse.py`]. Today's median is 17 of 31 jobs [M].
 - Today's rule maps any change under `crates/**` to archive-guard and its dependents (`.velnor/config.toml:120-149`), and maps the whole runner workspace to `velnor-actions-cli` (`.velnor/config.toml:42-50`).

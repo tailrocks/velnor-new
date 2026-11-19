@@ -33,7 +33,7 @@ GitHub's latest official runner runs only in `velnor-lab` as a continuous differ
 
 The trace below follows one typical `velnor-new` pull request from `git push` (with `velnor:verify` present, or from
 adding `velnor:verify` on the final head) to merged on `main`. P50 represents the median PR (47% touch only
-`generator/` or `ci-helper/` [EV: `v2/velnor-runner-architecture.md:698`]); P90 represents a `crates/velnor-runner` or
+`generator/` or `ci-helper/` [EV: `v2/velnor-runner-architecture.md:698`]); P90 represents a `crates/velnor-runner-*` or
 multi-root PR with a `Cargo.lock` or `merge_group` miss. Tags mark `[M]` measured in the repo or cluster experiments,
 `[EV]` cited from `evidence.md` or `v2`, and `[EST]` calculated with explicit arithmetic.
 
@@ -59,15 +59,15 @@ multi-root PR with a `Cargo.lock` or `merge_group` miss. Tags mark `[M]` measure
 Audit across all 16 `.github/workflows/*.yml` files (`ci.yml`, the State seal workflow, `cache-prune.yml`, `freshness.yml`,
 `homebrew-adoption.yml`, `job-image-candidate.yml`, `product-release*.yml`, `release-rust-ci-tools.yml`,
 `qualification.yml`, `source-preview-*.yml`, `source-qualification.yml`), generated `rust-ci.yml` and `release.yml`
-(`generator/crates/velnor-render/src/{steps,release,release_binaries}.rs`), `ci-helper/`, and PR lifecycle dimensions.
+(`crates/velnor-render/src/{steps,release,release_binaries}.rs`), `ci-helper/`, and PR lifecycle dimensions.
 
 ### Profile tension resolution (explicit, with numbers)
 
 Today CI compiles and tests with `[profile.dev]` / `[profile.test]` (`opt-level = 0` on all dependencies except `sha2`
-and `turso_core`, `Cargo.toml:69-73`, `crates/velnor-runner/Cargo.toml:74-75`), producing a `10.64 GiB` `target/`
+and `turso_core`, `Cargo.toml:69-73`, `Cargo.toml:74-75`), producing a `10.64 GiB` `target/`
 (`mbx-cache-cluster.md:33`) and slow unoptimised dependency execution in tests, then rebuilds shipped binaries from
 scratch in `--release` (`opt-level = "s"`, `lto = "thin"`, `strip = true`, `panic = "abort"`,
-`generator/Cargo.toml:35-39`) during release workflows. Testing everything in `--release` is rejected:
+`Cargo.toml:35-39`) during release workflows. Testing everything in `--release` is rejected:
 `panic = "abort"` breaks unwind-based test harnesses and `#[should_panic]`, `debug-assertions = false` and
 `overflow-checks = false` weaken confidence (Decision 11), and `lto = "thin"` across 356 integration test binaries
 (`design-feedback.md:122`) multiplies link cost on unshipped test harnesses. Rebuilding `--release` at tag time is
@@ -133,7 +133,7 @@ CI for architectural review.
 |---|---|---|---|---:|
 | `velnor-proto` | library | Scale-set v6.0-preview, Broker V2, Run Service, Results Twirp + WebSocket, Cache v2 Twirp, Artifacts v4 Twirp, OIDC wire types & HTTP/2 clients | Copy & strip legacy paths from `velnor-legacy/crates/velnor-runner/src/{scaleset/*,protocol.rs,job_message.rs,runner_json.rs}`; fix `summary_url` bug (`protocol.rs:9796`) | 8,000 |
 | `velnor-expr` | library | `Expressions2` lexer, parser, evaluator, `ContextValue`, `hashFiles`, `TemplateToken` expander | Copy from `velnor-legacy/.../expression/*` (3,565 LOC) + `velnor-model/src/context_value.rs` (1,740 LOC) | 5,500 |
-| `velnor-dispatch` | 1 HA active/standby pair per site | Holds scale-set sessions, long-polls Broker V2, manages virtual JIT runner pool in RAM, places jobs onto nodes *before* `acquirejob`, journals leases | Adapt `velnor-legacy/.../scaleset/{session,client,credentials,backoff}.rs` + `velnor-new` SQLite WAL journal (`crates/velnor-runner`) | 5,000 |
+| `velnor-dispatch` | 1 HA active/standby pair per site | Holds scale-set sessions, long-polls Broker V2, manages virtual JIT runner pool in RAM, places jobs onto nodes *before* `acquirejob`, journals leases | Adapt `velnor-legacy/.../scaleset/{session,client,credentials,backoff}.rs` + `velnor-new` SQLite WAL journal (`crates/velnor-runner-*`) | 5,000 |
 | `velnor-exec` | inside `velnor-node` | Executes `PipelineAgentJobRequest`: contexts, steps, composites, `background:`/`wait-all`, LIFO `post:`, file/stdout commands, 11-encoder secret masking, lease renewal, Results streaming, crash recovery | Copy pure state machines from `velnor-legacy/.../execution/{step_outcome,step_conditions,post_drain,composite_scopes,cancel}.rs`, `workflow_command.rs`, `command_files.rs`, `velnor-model/src/redaction.rs`; write orchestrator fresh (discarding 37k-LOC `executor.rs` & 36.7k-LOC `runner.rs`) | 10,000 |
 | `velnor-native-actions` | linked into `velnor-exec` | Closed native Rust action registry (`checkout`, `cache`, `upload/download-artifact`, `mise-action`, `mr-boxington-action`, `attest*`, `create-github-app-token`, `alint`, `setup-velnor`, composites) + pre-job refusal gate | Adapt `velnor-legacy/.../{checkout,git_mirror}.rs` + `gha_cache.rs` v2 subset; write `attest` (Sigstore/Fulcio) & App-token fresh | 7,500 |
 | `velnor-sandbox` | inside `velnor-node` | Pre-warmed Linux user/mount/PID/IPC/UTS/net namespaces, cgroup v2 CPU/RAM/PID controllers, `overlayfs` views, `pivot_root`, Landlock/seccomp, Firecracker microVM driver for Docker suites | Fresh Rust (`rustix` + `libc`), borrowing UID/cgroup ownership proofs from `velnor-new/crates/velnor-runner` | 4,500 |
@@ -272,7 +272,7 @@ GitHub Broker V2 ──(8.0 s)──► velnor-dispatch              velnor-ledg
 
 `velnor-native-actions` compiles directly into `velnor-exec` and implements the closed union of `velnor-new`'s engine
 allowlist (`crates/velnor-actions-actionlint/src/actions.rs:6-20`, `.velnor/version-policy.toml:41-120`) and
-`velnor-gen`'s 8-action allowlist (`generator/crates/velnor-render/src/rules.rs:8-21`). Before step 1 starts,
+`velnor-gen`'s 8-action allowlist (`crates/velnor-render/src/rules.rs:8-21`). Before step 1 starts,
 `velnor-exec` validates every `uses:` reference in `PipelineAgentJobRequest.Steps` against
 `(owner/repo[/path], qualified_commit_sha)`; any unknown action, floating tag, `using: node20|node24`, or
 `using: docker` manifest fails the job immediately with zero user code executed.
@@ -407,7 +407,7 @@ Measured slow-test root causes and concrete fixes targeting **no single test `> 
    cold `image-publication-fixture` example build (`evidence.md:255`) into `--all-targets`.
 4. **Artificial nextest serialisation (`golden_collector_public` 12 tests with
    `threads-required = "num-test-threads"`, `.config/nextest.toml:19,46`, `212 to 246 s`;
-   `ci-helper/.config/nextest.toml:4` `test-threads = 1`):** **Fix:** Isolate tempdirs, ephemeral `127.0.0.1:0` ports,
+   `.config/nextest.toml:4` `test-threads = 1`):** **Fix:** Isolate tempdirs, ephemeral `127.0.0.1:0` ports,
    and env snapshots so `threads-required` and `test-threads = 1` are deleted (`246 s -> 14 s`; `ci-helper`
    `10 s -> 3 s`).
 5. **`[profile.ci.package."*"] opt-level = 2` (with `debug-assertions = true`, `overflow-checks = true`):** Cuts
@@ -603,7 +603,7 @@ notifications.
 
 **Exact solution:** The repository ruleset on `refs/heads/main` requires **two** bound checks:
 1. `Required` bound to **GitHub Actions (`integration_id: 15368`)**, which satisfies `velnor-ci release-gate`
-   (`ci-helper/crates/velnor-ci/src/gate.rs:15,277-288`) and `product-release.yml:86`.
+   (`crates/velnor-ci/src/gate.rs:15,277-288`) and `product-release.yml:86`.
 2. `velnor/verdict` bound to **Velnor GitHub App (`integration_id: <velnor_app_id>`)**, which is the cryptographic
    gate enforced on every commit SHA.
 
