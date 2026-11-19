@@ -6,7 +6,20 @@ use std::collections::BTreeMap;
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 
+const RUNNER_LABELS: &str = "ubuntu-latest,ubuntu-22.04,ubuntu-24.04,ubuntu-26.04,ubuntu-22.04-arm,ubuntu-24.04-arm,ubuntu-26.04-arm";
+
 pub const FILES: [&str; 3] = [".runner", ".credentials", ".credentials_rsaparams"];
+
+#[must_use]
+pub fn labels(extra: &[String]) -> String {
+    let mut all: Vec<&str> = RUNNER_LABELS.split(',').collect();
+    for label in extra {
+        if !all.contains(&label.as_str()) {
+            all.push(label);
+        }
+    }
+    all.join(",")
+}
 
 #[must_use]
 pub fn register_script(name: &str, labels: &str) -> String {

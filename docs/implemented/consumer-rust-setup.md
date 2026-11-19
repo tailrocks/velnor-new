@@ -241,6 +241,8 @@ entries. Keep one flag set per repository: the profile above.
 Never set `CARGO_TARGET_DIR`, `build.target-dir`, `build.build-dir` or
 `rustc-wrapper` in a repository. MBX manages `target/` only when none of them
 is set; with any of them it leaves the directory alone and never collects it.
+The generated workflow is the one exception: it sets `CARGO_TARGET_DIR` on each
+step that builds a root, to that root's cached target directory.
 
 ## 5. Developer machines: MBX garbage collection
 

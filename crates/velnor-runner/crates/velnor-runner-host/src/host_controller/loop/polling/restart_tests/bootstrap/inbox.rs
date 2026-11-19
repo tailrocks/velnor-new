@@ -17,7 +17,7 @@ async fn draining_completion_unlocks_bootstrap_retirement_without_another_restar
         return Ok(());
     }
     for crash in [Crash::DindCreate, Crash::NetworkCreate] {
-        recovers_after_drain(crash)
+        Box::pin(recovers_after_drain(crash))
             .await
             .map_err(|error| format!("{crash:?}: {error}"))?;
     }

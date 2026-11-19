@@ -13,8 +13,6 @@ mod cold_registry;
 mod consumer_lint_pin;
 #[path = "velnor_cli/operator_toolchain_guard_fixture.rs"]
 mod fixture;
-#[path = "velnor_cli/freshness_path_dependencies.rs"]
-mod freshness_path_dependencies;
 mod gc1_t28;
 mod gc1_t29_common;
 mod gc1_t29_preserve;
