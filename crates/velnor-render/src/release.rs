@@ -102,7 +102,7 @@ pub fn render_release(
             ),
         ),
     ];
-    let file = crate::header::seal(RELEASE_HEADER, &emit(&workflow));
+    let file = crate::seal(RELEASE_HEADER, &emit(&workflow));
     if file.len() > MAX_WORKFLOW_BYTES {
         return Err(vec![RuleViolation {
             job: String::new(),
