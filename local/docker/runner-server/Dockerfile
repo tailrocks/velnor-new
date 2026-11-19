@@ -25,6 +25,13 @@ COPY job-grant.cs.snippet /job-grant.cs.snippet
 RUN test "$(grep -c 'if(!string.IsNullOrEmpty(github_token?.Value) ||' src/Runner.Server/Controllers/MessageController.cs)" = 1 \
     && sed -i '/if(!string.IsNullOrEmpty(github_token?.Value) ||/e cat /job-grant.cs.snippet' src/Runner.Server/Controllers/MessageController.cs \
     && grep -q 'new Claim("velnor", "job-cache-admin")' src/Runner.Server/Controllers/MessageController.cs
+# runner.server signs a job's token to expire timeout-minutes + 10 after it is queued and never
+# cancels the job at its timeout, so a job that outruns it finishes with a token the server and the
+# cache server refuse, and the run hangs. Keep every job token valid for a day.
+RUN f=src/Runner.Server/Controllers/MessageController.cs \
+    && test "$(grep -c 'AddMinutes(timeoutMinutes + 10)' $f)" = 3 \
+    && sed -i 's#AddMinutes(timeoutMinutes + 10)#AddHours(24)#' $f \
+    && ! grep -q 'AddMinutes(timeoutMinutes + 10)' $f
 COPY WorkflowObjectConverter.cs src/Runner.Server/Controllers/WorkflowObjectConverter.cs
 RUN cd src && dotnet msbuild dir.proj -t:GenerateConstant \
     && dotnet publish Runner.Client -c Release --no-self-contained -p:BUILD_OS=Any -p:RuntimeFrameworkVersion=8.0.0 -o /out

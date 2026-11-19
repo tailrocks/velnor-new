@@ -31,6 +31,7 @@ mod run_signal;
 mod runners;
 mod side;
 mod standin;
+mod standin_image;
 mod status;
 mod store;
 mod supervisor;
