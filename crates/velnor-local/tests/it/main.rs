@@ -45,4 +45,5 @@ mod supervisor;
 mod supervisor_down;
 mod supervisor_pid;
 mod support;
+mod timeout_scale;
 mod token_nbf;

@@ -20,5 +20,6 @@ pub mod sparse;
 pub mod standin;
 pub mod status;
 pub mod store;
+pub mod timeout;
 pub mod token;
 pub mod verdict;

@@ -12,6 +12,7 @@ use super::checkout::git;
 use crate::cli::{EnvironmentArgs, RunnerMode};
 use crate::pin::{Sha256, rewrite};
 use crate::prune::prune;
+use crate::timeout::{TimeoutScale, scale};
 
 const FLAG: &str = "--velnor-ci-binary";
 const MAX_BYTES: u64 = 256 << 20;
@@ -169,14 +170,19 @@ async fn tracked_files(repo: &Path) -> io::Result<Vec<String>> {
         .collect())
 }
 
-async fn rewrite_workflows(repo: &Path, pin: Option<&Sha256>) -> io::Result<(usize, bool)> {
+async fn rewrite_workflows(
+    repo: &Path,
+    pin: Option<&Sha256>,
+    timeout: TimeoutScale,
+) -> io::Result<(usize, bool)> {
     let (mut pinned, mut changed) = (0, false);
     let tracked = tracked_files(repo).await?;
     let tracked: Vec<&str> = tracked.iter().map(String::as_str).collect();
     for path in workflow_files(repo).await? {
         let text = read_workflow(&path).await?;
         let (pinning, count) = pin.map_or_else(|| (text.clone(), 0), |pin| rewrite(&text, pin));
-        let (rewritten, _) = prune(&pinning, &tracked);
+        let (scaled, _) = scale(&pinning, timeout);
+        let (rewritten, _) = prune(&scaled, &tracked);
         if rewritten != text {
             write_workflow(&path, &rewritten).await?;
             changed = true;
@@ -195,8 +201,12 @@ async fn commit_pin(repo: &Path) -> io::Result<()> {
 /// Pins the workflows of the branch checked out in `repo` to `pin`, and commits the change when it
 /// rewrote anything. The driver calls it after every switch, because a branch that already exists
 /// in the checkout carries the release digest.
-pub async fn pin_branch(repo: &Path, pin: Option<&Sha256>) -> io::Result<()> {
-    if rewrite_workflows(repo, pin).await?.1 {
+pub async fn pin_branch(
+    repo: &Path,
+    pin: Option<&Sha256>,
+    timeout: TimeoutScale,
+) -> io::Result<()> {
+    if rewrite_workflows(repo, pin, timeout).await?.1 {
         commit_pin(repo).await?;
     }
     Ok(())
@@ -206,13 +216,14 @@ pub async fn pin_workflows(
     args: &EnvironmentArgs,
     repo: &Path,
     tag: &str,
+    timeout: TimeoutScale,
 ) -> io::Result<Option<Sha256>> {
     let Some(binary) = binary(args).await? else {
-        pin_branch(repo, None).await?;
+        pin_branch(repo, None, timeout).await?;
         return Ok(None);
     };
     let pin = Sha256::of(&fs::read(&binary).await?);
-    let (pinned, changed) = rewrite_workflows(repo, Some(&pin)).await?;
+    let (pinned, changed) = rewrite_workflows(repo, Some(&pin), timeout).await?;
     println!(
         "velnor-local {tag}: WARNING: --velnor-ci-binary replaces the pinned velnor-ci release with {} (SHA-256 {}) in this run's copy of the workflows, {pinned} pin(s) rewritten; the integrity check itself runs unchanged, and this run does not test a release",
         binary.display(),
