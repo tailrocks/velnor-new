@@ -109,7 +109,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::MergeGroupHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.102 or later with `velnor-gen pin-helper 0.1.102`"
+                "velnor-ci {version} cannot tell whether a merge_group run passed, which skip_push_after_merge_group needs; pin velnor-ci 0.1.103 or later with `velnor-gen pin-helper 0.1.103`"
             ),
             Self::DocsHelperTooOld(version) => write!(
                 f,
