@@ -9,7 +9,7 @@ use velnor_gen::io::read_files;
 use velnor_model::RepoPath;
 use velnor_rust::{
     METADATA_PATH, cargo_config_paths, check_runtime_configs, external_config_profile,
-    recorded_roots, repo_profile, rustc_release,
+    recorded_roots, recorded_target_dirs, repo_profile, rustc_release,
 };
 
 use crate::error::CiError;
@@ -20,6 +20,8 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
     let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
     let roots = recorded_roots(recorded.get(&METADATA_PATH).map(Vec::as_slice))
         .map_err(|e| CiError::new(e.to_string()))?;
+    let recorded_dirs = recorded_target_dirs(recorded.get(&METADATA_PATH).map(Vec::as_slice))
+        .map_err(|e| CiError::new(e.to_string()))?;
     let mut files = BTreeMap::new();
     for path in cargo_config_paths(&roots) {
         if let Some(bytes) = read_config(root, &path)? {
@@ -27,7 +29,8 @@ pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
         }
     }
     let tracked = tracked_among(root, &files);
-    check_runtime_configs(&roots, &files, &tracked).map_err(|e| CiError::new(e.to_string()))?;
+    check_runtime_configs(&roots, &files, &tracked, &recorded_dirs)
+        .map_err(|e| CiError::new(e.to_string()))?;
     let inside = repo_profile(&files).map_err(|e| CiError::new(e.to_string()))?;
     let outside = external_config_profile(&external_configs(root)?).map_err(CiError::new)?;
     Ok(format!("{inside}{outside}"))

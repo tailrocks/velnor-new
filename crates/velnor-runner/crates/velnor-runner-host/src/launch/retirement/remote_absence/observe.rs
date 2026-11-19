@@ -59,7 +59,7 @@ fn observe_with_pat(
     let operation_started_unix_ms = unix_ms().map_err(RetirementRemoteAbsenceError::Host)?;
     let before = repository::lookup_repository(&mut transport, parts, pat.expose())
         .map_err(RetirementRemoteAbsenceError::Remote)?;
-    let admin = session::register_repository(&mut transport, parts, pat.expose())
+    let admin = session::register_repository(&mut transport, binding, pat.expose())
         .map_err(RetirementRemoteAbsenceError::Remote)?;
     let service_base_sha256 = binding_digest(admin.expose_url().as_bytes());
     transport

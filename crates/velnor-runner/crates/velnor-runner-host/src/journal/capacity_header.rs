@@ -16,6 +16,6 @@ pub(crate) use model::{
 };
 
 pub(super) use storage::{
-    bootstrap, bootstrap_schema_connection, has_any_charged, has_charged_connection, load, save,
-    validate, validate_capacity_policy_connection, validate_connection,
+    bootstrap, bootstrap_schema_connection, has_charged_connection, load, save, validate,
+    validate_capacity_policy_connection, validate_connection,
 };

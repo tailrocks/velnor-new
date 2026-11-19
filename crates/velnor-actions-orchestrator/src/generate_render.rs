@@ -36,6 +36,8 @@ pub(super) fn render_all(
     let ir = expansion.ir;
     let mut render_context = prep.workflow.context.clone();
     render_context.lane_plan = expansion.lane_plan;
+    render_context.scale_set_support_jobs =
+        velnor_actions_contract::workflow::scale_set_support_jobs(&prep.config);
     render_context.scale_set_selector = scale_set_selector_for_dispatch(&prep.config, dispatch)?;
     let mut lint_input = prep.workflow.lint_config.clone();
     lint_input.runner_labels = runner_labels::collect(
