@@ -4,6 +4,8 @@ Velnor provides a stack-generic GitHub Actions workflow generator (`crates/velno
 
 See the [documentation index](docs/README.md) for specifications, Runner Scale Set architecture, and implemented status.
 
+For the Rust CI generator, see [how Velnor keeps Rust CI fast](docs/rust-ci.md).
+
 The CLI is implemented (`crates/velnor-actions-cli`):
 
 ```text
