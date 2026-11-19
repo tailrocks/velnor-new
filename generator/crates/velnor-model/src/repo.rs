@@ -259,6 +259,7 @@ pub struct ToolLock {
 }
 
 pub use crate::repo_config::{
-    CacheDebug, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule, MbxRemote, MbxStore,
-    OnMain, PrCi, PrivateSources, PushAfterMergeGroup, RustCiConfig, TestSetup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule, MbxRemote,
+    MbxStore, OnMain, PrCi, PrivateSources, PushAfterMergeGroup, RustCiConfig, SpeedBudget,
+    TestSetup,
 };

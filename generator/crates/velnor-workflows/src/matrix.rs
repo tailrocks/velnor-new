@@ -79,7 +79,16 @@ fn axes_of(
         return refuse(format!("job {id} matrix axes must not be empty"));
     }
     let mut combinations: usize = 1;
-    for (name, values) in &axes {
+    for (index, (name, values)) in axes.iter().enumerate() {
+        if axes
+            .keys()
+            .take(index)
+            .any(|earlier| earlier.eq_ignore_ascii_case(name))
+        {
+            return refuse(format!(
+                "job {id} matrix axis {name:?} differs from another axis only by case; GitHub reads matrix keys without regard to case"
+            ));
+        }
         let key_ok = is_identifier(name, true) && !matches!(name.as_str(), "include" | "exclude");
         let values_ok = !values.is_empty()
             && values.iter().enumerate().all(|(index, value)| {

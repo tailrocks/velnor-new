@@ -52,7 +52,7 @@ pub(super) fn prepare() -> Result<String, CiError> {
         workspace: root.display().to_string(),
         driver: BUILD_DRIVER.to_owned(),
         repo_profile: repository_profile(&root)?,
-        image: image_identity(),
+        image: image_identity()?,
     };
     let digest = compat(&inputs);
     write_cargo_config(&root, profile.cargo_config)?;

@@ -8,6 +8,7 @@ use crate::yaml_tree::Node;
 const STEPS: &str = r#"
 [[workflow.job]]
 id = "check"
+permissions = { contents = "read" }
 
 [[workflow.job.step]]
 uses = "checkout"

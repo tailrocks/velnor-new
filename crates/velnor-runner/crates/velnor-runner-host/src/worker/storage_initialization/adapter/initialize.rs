@@ -148,7 +148,7 @@ impl InitializationContext<'_> {
                         .mark_storage_initializer_start_uncertain(claim)
                         .await?;
                 }
-                InitializationPhase::Process => {
+                InitializationPhase::Process | InitializationPhase::Handoff => {
                     self.journal
                         .mark_storage_initialization_result_uncertain(claim)
                         .await?;
@@ -156,8 +156,7 @@ impl InitializationContext<'_> {
                 InitializationPhase::Create
                 | InitializationPhase::CreateDispatched
                 | InitializationPhase::CreateResponseReceived
-                | InitializationPhase::CreateVerified
-                | InitializationPhase::Handoff => {}
+                | InitializationPhase::CreateVerified => {}
             }
         }
         Ok(())
@@ -285,3 +284,6 @@ struct CreateInterruption<'a> {
     phase: InitializationPhase,
     response: Option<&'a StorageInitializerCreateResponse>,
 }
+
+#[cfg(test)]
+mod handoff_tests;

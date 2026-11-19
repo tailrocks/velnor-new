@@ -62,6 +62,14 @@ pub enum ReleaseError {
     DuplicateBinary {
         package: String,
     },
+    KeyNeedsFormat {
+        package: String,
+        key: &'static str,
+        format: &'static str,
+    },
+    MuslNeedsLinux {
+        package: String,
+    },
     InvalidCheck(String, crate::check::CheckProblem),
     InvalidBundle {
         package: String,

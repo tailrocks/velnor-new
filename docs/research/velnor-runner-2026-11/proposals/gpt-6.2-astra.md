@@ -82,7 +82,7 @@ For future attribution, record GitHub creation, offer, assignment, pod Ready and
 
 P, seals for generator succeeded in 6/18 recent runs, ci-helper in 4/18, and root, runner and local in none.
 The sampled producer failures included both the tip check and verification failures. The workflow’s green status is a poor proxy for publication.
-Instrument actual published and consumed object digests. `evidence.md:370`, `.github/workflows/state-seal.yml:253`. [Owner’s seal analysis](https://github.com/tailrocks/velnor-new/issues/1305#issuecomment-6980735625)
+Instrument actual published and consumed object digests. `evidence.md:370`, the State seal workflow. [Owner’s seal analysis](https://github.com/tailrocks/velnor-new/issues/1305#issuecomment-6980735625)
 
 **Time to merge.** I joined PR-head CI creation, queue timeline events and `merged_at`. CI creation on the final head is the observable proxy for push.
 The pack’s 45 sampled group records represented 44 PRs. I matched 41 merged final heads by repository branch and SHA. Trigger-to-merge p50/p90 was **48.73/373.40 min**. First documented enqueue after that trigger to merge was **24.00/250.20 min**. This is a group-selected sample and includes waiting for people, other PRs and re-entry. `audit/merges.ts:1`, `audit/merges.txt:1`

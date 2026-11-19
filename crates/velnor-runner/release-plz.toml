@@ -1,0 +1,18 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+# Runner workspace (a separate Cargo workspace): velnor-runner-cli tags
+# `runner-v<version>` (#1290, #731). The CI tools workspace tags `v<version>`.
+
+[workspace]
+release = false
+release_always = false
+semver_check = false
+git_only = true
+git_release_draft = true
+pr_branch_prefix = "release-plz-runner-"
+
+[[package]]
+name = "velnor-runner-cli"
+release = true
+git_tag_name = "runner-v{{ version }}"
