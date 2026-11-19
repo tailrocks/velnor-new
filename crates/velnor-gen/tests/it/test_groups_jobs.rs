@@ -150,7 +150,7 @@ fn every_test_job_reports_its_tests_and_the_cache_check_waits_for_it() -> TestRe
 
 #[test]
 fn the_required_gate_covers_every_group_job() -> TestResult {
-    let text = workflow(&view_with(&["Cargo.toml"], DATABASE, "0.1.82")?)?;
+    let text = workflow(&view_with(&["Cargo.toml"], DATABASE, "0.1.90")?)?;
     let tree = document(&text)?;
     let required = job(&tree, "required")?;
     assert!(
@@ -176,7 +176,7 @@ fn every_group_has_a_job_per_root_and_a_name_cannot_collide_with_a_root() -> Tes
     let text = workflow(&view_with(
         &["Cargo.toml", "lab/Cargo.toml"],
         config,
-        "0.1.82",
+        "0.1.90",
     )?)?;
     let tree = document(&text)?;
     for id in [
@@ -270,7 +270,7 @@ fn the_check_runs_in_the_root_of_the_groups_it_compares() -> TestResult {
     let text = workflow(&view_with(
         &["Cargo.toml", "lab/Cargo.toml"],
         config,
-        "0.1.82",
+        "0.1.90",
     )?)?;
     let tree = document(&text)?;
     let lab = step(job(&tree, "rust-test-lab")?, "velnor-ci test-groups check")?;

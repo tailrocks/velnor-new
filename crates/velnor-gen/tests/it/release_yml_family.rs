@@ -44,7 +44,7 @@ fn render_family_tagged(
 ) -> Result<Result<Node, GenerateError>, Box<dyn Error>> {
     let mut view = release_view(&[APP, TOOLS], Some(config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.83").into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", "0.1.85").into_bytes());
     view.files.insert(
         RepoPath::new("release-plz.toml")?,
         release_plz_tagged(&APP, release, app_tag).into_bytes(),
