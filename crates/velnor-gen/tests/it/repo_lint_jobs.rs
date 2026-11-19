@@ -32,8 +32,7 @@ fn workflows() -> Result<Vec<(String, String)>, Box<dyn Error>> {
 }
 
 #[test]
-fn the_required_check_of_the_repository_waits_for_alint_jactionlint_and_the_policy_lane()
--> TestResult {
+fn the_required_check_of_the_repository_waits_for_every_lint_and_the_policy_lane() -> TestResult {
     let text = fs::read_to_string(root().join(".github/workflows/rust-ci.yml"))?;
     let needs: Vec<String> = document(&text)?["jobs"]["required"]["needs"]
         .as_array()
@@ -41,7 +40,12 @@ fn the_required_check_of_the_repository_waits_for_alint_jactionlint_and_the_poli
         .iter()
         .filter_map(|need| need.as_str().map(str::to_owned))
         .collect();
-    for job in ["lint-alint", "lint-jactionlint", "policy"] {
+    for job in [
+        "lint-alint",
+        "lint-jactionlint",
+        "lint-generator-samples",
+        "policy",
+    ] {
         assert!(
             needs.iter().any(|need| need == job),
             "{job} not in {needs:?}"
