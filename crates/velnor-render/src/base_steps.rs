@@ -220,39 +220,94 @@ fn fetched(job: &velnor_model::Job) -> Option<String> {
             StepKind::SourcesFetch { position, .. } => {
                 Some((*position, crate::gate::sources_fetch_step(*position)))
             }
-            StepKind::SourcesFetchAll { .. } => {
-                Some((0, crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()))
-            }
+            StepKind::SourcesFetchAll { manifests, .. } => Some((0, last_fetch_all_id(manifests))),
             _ => None,
         })
         .max_by_key(|(position, _)| *position)
         .map(|(_, id)| format!("${{{{ steps.{id}.outcome == 'success' }}}}"))
 }
 
-pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
-    let roots: Vec<String> = manifests
-        .iter()
-        .map(|manifest| {
-            manifest.parent().map_or_else(
-                || ".".to_owned(),
-                |directory| crate::release_steps::shell_word(&format!("./{directory}")),
-            )
-        })
-        .collect();
-    RenderedStep {
-        env: cache_debug
-            .then(crate::cargo::cache_debug_env)
-            .into_iter()
-            .collect(),
-        id: Some(crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()),
-        name: "Fetch the sources of every root".to_owned(),
-        continue_on_error: true,
-        run: Some(format!(
-            "velnor-ci sources fetch --roots {}",
-            roots.join(" ")
-        )),
-        ..RenderedStep::default()
+const FETCH_ROOTS: &str = "velnor-ci sources fetch --roots";
+
+fn fetch_chunks(manifests: &[RepoPath]) -> Vec<Vec<String>> {
+    let budget = MAX_RUN_CHARACTERS
+        - crate::helper_integrity::INVOCATION_PREFIX.len()
+        - (FETCH_ROOTS.len() - "velnor-ci ".len());
+    let mut chunks: Vec<Vec<String>> = vec![Vec::new()];
+    let mut used = 0;
+    for manifest in manifests {
+        let word = manifest.parent().map_or_else(
+            || ".".to_owned(),
+            |directory| shell_word(&format!("./{directory}")),
+        );
+        let cost = word.chars().count() + 1;
+        if used + cost > budget && used > 0 {
+            chunks.push(Vec::new());
+            used = 0;
+        }
+        used += cost;
+        if let Some(last) = chunks.last_mut() {
+            last.push(word);
+        }
     }
+    chunks
+}
+
+fn fetch_all_id(chunk: usize) -> String {
+    if chunk == 0 {
+        crate::gate::SOURCES_FETCH_ALL_STEP.to_owned()
+    } else {
+        format!("{}_{chunk}", crate::gate::SOURCES_FETCH_ALL_STEP)
+    }
+}
+
+fn last_fetch_all_id(manifests: &[RepoPath]) -> String {
+    fetch_all_id(fetch_chunks(manifests).len() - 1)
+}
+
+fn fetch_all_steps(manifests: &[RepoPath], cache_debug: bool) -> Vec<RenderedStep> {
+    fetch_chunks(manifests)
+        .into_iter()
+        .enumerate()
+        .map(|(chunk, roots)| RenderedStep {
+            env: cache_debug
+                .then(crate::cargo::cache_debug_env)
+                .into_iter()
+                .collect(),
+            id: Some(fetch_all_id(chunk)),
+            name: if chunk == 0 {
+                "Fetch the sources of every root".to_owned()
+            } else {
+                format!("Fetch the sources of every root part {}", chunk + 1)
+            },
+            condition: chunk.checked_sub(1).map(|previous| {
+                format!(
+                    "${{{{ steps.{}.outcome == 'success' }}}}",
+                    fetch_all_id(previous)
+                )
+            }),
+            continue_on_error: true,
+            run: Some(format!("{FETCH_ROOTS} {}", roots.join(" "))),
+            ..RenderedStep::default()
+        })
+        .collect()
+}
+
+pub(crate) fn sources_fetch_all(manifests: &[RepoPath], cache_debug: bool) -> RenderedStep {
+    fetch_all_steps(manifests, cache_debug)
+        .into_iter()
+        .next()
+        .unwrap_or_default()
+}
+
+pub(crate) fn sources_fetch_all_rest(
+    manifests: &[RepoPath],
+    cache_debug: bool,
+) -> Vec<RenderedStep> {
+    fetch_all_steps(manifests, cache_debug)
+        .into_iter()
+        .skip(1)
+        .collect()
 }
 
 pub(crate) fn sources_fetch(position: usize, lane: crate::cargo::CargoLane) -> RenderedStep {

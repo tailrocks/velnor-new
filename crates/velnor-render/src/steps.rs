@@ -10,15 +10,15 @@ use velnor_model::{
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
 use crate::base_steps::{
     cache_budget, cache_decide, cache_trim, lane_outputs, sources_fetch, sources_fetch_all,
-    sources_locks, trimmed_lane,
+    sources_fetch_all_rest, sources_locks, trimmed_lane,
 };
-use crate::budget_steps::{budget_outputs, budget_step};
+use crate::budget_steps::budget_step;
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
-    plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, all_conditions, check_name, condition, merge_group_skipped,
+    output, plan_read, plan_source, sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 use crate::permission_pairs;
@@ -60,6 +60,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
+        check_name: check_name(job.name.as_ref(), job.pr),
         comment: job.comment.clone(),
         env,
         needs: job.needs.iter().map(ToString::to_string).collect(),
@@ -87,7 +88,6 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             .chain(test_outputs(job, &tests))
             .chain(merge_group_output(job))
             .chain(lane_outputs(&job.steps))
-            .chain(budget_outputs(job))
             .collect(),
         steps,
         ..RenderedJob::default()
@@ -115,7 +115,7 @@ fn test_outputs<'a>(job: &'a Job, tests: &'a Tests) -> impl Iterator<Item = (Str
 fn merge_group_output(job: &Job) -> Option<(String, String)> {
     job.steps
         .iter()
-        .any(|step| step.kind == StepKind::Helper(HelperCommand::MergeGroupPassed))
+        .any(|step| matches!(step.kind, StepKind::MergeGroupPassed { .. }))
         .then(|| {
             (
                 MERGE_GROUP_SKIP_OUTPUT.to_owned(),
@@ -165,6 +165,9 @@ fn rendered_steps(
         ));
     }
     rendered.push(step_body(step, audit, tests, lane));
+    if let StepKind::SourcesFetchAll { manifests, .. } = &step.kind {
+        rendered.extend(sources_fetch_all_rest(manifests, lane.cache_debug));
+    }
     for body in &mut rendered {
         if let (StepKind::Cargo(_), Some(target)) = (&step.kind, &step.target_dir) {
             body.env.push(crate::cargo::target_dir_env(target));
@@ -181,7 +184,7 @@ fn rendered_steps(
         extra.extend(
             step.skip_after_merge_group
                 .as_ref()
-                .map(merge_group_skipped),
+                .map(|from| merge_group_skipped(from, setup)),
         );
         body.condition = all_conditions(
             body.condition.take(),
@@ -264,6 +267,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
             reports_tests(command).then(|| tests.id(step.reads.as_ref().map(|plan| &plan.slug))),
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
+        StepKind::MergeGroupPassed { required } => crate::helper_steps::merge_group_step(required),
         StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
         StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
         StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),

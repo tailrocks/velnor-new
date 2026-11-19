@@ -169,6 +169,7 @@ pub struct ApiWorkflowRun {
 
 #[derive(Debug, Deserialize)]
 pub struct ApiMergeGroupRun {
+    pub id: u64,
     pub event: String,
     pub status: String,
     pub head_sha: String,
@@ -288,7 +289,7 @@ pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
 #[must_use]
 pub fn merge_group_runs_path(repo: &Repo, workflow_file: &str, sha: &str) -> String {
     format!(
-        "/repos/{repo}/actions/workflows/{}/runs?head_sha={}&event=merge_group&status=success&per_page=100",
+        "/repos/{repo}/actions/workflows/{}/runs?head_sha={}&event=merge_group&per_page=100",
         encode(workflow_file),
         encode(sha)
     )
@@ -324,6 +325,22 @@ pub fn jobs_path(repo: &Repo, run_id: u64, attempt: u32, page: u32) -> String {
 #[must_use]
 pub fn job_log_path(repo: &Repo, job_id: u64) -> String {
     format!("/repos/{repo}/actions/jobs/{job_id}/logs")
+}
+
+#[must_use]
+pub fn event_runs_path(
+    repo: &Repo,
+    workflow_file: &str,
+    event: &str,
+    branch: Option<&str>,
+    page: u32,
+) -> String {
+    let branch = branch.map_or_else(String::new, |branch| format!("&branch={}", encode(branch)));
+    format!(
+        "/repos/{repo}/actions/workflows/{}/runs?status=success&event={}{branch}&per_page=100&page={page}",
+        encode(workflow_file),
+        encode(event)
+    )
 }
 
 #[must_use]

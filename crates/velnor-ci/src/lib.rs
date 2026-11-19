@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod bounded;
 pub mod budget;
+pub mod budget_history;
 pub mod cache;
 pub mod cargo_artifacts;
 pub mod cargo_package;
@@ -37,7 +39,6 @@ pub mod observed_units;
 pub mod plan;
 pub mod plan_request;
 pub mod platform;
-pub mod preview;
 pub mod preview_helpers;
 pub mod private_token;
 pub mod progress_evidence;
@@ -68,4 +69,5 @@ pub mod time;
 pub mod timings;
 pub mod tools_local;
 pub mod trusted_roots;
+pub mod unique_json;
 pub mod write_request;

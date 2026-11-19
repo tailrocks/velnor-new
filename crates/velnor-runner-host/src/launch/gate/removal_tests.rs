@@ -66,7 +66,7 @@ fn gate_decision(rows: &[IntentRow], state: &Path) -> TestResult<(Reconcile, Vec
     let config = config_after_removal()?;
     let proofs = read_absence_proofs(state, &config);
     let observed = observe_with(rows, &config, &proofs, &SOURCES);
-    let lines = hold::hold_lines(rows, &[], &observed);
+    let lines = hold::hold_lines(rows, &[], &[], &observed);
     Ok((decide(rows, &[], observed.runners), lines))
 }
 

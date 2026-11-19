@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, Gate, HelperCommand, Host, Job, JobId,
     MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
     TargetName, Toolchain, When, WorkflowPlan,
@@ -18,7 +18,7 @@ use crate::error::{DetectError, Reason};
 use crate::lane::{
     Lane, PLAN_JOB, expose_read_outputs, plan_job, policy_job, used_group_outputs, used_outputs,
 };
-use crate::plan_budget::{budget_job, draft_guard, triggers};
+use crate::plan_budget::{draft_guard, triggers};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::root_jobs;
@@ -102,7 +102,6 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
         jobs.insert(1, helper_job(facts, root, deltas));
     }
     apply_extensions(facts, &mut jobs, single);
-    jobs.extend(budget_job(facts));
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -188,17 +187,27 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
-    if facts.config.mbx_store == MbxStore::Shared {
-        steps.push(step(StepKind::MbxStore));
-        if facts
-            .helper
-            .as_ref()
-            .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
-        {
-            steps.push(step(StepKind::MbxSeed));
-        }
-    }
     steps
+}
+
+/// The shared-store steps. A job that plans runs them after the plan, so a
+/// run that selects nothing never seeds: `seed_gate` is the job's selection.
+pub(crate) fn mbx(facts: &RepoFacts, seed_gate: Option<Gate>) -> Vec<Step> {
+    if facts.config.mbx_store != MbxStore::Shared {
+        return Vec::new();
+    }
+    let seed = facts
+        .helper
+        .as_ref()
+        .is_some_and(|release| release.version().at_least(MBX_SEED_HELPER))
+        .then(|| Step {
+            gate: seed_gate,
+            ..step(StepKind::MbxSeed)
+        });
+    [Some(step(StepKind::MbxStore)), seed]
+        .into_iter()
+        .flatten()
+        .collect()
 }
 
 pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
@@ -253,6 +262,7 @@ pub(crate) fn setup_units(
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
+    steps.extend(mbx(facts, lane.steps()));
     let mut toolchain: Vec<Step> = mirror_step(facts)
         .into_iter()
         .chain(tools_restore(facts))

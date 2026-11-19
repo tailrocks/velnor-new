@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    DocsRun, HelperRelease, HelperVersion, MbxStore, PrCi, PushAfterMergeGroup, RepoFacts,
+    DocsRun, HelperRelease, HelperVersion, MbxStore, Platform, PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
-use crate::{BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
+use crate::{
+    BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM, TEST_LANE_HELPER,
+};
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -15,6 +17,19 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     require_compatible(release.version())?;
     if !release.version().at_least(HELPER_MINIMUM) {
         return Err(GenerateError::HelperTooOld(release.version().clone()));
+    }
+    if facts
+        .config
+        .runner
+        .as_str()
+        .to_ascii_lowercase()
+        .starts_with("macos")
+        && !release.digests().contains_key(&Platform::MacosArm64)
+    {
+        return Err(GenerateError::HelperLockLacksMacos {
+            version: release.version().clone(),
+            runner: facts.config.runner.to_string(),
+        });
     }
     if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 82)) {
         return Err(GenerateError::TestGroupsHelperTooOld(
@@ -42,20 +57,14 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         ));
     }
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
-        && !release.version().at_least((0, 1, 82))
+        && !release.version().at_least((0, 1, 88))
     {
         return Err(GenerateError::MergeGroupHelperTooOld(
             release.version().clone(),
         ));
     }
-    if facts
-        .config
-        .test_lanes
-        .iter()
-        .any(|lane| lane.filter.is_some())
-        && !release.version().at_least((0, 1, 86))
-    {
-        return Err(GenerateError::LaneGuardHelperTooOld(
+    if !facts.config.test_lanes.is_empty() && !release.version().at_least(TEST_LANE_HELPER) {
+        return Err(GenerateError::TestLaneHelperTooOld(
             release.version().clone(),
         ));
     }

@@ -4,7 +4,7 @@
 use velnor_ci::budget::{History, Population, Sample, evaluate};
 use velnor_model::SpeedBudget;
 
-fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) -> Sample {
+pub(crate) fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) -> Sample {
     Sample {
         run_id,
         wall_seconds: wall,
@@ -14,14 +14,14 @@ fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) -> Sample {
     }
 }
 
-fn history(population: Population, samples: Vec<Sample>) -> History {
+pub(crate) fn history(population: Population, samples: Vec<Sample>) -> History {
     History {
         population,
         samples,
     }
 }
 
-fn budget(pr_wall: u64, main_wall: u64, runner: u64, setup: u64) -> SpeedBudget {
+pub(crate) fn budget(pr_wall: u64, main_wall: u64, runner: u64, setup: u64) -> SpeedBudget {
     SpeedBudget {
         pr_wall_seconds: pr_wall,
         main_wall_seconds: main_wall,
@@ -186,7 +186,7 @@ fn listing() -> String {
     .to_string()
 }
 
-fn run(started: &str, ended: &str) -> String {
+pub(crate) fn run(started: &str, ended: &str) -> String {
     serde_json::json!({
         "name": "Rust CI", "status": "completed", "conclusion": "success", "run_attempt": 1,
         "event": "pull_request", "head_sha": "abc",
@@ -195,7 +195,7 @@ fn run(started: &str, ended: &str) -> String {
     .to_string()
 }
 
-fn jobs(started: &str, ended: &str, restored: &str) -> String {
+pub(crate) fn jobs(started: &str, ended: &str, restored: &str) -> String {
     serde_json::json!({
         "total_count": 1,
         "jobs": [{
@@ -235,8 +235,15 @@ fn the_command_measures_the_successful_first_attempts_and_names_the_slow_job() {
         "/repos/tailrocks/velnor-new".to_owned(),
         serde_json::json!({"id": 1, "default_branch": "main"}).to_string(),
     );
+    let empty = serde_json::json!({"total_count": 0, "workflow_runs": []}).to_string();
+    for query in ["event=push&branch=main", "event=schedule"] {
+        responses.insert(
+            format!("/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&{query}&per_page=100&page=1"),
+            empty.clone(),
+        );
+    }
     responses.insert(
-        "/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&per_page=100&page=1".to_owned(),
+        "/repos/tailrocks/velnor-new/actions/workflows/rust-ci.yml/runs?status=success&event=pull_request&per_page=100&page=1".to_owned(),
         listing(),
     );
     responses.insert(
@@ -283,4 +290,27 @@ fn the_command_measures_the_successful_first_attempts_and_names_the_slow_job() {
         ),
         "{stderr}"
     );
+}
+
+#[test]
+fn a_window_with_one_run_that_lacks_the_setup_metric_fails_closed() {
+    let histories = vec![history(
+        Population::PullRequest,
+        vec![
+            sample(2, 100, 100, Some(10)),
+            sample(1, 100, 100, None),
+            sample(0, 100, 100, Some(10)),
+        ],
+    )];
+    let evaluation = evaluate(&budget(0, 0, 0, 60), &histories);
+    assert!(!evaluation.passed(), "{evaluation:?}");
+    assert!(
+        evaluation
+            .missing
+            .iter()
+            .any(|text| text.contains("setup seconds of the measured runs is not measured")),
+        "{:?}",
+        evaluation.missing
+    );
+    assert_eq!(evaluation.medians[0].setup_seconds, None);
 }

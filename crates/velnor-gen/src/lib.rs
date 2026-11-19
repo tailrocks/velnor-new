@@ -33,7 +33,10 @@ use crate::plan_render::plan_and_render;
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
 pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
+pub const TAG_PUSH_HELPER: (u64, u64, u64) = (0, 1, 98);
 pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
+/// The first release whose `velnor-ci` accepts the `test_lane` key (and runs `lane-guard`).
+pub const TEST_LANE_HELPER: (u64, u64, u64) = (0, 1, 93);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {
     generated_with_notes(view).map(|(files, _)| files)

@@ -270,5 +270,13 @@ pub(super) fn run_decide(args: &crate::cli_cache::DecideArgs) -> Result<String, 
         )?
     };
     super::append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
-    Ok(decision.report)
+    let mut report = decision.report;
+    if decision.save
+        && let Err(error) = super::delta_snapshot::record_inventory(&target)
+    {
+        super::delta_snapshot::forget_inventory(&target)?;
+        report =
+            format!("{report}::notice::{error}; pull requests will read the whole restored base\n");
+    }
+    Ok(report)
 }

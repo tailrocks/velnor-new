@@ -64,6 +64,12 @@ pub struct FamilyTagArgs {
     #[arg(allow_hyphen_values = true, long, help = "Tag with one {{ version }}")]
     pub tag_pattern: String,
     #[arg(
+        allow_hyphen_values = true,
+        long,
+        help = "The tag that started the run; exit 1 before any request unless it is the tag the package versions name"
+    )]
+    pub pushed_tag: Option<String>,
+    #[arg(
         long = "package",
         required = true,
         help = "A package of the family; repeat"
@@ -207,6 +213,12 @@ pub struct RecordArgs {
         help = "A release-plz.toml of a Cargo root, once per root; gives the tag of each package at the version the checkout holds; needs RUSTUP_TOOLCHAIN"
     )]
     pub config: Vec<PathBuf>,
+    #[arg(
+        long = "version-groups",
+        value_name = "FILE",
+        help = "A release-plz.toml, once per Cargo root: packages of one version_group that share the lead's tag are one release, not a duplicate tag"
+    )]
+    pub version_groups: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]

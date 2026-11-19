@@ -87,6 +87,7 @@ pub(crate) fn copy_repo(dest: &Path) {
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Quirk {
     RequestIsASymlink,
+    RequestIsAFifo,
     AdmissionAlreadyStaged,
     VelnorDirectoryIsASymlink,
     NotARepository,

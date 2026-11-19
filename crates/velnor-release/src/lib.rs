@@ -11,7 +11,9 @@ mod error_binary;
 mod error_cargo;
 mod error_family;
 mod family;
+mod family_options;
 mod git_ref;
+mod groups;
 mod hazards;
 mod lock_version;
 mod members;
@@ -34,6 +36,8 @@ pub use check::{CheckArtifact, CheckPlan, CheckProblem, CheckStage};
 pub use error::ReleaseError;
 pub use error_family::FamilyError;
 pub use family::FamilyPlan;
+pub use family_options::FamilyTrigger;
+pub use groups::GroupError;
 pub use hazards::{
     refuse_cargo_config, refuse_external_commands, shadowed_by_extensionless_config,
 };
@@ -42,7 +46,7 @@ pub use plan::{
     BinaryPlan, ReleaseFiles, ReleasePlan, RootPlan, check_publish_budget,
     check_release_plz_configs, publish_budget_minutes,
 };
-pub use release_plz::{release_pr_branch_prefix, release_tag_patterns};
+pub use release_plz::{release_pr_branch_prefix, release_tag_patterns, release_version_groups};
 pub use ruleset::{
     RELEASE_APP_ID, RELEASE_APP_SLUG, ruleset_drift, ruleset_json, ruleset_ref, ruleset_refs,
 };

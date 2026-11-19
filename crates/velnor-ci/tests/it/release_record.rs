@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_ci::release::record;
+use velnor_ci::release::{record, record_in_groups};
 
 pub(crate) const CI: &str = r#"{"releases":[{"package_name":"velnor-ci","prs":[{"html_url":"https://github.com/tailrocks/velnor-new/pull/760","number":760}],"tag":"velnor-ci-v0.1.80","version":"0.1.80"}]}"#;
 pub(crate) const NOTHING: &str = r#"{"releases":[]}"#;
@@ -140,4 +140,79 @@ fn every_tag_the_plan_renders_is_a_tag_the_recorder_accepts() -> Result<(), Stri
         assert!(velnor_ci::release::PlainName::tag(&tag).is_ok(), "{tag}");
     }
     Ok(())
+}
+
+fn grouped(files: &[(&str, &str)], groups: &[(&str, &str)]) -> Result<String, String> {
+    let files: Vec<(String, String)> = files
+        .iter()
+        .map(|(file, text)| ((*file).to_owned(), (*text).to_owned()))
+        .collect();
+    let groups = groups
+        .iter()
+        .map(|(package, group)| ((*package).to_owned(), (*group).to_owned()))
+        .collect();
+    record_in_groups(&files, &groups).map_err(|e| e.to_string())
+}
+
+#[test]
+fn release_record_treats_members_of_one_version_group_with_the_lead_tag_as_one_release() {
+    let lead = release("velnor-ci", "tools-v0.1.97");
+    let follower = release("velnor-gen", "tools-v0.1.97");
+    let groups = [("velnor-ci", "tools"), ("velnor-gen", "tools")];
+    assert_eq!(
+        grouped(&[("ci.json", &lead), ("gen.json", &follower)], &groups),
+        Ok("velnor-ci=tools-v0.1.97\nvelnor-gen=tools-v0.1.97\n".to_owned())
+    );
+    let both = r#"{"releases":[{"package_name":"velnor-ci","prs":[],"tag":"tools-v0.1.97","version":"0.1.97"},{"package_name":"velnor-gen","prs":[],"tag":"tools-v0.1.97","version":"0.1.97"}]}"#;
+    assert_eq!(
+        grouped(&[("tools.json", both)], &groups),
+        Ok("velnor-ci=tools-v0.1.97\nvelnor-gen=tools-v0.1.97\n".to_owned())
+    );
+}
+
+#[test]
+fn release_record_still_refuses_one_tag_for_packages_outside_one_group() {
+    let lead = release("velnor-ci", "tools-v0.1.97");
+    let other = release("velnor-gen", "tools-v0.1.97");
+    let said = "release-plz released velnor-ci and velnor-gen with the same tag tools-v0.1.97";
+    for groups in [
+        &[][..],
+        &[("velnor-ci", "tools")][..],
+        &[("velnor-gen", "tools")][..],
+        &[("velnor-ci", "tools"), ("velnor-gen", "runner")][..],
+    ] {
+        assert_eq!(
+            grouped(&[("ci.json", &lead), ("gen.json", &other)], groups),
+            Err(said.to_owned()),
+            "{groups:?}"
+        );
+    }
+}
+
+#[test]
+fn release_record_refuses_members_of_one_group_released_under_different_tags() {
+    let lead = release("velnor-ci", "tools-v0.1.97");
+    let other = release("velnor-gen", "tools-v0.1.98");
+    assert_eq!(
+        grouped(
+            &[("ci.json", &lead), ("gen.json", &other)],
+            &[("velnor-ci", "tools"), ("velnor-gen", "tools")]
+        ),
+        Err("release-plz released velnor-ci and velnor-gen of one version group as tools-v0.1.97 and as tools-v0.1.98".to_owned())
+    );
+}
+
+#[test]
+fn release_record_still_refuses_a_package_released_twice_inside_a_group() {
+    let lead = release("velnor-ci", "tools-v0.1.97");
+    assert_eq!(
+        grouped(
+            &[("ci.json", &lead), ("again.json", &lead)],
+            &[("velnor-ci", "tools")]
+        ),
+        Err(
+            "release-plz released package velnor-ci twice, as tools-v0.1.97 and as tools-v0.1.97"
+                .to_owned()
+        )
+    );
 }

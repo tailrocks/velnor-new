@@ -28,3 +28,4 @@ mod sources;
 mod symlinks;
 mod tags;
 mod token_hardening;
+mod version_groups;

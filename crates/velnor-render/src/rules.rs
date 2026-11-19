@@ -78,7 +78,10 @@ pub enum RenderedMatrixSource {
     /// `fromJSON(<expression>)`, such as `needs.plan.outputs.matrix`.
     Output(String),
     /// Static axes, each with its values.
-    Axes(Vec<(String, Vec<String>)>),
+    Axes {
+        axes: Vec<(String, Vec<String>)>,
+        include: Vec<Vec<(String, String)>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -101,6 +104,7 @@ pub struct RenderedContainer {
 pub struct RenderedJob {
     pub id: String,
     pub name: Option<String>,
+    pub check_name: Option<String>,
     pub comment: Option<String>,
     pub needs: Vec<String>,
     pub condition: Option<String>,

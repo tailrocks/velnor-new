@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! The files an event changes, found the way the legacy planner finds them. When git cannot say,
-//! the answer is `Broad`: every file counts as changed and no job is skipped.
-
 use std::collections::BTreeSet;
 use std::path::Path;
 use std::process::Command;
@@ -75,7 +72,6 @@ pub(super) fn sha(rev: &str, role: &str) -> Result<(), String> {
     }
 }
 
-/// The checkout must be the event's head, or for a pull request the merge of it.
 pub(super) fn verify_checkout(root: &Path, event: Event, head: &str) -> Result<(), String> {
     if event == Event::Local {
         return Ok(());

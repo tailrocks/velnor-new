@@ -6,7 +6,7 @@ use std::collections::BTreeMap;
 use crate::plan::{job, step};
 use velnor_model::{
     Access, CI_RUN_LABEL, HelperVersion, Job, JobId, PermissionScope, Permissions, PrCi, PrRun,
-    RepoFacts, Step, StepKind, When,
+    PushAfterMergeGroup, RepoFacts, Step, StepKind, When,
 };
 
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job {
@@ -94,6 +94,7 @@ fn attach_metrics(job: &mut Job, nextest_artifacts: bool) {
 fn label_reset(facts: &RepoFacts) -> Option<Job> {
     (facts.config.pr_ci == PrCi::Label).then(|| Job {
         name: Some(format!("Remove the {CI_RUN_LABEL} label")),
+        needs: vec![crate::required_job::VERDICT_JOB],
         when: When::ClearRunLabel,
         pr: PrRun::Quick,
         permissions: Permissions(BTreeMap::from([(
@@ -111,14 +112,19 @@ pub(crate) fn finish(
     single: bool,
     draft_guard: Option<Step>,
 ) {
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
+        crate::merge_group_skip::ask(jobs, single, &facts.config.required_check);
+    }
     let trim = crate::base_cache::trim_job(facts, jobs);
     let cache = attach(facts, jobs, trim.as_ref());
     if facts.config.cache_check_blocks {
         jobs.push(cache.clone());
     }
     let required = crate::required_job::verdict_job(facts, jobs, single, draft_guard);
+    let budget = crate::plan_budget::budget_job(facts, &required.id);
     jobs.extend(trim);
     jobs.push(required);
+    jobs.extend(budget);
     jobs.extend(label_reset(facts));
     if !facts.config.cache_check_blocks {
         jobs.push(cache);

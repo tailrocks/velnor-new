@@ -16,7 +16,7 @@ use crate::units::Unit;
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
-const BATCHED_HELPER: (u64, u64, u64) = (0, 1, 93);
+const BATCHED_HELPER: (u64, u64, u64) = (0, 1, 97);
 
 pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     let batched = facts
@@ -30,7 +30,7 @@ pub(crate) fn inputs_cli(facts: &RepoFacts) -> InputsCli {
     }
 }
 
-const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 86);
+const SOURCES_FETCH_HELPER: (u64, u64, u64) = (0, 1, 88);
 const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {

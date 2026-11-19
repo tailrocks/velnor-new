@@ -99,7 +99,7 @@ pub(crate) fn plan_read(source: &str, key: &str, setup: Setup) -> String {
 pub(crate) fn plan_source(from: &PlanFrom) -> String {
     match from {
         PlanFrom::ThisJob => format!("steps.{PLAN_STEP}.outputs"),
-        PlanFrom::Job(job) => format!("needs.{job}.outputs"),
+        PlanFrom::Job(job) | PlanFrom::WorkJob(job) => format!("needs.{job}.outputs"),
     }
 }
 
@@ -120,12 +120,17 @@ fn delta_conditions(when: When, setup: Setup, parts: &mut Vec<String>) {
 
 pub(crate) const MERGE_GROUP_ASKED_ON: &str = "github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)";
 
-pub(crate) fn merge_group_skipped(from: &PlanFrom) -> String {
-    match from {
+pub(crate) fn merge_group_skipped(from: &PlanFrom, setup: Setup) -> String {
+    let flag = match from {
         PlanFrom::ThisJob => format!("steps.{MERGE_GROUP_STEP}.outputs.skip != 'true'"),
-        PlanFrom::Job(job) => {
+        PlanFrom::Job(job) | PlanFrom::WorkJob(job) => {
             format!("needs.{job}.outputs.{MERGE_GROUP_SKIP_OUTPUT} != 'true'")
         }
+    };
+    if setup == Setup::Replanned {
+        format!("({flag} || steps.{REPLAN_STEP}.outcome == 'success')")
+    } else {
+        flag
     }
 }
 
@@ -250,6 +255,14 @@ fn requested_here() -> String {
     )
 }
 
+pub(crate) fn check_name(name: Option<&String>, pr: PrRun) -> Option<String> {
+    let name = name.filter(|_| pr == PrRun::Related)?;
+    let quoted = name.replace('\'', "''");
+    Some(format!(
+        "${{{{ {RELATED_EVENT} && '{quoted}' || '{quoted} (ignored event)' }}}}"
+    ))
+}
+
 fn pr_parts(pr: PrRun) -> Vec<String> {
     match pr {
         PrRun::Always => Vec::new(),
@@ -272,6 +285,7 @@ fn pr_parts(pr: PrRun) -> Vec<String> {
 pub(crate) fn admission(when: When, gate: Option<&Gate>, pr: PrRun) -> String {
     let plan_succeeded: Vec<String> = match gate.map(|gate| &gate.from) {
         Some(PlanFrom::Job(job)) => vec![format!("needs.{job}.result == 'success'")],
+        Some(PlanFrom::WorkJob(_)) => vec![NOT_CANCELLED.to_owned()],
         _ => Vec::new(),
     };
     match condition(when, gate, Setup::Before, pr, &plan_succeeded) {
@@ -298,7 +312,7 @@ fn gate_parts(gate: &Gate, replanned: bool) -> Vec<String> {
     let source = plan_source(&gate.from);
     let mut parts = match &gate.from {
         PlanFrom::ThisJob => vec![format!("steps.{PLAN_STEP}.outcome == 'success'")],
-        PlanFrom::Job(_) => Vec::new(),
+        PlanFrom::Job(_) | PlanFrom::WorkJob(_) => Vec::new(),
     };
     let read_key = |key: String| {
         if replanned {

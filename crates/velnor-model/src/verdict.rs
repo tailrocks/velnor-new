@@ -16,7 +16,6 @@ pub enum JobCondition {
     ScheduleOrDispatch,
     ScheduleOrPushOrDispatch,
     DefaultBranchPush,
-    Advisory,
 }
 
 impl JobCondition {
@@ -28,7 +27,6 @@ impl JobCondition {
             "schedule-or-push-or-dispatch" => Ok(Self::ScheduleOrPushOrDispatch),
             "schedule-or-push" => Ok(Self::ScheduleOrPush),
             "default-branch-push" => Ok(Self::DefaultBranchPush),
-            "advisory" => Ok(Self::Advisory),
             other => other
                 .strip_prefix("lane:")
                 .and_then(|slug| RootSlug::new(slug).ok())
@@ -56,7 +54,6 @@ impl fmt::Display for JobCondition {
             Self::ScheduleOrPushOrDispatch => f.write_str("schedule-or-push-or-dispatch"),
             Self::ScheduleOrPush => f.write_str("schedule-or-push"),
             Self::DefaultBranchPush => f.write_str("default-branch-push"),
-            Self::Advisory => f.write_str("advisory"),
         }
     }
 }

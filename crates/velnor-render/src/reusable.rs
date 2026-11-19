@@ -3,8 +3,8 @@
 
 use velnor_model::{HelperRelease, github_hosted};
 use velnor_workflows::{
-    Action, Body, CallTarget, CallValue, Concurrency, Env, Job, MatrixSource, Step, Workflow,
-    WorkflowsPlan,
+    Action, Body, CallTarget, CallValue, Concurrency, Env, Job, Matrix, MatrixSource, Step,
+    Workflow, WorkflowsPlan,
 };
 
 use crate::gate::all_conditions;
@@ -18,7 +18,7 @@ use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
     UPLOAD_ARTIFACT, install_helper,
 };
-use crate::workflow::{SAME_REPOSITORY, yaml_concurrency, yaml_job};
+use crate::workflow::{SAME_REPOSITORY, ShellcheckMarks, yaml_concurrency, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 
 const SELF_REPOSITORY_IGNORE: &str = "zizmor: ignore[self-repository]";
@@ -69,7 +69,7 @@ fn render_one(
             rendered
                 .jobs
                 .iter()
-                .map(|job| (job.id.clone(), yaml_job(job)))
+                .map(|job| (job.id.clone(), yaml_job(job, ShellcheckMarks::Jobs)))
                 .collect(),
         ),
     ));
@@ -100,7 +100,10 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
         needs: job.needs.clone(),
         condition: call_fence(
             job,
-            condition(workflow.condition.as_deref(), job.condition.as_deref()),
+            matrix_output_guard(
+                job,
+                condition(workflow.condition.as_deref(), job.condition.as_deref()),
+            ),
         ),
         concurrency: job.concurrency.as_ref().map(rendered_concurrency),
         environment: job.environment.clone(),
@@ -126,7 +129,10 @@ fn rendered_job(workflow: &Workflow, job: &Job, helper: &HelperRelease) -> Rende
                 } => {
                     RenderedMatrixSource::Output(format!("needs.{from_job}.outputs.{from_output}"))
                 }
-                MatrixSource::Axes(axes) => RenderedMatrixSource::Axes(axes.clone()),
+                MatrixSource::Axes { axes, include } => RenderedMatrixSource::Axes {
+                    axes: axes.clone(),
+                    include: include.clone(),
+                },
             },
             fail_fast: matrix.fail_fast,
             max_parallel: matrix.max_parallel,
@@ -176,6 +182,27 @@ fn condition(workflow: Option<&str>, job: Option<&str>) -> Option<String> {
         (Some(only), None) | (None, Some(only)) => Some(format!("${{{{ {only} }}}}")),
         (Some(first), Some(second)) => Some(format!("${{{{ ({first}) && ({second}) }}}}")),
     }
+}
+
+/// `fromJSON` of an output that was never set fails the run while the matrix is expanded, so the
+/// job waits for a non-empty output.
+fn matrix_output_guard(job: &Job, condition: Option<String>) -> Option<String> {
+    let Some(Matrix {
+        source: MatrixSource::Output {
+            from_job,
+            from_output,
+        },
+        ..
+    }) = &job.matrix
+    else {
+        return condition;
+    };
+    all_conditions(
+        Some(format!(
+            "${{{{ needs.{from_job}.outputs.{from_output} != '' }}}}"
+        )),
+        condition,
+    )
 }
 
 /// A call job has no `runs-on` to put the fork fallback on, and the callee may run on a
@@ -269,6 +296,7 @@ fn rendered_step(step: &Step) -> RenderedStep {
             .as_deref()
             .map(|condition| format!("${{{{ {condition} }}}}")),
         continue_on_error: step.continue_on_error,
+        working_directory: step.working_directory.clone(),
         uses,
         uses_comment,
         with: values(&step.with)

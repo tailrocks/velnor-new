@@ -1043,19 +1043,23 @@ run = 'cp "target/$TARGET/release-tools/velnor-gen" stage/velnor-gen'
 
 [[workflow.job.step]]
 name = "Run velnor-ci"
-run = "env -C stage ./velnor-ci --version"
+run = "./velnor-ci --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Run velnor-gen"
-run = "env -C stage ./velnor-gen --version"
+run = "./velnor-gen --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-ci"
-run = 'env -C stage ./velnor-ci check-tag "$GITHUB_REF_NAME"'
+run = './velnor-ci check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-gen"
-run = 'env -C stage ./velnor-gen check-tag "$GITHUB_REF_NAME"'
+run = './velnor-gen check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Archive velnor-ci"
@@ -1124,19 +1128,23 @@ run = 'cp "target/$TARGET/release-tools/velnor-gen" stage/velnor-gen'
 
 [[workflow.job.step]]
 name = "Run velnor-ci"
-run = "env -C stage ./velnor-ci --version"
+run = "./velnor-ci --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Run velnor-gen"
-run = "env -C stage ./velnor-gen --version"
+run = "./velnor-gen --version"
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-ci"
-run = 'env -C stage ./velnor-ci check-tag "$GITHUB_REF_NAME"'
+run = './velnor-ci check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Check the tag against the version of velnor-gen"
-run = 'env -C stage ./velnor-gen check-tag "$GITHUB_REF_NAME"'
+run = './velnor-gen check-tag "$GITHUB_REF_NAME"'
+working_directory = "stage"
 
 [[workflow.job.step]]
 name = "Archive velnor-ci"
@@ -1192,11 +1200,13 @@ run = "tar -xzf dist/velnor-gen-aarch64-unknown-linux-musl.tar.gz -C binary/veln
 
 [[workflow.job.step]]
 name = "Write BINARY-SHA256SUMS"
-run = "env -C binary sha256sum velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen > dist/BINARY-SHA256SUMS"
+run = "sha256sum velnor-ci-x86_64-unknown-linux-musl.tar.gz/velnor-ci velnor-ci-aarch64-unknown-linux-musl.tar.gz/velnor-ci velnor-gen-x86_64-unknown-linux-musl.tar.gz/velnor-gen velnor-gen-aarch64-unknown-linux-musl.tar.gz/velnor-gen > ../dist/BINARY-SHA256SUMS"
+working_directory = "binary"
 
 [[workflow.job.step]]
 name = "Write SHA256SUMS"
-run = "env -C dist sha256sum COMMIT velnor-ci-x86_64-unknown-linux-musl.tar.gz velnor-ci-aarch64-unknown-linux-musl.tar.gz velnor-gen-x86_64-unknown-linux-musl.tar.gz velnor-gen-aarch64-unknown-linux-musl.tar.gz BINARY-SHA256SUMS > dist/SHA256SUMS"
+run = "sha256sum COMMIT velnor-ci-x86_64-unknown-linux-musl.tar.gz velnor-ci-aarch64-unknown-linux-musl.tar.gz velnor-gen-x86_64-unknown-linux-musl.tar.gz velnor-gen-aarch64-unknown-linux-musl.tar.gz BINARY-SHA256SUMS > SHA256SUMS"
+working_directory = "dist"
 
 [[workflow.job.step]]
 name = "Upload SHA256SUMS"
@@ -1222,7 +1232,8 @@ with = { name = "SHA256SUMS", path = "dist" }
 
 [[workflow.job.step]]
 name = "Verify every file against SHA256SUMS"
-run = "env -C dist sha256sum --check --strict SHA256SUMS"
+run = "sha256sum --check --strict SHA256SUMS"
+working_directory = "dist"
 
 [[workflow.job.step]]
 name = "Create the pre-release"
@@ -1235,6 +1246,7 @@ name = "Tag ruleset drift"
 runner = "ubuntu-24.04"
 
 [workflow.on]
+schedule = ["23 4 * * *"]
 
 [workflow.on.workflow_dispatch]
 
@@ -1243,67 +1255,14 @@ id = "tag-ruleset-drift"
 name = "Tag ruleset drift"
 if = "github.ref == format('refs/heads/{0}', github.event.repository.default_branch)"
 timeout_minutes = 5
+permissions = { contents = "read" }
+
+[[workflow.job.step]]
+name = "Check out"
+uses = "checkout"
+with = { persist-credentials = "false" }
 
 [[workflow.job.step]]
 name = "Check tag immutability rulesets"
-uses = "github-script"
-env = { TAG_RULESET_ADMIN_READ_TOKEN = "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}" }
-
-[workflow.job.step.with]
-script = """
-if (!process.env.TAG_RULESET_ADMIN_READ_TOKEN) {
-  throw new Error('Provision TAG_RULESET_ADMIN_READ_TOKEN with Administration: read (#949)');
-}
-const admin = getOctokit(process.env.TAG_RULESET_ADMIN_READ_TOKEN);
-const { owner, repo } = context.repo;
-const expectedBypassActors = new Map([
-  ['protect-tags', []],
-  ['release-tags', [{ actor_id: 5762496, actor_type: 'Integration', bypass_mode: 'always' }]]
-]);
-const listed = await admin.paginate('GET /repos/{owner}/{repo}/rulesets', {
-  owner, repo, per_page: 100
-});
-const rulesets = [];
-for (const listedRuleset of listed.filter(rule => rule.target === 'tag' || expectedBypassActors.has(rule.name))) {
-  const { data } = await admin.request('GET /repos/{owner}/{repo}/rulesets/{ruleset_id}', {
-    owner, repo, ruleset_id: listedRuleset.id
-  });
-  rulesets.push(data);
-}
-const baseline = rulesets.filter(rule => rule.name === 'protect-tags');
-const [protection] = baseline;
-if (baseline.length !== 1 || protection.target !== 'tag' || protection.enforcement !== 'active'
-    || !protection.conditions?.ref_name?.include?.includes('~ALL')
-    || protection.conditions?.ref_name?.exclude?.length !== 0
-    || !['update', 'deletion'].every(type => protection.rules?.some(rule => rule.type === type))) {
-  throw new Error('protect-tags must actively prevent all tag updates and deletion without exclusions');
-}
-const releases = rulesets.filter(rule => rule.name === 'release-tags');
-if (releases.length !== 1 || releases[0].target !== 'tag' || releases[0].enforcement !== 'active') {
-  throw new Error('release-tags must be exactly one active tag ruleset');
-}
-const legacyReleaseRefs = ['refs/tags/rust-ci-v*', 'refs/tags/velnor-ci-v*', 'refs/tags/velnor-gen-v*'];
-const acceptedReleaseRefs = [legacyReleaseRefs, [...legacyReleaseRefs, 'refs/tags/tools-v*']];
-const releaseRefs = releases[0].conditions?.ref_name;
-if (!Array.isArray(releaseRefs?.include)
-    || !acceptedReleaseRefs.some(expected => releaseRefs.include.length === expected.length
-      && expected.every(ref => releaseRefs.include.includes(ref)))
-    || !Array.isArray(releaseRefs.exclude) || releaseRefs.exclude.length !== 0
-    || !Array.isArray(releases[0].rules) || !releases[0].rules.some(rule => rule.type === 'creation')) {
-  throw new Error('release-tags must protect creation of exactly the release tag refs');
-}
-for (const ruleset of rulesets) {
-  if (expectedBypassActors.has(ruleset.name) || ruleset.rules?.some(rule => ['update', 'deletion'].includes(rule.type))) {
-    if (!Array.isArray(ruleset.bypass_actors)) {
-      throw new Error(`${ruleset.name}: bypass_actors unreadable; require Administration: read`);
-    }
-    const expected = expectedBypassActors.get(ruleset.name) ?? [];
-    if (ruleset.bypass_actors.length !== expected.length
-        || !ruleset.bypass_actors.every(actor => expected.some(value =>
-          actor.actor_id === value.actor_id && actor.actor_type === value.actor_type
-          && actor.bypass_mode === value.bypass_mode))) {
-      throw new Error(`${ruleset.name}: tag immutability bypass actors detected`);
-    }
-  }
-}
-"""
+run = "node scripts/tag-ruleset-drift.mjs"
+env = { TAG_RULESET_ADMIN_READ_TOKEN = "${{ secrets.TAG_RULESET_ADMIN_READ_TOKEN }}", GITHUB_REPOSITORY = "${{ github.repository }}" }

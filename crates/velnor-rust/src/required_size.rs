@@ -2,9 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CargoCommand, GateNeed, Job, RepoFacts, RootSlug, StepKind, TESTS_BY_PACKAGE_OUTPUT,
-    TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, cache_lane_outputs,
-    group_output_name, json_char_bytes, json_string_bytes,
+    CargoCommand, GateNeed, Job, MERGE_GROUP_SKIP_OUTPUT, RepoFacts, RootSlug, StepKind,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    cache_lane_outputs, group_output_name, json_char_bytes, json_string_bytes,
 };
 
 const PACKAGE_ENTRY_BYTES: usize = 43;
@@ -49,8 +49,18 @@ pub(crate) fn needs_max_bytes<'a>(
                 )),
             None => 0,
         };
+        let skip_push = if job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::MergeGroupPassed { .. }))
+        {
+            property_bytes(MERGE_GROUP_SKIP_OUTPUT, 5)
+        } else {
+            0
+        };
         total
             .saturating_add(64)
+            .saturating_add(skip_push)
             .saturating_add(json_string_bytes(job.id.as_str()))
             .saturating_add(json_string_bytes("cancelled"))
             .saturating_add(outputs)

@@ -53,10 +53,12 @@ fn apply(args: &DeltaArgs, base: &str) -> Result<String, CiError> {
         ));
     }
     let cutoff = snapshot::now_ns()?;
-    let baseline = snapshot::capture(&args.target_dir, base).and_then(|baseline| {
-        snapshot::validate_times(&baseline.nodes, cutoff)?;
-        Ok(baseline)
-    });
+    let recorded = snapshot::recorded_inventory(&args.target_dir);
+    let baseline =
+        snapshot::capture(&args.target_dir, base, recorded.as_ref()).and_then(|baseline| {
+            snapshot::validate_times(&baseline.nodes, cutoff)?;
+            Ok(baseline)
+        });
     let manifest = snapshot::read::<Manifest>(&args.staging_dir.join(MANIFEST));
     let mut report = if let Err(error) = &baseline {
         cold(&args.target_dir, error)?

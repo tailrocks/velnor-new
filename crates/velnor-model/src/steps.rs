@@ -14,22 +14,7 @@ pub enum InputsCli {
     Batched,
 }
 
-pub const BUDGET_STEP: &str = "budget";
 pub const BUDGET_JOB: &str = "rust-budget";
-pub const BUDGET_PR_WALL: &str = "budget_pr_wall_seconds";
-pub const BUDGET_MAIN_WALL: &str = "budget_main_wall_seconds";
-pub const BUDGET_RUNNER: &str = "budget_runner_seconds";
-pub const BUDGET_SETUP: &str = "budget_setup_seconds";
-pub const RUN_WALL: &str = "run_wall_seconds";
-pub const RUN_RUNNER: &str = "run_runner_seconds";
-pub const BUDGET_OUTPUTS: [&str; 6] = [
-    BUDGET_PR_WALL,
-    BUDGET_MAIN_WALL,
-    BUDGET_RUNNER,
-    BUDGET_SETUP,
-    RUN_WALL,
-    RUN_RUNNER,
-];
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StepKind {
@@ -143,6 +128,9 @@ pub enum StepKind {
     Budget {
         last: usize,
     },
+    MergeGroupPassed {
+        required: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -177,5 +165,4 @@ pub enum HelperCommand {
     CheckMetadata,
     Restored(BaseExpiry),
     InputsAudit,
-    MergeGroupPassed,
 }

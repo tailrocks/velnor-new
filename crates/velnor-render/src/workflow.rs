@@ -7,16 +7,27 @@ use crate::rules::{
 };
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{
-    BUDGET_OUTPUTS, MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT,
-    TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    MERGE_GROUP_SKIP_OUTPUT, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT,
 };
 
 /// True for every event except a pull request from a fork.
 pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
-pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
+/// Where the generated workflow tells jactionlint that `ShellCheck` cannot follow
+/// the launcher: on each launcher step, or, when that would push the file past
+/// the size GitHub accepts, once on each job that has one.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ShellcheckMarks {
+    Steps,
+    Jobs,
+}
+
+pub(crate) fn yaml_job(job: &RenderedJob, marks: ShellcheckMarks) -> Yaml {
     let mut items = Vec::new();
-    if let Some(name) = &job.name {
+    if let Some(expression) = &job.check_name {
+        items.push(entry("name", Yaml::Expr(expression.clone())));
+    } else if let Some(name) = &job.name {
         items.push(entry("name", text(name)));
     }
     if !job.needs.is_empty() {
@@ -80,10 +91,15 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
         }
         items.extend([entry(
             "steps",
-            Yaml::Seq(job.steps.iter().map(yaml_step).collect()),
+            Yaml::Seq(
+                job.steps
+                    .iter()
+                    .map(|step| yaml_step(step, marks))
+                    .collect(),
+            ),
         )]);
     }
-    match job_notes(job) {
+    match job_notes(job, marks) {
         Some(notes) => Yaml::Noted(notes, Box::new(Yaml::Map(items))),
         None => Yaml::Map(items),
     }
@@ -112,7 +128,6 @@ fn yaml_outputs(outputs: &[(String, String)]) -> Yaml {
                         || name == TESTS_LISTED_OUTPUT
                         || name == TESTS_IGNORED_OUTPUT
                         || name == TESTS_BY_PACKAGE_OUTPUT
-                        || BUDGET_OUTPUTS.contains(&name.as_str())
                     {
                         Yaml::Unread(value)
                     } else {
@@ -155,7 +170,7 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
             RenderedMatrixSource::Output(from) => {
                 Yaml::Expr(format!("${{{{ fromJSON({from}) }}}}"))
             }
-            RenderedMatrixSource::Axes(axes) => Yaml::Map(
+            RenderedMatrixSource::Axes { axes, include } => Yaml::Map(
                 axes.iter()
                     .map(|(name, values)| {
                         entry(
@@ -163,6 +178,12 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
                             Yaml::Seq(values.iter().map(|value| text(value)).collect()),
                         )
                     })
+                    .chain((!include.is_empty()).then(|| {
+                        entry(
+                            "include",
+                            Yaml::Seq(include.iter().map(|item| pairs(item)).collect()),
+                        )
+                    }))
                     .collect(),
             ),
         },
@@ -170,12 +191,8 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
     Yaml::Map(items)
 }
 
-fn job_notes(job: &RenderedJob) -> Option<String> {
-    let launches_helper = job.steps.iter().any(|step| {
-        step.run
-            .as_deref()
-            .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
-    });
+fn job_notes(job: &RenderedJob, marks: ShellcheckMarks) -> Option<String> {
+    let launches_helper = marks == ShellcheckMarks::Jobs && job.steps.iter().any(launches_helper);
     let notes: Vec<&str> = job
         .comment
         .as_deref()
@@ -183,6 +200,12 @@ fn job_notes(job: &RenderedJob) -> Option<String> {
         .chain(launches_helper.then_some(crate::helper_integrity::SHELLCHECK_IGNORE))
         .collect();
     (!notes.is_empty()).then(|| notes.join("\n"))
+}
+
+fn launches_helper(step: &RenderedStep) -> bool {
+    step.run
+        .as_deref()
+        .is_some_and(|run| run.starts_with(crate::helper_integrity::INVOCATION_PREFIX))
 }
 
 fn runs_on(job: &RenderedJob) -> Yaml {
@@ -200,7 +223,7 @@ fn literal(value: &str) -> String {
     format!("'{}'", value.replace('\'', "''"))
 }
 
-fn yaml_step(step: &RenderedStep) -> Yaml {
+fn yaml_step(step: &RenderedStep, marks: ShellcheckMarks) -> Yaml {
     let mut items = Vec::new();
     if let Some(id) = &step.id {
         items.push(entry("id", text(id)));
@@ -244,7 +267,15 @@ fn yaml_step(step: &RenderedStep) -> Yaml {
         };
         items.push(entry("run", value));
     }
-    Yaml::Map(items)
+    let rendered = Yaml::Map(items);
+    if marks == ShellcheckMarks::Steps && launches_helper(step) {
+        Yaml::Noted(
+            crate::helper_integrity::SHELLCHECK_IGNORE.to_owned(),
+            Box::new(rendered),
+        )
+    } else {
+        rendered
+    }
 }
 
 fn pairs(items: &[(String, String)]) -> Yaml {

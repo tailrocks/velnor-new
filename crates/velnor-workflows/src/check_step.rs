@@ -9,6 +9,7 @@ use crate::expression::{
     is_identifier, whole_expression,
 };
 use crate::helper_call::{HELPER_COMMANDS, calls_velnor_ci, subcommand};
+use crate::job_limits::bounded_cache_keys;
 use crate::plan::{Action, Body, Env, LocalAction, Step};
 use crate::raw::RawStep;
 
@@ -89,15 +90,45 @@ pub(crate) fn step(
         .condition
         .map(|text| check_condition(&text, scope))
         .transpose()?;
+    let working_directory = working_directory(job, &body, raw.working_directory)?;
+    let with = values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?;
+    bounded_cache_keys(job, &body, &with)?;
     Ok(Step {
         id: raw.id,
         name: raw.name.unwrap_or(label),
         condition,
         body,
-        with: values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?,
+        with,
         continue_on_error: raw.continue_on_error,
+        working_directory,
         env: values(job, raw.env, scope, None, check_env)?,
     })
+}
+
+fn working_directory(
+    job: &str,
+    body: &Body,
+    directory: Option<String>,
+) -> Result<Option<String>, WorkflowsError> {
+    let Some(directory) = directory else {
+        return Ok(None);
+    };
+    if !matches!(body, Body::Run(_)) {
+        return refuse(format!(
+            "job {job} sets working_directory on a step that is not a run step"
+        ));
+    }
+    let inside = !directory.starts_with(['/', '~'])
+        && !directory.contains(|c: char| c.is_control() || matches!(c, '$' | '\\' | '`' | ':'))
+        && directory
+            .split('/')
+            .all(|part| !part.is_empty() && part != "." && part != "..");
+    if !inside {
+        return refuse(format!(
+            "job {job} working_directory {directory:?} must be a plain relative path inside the workspace: no leading / or ~, no empty, . or .. part, no expression, $, backslash, backtick or colon"
+        ));
+    }
+    Ok(Some(directory))
 }
 
 fn plain_script(
