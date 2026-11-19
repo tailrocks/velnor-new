@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::collections::BTreeSet;
 use std::io;
 use std::time::Duration;
 
@@ -32,10 +33,16 @@ async fn online<B: Backend>(backend: &B, side: Side, name: &str) -> bool {
     serde_json::from_slice::<Value>(&answer).is_ok_and(|answer| answer["online"] == true)
 }
 
-async fn ready<B: Backend>(backend: &B, side: Side) -> io::Result<usize> {
+async fn ready<B: Backend>(
+    backend: &B,
+    side: Side,
+    consumed: &BTreeSet<String>,
+) -> io::Result<usize> {
     let mut ready = 0;
     for name in &names(backend, side).await? {
-        ready += usize::from(online(backend, side, name).await);
+        if !consumed.contains(name) {
+            ready += usize::from(online(backend, side, name).await);
+        }
     }
     Ok(ready)
 }
@@ -45,13 +52,23 @@ pub async fn await_online<B: Backend>(
     sides: &[(Side, u16)],
     timeout: Duration,
 ) -> io::Result<()> {
+    await_unconsumed(backend, sides, &BTreeSet::new(), timeout).await
+}
+
+async fn await_unconsumed<B: Backend>(
+    backend: &B,
+    sides: &[(Side, u16)],
+    consumed: &BTreeSet<String>,
+    timeout: Duration,
+) -> io::Result<()> {
     let deadline = tokio::time::Instant::now() + timeout;
     let sides: Vec<_> = sides.iter().filter(|(_, pairs)| *pairs > 0).collect();
     loop {
         let mut short = None;
         let mut failed = None;
         for &&(side, pairs) in &sides {
-            let Ok(ready) = tokio::time::timeout_at(deadline, ready(backend, side)).await else {
+            let Ok(ready) = tokio::time::timeout_at(deadline, ready(backend, side, consumed)).await
+            else {
                 return Err(io::Error::other(format!(
                     "{} runner.server did not answer within {} s",
                     side.name(),
@@ -82,4 +99,21 @@ pub async fn await_online<B: Backend>(
         }
         tokio::time::sleep(POLL).await;
     }
+}
+
+pub async fn await_replacement<B: Backend>(
+    backend: &B,
+    side: Side,
+    pairs: u16,
+    consumed: &BTreeSet<String>,
+    timeout: Duration,
+) -> io::Result<()> {
+    await_unconsumed(backend, &[(side, pairs)], consumed, timeout)
+        .await
+        .map_err(|error| {
+            io::Error::other(format!(
+                "no replacement {} pair registered at runner.server before the next event: {error}",
+                side.name()
+            ))
+        })
 }

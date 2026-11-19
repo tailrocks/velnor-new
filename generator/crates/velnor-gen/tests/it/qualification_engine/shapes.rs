@@ -106,7 +106,14 @@ pub(super) fn assert_notes(
     let mut shells = scale_sets.clone();
     shells.insert("container-hosted".to_owned());
     assert_eq!(listed("defaults.run.shell is not written"), shells);
-    assert_eq!(listed("a step shell is not written"), containers);
+    let mut shell_steps = containers.clone();
+    shell_steps.extend(set(&[
+        "mise-pin-linux-x64",
+        "stable-sources-producer-linux",
+        "stable-sources-linux-warm",
+        "stable-sources-linux-cold",
+    ]));
+    assert_eq!(listed("a step shell is not written"), shell_steps);
     assert_eq!(listed("a container is written as a mapping"), containers);
     assert_eq!(
         listed("a retry loop is written as plain probes"),

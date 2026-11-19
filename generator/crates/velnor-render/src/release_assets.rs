@@ -7,6 +7,7 @@ use velnor_release::{
 };
 
 use crate::release_binaries::{command, target};
+use crate::release_binary_sums::BINARY_SUMS_FILE;
 use crate::release_raw::bin_names;
 use crate::release_steps::{shell_word, variables};
 use crate::rules::{RenderedStep, Value};
@@ -171,6 +172,7 @@ pub(crate) fn assets(binary: &BinaryPlan) -> Vec<String> {
         .iter()
         .flat_map(|platform| published_files(binary, *platform))
         .chain(binary.commit_file.then(|| COMMIT_FILE.to_owned()))
+        .chain(binary.member_digests.map(|_| BINARY_SUMS_FILE.to_owned()))
         .collect()
 }
 

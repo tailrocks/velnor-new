@@ -166,6 +166,21 @@ pub struct RecordArgs {
         help = "A release-plz.toml, one per output file; exit 1 when a package it releases to crates.io is already published at its current version, has no git tag in the repository, and is absent from the outputs; needs RUSTUP_TOOLCHAIN and GITHUB_TOKEN"
     )]
     pub release_configs: Vec<PathBuf>,
+    #[arg(
+        long,
+        value_name = "SLUG",
+        value_parser = app,
+        requires_all = ["verified_commit", "config"],
+        help = "Slug of the GitHub App whose bot created the draft releases; with --config, also record each package whose tag for the checked-out version exists, was skipped by release-plz and has exactly one unpublished release, a draft that bot created, so a rerun after a partial failure finalizes it; exit 1 on a draft anyone else created or a second draft"
+    )]
+    pub app: Option<PlainName>,
+    #[arg(
+        long,
+        value_name = "FILE",
+        requires = "app",
+        help = "A release-plz.toml of a Cargo root, once per root; gives the tag of each package at the version the checkout holds; needs RUSTUP_TOOLCHAIN"
+    )]
+    pub config: Vec<PathBuf>,
 }
 
 #[derive(Debug, Args)]
