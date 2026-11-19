@@ -200,8 +200,7 @@ fn a_full_queue_is_authenticated_with_one_comparison_not_one_per_entry() {
     let mut entries = vec![(42, OURS, OURS_GROUP)];
     let shas: Vec<String> = (0..20).map(|n| format!("{n:040x}")).collect();
     let groups: Vec<String> = (0..20).map(|n| format!("{:040x}", n + 100)).collect();
-    for (n, (sha, group)) in shas.iter().zip(&groups).enumerate() {
-        let number = 100 + n as u32;
+    for (number, (sha, group)) in (100_u32..).zip(shas.iter().zip(&groups)) {
         routes.push(pull(number, REPOSITORY, sha));
         entries.push((number, sha.as_str(), group.as_str()));
     }
@@ -209,7 +208,7 @@ fn a_full_queue_is_authenticated_with_one_comparison_not_one_per_entry() {
     routes.push(compare(&held));
     let github = Counting {
         inner: queue(&entries, routes),
-        calls: Default::default(),
+        calls: std::cell::RefCell::default(),
     };
     assert_eq!(
         check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github)
