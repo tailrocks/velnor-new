@@ -145,7 +145,7 @@ fn current_uid(runner_temp: &Path) -> Result<u32, &'static str> {
             Ok(file) => {
                 let uid = file.metadata().map(|metadata| metadata.uid());
                 drop(file);
-                let _ = fs::remove_file(&probe);
+                fs::remove_file(&probe).ok();
                 return uid.map_err(|_| "cannot determine the current user");
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}

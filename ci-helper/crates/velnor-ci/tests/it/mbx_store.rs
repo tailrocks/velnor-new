@@ -151,7 +151,7 @@ fn an_unusable_directory_warns_and_keeps_the_private_store() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     let root_user = fs::File::create(root.join("ro").join("probe")).is_ok();
     if root_user {
-        let _ = fs::remove_file(root.join("ro").join("probe"));
+        fs::remove_file(root.join("ro").join("probe")).ok();
         return;
     }
     let cases: [(PathBuf, &str); 7] = [
