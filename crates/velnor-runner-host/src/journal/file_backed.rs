@@ -107,6 +107,7 @@ impl Journal {
             file: JournalFile::open(path).await?,
         };
         if seeded.was_copied() {
+            version.validate(&journal.connection().await?).await?;
             journal.renew_identity_for_test().await?;
         } else {
             version.bootstrap(&journal.connection().await?).await?;

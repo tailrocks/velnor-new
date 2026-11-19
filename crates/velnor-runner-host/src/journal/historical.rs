@@ -31,3 +31,14 @@ impl Historical {
         }
     }
 }
+
+impl Historical {
+    pub(super) async fn validate(self, conn: &turso::Connection) -> Result<(), HostError> {
+        match self {
+            Self::V45 => schema::validate_historical_v45(conn).await,
+            Self::V46 => schema::validate_historical_v46(conn).await,
+            Self::V47 => schema::validate_historical_v47(conn).await,
+            Self::V48 => schema::validate_historical_v48(conn).await,
+        }
+    }
+}

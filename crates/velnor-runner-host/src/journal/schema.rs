@@ -32,6 +32,11 @@ pub(in crate::journal) use driver::bootstrap_historical_v47;
 #[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v48;
 #[cfg(test)]
+pub(in crate::journal) use driver::{
+    validate_historical_v45, validate_historical_v46, validate_historical_v47,
+    validate_historical_v48,
+};
+#[cfg(test)]
 mod intents_tamper_tests;
 mod migration;
 mod physical_attempts;
