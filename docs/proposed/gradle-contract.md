@@ -71,7 +71,7 @@ major-only JDK selector, or a wider character class for any other key.
 declared group) owns one job, `Gradle / <project>` (id `gradle-<slug>`); its
 checks run as one `--continue` Gradle invocation, not as parallel steps.
 Rationale: Gradle serializes concurrent builds in one root, so step concurrency
-(decision 1) would only simulate parallelism; `--continue` keeps every
+(former hard decision 1, removed in #608) would only simulate parallelism; `--continue` keeps every
 independent check running and required. Not to be reintroduced without owner
 approval: per-phase Gradle jobs for one project, or concurrent Gradle writers
 in one root.

@@ -1,8 +1,7 @@
 # Native Rust crate jobs
 
 Each Rust package/configuration owns exactly one generated job,
-`Rust / <crate>` (`rust-<crate>`). This is a
-[hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps);
+`Rust / <crate>` (`rust-<crate>`). This was a former hard decision (removed in #608);
 it replaces the 0.1.20 Lint/Tests/Documentation phase jobs completely. There
 is no per-phase job, phase suffix, phase type or cross-phase gate left.
 

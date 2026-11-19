@@ -62,7 +62,7 @@ the configured value and the ten-minute ceiling. Control jobs keep the default. 
 
 ### One job per crate amendment (2026-10-19)
 
-The repository owner made a [hard decision](../hard-decisions.md#1-one-job-per-crate-with-parallel-check-steps)
+The repository owner made a former hard decision (removed in #608)
 that supersedes the lint, tests and docs phases above: each crate owns one
 `Rust / <crate>` job that prepares and builds once, then runs Format, Clippy,
 Documentation, tests and doctests as parallel GitHub steps. The phases

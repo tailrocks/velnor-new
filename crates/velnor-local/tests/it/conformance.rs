@@ -5,6 +5,7 @@ use serde_json::{Value, json};
 use velnor_local::conformance::{
     Values, differences, observations, report, run_values as run_values_of,
 };
+use velnor_local::io::run::log_values;
 
 const LOG: &str = r#"[probe / observe] Running: Run ./.github/actions/probe
 | {
@@ -177,4 +178,56 @@ fn the_run_values_come_from_the_payload_the_driver_wrote() {
     let merged = json!({"repository": repository, "number": 7,
         "pull_request": {"number": 7, "merged": true, "base": {"ref": "main"}}});
     assert_eq!(run_values_of(&merged), run_values("refs/heads/main"));
+}
+
+const PLAIN: &str = r#"[probe / observe] Running: Run ./.github/actions/probe
+{
+  "legs": {
+    "default-branch": {
+      "hit": "true",
+      "matched": "lab-probe-<tag>-a"
+    }
+  },
+  "probe": "cache-keys"
+}
+[probe / other] Running: Run sleep 1
+"#;
+
+#[test]
+fn an_unprefixed_probe_observation_in_a_job_log_is_read() {
+    assert_eq!(
+        observations(PLAIN),
+        [
+            json!({"legs": {"default-branch": {"hit": "true", "matched": "lab-probe-<tag>-a"}}, "probe": "cache-keys"})
+        ]
+    );
+    let single = r#"{"legs": {"default-branch": {"hit": "true"}}, "probe": "cache-keys"}"#;
+    assert_eq!(observations(single).len(), 1);
+}
+
+#[test]
+fn ordinary_json_without_the_probe_key_is_not_an_observation() {
+    let log = "{\n  \"name\": \"velnor\",\n  \"legs\": {}\n}\n{\"items\": [1, 2]}\n";
+    assert_eq!(observations(log), Vec::<serde_json::Value>::new());
+}
+
+#[test]
+fn a_log_under_logs_jobs_takes_the_values_of_its_run() {
+    let dir = crate::support::temp_dir("conformance-job-values");
+    std::fs::create_dir_all(dir.join("runs")).unwrap_or_else(|e| unreachable!("{e}"));
+    std::fs::create_dir_all(dir.join("events")).unwrap_or_else(|e| unreachable!("{e}"));
+    let saved = serde_json::to_string(&run_values("refs/pull/7/merge")).unwrap_or_default();
+    std::fs::write(dir.join("runs/5.json"), saved).unwrap_or_else(|e| unreachable!("{e}"));
+    let push = json!({"repository": {"full_name": "tailrocks/velnor-lab", "default_branch": "main"}, "ref": "refs/heads/probe-1-events"});
+    std::fs::write(dir.join("events/1-push.json"), push.to_string())
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(
+        log_values(&dir, "jobs/5-7.log"),
+        run_values("refs/pull/7/merge")
+    );
+    assert_eq!(
+        log_values(&dir, "1-push.log"),
+        run_values("refs/heads/probe-1-events")
+    );
+    assert_eq!(log_values(&dir, "jobs/9-7.log"), Values::new());
 }

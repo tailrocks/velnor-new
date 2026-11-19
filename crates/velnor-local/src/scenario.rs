@@ -16,6 +16,8 @@ pub struct Scenario {
     pub description: String,
     #[serde(default)]
     pub fresh_cache: bool,
+    #[serde(default)]
+    pub not_modelled: String,
     pub steps: Vec<Step>,
 }
 
@@ -97,6 +99,17 @@ impl Scenario {
     #[must_use]
     pub fn keeps_cache(&self, fresh_cache: bool) -> bool {
         !fresh_cache && !self.fresh_cache
+    }
+
+    pub fn refuse_unmodelled(&self) -> Result<(), String> {
+        if self.not_modelled.is_empty() {
+            Ok(())
+        } else {
+            Err(format!(
+                "not modelled locally: {}; the run would wait for it, so it is refused instead",
+                self.not_modelled
+            ))
+        }
     }
 
     #[must_use]

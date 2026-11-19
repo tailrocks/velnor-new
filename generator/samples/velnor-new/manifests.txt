@@ -18,5 +18,3 @@ crates/velnor-runner-image-manifest/Cargo.toml
 crates/velnor-runner-qualification/Cargo.toml
 crates/velnor-rust/Cargo.toml
 crates/velnor-workflows/Cargo.toml
-generator/samples/non-rust-lint/view/Cargo.lock
-generator/samples/private-deps/view/Cargo.lock

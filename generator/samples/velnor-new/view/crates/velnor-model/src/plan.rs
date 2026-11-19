@@ -3,6 +3,7 @@
 
 use std::collections::BTreeMap;
 
+use crate::budget_mode::SelectionName;
 use crate::cron::CronExpr;
 use crate::hosted::HostedRunners;
 use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
@@ -95,9 +96,12 @@ pub struct Job {
     pub permissions: Permissions,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
+    pub skip_after_merge_group: Option<PlanFrom>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub group_outputs: Vec<(RootSlug, JobId)>,
     pub reports_ignored: bool,
+    /// Titles the job with the selection of the run, read from the plan outputs.
+    pub selection_name: Option<SelectionName>,
     pub steps: Vec<Step>,
 }
 
@@ -108,7 +112,6 @@ pub struct Step {
     pub manifest: Option<RepoPath>,
     pub target_dir: Option<RepoPath>,
     pub when: When,
-    pub skip_on_draft: bool,
     pub skip_after_merge_group: Option<PlanFrom>,
     pub skip_when_cold: bool,
     pub pr: PrRun,
