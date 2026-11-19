@@ -167,7 +167,10 @@ fn only_the_publish_job_can_write_contents_and_verification_precedes_it() -> Tes
             .iter()
             .position(|run| run.ends_with(" check-tag \"$TAG\""))
             .ok_or("no tag check")?;
-        let packed = position(&build_runs, "tar -czf ")?;
+        let packed = build_runs
+            .iter()
+            .position(|run| run.starts_with("tar ") && run.contains(" -czf "))
+            .ok_or("no pack step")?;
         assert!(built < smoke && smoke < packed, "{build}");
     }
     let sums = runs(&jobs["sums-family"]);

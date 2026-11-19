@@ -183,8 +183,7 @@ fn plan_reads_the_old_text_of_a_lockfile_and_selects_only_the_members_whose_depe
         selected(&without_base),
         "Cargo.toml: all:workspace-manifest\ntools/Cargo.toml: all:workspace-manifest\n"
     );
-    let missing = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
-        .current_dir(repo.root())
+    let missing = stale_plan_command(&repo)
         .args(["plan", "--changed", "Cargo.lock", "--base-file"])
         .arg("Cargo.lock=/nonexistent/old-lock")
         .output()

@@ -33,9 +33,9 @@ pub(crate) fn budget_job(facts: &RepoFacts, after: &JobId) -> Option<Job> {
         name: Some("Speed budget".to_owned()),
         needs: vec![after.clone()],
         when: if facts.config.full_run == FullRun::Off {
-            When::DefaultBranchPush
+            When::DefaultBranchPushAfterNeeds
         } else {
-            When::Scheduled
+            When::ScheduledAfterNeeds
         },
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Actions, Access::Read),

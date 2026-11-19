@@ -69,6 +69,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
                 job.when,
                 job.gate.as_ref(),
                 job.pr,
+                &job.needs,
                 job.skip_after_merge_group.as_ref(),
             ),
             job,
