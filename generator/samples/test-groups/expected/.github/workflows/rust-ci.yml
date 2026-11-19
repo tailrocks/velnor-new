@@ -203,6 +203,7 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             lab/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir target'
       - id: save_target_root
         name: Save the target cache
@@ -394,6 +395,7 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             lab/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir target --archive nextest-archive.tar.zst'
       - id: save_target_root
         name: Save the target cache
@@ -856,6 +858,7 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             lab/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir lab/target'
       - id: save_target_lab
         name: Save the target cache
@@ -1034,6 +1037,7 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             lab/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir lab/target --archive lab/nextest-archive.tar.zst'
       - id: save_target_lab
         name: Save the target cache

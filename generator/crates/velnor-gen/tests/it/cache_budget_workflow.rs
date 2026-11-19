@@ -184,3 +184,27 @@ fn a_repository_without_cache_writers_still_budgets_existing_caches() -> TestRes
     }
     Ok(())
 }
+
+#[test]
+fn decide_gets_the_configured_cache_budget() -> TestResult {
+    for (config, bytes) in [
+        ("full_run = \"off\"\n", "8000000000"),
+        ("full_run = \"off\"\ncache_budget_bytes = 123\n", "123"),
+    ] {
+        let text = render("0.1.81", config)?;
+        let mut lanes = 0;
+        for (_, block) in jobs_of(&text) {
+            let Some(decide) = step(&block, "Decide whether to save the build directory") else {
+                continue;
+            };
+            lanes += 1;
+            assert!(
+                decide.contains(&format!("VELNOR_CACHE_BUDGET_BYTES: '{bytes}'"))
+                    || decide.contains(&format!("VELNOR_CACHE_BUDGET_BYTES: {bytes}")),
+                "{decide}"
+            );
+        }
+        assert!(lanes > 0, "{text}");
+    }
+    Ok(())
+}

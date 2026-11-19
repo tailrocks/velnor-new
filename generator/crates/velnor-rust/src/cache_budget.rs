@@ -121,6 +121,17 @@ fn pull_request(reference: &str) -> Option<u64> {
         .filter(|number| *number > 0)
 }
 
+fn target_owner(group: &str) -> Option<&str> {
+    group.rsplit_once('-').map(|(owner, _)| owner)
+}
+
+#[must_use]
+pub fn target_family_prefix(prefix: &str) -> Option<&str> {
+    let owner = prefix.strip_suffix('-')?;
+    let (owner, compat) = owner.rsplit_once('-')?;
+    (prefix.starts_with("velnor-tgt-") && hex(compat, 16)).then(|| &prefix[..=owner.len()])
+}
+
 #[must_use]
 pub fn budget_plan(
     entries: &[CacheEntry],
@@ -140,17 +151,33 @@ pub fn budget_plan(
         }
     }
     let mut ranks = BTreeMap::new();
-    for group in groups.values_mut() {
-        group.sort_unstable_by_key(|entry| std::cmp::Reverse((entry.created_at, entry.id)));
-        for (rank, entry) in group.iter().enumerate() {
+    let mut current: BTreeMap<(&str, &str), ((Timestamp, CacheId), &str)> = BTreeMap::new();
+    for ((family, group, reference), members) in &mut groups {
+        members.sort_unstable_by_key(|entry| std::cmp::Reverse((entry.created_at, entry.id)));
+        for (rank, entry) in members.iter().enumerate() {
             ranks.insert(entry.id, rank);
         }
+        if *family == CacheFamily::Target
+            && let (Some(owner), Some(newest)) = (target_owner(group), members.first())
+        {
+            let stamp = (newest.created_at, newest.id);
+            let slot = current.entry((owner, *reference)).or_insert((stamp, group));
+            if stamp > slot.0 {
+                *slot = (stamp, group);
+            }
+        }
     }
+    let stale_compat = |entry: &CacheEntry, group: &str| {
+        target_owner(group)
+            .and_then(|owner| current.get(&(owner, entry.reference.as_str())))
+            .is_some_and(|(_, newest)| *newest != group)
+    };
     let mut candidates = Vec::new();
     for entry in entries {
-        let tier = match cache_family(&entry.key) {
-            CacheFamily::Sources if retired_sources(&entry.key) => 0,
-            CacheFamily::Delta => {
+        let tier = match classify(&entry.key) {
+            Some((CacheFamily::Sources, _)) if retired_sources(&entry.key) => 0,
+            Some((CacheFamily::Target, group)) if stale_compat(entry, group) => 0,
+            Some((CacheFamily::Delta, _)) => {
                 let Some(pr) = delta_pull_request(entry) else {
                     continue;
                 };
@@ -162,12 +189,15 @@ pub fn budget_plan(
                     4
                 }
             }
-            CacheFamily::Target | CacheFamily::Sources
+            Some((CacheFamily::Sources, _)) if entry.last_accessed_at > now.saturating_sub(DAY) => {
+                continue;
+            }
+            Some((CacheFamily::Target | CacheFamily::Sources, _))
                 if ranks.get(&entry.id).is_some_and(|rank| *rank >= 2) =>
             {
                 2
             }
-            CacheFamily::Tools
+            Some((CacheFamily::Tools, _))
                 if ranks.get(&entry.id).is_some_and(|rank| *rank > 0)
                     && entry.last_accessed_at <= now.saturating_sub(7 * DAY) =>
             {

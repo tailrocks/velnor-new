@@ -249,6 +249,7 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             xtask/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir target'
       - id: save_target_root
         name: Save the target cache
@@ -470,6 +471,7 @@ jobs:
           VELNOR_CACHE_MANIFESTS: |
             Cargo.toml
             xtask/Cargo.toml
+          VELNOR_CACHE_BUDGET_BYTES: '8000000000'
         run: '. "$VELNOR_EXEC" cache decide --target-dir xtask/target'
       - id: save_target_xtask
         name: Save the target cache
