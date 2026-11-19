@@ -60,7 +60,7 @@ fn an_unrelated_label_gets_its_own_concurrency_group_and_cannot_cancel_the_run_i
             "${{ github.event_name == 'pull_request' && startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed' }}"
         )
     );
-    let always = crate::yaml_tree::document(&render("0.1.82", "shape = \"lint-test\"\n")?)?;
+    let always = crate::yaml_tree::document(&render("0.1.86", "shape = \"lint-test\"\n")?)?;
     assert!(
         !always
             .pointer("/concurrency/group")
@@ -73,7 +73,7 @@ fn an_unrelated_label_gets_its_own_concurrency_group_and_cannot_cancel_the_run_i
 fn every_generated_workflow(
     config: &str,
 ) -> Result<Vec<(String, Json)>, Box<dyn std::error::Error>> {
-    let mut view = pinned("0.1.82", config)?;
+    let mut view = pinned("0.1.86", config)?;
     for (path, text) in [("deny.toml", ""), ("mise.toml", DENY_MISE)] {
         let path = RepoPath::new(path)?;
         view.tracked_paths.insert(path.clone());

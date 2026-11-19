@@ -6,6 +6,8 @@ mod base_steps;
 mod cache;
 mod cache_upload;
 mod cargo;
+mod draft_steps;
+mod env;
 mod events;
 mod gate;
 mod header;
@@ -50,7 +52,11 @@ pub fn render(plan: &WorkflowPlan) -> Result<BTreeMap<RepoPath, String>, Vec<Rul
 #[must_use]
 pub fn rendered_workflow(plan: &WorkflowPlan) -> RenderedWorkflow {
     RenderedWorkflow {
-        jobs: plan.jobs.iter().map(rendered_job).collect(),
+        jobs: plan
+            .jobs
+            .iter()
+            .map(|job| rendered_job(job, &plan.fork_runner))
+            .collect(),
     }
 }
 
@@ -64,6 +70,7 @@ pub fn render_workflow(
         Some(entry("on", triggers(&plan.triggers))),
         Some(entry("permissions", permissions(&plan.permissions))),
         Some(entry("concurrency", concurrency(plan.concurrency))),
+        Some(entry("env", env::workflow_env())),
         helper_integrity::defaults(&rendered.jobs).map(|defaults| entry("defaults", defaults)),
         Some(entry(
             "jobs",

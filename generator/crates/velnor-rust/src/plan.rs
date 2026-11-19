@@ -108,6 +108,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
             PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
         },
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
+        fork_runner: facts.config.fork_runner.clone(),
         jobs,
     }
 }

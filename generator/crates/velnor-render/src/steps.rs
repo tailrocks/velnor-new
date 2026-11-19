@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    CI_RUN_LABEL, CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath,
-    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
+    CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, RunnerLabel,
+    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -30,14 +30,12 @@ pub(crate) const DOWNLOAD_ARTIFACT: &str =
 
 pub(crate) const TEST_STEP_ID: &str = "test";
 pub(crate) const MISE_VERSION: &str = "2026.11.9";
-const IS_DRAFT: &str = "${{ github.event.pull_request.draft == true }}";
 const CACHE_RESTORE: &str = "actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
 const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9";
-const DRAFT_NOTICE: &str = "echo \"::notice title=Draft::draft: CI not requested\"";
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
+pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
     let (restores, audit) = crate::base_steps::job_setup(job);
     let artifacts = job
         .steps
@@ -74,6 +72,7 @@ pub(crate) fn rendered_job(job: &Job) -> RenderedJob {
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),
+        fork_runner: (!github_hosted(job.runs_on.as_str())).then(|| fork_runner.to_string()),
         permissions: permission_pairs(&job.permissions),
         timeout_minutes: job.timeout_minutes,
         outputs: job
@@ -286,9 +285,9 @@ fn step_body(
             ..RenderedStep::default()
         },
         StepKind::InstallHelper(release) => install_helper(release),
-        StepKind::FailOnDraftRun => fail_on_draft(),
-        StepKind::DraftNotice => draft_notice(),
-        StepKind::ClearRunLabel => clear_run_label(),
+        StepKind::FailOnDraftRun => crate::draft_steps::fail_on_draft(),
+        StepKind::DraftNotice => crate::draft_steps::draft_notice(),
+        StepKind::ClearRunLabel => crate::draft_steps::clear_run_label(),
         StepKind::UploadCargoLog => upload_cargo_log(),
         StepKind::Verdict {
             spec,
@@ -356,45 +355,6 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
         uses_comment: Some(format!("rust-ci-v{version}")),
         with,
-        ..RenderedStep::default()
-    }
-}
-
-fn draft_notice() -> RenderedStep {
-    RenderedStep {
-        name: "Note that CI is not requested on a draft pull request".to_owned(),
-        condition: Some(IS_DRAFT.to_owned()),
-        run: Some(DRAFT_NOTICE.to_owned()),
-        ..RenderedStep::default()
-    }
-}
-
-fn clear_run_label() -> RenderedStep {
-    RenderedStep {
-        name: format!("Remove the {CI_RUN_LABEL} label"),
-        env: vec![
-            (
-                "GH_TOKEN".to_owned(),
-                Value::Expr("${{ github.token }}".to_owned()),
-            ),
-            (
-                "PR_NUMBER".to_owned(),
-                Value::Expr("${{ github.event.pull_request.number }}".to_owned()),
-            ),
-        ],
-        run: Some(format!(
-            "curl --fail --silent --show-error --request DELETE --header \"Authorization: Bearer $GH_TOKEN\" --header \"Accept: application/vnd.github+json\" \"$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/issues/$PR_NUMBER/labels/{}\"",
-            CI_RUN_LABEL.replace(':', "%3A")
-        )),
-        ..RenderedStep::default()
-    }
-}
-
-fn fail_on_draft() -> RenderedStep {
-    RenderedStep {
-        name: "Fail on a draft pull request, whose jobs were skipped".to_owned(),
-        condition: Some(IS_DRAFT.to_owned()),
-        run: Some("exit 1".to_owned()),
         ..RenderedStep::default()
     }
 }

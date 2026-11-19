@@ -12,6 +12,8 @@ mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_events;
+mod config_fork;
 mod config_helper;
 mod config_mirror;
 mod config_pr_ci;

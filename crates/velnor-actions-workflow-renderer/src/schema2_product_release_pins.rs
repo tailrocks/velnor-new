@@ -34,6 +34,7 @@ pub struct ProductReleasePins {
     pub mr_boxington_version: String,
     pub gh_version: String,
     pub bun_version: String,
+    pub runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig,
 }
 
 impl ProductReleasePins {

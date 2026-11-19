@@ -3,8 +3,8 @@
 
 use serde::Deserialize;
 use velnor_model::{
-    CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName,
+    CiDebugInfo, InputRule, PackageName, PathGlob, RepoPath, RunnerLabel, RustCiConfig, Shape,
+    TargetName,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,10 +12,11 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 21] = [
+const KEYS: [&str; 22] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
+    "fork_runner",
     "crates_mirror",
     "timeout_minutes",
     "exclude",
@@ -42,6 +43,7 @@ struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
     runner: Option<String>,
+    fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
@@ -112,15 +114,18 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         .map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
-    let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
+    let on_main =
+        crate::config_events::on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
     let full_run = match raw.full_run {
         None => defaults.full_run,
-        Some(value) => full_run(value).map_err(invalid)?,
+        Some(value) => crate::config_events::full_run(value).map_err(invalid)?,
     };
     let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
+    let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
@@ -145,7 +150,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         non_inputs,
         inputs,
         default_ignores: raw.default_ignores.unwrap_or(defaults.default_ignores),
-        runner: runner(raw.runner, defaults.runner).map_err(invalid)?,
+        runner,
+        fork_runner,
         timeout_minutes,
         exclude: excludes(raw.exclude).map_err(invalid)?,
     })
@@ -199,38 +205,13 @@ fn runner(configured: Option<String>, default: RunnerLabel) -> Result<RunnerLabe
     RunnerLabel::new(label.clone())
         .ok()
         .filter(|runner| !without_helper_build(runner.as_str()))
+        .filter(crate::config_fork::expression_safe)
         .ok_or(Reason::InvalidValue {
             key: "runner",
             value: label,
         })
 }
 
-fn on_main(configured: Option<&str>, default: OnMain) -> Result<OnMain, Reason> {
-    match configured {
-        None => Ok(default),
-        Some("affected") => Ok(OnMain::Affected),
-        Some("everything") => Ok(OnMain::Everything),
-        Some(other) => Err(Reason::InvalidValue {
-            key: "on_main",
-            value: other.to_owned(),
-        }),
-    }
-}
-
-fn full_run(value: String) -> Result<FullRun, Reason> {
-    Ok(match value.as_str() {
-        "off" => FullRun::Off,
-        "hourly" => FullRun::Hourly,
-        "nightly" => FullRun::Nightly,
-        "weekly" => FullRun::Weekly,
-        _ => FullRun::Cron(
-            CronExpr::new(value.clone()).map_err(|_| Reason::InvalidValue {
-                key: "full_run",
-                value,
-            })?,
-        ),
-    })
-}
 fn without_helper_build(label: &str) -> bool {
     let label = label.to_ascii_lowercase();
     let Some(version) = label.strip_prefix("macos-") else {
