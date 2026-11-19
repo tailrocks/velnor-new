@@ -4,7 +4,7 @@
 use std::collections::BTreeMap;
 
 use velnor_actions_contract::workflow::cache_family::{
-    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, RUNNER_TEMP_SHELL,
+    COMPLETE_STATE_ROOT_EXPR, COMPLETE_STATE_TRANSPORT_EXPR, STATE_RUNNER_TEMP,
 };
 use velnor_actions_contract::workflow::cache_family_mbx::{
     MBX_BUNDLE_IMPORT_CONDITION, MBX_BUNDLE_KEY_EXPR, MBX_BUNDLE_MATCHED_KEY_ENV,
@@ -31,11 +31,11 @@ const ZSTD_MAGIC_OCTAL: &str = "\\050\\265\\057\\375";
 fn ancestors(payload: &str) -> Result<Vec<String>, RenderError> {
     let (parent, _) = split_shell(payload)?;
     let relative = parent
-        .strip_prefix(&format!("{RUNNER_TEMP_SHELL}/"))
+        .strip_prefix(&format!("{STATE_RUNNER_TEMP}/"))
         .ok_or_else(|| {
             RenderError::InvalidWorkflow("state_transport_not_runner_temp".to_owned())
         })?;
-    let mut walked = RUNNER_TEMP_SHELL.to_owned();
+    let mut walked = STATE_RUNNER_TEMP.to_owned();
     Ok(relative
         .split('/')
         .map(|part| {
@@ -152,7 +152,7 @@ fn admission_lines(ceilings: StateCeilings) -> Vec<String> {
     vec![
         read_number("size", "wc -c < \"$payload\"", "size", "size unreadable"),
         format!("if [ \"$size\" -gt {stored} ]; then refused \"over_stored stored=$size ceiling={stored}\"; fi"),
-        "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"$RUNNER_TEMP/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
+        "if [ -z \"${MBX_CACHE_DIR:-}\" ] || [ \"$MBX_CACHE_DIR\" != \"/home/runner/work/_temp/velnor/mbx\" ] || [ ! -d \"$MBX_CACHE_DIR/actions\" ]; then corrupt import_unavailable; fi".to_owned(),
         "for tool in zstd cmp tar head tail wc find du df expr tee mkfifo date mise mbx; do command -v \"$tool\" >/dev/null 2>&1 || corrupt import_unavailable; done".to_owned(),
         "ws=${GITHUB_WORKSPACE:-}; ws=${ws%/}; if [ -z \"$ws\" ]; then corrupt import_unavailable; fi".to_owned(),
         "case \"$RUNNER_TEMP/velnor\" in \"$ws\"|\"$ws\"/*) corrupt import_in_workspace ;; esac".to_owned(),

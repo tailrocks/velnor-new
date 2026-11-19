@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::workflow::cache_family::{StateCompat, StateSnapshot};
+use velnor_actions_contract::workflow::cache_family::{MBX_STORE_DIR, StateCompat, StateSnapshot};
 
 pub(crate) const S256_FN: &str = "s256() { sha256sum \"$1\" > \"$d/sum\" || return 1; h=; rest=; read -r h rest < \"$d/sum\" || [ -n \"$h\" ]; case \"$h\" in ''|*[!0-9a-f]*) printf '%s\\n' 'sha256sum returned no digest' >&2; return 1 ;; esac; [ \"${#h}\" -eq 64 ] || return 1; }";
 
@@ -29,8 +29,7 @@ pub(crate) fn compat_lines(dir: &str, binding: &CompatBinding<'_>) -> Vec<String
         image_os: "${ImageOS-}".to_owned(),
         uname_s: "$uname_s".to_owned(),
         uname_m: "$uname_m".to_owned(),
-        store: "$RUNNER_TEMP/velnor/mbx".to_owned(),
-        checkout: "$GITHUB_WORKSPACE".to_owned(),
+        store: MBX_STORE_DIR.to_owned(),
     };
     let quoted = compat
         .lines()
