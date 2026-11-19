@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{JobId, RepoPath, VerdictSpec};
-use velnor_render::{ALLOWED_ACTIONS, RenderedJob, RenderedStep, RenderedWorkflow, check_rules};
+use velnor_render::{
+    ALINT, ALLOWED_ACTIONS, RenderedJob, RenderedStep, RenderedWorkflow, check_rules,
+};
 use velnor_rust::{Need, decide};
 
 use crate::facts::TestResult;
@@ -161,7 +163,7 @@ fn a_lint_workflow_obeys_rule_nine_and_only_the_pinned_alint_action_joins_the_fi
     assert!(
         check_rules(&job(vec![step(&format!(
             "asamarts/alint@{}",
-            "a".repeat(40)
+            ALINT.commit
         ))]))
         .is_ok()
     );

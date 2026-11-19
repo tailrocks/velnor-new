@@ -10,6 +10,7 @@ mod ids;
 mod lint;
 mod plan;
 mod repo;
+mod repo_config;
 mod selection;
 mod steps;
 mod test_group;
@@ -33,19 +34,19 @@ pub use ids::{
 };
 pub use lint::{LintCommand, LintJob, LintKind};
 pub use plan::{
-    Access, BUILD_TESTS_STEP, CargoCommand, CI_AUTO_LABEL, CI_RUN_LABEL, Concurrency, FilterRef,
-    Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, Permissions,
-    PermissionScope, PlanFrom, PlanRef, PrRun, PullRequestType, Shape, ShapeDecision, Step,
-    TEST_STEP, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
-    TESTS_RUN_OUTPUT, Triggers, When, WorkflowPlan, group_output_name,
+    Access, BUILD_TESTS_STEP, CI_AUTO_LABEL, CI_RUN_LABEL, CargoCommand, Concurrency, FilterRef,
+    Gate, GateNeed, Job, LINT_STEP, MERGE_GROUP_SKIP_OUTPUT, MERGE_GROUP_STEP, PermissionScope,
+    Permissions, PlanFrom, PlanRef, PrRun, PullRequestType, Shape, ShapeDecision, Step, TEST_STEP,
+    TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, Triggers,
+    When, WorkflowPlan, group_output_name,
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, DocsRun,
-    FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
-    PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
+    FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
+    PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
     RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
-    TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain,
-    UnownedPackage, Unread, Weakening,
+    TargetKind, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
+    Weakening,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

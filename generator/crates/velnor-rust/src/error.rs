@@ -116,6 +116,40 @@ impl Reason {
         }
     }
 
+    fn fmt_inputs(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::OverlappingRules { non_input, input } => write!(
+                f,
+                "non_inputs entry {non_input} overlaps inputs entry {input}; a path cannot select nothing and select packages"
+            ),
+            Self::UnknownInputPackage(package) => write!(
+                f,
+                "inputs names {package}, which is not a package of this repository"
+            ),
+            Self::AmbiguousNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which more than one test target declares"
+            ),
+            Self::UnknownNextestHarness(entry) => write!(
+                f,
+                "nextest_harnesses names {entry}, which is not a test target with harness = false"
+            ),
+            Self::UntrackedManifest => f.write_str(
+                "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
+            ),
+            Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
+            Self::UnknownLockedPackage(package) => write!(
+                f,
+                "lists {package}, which is not a package of this repository; run `velnor-ci inputs audit --write` after a build of all targets"
+            ),
+            Self::UnknownRoot(root) => write!(
+                f,
+                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
+            ),
+            _ => Ok(()),
+        }
+    }
+
     fn fmt_test_groups(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnknownTestGroupRoot(root) => write!(
@@ -237,34 +271,14 @@ impl fmt::Display for Reason {
                 write!(f, "exclude entry {glob} matches no tracked Cargo.toml")
             }
             Self::HelperLock(error) => error.fmt(f),
-            Self::OverlappingRules { non_input, input } => write!(
-                f,
-                "non_inputs entry {non_input} overlaps inputs entry {input}; a path cannot select nothing and select packages"
-            ),
-            Self::UnknownInputPackage(package) => write!(
-                f,
-                "inputs names {package}, which is not a package of this repository"
-            ),
-            Self::AmbiguousNextestHarness(entry) => write!(
-                f,
-                "nextest_harnesses names {entry}, which more than one test target declares"
-            ),
-            Self::UnknownNextestHarness(entry) => write!(
-                f,
-                "nextest_harnesses names {entry}, which is not a test target with harness = false"
-            ),
-            Self::UntrackedManifest => f.write_str(
-                "is a workspace member that git does not track; run `git add` on it so its harness = false tests are seen",
-            ),
-            Self::LockLine(line) => write!(f, "line {line} is not `path<TAB>package`"),
-            Self::UnknownLockedPackage(package) => write!(
-                f,
-                "lists {package}, which is not a package of this repository; run `velnor-ci inputs audit --write` after a build of all targets"
-            ),
-            Self::UnknownRoot(root) => write!(
-                f,
-                "has times for {root}, which is not a Cargo root of this repository; run `velnor-ci timings` again"
-            ),
+            Self::OverlappingRules { .. }
+            | Self::UnknownInputPackage(_)
+            | Self::AmbiguousNextestHarness(_)
+            | Self::UnknownNextestHarness(_)
+            | Self::UntrackedManifest
+            | Self::LockLine(_)
+            | Self::UnknownLockedPackage(_)
+            | Self::UnknownRoot(_) => self.fmt_inputs(f),
             Self::UnknownTestGroupRoot(_)
             | Self::TestGroupWithoutNextest(_)
             | Self::TestGroupFilter(_) => self.fmt_test_groups(f),

@@ -278,9 +278,13 @@ fn view_from(
     tracked_paths: BTreeSet<RepoPath>,
     symlinks: BTreeSet<RepoPath>,
 ) -> Result<RepoView, Error> {
+    let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
+        .into_iter()
+        .filter(|path| !(symlinks.contains(path) && path.as_str().ends_with(".rs")))
+        .collect();
     Ok(RepoView {
         repository: identity::repository_name(root),
-        files: read_files(root, &wanted_files(&tracked_paths))?,
+        files: read_files(root, &wanted)?,
         tracked_paths,
         symlinks,
         rust_metadata: BTreeMap::new(),

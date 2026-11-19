@@ -50,6 +50,8 @@ jobs:
       sources_key: '${{ steps.sources_root_key.outputs.key }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CARGO_TARGET_DIR: '${{ github.workspace }}/target'
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
