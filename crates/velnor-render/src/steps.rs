@@ -188,6 +188,11 @@ fn rendered_steps(
             condition(step.when, step.gate.as_ref(), setup, step.pr, &extra),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
+        if matches!(step.kind, StepKind::InputsSave { .. })
+            && step.when != velnor_model::When::SaveBase
+        {
+            body.id = None;
+        }
     }
     if let (Some(plan), StepKind::Cargo(command), Some(main)) =
         (&step.reads, &step.kind, rendered.last_mut())
