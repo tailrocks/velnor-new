@@ -47,6 +47,7 @@ mod fetch_server;
 mod gate;
 mod group_runs;
 mod helper_commands;
+mod http_errors;
 mod image_candidate;
 mod inputs;
 mod io;
