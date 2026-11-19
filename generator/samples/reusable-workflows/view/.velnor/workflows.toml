@@ -35,10 +35,10 @@ max_parallel = 2
 
 [[workflow.job.step]]
 name = "Warm the cache"
-run = "velnor-ci warm"
+run = "velnor-ci prepare"
 continue_on_error = true
 env = { TARGET = "${{ matrix.target }}" }
 
 [[workflow.job.step]]
 name = "Run the check"
-run = "velnor-ci check"
+run = "velnor-ci check-metadata"

@@ -15,6 +15,7 @@ pub use drifts::{Drift, drift};
 pub use error::GenerateError;
 use helper_gate::check_helper;
 pub use helper_gate::require_compatible;
+pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;

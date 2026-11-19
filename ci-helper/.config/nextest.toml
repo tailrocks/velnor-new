@@ -11,6 +11,10 @@ test-threads = 1
 slow-timeout = { period = "2s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = 'test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes)'
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = 'test(crates_mirror)'
 success-output = "immediate"
 threads-required = "num-test-threads"
@@ -19,6 +23,10 @@ slow-timeout = { period = "30s", terminate-after = 4 }
 [[profile.default.overrides]]
 filter = 'test(preview_parity) | test(preview_admit) | test(preview_authority)'
 slow-timeout = { period = "60s", terminate-after = 10 }
+
+[[profile.ci.overrides]]
+filter = 'test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes)'
+slow-timeout = { period = "30s", terminate-after = 1 }
 
 [[profile.ci.overrides]]
 filter = 'test(crates_mirror)'

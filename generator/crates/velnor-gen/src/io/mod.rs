@@ -273,6 +273,12 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
 
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
+fn is_rust_source(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+}
+
 fn view_from(
     root: &Path,
     tracked_paths: BTreeSet<RepoPath>,
@@ -280,12 +286,7 @@ fn view_from(
 ) -> Result<RepoView, Error> {
     let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
         .into_iter()
-        .filter(|path| {
-            !symlinks.contains(path)
-                || !std::path::Path::new(path.as_str())
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
-        })
+        .filter(|path| !(symlinks.contains(path) && is_rust_source(path.as_str())))
         .collect();
     Ok(RepoView {
         repository: identity::repository_name(root),

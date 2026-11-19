@@ -15,6 +15,7 @@ use velnor_rust::{
 use crate::error::CiError;
 
 const OS_RELEASE: &str = "/etc/os-release";
+const OS_RELEASE_OVERRIDE: &str = "VELNOR_OS_RELEASE";
 
 pub(super) fn repository_profile(root: &Path) -> Result<String, CiError> {
     let recorded = read_files(root, &[METADATA_PATH]).map_err(|e| CiError::new(e.to_string()))?;
@@ -108,14 +109,28 @@ pub(super) fn release_of(verbose: &str) -> Result<(u32, u32), CiError> {
     rustc_release(verbose).ok_or_else(|| CiError::new("rustc -vV reports no release".to_owned()))
 }
 
-pub(super) fn image_identity() -> String {
+pub(super) fn image_identity() -> Result<String, CiError> {
     let image_os = std::env::var("ImageOS").unwrap_or_default();
-    let os_release = std::fs::read_to_string(OS_RELEASE).unwrap_or_default();
+    let explicit = std::env::var_os(OS_RELEASE_OVERRIDE);
+    if explicit.is_none() && !cfg!(target_os = "linux") {
+        return Ok(format!("{image_os}|{}|", std::env::consts::OS));
+    }
+    let path = explicit.unwrap_or_else(|| OS_RELEASE.into());
+    let os_release = std::fs::read_to_string(&path).map_err(|e| {
+        CiError::new(format!(
+            "cannot read the OS identity from {}: {e}; without it the cache cannot tell runner images apart, so prepare fails rather than share a cache",
+            Path::new(&path).display()
+        ))
+    })?;
     let field = |name: &str| {
         os_release
             .lines()
             .find_map(|line| line.strip_prefix(name)?.strip_prefix('='))
             .map_or_else(String::new, |value| value.trim_matches('"').to_owned())
     };
-    format!("{image_os}|{}|{}", field("ID"), field("VERSION_ID"))
+    Ok(format!(
+        "{image_os}|{}|{}",
+        field("ID"),
+        field("VERSION_ID")
+    ))
 }

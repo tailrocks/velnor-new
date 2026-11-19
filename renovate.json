@@ -3,6 +3,15 @@
   "description": "Velnor V1: propose ALL updates (major + minor/patch) as reviewed changes; never merge, never touch tool inputs.",
   "extends": ["config:recommended"],
   "enabledManagers": ["cargo", "github-actions"],
+  "ignorePaths": [
+    "generator/samples/**",
+    "**/expected/**",
+    "**/goldens/**",
+    "**/golden/**",
+    "fixtures/**",
+    ".github/workflows/**",
+    ".github/actions/**"
+  ],
   "cargo": {
     "enabled": true
   },
@@ -28,6 +37,12 @@
       "matchManagers": ["mise"],
       "matchFileNames": ["mise.toml", "mise.lock", "rust-toolchain.toml"],
       "enabled": false
+    },
+    {
+      "description": "x509-cert 0.3 makes tbs_certificate private (E0616); upgrading is a code change, so hold 0.2.x until that lands.",
+      "matchManagers": ["cargo"],
+      "matchPackageNames": ["x509-cert"],
+      "allowedVersions": "<0.3"
     },
     {
       "description": "The alint pin is a reviewed policy pin; changes need policy review.",

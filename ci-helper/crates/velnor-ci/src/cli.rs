@@ -54,7 +54,7 @@ pub enum Command {
     )]
     Gate(GateArgs),
     #[command(
-        about = "Download every report artifact the plan expects, all at once from one listing of the run: read the artifact names from matrix.include[].artifact_id of <run-dir>/plan.json, list the run's artifacts, download each expected one over --connections connections (three attempts each) and extract it to <run-dir>/reports/<artifact name>. Every expected artifact is attempted before the command fails; exit 1 names each one that was never uploaded, expired or could not be downloaded, and a missing or malformed plan.json. Reads GITHUB_TOKEN, which needs actions: read"
+        about = "Download every report artifact the plan expects, all at once from one listing of the run: read the artifact names from matrix.include[].artifact_id of <run-dir>/plan.json, list the run's artifacts, download each expected one over --connections connections and extract it to <run-dir>/reports/<artifact name>; the listing and every download get three attempts, all artifacts together may extract to at most --max-extract-bytes, and two live artifacts with one expected name are an error. Every expected artifact is attempted before the command fails; exit 1 names each one that was never uploaded, expired or could not be downloaded, and a missing, oversized, non-regular, symbolic-link or malformed plan.json (a repeated object key is malformed). Reads GITHUB_TOKEN, which needs actions: read"
     )]
     FetchReports(FetchReportsArgs),
     #[command(

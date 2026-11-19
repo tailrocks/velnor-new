@@ -20,6 +20,7 @@ pub const PR_TYPES: &[&str] = &[
 
 const REQUIRED_JOB: &str = "required";
 const REQUIRED_GATE_JOB: &str = "required-gate";
+const REQUIRED_GATE_FORK_JOB: &str = "required-gate-fork";
 const PLAN_JOB: &str = "plan";
 pub const ADMIT: &str =
     "github.event_name != 'pull_request' || github.event.pull_request.draft == false";
@@ -75,7 +76,7 @@ pub fn apply(document: &mut Yaml, mode: PrCiMode, shape: PrCiShape<'_>) -> Resul
         let Yaml::Map(fields) = job else {
             return Err(bad("job"));
         };
-        if id == REQUIRED_GATE_JOB {
+        if id == REQUIRED_GATE_JOB || id == REQUIRED_GATE_FORK_JOB {
             gate_job(fields, &quick, shape.claim)?;
         } else if quick.contains(&id.as_str()) {
             wrap_if(fields, &format!("({ADMIT})"));
@@ -185,6 +186,18 @@ fn wrap_if(fields: &mut Vec<(String, Yaml)>, extra: &str) {
     }
 }
 
+fn gate_condition(existing: &Yaml) -> String {
+    let admission = velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION;
+    let fence = match existing {
+        Yaml::Str(old) if old.contains(&format!("!({admission})")) => {
+            format!(" && !({admission})")
+        }
+        Yaml::Str(old) if old.contains(admission) => format!(" && ({admission})"),
+        _ => String::new(),
+    };
+    format!("${{{{ always() && ({ADMIT}){fence} }}}}")
+}
+
 fn gate_job(fields: &mut [(String, Yaml)], quick: &[&str], claim: bool) -> Result<(), RenderError> {
     let mut needs = vec![REQUIRED_JOB.to_owned()];
     needs.extend(quick.iter().map(|id| (*id).to_owned()));
@@ -209,7 +222,7 @@ fn gate_job(fields: &mut [(String, Yaml)], quick: &[&str], claim: bool) -> Resul
     for (key, value) in fields.iter_mut() {
         match key.as_str() {
             "needs" => *value = Yaml::Seq(needs.iter().cloned().map(Yaml::str).collect()),
-            "if" => *value = Yaml::str(format!("${{{{ always() && ({ADMIT}) }}}}")),
+            "if" => *value = Yaml::str(gate_condition(value)),
             "steps" => {
                 let Yaml::Seq(steps) = value else {
                     return Err(bad("gate_steps"));

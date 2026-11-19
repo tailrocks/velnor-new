@@ -34,6 +34,7 @@ mod fetch_reports;
 mod fetch_server;
 mod gate;
 mod group_runs;
+mod helper_commands;
 mod image_candidate;
 mod inputs;
 mod io;
