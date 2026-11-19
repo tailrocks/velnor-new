@@ -6,6 +6,7 @@ pub struct AuditOptions {
     pub write: bool,
     pub root: Option<String>,
     pub max_directory_entries: usize,
+    pub inherit_target_dir: bool,
 }
 
 impl Default for AuditOptions {
@@ -14,6 +15,7 @@ impl Default for AuditOptions {
             write: false,
             root: None,
             max_directory_entries: super::inventory::LIMIT,
+            inherit_target_dir: true,
         }
     }
 }
