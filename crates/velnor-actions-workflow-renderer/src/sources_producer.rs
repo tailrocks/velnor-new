@@ -14,7 +14,10 @@ use crate::render::PLAN_JOB_ID;
 const DISPLAY_NAME: &str = "Sources producer";
 const HISTORY_INPUT: &str = "fetch-depth";
 
-pub(crate) fn add_sources_producer(jobs: &mut BTreeMap<String, Job>) -> Result<(), RenderError> {
+pub(crate) fn add_sources_producer(
+    jobs: &mut BTreeMap<String, Job>,
+    hosted_runs_on: &str,
+) -> Result<(), RenderError> {
     let Some(plan) = jobs.get(PLAN_JOB_ID) else {
         return Ok(());
     };
@@ -25,7 +28,9 @@ pub(crate) fn add_sources_producer(jobs: &mut BTreeMap<String, Job>) -> Result<(
     if !produces {
         return Ok(());
     }
-    let job = build(plan)?;
+    let mut job = build(plan)?;
+    // The producer feeds state-seal, which stays hosted wherever the plan runs.
+    hosted_runs_on.clone_into(&mut job.runs_on);
     validate_sources_producer(&job, SOURCES_PRODUCER_JOB_ID).map_err(RenderError::Contract)?;
     if jobs
         .insert(SOURCES_PRODUCER_JOB_ID.to_owned(), job)
