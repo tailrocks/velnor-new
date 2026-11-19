@@ -25,26 +25,6 @@ pub struct QualificationCompareArgs {
 }
 
 #[derive(Debug, Args)]
-pub struct PreviewGhArgs {
-    #[arg(
-        long,
-        help = "Absolute path of the pinned gh; defaults to the PREVIEW_GH variable"
-    )]
-    pub gh: Option<PathBuf>,
-}
-
-#[derive(Debug, Args)]
-pub struct RunAuthorityArgs {
-    #[arg(long, help = "draft, prepare or publish")]
-    pub mode: String,
-    #[arg(
-        long,
-        help = "Absolute path of the pinned gh; defaults to the PREVIEW_GH variable"
-    )]
-    pub gh: Option<PathBuf>,
-}
-
-#[derive(Debug, Args)]
 pub struct CheckConfigurationsArgs {
     #[arg(
         long,
