@@ -209,6 +209,28 @@ async fn a_pending_scale_set_delete_keeps_the_host_from_draining() -> TestResult
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_pending_scale_set_delete_blocks_reactivation() -> TestResult {
+    let fx = fixture().await?;
+    let binding = fx.config.connections().first().ok_or("connection")?;
+    run(
+        &fx.journal,
+        "UPDATE connection_scopes SET retired = 1 WHERE connection_id = 'conn-test-1'",
+    )
+    .await?;
+    for state in ["requested", "uncertain"] {
+        run(
+            &fx.journal,
+            &format!("INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, '{state}')"),
+        )
+        .await?;
+        assert!(!fx.journal.reactivate_if_drained(binding).await?, "{state}");
+        run(&fx.journal, "DELETE FROM connection_scale_set_deletes").await?;
+    }
+    assert!(fx.journal.reactivate_if_drained(binding).await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_bound_session_plus_a_running_job_is_not_drained() -> TestResult {
     let fx = fixture().await?;
     bind_session(&fx.scope, NONCE, "session-1", 0).await?;
