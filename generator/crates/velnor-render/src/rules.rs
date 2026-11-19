@@ -148,6 +148,7 @@ pub enum Rule {
     },
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
+    CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
@@ -211,6 +212,7 @@ impl fmt::Display for RuleViolation {
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
+            Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
@@ -234,8 +236,12 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
         .iter()
         .flat_map(|job| {
             let holds_token = holds_app_token(job);
+            let last = job.steps.len().saturating_sub(1);
             let step_violations = job.steps.iter().enumerate().flat_map(move |(index, step)| {
                 let mut rules = step_rules(step);
+                if crate::combined_cache::before_last(step, index, last) {
+                    rules.push(Rule::CombinedCacheNotLastStep);
+                }
                 if holds_token {
                     token_step_rules(step, &mut rules);
                 }

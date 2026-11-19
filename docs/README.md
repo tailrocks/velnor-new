@@ -2,6 +2,8 @@
 
 Start with the [vision, promises and rules](goals.md). They name the rule book for each part of the code. The process for the roadmap is in [working on the roadmap](roadmap.md).
 
+To adopt the Rust generator, read [how Velnor keeps Rust CI fast](rust-ci.md).
+
 This documentation separates work by delivery state:
 
 | State | Meaning | Document |
