@@ -26,6 +26,10 @@ cargo-binstall = "1.27.0"
 # and hk's check-only jactionlint step runs the same binaries locally.
 jactionlint = "2.6.0"
 shellcheck = "0.11.0"
+# Repository policy (.alint.yml): the generated Alint job installs this pin.
+"github:asamarts/alint" = "0.22.1"
+# jactionlint checks the script of every actions/github-script step with node on PATH.
+node = "24.22.3"
 # Owner hk standard (hk.pkl): secret scanners for the pre-commit, pre-push and
 # security-audit hooks, and the tools behind the stack builtins.
 kingfisher = "2.14.0"
