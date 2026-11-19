@@ -148,7 +148,10 @@ fn every_job_is_offered_by_the_mode_input_and_every_mode_has_a_job() -> TestResu
         let condition = job.get("if").map(text).ok_or(format!("{id}: no if"))?;
         let job_modes = modes(&condition);
         assert!(!job_modes.is_empty(), "{id}: names no mode");
-        assert!(job_modes.is_subset(&offered), "{id}: names an unoffered mode");
+        assert!(
+            job_modes.is_subset(&offered),
+            "{id}: names an unoffered mode"
+        );
         named.extend(job_modes);
     }
     assert_eq!(named, offered);
@@ -163,7 +166,12 @@ fn scripted_jobs_call_scripts_that_exist_with_a_phase_they_have() -> TestResult 
     for id in SCRIPTED {
         let job = jobs.get(id).ok_or(format!("{id}: no such job"))?;
         let mut calls = 0;
-        for step in job.get("steps").and_then(Value::as_array).into_iter().flatten() {
+        for step in job
+            .get("steps")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
             let Some((file, args)) = step.get("run").map(text).and_then(|run| {
                 script_call(&run).map(|(file, args)| (file.to_owned(), args.to_owned()))
             }) else {
