@@ -29,7 +29,7 @@ fn release_yml_quotes_a_root_with_a_single_quote_in_the_build_commands() -> Test
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
-            "tar -czf tools-linux-x64.tar.gz -C 'it'\\''s/target/x86_64-unknown-linux-musl/release' tools",
+            "tar -czf tools-x86_64-unknown-linux-musl.tar.gz -C 'it'\\''s/target/x86_64-unknown-linux-musl/release' tools",
         ]
     );
     Ok(())

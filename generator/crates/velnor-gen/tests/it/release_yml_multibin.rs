@@ -38,7 +38,7 @@ fn bundle_builds_every_bin_and_packs_them_flat_with_the_included_files() -> Test
         .ok_or("no pack step")?;
     assert_eq!(
         pack,
-        "tar -czf app-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE -C \"$GITHUB_WORKSPACE/docs\" NOTICE"
+        "tar -czf app-x86_64-unknown-linux-musl.tar.gz -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE -C \"$GITHUB_WORKSPACE/docs\" NOTICE"
     );
     Ok(())
 }
@@ -47,7 +47,7 @@ fn bundle_builds_every_bin_and_packs_them_flat_with_the_included_files() -> Test
 fn a_binary_without_the_bundle_keys_packs_only_its_bin() -> TestResult {
     let commands = build_runs("[[binaries]]\npackage = \"app\"\nplatforms = [\"linux-x64\"]\n")?;
     assert!(commands.contains(
-        &"tar -czf app-linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app".to_owned()
+        &"tar -czf app-x86_64-unknown-linux-musl.tar.gz -C target/x86_64-unknown-linux-musl/release app".to_owned()
     ));
     assert!(commands.iter().any(|run| {
         run.ends_with("--bin app --target x86_64-unknown-linux-musl --target-dir target")

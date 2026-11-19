@@ -64,6 +64,18 @@ fn a_family_release_refuses_the_keys_it_cannot_publish_yet() -> TestResult {
             "include",
         ),
         ("[[binaries]]\npackage = \"app\"\nattest = true\n", "attest"),
+        (
+            "[[binaries]]\npackage = \"app\"\nformat = \"raw\"\nsmoke = true\n",
+            "smoke",
+        ),
+        (
+            "[[binaries]]\npackage = \"app\"\ncommit_file = true\n",
+            "commit_file",
+        ),
+        (
+            "[[binaries]]\npackage = \"app\"\nchecksum_files = \"sha256\"\n",
+            "checksum_files",
+        ),
     ] {
         assert_eq!(refused_key(binaries)?, key);
     }
