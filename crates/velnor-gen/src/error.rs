@@ -34,6 +34,7 @@ pub enum GenerateError {
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
     LaneGuardHelperTooOld(HelperVersion),
+    HelperLockLacksMacos { version: HelperVersion, runner: String },
     Metadata(MetadataFileError),
     Workflows(WorkflowsError),
     Rules(Vec<RuleViolation>),
@@ -109,6 +110,10 @@ impl fmt::Display for GenerateError {
             Self::LaneGuardHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot run lane-guard; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"
+            ),
+            Self::HelperLockLacksMacos { version, runner } => write!(
+                f,
+                "the runner `{runner}` is a macOS runner, but the velnor-ci {version} in .velnor/rust-ci.lock has no macos-arm64 digest, so `actions/setup-velnor` would fail before velnor-ci runs; pin a release that lists a macos-arm64 digest with `velnor-gen pin-helper <version>`, or use a Linux runner"
             ),
             Self::FamilyTagHelperTooOld(version) => write!(
                 f,

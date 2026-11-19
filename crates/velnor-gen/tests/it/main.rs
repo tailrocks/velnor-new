@@ -104,6 +104,7 @@ mod lock;
 mod lock_affected;
 mod lock_archive;
 mod lock_consistency;
+mod macos_helper_lock;
 mod main_and_scheduled;
 mod mbx_remote;
 mod metadata_file;
