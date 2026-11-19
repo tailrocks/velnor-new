@@ -20,7 +20,6 @@ use crate::gate::{
 };
 use crate::helper_steps::restored_step;
 use crate::permission_pairs;
-use crate::private_steps::render as private_step;
 use crate::rules::{RenderedJob, RenderedStep, SETUP_VELNOR_ACTION, Value};
 
 pub(crate) const PREPARE_STEP: &str = "prepare";
@@ -241,15 +240,7 @@ fn saved_unless_hit(kind: &StepKind) -> Vec<String> {
         StepKind::CacheTrim { lane, family } => vec![trimmed_lane(lane, *family)],
         StepKind::PrivateCheck { cached }
         | StepKind::PrivateToken { cached, .. }
-        | StepKind::PrivateFetch { cached, .. }
-            if !cached.is_empty() =>
-        {
-            let misses: Vec<String> = cached
-                .iter()
-                .map(|slug| format!("steps.{}.outputs.cache-hit != 'true'", sources_step(slug)))
-                .collect();
-            vec![format!("({})", misses.join(" || "))]
-        }
+        | StepKind::PrivateFetch { cached, .. } => crate::private_steps::unless_hit(cached),
         _ => Vec::new(),
     }
 }
@@ -312,7 +303,7 @@ fn step_body(
         StepKind::CacheBudget(bytes) => cache_budget(*bytes),
         StepKind::RustComponents(components) => rustup_add("component", components),
         StepKind::RustTargets(targets) => rustup_add("target", targets),
-        StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane.cache_debug),
+        StepKind::SourcesFetch { position, .. } => sources_fetch(*position, lane),
         StepKind::Cargo(command) => cargo_step(command, audit, lane),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::InputsSave(target) => crate::helper_steps::inputs_step("save", target, directory),
@@ -323,7 +314,7 @@ fn step_body(
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
         StepKind::PrivateCheck { .. }
         | StepKind::PrivateToken { .. }
-        | StepKind::PrivateFetch { .. } => private_step(kind),
+        | StepKind::PrivateFetch { .. } => crate::private_steps::render(kind),
         StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),

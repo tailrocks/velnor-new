@@ -27,7 +27,7 @@ pub(crate) fn insert(sources: &PrivateSources, jobs: &mut [Job]) {
         let cached: Vec<RootSlug> = job.steps[..first]
             .iter()
             .filter_map(|step| match &step.kind {
-                StepKind::CacheRestore(CacheKey::Sources { root, .. }) => Some(root.slug().clone()),
+                StepKind::CacheRestore(CacheKey::Sources { lane, .. }) => Some(lane.slug().clone()),
                 _ => None,
             })
             .collect();
