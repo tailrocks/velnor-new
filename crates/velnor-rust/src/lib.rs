@@ -68,6 +68,7 @@ mod plan_budget;
 mod plan_tools;
 mod policy;
 mod private_fetch;
+mod private_lock;
 mod private_sources;
 mod reads;
 mod reexports;
