@@ -122,6 +122,17 @@ RELEASE_PROFILE_RULE = """  - id: ci-gen-release-profile
     message: "velnor-ci and velnor-gen ship with the size-tuned release-tools profile: build them with `cargo build --profile release-tools -p <package>` and copy from target/<triple>/release-tools/"
 
 """
+CLIPPY_DEFAULT_ROOTS = ("ci-helper", "generator", "local")
+CRATE_CLIPPY = (
+    "# SPDX-FileCopyrightText: 2026 Alexey Zhokhov\n"
+    "# SPDX-License-Identifier: Apache-2.0\n"
+    "\n"
+    "too-many-lines-threshold = 100\n"
+    "allow-unwrap-in-tests = false\n"
+    "allow-expect-in-tests = true\n"
+    "allow-panic-in-tests = true\n"
+    "check-incompatible-msrv-in-tests = true\n"
+)
 REPORT_TARGETS = ("aarch64-apple-darwin", "x86_64-unknown-linux-gnu")
 CLAP_ENTRY = 'clap = { version = "=4.6.7", features = ["derive", "string"] }'
 SKIP_PREFIXES = (
@@ -1303,6 +1314,12 @@ def rewrite_release_tools_workflow():
     write(RELEASE_TOOLS_WORKFLOW, text)
 
 
+def write_crate_clippy_configs():
+    for _, new, root in MOVES:
+        if root in CLIPPY_DEFAULT_ROOTS:
+            write(f"{new}/clippy.toml", CRATE_CLIPPY)
+
+
 def cmd_status(_args):
     status_report()
 
@@ -1345,6 +1362,7 @@ def cmd_apply(args):
     write(".config/nextest.toml", nextest)
     write("deny.toml", deny)
     append_secret_baselines()
+    write_crate_clippy_configs()
     merge_locks(old_locks)
     subprocess.run(["cargo", "fmt", "--all"], cwd=ROOT, check=True)
     git("add", "-A")
