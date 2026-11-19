@@ -106,6 +106,11 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
     }
+    if facts.config.mbx_shared_store && !release.version().at_least((0, 1, 84)) {
+        return Err(GenerateError::MbxStoreHelperTooOld(
+            release.version().clone(),
+        ));
+    }
     Ok(release)
 }
 

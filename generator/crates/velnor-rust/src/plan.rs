@@ -154,6 +154,9 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
             .iter()
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
+    if facts.config.mbx_shared_store {
+        steps.push(step(StepKind::MbxStore));
+    }
     steps
 }
 

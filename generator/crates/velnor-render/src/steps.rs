@@ -275,6 +275,7 @@ fn step_body(
             crate::helper_steps::inputs_step("restore", target, directory)
         }
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
+        StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
         StepKind::TestSetup { name, run } => RenderedStep {
             name: name.clone(),
             run: Some(run.clone()),
