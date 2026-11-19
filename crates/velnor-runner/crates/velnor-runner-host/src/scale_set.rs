@@ -201,7 +201,9 @@ fn lookup_action(
             | ScaleSetCreateState::NoEffect,
             true,
         ) if !organization => ScaleSetLookupAction::Adopt,
-        (ScaleSetCreateState::Prepared, false) => ScaleSetLookupAction::Create,
+        (ScaleSetCreateState::Prepared | ScaleSetCreateState::NoEffect, false) => {
+            ScaleSetLookupAction::Create
+        }
         (ScaleSetCreateState::Created | ScaleSetCreateState::Adopted, true) => {
             ScaleSetLookupAction::Verify
         }
