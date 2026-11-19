@@ -106,6 +106,7 @@ mod repo_profile_include;
 mod repo_sample;
 mod report;
 mod required_gate;
+mod required_gate_ignored;
 mod required_gate_lanes;
 mod required_job;
 mod required_policy_single;
