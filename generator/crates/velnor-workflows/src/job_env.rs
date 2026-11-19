@@ -11,10 +11,23 @@ use crate::plan::Env;
 const WRITER_GATE: &str =
     "github.ref != format('refs/heads/{0}', github.event.repository.default_branch)";
 
+pub(crate) struct JobExtras {
+    pub(crate) env: Vec<(String, Env)>,
+    pub(crate) cache_mode: Option<CacheMode>,
+}
+
 pub(crate) fn job_env(
     job: &str,
-    raw: BTreeMap<String, String>,
-) -> Result<Vec<(String, Env)>, WorkflowsError> {
+    (env_table, mode): (&BTreeMap<String, String>, Option<&str>),
+    conditions: [Option<&str>; 2],
+) -> Result<JobExtras, WorkflowsError> {
+    Ok(JobExtras {
+        env: env(job, env_table.clone())?,
+        cache_mode: cache_mode(job, mode, &conditions)?,
+    })
+}
+
+fn env(job: &str, raw: BTreeMap<String, String>) -> Result<Vec<(String, Env)>, WorkflowsError> {
     let mut items = Vec::new();
     for (key, value) in raw {
         if !is_identifier(&key, false) {

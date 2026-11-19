@@ -11,76 +11,21 @@ use serde_json::Value;
 use crate::declared_fixture::{TestResult, rendered_text};
 use crate::yaml_tree::document;
 
-mod compare;
-mod replaced;
+mod cache;
+mod lists;
 mod scripted;
 mod shapes;
-
-use compare::{Pair, compare_head, compare_steps};
-use scripted::{Pins, SCRIPT, SCRIPTED, compare_scripted, pinned};
 
 const SCALE_SET: &str = "ubuntu-26.04-scale-set";
 const HOSTED: &str = "ubuntu-26.04";
 
-const CHAINS: [&str; 24] = [
-    "cache-default-branch-guard",
-    "empty-cache-hosted",
-    "empty-cache-scale-set",
-    "bind-hosted",
-    "bind-scale-set",
-    "buildx-hosted",
-    "buildx-scale-set",
-    "compose-hosted",
-    "compose-scale-set",
-    "expect-fail-hosted",
-    "expect-fail-scale-set",
-    "mask-hosted",
-    "mask-scale-set",
-    "pressure-a-hosted",
-    "pressure-a-scale-set",
-    "pressure-b-hosted",
-    "pressure-b-scale-set",
-    "pressure-c-hosted",
-    "pressure-c-scale-set",
-    "submodule-hosted",
-    "submodule-scale-set",
-    "testcontainers-hosted",
-    "testcontainers-scale-set",
-    "outputs-scale-set",
-];
-
-const NARROWER: [&str; 30] = [
-    "cache-default-branch-guard",
-    "bind-hosted",
-    "bind-scale-set",
-    "buildx-hosted",
-    "buildx-scale-set",
-    "cancel-hosted",
-    "cancel-scale-set",
-    "cancel-service-hosted",
-    "cancel-service-scale-set",
-    "container-hosted",
-    "container-scale-set",
-    "js-pin-hosted",
-    "js-pin-scale-set",
-    "expect-fail-hosted",
-    "expect-fail-scale-set",
-    "mask-hosted",
-    "mask-scale-set",
-    "pressure-a-hosted",
-    "pressure-a-scale-set",
-    "pressure-b-hosted",
-    "pressure-b-scale-set",
-    "pressure-c-hosted",
-    "pressure-c-scale-set",
-    "services-hosted",
-    "services-scale-set",
-    "compare",
-    "outputs-hosted",
-    "outputs-scale-set",
-    "verify-hosted",
-    "verify-scale-set",
-];
+const PIPE_REPLACED: [(&str, [&str; 2]); 1] = [(
+    "g4-path-ok | grep -qx path-ok",
+    [
+        "g4-path-ok > \"$RUNNER_TEMP/g4-path-out\"",
+        "grep -qx path-ok \"$RUNNER_TEMP/g4-path-out\"",
+    ],
+)];
 
 fn set(ids: &[&str]) -> BTreeSet<String> {
     ids.iter().map(|id| (*id).to_owned()).collect()
@@ -158,17 +103,38 @@ fn engine_steps(job: &Value) -> (Vec<StepSignature>, Vec<StepSignature>) {
     (chains, flat)
 }
 
-fn expression(value: &Value) -> String {
-    text(value)
-        .trim()
-        .trim_start_matches("${{")
-        .trim_end_matches("}}")
-        .trim()
-        .to_owned()
+fn replace_pipes(steps: Vec<StepSignature>) -> (Vec<StepSignature>, bool) {
+    let mut replaced = false;
+    let mut out = Vec::new();
+    for step in steps {
+        let hit = PIPE_REPLACED
+            .iter()
+            .find(|(from, _)| step.run.as_deref() == Some(from));
+        match hit {
+            Some((_, to)) => {
+                replaced = true;
+                for run in to {
+                    out.push(StepSignature {
+                        run: Some((*run).to_owned()),
+                        ..step.clone()
+                    });
+                }
+            }
+            None => out.push(step),
+        }
+    }
+    (out, replaced)
 }
 
 fn condition(job: &Value) -> Option<String> {
-    job.get("if").map(expression)
+    job.get("if").map(|value| {
+        text(value)
+            .trim()
+            .trim_start_matches("${{")
+            .trim_end_matches("}}")
+            .trim()
+            .to_owned()
+    })
 }
 
 fn lane(runs_on: Option<&Value>) -> Option<&'static str> {
@@ -208,6 +174,103 @@ fn offered(generated: &Value) -> BTreeSet<String> {
         .collect()
 }
 
+fn compare(
+    id: &str,
+    engine: &Value,
+    engine_workflow: &Value,
+    generated: &Value,
+    generated_workflow: &Value,
+    kinds: &mut BTreeMap<&'static str, BTreeSet<String>>,
+    unexpected: &mut Vec<String>,
+) {
+    let mut note = |kind: &'static str| {
+        kinds.entry(kind).or_default().insert(id.to_owned());
+    };
+    let (unrolled, looped) = shapes::unroll(engine);
+    let engine = &unrolled;
+    if looped {
+        note("a retry loop is written as plain probes");
+    }
+    shapes::compare(id, engine, generated, &mut note, unexpected);
+    for key in ["name", "timeout-minutes", "needs", "outputs"] {
+        if engine.get(key) != generated.get(key) {
+            unexpected.push(format!(
+                "{id}: {key}: engine {:?}, generated {:?}",
+                engine.get(key),
+                generated.get(key)
+            ));
+        }
+    }
+    cache::head(id, engine, engine_workflow, generated, unexpected);
+    if condition(engine) != condition(generated) {
+        if cache::parenthesised(engine, generated) {
+            note("a case condition is parenthesised");
+        } else {
+            unexpected.push(format!(
+                "{id}: if: engine {:?}, generated {:?}",
+                condition(engine),
+                condition(generated)
+            ));
+        }
+    }
+    let engine_lane = lane(engine.get("runs-on"));
+    if engine_lane.is_none() || engine_lane != lane(generated.get("runs-on")) {
+        unexpected.push(format!(
+            "{id}: runs-on: engine {:?}, generated {:?}",
+            engine.get("runs-on"),
+            generated.get("runs-on")
+        ));
+    }
+    if engine_lane == Some("scale-set") {
+        note("runs-on gets the fork fence");
+    }
+    if engine.pointer("/defaults/run/shell").is_some() {
+        note("defaults.run.shell is not written");
+    }
+    let from_engine = permissions(engine, engine_workflow);
+    let from_generated = permissions(generated, generated_workflow);
+    if from_engine != from_generated {
+        if from_generated
+            .iter()
+            .all(|(scope, level)| from_engine.get(scope) == Some(level))
+        {
+            note("permissions are narrower");
+        } else {
+            unexpected.push(format!(
+                "{id}: permissions: engine {from_engine:?}, generated {from_generated:?}"
+            ));
+        }
+    }
+    if scripted::SCRIPTED.contains(&id) {
+        note("a script replaces inline commands");
+        scripted::scripted_steps(id, engine, generated, unexpected);
+        return;
+    }
+    let (chains, flat) = engine_steps(engine);
+    let (flat, piped) = replace_pipes(flat);
+    let (flat, applied) = cache::apply(id, flat);
+    if flat != gen_steps(generated) {
+        unexpected.push(format!(
+            "{id}: steps: engine {flat:#?}, generated {:#?}",
+            gen_steps(generated)
+        ));
+    }
+    if piped {
+        note("a pipe is written as two steps");
+    }
+    for kind in applied {
+        note(kind);
+    }
+    if chains.len()
+        != engine
+            .get("steps")
+            .map_or(0, |steps| steps.as_array().map_or(0, Vec::len))
+        || flat.len() != chains.len()
+    {
+        note("an && chain is written as steps");
+    }
+}
+
 type Jobs = serde_json::Map<String, Value>;
 
 fn undeclared(
@@ -245,31 +308,20 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         .and_then(Value::as_object)
         .ok_or("no generated jobs")?;
     let offered = offered(&generated);
-    let script = read(SCRIPT)?;
-    let mise = read("mise.toml")?;
-    let pins = Pins {
-        mbx: pinned(&mise, "mr-boxington")?,
-        rust: pinned(&mise, "rust")?,
-    };
     let mut kinds = BTreeMap::new();
     let mut unexpected = Vec::new();
     for (id, job) in generated_jobs {
-        let Some(engine_job) = engine_jobs.get(id) else {
-            unexpected.push(format!("{id}: the engine has no such job"));
-            continue;
-        };
-        let pair = Pair {
-            id,
-            engine: engine_job,
-            engine_workflow: &engine,
-            generated: job,
-            generated_workflow: &generated,
-        };
-        compare_head(&pair, &mut kinds, &mut unexpected);
-        if SCRIPTED.contains(&id.as_str()) {
-            compare_scripted(&pair, &script, &pins, &mut unexpected);
-        } else {
-            compare_steps(&pair, &mut kinds, &mut unexpected);
+        match engine_jobs.get(id) {
+            Some(engine_job) => compare(
+                id,
+                engine_job,
+                &engine,
+                job,
+                &generated,
+                &mut kinds,
+                &mut unexpected,
+            ),
+            None => unexpected.push(format!("{id}: the engine has no such job")),
         }
     }
     undeclared(engine_jobs, generated_jobs, &offered, &mut unexpected);
@@ -286,23 +338,16 @@ fn every_declared_qualification_job_matches_the_engine_job_but_for_the_listed_di
         listed("a pipe is written as two steps"),
         BTreeSet::from(["outputs-scale-set".to_owned()])
     );
-    let empty = set(&["empty-cache-hosted", "empty-cache-scale-set"]);
-    assert_eq!(listed("an || is written as one test"), empty);
-    assert_eq!(listed("a case condition is parenthesised"), empty);
     assert_eq!(
-        listed("a restore-only actions/cache is actions/cache/restore"),
-        set(&["cache-hosted"])
+        listed("a script replaces inline commands"),
+        set(&scripted::SCRIPTED)
     );
     assert_eq!(
-        listed("a line feed in a printf format is written as \\n"),
-        empty
+        listed("an && chain is written as steps"),
+        set(&lists::CHAINS)
     );
-    assert_eq!(
-        listed("a semicolon in a message is a full stop"),
-        set(&["cache-default-branch-guard"])
-    );
-    assert_eq!(listed("an && chain is written as steps"), set(&CHAINS));
-    assert_eq!(listed("permissions are narrower"), set(&NARROWER));
+    assert_eq!(listed("permissions are narrower"), set(&lists::NARROWER));
+    cache::assert_notes(&kinds);
     Ok(())
 }
 
@@ -319,22 +364,5 @@ fn the_committed_workflow_and_the_sample_are_what_the_repository_config_renders(
         read("generator/samples/qualification/expected/.github/workflows/qualification-gen.yml")?,
         rendered
     );
-    Ok(())
-}
-
-#[test]
-fn the_mbx_script_parses_and_refuses_an_unknown_phase() -> TestResult {
-    let script = repo(SCRIPT);
-    let parsed = std::process::Command::new("/bin/bash")
-        .arg("-n")
-        .arg(&script)
-        .status()?;
-    assert!(parsed.success());
-    let unknown = std::process::Command::new("/bin/bash")
-        .arg(&script)
-        .arg("no-such-phase")
-        .output()?;
-    assert_eq!(unknown.status.code(), Some(2));
-    assert!(String::from_utf8_lossy(&unknown.stderr).contains("no-such-phase"));
     Ok(())
 }

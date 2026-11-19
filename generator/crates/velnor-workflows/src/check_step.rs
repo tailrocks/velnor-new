@@ -5,8 +5,8 @@ use std::collections::BTreeMap;
 
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{
-    Scope, WITH_INTERPOLATIONS, check, check_condition, check_interpolated, is_identifier,
-    whole_expression,
+    Scope, WITH_INTERPOLATIONS, check, check_condition, check_env, check_interpolated,
+    is_identifier, whole_expression,
 };
 use crate::helper_call::{HELPER_COMMANDS, calls_velnor_ci, subcommand};
 use crate::plan::{Action, Body, Env, LocalAction, Step};
@@ -93,9 +93,9 @@ pub(crate) fn step(
         name: raw.name.unwrap_or(label),
         condition,
         body,
-        with: values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS))?,
+        with: values(job, raw_with, scope, Some(&WITH_INTERPOLATIONS), check)?,
         continue_on_error: raw.continue_on_error,
-        env: values(job, raw.env, scope, None)?,
+        env: values(job, raw.env, scope, None, check_env)?,
     })
 }
 
@@ -190,11 +190,13 @@ fn locked_inputs(
     Ok(with)
 }
 
+/// `checker` is `check` for `with` and `check_env` for `env`, the one place a secret may be read.
 fn values(
     job: &str,
     table: BTreeMap<String, String>,
     scope: &Scope<'_>,
     interpolations: Option<&[&str]>,
+    checker: fn(&str, &Scope<'_>) -> Result<(), WorkflowsError>,
 ) -> Result<Vec<(String, Env)>, WorkflowsError> {
     let mut items = Vec::new();
     for (key, value) in table {
@@ -209,7 +211,7 @@ fn values(
             check_interpolated(&format!("job {job} with {key}"), &value, allowed)?;
             items.push((key, Env::Interpolated(value)));
         } else if value.contains("${{") {
-            check(&value, scope)?;
+            checker(&value, scope)?;
             items.push((key, Env::Expression(whole_inner(&value))));
         } else {
             items.push((key, Env::Text(value)));

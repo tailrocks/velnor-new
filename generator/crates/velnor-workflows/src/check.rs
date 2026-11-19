@@ -12,7 +12,7 @@ use crate::concurrency::{concurrency, refuse_shared_group};
 use crate::containers::{container, services};
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope, check_condition, is_identifier};
-use crate::job_env::{cache_mode, job_env};
+use crate::job_env::{JobExtras, job_env};
 use crate::matrix::matrix;
 use crate::plan::{
     Body, Concurrency, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Triggers,
@@ -185,9 +185,16 @@ fn job_shape(raw: &RawJob, earlier: &[Job]) -> Result<u16, WorkflowsError> {
     Ok(timeout_minutes)
 }
 
+fn needed_outputs<'a>(needs: &[String], earlier: &'a [Job]) -> Vec<(&'a str, &'a str)> {
+    earlier
+        .iter()
+        .filter(|seen| needs.contains(&seen.id))
+        .flat_map(|seen| seen.output_names().map(|name| (seen.id.as_str(), name)))
+        .collect()
+}
+
 fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
-    let raw_id = id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
     let job_concurrency = raw
@@ -203,11 +210,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         .matrix
         .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
         .transpose()?;
-    let needed_outputs: Vec<(&str, &str)> = earlier
-        .iter()
-        .filter(|seen| raw.needs.contains(&seen.id))
-        .flat_map(|seen| seen.output_names().map(|name| (seen.id.as_str(), name)))
-        .collect();
+    let needed_outputs = needed_outputs(&raw.needs, earlier);
     let axes = matrix.as_ref().and_then(crate::matrix::axis_names);
     let mut scope = Scope {
         inputs: ctx.inputs,
@@ -217,16 +220,15 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needs: &raw.needs,
         needed_outputs: &needed_outputs,
         steps: Vec::new(),
+        events: ctx.triggers.events(),
     };
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
-    let env = job_env(&id, raw.env.clone())?;
-    let cache_mode = cache_mode(
+    let JobExtras { env, cache_mode } = job_env(
         &id,
-        raw.cache_mode.as_deref(),
-        &[condition.as_deref(), ctx.condition],
+        (&raw.env, raw.cache_mode.as_deref()),
+        [condition.as_deref(), ctx.condition],
     )?;
     let mut job = Job {
-        id,
         name: raw.name.clone(),
         needs: raw.needs.clone(),
         condition,
@@ -240,13 +242,11 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         env,
         outputs: Vec::new(),
         matrix,
-        container: raw
-            .container
-            .map(|raw| container(&raw_id, raw))
-            .transpose()?,
-        services: services(&raw_id, raw.service)?,
+        container: raw.container.map(|raw| container(&id, raw)).transpose()?,
+        services: services(&id, raw.service)?,
         steps: Vec::new(),
         call: None,
+        id,
     };
     if let Some(uses) = &raw.uses {
         scope.level = Level::Call;

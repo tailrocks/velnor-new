@@ -4,7 +4,7 @@
 use std::error::Error;
 
 use velnor_model::HelperVersion;
-use velnor_rust::{commit_url, sums_url};
+use velnor_rust::{binary_sums_url, commit_url, sums_url};
 
 use crate::lock::locked;
 use crate::pipeline::workflow;
@@ -46,11 +46,15 @@ fn the_tag_comment_after_the_setup_velnor_pin_names_the_tag_that_exists() -> Tes
 }
 
 #[test]
-fn pin_helper_downloads_the_sums_and_commit_from_the_tag_of_the_version() -> TestResult {
+fn pin_helper_downloads_every_digest_file_from_the_tag_of_the_version() -> TestResult {
     for (version, tag) in [("0.1.84", "rust-ci-v0.1.84"), ("0.1.85", "tools-v0.1.85")] {
         let version = HelperVersion::new(version)?;
         assert_eq!(sums_url(&version), format!("{RELEASES}/{tag}/SHA256SUMS"));
         assert_eq!(commit_url(&version), format!("{RELEASES}/{tag}/COMMIT"));
+        assert_eq!(
+            binary_sums_url(&version),
+            format!("{RELEASES}/{tag}/BINARY-SHA256SUMS")
+        );
     }
     Ok(())
 }

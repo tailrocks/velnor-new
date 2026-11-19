@@ -1,15 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use super::StepSignature;
+use std::collections::{BTreeMap, BTreeSet};
 
-const PIPE_REPLACED: [(&str, [&str; 2]); 1] = [(
-    "g4-path-ok | grep -qx path-ok",
-    [
-        "g4-path-ok > \"$RUNNER_TEMP/g4-path-out\"",
-        "grep -qx path-ok \"$RUNNER_TEMP/g4-path-out\"",
-    ],
-)];
+use serde_json::Value;
+
+use super::{StepSignature, condition, set};
 
 const OR_REPLACED: [(&str, &str); 1] = [(
     "test -z \"$HIT\" || test \"$HIT\" = false",
@@ -31,29 +27,6 @@ const MESSAGE_REPLACED: [(&str, &str); 1] = [(
     "echo '::error title=cache_qualification_requires_non_default_branch::Dispatch cache qualification modes from a non-default branch; every cache job is skipped on the default branch.'",
     "echo '::error title=cache_qualification_requires_non_default_branch::Dispatch cache qualification modes from a non-default branch. Every cache job is skipped on the default branch.'",
 )];
-
-fn replace_pipes(steps: Vec<StepSignature>) -> (Vec<StepSignature>, bool) {
-    let mut replaced = false;
-    let mut out = Vec::new();
-    for step in steps {
-        let hit = PIPE_REPLACED
-            .iter()
-            .find(|(from, _)| step.run.as_deref() == Some(from));
-        match hit {
-            Some((_, to)) => {
-                replaced = true;
-                for run in to {
-                    out.push(StepSignature {
-                        run: Some((*run).to_owned()),
-                        ..step.clone()
-                    });
-                }
-            }
-            None => out.push(step),
-        }
-    }
-    (out, replaced)
-}
 
 pub(super) fn unparenthesised(condition: &str) -> Option<String> {
     let (mode, gate) = condition
@@ -107,13 +80,11 @@ fn replace_runs(steps: Vec<StepSignature>, table: &[(&str, &str)]) -> (Vec<StepS
 }
 
 pub(super) fn apply(id: &str, flat: Vec<StepSignature>) -> (Vec<StepSignature>, Vec<&'static str>) {
-    let (flat, piped) = replace_pipes(flat);
     let (flat, ored) = replace_runs(flat, &OR_REPLACED);
     let (flat, worded) = replace_runs(flat, &MESSAGE_REPLACED);
     let (flat, escaped) = replace_runs(flat, &NEWLINE_REPLACED);
     let (flat, restored) = restore_only(id, flat);
     let kinds = [
-        ("a pipe is written as two steps", piped),
         ("an || is written as one test", ored),
         ("a semicolon in a message is a full stop", worded),
         ("a line feed in a printf format is written as \\n", escaped),
@@ -129,4 +100,73 @@ pub(super) fn apply(id: &str, flat: Vec<StepSignature>) -> (Vec<StepSignature>, 
             .filter_map(|(kind, happened)| happened.then_some(kind))
             .collect(),
     )
+}
+
+pub(super) fn head(
+    id: &str,
+    engine: &Value,
+    engine_workflow: &Value,
+    generated: &Value,
+    unexpected: &mut Vec<String>,
+) {
+    if engine.get("env") != generated.get("env") {
+        unexpected.push(format!(
+            "{id}: env: engine {:?}, generated {:?}",
+            engine.get("env"),
+            generated.get("env")
+        ));
+    }
+    let engine_mode = engine.get("cache-mode");
+    let inherited = engine_mode.or_else(|| engine_workflow.get("cache-mode"));
+    let differs = match generated.get("cache-mode") {
+        Some(mode) => Some(mode) != inherited,
+        None => engine_mode.is_some(),
+    };
+    if differs {
+        unexpected.push(format!(
+            "{id}: cache-mode: engine {inherited:?}, generated {:?}",
+            generated.get("cache-mode")
+        ));
+    }
+}
+
+pub(super) fn parenthesised(engine: &Value, generated: &Value) -> bool {
+    let generated = condition(generated);
+    condition(engine) == generated.as_deref().and_then(unparenthesised)
+}
+
+pub(super) fn assert_notes(kinds: &BTreeMap<&'static str, BTreeSet<String>>) {
+    let listed = |kind: &str| kinds.get(kind).cloned().unwrap_or_default();
+    let empty = set(&["empty-cache-hosted", "empty-cache-scale-set"]);
+    assert_eq!(listed("an || is written as one test"), empty);
+    assert_eq!(listed("a case condition is parenthesised"), empty);
+    assert_eq!(
+        listed("a line feed in a printf format is written as \\n"),
+        empty
+    );
+    assert_eq!(
+        listed("a restore-only actions/cache is actions/cache/restore"),
+        set(&["cache-hosted"])
+    );
+    assert_eq!(
+        listed("a semicolon in a message is a full stop"),
+        set(&["cache-default-branch-guard"])
+    );
+}
+
+#[test]
+fn the_mbx_script_parses_and_refuses_an_unknown_phase() -> super::TestResult {
+    let script = super::repo("qualification/mbx-cache-roundtrip.sh");
+    let parsed = std::process::Command::new("/bin/bash")
+        .arg("-n")
+        .arg(&script)
+        .status()?;
+    assert!(parsed.success());
+    let unknown = std::process::Command::new("/bin/bash")
+        .arg(&script)
+        .arg("no-such-phase")
+        .output()?;
+    assert_eq!(unknown.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&unknown.stderr).contains("no-such-phase"));
+    Ok(())
 }

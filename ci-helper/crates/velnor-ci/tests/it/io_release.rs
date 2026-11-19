@@ -282,3 +282,36 @@ fn release_record_with_a_verified_commit_writes_nothing_when_it_cannot_check_the
     );
     assert_eq!(output.status.code(), Some(2), "{output:?}");
 }
+
+#[test]
+fn release_record_recovery_flags_need_each_other_and_the_verified_commit() {
+    let dir = Dir::new("record-recover-flags");
+    let ci = dir.write("ci-helper.json", CI);
+    let path = ci.to_string_lossy();
+    let sha = "1111111111111111111111111111111111111111";
+    for args in [
+        vec![
+            "--repo",
+            REPO,
+            "--verified-commit",
+            sha,
+            "--app",
+            "velnor-release",
+        ],
+        vec![
+            "--repo",
+            REPO,
+            "--verified-commit",
+            sha,
+            "--config",
+            "release-plz.toml",
+        ],
+        vec!["--app", "velnor-release", "--config", "release-plz.toml"],
+    ] {
+        let mut full = vec!["release", "record"];
+        full.extend(args);
+        full.push(&path);
+        let output = velnor_ci(&full, &[]);
+        assert_eq!(output.status.code(), Some(2), "{full:?} {output:?}");
+    }
+}
