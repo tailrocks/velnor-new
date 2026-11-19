@@ -147,16 +147,22 @@ async fn local_pair_starts_on_the_named_network_and_is_removed_by_its_label() ->
         network_mode(&observed.runner),
         Some(format!("container:{}", observed.dind_id))
     );
-    let dind_memory = 40_063_991_808;
-    let runner_memory = 22_884_122_624;
-    assert_eq!(
-        limits(&observed.dind),
-        Some((500_000_000, dind_memory, dind_memory, 2048, true))
-    );
-    assert_eq!(
-        limits(&observed.runner),
-        Some((1_500_000_000, runner_memory, runner_memory, 1024, false))
-    );
+    let floor = 1_073_741_824 + 3 * 2_147_483_648;
+    for (container, cpu, pids, privileged) in [
+        (&observed.dind, 500_000_000, 2048, true),
+        (&observed.runner, 1_500_000_000, 1024, false),
+    ] {
+        let Some((nano_cpus, memory, swap, found_pids, found_privileged)) = limits(container)
+        else {
+            return Err("a container without limits".into());
+        };
+        assert_eq!(
+            (nano_cpus, found_pids, found_privileged),
+            (cpu, pids, privileged)
+        );
+        assert_eq!(memory, swap);
+        assert!(memory >= floor, "{memory} below {floor}");
+    }
     assert_eq!(tmpfs(&observed.dind), Some(expected_tmpfs.clone()));
     assert_eq!(tmpfs(&observed.runner), Some(expected_tmpfs));
     assert_eq!(

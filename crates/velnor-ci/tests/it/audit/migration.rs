@@ -156,8 +156,12 @@ fn records_execution() {
     std::fs::OpenOptions::new().create(true).append(true).open(file).unwrap().write_all(b"run").unwrap();
 }
 "#);
+    let pinned = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../mise.toml");
     let built = command(env!("CARGO_BIN_EXE_velnor-ci"))
         .env_remove("NEXTEST_PROFILE")
+        .env_remove("MISE_NO_CONFIG")
+        .env("MISE_GLOBAL_CONFIG_FILE", &pinned)
+        .env("MISE_TRUSTED_CONFIG_PATHS", repo.root())
         .current_dir(repo.root().join("rust"))
         .args([
             "inputs",
