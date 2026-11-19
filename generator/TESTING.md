@@ -4,7 +4,7 @@
 |---|---|---|
 | Rule tests | One function: this input gives this output | Next to the code, in each crate |
 | Golden tests | A whole sample repository gives exactly the expected files | `crates/velnor-gen/tests/it/golden.rs` |
-| Helper tests | `velnor-ci` commands against temporary folders and recorded API responses | `ci-helper/` |
+| Helper tests | `velnor-ci` commands against temporary folders and recorded API responses | `crates/velnor-ci/tests/it/` |
 | Real runs | The generated workflow works on GitHub | `velnor-lab` nightly and this repository's CI |
 
 ## Rules
