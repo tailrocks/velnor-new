@@ -185,7 +185,12 @@ fn a_path_toolchain_inside_the_repository_is_checked_out_and_an_escaping_one_for
         );
     }
     let absolute = render_with("[toolchain]\npath = \"/opt/toolchain\"\n")?;
-    assert!(!lanes_of(&absolute).is_empty());
+    assert!(
+        lanes_of(&absolute)
+            .iter()
+            .any(|(_, block)| lane_listing(block).contains(&"/.velnor/")),
+        "{absolute}"
+    );
     assert!(!absolute.contains("/opt/toolchain/"), "{absolute}");
     let escaping = render_with("[toolchain]\npath = \"../outside\"\n")?;
     assert!(!escaping.contains("sparse-checkout"), "{escaping}");
