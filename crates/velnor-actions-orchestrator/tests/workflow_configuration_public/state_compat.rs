@@ -131,3 +131,63 @@ fn plan_computes_the_compat_the_crate_job_recomputes() -> Result<(), Box<dyn Err
     }
     Ok(())
 }
+
+#[test]
+fn compat_is_the_same_on_every_runner_class() -> Result<(), Box<dyn Error>> {
+    let hosted_repo = declared_input_repo()?;
+    let scale_repo = declared_input_repo()?;
+    let jobs = finalized_jobs(&prepare(hosted_repo.path())?)?;
+    let hosted_temp = tempfile::Builder::new().prefix("work-").tempdir()?;
+    let scale_temp = tempfile::Builder::new().prefix("_work-").tempdir()?;
+    let scale_jobs = finalized_jobs(&prepare(scale_repo.path())?)?;
+    for dir in ["crates/nested", "other"] {
+        let hosted = job_compat(&jobs, hosted_repo.path(), hosted_temp.path(), dir)?;
+        let scale = job_compat(&scale_jobs, scale_repo.path(), scale_temp.path(), dir)?;
+        if hosted != scale {
+            return Err(
+                format!("{dir}: hosted compat {hosted} != scale-set compat {scale}").into(),
+            );
+        }
+    }
+    let hosted = plan_outputs(&jobs, hosted_repo.path(), hosted_temp.path())?;
+    let scale = plan_outputs(&scale_jobs, scale_repo.path(), scale_temp.path())?;
+    let compats = |outputs: &str| {
+        outputs
+            .lines()
+            .filter(|line| line.contains("_compat="))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    };
+    if compats(&hosted).is_empty() || compats(&hosted) != compats(&scale) {
+        return Err("plan compat outputs differ between runner classes".into());
+    }
+    Ok(())
+}
+
+#[test]
+fn state_cache_paths_and_the_store_do_not_name_the_runner_temp() -> Result<(), Box<dyn Error>> {
+    let repo = declared_input_repo()?;
+    let jobs = finalized_jobs(&prepare(repo.path())?)?;
+    let mut restores = 0;
+    for step in jobs.values().flat_map(|job| &job.steps) {
+        let StepKind::Action { with, env, .. } = &step.kind else {
+            continue;
+        };
+        if step.role == Some(StepRole::MbxBundleRestore) {
+            restores += 1;
+            let path = with.get("path").ok_or("state restore lost its path")?;
+            if path.contains("runner.temp") {
+                return Err(format!("state cache path depends on the runner class: {path}").into());
+            }
+        }
+        if let Some(store) = env.get("MBX_CACHE_DIR")
+            && store.contains("runner.temp")
+        {
+            return Err(format!("MBX_CACHE_DIR depends on the runner class: {store}").into());
+        }
+    }
+    if restores == 0 {
+        return Err("no state restore step was rendered".into());
+    }
+    Ok(())
+}

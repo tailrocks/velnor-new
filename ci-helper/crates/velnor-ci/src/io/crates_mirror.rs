@@ -70,6 +70,37 @@ pub(super) fn setup(args: &CratesMirrorArgs) -> Result<String, CiError> {
     ))
 }
 
+pub(super) fn runner_config() -> Result<Option<PathBuf>, CiError> {
+    let Some(path) = std::env::var_os(CONFIG_ENV).filter(|path| !path.is_empty()) else {
+        return Ok(None);
+    };
+    let path = PathBuf::from(path);
+    let written = path.is_absolute()
+        && std::fs::read_to_string(&path).is_ok_and(|text| is_written_by_setup(&text));
+    if written {
+        Ok(Some(path))
+    } else {
+        Err(CiError::new(format!(
+            "{CONFIG_ENV} is {}, which is not a file crates-mirror wrote",
+            path.display()
+        )))
+    }
+}
+
+fn is_written_by_setup(text: &str) -> bool {
+    let lines: Vec<&str> = text.lines().collect();
+    let quoted = |line: &str, key: &str| {
+        line.strip_prefix(key)
+            .and_then(|rest| rest.strip_prefix(" = "))
+            .is_some_and(|value| serde_json::from_str::<String>(value).is_ok())
+    };
+    matches!(
+        lines.as_slice(),
+        [marker, "[source.crates-io]", "replace-with = \"velnor-crates-mirror\"", "[source.velnor-crates-mirror]", registry, "[http]", cainfo]
+            if format!("{marker}\n") == MARKER && quoted(registry, "registry") && quoted(cainfo, "cainfo")
+    )
+}
+
 pub(super) fn is_wrapper() -> bool {
     std::env::args_os().next().is_some_and(|arg| {
         Path::new(&arg)

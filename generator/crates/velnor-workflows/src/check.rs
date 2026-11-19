@@ -8,6 +8,7 @@ use velnor_model::github_hosted;
 use crate::call::{call, refuse_step_keys};
 use crate::check_step::step;
 use crate::concurrency::concurrency;
+use crate::containers::{container, services};
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope, check_condition, is_identifier};
 use crate::matrix::matrix;
@@ -173,6 +174,7 @@ fn job_shape(raw: &RawJob, earlier: &[Job]) -> Result<u16, WorkflowsError> {
 
 fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
+    let raw_id = id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
     let job_concurrency = raw
@@ -216,6 +218,11 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         permissions: raw.permissions.clone().into_iter().collect(),
         outputs: Vec::new(),
         matrix,
+        container: raw
+            .container
+            .map(|raw| container(&raw_id, raw))
+            .transpose()?,
+        services: services(&raw_id, raw.service)?,
         steps: Vec::new(),
         call: None,
     };

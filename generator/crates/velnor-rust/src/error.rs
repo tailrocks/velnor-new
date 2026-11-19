@@ -57,9 +57,11 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
+    MiseTemplate,
     OtherMiseConfig,
     CapLints,
     CargoEnv(String),
@@ -69,7 +71,9 @@ pub enum Reason {
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
     HelperSourceRelease,
+    MbxRemotePrivate(String),
     CargoCredentialProvider(String),
+    LockedUrlCredentials(String),
     TargetDirOutside(String),
     TargetDirOverlap(String),
     BuildDirKey(&'static str),
@@ -113,8 +117,15 @@ impl Reason {
                 f,
                 "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
             ),
+            Self::PrCiWithSkipDraft => f.write_str(
+                "pr_ci = \"label\" and skip_draft_pull_requests = true both decide what a draft pull request runs; remove skip_draft_pull_requests, because pr_ci = \"label\" already runs nothing on a draft",
+            ),
             Self::HelperSourceRelease => f.write_str(
                 "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
+            ),
+            Self::MbxRemotePrivate(cause) => write!(
+                f,
+                "cache.mbx_remote is refused: fork pull requests can restore that cache and this repository has private dependencies ({cause}); remove cache.mbx_remote"
             ),
             _ => Ok(()),
         }
@@ -128,6 +139,10 @@ impl Reason {
             Self::CargoCredentialProvider(key) => write!(
                 f,
                 "{key} names a program or alias that cargo runs when it publishes, with the release token in its environment; remove it, or use one of cargo:token, cargo:wincred, cargo:macos-keychain or cargo:libsecret"
+            ),
+            Self::LockedUrlCredentials(name) => write!(
+                f,
+                "{name} is locked from an https URL with credentials in it, which the private_sources token cannot replace, so git could not fetch it; lock it from a plain https URL (the token supplies the credentials) or an ssh URL"
             ),
             Self::CapLints => f.write_str(
                 "rustflags or rustdocflags with --cap-lints, --force-warn or an @file argument could let the lint or documentation step pass with warnings; remove it",
@@ -145,8 +160,27 @@ impl Reason {
                 f,
                 "{key} is not supported: the target cache cannot model a separate build directory, so remove it"
             ),
+            Self::RustdocflagsString => f.write_str(
+                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
+            ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
+            ),
+            _ => Ok(()),
+        }
+    }
+
+    fn fmt_mise(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MiseOverridesFlags(name) => write!(
+                f,
+                "{name} is not supported: mise-action installs tools and exports this configuration's environment to every step, where plugins or variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::MiseTemplate => f.write_str(
+                "templates are not supported: mise evaluates them while installing tools and can execute commands that replace or weaken a check; use literal configuration values"
+            ),
+            Self::OtherMiseConfig => f.write_str(
+                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
             _ => Ok(()),
         }
@@ -204,36 +238,33 @@ impl fmt::Display for Reason {
                 f,
                 "test_setup names the root {root}, which is not a Cargo root of this repository; name the folder of a root's Cargo.toml, or . for the repository root"
             ),
-            Self::RustdocflagsString => f.write_str(
-                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
-            ),
-            Self::MiseOverridesFlags(name) => write!(
-                f,
-                "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
-            ),
+            Self::MiseOverridesFlags(_) | Self::MiseTemplate | Self::OtherMiseConfig => {
+                self.fmt_mise(f)
+            }
             Self::UndeclaredTarget(_) | Self::HostTupleVersion(_) => self.fmt_build_target(f),
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
-            Self::OtherMiseConfig => f.write_str(
-                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
-            ),
-            Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperSourceRelease => self.fmt_setup(f),
+            Self::UnpinnedTool(_)
+            | Self::HelperBox(_)
+            | Self::HelperSourceRelease
+            | Self::MbxRemotePrivate(_)
+            | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
+            | Self::LockedUrlCredentials(_)
             | Self::CapLints
             | Self::TargetDirOutside(_)
             | Self::TargetDirOverlap(_)
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
+            | Self::RustdocflagsString
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
-            Self::InvalidPatch(key) => {
-                write!(
-                    f,
-                    "{key} must be a table whose path is a folder in the repository"
-                )
-            }
+            Self::InvalidPatch(key) => write!(
+                f,
+                "{key} must be a table whose path is a folder in the repository"
+            ),
         }
     }
 }

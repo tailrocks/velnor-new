@@ -25,7 +25,7 @@ fn steps_of<'t>(text: &'t str, job: &str) -> Vec<&'t str> {
         .collect()
 }
 
-const LANE_SETUP: [&str; 15] = [
+const LANE_SETUP: [&str; 16] = [
     "Check out",
     "Resolve released helper tools",
     "Install velnor-ci 0.1.81",
@@ -36,6 +36,7 @@ const LANE_SETUP: [&str; 15] = [
     "Save the tools cache",
     "velnor-ci prepare",
     "velnor-ci check-metadata",
+    "Hash the sources lockfiles",
     "Restore the sources cache",
     "Restore the target cache",
     "velnor-ci inputs restore",

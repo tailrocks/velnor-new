@@ -77,6 +77,8 @@ pub struct Schema2WorkflowRequest {
     pub version: String,
     pub hosted_label: String,
     pub scale_set: ScaleSetSelector,
+    /// Control jobs `execution.overrides` places on the scale set.
+    pub scale_set_jobs: BTreeSet<String>,
     pub workflows: BTreeSet<RoutingWorkflow>,
     pub mbx_qualification: Option<MbxQualificationPins>,
     pub mise_pin_qualification: Option<MisePinQualificationPins>,
