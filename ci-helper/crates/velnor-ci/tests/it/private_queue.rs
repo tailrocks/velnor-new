@@ -31,9 +31,13 @@ fn head_ref(number: u32, sha: &str) -> String {
 }
 
 fn pull(number: u32, repository: &str, sha: &str) -> (String, String) {
+    authored(number, "alice", repository, sha)
+}
+
+fn authored(number: u32, login: &str, repository: &str, sha: &str) -> (String, String) {
     (
         format!("/repos/{REPOSITORY}/pulls/{number}"),
-        format!("{{\"head\":{{\"sha\":\"{sha}\",\"repo\":{{\"full_name\":\"{repository}\"}}}}}}"),
+        format!("{{\"user\":{{\"login\":\"{login}\"}},\"head\":{{\"sha\":\"{sha}\",\"repo\":{{\"full_name\":\"{repository}\"}}}}}}"),
     )
 }
 
@@ -236,4 +240,39 @@ fn a_comparison_spanning_pages_is_read_to_the_end() {
     );
     let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github));
     assert!(message.contains("mallory/app"), "{message}");
+}
+
+#[test]
+fn a_bot_authored_queue_entry_or_one_stacked_under_it_gets_no_token() {
+    for bot in ["dependabot[bot]", "renovate[BOT]"] {
+        let own = queue(
+            &[(42, OURS, OURS_GROUP)],
+            vec![authored(42, bot, REPOSITORY, OURS)],
+        );
+        let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &own));
+        assert!(message.contains("#42") && message.contains("bot"), "{bot}: {message}");
+        let stacked = queue(
+            &[(42, OURS, OURS_GROUP), (41, AHEAD, AHEAD_GROUP)],
+            vec![
+                pull(42, REPOSITORY, OURS),
+                authored(41, bot, REPOSITORY, AHEAD),
+                compare(&[AHEAD_GROUP, OURS_GROUP]),
+            ],
+        );
+        let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &stacked));
+        assert!(message.contains("#41") && message.contains("bot"), "{bot}: {message}");
+    }
+}
+
+#[test]
+fn a_pull_request_without_an_author_is_refused() {
+    let github = queue(
+        &[(42, OURS, OURS_GROUP)],
+        vec![(
+            format!("/repos/{REPOSITORY}/pulls/42"),
+            format!("{{\"head\":{{\"sha\":\"{OURS}\",\"repo\":{{\"full_name\":\"{REPOSITORY}\"}}}}}}"),
+        )],
+    );
+    let message = error(check(&head_ref(42, OURS), REPOSITORY, OURS_GROUP, &github));
+    assert!(message.contains("not readable"), "{message}");
 }

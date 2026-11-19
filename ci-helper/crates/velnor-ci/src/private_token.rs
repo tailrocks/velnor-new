@@ -25,7 +25,13 @@ pub struct QueueEntry {
 
 #[derive(Deserialize)]
 struct Pull {
+    user: Author,
     head: Head,
+}
+
+#[derive(Deserialize)]
+struct Author {
+    login: String,
 }
 
 #[derive(Deserialize)]
@@ -114,6 +120,12 @@ fn authenticate(entry: &QueueEntry, repository: &str, github: &dyn GitHub) -> Re
             "pull request #{} comes from {}, not from {repository}",
             entry.number,
             full_name.unwrap_or("a deleted repository")
+        )));
+    }
+    if pull.user.login.to_ascii_lowercase().ends_with("[bot]") {
+        return Err(CiError::new(format!(
+            "pull request #{} is by {}, a bot, and a bot's pull request gets no private-source token",
+            entry.number, pull.user.login
         )));
     }
     if !pull.head.sha.eq_ignore_ascii_case(&entry.sha) {

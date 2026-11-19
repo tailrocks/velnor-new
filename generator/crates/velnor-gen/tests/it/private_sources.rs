@@ -347,3 +347,36 @@ fn a_merge_queue_entry_gets_the_token_only_when_the_check_before_it_allows_it() 
     assert!(checked > 0, "{text}");
     Ok(())
 }
+
+#[test]
+fn the_token_action_gets_the_configured_value_as_its_client_id() -> TestResult {
+    let text = workflow(&private_repo(&["Cargo.toml"], SECTION, "0.1.86")?)?;
+    let mut checked = 0;
+    for job in jobs(&text)? {
+        for step in job["steps"].as_array().into_iter().flatten() {
+            if step["id"] == "private-token" {
+                checked += 1;
+                assert_eq!(step["with"]["client-id"], "${{ vars.DEPS_APP_ID }}");
+                assert!(step["with"].get("app-id").is_none(), "{step}");
+            }
+        }
+    }
+    assert!(checked > 0, "{text}");
+    Ok(())
+}
+
+#[test]
+fn test_binaries_built_with_private_sources_are_never_uploaded_as_an_artifact() -> TestResult {
+    let config = format!("shape = 'groups'\n{SECTION}");
+    let text = workflow(&private_repo(&["Cargo.toml"], &config, "0.1.86")?)?;
+    for job in jobs(&text)? {
+        for step in job["steps"].as_array().into_iter().flatten() {
+            let name = step["with"]["name"].as_str().unwrap_or_default();
+            assert!(!name.starts_with("nextest-archive"), "{step}");
+            let run = step["run"].as_str().unwrap_or_default();
+            assert!(!run.contains("nextest archive"), "{step}");
+        }
+    }
+    assert!(text.contains("private-token"), "{text}");
+    Ok(())
+}

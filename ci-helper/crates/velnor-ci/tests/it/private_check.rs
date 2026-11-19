@@ -25,7 +25,7 @@ fn head_ref(base: &str, number: u32, sha: &str) -> String {
 
 fn pull(repository: &str, sha: &str) -> String {
     format!(
-        "{{\"number\":42,\"head\":{{\"sha\":\"{sha}\",\"repo\":{{\"full_name\":\"{repository}\"}}}}}}"
+        "{{\"number\":42,\"user\":{{\"login\":\"alice\"}},\"head\":{{\"sha\":\"{sha}\",\"repo\":{{\"full_name\":\"{repository}\"}}}}}}"
     )
 }
 

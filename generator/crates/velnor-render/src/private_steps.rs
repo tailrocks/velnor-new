@@ -52,7 +52,7 @@ fn token(sources: &PrivateSources) -> RenderedStep {
         uses_comment: Some(APP_TOKEN_VERSION.to_owned()),
         with: vec![
             (
-                "app-id".to_owned(),
+                "client-id".to_owned(),
                 Value::Expr(format!("${{{{ vars.{} }}}}", sources.app_id)),
             ),
             (
