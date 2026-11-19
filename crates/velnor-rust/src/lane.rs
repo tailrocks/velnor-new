@@ -50,7 +50,11 @@ impl Lane {
     }
 
     fn from(&self) -> PlanFrom {
-        self.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)
+        match self.plan.clone() {
+            None => PlanFrom::ThisJob,
+            Some(job) if job == RUST_JOB => PlanFrom::WorkJob(job),
+            Some(job) => PlanFrom::Job(job),
+        }
     }
 
     fn gate(&self, need: GateNeed) -> Gate {
@@ -187,7 +191,7 @@ pub(crate) fn expose_read_outputs(jobs: &mut [Job], source: &JobId) {
                 .iter()
                 .chain(job.steps.iter().filter_map(|step| step.gate.as_ref()))
         })
-        .filter(|gate| matches!(&gate.from, PlanFrom::Job(job) if job == source))
+        .filter(|gate| matches!(&gate.from, PlanFrom::Job(job) | PlanFrom::WorkJob(job) if job == source))
         .flat_map(Gate::outputs)
         .collect();
     for job in jobs.iter_mut().filter(|job| &job.id == source) {
