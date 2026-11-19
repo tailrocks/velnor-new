@@ -150,6 +150,11 @@ impl OwnedResources {
                             Recovery::Unresolved { owned_observed }
                         };
                     }
+                    if let MutationValue::ContainerId(id) = &value
+                        && let MutationKind::Container(name) = &mutation.kind
+                    {
+                        let _ = self.bind_container_id(name, id);
+                    }
                     return Recovery::Unresolved {
                         owned_observed: true,
                     };
