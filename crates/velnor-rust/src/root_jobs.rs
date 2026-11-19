@@ -180,6 +180,7 @@ impl RootJobs<'_> {
                     CargoCommand::NextestBuild
                         | CargoCommand::NextestRun { .. }
                         | CargoCommand::NextestFeatures { .. }
+                        | CargoCommand::LaneGuard { .. }
                         | CargoCommand::TestTarget { .. }
                         | CargoCommand::Doctest
                 )

@@ -289,6 +289,12 @@ pub enum CargoCommand {
     DocFeatures {
         features: Vec<String>,
     },
+    LaneGuard {
+        features: Vec<String>,
+        packages: Vec<PackageName>,
+        filter: String,
+        except: Vec<String>,
+    },
     NextestArchive {
         file: RepoPath,
     },

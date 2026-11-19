@@ -65,6 +65,16 @@ pub(crate) fn view(roots: &[&str], config: Option<&[u8]>) -> Result<RepoView, Bo
     Ok(view)
 }
 
+pub(crate) fn pin_helper(view: &mut RepoView, version: &str) -> Result<(), Box<dyn Error>> {
+    view.files.insert(
+        velnor_rust::LOCK_PATH,
+        String::from_utf8(HELPER_LOCK.to_vec())?
+            .replace("0.1.81", version)
+            .into_bytes(),
+    );
+    Ok(())
+}
+
 /// The same repository pinned to the first helper release that has the delta commands.
 pub(crate) fn with_deltas(mut view: RepoView) -> Result<RepoView, Box<dyn Error>> {
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;

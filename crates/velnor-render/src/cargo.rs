@@ -142,6 +142,12 @@ fn cargo_command(
             ci_profile,
             ..
         } => crate::cargo_features::nextest_features(nextest, features, filter, *ci_profile),
+        CargoCommand::LaneGuard {
+            features,
+            filter,
+            except,
+            ..
+        } => crate::cargo_features::lane_guard(features, filter, except),
         CargoCommand::NextestRunArchive {
             file,
             filter,
@@ -208,6 +214,7 @@ fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
                 | CargoCommand::Deny { .. }
                 | CargoCommand::Machete
                 | CargoCommand::NextestRunArchive { .. }
+                | CargoCommand::LaneGuard { .. }
         )
     {
         "velnor-ci inputs build -- "

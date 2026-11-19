@@ -32,6 +32,30 @@ pub(crate) fn nextest_features(
     )
 }
 
+fn quoted(text: &str) -> String {
+    format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+pub(crate) fn lane_guard(
+    features: &[String],
+    filter: &str,
+    except: &[String],
+) -> (String, String, Vec<(String, Value)>) {
+    let run = except.iter().fold(
+        format!(
+            "velnor-ci lane-guard --features {} --filter {}",
+            quoted(&features.join(",")),
+            quoted(filter)
+        ),
+        |text, id| format!("{text} --except-binary {}", quoted(id)),
+    );
+    (
+        format!("Test lane guard (features: {})", features.join(",")),
+        run,
+        vec![],
+    )
+}
+
 pub(crate) fn expr(expr: &str, except: &[String]) -> String {
     let both = format!("($TEST_FILTER) and ({expr})");
     if except.is_empty() {
