@@ -45,6 +45,9 @@ enum ConfigFact {
     Invalid,
 }
 
+#[cfg(test)]
+mod live_intents_tests;
+
 #[must_use]
 pub fn controller_readiness(state: &Path) -> Readiness {
     let runtime = tokio::runtime::Builder::new_current_thread()
@@ -301,31 +304,33 @@ async fn scan_rows(path: &Path, deadline: tokio::time::Instant) -> Result<bool, 
         .await
         .map_err(|_| HostError::Journal)?;
     let conn = db.connect().map_err(|_| HostError::Journal)?;
-    let mut query = conn
-        .query(
-            "SELECT kind, state, cleanup_proven FROM intents ORDER BY id",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
     let mut row_count = 0_usize;
     let mut occupied = false;
-    loop {
-        if tokio::time::Instant::now() >= deadline {
-            return Err(HostError::Journal);
-        }
-        let Some(row) = tokio::time::timeout_at(deadline, query.next())
+    for table in ["connection_intents", "intents"] {
+        let mut query = conn
+            .query(
+                &format!("SELECT kind, state, cleanup_proven FROM {table} ORDER BY id"),
+                (),
+            )
             .await
-            .map_err(|_| HostError::Journal)?
-            .map_err(|_| HostError::Journal)?
-        else {
-            break;
-        };
-        if row_count >= MAX_JOURNAL_ROWS {
-            return Err(HostError::Journal);
+            .map_err(|_| HostError::Journal)?;
+        loop {
+            if tokio::time::Instant::now() >= deadline {
+                return Err(HostError::Journal);
+            }
+            let Some(row) = tokio::time::timeout_at(deadline, query.next())
+                .await
+                .map_err(|_| HostError::Journal)?
+                .map_err(|_| HostError::Journal)?
+            else {
+                break;
+            };
+            if row_count >= MAX_JOURNAL_ROWS {
+                return Err(HostError::Journal);
+            }
+            row_count += 1;
+            occupied |= occupies(&marker_row(&row)?);
         }
-        row_count += 1;
-        occupied |= occupies(&marker_row(&row)?);
     }
     Ok(occupied)
 }

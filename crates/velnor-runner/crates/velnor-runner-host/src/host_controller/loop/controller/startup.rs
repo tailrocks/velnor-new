@@ -61,7 +61,7 @@ pub(super) async fn prepare_startup(
         image_authority,
     } = inputs;
 
-    let legacy_reconcile = crate::launch::reconcile_gate(journal, docker).await?;
+    let legacy_reconcile = crate::launch::reconcile_gate(journal, docker, current).await?;
     eprintln!(
         "legacy_reconcile={}",
         crate::launch::gate_line(&legacy_reconcile)

@@ -43,7 +43,7 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
     assert_eq!(
         tools,
         RenderedKey {
-            key: format!("velnor-tools-{HOST}-mise2026.11.9-${{{{ hashFiles('mise.lock') }}}}"),
+            key: format!("velnor-tools-{HOST}-mise2026.11.10-${{{{ hashFiles('mise.lock') }}}}"),
             restore_keys: vec![],
         }
     );
@@ -193,6 +193,7 @@ fn a_save_step_renders_the_same_key_without_fallbacks() -> TestResult {
             timeout_minutes: 10,
             gate: None,
             plan_outputs: Vec::new(),
+            reports_ignored: false,
             steps: vec![Step {
                 kind: StepKind::CacheSave(key.clone()),
                 directory: None,
