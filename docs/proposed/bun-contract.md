@@ -37,7 +37,7 @@ admitted.
 A member job's timeout resolves most specific first: the member's
 `timeout_minutes`, then `[stacks.bun] timeout_minutes`, then
 `workflow.crate_timeout_minutes`. A member value outside `1..=360` fails with
-`bad_timeout:<n>:expected_1..=360`, never clamped (hard decision 2); see
+`bad_timeout:<n>:expected_1..=360`, never clamped (former hard decision 2, removed in #608); see
 [job timeout limits](../implemented/job-timeout-limits.md).
 
 *(refinement)* `roots` is required rather than detected. The design detects
@@ -221,7 +221,7 @@ before its separate registry phase. Maven bundles are not Bun inputs. The
 repositories with `contents:read` and `metadata:read`); the organization variable
 `VELNOR_DEPS_APP_ID` and secret `VELNOR_DEPS_APP_PRIVATE_KEY` are set.
 
-## Affected selection (hard decision 3)
+## Affected selection (former hard decision 3, removed in #608)
 
 A member is selected by a changed path in its directory (the deepest member
 directory owns a nested path), by a file all members of the workspace share

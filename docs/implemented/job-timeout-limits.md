@@ -13,8 +13,7 @@ one through five, both defaulting to five independently of the general workflow 
 field, substitute GitHub's implicit default, or silently clamp a request.
 
 Crate jobs (the one job per Rust crate and each OpenTofu root job) use
-`[workflow] crate_timeout_minutes` (default `5`), a
-[hard decision](../hard-decisions.md#2-configurable-crate-job-timeout). Hosted
+`[workflow] crate_timeout_minutes` (default `5`), a former hard decision (removed in #608). Hosted
 cold builds can exceed five minutes before every check finishes; raising this
 one value gives every crate job the same larger literal bound without changing
 the one-job-per-crate topology. Parallel check steps are linked to the job's
