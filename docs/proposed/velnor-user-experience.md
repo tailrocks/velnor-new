@@ -1,352 +1,385 @@
 # How you use Velnor (draft for the owner)
 
-**Status:** draft. It describes Velnor as you and the agents will use it, following the
+**Status:** draft. It describes Velnor as you and the agents use it, following the
 [architecture](velnor-runner-architecture.md) and the
-[delivery plan](../research/velnor-runner-2026-11/delivery-plan.md). Where the design leaves a
-user-facing choice open, this draft proposes one and marks it **Proposed — owner to confirm**.
-Command names, config keys and example output are proposals unless the text says the design names
-them. Example output is illustrative: its numbers are not measurements.
+[rulings](../research/velnor-runner-2026-11/velnor-gen-rebase/rulings.md). Where the design leaves a
+user-facing choice open, this draft proposes one and marks it **Proposed — owner to confirm**, with
+the id of the question in the [owner sheet](../research/velnor-runner-2026-11/owner-questions.md).
 
-## 1. Setting it up
+Three kinds of statement appear here:
 
-### 1.1 On the Hetzner Kubernetes cluster
+- **Phase 0.** The generated workflow after the phase-0 items of the architecture (section 3). This is
+  the near-term contract.
+- **After phase 0.** Agent commands and reuse that need records or the node agent. Nothing marked so
+  is built.
+- **After Q1.** Anything where Velnor, not GitHub's official runner, executes jobs. It waits for the
+  owner to amend `docs/goals.md` (Q1).
 
-**What you do once.**
+Command names, configuration keys and example output are proposals unless the text says they
+exist. Example output is illustrative; its numbers are not measurements.
 
-1. Create the GitHub App `velnor-verify` (owner question D7). Permissions: `statuses: write`,
-   `checks: write`, `pull_requests: read`, `contents: read`, `metadata: read`. Webhooks:
-   `pull_request`, `merge_group`, `push` and `check_run`.
-2. Create an agent identity that cannot change the ruleset (D7), and a deploy identity for the
-   `velnor-system` namespace (D8).
-3. Approve the node changes (D8): XFS work volumes, node reservations (3 CPU, 6 GiB), a 2 GiB
-   eviction threshold, a PID limit of 16,384, taints for the nodes that run Docker tests, and one
-   drive or partition per worker for RustFS.
-4. Deploy with `velnor deploy --site de`, then `--site fi`. It applies digest-pinned, attested
-   images to `velnor-system` and reads back what it applied. **Proposed — owner to confirm** (the
-   command; the design says only "deploy to `velnor-system`").
+## 1. What CI is
 
-**What gets installed.**
+velnor-gen writes this repository's workflows from `.velnor/rust-ci.toml` and
+`.velnor/workflows.toml`. The helper `velnor-ci`, pinned by `.velnor/rust-ci.lock`, runs every step.
+On a pull request the workflow `Rust CI` (`.github/workflows/rust-ci.yml`) runs:
+
+| Job | What it does |
+|---|---|
+| `rust` | Plans which packages the change selects, then runs format, lint, the tests of the selected packages and the `local-mode` lane |
+| The lint jobs | Alint, Jactionlint and the generator-samples check, from `[[lint]]` (phase 0 moves them out of the hand-written `ci.yml`) |
+| `policy` | `cargo deny` and `cargo machete` |
+| `Required` | The one required check. It is green only when everything selected ran and passed |
+| `Cache` | Reports whether the cache did its job. It never blocks a merge |
+
+A push to `main` adds the documentation build, the "check crate alone" steps and the cache saves.
+Phase 0 moves those checks into the merge queue or keeps them after the merge, as you decide (Q13).
+
+## 2. Your day as the owner
+
+### 2.1 From draft to merge
+
+| Step | You or the agent do | What runs | `Required` on the latest commit |
+|---|---|---|---|
+| 1 | Open a draft and push commits | Nothing | Red: "CI not requested" |
+| 2 | Mark it ready for review | Nothing | Red: "CI not requested" |
+| 3 | Add the label `velnor:verify` | The latest commit runs: plan, format, lint, the tests of the selected packages, the lint jobs, policy | Pending, then green or red |
+| 4 | Push again while labelled | The new commit runs; the previous run is cancelled | Pending, then green or red |
+| 5 | Remove the label | The run in flight is cancelled | A commit that already has a verdict keeps it; otherwise red |
+| 6 | Edit the title or body, or add another label | Nothing new | Unchanged |
+| 7 | Turn on auto-merge (agents do it when they open the PR) | When `Required` is green, GitHub puts the PR in the merge queue | — |
+| 8 | Nothing: the queue runs | The merge group is checked (section 2.2) | The group's own check |
+| 9 | Nothing: the PR lands | The push to `main` reuses the queue's result and runs only what the queue did not run | The push run's check |
+
+A label added while the PR is a draft arms it: when you mark it ready, the latest commit runs. You
+never re-add the label after "ready".
+
+Labels must come from you or from an agent identity, never from `GITHUB_TOKEN`: GitHub starts no
+workflow for a label that `GITHUB_TOKEN` added.
+
+**The cost of an honest gate.** An unlabelled PR shows one short red `Required` per push. That
+remains until the Velnor App exists. A green check that verified nothing would be worse.
+
+### 2.2 Merging
+
+- **Every merge goes through the merge queue** (phase 0, item 6; Q3, Q4). There is no admin bypass.
+  Nobody, you included, merges around `Required`.
+- **The queue uses ALLGREEN.** Each group's own result must be green. HEADGREEN would let a later
+  group's pass cover an earlier entry that was tested only on its own diff.
+- **Auto-merge is on.** Agents turn it on when they open the PR and never merge `main` into their
+  branch: the queue already tests against the latest `main`.
+- **A red group** removes the PR from the queue. The PR's own green stays. Fix, push, and the PR
+  re-enters when its new commit is green.
+- **The push after a queue merge** reuses the queue's result (phase 0, item 7). A check that the queue
+  did not run, such as the documentation build if you keep it after the merge, still runs on the
+  push.
+- **After phase 0:** a group whose tree equals a tree already verified is a lookup, not a run.
+
+### 2.3 What red and green mean
+
+| `Required` shows | It means | What to do |
+|---|---|---|
+| Green | Everything the plan selected for this commit ran and passed; tests that were expected ran (a test step that ran no tests fails); the generated files are current; the PR does not weaken the gate compared with `main` | Nothing. The PR can merge |
+| Red: "CI not requested" | This commit has no verdict | Add `velnor:verify` when the PR is ready |
+| Red: a step failed | A check failed; the run names the step and the test | Open the run, fix, push |
+| Red: generated files out of date (phase 0, item 3) | Someone edited a generated workflow by hand, or changed `.velnor/` without regenerating | Run `velnor-gen generate` and commit the result |
+| Red: the PR checks less than `main` (phase 0, item 10) | The PR removes a test or a check, or loosens `.velnor/rust-ci.toml`, compared with the base branch | Undo the reduction, or you sign it for that exact diff |
+| Pending | A run is in progress for this commit | Wait |
+
+`Required` is never skipped. A skipped required job would count as a pass, so the workflow never
+lets that happen on a pull-request event.
+
+The `Cache` check is advisory. Red means a run compiled a crate that the restored cache already held,
+or a cache save failed. It does not block a merge.
+
+A red push run on `main` means `main` is broken. It blocks the next tools release (section 2.4) and
+stops the target cache from being saved, so every run starts cold until `main` is green again.
+
+### 2.4 Releases
+
+The tools (`velnor-ci` and `velnor-gen`) release together under one tag, `tools-v<version>`:
+
+1. A release-plz pull request bumps the version.
+2. The release App pushes the tag.
+3. The generated workflow `release-rust-ci-tools.yml` builds both tools for Linux (x86-64 and arm64)
+   on GitHub-hosted runners and publishes a pre-release with checksums.
+4. An agent pins the new version with `velnor-gen pin-helper <version>` and regenerates.
+
+Phase 0 (item 5) gates step 3 on the exact green push run of the tagged commit. A red, skipped or
+older push run blocks the release.
+
+After phase 0, the push run on `main` builds the release binaries once, and the tag promotes those
+exact bytes instead of rebuilding them. Releases stay on GitHub-hosted runners with attestation
+until you decide otherwise (Q5). The runner crates have a release group but no release workflow yet
+(Q17).
+
+## 3. Setting it up
+
+### 3.1 Phase 0 (you do this once)
+
+1. **Confirm the plan.** No issue is created before you do.
+2. **Answer the phase-0 questions:** the label flow (Q2), the bypass and the binding (Q3), the queue
+   (Q4), what blocks landing (Q13) and the base-branch gate (Q12).
+3. **Create an agent identity** that labels and enables auto-merge but cannot change the ruleset.
+   **Proposed — owner to confirm** (the owner sheet's question on the App and the agent identity):
+   create it now; the App comes later.
+4. **Create the label `velnor:verify`** and delete `ci:run` and `ci:auto`.
+5. **Apply the ruleset change** once `Required` has been green on `main` with tests running (phase
+   0, item 6). The change binds `Required` to the GitHub Actions app, empties `bypass_actors`, switches
+   the queue to ALLGREEN, and keeps the four protections that exist today: no deletion, no
+   force-push, linear history, pull requests only. Read it back field by field. Do not send a payload
+   that lists fewer rules: a PUT replaces the whole ruleset.
+6. **Allow auto-merge** in the repository settings.
+
+A generated drift check then fails if any of it is undone.
+
+### 3.2 After Q1: the cluster
+
+The Kubernetes manifests live outside this repository, and host deployments stay operator-run
+(`docs/host-deployment-decision.md`).
+
+1. Create the GitHub App `velnor-verify`. Permissions: `statuses: write`, `checks: write`,
+   `pull_requests: read`, `contents: read`, `metadata: read`. Webhooks: `pull_request`,
+   `merge_group`, `push` and `check_run`.
+2. Create a deploy identity for the `velnor-system` namespace and approve the node changes: XFS work
+   volumes, node reservations, an eviction threshold, a PID limit, taints for the nodes that run
+   Docker tests, and one drive or volume per worker for RustFS. **Proposed — owner to confirm** (the
+   owner sheet's question on the deploy identity and node changes).
 
 | Part | Runs as | What it does |
 |---|---|---|
-| `velnor-control` | one per repository, in its home site | Receives webhooks, runs the label flow, writes `Velnor / Verified` |
-| `velnor-dispatch` | one per site | Talks to GitHub for Actions jobs (release, image, scheduled) and places all work |
-| Node agent | one per worker (DaemonSet) | Keeps warm sandboxes, mirrors, tool store and build snapshots; observes and signs results |
-| Signer daemon | on each worker, outside every sandbox | Holds the key that signs results |
-| Ledger and cache index | site services | Remember every verified result and every `actions/cache` entry |
-| RustFS | one cluster per site | Stores large blobs: cache chunks, artifacts, release bytes |
-| Mirrors | per worker and per site | Git mirror on every worker; crates mirror and image registry mirror per site |
-| Official runner image | kept | Used as the reference, and when you choose the official executor |
+| `velnor-control` | One per repository, in its home site | Receives webhooks, runs the label flow, writes `Velnor / Verified` |
+| `velnor-dispatch` | One per site | Talks to GitHub for Actions jobs and places all work |
+| Node agent | One per worker (DaemonSet) | Keeps warm sandboxes, mirrors, the tool store and build generations; observes and signs results |
+| Signer daemon | On each worker, outside every sandbox | Holds the key that signs results |
+| Cache index | Site service | Remembers every `actions/cache` entry |
+| RustFS | One cluster per site | Stores large blobs: cache chunks, artifacts, release bytes |
+| Mirrors | Per worker and per site | A Git mirror on every worker; a crates mirror (it exists today) and an image registry mirror per site |
+| Official runner image | Kept | The reference executor, and the executor when you choose it |
 
-ARC is removed for velnor-new at the final milestone (day 6.5). ChainArgos and jackin keep their
-ARC scale sets.
+ARC's velnor-new scale set goes only after the last job type moves (Q9). ChainArgos and jackin keep
+their ARC scale sets.
 
-### 1.2 On a Mac with Docker
+### 3.3 On a Mac
 
-1. Install Docker Desktop.
-2. Install the `velnor` binary with `cargo install`, as you install other tools on macOS.
-3. Run `velnor local up`. It starts the node agent as a launchd service, creates a few warm
-   containers and a local store, and mounts the tool store read-only.
+Today `velnor-local` runs this repository's workflows on a Mac with Apple Silicon: `velnor-local up`,
+`run` and `down`. It runs GitHub's official runner against a local stand-in for GitHub.
 
-**Proposed — owner to confirm:** the commands `velnor local up` and the install by `cargo install`.
+**After Q1, proposed — owner to confirm (Q1):** one `velnor` binary with `velnor local up`, which
+starts the node agent, a few warm containers and a local store. A Mac result never counts as CI
+evidence: the machine's kernel and OS are part of every key.
 
-What is different on a Mac: storage is `local` only (no RustFS); there is no file-access audit, so
-keys stay whole-tree; Docker tests get a private daemon container or are refused, never the host's
-daemon. A Mac is for running jobs locally and for conformance. **A Mac result never counts as CI
-evidence**, and its keys differ anyway, because the machine's kernel and OS are part of every key.
-The same steps work on any Linux host with Docker.
+## 4. The configuration
 
-## 2. The configuration
+Velnor reads its configuration from the **base commit**, never from the PR under test, for anything
+the gate depends on (phase 0, item 10). A change to it takes effect only after it lands.
 
-Velnor reads its configuration from the **base commit** (the `main` your PR targets), never from
-the PR under test. A change to it takes effect only after it lands, through the normal gate.
+### 4.1 Phase 0: `.velnor/rust-ci.toml`
 
-**Proposed — owner to confirm:** repository settings go into the existing `.velnor/config.toml` as
-new `[velnor.*]` tables; site settings (platform, storage backends, capacity, warm pools) go into a
-new `.velnor/sites.toml`; personal Mac settings go into `~/.config/velnor/local.toml`. All keys
-below are proposed (work item G05 writes the real schema). Values come from the design unless a
-comment says "proposed value".
+The generator rejects unknown keys. A new key is added in `velnor-rust` (`config_keys.rs`),
+documented in `generator/CONFIG.md` and gated on the helper release that understands it.
+`.velnor/config.toml` is deleted in phase 0 (item 3); its path rules were not read by CI.
 
 ```toml
-# ---- .velnor/config.toml (Velnor part) -------------------------------------------------
-[velnor]
-schema = 1
-home_site = "de"                     # proposed value: where the status writer and cache index live
+runner = "ubuntu-26.04-scale-set"
+required_check = "Required"
+mbx_shared_store = true
+docs = "post_merge"            # or "always" if you decide docs block landing (Q13)
+check_alone = "post_merge"
+pr_ci = "label"                # one label, velnor:verify; no quick set (Q2)
 
-[velnor.label]
-name = "velnor:verify"               # the design's working name
-arm_from_draft = false               # D16 default; the recommendation is true
+[ci]
+skip_push_after_merge_group = true   # the push after a queue merge reuses the queue (phase 0, item 7)
 
-[velnor.executor]
+# The four ci.yml jobs move here (phase 0, item 4).
+[[lint]]
+kind = "alint"
+config = ".alint.yml"
+probe = "scripts/alint-line-cap-probe.sh"
+
+[[lint]]
+kind = "jactionlint"
+config = ".github/jactionlint.yaml"
+
+[[lint]]
+kind = "mise-task"
+task = "lint-generator-samples"
+tools = ["jactionlint"]
+
+# Paths the plan cannot place select everything until they are mapped (phase 0, item 9).
+[[inputs]]
+glob = "generator/samples/**"
+packages = ["velnor-gen"]
+
+[budget]                       # filled from the first green baseline (phase 0, item 8)
+pr_wall_seconds = 0
+main_wall_seconds = 0
+```
+
+The `[crates_mirror]`, `[[test_setup]]` and `[[test_lane]]` tables stay as they are. The exact
+`[[inputs]]` entries come from replaying 400 commits; the one above is an example.
+
+**Proposed — owner to confirm (Q2):** the label name `velnor:verify` is fixed by the generator, not a
+configuration key, so every Velnor repository uses the same label.
+
+### 4.2 After Q1: runner settings
+
+**Proposed — owner to confirm (Q1):** runner-side settings for the repository go into a new
+`.velnor/velnor.toml`, site settings into `.velnor/sites.toml`, and personal Mac settings into
+`~/.config/velnor/local.toml`. All keys are proposals.
+
+```toml
+# ---- .velnor/velnor.toml -----------------------------------------------------------------
+[executor]
 default = "native"                   # "native" (Velnor Native) or "official" (GitHub Official)
 
-# Only certified identities are accepted. The identity is part of every result key,
-# so switching re-verifies once and can never reuse the other executor's results.
-[velnor.executor.native]
-image = "ghcr.io/tailrocks/velnor-exec@sha256:<digest>"
-[velnor.executor.official]
-runner_lock = ".velnor/runner.lock"  # the official runner pin that exists today
-image = "ghcr.io/tailrocks/velnor-official@sha256:<digest>"
-
-[velnor.executor.job_types]          # Actions jobs that stay jobs: release, image, scheduled
-"release-rust-ci-tools" = "native"
-"product-release"       = "native"
-"job-image-candidate"   = "native"
-
-[velnor.executor.obligations]        # PR and merge-group checks, per kind
-fmt = "native"
-clippy = "native"
-doc = "native"
-test = "native"                      # "official" is refused until its obligation mode passes conformance
+[executor.job_types]                 # per job of the generated workflows
+"release-rust-ci-tools" = "official" # releases stay on hosted runners until Q5
 
 # Each data class picks its tiers, fastest first. A tier the platform lacks is skipped.
-# A wrong route can only make things slower: a missing or bad blob is a miss.
-[velnor.storage.routes]
+[storage.routes]
 actions_cache = ["local", "site", "cross-site"]
 artifacts     = ["local", "site"]    # also uploaded to GitHub, so `gh run download` works
-release       = ["site"]
-mbx_cache     = ["site"]
-generations   = ["local", "site"]    # all routes stay "local" until the RustFS cluster test passes
+generations   = ["local", "site"]    # every route stays "local" until the RustFS test passes
 
-[velnor.mirrors.repositories."tailrocks/velnor-new"]
+[mirrors.repositories."tailrocks/velnor-new"]
 refs = ["refs/heads/*", "refs/pull/*/head", "refs/heads/gh-readonly-queue/*", "refs/tags/*"]
 refresh = "webhook"                  # plus a periodic catch-up
-catch_up = "5m"                      # proposed value
-seed = "site-bundle"                 # new or wiped nodes seed from the site store, not GitHub
 
-[velnor.mirrors.crates]
-verify = "lockfile-checksum"
-
-[velnor.mirrors.toolchains]
-from = [".velnor/rust-toolchain.toml", ".velnor/mise.lock"]   # pinned by digest
-
-[velnor.mirrors.images]
-pin = "digest"                       # through a registry mirror per site
-
-# ---- .velnor/sites.toml -----------------------------------------------------------------
+# ---- .velnor/sites.toml ------------------------------------------------------------------
 [sites.de]
 platform = "kubernetes"
 namespace = "velnor-system"
 
 [sites.de.storage.tiers]
-local      = { backend = "filesystem", path = "/var/lib/velnor/l0" }   # node NVMe on XFS
-site       = { backend = "s3", kind = "rustfs-cluster", endpoint = "http://rustfs.velnor-system.svc:9000",
-               durability = "strict", credentials = { secret = "velnor-rustfs" } }
-cross-site = { backend = "replication", from = "fi" }                    # background warmth only
-# Any S3 store works the same way, e.g. { backend = "s3", kind = "aws", bucket = "..." }.
+local = { backend = "filesystem", path = "/var/lib/velnor/l0" }
+site  = { backend = "s3", kind = "rustfs-cluster", endpoint = "http://rustfs.velnor-system.svc:9000" }
 
 [sites.de.capacity]
-priorities = ["merge", "gate", "pr", "batch"]       # only batch is preempted
+priorities = ["merge", "gate", "pr", "batch"]   # only batch is preempted
 build = { cpus = 16, memory = "24GiB", max_per_node = 4 }
-gate  = { cpus = 1, memory = "1GiB" }               # memory: proposed value
-reserved = { merge_build_slots = 1, merge_gate_cpus = 2, audit_build_slots = 1 }
-
-[sites.de.warm_pool]                                 # proposed values
-gate = 8
-build = 2
-
-[sites.de.budgets]
-generations_per_root = 3
-data_volume_share = 0.40
-alert_at = 0.70
-mbx_cache = "300GiB"
-
-[sites.fi]                                           # same shape as "de"
-platform = "kubernetes"
-
-# ---- ~/.config/velnor/local.toml (a Mac) ----------------------------------------------------
-[local]
-platform = "docker"
-docker_host = "unix:///var/run/docker.sock"
-docker_tests = "private-daemon"      # or "refuse"
-storage = { local = { backend = "filesystem", path = "~/Library/Caches/velnor" } }
-build = { cpus = 8, memory = "16GiB" }               # proposed value
-warm_pool = { build = 1 }                            # proposed value
 ```
 
-**Proposed — owner to confirm:** the values marked "proposed value": home site `de`, a 5-minute
-mirror catch-up, 1 GiB per gate sandbox, warm pools of 8 gate and 2 build sandboxes per site, and
-8 CPU / 16 GiB with one warm sandbox on a Mac.
+The executor identity is part of every result key, so a switch re-verifies once and never reuses
+the other executor's results. A wrong storage route can only make things slower: a missing or bad
+blob is a miss.
 
-## 3. Workflows
+## 5. The agent's day
 
-**What stays the same.** Workflows are GitHub Actions YAML. `actions/cache` is used exactly as on
-GitHub (`key`, `restore-keys`, `path`, `cache-hit`), with GitHub's branch rules. Artifacts use
-GitHub's v4 service, so `gh run download` and the API still see them. Logs and summaries of Actions
-jobs appear in GitHub's UI.
+### 5.1 Phase 0
 
-**What the generator does.** `velnor-gen` writes the workflows. It routes each job type to Velnor,
-uses only actions from the qualified set at qualified commit SHAs (a generator test enforces this),
-and replaces the three `actions/github-script` steps with `velnor-ci` commands. After the cutover
-(day 5.2), PRs and merge groups have **no Actions run at all**: Velnor checks them directly. Release,
-image and scheduled workflows stay Actions jobs that run on Velnor. A push to `main` keeps one small
-Actions job, `Required`, that waits for the cold audit of that commit.
+1. **Push freely.** Drafts run nothing, so intermediate commits cost nothing.
+2. **Check locally before pushing.** Run the tests of the crates you touched with the CI profile
+   (`cargo nextest run --profile ci -p <crate>`). After a change under `.velnor/` or to a crate's
+   manifest, run `velnor-gen generate` and commit what it writes; `velnor-gen check` must pass.
+3. **Open the PR ready, with auto-merge on.** Add `velnor:verify` with the agent identity when the
+   change is ready to verify. A label added during draft arms the PR at "ready".
+4. **On red,** read the failing step in the run, fix, and push. The label stays; the new commit runs.
+5. **Never** merge `main` into the branch, edit a generated workflow by hand, weaken
+   `.velnor/rust-ci.toml` without the owner's signature, or merge around the gate.
+6. **Stacked PRs.** Label the upper PR at any time. It merges only after the lower PR lands and GitHub
+   retargets it to `main`, because the ruleset guards only `main`. **Proposed — owner to confirm
+   (Q2).**
 
-**The closed native action set.**
+### 5.2 After phase 0: verify before pushing
 
-| Action | How Velnor Native runs it |
-|---|---|
-| `actions/checkout` | From the worker's mirror, with every file checked; sparse checkout and `fetch-depth` supported |
-| `actions/upload-artifact`, `download-artifact` | GitHub's v4 service, cached on site storage |
-| `actions/cache`, `/restore`, `/save` | Velnor's cache with GitHub's rules, stored on local disk and RustFS |
-| `jdx/mise-action` | Pinned tools from the read-only tool store |
-| `jdx/mr-boxington-action` | Plain cargo, until `velnor-gen` drops it |
-| `actions/attest-build-provenance`, `actions/attest` | Native signing and upload |
-| `actions/create-github-app-token` | A scoped token, masked, revoked after the job |
-| `asamarts/alint` | The pinned release |
-| Composite actions in `.github/actions/` and `actions/setup-velnor` | Full composite rules, including background steps |
+The agent loop becomes: ask (`velnor resolve`), edit, run `cargo` as usual, `velnor verify`, then
+`velnor ship`. The label then finds almost everything done. **Proposed — owner to confirm:** one
+`velnor` binary with the commands below, their names and their output. The names are settled in one
+decision record beside `velnor-ci`, `velnor-local` and `velnor-host`.
 
-**An unknown action.** Velnor Native refuses the job **before its first step**: an action, a SHA or
-an input outside the qualified set. The job fails with a message naming the action. The fix is to
-qualify the action (add a native implementation with conformance cases) or not use it. Velnor never
-falls back to the official runner on its own. The official executor runs JavaScript actions on
-Node by nature, but choosing it is a deliberate config change, and the generator still emits only
-qualified actions.
-
-## 4. The PR flow, step by step
-
-| Step | What happens | What `Velnor / Verified` shows |
-|---|---|---|
-| Open a draft, push many commits | Nothing runs | No status. GitHub shows "Expected — waiting for status", which blocks |
-| Mark it ready for review | Nothing runs | No status |
-| Before the label (agent's choice) | `velnor verify` or `velnor ship` checks your tree on the cluster, two witnesses on two nodes; nothing runs on its own | No status: the records wait in the ledger |
-| Add the `velnor:verify` label | Velnor resolves your head merged with the merge-queue tip (or `main`); what `verify` already ran is a lookup, the rest and the clock- or network-reading checks run | `pending`, then `success` or `failure`, often within seconds |
-| Push again while labelled | The old run is cancelled at once; the new head is checked, reusing every unchanged result | No status on the new commit until written |
-| Remove the label | Velnor cancels and stops. Nothing is written | Unchanged: a verdict stays true for its commit |
-| "Re-run" on `Velnor / Details` | Re-runs only the failed checks of that commit | `pending`, then the result |
-
-**The four states of the check.**
-
-| State | GitHub status | Description text (**Proposed — owner to confirm**) |
-|---|---|---|
-| Not requested | none (blocks) | `Velnor / Details` is `neutral`: "Not requested: add velnor:verify" (**Proposed — owner to confirm**) |
-| Running | `pending` | "Verifying: 12 to run, 29 reused" |
-| Passed | `success` | "Verified: 41 checks (29 reused, 8 verified before push, 3 run now twice, 1 fresh)" |
-| Failed | `failure` | "2 checks failed: velnor-ci tests" |
-
-`Velnor / Details` is a check run with the full report. No ruleset lists it, so it never gates.
-
-**Merge queue and auto-merge.** Turn on auto-merge when you open the PR. When the head is green,
-GitHub puts the PR in the queue. Velnor checks the group's commit, reusing every result whose key is
-the same (about 60–75% of groups match the tree the PR passed, estimate), and runs the rest twice. Checks that read the clock or network always run. On `success`
-the group lands. On `failure` GitHub removes the PR from the queue; the PR's own green stays, and
-you fix and re-enter. After landing, Velnor rebuilds the commit cold (audit A1, within 2 hours at
-P90, target). Releases wait for that audit.
-
-**Until the App gate is on (about day 4.2).** The label is checked by an Actions job that fails with
-"CI not requested". In that period any label change re-runs the workflow, and removing the label
-turns a verified head red. So agents add the label only when they create the PR.
-
-## 5. The CLI
-
-The design names `velnor verify` and the "run both and diff" mode. **Proposed — owner to confirm:**
-one `velnor` binary with the commands below, their names and their output.
-
-**`velnor verify` before pushing** (about day 6.5, after exact-tree records). It snapshots your
-worktree as a Git tree (tracked and untracked files, never ignored ones), sends only the new objects
-to the node mirror, and runs the tree merged with the queue tip in the gate's own sealed sandbox, on
-two cluster nodes. The results are candidate records with the gate's keys, so the label later reads
-them instead of running them. **`velnor ship`** does `verify`, pushes, adds the label with your
-agent identity and turns on auto-merge. **`velnor wait`** follows the verdict and prints the failing
-test, its signature and the last log lines; **`velnor repro`** reruns that failure the same way.
-`velnor verify --witnesses=1` runs one witness and leaves the second to the label. **`velnor resolve`** asks the ledger, without running
-anything, which checks are already done, running, or still needed. **`velnor why-red`** says whether
-a failure on an unchanged key is also red on `main`, a known flake, or new on your tree.
-
-Every command takes `--json` for agents; `velnor resolve --json` prints the planned checks and why
-each would run or be reused, without running anything.
-
-**`cargo` goes through Velnor.** `velnor cargo` sits in `mise.toml`'s cargo wrapper slot. A command
-that matches a CI check (`cargo nextest run -p velnor-ci`, `cargo clippy …`) asks the ledger first,
-then runs on a warm cluster node in the `interactive` class and shows a trust tier; anything else
-runs on your Mac as before, as advice. Your Mac also runs a quick local pass in parallel to find
-reds early; its green is marked provisional and never counts. The `hk` pre-commit hooks call the same
-check names.
+- **`velnor verify`** snapshots the worktree as a Git tree (tracked and untracked files, never ignored
+  ones), sends only the new objects to the node mirror, and runs the tree merged with the queue tip in
+  the gate's own sealed sandbox, on two cluster nodes. The results are records with the gate's keys,
+  so the label later reads them instead of running them. `--witnesses=1` runs one and leaves the
+  second to the label.
+- **`velnor ship`** verifies, pushes, adds the label with the agent identity and turns on auto-merge.
+- **`velnor wait`** follows the verdict and prints the failing test, its signature and the last log
+  lines; **`velnor repro`** reruns that failure the same way.
+- **`velnor resolve`** asks, without running anything, which checks are done, running or still
+  needed. **`velnor why-red`** says whether a failure on an unchanged key is also red on `main`, a
+  known flake, or new.
+- Every command takes `--json`.
 
 ```console
 $ velnor verify
 Verifying 3f9a2c1 (merged with queue tip 5ae9378) on site de
   reused  38   ran 3 (2 witnesses each)   fresh 1 (reads the clock)
-  ✓ fmt  ✓ clippy:ci-helper  ✓ test:velnor-ci (412 tests)
+  ✓ fmt  ✓ clippy:velnor-ci  ✓ test:velnor-ci (412 tests)
 Verified in 41 s. Push and label: the PR will reuse these results.
 ```
 
-**Run one check by name** (from the released inventory at the base commit; an unknown name is
-refused). `--target` picks where it runs: `local` (Docker on this machine), `k8s://de`, `k8s://fi`;
-the trust tier comes from the node that ran it, never from the target name:
+**Run one check by name.** Names come from the verification contract at the base commit and follow
+velnor-gen's step and package names. An unknown name is refused.
 
 ```console
 $ velnor check -l
-fmt  clippy:ci-helper  clippy:generator  test:velnor-ci  test:velnor-gen  fresh:workflows  …
+fmt  clippy:velnor-ci  clippy:velnor-gen  test:velnor-ci  test:velnor-gen  fresh:rust-ci.yml  …
 $ velnor check test:velnor-ci --target local
 ✓ test:velnor-ci (412 tests) on local (advice only: a Mac result never counts)
 ```
 
-**Agent environments** (proposed; Docker first, cluster environments wait on capacity): `velnor env
-new <task>` makes a worktree and a sticky sandbox with its own target directory, temp dirs and
-ports, and a command log; `velnor env push` publishes the branch. Environments never mint.
-`velnor mcp` offers `env`, `check`, `verify` and `explain` as MCP tools beside `--json`.
-`velnor lock update` is the only command that resolves inputs live; it opens a PR.
-`velnor trace <sha>` renders the request's trace (every stage timed).
-
-**Run a job locally** (on the Docker backend; work item P07):
-
-```console
-$ velnor run ci.yml:check-generator-samples
-Using executor native@sha256:ab12…, platform docker (local)
-  ✓ checkout (0.4 s)  ✓ mise  ✓ cargo nextest run (88 passed)
-Job succeeded. This local result is not CI evidence.
-```
-
-**Run both executors and diff** (reference mode; it writes no verdict, cache entry or release):
-
-```console
-$ velnor diff ci.yml:check-generator-samples
-native   succeeded  31.2 s
-official succeeded  44.8 s
-Compared outcomes, outputs, env, annotations, cache and artifact effects: 0 differences.
-```
-
-**Why something re-ran or was reused:**
+**Why something ran or was reused:**
 
 ```console
 $ velnor explain 1412 test:velnor-ci
 test:velnor-ci  RAN (2 witnesses: velnor-12, velnor-31)
   changed input  crates/velnor-ci/src/plan.rs
-$ velnor explain 1412 clippy:generator
-clippy:generator  REUSED  record from PR #1409, trusted, epoch 4
-  same: tree for generator/ (contract v3), toolchain 1.99.1, executor native@sha256:ab12…
+$ velnor explain 1412 clippy:velnor-gen
+clippy:velnor-gen  REUSED  record from PR #1409, trusted, epoch 4
+  same: tree, workflow digest, helper 0.1.96, toolchain, executor
 $ velnor explain 1415 test:velnor-gen
-test:velnor-gen  RAN  miss on one field: toolchain 1.99.1 → 1.99.2
+test:velnor-gen  RAN  miss on one field: toolchain changed
 ```
 
-**Caches and mirrors:**
+**`cargo` through Velnor.** `velnor cargo` may take `mise.toml`'s cargo wrapper slot from `mbx` once
+the generator no longer emits mbx steps. A command that matches a CI check asks first, then runs on
+a warm cluster node and shows a trust tier; anything else runs on the Mac as before, as advice. Its
+first release only counts, so the data show whether agents use it.
+
+**Trust tiers** (shown on every result):
+
+| Tier | Where it ran | Counts at the gate? |
+|---|---|---|
+| T0 | The agent's Mac, plain | No: advice |
+| T1 | A sealed Linux sandbox on the Mac | No: advice, used only to spot duplicates and reds |
+| T2 | A cluster node, the gate's sealed sandbox | Yes: fills one of a key's two witness slots |
+| T3 | On `main` after the cold audit A1 | Yes: trusted |
+
+Nothing verifies on its own. Automatic verification of unpushed commits is an open question in the
+owner sheet, default off.
+
+### 5.3 After Q1: jobs on Velnor
+
+**Run a generated job locally** on the Docker backend, and **run both executors and diff** (reference
+mode; it writes no verdict, cache entry or release):
 
 ```console
-$ velnor cache ls --ref refs/pull/1412/merge
-cargo-registry-3b1e…   212 MiB   L0 de/velnor-12, L1 de   last used 4 min ago
-$ velnor cache evict cargo-registry-3b1e…          # owner identity only
-$ velnor mirror status
-tailrocks/velnor-new   de 9/9 workers current   fi 6/6 current   last fetch 3 s ago
-crates                 0 downloads in the last hour (lockfile unchanged)
+$ velnor run rust-ci.yml:rust
+Using executor native@sha256:ab12…, platform docker (local)
+  ✓ checkout (0.4 s)  ✓ setup-velnor  ✓ plan  ✓ cargo nextest run (88 passed)
+Job succeeded. This local result is not CI evidence.
+$ velnor diff rust-ci.yml:rust
+native   succeeded  31.2 s
+official succeeded  44.8 s
+Compared outcomes, outputs, env, annotations, cache and artifact effects: 0 differences.
 ```
 
-**Status:**
-
-```console
-$ velnor status
-Gate        velnor-control de (epoch 4, writer lease held)   canaries: all blocked ✓
-Queue       2 groups building, 1 waiting                     A1 lag 22 min (SLO 2 h)
-Capacity    de 61% CPU, fi 48%; merge lane free
-Conformance native = official: 100% (de, fi, docker)        last official release check 2 d ago
-```
+Velnor Native runs only what velnor-gen writes: the actions in the generator's fixed list, pinned by
+SHA, and one-command `run:` steps. A job outside that set is refused **before its first step**, with a
+message naming the action. Velnor never falls back to the official runner on its own; choosing it is
+a configuration change that lands through the gate.
 
 ## 6. What you see
 
-**The check summary** (`Velnor / Details`). **Proposed — owner to confirm:** the layout.
+**Today and in phase 0:** the Actions run of `Rust CI` with its job summary, the `Required` check and
+the `Cache` check. `velnor-ci report` writes `ci-metrics.json` and the lane summary for each run.
+
+**After phase 0,** proposed — owner to confirm: a check run `Velnor / Details` with the full report.
+No ruleset lists it, so it never gates.
 
 ```markdown
-### Verified 3f9a2c1 in 38 s (would have been ~9 min without reuse)
+### Verified 3f9a2c1 in 38 s
 | | Checks | Why |
 |---|---|---|
 | Reused | 29 | same key verified in PR #1409 and on main |
@@ -355,93 +388,76 @@ Conformance native = official: 100% (de, fi, docker)        last official releas
 Dropped tests: none. (A test missing compared with main fails the check unless the owner signed it.)
 ```
 
-**Logs.** Actions jobs log to GitHub as today. For checks that are not Actions jobs, the summary
-shows the failing tail and links to the full log; `velnor logs <sha> <check>` prints it.
-**Proposed — owner to confirm.**
-
-**Dashboards and metrics.** The design defines a daily report (work item B15). **Proposed — owner to confirm:**
-each service also exports Prometheus metrics, and `velnor status` reads them.
+**Metrics.** The daily report builds on `velnor-ci bench` and `timings`. **Proposed — owner to
+confirm:** after Q1, each Velnor service also exports Prometheus metrics, and `velnor status` reads
+them.
 
 | Metric | What it tells you |
 |---|---|
-| PR verdict time, P50 / P90 | Label or labelled push to `success` |
-| Push-to-merge, P50 / P90 | The main goal |
-| Time to first actionable red | How fast a failure reaches you |
+| PR verdict time, P50 / P90 | Label or labelled push to a green `Required` |
+| Push-to-merge, P50 / P90 | The main goal: 3 / 8 min; trial budget 9 / 20 min after phase 0 |
+| Time to the first actionable red | How fast a failure reaches you |
 | Enqueue time, queue residence, landing | Where merge time goes |
-| Runner-minutes per merged PR | Split into completed, cancelled and superseded work, twins, audits, releases |
-| Cache hit rates | Per tier (L0, L1, L2) and per data class; bytes from GitHub against bytes from the LAN |
-| Reuse rates | Records reused against run, per check kind |
-| Conformance | Pass rate per backend and executor; mutants caught; days since the last official release check |
-| False failures (flakes) | Per required run, with an interval; budget 3%, then 1% |
-| A1 audit lag | Time from landing to the cold audit |
+| Runner-minutes per merged PR | Split into completed, cancelled and superseded work |
+| Reuse rates | Results reused against run, per rung of the ladder |
+| False failures (flakes) | Per required run, with an interval |
+| A1 audit lag (after Q1) | Time from landing to the cold audit |
+
+No dated speed target is published before the first green, test-running baseline (phase 0, item 8).
+The trial budgets are about 4 / 9 min for the PR verdict and 9 / 20 min for push-to-merge.
 
 ## 7. When things go wrong
 
-**A red check.** Open `Velnor / Details`. It names the failed check, the failing test IDs and the
-log tail. Run `velnor run` locally to reproduce, fix, and push: with the label on, the new head is
-checked automatically. Failed results are never reused.
+**`main` is red.** The usual cause is a generated step that calls a command or flag the pinned helper
+cannot run. Re-pin to a helper that has it, or regenerate with the pinned one. After phase 0 item 1,
+`velnor-gen check` refuses such a step before it merges.
 
-**A flaky test.** There are no automatic retries. Press "Re-run" on `Velnor / Details`; if it
-passes, it counts as a false failure. Two false failures of one test in seven days open an issue
-for the owner. The test is fixed, or quarantined only if another blocking check covers the same
-thing, or under an owner exception that expires.
+**A red check on a PR.** Open the run. It names the failed step and the failing test IDs. Fix and
+push: with the label on, the new commit runs.
 
-**A broken executor** (Velnor itself fails jobs). Velnor never switches executor on its own.
-Changing the executor in config also cannot help at once, because that change must pass the gate
-too. The recovery path (D15): (1) redeploy the previous image digest; this is a deploy, not a code
-change, and then the fix PR is checked like any other; (2) if no earlier image can check it, the
-pre-approved break-glass verifier runs every check cold on one node with the reference-qualified
-executor, and writes `success` only if all pass. There is never an admin merge.
+**A flaky test.** There are no automatic retries. Re-run the failed job; if it passes, it counts as a
+false failure. Two false failures of one test in seven days open an issue. The test is fixed, or
+quarantined only if another blocking check covers the same thing, or under an owner exception that
+expires.
 
-**A stuck queue.** Run `velnor status`. Velnor re-reads GitHub's state every 10 s, so a lost webhook
-heals itself. A merge group that gets no answer times out after 90 minutes (15 minutes once group
-verdicts take 5 minutes or less at P90) and GitHub removes it. If the ledger is unreachable, checks run fresh: slower, never wrong. If
-storage stalls, reads become misses. A cold audit late by 2 hours alarms; at 6 hours it pages you
-and holds releases.
+**A bad helper release.** The fix is a pull request that pins the previous release. The previous pin
+verifies it like any other PR. There is never an admin merge. An emergency stop on the queue and tags
+is Q16.
 
-**A reused result turns out wrong.** Velnor stops writing `success`, marks every open head or queued
-group that relied on it as `failure` (GitHub ejects those groups), re-checks them, and audits every
-commit that landed in the window cold.
+**A stuck queue.** A group with no answer times out after 90 minutes and GitHub removes it.
 
-## 8. Switching things
+**After Q1:** a broken Velnor release is fixed by redeploying the previous image digest. If the
+records are unreachable, checks run fresh: slower, never wrong. If storage stalls, reads become
+misses. A cold audit 2 hours late alarms; at 6 hours it pages you and holds releases. A reused result
+that turns out wrong makes Velnor stop writing `success`, mark every open head or queued group that
+relied on it as `failure`, re-check them, and audit every commit that landed in the window.
+
+## 8. Switching things (after Q1)
 
 | You switch | How | What changes | What never changes |
 |---|---|---|---|
-| Executor for a job type or check kind | Edit `[velnor.executor.*]` and land it | That type re-verifies once (the executor is in the key), then runs on the other executor | The gate, the two runs, the audits |
-| Storage tier for a data class | Edit `[velnor.storage.routes]` | Speed and hit rates | `actions/cache` behaviour and scoping; PR writes never reach `main`'s scope |
+| Executor for a job type | Edit `.velnor/velnor.toml` and land it | That type re-verifies once, then runs on the other executor | The gate and the audits |
+| Storage tier for a data class | Edit the storage routes | Speed and hit rates | `actions/cache` behaviour and scoping; PR writes never reach `main`'s scope |
 | Storage backend | Edit `.velnor/sites.toml` (RustFS, MinIO, AWS S3, R2) | Speed, operations | Content is checked on every read |
-| Platform | Run on Kubernetes or Docker | Speed; which shortcuts are available (no file-access audit on Docker means whole-tree keys) | Results from different platforms never mix: the machine is in the key |
+| Platform | Run on Kubernetes or Docker | Speed; which shortcuts exist (no file-access audit on Docker means whole-tree keys) | Results from different platforms never mix |
 
-No switch can make a check pass that would fail. The worst a misconfiguration can do is make
-things slower.
+No switch can make a check pass that would fail. The worst a misconfiguration can do is make things
+slower.
 
-## 9. What agents do differently
+## 9. Proposed — owner to confirm
 
-**Trust tiers** (shown on every result):
-
-| Tier | Where it ran | Counts at the gate? |
+| Item | Proposal | Question |
 |---|---|---|
-| T0 | Your Mac, plain | No: advice |
-| T1 | A sealed Linux sandbox on your Mac | No: advice, used only to spot duplicates and reds |
-| T2 | A cluster node, the gate's sealed sandbox | Yes: fills one of a key's two witness slots |
-| T3 | On `main` after the cold audit A1 | Yes: trusted |
-
-**The agent loop:** ask (`velnor resolve`), edit, run `cargo` as usual (counting commands run on the
-cluster), `velnor verify`, then `velnor ship`; the label then finds almost everything done.
-
-- **Push freely.** Drafts and unlabelled PRs run nothing, so intermediate commits cost nothing.
-- **Verify before pushing** with `velnor verify` or `velnor ship` (about day 6.5), so the PR's
-  verdict is mostly a lookup. Nothing verifies on its own: automatic verification of unpushed
-  commits is owner question D23, default off.
-- **Label deliberately.** Add `velnor:verify` when the PR is ready, with the agent's App identity,
-  never `GITHUB_TOKEN`. Under D16's default, a label added during draft does not start CI at
-  "ready"; re-apply it. Nothing adds the label automatically.
-- **Turn on auto-merge at creation, and never merge `main` into the branch.** The queue already
-  tests against the latest `main`.
-- **Editing the PR text is free.** The `edited` trigger is gone.
-- **Stacked PRs.** The upper PR reuses every result of the lower one with the same key, so it runs
-  only its own changes. **Proposed — owner to confirm:** label the upper PR at any time (it is
-  checked against its head merged with the queue tip). Merge it only after the lower PR lands and
-  GitHub retargets it to `main`, because the ruleset guards only `main`.
-- **Never bypass.** Agents use an identity that cannot change the ruleset, and no procedure uses an
-  admin merge.
+| The label flow | One label `velnor:verify`; no quick set; an unarmed commit is red; a draft-carried label arms at "ready"; one short red job per push until the App | Q2 |
+| The label name | Fixed by the generator, not configurable | Q2 |
+| Stacked PRs | Label any time; merge after the lower PR lands | Q2 |
+| No bypass, `Required` bound to the GitHub Actions app | After a test-running green `main` | Q3 |
+| Every merge through the queue, ALLGREEN, auto-merge | Yes | Q4 |
+| What blocks landing | Docs and alone-checks run in the queue; alone-checks only for released crates | Q13 |
+| The gate's rules come from the base branch | Yes; the owner signs any reduction for its exact diff | Q12 |
+| Release hosting | GitHub-hosted with attestation | Q5 |
+| A `runner-v` release workflow | Generated, in phase 1 | Q17 |
+| The agent identity, now; the App, later | Yes | Owner sheet, App and agent identity |
+| Velnor executes jobs; `velnor local up`; `.velnor/velnor.toml` and `.velnor/sites.toml` | After the goals amendment | Q1 |
+| Automatic verification of unpushed commits | Off | Owner sheet, unpushed commits |
+| The `velnor` command names and output, `Velnor / Details` layout, Prometheus metrics | As shown above | Decided in one decision record after phase 0 |
