@@ -273,6 +273,8 @@ pub struct TestLane {
     pub root: Option<RepoPath>,
     pub features: Vec<String>,
     pub filter: Option<String>,
+    pub lint: bool,
+    pub doc: bool,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

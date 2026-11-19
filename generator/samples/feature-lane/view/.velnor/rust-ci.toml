@@ -2,6 +2,8 @@
 root = "."
 features = ["local-mode"]
 filter = "test(~local::) or binary(local_host_public) or binary(local_pair_public)"
+lint = true
+doc = true
 
 [deny]
 locked = true
