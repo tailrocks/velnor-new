@@ -10,7 +10,7 @@ use std::collections::BTreeMap;
 use velnor_model::{
     DependencyKind, PackageDependency, PackageName, RepoPath, RustMetadata, RustPackage,
 };
-use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan};
+use velnor_release::{ReleaseError, ReleaseFiles, ReleasePlan, ShippedError};
 
 use crate::fixture::{PLZ, TestResult, files};
 
@@ -95,7 +95,7 @@ fn a_crate_a_shipped_binary_compiles_in_must_be_listed() -> TestResult {
     assert!(
         matches!(
             &error,
-            Some(ReleaseError::UnlistedShipped { binary, package })
+            Some(ReleaseError::Shipped(ShippedError::Unlisted { binary, package }))
                 if binary == "app" && (package == "lib" || package == "core")
         ),
         "{error:?}"

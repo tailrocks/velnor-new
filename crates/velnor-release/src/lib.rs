@@ -53,6 +53,7 @@ pub use release_plz::{release_pr_branch_prefix, release_tag_patterns, release_ve
 pub use ruleset::{
     RELEASE_APP_ID, RELEASE_APP_SLUG, ruleset_drift, ruleset_json, ruleset_ref, ruleset_refs,
 };
+pub use shipped::ShippedError;
 pub use tag::{TagPattern, is_tag_name};
 pub use timeout::TAG_JOB_BASE_MINUTES;
 pub use velnor_config::{BinaryFormat, Checksum, Libc};
