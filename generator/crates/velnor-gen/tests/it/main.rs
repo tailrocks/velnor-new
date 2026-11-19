@@ -59,6 +59,7 @@ mod job_setup;
 mod mise_safety;
 
 mod job_shape;
+mod job_trust_boundary;
 mod lock;
 mod lock_affected;
 mod lock_consistency;
