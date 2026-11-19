@@ -1,6 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+#[path = "restart_tests/bootstrap.rs"]
+mod bootstrap;
+#[path = "restart_tests/bootstrap_seed.rs"]
+mod bootstrap_seed;
+#[path = "restart_tests/bootstrap_storage.rs"]
+mod bootstrap_storage;
 #[path = "restart_tests/controller.rs"]
 mod controller;
 #[path = "restart_tests/docker.rs"]

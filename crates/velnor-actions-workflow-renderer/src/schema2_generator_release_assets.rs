@@ -144,14 +144,16 @@ pub(super) fn build_steps(
     if stable_sources {
         let mut source_prepare = workflow_steps::bash_step_with_env(
             "Prepare locked source handoff",
-            "bash scripts/generator-release/stable-source-producer.sh",
+            &workflow_steps::credential_free_command(
+                "bash scripts/generator-release/stable-source-producer.sh",
+            ),
             vec![("VELNOR_RUST_VERSION", &pins.rust_version)],
         );
         if let Yaml::Map(fields) = &mut source_prepare {
             fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
         }
         steps.push(source_prepare);
-        steps.push(workflow_steps::source_identity_step());
+        steps.push(workflow_steps::source_identity_step(pins));
         steps.push(workflow_steps::source_upload_step(product));
     }
     steps.extend([
@@ -297,7 +299,7 @@ fn verify_provenance_in_directory(
 
 pub(super) fn qualification_script(binary: &str, directory: &str) -> String {
     format!(
-        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nchmod 0500 \"./{directory}/{binary}\"\ntest \"$(./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nbash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(shasum -a 256 \"$guard\" | cut -d ' ' -f 1)\"\nscripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
+        "set -eu\nunset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN GH_TOKEN MISE_GITHUB_TOKEN GH_HOST GH_CONFIG_DIR\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\"\nchmod 0500 \"./{directory}/{binary}\"\ntest \"$(env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR ./{directory}/{binary} --version)\" = \"velnor-actions {VERSION}\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/build-owned-archive-guard.sh --source-cache \"$CARGO_HOME\"\nguard=\"$GITHUB_WORKSPACE/.velnor/archive-guard/bin/velnor-archive-guard\"\nguard_sha256=\"$(shasum -a 256 \"$guard\" | cut -d ' ' -f 1)\"\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR scripts/capture-opentofu-goldens.sh --archive-guard \"$guard\" --archive-guard-sha256 \"$guard_sha256\" check-release \"$GITHUB_WORKSPACE/{directory}/{binary}\" \"$GITHUB_WORKSPACE/manifest-assets/release-manifest.json\" \"$VELNOR_RELEASE_MANIFEST_SHA256\""
     )
 }
 
@@ -314,7 +316,7 @@ pub(super) fn source_gate_job(
         ci_check_step(pins)?,
         workflow_steps::bash_step(
             "Check release freshness gate",
-            "bash scripts/check-freshness.sh",
+            &workflow_steps::credential_free_command("bash scripts/check-freshness.sh"),
         ),
         workflow_steps::bash_step_with_token(
             "Recheck default-branch source",
@@ -361,7 +363,7 @@ test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success
 run_id="$(printf '%s\n' "$run" | jq -r .id)"
 attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
 jobs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
-printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == "main" and .[0].status == "completed" and .[0].conclusion == "success"' >/dev/null
+printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .conclusion != "skipped")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == "main" and .[0].status == "completed" and .[0].conclusion == "success"' >/dev/null
 test "$(gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }

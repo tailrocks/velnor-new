@@ -27,7 +27,7 @@ fn golden() -> Result<String, Box<dyn Error>> {
 fn ruleset_on_the_golden_prints_the_recorded_json() -> TestResult {
     let view = load(&samples().join("release-two-roots"))?;
     let json = release_ruleset(&view)?;
-    if std::env::var_os("UPDATE_GOLDENS").is_some() {
+    if crate::golden::update_requested(std::env::var_os("UPDATE_GOLDENS").as_deref()) {
         fs::write(samples().join("release-two-roots/ruleset.json"), &json)?;
     }
     assert_eq!(json, golden()?);
@@ -328,13 +328,9 @@ fn the_binary_prints_the_golden_ruleset_for_a_repository_that_holds_the_sample()
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(String::from_utf8(output.stdout)?, golden()?);
-    let paths: BTreeSet<String> = [
-        ".velnor/release.toml",
-        "release-plz.toml",
-        "tools/release-plz.toml",
-    ]
-    .map(str::to_owned)
-    .into();
+    let paths: BTreeSet<String> = [".velnor/release.toml", "release-plz.toml"]
+        .map(str::to_owned)
+        .into();
     for path in &paths {
         assert!(
             repo.0.join(RepoPath::new(path)?.as_str()).is_file(),

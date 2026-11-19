@@ -4,7 +4,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::io;
-
 use velnor_actions_actionlint::actions::MISE_ACTION_SHA;
 use velnor_actions_contract::config::jactionlint_verifier::jactionlint_verifier_script;
 use velnor_actions_contract::{
@@ -88,7 +87,17 @@ pub(crate) fn pins() -> ProductReleasePins {
         macos_x86_64_setup: setup,
         install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.2"]),
         install_build_tools_argv: argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"]),
-        install_qualify_tools_argv: argv(&["mise", "install", "opentofu@1.13.2"]),
+        install_qualify_tools_argv: [
+            "mise",
+            "install",
+            "rust@1.91.0",
+            "bun@1.4.4",
+            "jactionlint@2.103.2",
+            "shellcheck@0.11.0",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         qualify_mbx_action_steps: [fixture_step(), fixture_step(), fixture_step()],
         install_runner_build_tools_argv: Vec::new(),
         install_gh_argv: argv(&["mise", "install", "gh@2.103.2"]),
@@ -129,12 +138,16 @@ pub(crate) fn pins() -> ProductReleasePins {
         verify_rust_argv: verify_rust_argv(),
         mr_boxington_version: "1.0.0".to_owned(),
         gh_version: "2.103.2".to_owned(),
+        bun_version: "1.4.4".to_owned(),
+        runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig::default(),
     }
 }
 
 fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -146,8 +159,7 @@ fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
 }
 
 fn rendered() -> Result<Vec<RenderedFile>, Box<dyn Error>> {
-    let request = request()?;
-    Ok(render_schema2_product_release_workflows(&request)?)
+    Ok(render_schema2_product_release_workflows(&request()?)?)
 }
 
 fn rendered_with(pins: ProductReleasePins) -> Result<Vec<RenderedFile>, Box<dyn Error>> {

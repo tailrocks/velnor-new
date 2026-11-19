@@ -4,17 +4,35 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 
-use crate::cron::CronExpr;
-use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
-use crate::plan::{HelperRelease, Shape};
+use crate::helper::HelperRelease;
+use crate::ids::{PackageName, RepoPath, TargetName};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RepoView {
-    pub repository: String,
+    pub repository: RepositoryIdentity,
     pub files: BTreeMap<RepoPath, Vec<u8>>,
     pub tracked_paths: BTreeSet<RepoPath>,
     pub symlinks: BTreeSet<RepoPath>,
     pub rust_metadata: BTreeMap<RepoPath, RustMetadata>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepositoryIdentity {
+    Named(String),
+    Unhosted,
+}
+
+impl Default for RepositoryIdentity {
+    fn default() -> Self {
+        Self::Named(String::new())
+    }
+}
+
+impl FullRun {
+    #[must_use]
+    pub fn is_hashed(&self) -> bool {
+        matches!(self, Self::Hourly | Self::Nightly | Self::Weekly)
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -36,6 +54,7 @@ pub struct PackageDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: Option<RepoPath>,
     pub features: Vec<String>,
     pub rename: Option<String>,
@@ -80,8 +99,11 @@ pub struct RepoFacts {
     pub compile_inputs: CompileInputs,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
+    pub private_sources: Option<String>,
+    pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
+    pub deny_configs: BTreeMap<RepoPath, RepoPath>,
     pub weakenings: Vec<Weakening>,
 }
 
@@ -158,7 +180,7 @@ pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
 pub struct RustRoot {
     pub manifest: RepoPath,
     pub target_dir: RepoPath,
-    pub sets_build_target: bool,
+    pub nextest_ci_profile: bool,
     pub members: Vec<RustMember>,
     pub depends_on: Vec<RepoPath>,
     pub external_dependencies: Vec<PackageName>,
@@ -193,6 +215,7 @@ pub struct MemberDependency {
     pub name: PackageName,
     pub kind: DependencyKind,
     pub platform: Option<String>,
+    pub optional: bool,
     pub manifest: RepoPath,
 }
 
@@ -220,71 +243,7 @@ pub struct ToolPin {
     pub prebuilt: BTreeSet<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RustCiConfig {
-    pub runner: RunnerLabel,
-    pub timeout_minutes: u16,
-    pub exclude: Vec<PathGlob>,
-    pub non_inputs: Vec<PathGlob>,
-    pub inputs: Vec<InputRule>,
-    pub default_ignores: bool,
-    pub shape: Option<Shape>,
-    pub required_check: String,
-    pub nextest_harnesses: Vec<(PackageName, TargetName)>,
-    pub default_branch: String,
-    pub skip_draft_pull_requests: bool,
-    pub on_main: OnMain,
-    pub full_run: FullRun,
-    pub helper: Option<RepoPath>,
-    pub ci_debuginfo: CiDebugInfo,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum OnMain {
-    Affected,
-    Everything,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum FullRun {
-    Off,
-    Hourly,
-    Nightly,
-    Weekly,
-    Cron(CronExpr),
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CiDebugInfo {
-    Full,
-    LineTablesOnly,
-    None,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct InputRule {
-    pub glob: PathGlob,
-    pub packages: Vec<PackageName>,
-}
-
-impl Default for RustCiConfig {
-    fn default() -> Self {
-        Self {
-            runner: RunnerLabel::from_static("ubuntu-latest"),
-            timeout_minutes: 30,
-            exclude: Vec::new(),
-            non_inputs: Vec::new(),
-            inputs: Vec::new(),
-            default_ignores: true,
-            shape: None,
-            required_check: "Required".to_owned(),
-            nextest_harnesses: Vec::new(),
-            default_branch: "main".to_owned(),
-            skip_draft_pull_requests: false,
-            on_main: OnMain::Affected,
-            full_run: FullRun::Nightly,
-            helper: None,
-            ci_debuginfo: CiDebugInfo::LineTablesOnly,
-        }
-    }
-}
+pub use crate::repo_config::{
+    CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule, MbxRemote,
+    MbxStore, OnMain, PrCi, PrivateSources, PushAfterMergeGroup, RustCiConfig, TestSetup,
+};

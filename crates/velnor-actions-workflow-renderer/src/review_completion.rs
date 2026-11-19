@@ -13,7 +13,7 @@ use velnor_actions_contract::{
 mod steps;
 
 #[derive(Debug)]
-pub struct ReviewCompletionSpec {
+pub(crate) struct ReviewCompletionSpec {
     pub policy: ReviewCompletionPolicy,
     pub config: ReviewCompletionConfig,
     pub generator_version: String,
@@ -22,7 +22,9 @@ pub struct ReviewCompletionSpec {
     pub install_gh_argv: Vec<String>,
 }
 
-pub fn render_review_completion(spec: &ReviewCompletionSpec) -> Result<RenderedFile, RenderError> {
+pub(crate) fn render_review_completion(
+    spec: &ReviewCompletionSpec,
+) -> Result<RenderedFile, RenderError> {
     spec.policy
         .validate()
         .map_err(|e| RenderError::InvalidWorkflow(e.to_string()))?;

@@ -101,6 +101,35 @@ fn a_modified_file_selects_its_package_with_no_token() {
     );
 }
 
+fn docs_only_merge(name: &str) -> Repo {
+    merged_pull_request(name, |repo| repo.write("docs/readme.md", "docs\n"))
+}
+
+#[test]
+fn an_unstaged_source_edit_after_a_docs_only_merge_selects_everything() {
+    let repo = docs_only_merge("git-dirty-worktree");
+    let clean = pull_request(&repo);
+    assert!(clean.status.success(), "{clean:?}");
+    assert_eq!(
+        selected(&clean),
+        "Cargo.toml: none\ntools/Cargo.toml: none\n"
+    );
+    repo.write_unstaged("b/src/lib.rs", "pub fn broken( {\n");
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
+
+#[test]
+fn a_staged_source_edit_after_a_docs_only_merge_selects_everything() {
+    let repo = docs_only_merge("git-dirty-index");
+    repo.write("b/src/lib.rs", "pub fn broken( {\n");
+    repo.git(&["add", "b/src/lib.rs"]);
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+}
+
 #[test]
 fn a_changed_lockfile_is_compared_with_its_text_at_the_first_parent() {
     let repo = merged_pull_request("git-lock", |repo| {
@@ -142,6 +171,38 @@ fn a_checkout_with_no_git_history_selects_everything() {
     let output = pull_request(&repo);
     assert!(output.status.success(), "{output:?}");
     assert_eq!(selected(&output), EVERYTHING);
+}
+
+#[test]
+fn a_rejected_git_path_is_escaped_when_plan_selects_everything() {
+    let hostile = "notes.txt\n::add-mask::super-secret\ntail";
+    let repo = plan_repo("git-hostile-path");
+    repo.write(hostile, "old\n");
+    repo.commit();
+    repo.git(&["branch", "-M", "main"]);
+    repo.git(&["checkout", "--quiet", "-b", "topic"]);
+    remove(&repo, hostile);
+    repo.git(&["add", "--all"]);
+    repo.commit();
+    repo.git(&["checkout", "--quiet", "main"]);
+    repo.write("a/src/later.rs", "pub fn later() {}\n");
+    repo.commit();
+    git(
+        &repo,
+        &["merge", "--quiet", "--no-ff", "--message", "merge", "topic"],
+    );
+    let output = pull_request(&repo);
+    assert!(output.status.success(), "{output:?}");
+    assert_eq!(selected(&output), EVERYTHING);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("notes.txt%0A::add-mask::super-secret%0Atail"),
+        "{stderr}"
+    );
+    assert!(
+        stderr.lines().all(|line| !line.starts_with("::")),
+        "{stderr}"
+    );
 }
 
 #[test]

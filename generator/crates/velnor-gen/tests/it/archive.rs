@@ -9,7 +9,33 @@ use crate::job_shape::{job_ids, target};
 use crate::pipeline::{view, workflow};
 use crate::select::{facts, member};
 
+const LAUNCH: &str = ". \"$VELNOR_EXEC\" ";
+
+pub(crate) fn plain_invocations(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            let Some((indent, quoted)) = line.split_once("run: '") else {
+                return line.to_owned();
+            };
+            let Some(body) = quoted
+                .strip_prefix(LAUNCH)
+                .and_then(|rest| rest.strip_suffix('\''))
+            else {
+                return line.to_owned();
+            };
+            if body.contains(['"', '\'']) || body.contains(": ") {
+                format!("{indent}run: 'velnor-ci {body}'")
+            } else {
+                format!("{indent}run: velnor-ci {body}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+        + "\n"
+}
+
 pub(crate) fn jobs_of(text: &str) -> Vec<(String, String)> {
+    let text = plain_invocations(text);
     let mut jobs: Vec<(String, String)> = Vec::new();
     let mut in_jobs = false;
     for line in text.lines() {
@@ -51,7 +77,9 @@ fn groups_build_one_archive_per_root_and_every_other_test_job_only_runs_it() -> 
             "rust-test-lab",
             "rust-test-default-lab",
             "rust-inputs-audit",
-            "required"
+            "rust-trim",
+            "required",
+            "cache"
         ]
     );
     let block = |id: &str| {
@@ -112,7 +140,11 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
         ("shape = \"groups\"\n", 2),
     ] {
         let jobs = rendered(config)?;
-        let text: String = jobs.iter().map(|(_, block)| block.as_str()).collect();
+        let text: String = jobs
+            .iter()
+            .filter(|(id, _)| id != "cache")
+            .map(|(_, block)| block.as_str())
+            .collect();
         assert_eq!(text.matches("name: Upload the tests\n").count(), archives);
         assert_eq!(
             text.matches("uses: actions/download-artifact@").count(),
@@ -125,10 +157,19 @@ fn only_the_groups_shape_has_an_archive_and_every_nextest_step_reports_tests_run
             .collect();
         assert_eq!(testing.len(), 2, "{config}: {testing:?}");
         for (id, block) in &jobs {
-            let reports =
-                block.contains("      tests_run: '${{ steps.test.outputs.tests_run }}'\n");
+            let reports = ["tests_run", "tests_listed", "tests_by_package"]
+                .iter()
+                .all(|name| {
+                    block.contains(&format!(
+                        "      {name}: '${{{{ steps.test.outputs.{name} }}}}'\n"
+                    ))
+                });
             assert_eq!(reports, block.contains("nextest run"), "{config}: {id}");
-            for line in block.lines().filter(|line| line.contains("nextest run")) {
+            for line in block
+                .lines()
+                .filter(|line| line.contains("nextest run") && !line.contains("--no-run"))
+            {
+                assert!(line.contains("--status-level pass"), "{config}: {line}");
                 assert!(line.ends_with("--no-tests=pass'"), "{config}: {line}");
             }
         }

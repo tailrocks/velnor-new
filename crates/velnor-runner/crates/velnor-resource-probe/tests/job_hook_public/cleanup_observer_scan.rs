@@ -31,6 +31,11 @@ struct PairNamespace {
 
 impl PairNamespace {
     fn start(name: &str) -> TestResult<Self> {
+        Self::launch(name, 1)
+    }
+
+    fn launch(name: &str, mounts: usize) -> TestResult<Self> {
+        let mounts = vec!["mount -t tmpfs tmpfs \"$1\""; mounts].join(" && ");
         let directory = std::env::temp_dir().join(format!("velnor-scan-{name}"));
         fs::create_dir_all(&directory)?;
         let mut command = Command::new("unshare");
@@ -43,7 +48,7 @@ impl PairNamespace {
             .args([
                 "sh",
                 "-c",
-                "mount -t tmpfs tmpfs \"$1\" && echo ready && exec sleep 300",
+                &format!("{mounts} && echo ready && exec sleep 300"),
                 "sh",
             ])
             .arg(&directory)
@@ -76,6 +81,16 @@ impl PairNamespace {
             mount_device,
             mount_inode: inside.ino(),
         })
+    }
+
+    fn volume(&self) -> CleanupVolume {
+        CleanupVolume {
+            role: "runner-home".to_owned(),
+            mountpoint: self.directory.display().to_string(),
+            mount_device: self.mount_device,
+            statx_device: self.mount_device,
+            inode: self.mount_inode,
+        }
     }
 
     fn pid(&self) -> u32 {
@@ -259,17 +274,44 @@ fn a_task_in_the_runner_mount_namespace_is_an_owned_reference() -> TestResult<()
 }
 
 #[test]
+fn a_descriptor_held_outside_the_pair_namespace_is_an_owned_reference() -> TestResult<()> {
+    let mut pair = PairNamespace::start("held-namespace")?;
+    let mut holder = Command::new("sh")
+        .args(["-c", "exec 3<\"$1\" && echo held && exec sleep 300", "sh"])
+        .arg(format!("/proc/{}/ns/mnt", pair.pid()))
+        .stdout(Stdio::piped())
+        .spawn()?;
+    let held = BufReader::new(holder.stdout.take().ok_or("no stdout")?)
+        .lines()
+        .next();
+    pair.child.kill().and_then(|()| pair.child.wait())?;
+    let record = scan(Scenario {
+        runner_namespace: pair.namespace,
+        volume_override: None,
+    });
+    holder.kill().and_then(|()| holder.wait())?;
+    assert_eq!(held.transpose()?.as_deref(), Some("held"));
+    assert!(record?.owned_reference_count >= 1);
+    Ok(())
+}
+
+#[test]
 fn a_pair_volume_mounted_in_another_namespace_is_an_owned_reference() -> TestResult<()> {
     let pair = PairNamespace::start("volume-mount")?;
     let record = scan(Scenario {
         runner_namespace: untouched_namespace(),
-        volume_override: Some(CleanupVolume {
-            role: "runner-home".to_owned(),
-            mountpoint: pair.directory.display().to_string(),
-            mount_device: pair.mount_device,
-            statx_device: pair.mount_device,
-            inode: pair.mount_inode,
-        }),
+        volume_override: Some(pair.volume()),
+    })?;
+    assert_eq!(record.owned_reference_count, 1, "{record:?}");
+    Ok(())
+}
+
+#[test]
+fn a_pair_volume_covered_by_another_mount_is_an_owned_reference() -> TestResult<()> {
+    let pair = PairNamespace::launch("covered-volume", 2)?;
+    let record = scan(Scenario {
+        runner_namespace: untouched_namespace(),
+        volume_override: Some(pair.volume()),
     })?;
     assert_eq!(record.owned_reference_count, 1, "{record:?}");
     Ok(())
@@ -323,56 +365,5 @@ fn a_live_pair_process_in_another_namespace_does_not_protect_the_observer_namesp
     Ok(())
 }
 
-#[test]
-fn an_unreadable_pair_identity_does_not_exempt_observer_runtime_mounts() -> TestResult<()> {
-    const MARKER: &str = "VELNOR_TEST_UNREADABLE_PAIR_IDENTITY";
-    if std::env::var_os(MARKER).is_none() {
-        let mut command = Command::new("unshare");
-        if rustix::process::geteuid().is_root() {
-            command.arg("--mount");
-        } else {
-            command.args(["--user", "--map-root-user", "--mount"]);
-        }
-        let output = command
-            .args([
-                "--propagation",
-                "private",
-                "sh",
-                "-c",
-                "mount --bind /proc/$$/mem /proc/$$/stat && VELNOR_TEST_UNREADABLE_PAIR_IDENTITY=$$ \"$1\" --exact cleanup_observer_scan::an_unreadable_pair_identity_does_not_exempt_observer_runtime_mounts --nocapture; status=$?; exit \"$status\"",
-                "sh",
-            ])
-            .arg(std::env::current_exe()?)
-            .output()?;
-        assert!(
-            output.status.success(),
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
-        assert!(
-            String::from_utf8_lossy(&output.stdout).contains("running 1 test"),
-            "{output:?}"
-        );
-        return Ok(());
-    }
-    let pid = std::env::var(MARKER)?.parse()?;
-    let error =
-        fs::read(format!("/proc/{pid}/stat")).expect_err("injected identity read must fail");
-    assert_eq!(error.raw_os_error(), Some(5), "{error:?}");
-    let own = identity("/proc/self/ns/mnt")?;
-    let record = scan_runner_identity(process(pid, own))?;
-    assert!(
-        record
-            .issues
-            .iter()
-            .any(|issue| issue == "observer_identity_unreadable"),
-        "{record:?}"
-    );
-    assert!(record.owned_reference_count >= 1, "{record:?}");
-    assert!(
-        !record.complete && !record.owned_references_absent,
-        "{record:?}"
-    );
-    Ok(())
-}
+#[path = "cleanup_observer_unreadable_identity.rs"]
+mod cleanup_observer_unreadable_identity;

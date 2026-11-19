@@ -1,6 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod build;
+mod freshness;
+mod inventory;
+mod options;
+
+pub(crate) use build::build;
+pub use options::AuditOptions;
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 use std::path::Path;
@@ -9,19 +17,23 @@ use std::time::SystemTime;
 use velnor_gen::io::read_checkout;
 use velnor_model::{CompileInputs, MemberDependency, RepoFacts, RepoPath};
 use velnor_rust::{
-    INPUTS_LOCK, Located, Owner, Owners, add_reads, dep_info_paths, detect, format_inputs_lock,
-    locate, parse_inputs_lock, rerun_if_changed, unlisted,
+    INPUTS_LOCK, Located, Owner, Owners, add_reads, detect, format_inputs_lock, locate,
+    parse_inputs_lock, rerun_if_changed, unlisted,
 };
 
-use super::units::{UnitFile, Workspace, apart, platforms, profile, unit_files, workspace};
+use super::unit_platforms::platforms;
+use super::units::{UnitFile, Workspace, apart, profile, unit_files, workspace};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind, gaps};
 use crate::error::CiError;
 use crate::platform::Platforms;
+
+mod dep_info;
 
 pub(super) struct Audit<'a> {
     repository: &'a Path,
     owners: Owners<'a>,
     tracked: &'a BTreeSet<RepoPath>,
+    freshness: freshness::Freshness,
     pub(super) fingerprints: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) names: BTreeMap<(usize, String, String), (String, Fingerprint)>,
     pub(super) runs: BTreeMap<(usize, String, String), String>,
@@ -31,11 +43,14 @@ pub(super) struct Audit<'a> {
     pub(super) scripts: BTreeMap<(usize, String, String), BTreeMap<RepoPath, SystemTime>>,
     targets: Vec<RepoPath>,
     found: CompileInputs,
+    /// Bytes read from each Cargo root's target directory, bounded per root.
+    target_bytes: Vec<u64>,
+    stale: Vec<String>,
     units: usize,
     pub(super) built: Vec<Built>,
 }
 
-pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
+pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
     let listed = checkout
@@ -50,13 +65,14 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
     let workspaces = facts
         .rust_roots
         .iter()
-        .map(|root| workspace(&checkout.root.join(root.manifest.as_str())))
+        .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
         .collect::<Result<Vec<_>, _>>()?;
     apart(&workspaces)?;
     let mut audit = Audit {
         repository: &checkout.root,
         owners: Owners::new(&facts, &checkout.view.tracked_paths),
         tracked: &checkout.view.tracked_paths,
+        freshness: freshness::Freshness::new(&workspaces, options.max_directory_entries),
         fingerprints: BTreeMap::new(),
         names: BTreeMap::new(),
         runs: BTreeMap::new(),
@@ -72,6 +88,8 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
             })
             .collect(),
         found: CompileInputs::new(),
+        target_bytes: vec![0; workspaces.len()],
+        stale: Vec::new(),
         units: 0,
         built: workspaces.iter().map(|_| Built::default()).collect(),
     };
@@ -101,9 +119,10 @@ pub fn audit_inputs(directory: &Path, write: bool) -> Result<String, CiError> {
         })
         .collect::<Result<Vec<_>, _>>()?;
     complete(&facts, &workspaces, &audit.built, &platforms)?;
+    audit.check_stale()?;
     let reads: usize = audit.found.values().map(BTreeSet::len).sum();
     let summary = format!("{reads} reads from {} unit files", audit.units);
-    if write {
+    if options.write {
         write_lock(&checkout.root.join(INPUTS_LOCK.as_str()), &audit.found)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
     }
@@ -158,7 +177,7 @@ fn complete(
         return Ok(());
     }
     Err(CiError::new(format!(
-        "found no current dep-info {}; run this after cargo build --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
+        "found no current dep-info {}; run this after velnor-ci inputs build -- cargo build --workspace --all-targets in every Cargo root, and build fully or delete each debug directory that holds a test harness of a member",
         gaps.join("; ")
     )))
 }
@@ -191,12 +210,22 @@ fn compare(
     .map(|(heading, entries)| format!("{heading}:\n{}", format_inputs_lock(&entries)))
     .collect();
     Err(CiError::new(format!(
-        "{INPUTS_LOCK} is stale; run velnor-ci inputs audit --write after a build of all targets and commit it\n{}",
+        "{INPUTS_LOCK} is stale; run velnor-ci inputs build -- cargo build --workspace --all-targets, then velnor-ci inputs audit --write and commit it\n{}",
         sections.concat().trim_end()
     )))
 }
 
 impl Audit<'_> {
+    fn check_stale(&self) -> Result<(), CiError> {
+        if self.stale.is_empty() {
+            return Ok(());
+        }
+        Err(CiError::new(format!(
+            "found stale dep-info {}; rebuild every observed target through velnor-ci inputs build -- cargo build --workspace --all-targets or delete its stale unit files before auditing inputs",
+            self.stale.join(", ")
+        )))
+    }
+
     fn record(
         &mut self,
         workspace: &Path,
@@ -233,7 +262,7 @@ impl Audit<'_> {
                     return Ok(());
                 }
                 let package = identity.as_ref().map(|(package, _)| package.as_str());
-                let Some((source, _)) = self.dep_info(workspace, file, package)? else {
+                let Some((source, _)) = self.dep_info(workspace, index, file, package)? else {
                     return Ok(());
                 };
                 if let (Some(configuration), Some((package, fingerprint))) =
@@ -265,31 +294,6 @@ impl Audit<'_> {
         Ok(())
     }
 
-    pub(super) fn dep_info(
-        &mut self,
-        workspace: &Path,
-        file: &Path,
-        package: Option<&str>,
-    ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
-        let text = read(file)?;
-        let built = modified(file)?;
-        let paths = dep_info_paths(&text);
-        let Some(Located::Inside(source)) = paths
-            .first()
-            .map(|source| locate(self.repository, workspace, source))
-        else {
-            return Ok(None);
-        };
-        if changed_since(workspace, &paths, built) {
-            return Ok(None);
-        }
-        for owner in self.owners.of(package, &source) {
-            self.credit(&owner, workspace, &paths, false);
-        }
-        self.units += 1;
-        Ok(Some((source, built)))
-    }
-
     fn build_output(
         &mut self,
         index: usize,
@@ -297,7 +301,7 @@ impl Audit<'_> {
         configuration: &str,
         package: &str,
     ) -> Result<bool, CiError> {
-        let text = read(file)?;
+        let text = self.build_output_text(index, file)?;
         let built = modified(file)?;
         let paths = rerun_if_changed(&text);
         let mut current = false;
@@ -317,7 +321,7 @@ impl Audit<'_> {
                     || self.repository.to_path_buf(),
                     |d| self.repository.join(d.as_str()),
                 );
-                if changed_since(&base, &paths, built) {
+                if self.changed_since(&base, &paths, built, file, true)? {
                     continue;
                 }
                 ran = true;
@@ -363,17 +367,6 @@ impl Audit<'_> {
             &self.targets,
         );
     }
-}
-
-fn changed_since(base: &Path, paths: &[String], built: SystemTime) -> bool {
-    paths
-        .iter()
-        .any(|path| modified(&base.join(path)).is_ok_and(|time| time > built))
-}
-
-fn read(file: &Path) -> Result<String, CiError> {
-    fs::read_to_string(file)
-        .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))
 }
 
 fn modified(path: &Path) -> Result<SystemTime, CiError> {

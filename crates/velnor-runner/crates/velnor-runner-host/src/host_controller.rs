@@ -3,6 +3,8 @@
 
 #[path = "host_controller/assigned_population.rs"]
 mod assigned_population;
+#[cfg(test)]
+pub(crate) use assigned_population::AssignedPopulationBlock;
 pub(crate) use assigned_population::{
     AssignedPopulationAction, plan_assigned_population_with_successors,
 };
@@ -13,3 +15,6 @@ mod retirement;
 
 pub(crate) use loop_driver::connection_pat;
 pub use loop_driver::run_host_blocking;
+pub(crate) use retirement::{AbsenceProofs, read_absence_proofs};
+#[cfg(test)]
+pub(crate) use retirement::{fixture_config, record_absence, removed_fixture};

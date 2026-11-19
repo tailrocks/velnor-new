@@ -159,7 +159,7 @@ fn a_name_taken_by_a_folder_is_skipped_and_the_folder_is_left_untouched() {
 pub(crate) struct Repo(PathBuf);
 
 impl Repo {
-    fn empty(name: &str) -> Self {
+    pub(crate) fn empty(name: &str) -> Self {
         Self(fresh_dir("velnor-ci-inputs", name))
     }
 
@@ -273,6 +273,15 @@ impl Drop for Repo {
 }
 
 pub(crate) fn serve(responses: BTreeMap<String, String>) -> String {
+    serve_with_status(
+        responses
+            .into_iter()
+            .map(|(path, body)| (path, (200, body)))
+            .collect(),
+    )
+}
+
+pub(crate) fn serve_with_status(responses: BTreeMap<String, (u16, String)>) -> String {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap_or_else(|e| unreachable!("{e}"));
     let address = listener
         .local_addr()
@@ -286,11 +295,14 @@ pub(crate) fn serve(responses: BTreeMap<String, String>) -> String {
             }
             let text = String::from_utf8_lossy(&request).into_owned();
             let path = text.split_whitespace().nth(1).unwrap_or_default();
-            let (status, body) = responses
+            let (code, body) = responses
                 .get(path)
-                .map_or(("404 Not Found", String::new()), |body| {
-                    ("200 OK", body.clone())
-                });
+                .map_or((404, String::new()), |(code, body)| (*code, body.clone()));
+            let status = match code {
+                200 => "200 OK".to_owned(),
+                404 => "404 Not Found".to_owned(),
+                other => format!("{other} Error"),
+            };
             let reply = format!(
                 "HTTP/1.1 {status}\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
                 body.len()
@@ -362,7 +374,14 @@ fn check_tag_exits_0_for_the_tag_of_its_own_version_and_1_for_any_other() {
     let version = env!("CARGO_PKG_VERSION");
     for (tag, code) in [
         (format!("rust-ci-v{version}"), Some(0)),
+        (format!("tools-v{version}"), Some(0)),
         ("rust-ci-v0.0.0".to_owned(), Some(1)),
+        ("tools-v0.0.0".to_owned(), Some(1)),
+        (format!("v{version}"), Some(1)),
+        (format!("runner-v{version}"), Some(1)),
+        (format!("actions-v{version}"), Some(1)),
+        (format!("x{version}"), Some(1)),
+        (format!("rust-ci-{version}"), Some(1)),
         (version.to_owned(), Some(1)),
     ] {
         let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))

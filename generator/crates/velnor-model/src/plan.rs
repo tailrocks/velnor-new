@@ -3,18 +3,20 @@
 
 use std::collections::BTreeMap;
 
-use crate::cache::CacheKey;
 use crate::cron::CronExpr;
-use crate::ids::{
-    CommitSha, HelperVersion, InvalidId, JobId, PackageName, RepoPath, RootSlug, RunnerLabel,
-    Sha256, TargetName,
-};
+use crate::ids::{JobId, PackageName, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::repo::TargetKind;
+use crate::steps::StepKind;
 
 pub const LINT_STEP: &str = "Lint";
 pub const TEST_STEP: &str = "Test";
-
+pub const BUILD_TESTS_STEP: &str = "Build the tests";
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
+pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
+pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
+pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
+pub const MERGE_GROUP_STEP: &str = "merge_group";
+pub const MERGE_GROUP_SKIP_OUTPUT: &str = "skip_push";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WorkflowPlan {
@@ -22,6 +24,7 @@ pub struct WorkflowPlan {
     pub triggers: Triggers,
     pub concurrency: Concurrency,
     pub permissions: Permissions,
+    pub fork_runner: RunnerLabel,
     pub jobs: Vec<Job>,
 }
 
@@ -42,6 +45,7 @@ pub enum PullRequestType {
     ReadyForReview,
     Edited,
     ConvertedToDraft,
+    Labeled,
 }
 
 impl PullRequestType {
@@ -57,6 +61,7 @@ impl PullRequestType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Concurrency {
     CancelOlderPullRequestRuns,
+    CancelOlderPullRequestRunsExceptUnrelatedLabels,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -64,6 +69,7 @@ pub struct Permissions(pub BTreeMap<PermissionScope, Access>);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum PermissionScope {
+    PullRequests,
     Actions,
     Contents,
 }
@@ -82,12 +88,14 @@ pub struct Job {
     pub comment: Option<String>,
     pub needs: Vec<JobId>,
     pub when: When,
-    pub skip_on_draft: bool,
+    pub pr: PrRun,
     pub runs_on: RunnerLabel,
     pub permissions: Permissions,
     pub timeout_minutes: u16,
     pub gate: Option<Gate>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
+    pub group_outputs: Vec<(RootSlug, JobId)>,
+    pub reports_ignored: bool,
     pub steps: Vec<Step>,
 }
 
@@ -95,10 +103,27 @@ pub struct Job {
 pub struct Step {
     pub kind: StepKind,
     pub directory: Option<RepoPath>,
+    pub target_dir: Option<RepoPath>,
     pub when: When,
     pub skip_on_draft: bool,
+    pub skip_after_merge_group: Option<PlanFrom>,
+    pub pr: PrRun,
     pub gate: Option<Gate>,
     pub reads: Option<PlanRef>,
+}
+
+pub const CI_RUN_LABEL: &str = "ci:run";
+pub const CI_AUTO_LABEL: &str = "ci:auto";
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum PrRun {
+    #[default]
+    Always,
+    Ready,
+    Quick,
+    Related,
+    Requested,
+    Unrequested,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -113,6 +138,7 @@ pub struct Gate {
     pub need: GateNeed,
     pub from: PlanFrom,
     pub package: Option<PackageName>,
+    pub group: Option<JobId>,
 }
 
 impl Gate {
@@ -120,7 +146,7 @@ impl Gate {
     pub fn outputs(&self) -> Vec<(RootSlug, GateNeed)> {
         let own = |need| (self.slug.clone(), need);
         match self.need {
-            GateNeed::Selected => vec![own(GateNeed::Selected)],
+            GateNeed::Selected | GateNeed::Group => vec![own(GateNeed::Selected)],
             GateNeed::Doctests | GateNeed::Docs => vec![
                 own(GateNeed::Selected),
                 own(self.need),
@@ -129,7 +155,10 @@ impl Gate {
             GateNeed::Deny => vec![own(GateNeed::Deny)],
             GateNeed::Machete => vec![own(GateNeed::Machete)],
             GateNeed::Policy => vec![own(GateNeed::Deny), own(GateNeed::Machete)],
-            GateNeed::TestFilter | GateNeed::PackageArgs | GateNeed::DoctestsKnown => {
+            GateNeed::TestFilter
+            | GateNeed::PackageArgs
+            | GateNeed::DoctestsKnown
+            | GateNeed::TestsExpected => {
                 vec![own(self.need)]
             }
         }
@@ -147,6 +176,8 @@ pub enum GateNeed {
     Deny,
     Machete,
     Policy,
+    TestsExpected,
+    Group,
 }
 
 impl GateNeed {
@@ -154,6 +185,33 @@ impl GateNeed {
     pub fn is_global(self) -> bool {
         matches!(self, Self::Deny | Self::Machete | Self::Policy)
     }
+
+    #[must_use]
+    pub fn output_name(self, slug: &RootSlug) -> String {
+        let name = match self {
+            Self::Selected => "mode",
+            Self::Doctests => "doctests",
+            Self::DoctestsKnown => "doctests_known",
+            Self::Docs => "docs",
+            Self::TestFilter => "test_filter",
+            Self::PackageArgs => "package_args",
+            Self::Deny => "deny",
+            Self::Machete => "machete",
+            Self::Policy => "policy",
+            Self::TestsExpected => "tests",
+            Self::Group => "group",
+        };
+        if self.is_global() {
+            format!("rust_{name}")
+        } else {
+            format!("rust_{slug}_{name}")
+        }
+    }
+}
+
+#[must_use]
+pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
+    format!("rust_{slug}_group_{group}")
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,125 +225,24 @@ pub enum When {
     #[default]
     Success,
     NotCancelled,
+    NotCancelledPostMerge,
+    Finalizer,
+    Always,
     Scheduled,
     ScheduledOrPush,
     CacheDebug,
     SaveToolsOnDefaultBranch,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum StepKind {
-    Checkout {
-        depth: u32,
-    },
-    InstallTools {
-        only: Option<String>,
-    },
-    CacheRestore(CacheKey),
-    CacheSave(CacheKey),
-    RustComponents(Vec<String>),
-    RustTargets(Vec<String>),
-    UploadArchive {
-        name: String,
-        file: RepoPath,
-    },
-    DownloadArchive {
-        name: String,
-        into: Option<RepoPath>,
-    },
-    Cargo(CargoCommand),
-    Helper(HelperCommand),
-    GeneratorCheck,
-    InstallHelper(HelperRelease),
-    HelperFromArtifact,
-    PublishHelper {
-        binary: RepoPath,
-    },
-    FailWhenANeedFailed,
-    FailOnDraftRun,
-    UploadCargoLog,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum HelperCommand {
-    Plan,
-    Prepare,
-    CheckMetadata,
-    Restored,
-    InputsSave,
-    InputsRestore,
-    InputsAudit,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct HelperRelease {
-    version: HelperVersion,
-    action: CommitSha,
-    digests: BTreeMap<Platform, Sha256>,
-}
-
-impl HelperRelease {
-    pub fn new(
-        version: HelperVersion,
-        action: CommitSha,
-        digests: BTreeMap<Platform, Sha256>,
-    ) -> Result<Self, InvalidId> {
-        if digests.is_empty() {
-            return Err(InvalidId {
-                kind: "HelperRelease",
-                value: version.to_string(),
-            });
-        }
-        Ok(Self {
-            version,
-            action,
-            digests,
-        })
-    }
-
-    #[must_use]
-    pub fn version(&self) -> &HelperVersion {
-        &self.version
-    }
-
-    #[must_use]
-    pub fn action(&self) -> &CommitSha {
-        &self.action
-    }
-
-    #[must_use]
-    pub fn digests(&self) -> &BTreeMap<Platform, Sha256> {
-        &self.digests
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Platform {
-    LinuxX64,
-    LinuxArm64,
-    MacosArm64,
-}
-
-impl Platform {
-    pub const ALL: [Self; 3] = [Self::LinuxX64, Self::LinuxArm64, Self::MacosArm64];
-
-    #[must_use]
-    pub const fn file_suffix(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "linux-x64",
-            Self::LinuxArm64 => "linux-arm64",
-            Self::MacosArm64 => "macos-arm64",
-        }
-    }
-
-    #[must_use]
-    pub const fn runner_key(self) -> &'static str {
-        match self {
-            Self::LinuxX64 => "Linux-X64",
-            Self::LinuxArm64 => "Linux-ARM64",
-            Self::MacosArm64 => "macOS-ARM64",
-        }
-    }
+    RestoreToolsUnlessLocal,
+    SaveToolsUnlessLocal,
+    SaveBase,
+    SaveBaseDecided,
+    SaveSources,
+    FetchSources,
+    FullAudit,
+    FullAuditOrPush,
+    BaseExpired,
+    SavingRun,
+    ClearRunLabel,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -297,12 +254,15 @@ pub enum CargoCommand {
     CheckAlone {
         package: PackageName,
     },
-    Build {
+    BuildBinary {
         package: PackageName,
+        binary: TargetName,
     },
     BuildAll,
+    NextestBuild,
     NextestRun {
         filter: FilterRef,
+        ci_profile: bool,
     },
     NextestArchive {
         file: RepoPath,
@@ -310,6 +270,8 @@ pub enum CargoCommand {
     NextestRunArchive {
         file: RepoPath,
         filter: FilterRef,
+        threads: Option<u16>,
+        ci_profile: bool,
     },
     TestTarget {
         package: PackageName,
@@ -321,11 +283,20 @@ pub enum CargoCommand {
     Doc,
     Deny {
         manifest: RepoPath,
+        config: Option<RepoPath>,
     },
     Machete,
 }
 
 impl CargoCommand {
+    #[must_use]
+    pub fn builds(&self) -> bool {
+        !matches!(
+            self,
+            Self::FmtCheck | Self::Deny { .. } | Self::Machete | Self::NextestRunArchive { .. }
+        )
+    }
+
     #[must_use]
     pub fn plan_values(&self) -> &'static [GateNeed] {
         match self {
@@ -340,6 +311,11 @@ impl CargoCommand {
 pub enum FilterRef {
     All,
     AllExcept(Vec<String>),
+    Group {
+        include: Option<String>,
+        exclude: Vec<String>,
+        except: Vec<String>,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

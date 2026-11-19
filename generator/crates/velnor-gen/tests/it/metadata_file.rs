@@ -310,6 +310,13 @@ fn a_file_written_before_versions_were_recorded_is_refused_with_the_regenerate_c
 fn a_pin_below_0_1_81_gets_a_file_its_helper_can_read() -> TestResult {
     let mut files = two_workspaces()?;
     pin(&mut files, "0.1.79");
+    files
+        .tracked_paths
+        .insert(RepoPath::new(".velnor/rust-ci.toml")?);
+    files.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"off\"\n".to_vec(),
+    );
     let old = recorded(&files)?;
     assert!(!old.contains("\"version\""), "{old}");
     assert!(generated_files(&files).is_ok());
@@ -341,5 +348,22 @@ fn the_pin_decides_whether_a_recorded_version_is_read() -> TestResult {
         recorded_metadata(&files, Some(old.as_bytes())),
         Err(MetadataFileError::Unreadable(_))
     ));
+    Ok(())
+}
+
+#[test]
+fn only_a_pin_whose_helper_reads_target_dir_gets_it_recorded() -> TestResult {
+    let mut files = two_workspaces()?;
+    pin(&mut files, "0.1.81");
+    let released = recorded(&files)?;
+    assert!(!released.contains("target_dir"), "{released}");
+    for released in ["0.1.82", "0.1.83", "0.1.84"] {
+        pin(&mut files, released);
+        let metadata = recorded(&files)?;
+        assert!(!metadata.contains("target_dir"), "{released}: {metadata}");
+    }
+    pin(&mut files, "0.1.85");
+    let newer = recorded(&files)?;
+    assert!(newer.contains("\"target_dir\""), "{newer}");
     Ok(())
 }

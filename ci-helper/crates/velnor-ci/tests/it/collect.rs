@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::{Value, json};
 use velnor_ci::collect::collect;
-use velnor_ci::github::{Repo, job_log_path, jobs_path};
+use velnor_ci::compare::compare;
+use velnor_ci::github::{Repo, job_log_path, jobs_path, run_path};
 
 use crate::support::{
     CLI_ID, CLI_LOG, CORE_ID, CORE_LOG, FakeGitHub, JOBS, RUN, RUN_ID, error_text,
@@ -16,17 +18,17 @@ fn recorded_run_becomes_metrics() {
     assert_eq!(metrics.run_attempt, 1);
     assert_eq!(metrics.event, "push");
     assert_eq!(metrics.head_sha, "41f0a2dd1fee1a11c35a172ef1298fca69fc62e8");
-    assert_eq!(metrics.wall_seconds, 963);
-    assert_eq!(metrics.runner_seconds, 12 + 854 + 70);
+    assert_eq!(metrics.wall_seconds, Some(963));
+    assert_eq!(metrics.runner_seconds, Some(12 + 854 + 70));
     assert_eq!(metrics.jobs.len(), 3);
     let cli = &metrics.jobs[1];
     assert_eq!(cli.name, "Rust / velnor-actions-cli");
     assert_eq!(cli.conclusion, "success");
-    assert_eq!(cli.queue_seconds, 2);
-    assert_eq!(cli.duration_seconds, 854);
+    assert_eq!(cli.queue_seconds, Some(2));
+    assert_eq!(cli.duration_seconds, Some(854));
     assert_eq!(cli.steps.len(), 6);
     assert_eq!(cli.steps[1].name, "Checkout");
-    assert_eq!(cli.steps[1].seconds, 5);
+    assert_eq!(cli.steps[1].seconds, Some(5));
     assert_eq!(cli.log.compiling, 24);
     assert_eq!(metrics.crates_compiled(), 28);
 }
@@ -74,7 +76,7 @@ fn a_job_carried_over_from_an_earlier_attempt_is_not_a_job_run() {
     let metrics = collect(&fake, &repo(), RUN_ID, true).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(metrics.jobs.len(), 3);
     assert_eq!(metrics.jobs_run(), 2);
-    assert_eq!(metrics.runner_seconds, 854 + 70);
+    assert_eq!(metrics.runner_seconds, Some(854 + 70));
 }
 
 #[test]
@@ -97,7 +99,7 @@ fn wall_time_starts_at_run_started_at_not_created_at() {
     assert_ne!(early, RUN);
     fake.respond(velnor_ci::github::run_path(&repo(), RUN_ID), &early);
     let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
-    assert_eq!(metrics.wall_seconds, 963);
+    assert_eq!(metrics.wall_seconds, Some(963));
 }
 
 #[test]
@@ -136,7 +138,7 @@ fn skipped_jobs_cost_nothing_and_have_no_log_fetched() {
     let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(metrics.jobs_skipped(), 1);
     assert_eq!(metrics.jobs_run(), 2);
-    assert_eq!(metrics.runner_seconds, 854 + 70);
+    assert_eq!(metrics.runner_seconds, Some(854 + 70));
 }
 
 #[test]
@@ -163,8 +165,9 @@ fn a_job_cancelled_before_it_started_is_not_a_job_run() {
     assert_eq!(metrics.jobs.len(), 3);
     assert_eq!(metrics.jobs_run(), 2);
     assert_eq!(metrics.jobs_skipped(), 1);
-    assert_eq!(metrics.jobs[0].queue_seconds, 0);
-    assert_eq!(metrics.runner_seconds, 854 + 70);
+    assert_eq!(metrics.jobs[0].queue_seconds, None);
+    assert_eq!(metrics.jobs[0].duration_seconds, None);
+    assert_eq!(metrics.runner_seconds, Some(854 + 70));
 }
 
 #[test]
@@ -181,8 +184,38 @@ fn jobs_on_later_pages_are_collected() {
     let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
     assert_eq!(metrics.jobs.len(), 4);
     assert_eq!(metrics.jobs[3].name, "Late");
-    assert_eq!(metrics.jobs[3].queue_seconds, 10);
-    assert_eq!(metrics.jobs[3].duration_seconds, 30);
+    assert_eq!(metrics.jobs[3].queue_seconds, Some(10));
+    assert_eq!(metrics.jobs[3].duration_seconds, Some(30));
+}
+
+#[test]
+fn jobs_missing_from_the_advertised_count_are_refused() {
+    let advertised = r#"{"total_count": 1, "jobs": []}"#;
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), advertised);
+    let message = error_text(collect(&fake, &repo(), RUN_ID, false));
+    assert!(message.contains("incomplete"), "{message}");
+}
+
+#[test]
+fn an_empty_page_before_the_advertised_count_is_refused() {
+    let first = JOBS.replace("\"total_count\": 3", "\"total_count\": 4");
+    let second = r#"{"total_count": 4, "jobs": []}"#;
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &first);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 2), second);
+    let message = error_text(collect(&fake, &repo(), RUN_ID, false));
+    assert!(message.contains("incomplete"), "{message}");
+}
+
+#[test]
+fn an_advertised_count_of_zero_is_complete() {
+    let none = r#"{"total_count": 0, "jobs": []}"#;
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), none);
+    let metrics = collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"));
+    assert_eq!(metrics.jobs.len(), 0);
+    assert_eq!(metrics.runner_seconds, Some(0));
 }
 
 #[test]
@@ -216,6 +249,88 @@ fn job_with(steps: &[(&str, &str, &str)]) -> velnor_ci::github::ApiJob {
         steps.join(",")
     ))
     .unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+fn collected_with_times(
+    run_started: &str,
+    run_updated: &str,
+    job_created: &str,
+    job_started: &str,
+    job_completed: &str,
+) -> velnor_ci::metrics::RunMetrics {
+    let mut run: Value = serde_json::from_str(RUN).unwrap_or_else(|e| unreachable!("{e}"));
+    run["run_started_at"] = json!(run_started);
+    run["updated_at"] = json!(run_updated);
+    let mut jobs: Value = serde_json::from_str(JOBS).unwrap_or_else(|e| unreachable!("{e}"));
+    for job in jobs["jobs"].as_array_mut().into_iter().flatten() {
+        if job["conclusion"] == "success" {
+            job["created_at"] = json!(job_created);
+            job["started_at"] = json!(job_started);
+            job["completed_at"] = json!(job_completed);
+        }
+    }
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(run_path(&repo(), RUN_ID), &run.to_string());
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &jobs.to_string());
+    collect(&fake, &repo(), RUN_ID, false).unwrap_or_else(|e| unreachable!("{e}"))
+}
+
+#[test]
+fn unmeasured_run_and_job_timestamps_stay_distinct_from_measured_zero() {
+    let unmeasured = collected_with_times(
+        "2026-11-12T08:36:32Z",
+        "not-a-time",
+        "2026-11-12T08:36:32Z",
+        "not-a-time",
+        "not-a-time",
+    );
+    let summary = unmeasured.summary();
+    assert_eq!(unmeasured.wall_seconds, None);
+    assert_eq!(unmeasured.runner_seconds, None);
+    assert!(
+        unmeasured
+            .jobs
+            .iter()
+            .filter(|job| job.ran())
+            .all(|job| { job.queue_seconds.is_none() && job.duration_seconds.is_none() })
+    );
+    assert!(
+        summary.contains("wall unmeasured, runner unmeasured"),
+        "{summary}"
+    );
+    assert!(summary.contains("[success] unmeasured"), "{summary}");
+
+    let measured_zero = collected_with_times(
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+        "2026-11-12T08:36:32Z",
+    );
+    assert_eq!(measured_zero.wall_seconds, Some(0));
+    assert_eq!(measured_zero.runner_seconds, Some(0));
+    assert!(
+        measured_zero
+            .jobs
+            .iter()
+            .filter(|job| job.ran())
+            .all(|job| job.queue_seconds == Some(0) && job.duration_seconds == Some(0))
+    );
+    assert!(
+        measured_zero
+            .summary()
+            .contains("wall 0s, runner 0s (0.0 runner-minutes)")
+    );
+    let comparison = compare(&unmeasured, &measured_zero).unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(
+        comparison.contains("| Wall seconds | - | 0 | - |"),
+        "{comparison}"
+    );
+    assert!(
+        comparison.contains("| Runner seconds | - | 0 | - |"),
+        "{comparison}"
+    );
+    assert!(comparison.contains("unmeasured | 0 | -"), "{comparison}");
 }
 
 #[test]

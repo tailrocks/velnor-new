@@ -6,6 +6,9 @@ mod lookup;
 
 mod recovery;
 
+#[cfg(test)]
+mod tests;
+
 pub(super) use recovery::recover_at_startup;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

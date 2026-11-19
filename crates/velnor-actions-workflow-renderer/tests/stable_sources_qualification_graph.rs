@@ -11,7 +11,9 @@ fn request(generator: bool) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
         workflows.insert(RoutingWorkflow::GeneratorRelease);
     }
     Ok(Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: "0.1.79".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -124,3 +126,6 @@ fn stable_sources_mode_runs_only_the_read_only_branch_qualification_graph()
     );
     Ok(())
 }
+
+#[path = "stable_source_metadata.rs"]
+mod metadata;

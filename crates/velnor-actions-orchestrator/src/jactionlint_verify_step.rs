@@ -9,10 +9,6 @@ use crate::OrchestratorError;
 
 pub(crate) const VERIFY_JACTIONLINT_STEP: &str = verifier_builders::VERIFY_JACTIONLINT_STEP;
 
-pub(crate) fn script(catalog: &ToolCatalog) -> String {
-    verifier_builders::jactionlint_verifier_script(catalog)
-}
-
 pub(crate) fn argv(catalog: &ToolCatalog) -> Vec<String> {
     verifier_builders::jactionlint_verifier_argv(catalog)
 }

@@ -1,9 +1,0 @@
-roots = [".", "tools"]
-after = ["CI", "Qualification", "Rust CI"]
-
-[[binaries]]
-package = "app"
-
-[[binaries]]
-package = "tools"
-platforms = ["linux-x64", "macos-arm64"]

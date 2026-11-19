@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, StepNeed, Unread,
-    Weakening,
+    Weakening, group_output_name,
 };
-use velnor_rust::{CONFIG_PATH, PolicyRuns};
+use velnor_rust::{CONFIG_PATH, GroupPlan, PolicyRuns};
 
 use crate::error::CiError;
 use crate::escape::{escape, inert};
@@ -60,6 +60,53 @@ pub fn outputs(
     lines.push(format!("rust_deny={}\n", lane(policy.deny)));
     lines.push(format!("rust_machete={}\n", lane(policy.machete)));
     Ok(lines.concat())
+}
+
+#[must_use]
+pub fn group_outputs(groups: &[GroupPlan]) -> String {
+    groups
+        .iter()
+        .map(|group| {
+            format!(
+                "{}={}\n",
+                group_output_name(&RootSlug::of(&group.root), &group.name),
+                lane(group.decision.run)
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn group_explanation(groups: &[GroupPlan]) -> String {
+    groups
+        .iter()
+        .map(|group| {
+            format!(
+                "test group {} ({}): {}: {}\n",
+                inert(group.name.as_str()),
+                inert(group.root.as_str()),
+                lane(group.decision.run),
+                escape(&group.decision.reason, false)
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
+}
+
+#[must_use]
+pub fn tests_outputs(expected: &BTreeMap<RepoPath, bool>) -> String {
+    expected
+        .iter()
+        .map(|(root, run)| {
+            format!(
+                "rust_{}_tests={}\n",
+                RootSlug::of(root),
+                if *run { "run" } else { "skip" }
+            )
+        })
+        .collect::<Vec<String>>()
+        .concat()
 }
 
 fn package_args(names: &[&str]) -> String {

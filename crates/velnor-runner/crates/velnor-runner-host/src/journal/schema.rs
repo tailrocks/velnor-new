@@ -14,8 +14,25 @@ mod driver;
 mod execution_authorization;
 mod execution_publication;
 pub(in crate::journal) mod image_import;
+mod jit_claim_deadline;
 mod jit_conflict_recovery;
 mod jit_conflict_settlement;
+pub(in crate::journal) mod jit_interrupted_claims;
+mod jit_tombstone_completion;
+#[cfg(test)]
+pub(in crate::journal) use driver::migrate_historical_to;
+#[cfg(test)]
+mod historical_tamper_tests;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v45;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v46;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v47;
+#[cfg(test)]
+pub(in crate::journal) use driver::bootstrap_historical_v48;
+#[cfg(test)]
+mod intents_tamper_tests;
 mod migration;
 mod physical_attempts;
 
@@ -38,6 +55,8 @@ mod remote;
 mod request_ledger;
 mod request_reservations;
 mod scale_set_create;
+mod scale_set_delete;
+mod scale_set_unverified;
 mod session;
 mod session_refresh;
 mod source_authorization;
@@ -50,10 +69,12 @@ mod storage_root_backing;
 mod unbound_retirement;
 pub(super) use unbound_retirement::UNBOUND_SHAPE;
 
+#[cfg(test)]
+mod tamper_tests;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 45;
+pub(super) const JOURNAL_VERSION: i64 = 59;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -116,12 +137,54 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
-    validate_persisted_schema_v45(conn).await
+    validate_persisted_schema_v53(conn).await?;
+    scale_set_delete::validate(conn).await?;
+    scale_set_unverified::validate(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v52(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v42(conn).await?;
+    unbound_retirement::validate(conn).await?;
+    jit_interrupted_claims::validate(conn).await?;
+    jit_claim_deadline::validate(conn).await?;
+    jit_tombstone_completion::validate(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v53(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v52(conn).await?;
+    execution_authorization::validate_v53(conn).await
+}
+
+#[cfg(test)]
+async fn validate_persisted_schema_v48(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v46(conn).await?;
+    jit_interrupted_claims::validate_initial_absence(conn).await
+}
+
+async fn validate_persisted_schema_v50(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v46(conn).await?;
+    jit_claim_deadline::validate(conn).await?;
+    jit_tombstone_completion::validate(conn).await
+}
+
+#[cfg(test)]
+pub(in crate::journal) async fn validate_historical_v48_for_test(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v48(conn).await
+}
+
+async fn validate_persisted_schema_v46(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v45(conn).await?;
+    jit_interrupted_claims::validate(conn).await
 }
 
 mod legacy_validation;
 pub(super) use legacy_validation::{
-    validate_persisted_schema_v19, validate_persisted_schema_v20, validate_persisted_schema_v27,
     validate_persisted_schema_v32, validate_persisted_schema_v33, validate_persisted_schema_v34,
     validate_persisted_schema_v36, validate_persisted_schema_v37, validate_persisted_schema_v38,
     validate_persisted_schema_v39,
@@ -149,6 +212,9 @@ async fn journal_version(conn: &turso::Connection) -> Result<i64, HostError> {
 
 pub(super) async fn validate_current_schema(conn: &turso::Connection) -> Result<(), HostError> {
     let columns = read_columns(conn).await?;
+    if columns.len() != CURRENT_COLUMNS.len() {
+        return Err(HostError::Journal);
+    }
     for expected in CURRENT_COLUMNS {
         let Some(actual) = columns.get(expected.name) else {
             return Err(HostError::Journal);
@@ -270,5 +336,5 @@ async fn validate_persisted_schema_v44(conn: &turso::Connection) -> Result<(), H
 
 async fn validate_persisted_schema_v45(conn: &turso::Connection) -> Result<(), HostError> {
     validate_persisted_schema_v42(conn).await?;
-    unbound_retirement::validate(conn).await
+    unbound_retirement::validate_v45(conn).await
 }

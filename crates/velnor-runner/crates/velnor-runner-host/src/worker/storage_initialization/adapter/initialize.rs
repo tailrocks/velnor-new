@@ -148,7 +148,7 @@ impl InitializationContext<'_> {
                         .mark_storage_initializer_start_uncertain(claim)
                         .await?;
                 }
-                InitializationPhase::Process => {
+                InitializationPhase::Process | InitializationPhase::Handoff => {
                     self.journal
                         .mark_storage_initialization_result_uncertain(claim)
                         .await?;
@@ -156,8 +156,7 @@ impl InitializationContext<'_> {
                 InitializationPhase::Create
                 | InitializationPhase::CreateDispatched
                 | InitializationPhase::CreateResponseReceived
-                | InitializationPhase::CreateVerified
-                | InitializationPhase::Handoff => {}
+                | InitializationPhase::CreateVerified => {}
             }
         }
         Ok(())
@@ -179,11 +178,13 @@ impl InitializationContext<'_> {
         {
             return Ok(());
         }
-        let remaining = self.deadline.saturating_duration_since(Instant::now());
-        if remaining.is_zero() {
-            return Ok(());
-        }
-        recover_absent(self.docker, self.journal, self.reservation_id, remaining).await
+        recover_absent(
+            self.docker,
+            self.journal,
+            self.reservation_id,
+            self.deadline,
+        )
+        .await
     }
 }
 
@@ -283,3 +284,6 @@ struct CreateInterruption<'a> {
     phase: InitializationPhase,
     response: Option<&'a StorageInitializerCreateResponse>,
 }
+
+#[cfg(test)]
+mod handoff_tests;

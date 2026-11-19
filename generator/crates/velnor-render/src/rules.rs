@@ -4,16 +4,16 @@
 use std::fmt;
 
 use crate::key_length::longest_cache_key;
+use crate::pinned_actions::{
+    ACTIONS_CACHE, ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
+    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, credential_rules, pin_rules,
+};
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const HELPER_FROM_ARTIFACT_RUN: &str = "\
-chmod +x \"$RUNNER_TEMP/vbin/velnor-ci\"
-echo \"$RUNNER_TEMP/vbin\" >> \"$GITHUB_PATH\"";
-
-pub const ALLOWED_ACTIONS: [&str; 8] = [
+pub const ALLOWED_ACTIONS: [&str; 17] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
@@ -22,13 +22,24 @@ pub const ALLOWED_ACTIONS: [&str; 8] = [
     "actions/download-artifact",
     MISE_ACTION,
     SETUP_VELNOR_ACTION,
+    MBX_ACTION,
+    ATTEST_BUILD_PROVENANCE.action,
+    ALINT.action,
+    DOCKER_LOGIN.action,
+    DOCKER_SETUP_BUILDX.action,
+    DOCKER_BUILD_PUSH.action,
+    GITHUB_SCRIPT.action,
+    MR_BOXINGTON.action,
+    ACTIONS_CACHE.action,
 ];
 
+pub(crate) const MBX_ACTION: &str = "jdx/mr-boxington-action";
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
 pub(crate) const MAX_WORKFLOW_BYTES: usize = 500_000;
 pub const MAX_CACHE_KEY_CHARACTERS: usize = 512;
+pub const MAX_ENV_CHARACTERS: usize = 100_000;
 
 const FORBIDDEN_WORDS: [&str; 5] = ["if", "for", "while", "case", "coproc"];
 const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<(", ">("];
@@ -37,6 +48,7 @@ const FORBIDDEN_SYMBOLS: [&str; 9] = ["|", "&", "&&", "||", ";", "$(", "`", "<("
 pub enum Value {
     Text(String),
     Expr(String),
+    BoundedExpr { text: String, max_bytes: usize },
     Int(u64),
     Bool(bool),
 }
@@ -62,6 +74,30 @@ pub struct RenderedConcurrency {
     pub cancel_in_progress: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RenderedMatrixSource {
+    /// `fromJSON(<expression>)`, such as `needs.plan.outputs.matrix`.
+    Output(String),
+    /// Static axes, each with its values.
+    Axes(Vec<(String, Vec<String>)>),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedMatrix {
+    pub source: RenderedMatrixSource,
+    pub fail_fast: Option<bool>,
+    pub max_parallel: Option<u16>,
+}
+
+/// A job `container:` or one service; `ports` is empty for a job container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedContainer {
+    pub image: String,
+    pub ports: Vec<String>,
+    pub options: Option<String>,
+    pub env: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -74,8 +110,16 @@ pub struct RenderedJob {
     pub no_permissions: bool,
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
+    pub matrix: Option<RenderedMatrix>,
+    pub container: Option<RenderedContainer>,
+    pub services: Vec<(String, RenderedContainer)>,
+    /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
+    pub uses: Option<String>,
+    pub with: Vec<(String, Value)>,
     pub runs_on: String,
+    pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
+    pub env: Vec<(String, Value)>,
     pub steps: Vec<RenderedStep>,
 }
 
@@ -94,12 +138,22 @@ pub enum Rule {
     NotExactlyOneOfRunAndUses,
     ActionNotAllowed(String),
     ActionNotPinned(String),
+    ActionPinMismatch {
+        action: String,
+        commit: &'static str,
+    },
+    LiteralCredential {
+        action: String,
+        input: String,
+    },
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
+    CombinedCacheNotLastStep,
     TokenJobRunnerNotX64(String),
     WorkflowTooLarge(usize),
     CacheKeyTooLong(usize),
     OutputNameCollision(String),
+    EnvTooLong(usize),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -114,7 +168,7 @@ impl fmt::Display for RuleViolation {
         if let Rule::WorkflowTooLarge(bytes) = &self.rule {
             return write!(
                 f,
-                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; release fewer binaries from one repository"
+                "the workflow is {bytes} bytes, and GitHub does not start a workflow file above {MAX_WORKFLOW_BYTES} bytes; reduce the workflow size"
             );
         }
         if let Rule::OutputNameCollision(name) = &self.rule {
@@ -144,16 +198,29 @@ impl fmt::Display for RuleViolation {
             Rule::ActionNotPinned(action) => {
                 write!(f, "action {action} is not pinned to a full commit SHA")
             }
+            Rule::ActionPinMismatch { action, commit } => write!(
+                f,
+                "action {action} is accepted only at commit {commit}; use that commit"
+            ),
+            Rule::LiteralCredential { action, input } => write!(
+                f,
+                "action {action} input {input} is a literal; pass it through a secrets or env expression"
+            ),
             Rule::MiseActionInTokenJob => f.write_str(
                 "a job that holds the release App token uses jdx/mise-action, which reads the repository's mise config",
             ),
             Rule::MiseReadsRepositoryConfig => f.write_str(
                 "a job that holds the release App token runs mise without --no-config --no-env --no-hooks",
             ),
+            Rule::CombinedCacheNotLastStep => f.write_str(crate::combined_cache::MESSAGE),
             Rule::WorkflowTooLarge(_) | Rule::OutputNameCollision(_) => Ok(()),
             Rule::CacheKeyTooLong(length) => write!(
                 f,
                 "a cache key can be {length} characters long at run time, and actions/cache allows at most {MAX_CACHE_KEY_CHARACTERS}; shorten the job id or the root directory name"
+            ),
+            Rule::EnvTooLong(length) => write!(
+                f,
+                "an env value can expand to {length} UTF-8 bytes, and the limit is {MAX_ENV_CHARACTERS}; the required gate's needs JSON includes every dependency's outputs, so reduce the Cargo roots or package outputs"
             ),
             Rule::TokenJobRunnerNotX64(runner) => write!(
                 f,
@@ -169,8 +236,12 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
         .iter()
         .flat_map(|job| {
             let holds_token = holds_app_token(job);
+            let last = job.steps.len().saturating_sub(1);
             let step_violations = job.steps.iter().enumerate().flat_map(move |(index, step)| {
                 let mut rules = step_rules(step);
+                if crate::combined_cache::before_last(step, index, last) {
+                    rules.push(Rule::CombinedCacheNotLastStep);
+                }
                 if holds_token {
                     token_step_rules(step, &mut rules);
                 }
@@ -197,9 +268,11 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
 
 fn holds_app_token(job: &RenderedJob) -> bool {
     job.steps.iter().any(|step| {
-        step.uses
-            .as_deref()
-            .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+        step.id.as_deref() != Some(crate::private_steps::TOKEN_STEP)
+            && step
+                .uses
+                .as_deref()
+                .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
     })
 }
 
@@ -232,11 +305,7 @@ fn token_step_rules(step: &RenderedStep, rules: &mut Vec<Rule>) {
 
 fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     let mut rules = Vec::new();
-    if let Some(run) = step
-        .run
-        .as_deref()
-        .filter(|run| *run != HELPER_FROM_ARTIFACT_RUN)
-    {
+    if let Some(run) = step.run.as_deref() {
         run_rules(run, &mut rules);
     }
     if step.run.is_some() == step.uses.is_some() {
@@ -248,25 +317,45 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if let Some(uses) = &step.uses {
         action_rules(uses, &mut rules);
     }
+    credential_rules(step, &mut rules);
     if let Some(length) = longest_cache_key(step)
         && length > MAX_CACHE_KEY_CHARACTERS
     {
         rules.push(Rule::CacheKeyTooLong(length));
     }
+    if let Some(length) = longest_env(step)
+        && length > MAX_ENV_CHARACTERS
+    {
+        rules.push(Rule::EnvTooLong(length));
+    }
     rules
+}
+
+fn longest_env(step: &RenderedStep) -> Option<usize> {
+    step.env
+        .iter()
+        .filter_map(|(_, value)| match value {
+            Value::Text(text) => Some(text.len()),
+            Value::BoundedExpr { max_bytes, .. } => Some(*max_bytes),
+            _ => None,
+        })
+        .max()
 }
 
 fn run_rules(run: &str, rules: &mut Vec<Rule>) {
     if run.contains('\n') {
         rules.push(Rule::MultiLineRun);
     }
+    let command = run
+        .strip_prefix(crate::helper_integrity::INVOCATION_PREFIX)
+        .unwrap_or(run);
     for word in FORBIDDEN_WORDS {
         if has_word(run, word) {
             rules.push(Rule::ForbiddenSyntax(word));
         }
     }
     for symbol in FORBIDDEN_SYMBOLS {
-        if run.contains(symbol) {
+        if command.contains(symbol) {
             rules.push(Rule::ForbiddenSyntax(symbol));
         }
     }
@@ -287,6 +376,12 @@ fn has_word(run: &str, word: &str) -> bool {
 }
 
 fn action_rules(uses: &str, rules: &mut Vec<Rule>) {
+    if uses.starts_with("./") {
+        if velnor_workflows::LocalAction::parse(uses).is_none() {
+            rules.push(Rule::ActionNotAllowed(uses.to_owned()));
+        }
+        return;
+    }
     let (action, reference) = uses.split_once('@').unwrap_or((uses, ""));
     if !ALLOWED_ACTIONS.contains(&action) {
         rules.push(Rule::ActionNotAllowed(action.to_owned()));
@@ -295,7 +390,9 @@ fn action_rules(uses: &str, rules: &mut Vec<Rule>) {
         && reference
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if !pinned {
+    if pinned {
+        pin_rules(action, reference, rules);
+    } else {
         rules.push(Rule::ActionNotPinned(uses.to_owned()));
     }
 }

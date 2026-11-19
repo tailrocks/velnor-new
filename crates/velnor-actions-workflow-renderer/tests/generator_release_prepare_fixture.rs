@@ -1,15 +1,14 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use serde_json::json;
+use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-
-use serde_json::json;
-use sha2::{Digest, Sha256};
 use tempfile::TempDir;
 use velnor_actions_contract::RoutingWorkflow;
 use velnor_actions_workflow_renderer::render::RenderedFile;
@@ -22,11 +21,10 @@ use velnor_actions_workflow_renderer::setup::MiseSetup;
 #[path = "generator_release_prepare_fixture/fixture_pins.rs"]
 mod fixture_pins;
 
-#[path = "generator_release_prepare_fixture/interpreter.rs"]
-mod interpreter;
-
 #[path = "generator_release_prepare_fixture/extract.rs"]
 mod extract;
+#[path = "generator_release_prepare_fixture/interpreter.rs"]
+mod interpreter;
 use extract::extract_prepare_script;
 
 const SOURCE_SHA: &str = "a97f3c482da31b6f91f83e28c4dca0217e5b6930";
@@ -158,7 +156,9 @@ impl Fixture {
 
 fn request(fake_gh: &Path) -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: "1".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -181,7 +181,17 @@ fn pins(fake_gh: &Path) -> ProductReleasePins {
         macos_x86_64_setup: setup,
         install_gate_tools_argv: fixture_pins::command_argv(),
         install_build_tools_argv: fixture_pins::command_argv(),
-        install_qualify_tools_argv: fixture_pins::command_argv(),
+        install_qualify_tools_argv: [
+            "mise",
+            "install",
+            "rust@1.91.0",
+            "bun@1.4.4",
+            "jactionlint@2.103.2",
+            "shellcheck@0.11.0",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         qualify_mbx_action_steps: std::array::from_fn(|_| fixture_pins::fixture_step()),
         install_runner_build_tools_argv: fixture_pins::command_argv(),
         install_gh_argv: fixture_pins::command_argv(),
@@ -216,6 +226,8 @@ fn pins(fake_gh: &Path) -> ProductReleasePins {
         ],
         mr_boxington_version: "${VELNOR_TOOL_MR_BOXINGTON}".to_owned(),
         gh_version: GH_VERSION.to_owned(),
+        bun_version: "1.4.4".to_owned(),
+        runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig::default(),
     }
 }
 

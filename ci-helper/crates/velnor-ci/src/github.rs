@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -12,6 +13,7 @@ pub trait GitHub {
 }
 
 pub trait GitHubWrite: GitHub {
+    fn wait(&self, duration: Duration);
     fn upload(&self, url: &str, bytes: &[u8]) -> Result<String, CiError>;
     fn patch(&self, path: &str, json: &str) -> Result<String, CiError>;
     fn delete(&self, path: &str) -> Result<(), CiError>;
@@ -107,6 +109,9 @@ pub struct ApiRule {
     #[serde(rename = "type")]
     pub kind: String,
     pub parameters: Option<ApiRuleParameters>,
+    pub ruleset_id: Option<u64>,
+    pub ruleset_source: Option<String>,
+    pub ruleset_source_type: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -145,6 +150,8 @@ pub struct ApiPage<T> {
         rename = "items",
         alias = "workflow_runs",
         alias = "jobs",
+        alias = "check_runs",
+        alias = "check_suites",
         alias = "statuses"
     )]
     pub items: Vec<T>,
@@ -158,6 +165,14 @@ pub struct ApiWorkflowRun {
     pub head_branch: Option<String>,
     pub head_sha: String,
     pub head_repository: Option<ApiRepoId>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ApiMergeGroupRun {
+    pub event: String,
+    pub status: String,
+    pub head_sha: String,
+    pub conclusion: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -225,11 +240,6 @@ pub fn tag_ref_path(repo: &Repo, tag: &str) -> String {
 }
 
 #[must_use]
-pub fn release_by_tag_path(repo: &Repo, tag: &str) -> String {
-    format!("/repos/{repo}/releases/tags/{}", encode(tag))
-}
-
-#[must_use]
 pub fn tag_object_path(repo: &Repo, sha: &str) -> String {
     format!("/repos/{repo}/git/tags/{sha}")
 }
@@ -256,6 +266,15 @@ pub fn statuses_path(repo: &Repo, sha: &str, page: u32) -> String {
 pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
     format!(
         "/repos/{repo}/actions/runs?head_sha={sha}&exclude_pull_requests=true&per_page=100&page={page}"
+    )
+}
+
+#[must_use]
+pub fn merge_group_runs_path(repo: &Repo, workflow_file: &str, sha: &str) -> String {
+    format!(
+        "/repos/{repo}/actions/workflows/{}/runs?head_sha={}&event=merge_group&status=success&per_page=100",
+        encode(workflow_file),
+        encode(sha)
     )
 }
 

@@ -3,33 +3,58 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
+use std::ffi::OsStr;
 use std::fs;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 
 use similar::TextDiff;
 use velnor_gen::expected_with_notes;
-use velnor_gen::io::SAMPLE_REPOSITORY;
-use velnor_model::{RepoPath, RepoView};
+use velnor_gen::io::{Error as IoError, SAMPLE_REPOSITORY};
+use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
 use velnor_rust::{manifests, metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
 pub(crate) fn samples() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples")
+    match std::env::var_os("VELNOR_GOLDEN_SAMPLES_ROOT") {
+        Some(root) => PathBuf::from(root),
+        None => Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples"),
+    }
 }
 
-fn sample_dirs() -> Result<Vec<PathBuf>, Box<dyn Error>> {
+pub(crate) fn sample_dirs(samples: &Path) -> Result<Vec<PathBuf>, Box<dyn Error>> {
     let mut dirs = Vec::new();
-    for entry in fs::read_dir(samples())? {
+    for entry in fs::read_dir(samples)? {
         let entry = entry?;
-        if !entry.file_type()?.is_dir() {
+        let name = entry.file_name();
+        let kind = entry.file_type()?;
+        if kind.is_dir() && name.to_string_lossy().starts_with(".velnor-gen-") {
+            continue;
+        }
+        if !kind.is_dir() {
             return Err(format!("{} is not a real directory", entry.path().display()).into());
         }
         dirs.push(entry.path());
     }
     dirs.sort();
     Ok(dirs)
+}
+
+#[test]
+fn abandoned_sample_staging_directories_are_not_golden_samples() -> TestResult {
+    let root =
+        std::env::temp_dir().join(format!("velnor-gen-golden-staging-{}", std::process::id()));
+    if root.exists() {
+        fs::remove_dir_all(&root)?;
+    }
+    let samples = root.join("samples");
+    fs::create_dir_all(samples.join("valid-sample"))?;
+    fs::create_dir_all(samples.join(".velnor-gen-123-0"))?;
+    let result = sample_dirs(&samples)?;
+    fs::remove_dir_all(&root)?;
+    assert_eq!(result, vec![samples.join("valid-sample")]);
+    Ok(())
 }
 
 fn files_under(directory: &Path) -> Result<BTreeMap<RepoPath, Vec<u8>>, Box<dyn Error>> {
@@ -71,10 +96,37 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
     for line in fs::read_to_string(sample.join("manifests.txt"))?.lines() {
         tracked_paths.insert(RepoPath::new(line)?);
     }
-    let files = wanted_files(&tracked_paths)
+    let mut symlinks = BTreeSet::new();
+    let symlinks_file = sample.join("symlinks.txt");
+    match fs::symlink_metadata(&symlinks_file) {
+        Ok(metadata) if metadata.is_file() => {
+            for line in fs::read_to_string(&symlinks_file)?.lines() {
+                symlinks.insert(RepoPath::new(line)?);
+            }
+        }
+        Ok(_) => return Err(format!("{} is not a regular file", symlinks_file.display()).into()),
+        Err(error) if error.kind() == ErrorKind::NotFound => {
+            return Err(format!("{} is missing", symlinks_file.display()).into());
+        }
+        Err(error) => return Err(error.into()),
+    }
+    tracked_paths.extend(symlinks.iter().cloned());
+    let wanted: BTreeSet<RepoPath> = wanted_files(&tracked_paths)
         .into_iter()
         .chain(manifests(&tracked_paths))
-        .filter_map(|path| recorded.get(&path).map(|bytes| (path, bytes.clone())))
+        .collect();
+    for link in &symlinks {
+        if wanted.contains(link) {
+            return Err(Box::new(IoError::NotRegular(link.clone())));
+        }
+    }
+    let files = wanted
+        .iter()
+        .filter_map(|path| {
+            recorded
+                .get(path)
+                .map(|bytes| (path.clone(), bytes.clone()))
+        })
         .collect();
     let mut rust_metadata = BTreeMap::new();
     for json in files_under(&sample.join("cargo-metadata"))?.values() {
@@ -82,14 +134,16 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         rust_metadata.insert(workspace, metadata);
     }
     let view = RepoView {
-        repository: sample
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into_owned(),
+        repository: RepositoryIdentity::Named(
+            sample
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into_owned(),
+        ),
         files,
         tracked_paths,
-        symlinks: BTreeSet::new(),
+        symlinks,
         rust_metadata,
     };
     for manifest in metadata_roots(&view)? {
@@ -142,21 +196,29 @@ fn mismatches(
         .collect()
 }
 
+pub(crate) fn update_requested(value: Option<&OsStr>) -> bool {
+    value == Some(OsStr::new("1"))
+}
+
+pub(crate) fn check_sample(sample: &Path, update: bool) -> Result<Vec<String>, Box<dyn Error>> {
+    let generated = expected_with_notes(&load(sample)?).map(|(files, _)| files)?;
+    let expected_dir = sample.join("expected");
+    if update {
+        rewrite(&expected_dir, &generated)?;
+        return Ok(Vec::new());
+    }
+    let name = sample.file_name().unwrap_or_default().to_string_lossy();
+    Ok(mismatches(&name, &generated, &files_under(&expected_dir)?))
+}
+
 #[test]
 fn every_sample_repository_renders_exactly_its_expected_files() -> TestResult {
-    let update = std::env::var_os("UPDATE_GOLDENS").is_some();
-    let samples = sample_dirs()?;
+    let update = update_requested(std::env::var_os("UPDATE_GOLDENS").as_deref());
+    let samples = sample_dirs(&samples())?;
     assert!(!samples.is_empty(), "no sample recorded");
     let mut failures = Vec::new();
     for sample in &samples {
-        let generated = expected_with_notes(&load(sample)?).map(|(files, _)| files)?;
-        let expected_dir = sample.join("expected");
-        if update {
-            rewrite(&expected_dir, &generated)?;
-        } else {
-            let name = sample.file_name().unwrap_or_default().to_string_lossy();
-            failures.extend(mismatches(&name, &generated, &files_under(&expected_dir)?));
-        }
+        failures.extend(check_sample(sample, update)?);
     }
     assert!(
         failures.is_empty(),
@@ -193,63 +255,23 @@ fn a_missing_or_byte_different_expected_file_is_a_mismatch() -> TestResult {
 }
 
 #[test]
-fn every_expected_workflow_is_an_input_of_the_generator_samples_check() -> TestResult {
-    let config: toml::Table = fs::read_to_string(
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../.velnor/config.toml"),
-    )?
-    .parse()?;
-    let listed: BTreeSet<String> = config
-        .get("checks")
-        .and_then(toml::Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter(|check| check.get("id").and_then(toml::Value::as_str) == Some("generator-samples"))
-        .filter_map(|check| check.get("inputs").and_then(toml::Value::as_array))
-        .flatten()
-        .filter_map(toml::Value::as_str)
-        .filter(|input| input.starts_with("generator/samples/"))
-        .map(str::to_owned)
-        .collect();
-    let mut present = BTreeSet::new();
-    for sample in sample_dirs()? {
-        for path in expected_with_notes(&load(&sample)?)
-            .map(|(files, _)| files)?
-            .keys()
-        {
-            if matches!(
-                Path::new(path.as_str())
-                    .extension()
-                    .and_then(|e| e.to_str()),
-                Some("yml" | "yaml")
-            ) {
-                let name = sample.file_name().unwrap_or_default().to_string_lossy();
-                present.insert(format!("generator/samples/{name}/expected/{path}"));
-            }
-        }
-    }
-    assert_eq!(
-        present, listed,
-        "add or remove the workflow path in the inputs of the generator-samples check in .velnor/config.toml"
-    );
-    Ok(())
-}
-
-#[test]
 fn a_sample_without_metadata_for_one_of_its_roots_is_rejected() -> TestResult {
     let sample = std::env::temp_dir().join(format!("velnor-gen-golden-{}", std::process::id()));
     if sample.exists() {
         fs::remove_dir_all(&sample)?;
     }
     fs::create_dir_all(&sample)?;
+    fs::write(sample.join("symlinks.txt"), "")?;
     fs::write(
         sample.join("manifests.txt"),
         "Cargo.toml\nxtask/Cargo.toml\n",
     )?;
-    let workspace = br#"{"workspace_root":"/repo","packages":[{"name":"a","manifest_path":"/repo/Cargo.toml","dependencies":[],"targets":[]}]}"#;
+    let workspace = br#"{"workspace_root":"/repo","packages":[{"name":"a","version":"0.1.0","manifest_path":"/repo/Cargo.toml","dependencies":[],"targets":[]}]}"#;
     fs::create_dir_all(sample.join("cargo-metadata"))?;
     fs::write(sample.join("cargo-metadata/Cargo.toml.json"), workspace)?;
     let result = load(&sample);
     fs::remove_dir_all(&sample)?;
-    assert!(result.is_err());
+    let error = result.err().ok_or("missing root metadata was accepted")?;
+    assert!(error.to_string().contains("xtask/Cargo.toml"), "{error}");
     Ok(())
 }

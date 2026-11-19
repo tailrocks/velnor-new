@@ -100,7 +100,9 @@ pub use lanes::{
     HOSTED_SUFFIX, LANE_INVENTORY_ENV, LaneClass, LaneInventory, LanePlan, LaneRoute, LaneVariant,
     NAMED_CHECK_JOB_ID_ENV, NAMED_CHECK_LANE_VARIANT_ENV, NAMED_CHECK_LANES_ENV, NamedCheckLane,
     SCALE_SUFFIX, WorkflowExpansion, expand_workflow_with_lane_plan,
-    expand_workflow_with_task_bindings, lane_class, named_check_lanes,
+    expand_workflow_with_task_bindings, fork_fenced_condition,
+    fork_fenced_condition_admitting_dispatch, is_renderer_added_control_job, lane_class,
+    named_check_lanes, scale_set_control_jobs, scale_set_support_jobs,
 };
 pub use needs::{
     NEEDS_CHANNEL_ENV, NEEDS_CHANNEL_EXPRESSION, NEEDS_EXPECTED_ENV, NeedsConclusions,

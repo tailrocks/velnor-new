@@ -14,6 +14,10 @@ use crate::detect::metadata_roots;
 use crate::lock::{LOCK_PATH, parse_lock};
 use crate::sha256::sha256_hex;
 
+mod recorded;
+
+pub use recorded::{recorded_members, recorded_roots, recorded_target_dirs};
+
 pub const METADATA_PATH: RepoPath = RepoPath::from_static(".velnor/rust-metadata.json");
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -59,6 +63,8 @@ struct File {
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Root {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    target_dir: Option<String>,
     members: Vec<Member>,
 }
 
@@ -83,6 +89,8 @@ struct Edge {
     features: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     platform: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    optional: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     rename: Option<String>,
 }
@@ -130,15 +138,18 @@ fn dependency_name(kind: DependencyKind) -> &'static str {
 
 pub const VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
 
-fn records_versions(view: &RepoView) -> bool {
+const TARGET_DIR_HELPER: (u64, u64, u64) = (0, 1, 85);
+
+fn pin_at_least(view: &RepoView, minimum: (u64, u64, u64)) -> bool {
     view.files
         .get(&LOCK_PATH)
         .and_then(|bytes| parse_lock(bytes).ok())
-        .is_some_and(|helper| helper.version().at_least(VERSIONS_HELPER))
+        .is_some_and(|helper| helper.version().at_least(minimum))
 }
 
 pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
-    let versions = records_versions(view);
+    let versions = pin_at_least(view, VERSIONS_HELPER);
+    let records_target_dir = pin_at_least(view, TARGET_DIR_HELPER);
     let mut manifests = BTreeMap::new();
     let mut roots = BTreeMap::new();
     for (workspace, metadata) in &view.rust_metadata {
@@ -149,9 +160,17 @@ pub fn metadata_file(view: &RepoView) -> Result<String, MetadataFileError> {
                 .ok_or_else(|| MetadataFileError::Changed(path.clone()))?;
             manifests.insert(path.to_string(), sha256_hex(bytes));
         }
+        let target_dir = if records_target_dir {
+            let dir = crate::target_dir::target_dir(view, workspace)
+                .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
+            Some(dir.to_string())
+        } else {
+            None
+        };
         roots.insert(
             workspace.to_string(),
             Root {
+                target_dir,
                 members: metadata
                     .members
                     .iter()
@@ -184,6 +203,7 @@ fn member(package: &RustPackage, versions: bool) -> Member {
                 manifest: dependency.manifest.as_ref().map(ToString::to_string),
                 features: dependency.features.clone(),
                 platform: dependency.platform.clone(),
+                optional: dependency.optional,
                 rename: dependency.rename.clone(),
             })
             .collect(),
@@ -211,7 +231,7 @@ pub fn recorded_metadata(
     recorded: Option<&[u8]>,
 ) -> Result<BTreeMap<RepoPath, RustMetadata>, MetadataFileError> {
     let bytes = recorded.ok_or(MetadataFileError::Missing)?;
-    let versions = records_versions(view);
+    let versions = pin_at_least(view, VERSIONS_HELPER);
     let file: File = serde_json::from_slice(bytes)
         .map_err(|error| MetadataFileError::Unreadable(error.to_string()))?;
     for (path, digest) in &file.manifests {
@@ -324,6 +344,7 @@ fn package(member: Member, versions: bool) -> Result<RustPackage, MetadataFileEr
                     manifest: edge.manifest.as_deref().map(path_of).transpose()?,
                     features: edge.features,
                     platform: edge.platform,
+                    optional: edge.optional,
                     rename: edge.rename,
                 })
             })

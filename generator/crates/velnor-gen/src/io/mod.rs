@@ -20,6 +20,7 @@ mod check;
 mod error;
 mod identity;
 mod pin;
+pub use identity::repository_name;
 mod recorded;
 mod ruleset;
 mod sample;
@@ -35,8 +36,8 @@ use pin::pin_helper;
 pub use pin::write_lock;
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, record_sample, recorded_files, recording_of,
-    relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
+    recording_of, relocate_metadata, write_sample,
 };
 use tracked::tracked;
 use workflows::{ENGINE_CONFIG, workflow_paths};
@@ -96,8 +97,16 @@ pub fn main() -> Exit {
     match &cli.command {
         Command::RecordSample { checkout, name } => {
             return finish(
-                record_sample(&cli.root, checkout, name)
-                    .map(|()| format!("recorded {SAMPLES}/{name}")),
+                record_sample(&cli.root, checkout, name).map(|outcome| match outcome {
+                    SampleWriteOutcome::Recorded => format!("recorded {SAMPLES}/{name}"),
+                    SampleWriteOutcome::RecordedWithCleanupFailure {
+                        staging_path,
+                        error,
+                    } => format!(
+                        "recorded {SAMPLES}/{name}; cleanup failed for {}: {error}",
+                        staging_path.display()
+                    ),
+                }),
             );
         }
         Command::PinHelper { version } => return finish(pin_helper(&cli.root, version)),
@@ -106,6 +115,7 @@ pub fn main() -> Exit {
         Command::Release(ReleaseCommand::RulesetDrift { live }) => {
             return ruleset::drift(&cli.root, live);
         }
+        Command::SuggestGroups => return suggest(&cli.root),
         Command::Generate | Command::Check => {}
     }
     match execute(&cli) {
@@ -126,6 +136,31 @@ pub fn main() -> Exit {
                     Drift::Stale(path) => println!("removed {path}"),
                     Drift::Foreign(path) | Drift::Unmarked(path) => println!("kept {path}"),
                 }
+            }
+            Exit::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("velnor-gen: {error}");
+            Exit::from(2)
+        }
+    }
+}
+
+fn suggest(path: &Path) -> Exit {
+    let result = toplevel(path)
+        .and_then(|root| read_view(&root, false))
+        .and_then(|(view, _)| crate::suggest_groups(&view).map_err(Error::Generate));
+    match result {
+        Ok((text, notes)) => {
+            for note in notes {
+                eprintln!("velnor-gen: {note}");
+            }
+            if text.is_empty() {
+                eprintln!(
+                    "velnor-gen: no test binary takes more than a third of its root's test time"
+                );
+            } else {
+                print!("{text}");
             }
             Exit::SUCCESS
         }
@@ -238,14 +273,24 @@ pub fn read_checkout(path: &Path) -> Result<Checkout, Error> {
 
 type Recorded = (RepoView, BTreeMap<RepoPath, Vec<u8>>);
 
+fn is_rust_source(path: &str) -> bool {
+    Path::new(path)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("rs"))
+}
+
 fn view_from(
     root: &Path,
     tracked_paths: BTreeSet<RepoPath>,
     symlinks: BTreeSet<RepoPath>,
 ) -> Result<RepoView, Error> {
+    let wanted: Vec<RepoPath> = wanted_files(&tracked_paths)
+        .into_iter()
+        .filter(|path| !(symlinks.contains(path) && is_rust_source(path.as_str())))
+        .collect();
     Ok(RepoView {
         repository: identity::repository_name(root),
-        files: read_files(root, &wanted_files(&tracked_paths))?,
+        files: read_files(root, &wanted)?,
         tracked_paths,
         symlinks,
         rust_metadata: BTreeMap::new(),
@@ -287,11 +332,8 @@ pub fn view_of(
     let roots: Vec<RepoPath> = view.rust_metadata.keys().cloned().collect();
     view.files.extend(read_files(root, &roots)?);
     for source in build_script_sources(&view) {
-        match read_files(root, std::slice::from_ref(&source)) {
-            Ok(files) => view.files.extend(files),
-            Err(Error::NotRegular(_)) => {}
-            Err(error) => return Err(error),
-        }
+        view.files
+            .extend(read_files(root, std::slice::from_ref(&source))?);
     }
     add_manifests(&mut view, |paths| read_files(root, paths))?;
     Ok((view, recorded))

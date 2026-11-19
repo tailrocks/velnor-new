@@ -10,11 +10,10 @@ use serde_json::{Value, json};
 use tokio::fs;
 use tokio::sync::Mutex;
 
+use super::Body;
 use super::git::Git;
-use super::reply::{Reply, response, text_response};
-use super::{
-    Body, lock_index, now, read_index, recover_tombstones, remove_if_present, write_index,
-};
+use super::local_setup;
+use super::reply::{Reply, gzip_response, redirect, response, text_response};
 use crate::rest::{
     self, Api, COMPARE_COMMITS_DEFAULT, COMPARE_FILES_CAP, CONTENTS_LIMIT_BYTES, Commit,
     Comparison, DEFAULT_PER_PAGE, DIRECTORY_LIMIT, MAX_PER_PAGE, PULL_FILES_CAP, Page, Site,
@@ -22,6 +21,7 @@ use crate::rest::{
 };
 
 mod actions;
+mod caches;
 
 pub use actions::{Answer, HttpStandIn, StandIn};
 
@@ -35,6 +35,14 @@ pub struct ApiStubConfig {
     pub default_branch: String,
     pub diff_limit_bytes: usize,
     pub standin: Option<std::sync::Arc<dyn StandIn>>,
+    pub local_setup: bool,
+    /// Grant every job the cache list and delete, whatever it carries. Without it only a job
+    /// with a signed grant gets them (see `token_key`), and the control port always does.
+    pub job_cache_admin: bool,
+    /// Public half of runner.server's token signing key. A job whose `github.token` is a grant
+    /// signed by it (`actions: write`, no pull request event) may list and delete the caches of
+    /// its repository. Without it no job is granted.
+    pub token_key: Option<Vec<u8>>,
 }
 
 #[derive(Debug)]
@@ -64,6 +72,27 @@ impl ApiStub {
     }
 
     pub async fn handle(&self, request: Request<Body>) -> Response<Body> {
+        let route = rest::route(request.method().as_str(), request.uri().path());
+        if matches!(route, Api::CacheList | Api::CacheDelete { .. })
+            && !self.job_may_administer(&request)
+        {
+            return super::json_response(
+                403,
+                &json!({"message": "cache administration needs a job with actions: write on an event that is not a pull request"}),
+            );
+        }
+        self.dispatch(request, route).await
+    }
+
+    pub async fn handle_control(&self, token: &str, request: Request<Body>) -> Response<Body> {
+        super::guarded(token, request, |request| async move {
+            let route = rest::route(request.method().as_str(), request.uri().path());
+            self.dispatch(request, route).await
+        })
+        .await
+    }
+
+    async fn dispatch(&self, request: Request<Body>, route: Api) -> Response<Body> {
         let method = request.method().as_str().to_owned();
         let path = request.uri().path().to_owned();
         let host = request
@@ -82,11 +111,13 @@ impl ApiStub {
                 repository: &repository,
             },
         };
-        let route = rest::route(&method, &path);
         if let Api::JobLog { id } = route {
             let log = self.job_log(id).await;
             eprintln!("{method} {path} {}", if log.is_some() { 200 } else { 404 });
             return log.map_or_else(|| response(Reply::missing()), text_response);
+        }
+        if let Api::Tarball { repository } = &route {
+            return self.tarball(&method, &path, repository);
         }
         let reply = match route {
             Api::PullFiles { number } => self.pull_files(&call, number).await,
@@ -97,12 +128,29 @@ impl ApiStub {
             Api::CacheDelete { id } => self.cache_delete(&call, id).await,
             Api::Run { id } => self.run(id).await,
             Api::RunJobs { id, attempt } => self.run_jobs(&call, id, attempt).await,
-            Api::JobLog { .. } | Api::NotImplemented => {
+            Api::JobLog { .. } | Api::Tarball { .. } | Api::NotImplemented => {
                 Reply::with(501, rest::not_implemented(&method, &path), None)
             }
         };
         eprintln!("{method} {path} {}", reply.status);
         response(reply)
+    }
+
+    /// The download of an action. Only `tailrocks/velnor-new` in local mode gets the local
+    /// variant of setup-velnor; every other request goes to the same GitHub URL that
+    /// runner.server hands out by default.
+    fn tarball(&self, method: &str, path: &str, repository: &str) -> Response<Body> {
+        let local =
+            self.config.local_setup && repository.eq_ignore_ascii_case(local_setup::REPOSITORY);
+        eprintln!(
+            "{method} {path} {}",
+            if local { "200 local" } else { "302" }
+        );
+        if local {
+            gzip_response(local_setup::tarball())
+        } else {
+            redirect(&format!("https://api.github.com{path}"))
+        }
     }
 
     async fn pulls(&self) -> Option<Vec<Value>> {
@@ -281,56 +329,6 @@ impl ApiStub {
         found
             .into_iter()
             .find(|candidate| candidate.path == target && candidate.kind() == "file")
-    }
-
-    async fn cache_list(&self, call: &Call<'_>) -> Reply {
-        let Ok(index) = read_index(&self.config.cache_dir).await else {
-            return Reply::with(500, json!({"message": "cache index is unreadable"}), None);
-        };
-        let listed = index.listed(call.site.repository, now());
-        let entries = rest::cache_list(&listed, &call.params);
-        let page = Page::from_query(&call.params, DEFAULT_PER_PAGE, MAX_PER_PAGE);
-        Reply::with(
-            200,
-            json!({"total_count": entries.len(), "actions_caches": page.slice(&entries)}),
-            page.link(entries.len(), call.host, call.path, &call.params),
-        )
-    }
-
-    async fn cache_delete(&self, call: &Call<'_>, id: u64) -> Reply {
-        let dir = &self.config.cache_dir;
-        let Ok(_lock) = lock_index(dir).await else {
-            return Reply::with(500, json!({"message": "cache index is locked"}), None);
-        };
-        let Ok(mut index) = read_index(dir).await else {
-            return Reply::with(500, json!({"message": "cache index is unreadable"}), None);
-        };
-        recover_tombstones(dir, &index).await;
-        let Some(record) = index.delete(call.site.repository, id) else {
-            return Reply::missing();
-        };
-        let archive = dir.join("archives").join(&record.blob);
-        let tombstone = dir
-            .join("archives")
-            .join(format!("{}.deleted", record.blob));
-        if remove_if_present(fs::rename(&archive, &tombstone).await).is_err() {
-            return Reply::with(
-                500,
-                json!({"message": "cache archive could not be removed"}),
-                None,
-            );
-        }
-        if write_index(dir, &index).await.is_err() {
-            let _ = fs::rename(&tombstone, &archive).await;
-            return Reply::with(500, json!({"message": "cache index is not writable"}), None);
-        }
-        let _ = fs::remove_file(&tombstone).await;
-        let _ = fs::remove_dir_all(dir.join("blocks").join(&record.blob)).await;
-        Reply {
-            status: 204,
-            body: None,
-            link: None,
-        }
     }
 }
 

@@ -50,6 +50,10 @@ fn run_line<'a>(step: &[&'a str]) -> &'a str {
     step.iter()
         .find_map(|line| line.trim().strip_prefix("run: "))
         .map(|run| run.trim_matches('\''))
+        .map(|run| {
+            run.split_once("\"$VELNOR_EXEC\" ")
+                .map_or(run, |(_, invocation)| invocation)
+        })
         .unwrap_or_default()
 }
 
@@ -59,11 +63,13 @@ fn the_documentation_step_builds_the_workspace_and_an_empty_selection_skips_it()
     let doc = step(&single, "Documentation");
     let condition = doc.join("\n");
     assert!(
-        condition.contains("steps.plan.outputs.rust_root_package_args != ''"),
+        condition.contains("(steps.replan.outputs.rust_root_package_args || steps.plan.outputs.rust_root_package_args) != ''"),
         "{condition}"
     );
     assert!(
-        condition.contains("steps.plan.outputs.rust_root_docs == 'run'"),
+        condition.contains(
+            "(steps.replan.outputs.rust_root_docs || steps.plan.outputs.rust_root_docs) == 'run'"
+        ),
         "{condition}"
     );
     assert!(!condition.contains("PACKAGE_ARGS"), "{condition}");
@@ -74,7 +80,7 @@ fn the_documentation_step_builds_the_workspace_and_an_empty_selection_skips_it()
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], None)?)?;
     let doc = step(&lanes, "Documentation").join("\n");
     assert!(
-        doc.contains("needs.rust-plan.outputs.rust_root_package_args != ''"),
+        doc.contains("(steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != ''"),
         "{doc}"
     );
     assert!(!doc.contains("PACKAGE_ARGS"), "{doc}");
@@ -90,7 +96,7 @@ fn nextest_builds_the_workspace_and_reads_the_filter_the_plan_selected() -> Test
     let test = step(&single, "Test");
     let joined = test.join("\n");
     assert!(
-        joined.contains("TEST_FILTER: '${{ steps.plan.outputs.rust_root_test_filter }}'"),
+        joined.contains("TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || steps.plan.outputs.rust_root_test_filter }}'"),
         "{joined}"
     );
     assert!(!joined.contains("PACKAGE_ARGS"), "{joined}");
@@ -105,14 +111,39 @@ fn nextest_builds_the_workspace_and_reads_the_filter_the_plan_selected() -> Test
 
 #[test]
 fn the_doctest_step_requires_a_doctest_only_when_the_plan_found_one() -> TestResult {
-    let mut files = view(&["Cargo.toml"], None)?;
+    let mut files = view(
+        &["lab/Cargo.toml"],
+        Some(b"skip_draft_pull_requests = true\n"),
+    )?;
     with_doctest_library(&mut files)?;
     let text = text(&files)?;
     let doctests = step(&text, "Doctests");
     assert_eq!(
         run_line(&doctests),
-        "velnor-ci run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked"
+        "run --require-doctests=$DOCTESTS_KNOWN -- velnor-ci inputs build -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics"
     );
+    assert_eq!(text.matches("cargo test --doc").count(), 1);
+    let steps: Vec<&str> = text.split("\n      - ").collect();
+    let index = steps
+        .iter()
+        .position(|body| body.contains("name: Doctests\n"))
+        .ok_or("no doctests")?;
+    let build = steps.get(index - 1).ok_or("no preparatory build")?;
+    assert!(
+        build.contains("velnor-ci inputs build -- cargo build --workspace --all-targets --locked"),
+        "{build}"
+    );
+    for line in steps[index].lines().filter(|line| {
+        line.trim_start().starts_with("if:") || line.trim_start().starts_with("working-directory:")
+    }) {
+        assert!(build.lines().any(|candidate| candidate == line), "{line}");
+    }
+    files.files.insert(
+        RepoPath::new(".velnor/rust-ci.toml")?,
+        b"full_run = \"off\"\n".to_vec(),
+    );
+    let off = self::text(&files)?;
+    assert_eq!(off.matches("cargo test --doc").count(), 1);
     Ok(())
 }
 
@@ -140,7 +171,7 @@ fn the_policy_lane_runs_each_tool_only_when_its_output_says_run() -> TestResult 
     assert!(job.contains("needs:\n      - rust-plan"), "{job}");
     assert!(
         job.contains(
-            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run')) }}'"
+            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && (needs.rust-plan.result == 'success' && (needs.rust-plan.outputs.rust_deny == 'run' || needs.rust-plan.outputs.rust_machete == 'run')) }}'"
         ),
         "{job}"
     );
@@ -160,26 +191,20 @@ fn the_policy_lane_runs_each_tool_only_when_its_output_says_run() -> TestResult 
 }
 
 #[test]
-fn a_single_job_workflow_gives_the_policy_lane_its_own_plan_step() -> TestResult {
+fn a_single_job_workflow_gives_the_policy_lane_the_rust_jobs_plan() -> TestResult {
     let mut files = view(&["Cargo.toml"], None)?;
     track(&mut files, "deny.toml", "")?;
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let text = text(&files)?;
-    let job = text
-        .lines()
-        .skip_while(|line| *line != "  policy:")
-        .skip(1)
-        .take_while(|line| line.starts_with("   "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    assert!(!job.contains("needs:"), "{job}");
-    assert!(job.contains("run: velnor-ci plan"), "{job}");
+    let job = policy_job(&text);
+    assert!(job.contains("needs:\n      - rust\n"), "{job}");
+    assert!(!job.contains(r#""$VELNOR_EXEC" plan"#), "{job}");
     let deny = step(&job, "Dependency policy").join("\n");
-    assert!(deny.contains("steps.plan.outcome == 'success'"), "{deny}");
     assert!(
-        deny.contains("steps.plan.outputs.rust_deny == 'run'"),
+        deny.contains("needs.rust.outputs.rust_deny == 'run'"),
         "{deny}"
     );
+    assert!(!deny.contains("steps.plan."), "{deny}");
     Ok(())
 }
 
@@ -210,9 +235,14 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
     track(&mut files, "deny.toml", "")?;
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let job = policy_job(&text(&files)?);
-    assert!(job.contains("velnor-ci run -- cargo-deny check"), "{job}");
     assert!(
-        job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' check"),
+        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny --config 'deny.toml' --locked check"#),
+        "{job}"
+    );
+    assert!(
+        job.contains(
+            "cargo-deny --manifest-path 'lab/Cargo.toml' --config 'deny.toml' --locked check"
+        ),
         "{job}"
     );
     Ok(())
@@ -236,22 +266,39 @@ fn lint_builds_the_whole_workspace_so_that_cargo_unifies_features_as_in_the_cach
 
 #[test]
 fn a_one_job_workflow_that_skips_drafts_still_lints_them() -> TestResult {
-    let config = b"skip_draft_pull_requests = true\n";
-    let text = text(&view(&["Cargo.toml"], Some(config))?)?;
-    let job = text
-        .lines()
-        .skip_while(|line| *line != "  rust:")
-        .skip(1)
-        .take_while(|line| line.starts_with("   "))
-        .collect::<Vec<_>>()
-        .join("\n");
-    let draft = "github.event.pull_request.draft != true";
-    assert!(
-        !job.lines().take(4).any(|line| line.contains(draft)),
-        "{job}"
-    );
-    assert!(!step(&job, "Lint").join("\n").contains(draft), "{job}");
-    assert!(step(&job, "Test").join("\n").contains(draft), "{job}");
+    for executable in ["Test", "Doctests"] {
+        let mut repo = crate::base_save::pinned("0.1.81", "skip_draft_pull_requests = true\n")?;
+        if executable == "Doctests" {
+            with_doctest_library(&mut repo)?;
+            for target in repo
+                .rust_metadata
+                .values_mut()
+                .flat_map(|metadata| &mut metadata.members)
+                .flat_map(|member| &mut member.targets)
+            {
+                target.tests = false;
+            }
+        }
+        let text = text(&repo)?;
+        let job = text
+            .lines()
+            .skip_while(|line| *line != "  rust:")
+            .skip(1)
+            .take_while(|line| line.starts_with("   "))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let draft = "github.event.pull_request.draft != true";
+        assert!(
+            !job.lines().take(4).any(|line| line.contains(draft)),
+            "{job}"
+        );
+        for name in ["Lint", "Documentation", executable] {
+            let command = step(&job, name);
+            assert!(!command.is_empty(), "no {name}: {job}");
+            let skipped = command.join("\n").contains(draft);
+            assert_eq!(skipped, name == executable, "{name}: {job}");
+        }
+    }
     Ok(())
 }
 
@@ -260,13 +307,13 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
     let config = Some(b"on_main = \"everything\"\n".as_slice());
     let single = text(&view(&["Cargo.toml"], config)?)?;
     assert_eq!(
-        single.matches("run: velnor-ci inputs audit").count(),
+        single.matches(r#""$VELNOR_EXEC" inputs audit"#).count(),
         1,
         "{single}"
     );
     let lanes = text(&view(&["Cargo.toml", "lab/Cargo.toml"], config)?)?;
     assert_eq!(
-        lanes.matches("run: velnor-ci inputs audit").count(),
+        lanes.matches(r#""$VELNOR_EXEC" inputs audit"#).count(),
         1,
         "{lanes}"
     );
@@ -274,25 +321,33 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         .split("\n  rust-inputs-audit:\n")
         .nth(1)
         .ok_or("no audit job")?
-        .split("\n  required:\n")
+        .split("\n  # jactionlint ignore=shellcheck\n  rust-trim:\n")
         .next()
         .ok_or("no audit job")?;
     assert!(
         audit.contains(
-            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'push')) }}'"
+            "if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' || github.event_name == 'push')) }}'"
         ),
         "{audit}"
     );
     assert_eq!(
         audit
-            .matches("run: velnor-ci run -- cargo build --workspace --all-targets --locked")
+            .matches(
+                r#""$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics"#
+            )
             .count(),
         2,
         "{audit}"
     );
     assert!(audit.contains("working-directory: lab"), "{audit}");
     assert!(audit.trim_end().ends_with("overwrite: true"), "{audit}");
-    assert!(audit.contains("run: velnor-ci inputs audit\n"), "{audit}");
+    assert!(
+        audit.contains(
+            r#""$VELNOR_EXEC" inputs audit'
+"#
+        ),
+        "{audit}"
+    );
     Ok(())
 }
 
@@ -302,10 +357,16 @@ fn the_multi_root_audit_job_follows_the_schedule_policy() -> TestResult {
     let scheduled = text(&view(&roots, Some(b"full_run = \"nightly\"\n".as_slice()))?)?;
     assert!(scheduled.contains("rust-inputs-audit:"), "{scheduled}");
     assert!(
-        scheduled.contains("if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && (github.event_name == 'schedule') }}'"),
+        scheduled.contains("if: '${{ (github.event_name != 'pull_request' || (startsWith(github.ref, 'refs/pull/') && github.event.pull_request.state != 'closed')) && ((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}'"),
         "{scheduled}"
     );
     let off = text(&view(&roots, Some(b"full_run = \"off\"\n".as_slice()))?)?;
-    assert!(!off.contains("inputs audit"), "{off}");
+    assert!(off.contains("rust-inputs-audit:"), "{off}");
+    assert!(
+        off.contains(
+            "((github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')) }}'"
+        ),
+        "{off}"
+    );
     Ok(())
 }

@@ -24,13 +24,18 @@ final-status-level = "flaky"
 [profile.default]
 slow-timeout = { period = "2s", terminate-after = 1 }
 
-# Tests that build a temporary repository and run real cargo or git through
-# velnor-gen. Measured locally (CARGO_BUILD_JOBS=4, warm build): 0.36 s to
-# 1.04 s each, so 10 s is about 10x the slowest.
 [[profile.ci.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_nested_toolchain::a_nested_toolchain_taken_from_a_path_is_refused_in_a_real_repository))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_ruleset_lock_version::the_ruleset_command_refuses_a_lock_version_of_a_released_member) or test(=release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository) or test(=golden_env::the_update_switch_leaves_the_expected_files_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_expected_files_when_it_is_one) or test(=golden_env::the_update_switch_leaves_the_ruleset_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_ruleset_when_it_is_one))'
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
-filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_nested_toolchain::a_nested_toolchain_taken_from_a_path_is_refused_in_a_real_repository))'
+filter = 'package(=velnor-gen) and binary(=it) and (test(=release_cargo_include::a_cargo_config_include_is_refused_in_every_form_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_key_off_the_harmless_list_is_refused_in_a_real_repository) or test(=release_cargo_include::a_cargo_config_of_harmless_keys_is_accepted_in_a_real_repository) or test(=release_symlink::a_committed_cargo_symlink_hiding_a_credential_provider_is_refused_in_a_real_repository) or test(=release_ruleset_lock_version::the_ruleset_command_refuses_a_lock_version_of_a_released_member) or test(=release_nested_toolchain::a_root_toolchain_taken_from_a_path_is_refused_in_a_real_repository) or test(=golden_env::the_update_switch_leaves_the_expected_files_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_expected_files_when_it_is_one) or test(=golden_env::the_update_switch_leaves_the_ruleset_alone_when_it_is_zero) or test(=golden_env::the_update_switch_rewrites_the_ruleset_when_it_is_one))'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them)'
+slow-timeout = { period = "10s", terminate-after = 1 }
+
+[[profile.ci.overrides]]
+filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_default_tools_and_rendered_calls_use_them)'
 slow-timeout = { period = "10s", terminate-after = 1 }

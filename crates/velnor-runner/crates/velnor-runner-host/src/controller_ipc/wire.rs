@@ -7,7 +7,7 @@ use crate::config::{ConnectionId, RepositoryConnection};
 use crate::launch::steady::PollObservation;
 use crate::readiness::Readiness;
 
-pub(super) const MAX_REQUEST_BYTES: usize = 65_536;
+pub(super) const MAX_REQUEST_BYTES: usize = crate::ipc::MAX_FRAME;
 pub(super) const SOCKET_NAME: &str = "controller.sock";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +57,15 @@ pub(super) enum Request {
         connection_id: ConnectionId,
         nonce: String,
     },
+    ScaleSetDeleteStart {
+        binding: RepositoryConnection,
+        token: String,
+        nonce: String,
+    },
+    ScaleSetDeleteStatus {
+        connection_id: ConnectionId,
+        nonce: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -69,7 +78,7 @@ pub(super) enum Target {
     },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Response {
     pub(super) value: Option<bool>,
@@ -83,6 +92,25 @@ pub(super) struct Response {
     pub(super) setup_receipt: Option<SetupReceiptReply>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) connection_census: Option<ConnectionCensusReply>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) scale_set_delete: Option<ScaleSetDeleteReply>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum ScaleSetDeleteStatus {
+    Pending,
+    Deleted,
+    NotOwned,
+    Refused { status: u16 },
+    Uncertain,
+    Stale,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct ScaleSetDeleteReply {
+    pub(super) status: ScaleSetDeleteStatus,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -208,3 +236,7 @@ impl Response {
         serde_json::from_slice(bytes).map_err(|_| ())
     }
 }
+
+#[cfg(test)]
+#[path = "wire/tests.rs"]
+mod tests;

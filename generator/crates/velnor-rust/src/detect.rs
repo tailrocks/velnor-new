@@ -3,20 +3,21 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use crate::toml_file::table;
 use velnor_model::{
-    PackageName, PolicyTools, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
-    RootSlug, RustCiConfig, RustRoot, Toolchain,
+    PackageName, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView,
+    RepositoryIdentity, RootSlug, RustCiConfig, RustRoot, Toolchain, WORKFLOWS_CONFIG_PATH,
 };
 
+use crate::build_target::{build_targets, check_host_tuple_version};
 use crate::config::{CONFIG_PATH, excluded, parse};
+use crate::embedded::is_rust_source;
 use crate::error::{DetectError, Reason};
 use crate::lock::{LOCK_PATH, parse_lock};
-use crate::mise::{MISE_CONFIGS, MISE_LOCK, tool_pins};
-use crate::os_pins::pinned_for_runner;
-use crate::policy::DENY_CONFIG;
-use crate::reads::{INPUTS_LOCK, parse_inputs_lock};
-use crate::roots::{CARGO_LOCK, is_cargo_config, rust_roots};
+use crate::mise::{MISE_CONFIGS, MISE_LOCK};
+use crate::policy::{deny_configs, policy_tools};
+use crate::private_sources::{private_suggestion, refuse_locked_credentials};
+use crate::reads::INPUTS_LOCK;
+use crate::roots::{CARGO_LOCK, is_cargo_config, is_cargo_lock, rust_roots};
 use crate::timings::{TIMINGS_PATH, usable_timings};
 use crate::toolchain::{TOOLCHAIN_PLAIN, TOOLCHAIN_TOML, toolchain};
 use crate::unowned::unowned;
@@ -30,6 +31,7 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     [
         CONFIG_PATH,
         RELEASE_CONFIG_PATH,
+        WORKFLOWS_CONFIG_PATH,
         LOCK_PATH,
         INPUTS_LOCK,
         TIMINGS_PATH,
@@ -43,7 +45,12 @@ pub fn wanted_files(tracked: &BTreeSet<RepoPath>) -> Vec<RepoPath> {
     .chain(
         tracked
             .iter()
-            .filter(|path| is_cargo_config(path) || is_nextest_config(path))
+            .filter(|path| {
+                is_cargo_config(path)
+                    || is_nextest_config(path)
+                    || is_cargo_lock(path)
+                    || is_rust_source(path)
+            })
             .cloned(),
     )
     .chain(
@@ -111,10 +118,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
             });
         }
     }
-    let compile_inputs = view
-        .files
-        .get(&INPUTS_LOCK)
-        .map_or_else(|| Ok(BTreeMap::new()), |bytes| parse_inputs_lock(bytes))?;
+    let compile_inputs = crate::embedded::locked_and_embedded(view, &rust_roots)?;
     let named = config.inputs.iter().flat_map(|input| &input.packages);
     if let Some(package) = unknown_package(&rust_roots, named) {
         return Err(DetectError::invalid(
@@ -130,10 +134,11 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     }
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
+    crate::config_test_groups::check_tests(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
-    let tools = tool_pins(&view.files)?;
+    let tools = crate::config_lint::pinned_tools(view, &config)?;
     check_setup_files(view, &rust_roots)?;
-    check_build_targets(view, toolchain.as_ref())?;
+    check_build_targets(view, &rust_roots, toolchain.as_ref(), &tools)?;
     let helper = view
         .files
         .get(&LOCK_PATH)
@@ -142,14 +147,32 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
+    if config.helper.is_some()
+        && !helper
+            .as_ref()
+            .is_some_and(|release| release.version().at_least((0, 1, 81)))
+    {
+        return Err(DetectError::invalid(
+            &LOCK_PATH,
+            Reason::HelperSourceRelease,
+        ));
+    }
+    refuse_locked_credentials(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
-    let policy = policy_tools(view, config.runner.as_str())?;
+    let deny_configs = deny_configs(view, &rust_roots);
+    let policy = policy_tools(view, &deny_configs, config.runner.as_str())?;
     let weakenings = weakenings(&view.files, &rust_roots);
+    let private_sources = crate::config_cache::private_sources(view, &rust_roots, &config)?;
+    let repository = repository_identity(view, &config)?;
     Ok(RepoFacts {
         policy,
-        repository: view.repository.clone(),
+        deny_configs,
+        repository,
         timings,
         timings_notes,
+        private_sources,
+        private_suggestion: private_suggestion(view, &config, &rust_roots),
+        weakenings,
         rust_roots,
         toolchain,
         tools,
@@ -157,29 +180,16 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
         helper,
         compile_inputs,
         unowned,
-        weakenings,
     })
 }
 
-const DENY_TOOL: &str = "cargo-deny";
-
-fn policy_tools(view: &RepoView, runner: &str) -> Result<PolicyTools, DetectError> {
-    let pinned = |tool: &str| pinned_for_runner(&view.files, |name| is_tool(name, tool), runner);
-    let deny = view.tracked_paths.contains(&DENY_CONFIG);
-    if deny && !pinned(DENY_TOOL) {
-        return Err(DetectError::invalid(
-            &DENY_CONFIG,
-            Reason::UnpinnedTool(DENY_TOOL),
-        ));
+fn repository_identity(view: &RepoView, config: &RustCiConfig) -> Result<String, DetectError> {
+    let hashed = config.full_run.is_hashed();
+    match &view.repository {
+        RepositoryIdentity::Named(name) if hashed => Ok(name.clone()),
+        RepositoryIdentity::Unhosted if hashed => Err(DetectError::UnhostedOrigin),
+        _ => Ok(String::new()),
     }
-    Ok(PolicyTools {
-        deny,
-        machete: pinned("cargo-machete"),
-    })
-}
-
-fn is_tool(name: &str, tool: &str) -> bool {
-    name.rsplit(['/', ':']).next() == Some(tool)
 }
 
 fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<(), DetectError> {
@@ -198,32 +208,30 @@ fn check_helper_box(config: &RustCiConfig, rust_roots: &[RustRoot]) -> Result<()
             &CONFIG_PATH,
             Reason::HelperBox(path.clone()),
         )),
-        Some(root) if root.sets_build_target => Err(DetectError::invalid(
-            &CONFIG_PATH,
-            Reason::HelperTarget(path.clone()),
-        )),
         Some(_) => Ok(()),
     }
 }
 
-fn check_build_targets(view: &RepoView, toolchain: Option<&Toolchain>) -> Result<(), DetectError> {
+fn check_build_targets(
+    view: &RepoView,
+    rust_roots: &[RustRoot],
+    toolchain: Option<&Toolchain>,
+    tools: &velnor_model::ToolPins,
+) -> Result<(), DetectError> {
     let declared: Vec<&String> = toolchain.into_iter().flat_map(|t| &t.targets).collect();
-    for (file, bytes) in view.files.iter().filter(|(path, _)| is_cargo_config(path)) {
-        let parsed = table(bytes).map_err(|reason| DetectError::invalid(file, reason))?;
-        let target = parsed.get("build").and_then(|build| build.get("target"));
-        let named: Vec<String> = match target {
-            Some(toml::Value::String(one)) => vec![one.clone()],
-            Some(toml::Value::Array(many)) => many
-                .iter()
-                .map(|item| item.as_str().unwrap_or_default().to_owned())
-                .collect(),
-            _ => Vec::new(),
-        };
-        if let Some(missing) = named.into_iter().find(|name| !declared.contains(&name)) {
-            return Err(DetectError::invalid(
-                file,
-                Reason::UndeclaredTarget(missing),
-            ));
+    let rust_version = crate::mise::rust_tool(tools)
+        .and_then(|name| tools.tools.get(name))
+        .and_then(|pin| pin.requested.first())
+        .map(String::as_str)
+        .or(toolchain.and_then(|pinned| pinned.channel.as_deref().or(pinned.path.as_deref())))
+        .unwrap_or("an unspecified Rust toolchain");
+    for root in rust_roots {
+        check_host_tuple_version(view, &root.manifest, rust_version)?;
+        let missing = build_targets(view, &root.manifest)?
+            .into_iter()
+            .find(|(_, name)| !declared.contains(&name));
+        if let Some((file, name)) = missing {
+            return Err(DetectError::invalid(&file, Reason::UndeclaredTarget(name)));
         }
     }
     Ok(())
@@ -265,7 +273,7 @@ fn check_setup_files(view: &RepoView, rust_roots: &[RustRoot]) -> Result<(), Det
     Ok(())
 }
 
-const MISE_FOLDERS: [&str; 3] = [".config/", ".mise/", "mise/"];
+const MISE_FOLDERS: [&str; 5] = [".config/", ".mise/", "mise/", "rtx/", ".rtx/"];
 
 fn other_mise_config(path: &RepoPath) -> bool {
     let text = path.as_str();
@@ -273,9 +281,10 @@ fn other_mise_config(path: &RepoPath) -> bool {
         .extension()
         .is_some_and(|extension| extension.eq_ignore_ascii_case("toml"));
     let named = |name: &str| {
-        ["mise", ".mise", "rtx", ".rtx"]
-            .iter()
-            .any(|prefix| name.starts_with(prefix))
+        ["mise", ".mise", "rtx", ".rtx"].iter().any(|prefix| {
+            name.strip_prefix(prefix)
+                .is_some_and(|rest| rest.starts_with(['.', '/']))
+        })
     };
     let at_root = !text.contains('/') && named(text) && toml;
     let in_folder = MISE_FOLDERS.iter().any(|folder| {

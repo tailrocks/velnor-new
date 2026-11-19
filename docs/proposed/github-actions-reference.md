@@ -26,8 +26,16 @@ When designing workflows in the Velnor V1 generator or implementing runner infra
 - **Reference Areas**:
   - Scale set message protocol and session acquisition contracts (`JobMessageBase` in `types.go` deprecates `runnerRequestId` and sets `runnerRequestId: 0` on current `JobAvailable`, `JobAssigned`, `JobStarted`, and `JobCompleted` messages; because a job can be reassigned to a scale set up to three times with a new `scaleSetAssignTime` / `requestAssignedTime`, `velnor-runner-github` derives the positive synthetic `request_id` for `runnerRequestId: 0` from `jobId` plus the non-zero `scaleSetAssignTime` or `requestAssignedTime`).
   - The pinned [client.go](https://github.com/actions/scaleset/blob/716908e507993947ada4273aecf2361c02e5836c/client.go#L348-L405) joins API paths to the Actions service URL and sends the paired admin token as a bearer credential. Its [refresh path](https://github.com/actions/scaleset/blob/716908e507993947ada4273aecf2361c02e5836c/client.go#L1136-L1159) replaces the URL and token together. Velnor preserves service URL paths and accepts HTTPS URLs without user information.
+  - Scale set and session deletion (`journal` created-set delete, `delete_runner_scale_set`, `delete_session`). The pinned [`DeleteRunnerScaleSet`](https://github.com/actions/scaleset/blob/716908e507993947ada4273aecf2361c02e5836c/client.go#L656-L674) issues `DELETE /_apis/runtime/runnerscalesets/{id}` with `api-version=6.0-preview` (added by `newActionsServiceRequest`) and treats only `204 No Content` as success. The pinned [`MessageSessionClient.Close`](https://github.com/actions/scaleset/blob/716908e507993947ada4273aecf2361c02e5836c/session_client.go#L39-L42) and `deleteMessageSession` issue `DELETE /_apis/runtime/runnerscalesets/{id}/sessions/{sessionId}` and also accept only `204`. The upstream source does not define any other status: Velnor therefore counts only `204` as a delete, never trusts a bare `404` for the scale set (it requires a by-id miss and an absent listing in the runner group before recording `deleted`), records `400/401/403/409/422` as a definite refusal that left the set in place, and treats every other answer as uncertain. A `404` on a session delete is accepted as already gone only when the journal shows Velnor itself deleted the set that held the session. This is a Velnor decision, not upstream behavior.
   - Ephemeral runner lifecycles, graceful teardown, and runner pool auto-scaling contracts.
   - Compatibility with GitHub Enterprise Server and GitHub.com scale set endpoints.
+
+### Organization scale-set registration
+
+- The actions/scaleset client registers with `POST /actions/runner-registration` carrying the `url` of the registration scope and a registration token; GitHub documents the organization token as `POST /orgs/{org}/actions/runners/registration-token` and the repository token as `POST /repos/{owner}/{repo}/actions/runners/registration-token`. For an organization binding, `velnor-runner-host` sends `url=https://github.com/{org}` and uses the organization token path; the organization must equal the owner of the bound repository, compared exactly as configured.
+- Runner groups are listed at `_apis/runtime/runnergroups` on the admin connection. A named group must match exactly one entry and the unnamed choice must match exactly one default entry. Duplicate numeric group IDs anywhere in the response are rejected, because the journal keeps only the numeric ID.
+- An organization scale set is shared by every repository of the organization that selects the same group, name and labels, so the host never adopts an existing organization scale set that this connection did not create; a name conflict stays uncertain.
+- The bound repository ID, owner and name are verified before registration and again on every admin refresh. Owner and name compare ASCII case-insensitively against GitHub's canonical spelling; the repository ID must match exactly.
 
 ### 3. Runner Environments & Tooling Inventories
 
@@ -47,6 +55,16 @@ Velnor probes and runs the named task with that `DEVELOPER_DIR` and never change
 
 ## Compatibility Rules and Verification Procedures
 
+### Interrupted JIT requests
+
+Recovery retains a late-registration tombstone for 24 hours from the claim
+timestamp, or until the runner is observed and deleted. The
+[JIT configuration endpoint](https://docs.github.com/en/rest/actions/self-hosted-runners#create-configuration-for-a-just-in-time-runner-for-an-organization)
+does not bound the time a request may take to create a runner. A runner created
+after 24 hours has a JIT configuration nobody holds, so it cannot come online
+or run a job. GitHub removes offline ephemeral runners itself; this residual is
+accepted.
+
 ### Performance review sources
 
 The [review gates](../reviews/ci-performance.md) use these primary sources:
@@ -63,6 +81,12 @@ The [review gates](../reviews/ci-performance.md) use these primary sources:
 These are review criteria, not new runtime behavior or cache capacity. Existing
 [cache decisions](cache-decisions.md) and stricter
 [compiled-state admission](compiled-state-persistence.md#budget) remain binding.
+
+### Runner-scoped crates mirror
+
+The official runner [sets the runner environment context](https://github.com/actions/runner/blob/1ba885c2065fd9be317808ab3fd406f392635cf7/src/Runner.Worker/JobRunner.cs#L150-L156) from the job message before executing steps. GitHub’s [runner context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#runner-context) defines `runner.environment` as `github-hosted` or `self-hosted` and permits the runner context in step conditions.
+
+The new generator emits mirror setup only for the configured matching runner label. Every emitted mirror step additionally requires `runner.environment == 'self-hosted'` and excludes fork pull requests by requiring the pull-request head repository to match `github.repository`. Label spelling alone cannot establish the runner environment: new hosted labels and custom scale-set names remain protected by the runtime condition. An absent or unrecognized runner environment skips mirror setup.
 
 ### Ledger event and source identity
 
@@ -110,6 +134,13 @@ than from the certificate's caller source digest.
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) resolves a step's shell with `WhichUtil.Which(command, …, prependPath)`, where `prependPath` holds every `core.addPath`/`GITHUB_PATH` entry ahead of the job `PATH`. In a composite action (`IsActionStep`) even `shell: bash` takes this route. [`WhichUtil.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Sdk/Util/WhichUtil.cs) returns a fully qualified command as given when the file exists and never searches `PATH` for it; a custom shell string is split at its first space and must contain `{0}`. `jdx/mise-action` adds the Mise `bin/` and, by default, `shims/` with `core.addPath`, so after a tools-cache restore a bare shell or helper name can resolve to restored bytes. Velnor's restore checks therefore use `/bin/bash --noprofile --norc -p -e -o pipefail {0}` and reset `PATH` to `/usr/bin:/bin:/usr/sbin:/sbin` first ([hermetic checks](tools-cache-v2.md#the-checks-run-hermetically)).
 
+Trusted generator helper invocations use the same absolute Bash shell. Bash's
+[`-p` mode](https://www.gnu.org/software/bash/manual/html_node/The-Set-Builtin.html)
+ignores startup files, imported functions, and shell options inherited through
+the environment. This prevents persisted `BASH_ENV`, exported functions, or
+`SHELLOPTS` from bypassing the helper's copy, digest check, and execution before
+the generated command runs.
+
 ### Workflow command parsing
 
 [`ScriptHandler.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Worker/Handlers/ScriptHandler.cs) gives a step's standard output and its standard error each an `OutputManager` that feeds the same `ActionCommandManager`, so a workflow command on either stream runs. [`ActionCommand.cs`](https://github.com/actions/runner/blob/4c989f2f108bb6798e07ea5935bc8bc4aab7de2f/src/Runner.Common/ActionCommand.cs) calls `TrimStart()` on a line before it checks for the `::` prefix, so a command can follow leading Unicode whitespace. Command data escapes `%`, `\r` and `\n` as `%25`, `%0D` and `%0A`; command properties also escape `:` and `,` as `%3A` and `%2C`. `::stop-commands::<token>` pauses command processing until a command named by the token resumes it. `velnor-ci` therefore escapes every control and non-space whitespace character and `%` in anything it prints, and escapes `:` in names taken from repository content, so no printed line can start a command on either stream.
@@ -135,11 +166,13 @@ workflow or composite-action call: expressions and environment values retain
 their use-site job and step context. The [official announcement](https://github.blog/changelog/2025-09-18-actions-yaml-anchors-and-non-public-workflow-templates/)
 records workflow anchor/alias support.
 
-Velnor uses a narrower grammar only when a workflow exceeds its unchanged
+Velnor shares the released helper launcher and verification selectors as exact step `env` scalar aliases. Its other workflow sharing applies only when needed to fit the unchanged
 500,000-byte transport limit: exact job `env`, step `env`/`with`, whole step mapping, and existing `run` scalar reuse. It never moves execution, credentials,
 permissions, dependencies, caches or outputs into a different scope. Definitions precede uses in one globally unique document namespace. Staged shell validation
 normalizes only those emitted forms before its existing ancestry, effective-shell and ShellCheck checks. Input is bounded to 500,000 bytes, nesting to 32 levels,
 and normalization work to 262,144 nodes and 16 MiB; merge keys, tags on shared nodes, forward/cyclic references and other alias scopes fail closed.
+
+The launcher remains a workflow-owned step environment value, including on `always()` steps. The official runner’s [`StepsRunner`](https://github.com/actions/runner/blob/main/src/Runner.Worker/StepsRunner.cs#L96-L114) copies the global environment first, then overwrites it with evaluated step environment values. A persisted `GITHUB_ENV` value therefore cannot replace the launcher or its verification selectors. The launcher hashes each fresh helper copy through `/usr/bin/env -i PATH=/usr/bin:/bin`, so Perl startup variables cannot change macOS `shasum` execution. The installed helper directory stays owner-writable (`0700`) for runner cleanup; the helper file is executable and owner-read-only (`0500`).
 
 This Velnor admission does **not** extend to local action manifests. The original
 runner's [legacy `YamlObjectReader.EvaluateCurrent`](https://github.com/actions/runner/blob/397b032cbf865e9c3ddfab89d533ec19325e1273/src/Sdk/DTPipelines/Pipelines/ObjectTemplating/YamlObjectReader.cs)
@@ -563,6 +596,8 @@ Use GitHub's [MergeQueueEntry schema](https://docs.github.com/en/enterprise-clou
 
 A cutover author check must bind the current queue entry's base and head to the authenticated merge-group context, then authenticate the associated pull request and its current author. A queue branch name alone is not author evidence. The pull-request test merge reference and an assumed two-parent queue commit are not substitutes for queue membership. Missing, stale, ambiguous or truncated membership must fail closed.
 
+The private-source token check (`velnor-ci private-token-allowed`) relies on a contract that GitHub does not document, so it is recorded here. GitHub creates one ref `gh-readonly-queue/<base>/pr-<number>-<sha>` per queue entry and deletes it when the entry merges or leaves the queue. The commit of an entry holds the commits of every entry ahead of it. The check lists the refs of the base, requires the live ref of its own entry to equal `GITHUB_SHA`, and authenticates each ref whose commit is among the commits `compare/<base>...<GITHUB_SHA>` reports. An entry without a ref cannot add code the check misses: if it merged, its commits are in the base branch and are not in that comparison, and if it left the queue, GitHub rebuilt the entries behind it, so the live ref no longer equals `GITHUB_SHA` and the check refuses. The comparison is read for at most three pages of 100 commits and a longer one is refused.
+
 ## Private Bun artifact admission
 
 GitHub documents that authenticated users with repository read access can
@@ -704,15 +739,58 @@ on `sha256sum`.
 ## Tag ruleset drift
 
 The maintenance drift job uses the [pinned github-script API client](https://github.com/actions/github-script/blob/3a2844b7e9c422d3c10d287c895573f7108da1b3/README.md#this-action) and its pagination plugin without checkout.
-The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential requests Administration read permission.
+The [ruleset API](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) omits bypass actors without write access to the ruleset. Missing bypass data fails the check; the dedicated credential needs Administration write permission.
+
+## Rulesets API: bypass_actors visibility
+
+GitHub's [repository ruleset endpoint](https://docs.github.com/en/rest/repos/rules#get-a-repository-ruleset) says `bypass_actors` is returned only when the requester has write access to the ruleset. The [branch rules endpoint](https://docs.github.com/en/rest/repos/rules#get-rules-for-a-branch) returns effective rules and does not document bypass actors. The release gate requests Administration write because it requires an explicit array.
+
+## PR-only check exemption contracts
+
+The [Checks API](https://docs.github.com/en/rest/checks/runs) limits the commit-reference check-runs endpoint to the 1,000 most recent check suites for a SHA. To inspect the full history, enumerate check suites for the reference and list check runs for each suite; both suite and run listings are paginated, with at most 100 items per page. A check run includes its suite identity and the suite includes its App identity. An unfinished suite from the App that owns an exempted required check cannot establish that the check is absent. The endpoint requires `checks: read` for fine-grained GitHub App tokens.
+
+The [Rules API](https://docs.github.com/en/rest/repos/rules) returns the effective rules for a branch with their ruleset IDs and source identities. Fetch each candidate ruleset with `includes_parents=true` (the default) and verify that its ID, source, source type, target and rules match the effective rule. A repository ruleset response can omit `bypass_actors` unless the credential has write access to that ruleset, even when the request succeeds; absence is unknown, not proof that bypass is disabled. Organization and enterprise ruleset details may be unavailable without the necessary permissions or a supporting GitHub plan; inaccessible details cannot authorize an exemption. An active branch ruleset must explicitly return an empty `bypass_actors` list to prove non-bypassable pull-request and required-status-check enforcement. GitHub defines `pull_request` and `required_status_checks` as distinct rules; verify both rules in the effective enforcement used for the exemption. The ruleset read endpoint documents `Metadata: read` for fine-grained tokens, but visibility of bypass actors has the stricter write-access condition.
 
 ## Generated Rust CI workflow events and concurrency
+
+The runner's [`toJSON` implementation](https://github.com/actions/runner/blob/main/src/Sdk/DTExpressions2/Expressions2/Sdk/Functions/ToJson.cs)
+serializes nested mappings with two spaces per level, LF newlines, a space after
+each colon, and commas between entries. The Required gate's environment size
+estimate includes this formatting and JSON string escaping for job identifiers,
+output names, and output values. The expression stays in `env`; the shell command
+contains no interpolated expressions.
 
 These behaviors are GitHub service semantics, so the runner source does not define them. The generator relies on the GitHub documentation below and tests the rendered text, not the service.
 
 - Pull-request activity types: the [`pull_request` event](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request) lists `opened`, `synchronize`, `reopened`, `ready_for_review`, `edited` and `converted_to_draft`. The generator lists the first five always (`edited` also fires when the base branch is retargeted, so a green result for the old base is replaced, as docs/implemented/affected-selection.md requires). It adds `converted_to_draft` only with `skip_draft_pull_requests`, so a running non-draft run is cancelled by the replacement run that skips its jobs.
 - Draft state: `github.event.pull_request.draft` is the pull-request payload field. A `ready_for_review` run carries `draft == false`.
 - Conditionally skipped jobs: [GitHub reports a job skipped by a condition as successful](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-jobs-with-conditions), so a required check cannot rely on `needs` results to notice skipped lanes. With `skip_draft_pull_requests`, the verdict job fails on a draft run and only a non-draft run can pass it.
+- Label-gated runs: with `pr_ci = "label"` the `pull_request` trigger adds `labeled`, and the label names are read from `github.event.pull_request.labels.*.name`, the labels the pull request had when the event fired. A job skipped by its condition is reported as successful, so `Required` runs the gate only where the full suite was requested and otherwise fails on a failed or cancelled need. A `pull_request` run from a fork gets a read-only `GITHUB_TOKEN`, so the job that removes `ci:run` runs only on pull requests from the same repository, and a fork pull request never runs the full suite on a label (the merge queue does). Added labels other than `ci:run` and `ci:auto` run nothing and get their own concurrency group,, and `edited` stays a trigger type so a base retarget still replaces the result; an edit that keeps the base (`github.event.changes.base` absent) runs nothing and gets its own concurrency group, so it cannot cancel a requested full run.
 - Pull-request state: CI jobs exclude a `pull_request` event when `github.event.pull_request.state == 'closed'` or `github.ref` is outside `refs/pull/`. The [GitHub context contract](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#github-context) assigns merged PR events the destination branch ref, independently of the possibly empty PR payload. Open edits still run so base retargeting replaces the previous result. Missing state with a PR ref retains the conservative planning path and Required execution, including for forks.
 - Concurrency: [group names must be unique across workflows](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency) to avoid cross-workflow cancellation. The group uses `github.workflow_ref`, the workflow file path, not the display name. Only `pull_request` runs with a PR ref and a state other than `closed` share the PR group and cancel in progress. Other events get a per-run group. GitHub also replaces a pending run in the same group regardless of `cancel-in-progress`, so excluded PR edits require a separate group.
 - `merge_group` and `push` to the configured default branch start the same workflow; `default_branch` is a validated config key and a push to any other branch starts no run.
+
+## Runtime cache-prefix bounds
+
+The runner [sets the OS and architecture contexts from VarUtil](https://github.com/actions/runner/blob/af09a511a0869abf002daef236c66c5b146d683a/src/Runner.Worker/JobRunner.cs#L150-L151).
+[VarUtil's complete value sets](https://github.com/actions/runner/blob/af09a511a0869abf002daef236c66c5b146d683a/src/Runner.Common/Util/VarUtil.cs#L21-L55)
+make `Windows` and `ARM64` the longest values, at seven and five ASCII bytes.
+The generator bounds JSON cache outputs from the same key segments that render
+cache fallbacks. The compatibility width is shared with the helper's producer;
+Base-save, source-save and cache-verification values require at most the five characters of `false`.
+These bounds include JSON escaping and do not depend on a cache-key length limit.
+
+The pinned [`actions/cache` save implementation](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/src/saveImpl.ts) catches save errors, emits warnings and exits successfully. Its [save action inputs](https://github.com/actions/cache/blob/55cc8345863c7cc4c66a329aec7e433d2d1c52a9/save/action.yml) expose neither a strict failure switch nor a saved-key output. Generated base-cache writers therefore verify the exact key and ref with the [read-only cache listing API](https://docs.github.com/en/rest/actions/cache#list-github-actions-caches-for-a-repository). The separate Cache check reports failed verification without changing Required. Cargo-lane reports collect local logs, provenance, step results and metrics without API access or `GITHUB_TOKEN`; a separate no-checkout Cache job performs API enrichment with `actions: read`. The Actions runner [status-function implementation](https://github.com/actions/runner/blob/main/src/Runner.Worker/Expressions/SuccessFunction.cs) evaluates `success()` against job status for steps; save steps combine this with their event and explicit decision guards, so an earlier producer or inline input-audit failure cannot authorize publication.
+
+## Public source artifact admission
+
+A generated inline step uses the pinned GitHub CLI and a step-scoped token to
+read metadata from the fixed `tailrocks/velnor-new` repository through GitHub's
+[Get an artifact endpoint](https://docs.github.com/en/rest/actions/artifacts#get-an-artifact).
+It validates a positive numeric artifact ID before the request, bounds the
+response to 1 MiB and removes stale or incomplete metadata on failure. The
+repository admission script reads only that metadata file without credentials
+or network access. Admission checks the same-run producer identity, artifact
+digest, source locks, size and expiry. An unavailable metadata response takes
+the generator release qualifier's existing source-fetch fallback. The mandatory
+warm qualification fails if it cannot fetch or admit the source artifact.

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use bollard::Docker;
 
@@ -19,6 +19,8 @@ use super::state::PreparedConnection;
 mod credentials;
 #[path = "connection_poll/fairness.rs"]
 pub(super) mod fairness;
+#[path = "connection_poll/scale_set_delete.rs"]
+mod scale_set_delete;
 #[path = "connection_poll/turn.rs"]
 mod turn;
 
@@ -34,6 +36,7 @@ pub(super) struct ConnectionPollContext<'a> {
     pub(super) image_authority: &'a Arc<ImageAuthority>,
     pub(super) admission_ready: bool,
     pub(super) control_state: &'a ControlState,
+    pub(super) retirement_budget: Duration,
 }
 
 pub(super) async fn poll_active_connections(
@@ -45,6 +48,7 @@ pub(super) async fn poll_active_connections(
     let mut positive_poll_settled = false;
     let mut index = 0;
     while index < connections.len() {
+        scale_set_delete::service(&mut connections[index], &context).await?;
         let result = turn::poll_connection(
             &mut connections[index],
             &context,

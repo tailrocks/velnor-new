@@ -1,7 +1,21 @@
 # SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 # SPDX-License-Identifier: Apache-2.0
+experimental = ["wrapper-scripts"]
+
+[scripts.wrapper.local-docker-ci]
+command = ["sh","-c","if [ \"${GITHUB_ACTIONS:-}\" = true ] && [ \"${VELNOR_TEST_DOCKER_HOST+x}\" != x ]; then export VELNOR_TEST_DOCKER_HOST=unix:///var/run/docker.sock; fi; exec \"$@\"","local-docker-ci"]
+
+[[profile.ci.scripts]]
+filter = 'package(=velnor-local) and binary(=it) and test(removal_audit::)'
+platform = 'cfg(target_os = "linux")'
+run-wrapper = 'local-docker-ci'
+
 [profile.ci]
 retries = 0
 test-threads = "num-cpus"
 status-level = "all"
 final-status-level = "flaky"
+
+[[profile.default.overrides]]
+filter = 'package(=velnor-local) and binary(=it) and test(removal_audit::)'
+success-output = "immediate"

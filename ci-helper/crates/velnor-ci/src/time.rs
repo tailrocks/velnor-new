@@ -44,14 +44,13 @@ fn split_offset(text: &str) -> Option<(&str, i64)> {
 }
 
 #[must_use]
-pub fn seconds_between(start: Option<&str>, end: Option<&str>) -> u64 {
-    match (start.and_then(parse_utc), end.and_then(parse_utc)) {
-        (Some(start), Some(end)) => u64::try_from(end - start).unwrap_or(0),
-        _ => 0,
-    }
+pub fn seconds_between(start: Option<&str>, end: Option<&str>) -> Option<u64> {
+    let start = start.and_then(parse_utc)?;
+    let end = end.and_then(parse_utc)?;
+    u64::try_from(end - start).ok()
 }
 
-fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
+pub(crate) fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let year = if month <= 2 { year - 1 } else { year };
     let era = year.div_euclid(400);
     let year_of_era = year - era * 400;
@@ -59,4 +58,23 @@ fn days_from_civil(year: i64, month: i64, day: i64) -> i64 {
     let day_of_year = (153 * shifted_month + 2) / 5 + day - 1;
     let day_of_era = year_of_era * 365 + year_of_era / 4 - year_of_era / 100 + day_of_year;
     era * 146_097 + day_of_era - 719_468
+}
+
+#[must_use]
+pub fn date_text(unix_seconds: i64) -> String {
+    let days = unix_seconds.div_euclid(86_400) + 719_468;
+    let era = days.div_euclid(146_097);
+    let day_of_era = days - era * 146_097;
+    let year_of_era =
+        (day_of_era - day_of_era / 1_460 + day_of_era / 36_524 - day_of_era / 146_096) / 365;
+    let day_of_year = day_of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted_month = (5 * day_of_year + 2) / 153;
+    let day = day_of_year - (153 * shifted_month + 2) / 5 + 1;
+    let month = if shifted_month < 10 {
+        shifted_month + 3
+    } else {
+        shifted_month - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
 }

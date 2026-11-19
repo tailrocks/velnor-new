@@ -24,7 +24,6 @@ mod gc1_t13;
 mod gc1_t14;
 mod gc1_t16;
 mod gc1_t30;
-mod gc1_t31;
 mod gc1_t41;
 mod gc1_t42;
 mod gc1_t43;
@@ -101,3 +100,5 @@ pub mod workflow_size;
 mod workflow_timeout;
 
 mod stable_sources_qualification_graph;
+
+mod homebrew_qualification_acquire;

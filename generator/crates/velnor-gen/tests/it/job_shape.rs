@@ -70,7 +70,7 @@ pub(crate) fn target(kind: TargetKind) -> Target {
     }
 }
 
-fn with_targets(package: &str, kinds: &[TargetKind]) -> RustMember {
+pub(crate) fn with_targets(package: &str, kinds: &[TargetKind]) -> RustMember {
     RustMember {
         targets: kinds.iter().map(|kind| target(*kind)).collect(),
         ..member(package, &format!("crates/{package}"), &[])
@@ -152,6 +152,7 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
             CargoCommand::Clippy { extra: Vec::new() },
             CargoCommand::NextestRun {
                 filter: FilterRef::All,
+                ci_profile: false,
             },
             CargoCommand::Doctest,
             CargoCommand::Doc,
@@ -224,10 +225,12 @@ fn a_committed_timings_entry_splits_only_its_own_root_and_the_config_names_the_v
             "  rust-lint-lab:",
             "  rust-test-lab:",
             "  rust-inputs-audit:",
-            "  required:"
+            "  rust-trim:",
+            "  required:",
+            "  cache:"
         ]
     );
-    assert!(text.contains("  # lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)\n  rust-lint-lab:\n"), "{text}");
+    assert!(text.contains("  # lint and test jobs: the shorter build takes 10 s, longer than the 5 s a second job adds (#585)\n  # jactionlint ignore=shellcheck\n  rust-lint-lab:\n"), "{text}");
     assert!(text.contains("    name: CI passed\n"), "{text}");
     assert_eq!(text.matches("      - name: Install tools\n").count(), 4);
     assert!(!text.contains("install_args"), "{text}");

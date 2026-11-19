@@ -25,10 +25,10 @@ with tempfile.TemporaryDirectory() as directory:
     env = {
         "GITHUB_SHA": source, "GITHUB_WORKFLOW_SHA": source, "GITHUB_RUN_ID": "37", "GITHUB_RUN_ATTEMPT": "2",
         "GITHUB_REPOSITORY": "tailrocks/velnor-new", "GITHUB_REPOSITORY_ID": "1390620900", "GITHUB_OUTPUT": str(output),
-        "SOURCES_ID": "42", "SOURCES_DIGEST": digest, "SOURCES_TREE": "c" * 64,
+        "SOURCES_METADATA": str(work / "metadata.json"), "SOURCES_ID": "42", "SOURCES_DIGEST": digest, "SOURCES_TREE": "c" * 64,
         "SOURCES_ROOT_LOCK": hashlib.sha256(b"root-lock").hexdigest(),
         "SOURCES_RUNNER_LOCK": hashlib.sha256(b"runner-lock").hexdigest(),
-        "SOURCES_ATTEMPT": "2", "SOURCES_NAME": "generator-linux-assets", "GH_TOKEN": "fixture",
+        "SOURCES_ATTEMPT": "2", "SOURCES_NAME": "generator-linux-assets",
     }
     artifact = {"id": 42, "name": "generator-linux-assets-sources-2", "expired": False,
                 "digest": "sha256:" + digest, "size_in_bytes": 100,
@@ -36,10 +36,14 @@ with tempfile.TemporaryDirectory() as directory:
     previous = os.getcwd()
     os.chdir(work)
     try:
-        def check(changes=None, metadata=None, expected=False):
+        def check(changes=None, metadata=None, expected=False, raw=None, missing=False):
             output.unlink(missing_ok=True)
+            metadata_path = Path(env["SOURCES_METADATA"])
+            metadata_path.unlink(missing_ok=True)
+            if not missing:
+                metadata_path.write_bytes(raw if raw is not None else json.dumps(artifact if metadata is None else metadata).encode())
             with patch.dict(os.environ, env | (changes or {}), clear=True), \
-                 patch("urllib.request.urlopen", return_value=io.BytesIO(json.dumps(artifact if metadata is None else metadata).encode())), \
+                 patch("urllib.request.urlopen", side_effect=AssertionError("admission must not access network")), \
                  contextlib.redirect_stdout(io.StringIO()):
                 try:
                     runpy.run_path(str(script), run_name="__main__")
@@ -52,6 +56,9 @@ with tempfile.TemporaryDirectory() as directory:
                         {"SOURCES_RUNNER_LOCK": "d" * 64}, {"GITHUB_RUN_ID": "38"}):
             check(changes)
         check(metadata=artifact | {"size_in_bytes": 536870913})
+        check(missing=True)
+        check(raw=b'{')
+        check(raw=b' ' * 1048577)
         check(metadata=[])
         check(metadata=artifact | {"workflow_run": []})
         check(metadata=artifact | {"workflow_run": {"id": 37, "head_sha": "d" * 40, "repository_id": 1390620900}})

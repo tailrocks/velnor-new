@@ -77,6 +77,7 @@ pub(crate) fn package(
                     name: PackageName::new(*name)?,
                     kind: *kind,
                     platform: None,
+                    optional: false,
                     manifest: Some(path(manifest)?),
                     features: Vec::new(),
                     rename: None,
@@ -127,8 +128,12 @@ pub(crate) fn repo(
     let lock = path(".velnor/rust-ci.lock")?;
     if !view.files.contains_key(&lock) {
         view.tracked_paths.insert(lock.clone());
-        view.files
-            .insert(lock, crate::pipeline::HELPER_LOCK.to_vec());
+        view.files.insert(
+            lock,
+            String::from_utf8(crate::pipeline::HELPER_LOCK.to_vec())?
+                .replace("0.1.79", "0.1.81")
+                .into_bytes(),
+        );
     }
     Ok(view)
 }

@@ -16,6 +16,7 @@ mod completion_admin;
 mod config;
 mod connect;
 mod controller_ipc;
+mod credential_file;
 pub mod curl_config;
 mod daemon_lock;
 mod digest_hex;
@@ -60,11 +61,12 @@ pub use config::{
 };
 pub use connect::{ConnectPlan, DisconnectEffect, SetOwnership, connect_plan, disconnect_effects};
 pub use controller_ipc::{
-    ConnectionCensus, ConnectionSetupReceipt, RunnerGroupReceipt, SelectedSetReceipt,
-    SessionObservation, SessionObservationStatistics, controller_readiness_status,
-    reactivate_connection_if_drained, run_doctor_probe, wait_for_connection_census,
-    wait_for_connection_detached, wait_for_connection_drain, wait_for_connection_setup_receipt,
-    wait_for_drain, wait_for_session_observation,
+    ConnectionCensus, ConnectionSetupReceipt, CreatedSetDeletion, RunnerGroupReceipt,
+    SelectedSetReceipt, SessionObservation, SessionObservationStatistics,
+    controller_readiness_status, delete_created_scale_set, reactivate_connection_if_drained,
+    run_doctor_probe, wait_for_connection_census, wait_for_connection_detached,
+    wait_for_connection_drain, wait_for_connection_setup_receipt, wait_for_drain,
+    wait_for_session_observation,
 };
 pub use daemon_lock::DaemonLock;
 pub use docker_client::connect_unix;

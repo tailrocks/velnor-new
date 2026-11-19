@@ -34,7 +34,8 @@ pub(crate) fn resolve(
 ) -> Result<ProductReleasePins, OrchestratorError> {
     let catalog = catalog.clone();
     let (linux_x86_64_setup, macos_arm64_setup, macos_x86_64_setup) = resolve_setups(config)?;
-    let (runner_build_argv, attestation_helper_build_argv) = binary_build_argv(&catalog)?;
+    let manifest = config.runner_workspace.manifest_path();
+    let (runner_build_argv, attestation_helper_build_argv) = binary_build_argv(&manifest, &catalog)?;
     Ok(ProductReleasePins {
         linux_x86_64_setup,
         macos_arm64_setup,
@@ -73,7 +74,7 @@ pub(crate) fn resolve(
         install_resource_probe_target_argv: resource_probe_target_argv(&catalog)?,
         runner_build_argv,
         attestation_helper_build_argv,
-        resource_probe_build_argv: resource_probe_build_argv(&catalog)?,
+        resource_probe_build_argv: resource_probe_build_argv(&manifest, &catalog)?,
         install_resource_probe_release_tools_argv: install_argv(
             &[
                 PinnedTool::Rust,
@@ -82,8 +83,8 @@ pub(crate) fn resolve(
             ],
             &catalog,
         )?,
-        resource_probe_release_build_argv: resource_probe_release_build_argv(&catalog)?,
-        resource_probe_release_test_argv: resource_probe_release_test_argv(&catalog)?,
+        resource_probe_release_build_argv: resource_probe_release_build_argv(&manifest, &catalog)?,
+        resource_probe_release_test_argv: resource_probe_release_test_argv(&manifest, &catalog)?,
         lint_argv: scrubbed_inline(crate::workflow_jobs::workflow_lint_argv(&catalog)?),
         verify_lint_argv: crate::workflow::jactionlint_verify_argv(&catalog),
         gh_argv: exec_argv(&[PinnedTool::Gh], "gh", &[], &catalog)?,
@@ -91,10 +92,13 @@ pub(crate) fn resolve(
         verify_rust_argv: crate::workflow::verify_rust_argv(&catalog),
         mr_boxington_version: catalog.version(PinnedTool::MrBoxington).to_owned(),
         gh_version: catalog.version(PinnedTool::Gh).to_owned(),
+        bun_version: catalog.version(PinnedTool::Bun).to_owned(),
+        runner_workspace: config.runner_workspace.clone(),
     })
 }
 
 fn binary_build_argv(
+    manifest: &str,
     catalog: &ToolCatalog,
 ) -> Result<(Vec<String>, Vec<String>), OrchestratorError> {
     let runner = mbx_locked_build_argv(
@@ -102,7 +106,7 @@ fn binary_build_argv(
             "build",
             "--locked",
             "--manifest-path",
-            "crates/velnor-runner/Cargo.toml",
+            manifest,
             "--release",
             "--package",
             "velnor-runner-cli",
@@ -116,7 +120,7 @@ fn binary_build_argv(
             "build",
             "--locked",
             "--manifest-path",
-            "crates/velnor-runner/Cargo.toml",
+            manifest,
             "--release",
             "--package",
             "velnor-runner-attestation",
@@ -149,13 +153,16 @@ fn resource_probe_target_argv(catalog: &ToolCatalog) -> Result<Vec<String>, Orch
     )
 }
 
-fn resource_probe_build_argv(catalog: &ToolCatalog) -> Result<Vec<String>, OrchestratorError> {
+fn resource_probe_build_argv(
+    manifest: &str,
+    catalog: &ToolCatalog,
+) -> Result<Vec<String>, OrchestratorError> {
     mbx_locked_build_argv(
         &[
             "build",
             "--locked",
             "--manifest-path",
-            "crates/velnor-runner/Cargo.toml",
+            manifest,
             "--package",
             "velnor-resource-probe",
             "--bin",
@@ -245,6 +252,7 @@ fn contract_error(problem: impl std::fmt::Display) -> OrchestratorError {
 }
 
 fn resource_probe_release_build_argv(
+    manifest: &str,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
     mbx_locked_build_argv(
@@ -252,7 +260,7 @@ fn resource_probe_release_build_argv(
             "build",
             "--locked",
             "--manifest-path",
-            "crates/velnor-runner/Cargo.toml",
+            manifest,
             "--package",
             "velnor-runner-host",
             "--bin",
@@ -265,6 +273,7 @@ fn resource_probe_release_build_argv(
 }
 
 fn resource_probe_release_test_argv(
+    manifest: &str,
     catalog: &ToolCatalog,
 ) -> Result<Vec<String>, OrchestratorError> {
     exec_argv(
@@ -279,7 +288,7 @@ fn resource_probe_release_test_argv(
             "run",
             "--locked",
             "--manifest-path",
-            "crates/velnor-runner/Cargo.toml",
+            manifest,
             "--package",
             "velnor-runner-host",
             "--test",

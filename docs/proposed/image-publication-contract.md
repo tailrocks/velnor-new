@@ -42,22 +42,40 @@ lexically confined: no absolute, empty, `.` or `..` segments, no expressions.
 
 ## Dockerfile rules
 
-`analyze_dockerfile` is a static parse (continuations, heredocs and global `ARG`
-defaults are understood). It rejects:
+`analyze_dockerfile` is a static parse (continuations, heredocs, and resolvable
+global and stage `ARG` defaults are understood). A heredoc is read where
+BuildKit reads one: in `ADD`, `COPY` and `RUN`, including an `ONBUILD` of
+those, with a word in the BuildKit heredoc form (`moby/buildkit` v0.23.0,
+`frontend/dockerfile/parser/parser.go`, `heredocDirectives` and `reHeredoc`;
+`frontend/dockerfile/shell/lex.go`, `processPossibleHeredoc`). A `<<` inside a
+shell substitution or an arithmetic expansion never starts one. A `<<` token
+anywhere else, or a word BuildKit does not read as a heredoc, is ordinary
+text, so the lines after it stay instructions. A heredoc whose terminator is
+missing hides nothing. It rejects:
 
 - `image_base_unpinned`: any external `FROM`, `COPY --from` or `RUN --mount=from`
   image without `@sha256:<64 hex>`. Earlier stage names, stage indexes and
   `scratch` are exempt.
-- `image_base_unresolved`: a `FROM` that names an `ARG` with no default.
+- `image_base_unresolved`: a `FROM` value cannot be resolved safely. An unset
+  `ARG` uses a `:-` fallback when one is present; without a usable fallback, or
+  when an argument value is unknown, the analyzer rejects the `FROM`.
 - `image_syntax_unpinned`: a `# syntax=` frontend that is not digest-pinned.
 - `image_secret_mount`: `RUN --mount=type=secret` or `type=ssh`.
 - `image_add_remote_source`: `ADD` of a URL or git source.
 - `image_context_escape`: a `COPY`/`ADD` source containing `..`.
+- `image_context_source_unresolved:<source>`: a `COPY`/`ADD` operand has
+  unsupported quoting or escaping, cannot be parsed as operands, or expands to
+  whitespace in shell form; an `ARG` declaration is empty, malformed, or has
+  an invalid name.
 - `image_escape_directive`: a changed `# escape=` character.
 
-It also reports the context-relative `COPY`/`ADD` sources, which drive affected
-selection. `RUN` may use the network (for example `apt`); it never receives a
-secret.
+For a `COPY` source that depends on an unknown or unsupported value, the
+analyzer claims the whole context so affected-image selection remains
+conservative. An unresolved `ADD` source is rejected as
+`image_add_remote_source` because it could resolve to a remote input. A `COPY`
+from another stage does not claim a local context source. Resolved local sources
+are reported as context-relative paths. `RUN` may use the network (for example
+`apt`); it never receives a secret.
 
 ## Build jobs (implemented)
 

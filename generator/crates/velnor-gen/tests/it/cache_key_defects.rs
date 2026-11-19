@@ -7,19 +7,32 @@ use velnor_render::render_key;
 use crate::facts::TestResult;
 use crate::pipeline::{view, workflow};
 
-fn with_config(view: &mut RepoView, path: &str, text: &str) -> TestResult {
+pub(crate) fn with_config(view: &mut RepoView, path: &str, text: &str) -> TestResult {
     let path = RepoPath::new(path)?;
     view.tracked_paths.insert(path.clone());
     view.files.insert(path, text.as_bytes().to_vec());
     Ok(())
 }
 
-fn sources_key(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
-    Ok(render_key(&CacheKey::Sources {
-        host: Host,
-        root: CacheRoot::new(&RepoPath::new(manifest)?, RepoPath::new("target")?),
-    })
-    .key)
+fn target_cache_paths(text: &str) -> Result<Vec<Vec<String>>, Box<dyn std::error::Error>> {
+    let workflow: serde_json::Value = serde_saphyr::from_str(text)?;
+    let jobs = workflow["jobs"].as_object().ok_or("jobs")?;
+    let mut paths = Vec::new();
+    for job in jobs.values() {
+        for step in job["steps"].as_array().ok_or("steps")? {
+            if matches!(
+                step["name"].as_str(),
+                Some("Restore the target cache" | "Save the target cache")
+            ) {
+                let path = step["with"]["path"].as_str().ok_or("cache path")?;
+                paths.push(path.lines().map(str::to_owned).collect());
+            }
+        }
+    }
+    if paths.is_empty() {
+        return Err("no target cache paths".into());
+    }
+    Ok(paths)
 }
 
 #[test]
@@ -32,11 +45,8 @@ fn a_root_path_with_glob_characters_is_read_literally_by_hash_files() -> TestRes
         ("#h/Cargo.toml", "./#h/Cargo.lock"),
         ("plain/Cargo.toml", "plain/Cargo.lock"),
     ] {
-        let key = sources_key(manifest)?;
-        assert!(
-            key.ends_with(&format!("-${{{{ hashFiles('{literal}') }}}}")),
-            "{key}"
-        );
+        let hash = crate::shared_sources::locks_hash(&[manifest])?;
+        assert_eq!(hash, format!("${{{{ hashFiles('{literal}') }}}}"));
     }
     Ok(())
 }
@@ -61,7 +71,7 @@ fn no_key_family_carries_the_run_attempt() -> TestResult {
         CacheKey::Tools { host: Host },
         CacheKey::Sources {
             host: Host,
-            root: root.clone(),
+            lane: root.clone(),
         },
         CacheKey::Target {
             job: JobId::new("rust")?,
@@ -91,8 +101,11 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
         "[build]\ntarget-dir = \"out\"\n",
     )?;
     let text = workflow(&one)?;
-    assert!(text.contains("path: out\n"), "{text}");
-    assert!(!text.contains("path: target\n"), "{text}");
+    assert!(
+        target_cache_paths(&text)?
+            .iter()
+            .all(|paths| { paths == &["out"] })
+    );
 
     let mut nested = view(&["Cargo.toml", "lab/Cargo.toml", "tools/Cargo.toml"], None)?;
     with_config(
@@ -116,13 +129,25 @@ fn the_target_cache_path_follows_build_target_dir() -> TestResult {
         "[build]\ntarget-dir = \"ignored\"\n",
     )?;
     let text = workflow(&nested)?;
-    assert!(text.contains("path: shared\n"), "{text}");
-    assert!(text.contains("path: out/lab\n"), "{text}");
-    assert!(text.contains("path: tools/build\n"), "{text}");
-    assert!(!text.contains("path: lab/target\n"), "{text}");
+    let paths = target_cache_paths(&text)?;
+    assert!(paths.contains(&vec!["shared".to_owned()]));
+    assert!(paths.contains(&vec!["out/lab".to_owned()]));
+    assert!(paths.contains(&vec!["tools/build".to_owned()]));
+    assert!(!paths.contains(&vec!["lab/target".to_owned()]));
 
     let plain = workflow(&view(&["lab/Cargo.toml"], None)?)?;
-    assert!(plain.contains("path: lab/target\n"), "{plain}");
+    assert!(
+        target_cache_paths(&plain)?
+            .iter()
+            .all(|paths| paths == &["lab/target"])
+    );
+
+    let root_default = workflow(&view(&["Cargo.toml"], None)?)?;
+    assert!(
+        target_cache_paths(&root_default)?
+            .iter()
+            .all(|paths| paths == &["target"])
+    );
     Ok(())
 }
 
@@ -149,6 +174,30 @@ fn a_target_dir_outside_the_repository_fails_generation() -> TestResult {
             error.contains("lab/.cargo/config.toml") && error.contains("target-dir"),
             "{value}: {error}"
         );
+    }
+    Ok(())
+}
+
+fn target_key(manifest: &str) -> Result<String, Box<dyn std::error::Error>> {
+    Ok(render_key(&CacheKey::Target {
+        job: JobId::new("rust")?,
+        root: CacheRoot::new(&RepoPath::new(manifest)?, RepoPath::new("target")?),
+        host: Host,
+    })
+    .key)
+}
+
+#[test]
+fn brace_paths_are_encoded_outside_hash_files_literals() -> TestResult {
+    for (manifest, encoded) in [
+        ("a{b/Cargo.toml", "fromJSON('\"\\u007b\"')"),
+        ("a}b/Cargo.toml", "fromJSON('\"\\u007d\"')"),
+    ] {
+        let key = target_key(manifest)?;
+        assert!(key.contains("hashFiles(format("), "{key}");
+        assert!(key.contains(encoded), "{key}");
+        assert!(!key.contains("hashFiles('a{"), "{key}");
+        assert!(!key.contains("hashFiles('a}"), "{key}");
     }
     Ok(())
 }

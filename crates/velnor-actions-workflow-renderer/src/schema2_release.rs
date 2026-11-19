@@ -47,8 +47,8 @@ const NOTICE: &str = "NOTICE";
 const IMAGE_BUILD: &str = "\
 set -eu
 : \"${VELNOR_SOURCE_SHA:?}\"
-docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04
-docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-dind:linux-amd64 images/dind";
+env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-runner:linux-amd64 images/runner/ubuntu-26.04
+env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR docker build --platform linux/amd64 --build-arg VELNOR_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" -t velnor-dind:linux-amd64 images/dind";
 
 const IMAGE_VERIFY: &str = "\
 set -eu
@@ -154,9 +154,12 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
         .as_ref()
         .ok_or_else(|| RenderError::InvalidWorkflow("product_release_pins_missing".to_owned()))?;
     let install = join_argv_for_run(&pins.install_build_tools_argv)?;
+    let target_dir = pins.runner_workspace.target_dir();
     let build = format!(
-        "set -euo pipefail\n: \"${{VELNOR_SOURCE_SHA:?}}\"\n{}\nhelper_path=crates/velnor-runner/target/release/velnor-runner-attestation-helper\ntest -s \"$helper_path\"\nhelper_sha=\"$(shasum -a 256 \"$helper_path\" | awk 'NR == 1 {{ print $1 }}')\"\n[[ \"$helper_sha\" =~ ^[0-9a-f]{{64}}$ ]]\nenv VELNOR_RUNNER_BUILD_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" VELNOR_RUNNER_BUILD_HELPER_SHA256=\"$helper_sha\" {}\ncp crates/velnor-runner/target/release/velnor-host velnor-host\ncp \"$helper_path\" velnor-runner-attestation-helper\ntest -s velnor-host\ntest -s velnor-runner-attestation-helper\ncopied_helper_sha=\"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 {{ print $1 }}')\"\ntest \"$copied_helper_sha\" = \"$helper_sha\"",
-        join_argv_for_run(&pins.attestation_helper_build_argv)?,
+        "set -euo pipefail\n: \"${{VELNOR_SOURCE_SHA:?}}\"\n{}\nhelper_path={target_dir}/release/velnor-runner-attestation-helper\ntest -s \"$helper_path\"\nhelper_sha=\"$(shasum -a 256 \"$helper_path\" | awk 'NR == 1 {{ print $1 }}')\"\n[[ \"$helper_sha\" =~ ^[0-9a-f]{{64}}$ ]]\nenv -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR env VELNOR_RUNNER_BUILD_SOURCE_SHA=\"$VELNOR_SOURCE_SHA\" VELNOR_RUNNER_BUILD_HELPER_SHA256=\"$helper_sha\" {}\ncp {target_dir}/release/velnor-host velnor-host\ncp \"$helper_path\" velnor-runner-attestation-helper\ntest -s velnor-host\ntest -s velnor-runner-attestation-helper\ncopied_helper_sha=\"$(shasum -a 256 velnor-runner-attestation-helper | awk 'NR == 1 {{ print $1 }}')\"\ntest \"$copied_helper_sha\" = \"$helper_sha\"",
+        join_argv_for_run(&crate::toolchain_env::with_env_unset_argv(
+            &pins.attestation_helper_build_argv
+        ))?,
         join_argv_for_run(&pins.runner_build_argv)?
     );
     let macos = runs_on_yaml(MACOS_RUNS_ON)?;
@@ -168,7 +171,7 @@ pub(super) fn macos_binary_release(request: &Schema2WorkflowRequest) -> Result<Y
                 id: "build-binary",
                 name: "Build velnor-host",
                 runs_on: macos.clone(),
-                timeout: JobTimeout::PRODUCT_COMPILER,
+                timeout: JobTimeout::PRODUCT_MACOS_COMPILER,
                 steps: vec![
                     generator_release::mise_setup_step(pins, ReleaseTarget::MacosArm64)?,
                     run_step("Install pinned Rust and MBX", &install),
@@ -287,7 +290,6 @@ fn publish_job(runs_on: Yaml, spec: &Publish<'_>) -> (String, Yaml) {
             spec.needs,
         ),
         vec![
-            checkout_step(),
             validate_artifact_id_step(spec.artifact),
             download_by_id_step(spec.artifact),
             identified_publish_step(

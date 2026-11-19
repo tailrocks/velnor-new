@@ -54,7 +54,17 @@ fn pins() -> ProductReleasePins {
         macos_x86_64_setup: setup,
         install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.2"]),
         install_build_tools_argv: argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"]),
-        install_qualify_tools_argv: argv(&["mise", "install", "opentofu@1.13.2"]),
+        install_qualify_tools_argv: [
+            "mise",
+            "install",
+            "rust@1.91.0",
+            "bun@1.4.4",
+            "jactionlint@2.103.2",
+            "shellcheck@0.11.0",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         qualify_mbx_action_steps: [fixture_step(), fixture_step(), fixture_step()],
         install_runner_build_tools_argv: install_runner_build_tools_argv(),
         install_gh_argv: argv(&["mise", "install", "gh@2.103.2"]),
@@ -95,11 +105,14 @@ fn pins() -> ProductReleasePins {
         verify_rust_argv: verify_rust_argv(),
         mr_boxington_version: "1.0.0".to_owned(),
         gh_version: "2.103.2".to_owned(),
+        bun_version: "1.4.4".to_owned(),
+        runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig::default(),
     }
 }
 
 fn rendered() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box<dyn Error>> {
     let mut request = Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: Some(MacRunnerQualificationConfig {
             runner_id: 2,
             companion_workflow_path: ".github/workflows/qualify-runner-family.yml".to_owned(),
@@ -120,6 +133,7 @@ fn rendered() -> Result<Vec<velnor_actions_workflow_renderer::RenderedFile>, Box
         mbx_qualification: None,
         mise_pin_qualification: None,
         product_release: Some(pins()),
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
     };
     request
         .runner_image_family

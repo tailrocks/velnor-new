@@ -7,7 +7,8 @@ use std::io::ErrorKind;
 use std::path::{Component, Path};
 
 use super::http::{DEFAULT_TIMEOUT, HttpGitHub};
-use crate::cli::{CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs};
+use super::registry::CratesIo;
+use crate::cli::{CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs};
 use crate::error::CiError;
 use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
@@ -16,9 +17,11 @@ use crate::release::{
     check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
 };
 use crate::release_commit::tagged_commits;
+use crate::release_family::{family_tag, lines, tag_of, version_of};
 use crate::release_preflight::check_release_source;
-use crate::release_recover::recover;
+use crate::release_published::check_published_tagged;
 use crate::rulesets::check_tag_rulesets;
+use velnor_release::expected_releases;
 
 pub(super) fn run_preflight(args: &PreflightArgs) -> Result<String, CiError> {
     let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
@@ -34,6 +37,28 @@ pub(super) fn run_preflight(args: &PreflightArgs) -> Result<String, CiError> {
     ))
 }
 
+pub(super) fn run_family_tag(args: &FamilyTagArgs) -> Result<String, CiError> {
+    let metadata = args
+        .metadata
+        .iter()
+        .map(|path| {
+            fs::read_to_string(path)
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
+        })
+        .collect::<Result<Vec<_>, CiError>>()?;
+    let tag = tag_of(&args.tag_pattern, &version_of(&metadata, &args.packages)?)?;
+    let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+    let outcome = family_tag(
+        &github,
+        &Repo::parse(&args.repo)?,
+        &args.verified_commit,
+        &tag,
+    )?;
+    let text = lines(&outcome);
+    super::append_outputs(&text)?;
+    Ok(text)
+}
+
 pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     let outputs = args
         .outputs
@@ -44,41 +69,61 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
         })
         .collect::<Result<Vec<_>, CiError>>()?;
-    let mut tags = recorded(&outputs)?;
-    let mut lines = String::new();
+    let tags = recorded(&outputs)?;
+    let mut lines = tag_lines(&tags);
     if let (Some(repo), Some(verified)) = (&args.repo, &args.verified_commit) {
         let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
-        let repo = Repo::parse(repo)?;
-        if let Some(app) = &args.app {
-            let recovery = recover(&github, &repo, app, &expected_tags(&args.config)?, &tags)?;
-            for (package, tag) in &recovery.without_draft {
-                eprintln!(
-                    "velnor-ci: tag {tag} of {package} exists but has no draft release to recover; skipping it"
-                );
-            }
-            tags.extend(recovery.found);
-        }
-        lines.push_str(&tag_lines(&tags));
-        lines.push_str(&tagged_commits(&github, &repo, verified, &tags)?);
-    } else {
-        lines.push_str(&tag_lines(&tags));
+        lines.push_str(&tagged_commits(
+            &github,
+            &Repo::parse(repo)?,
+            verified,
+            &tags,
+        )?);
+    }
+    if !args.release_configs.is_empty() {
+        check_published(args, &outputs, &tags)?;
     }
     super::append_outputs(&lines)?;
     Ok(lines)
 }
 
-fn expected_tags(configs: &[std::path::PathBuf]) -> Result<BTreeMap<String, String>, CiError> {
+fn check_published(
+    args: &RecordArgs,
+    outputs: &[(String, String)],
+    tags: &BTreeMap<PlainName, PlainName>,
+) -> Result<(), CiError> {
+    let (Some(repo), true) = (&args.repo, args.release_configs.len() == outputs.len()) else {
+        return Err(CiError::new(
+            "--release-config needs --repo and one release-plz.toml for each output file",
+        ));
+    };
     let top = std::env::current_dir()
         .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
-    let mut files = Vec::new();
-    for path in configs {
-        let text = fs::read_to_string(path)
-            .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))?;
-        files.push((relative_to(&top, path), text));
-    }
-    let roots: Vec<String> = configs.iter().map(|path| root_of(&top, path)).collect();
+    let files = args
+        .release_configs
+        .iter()
+        .map(|path| {
+            fs::read_to_string(path)
+                .map(|text| (relative_to(&top, path), text))
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
+        })
+        .collect::<Result<Vec<_>, CiError>>()?;
+    let roots: Vec<String> = args
+        .release_configs
+        .iter()
+        .map(|path| root_of(&top, path))
+        .collect();
     let known = super::manifests::read(&top, &roots)?;
-    velnor_release::released_tags(&files, &known.metadata, &known.versions).map_err(CiError::new)
+    let expected =
+        expected_releases(&files, &known.metadata, &known.versions).map_err(CiError::new)?;
+    let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
+    check_published_tagged(
+        &github,
+        &Repo::parse(repo)?,
+        &CratesIo::new(),
+        &expected,
+        tags,
+    )
 }
 
 pub(super) fn run_check_config(args: &CheckConfigArgs) -> Result<String, CiError> {

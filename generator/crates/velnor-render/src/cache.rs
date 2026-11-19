@@ -1,25 +1,19 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{CacheKey, CachePath, RepoPath};
+use velnor_model::{CacheKey, CacheKeySegment, CachePath, LOCK_OUTPUT_PREFIX, RepoPath};
 
+use crate::gate::SOURCES_LOCKS_STEP;
 use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
 const COMMIT: &str = "${{ github.sha }}";
 const RUN_ID: &str = "${{ github.run_id }}";
 const DELTA_BASE: &str = "${{ steps.restored.outputs.base8 }}";
-const MISE_LOCK: RepoPath = RepoPath::from_static("mise.lock");
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RenderedKey {
     pub key: String,
     pub restore_keys: Vec<String>,
-}
-
-struct Layout<'a> {
-    segments: Vec<&'a str>,
-    fallbacks: &'static [usize],
 }
 
 #[must_use]
@@ -27,75 +21,46 @@ pub fn render_key(key: &CacheKey) -> RenderedKey {
     render_key_with_mise(key, MISE_VERSION)
 }
 
-/// The tools entry is saved only on a miss, so the mise program version that
-/// `jdx/mise-action` installs must be part of the key.
 #[must_use]
 pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
-    let mise = format!("mise{mise_version}");
-    let compat = format!("${{{{ steps.{PREPARE_STEP}.outputs.compat }}}}");
-    let lock = match key {
-        CacheKey::Tools { .. } => hash_files(&MISE_LOCK),
-        CacheKey::Sources { root, .. } | CacheKey::Target { root, .. } => {
-            hash_files(&root.lock_file())
-        }
-        CacheKey::Delta { .. } => String::new(),
-    };
-    let layout = match key {
-        CacheKey::Tools { .. } => Layout {
-            segments: vec!["velnor", "tools", HOST, &mise, &lock],
-            fallbacks: &[],
-        },
-        CacheKey::Sources { root, .. } => Layout {
-            segments: vec!["velnor", "src", HOST, root.slug().as_str(), &lock],
-            fallbacks: &[4],
-        },
-        CacheKey::Target { job, root, .. } => Layout {
-            segments: vec![
-                "velnor",
-                "tgt",
-                job.as_str(),
-                root.slug().as_str(),
-                HOST,
-                &compat,
-                &lock,
-                COMMIT,
-                RUN_ID,
-            ],
-            fallbacks: &[7, 6],
-        },
-        CacheKey::Delta { job, root, .. } => Layout {
-            segments: vec![
-                "velnor",
-                "dlt",
-                job.as_str(),
-                root.slug().as_str(),
-                HOST,
-                &compat,
-                DELTA_BASE,
-                RUN_ID,
-            ],
-            fallbacks: &[7],
-        },
-    };
-    joined(&layout)
-}
-
-fn joined(layout: &Layout<'_>) -> RenderedKey {
+    let layout = key.layout();
+    let segments: Vec<String> = layout
+        .segments
+        .iter()
+        .map(|segment| match segment {
+            CacheKeySegment::Text(text) => text.clone(),
+            CacheKeySegment::Host => HOST.to_owned(),
+            CacheKeySegment::TargetOwner { job, root } => format!("{job}.{root}.{HOST}"),
+            CacheKeySegment::Compat => format!("${{{{ steps.{PREPARE_STEP}.outputs.compat }}}}"),
+            CacheKeySegment::Lock(path) => hash_files(std::slice::from_ref(path)),
+            CacheKeySegment::RootLock(root) => {
+                format!("${{{{ steps.{PREPARE_STEP}.outputs.{LOCK_OUTPUT_PREFIX}{root} }}}}")
+            }
+            CacheKeySegment::SourcesLocks => {
+                format!("${{{{ steps.{SOURCES_LOCKS_STEP}.outputs.hash }}}}")
+            }
+            CacheKeySegment::Mise => format!("mise{mise_version}"),
+            CacheKeySegment::Commit => COMMIT.to_owned(),
+            CacheKeySegment::RunId => RUN_ID.to_owned(),
+            CacheKeySegment::DeltaBase => DELTA_BASE.to_owned(),
+        })
+        .collect();
     RenderedKey {
-        key: layout.segments.join("-"),
+        key: segments.join("-"),
         restore_keys: layout
-            .fallbacks
+            .fallback_lengths
             .iter()
-            .map(|length| format!("{}-", layout.segments[..*length].join("-")))
+            .map(|&length| format!("{}-", segments[..length].join("-")))
             .collect(),
     }
 }
 
-fn hash_files(path: &RepoPath) -> String {
-    format!(
-        "${{{{ hashFiles({}) }}}}",
-        string_expression(&glob_literal(path.as_str()))
-    )
+pub(crate) fn hash_files(paths: &[RepoPath]) -> String {
+    let patterns: Vec<String> = paths
+        .iter()
+        .map(|path| string_expression(&glob_literal(path.as_str())))
+        .collect();
+    format!("${{{{ hashFiles({}) }}}}", patterns.join(", "))
 }
 
 pub(crate) fn glob_literal(text: &str) -> String {
@@ -108,7 +73,7 @@ pub(crate) fn glob_literal(text: &str) -> String {
             other => vec![other],
         })
         .collect();
-    if escaped.starts_with(['!', '#']) {
+    if escaped.starts_with(['!', '#', '~']) {
         format!("./{escaped}")
     } else {
         escaped

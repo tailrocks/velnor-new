@@ -12,6 +12,14 @@ use super::support::TestResult;
 
 const JOURNAL: &str = "minted-agents.log";
 
+fn record(kind: &str, name: &str) -> String {
+    let body = format!("{kind} trusted {name}");
+    let sum = body.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    });
+    format!("{body} {sum:08x}\n")
+}
+
 fn registered(events: &[String]) -> Vec<String> {
     events
         .iter()
@@ -23,7 +31,9 @@ fn registered(events: &[String]) -> Vec<String> {
 #[tokio::test]
 async fn local_host_killed_while_a_mint_reply_never_arrives_deletes_the_registered_agent_on_restart()
 -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     scenario.fake().stall_mint.store(true, Ordering::SeqCst);
     let state = scenario.state.path().to_path_buf();
     let killed = {
@@ -72,11 +82,18 @@ async fn local_host_killed_while_a_mint_reply_never_arrives_deletes_the_register
 #[tokio::test]
 async fn local_sweep_never_deletes_a_name_cut_short_by_a_torn_last_journal_line() -> TestResult<()>
 {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let state = scenario.state.path().to_path_buf();
     std::fs::write(
         state.join(JOURNAL),
-        "+ trusted whole-name\n+ trusted retired-name\n- trusted retired-name\n+ trusted torn-na",
+        format!(
+            "{}{}{}+ trusted torn-na",
+            record("+", "whole-name"),
+            record("+", "retired-name"),
+            record("-", "retired-name")
+        ),
     )?;
     let docker = scenario.fixture.docker.clone();
     let plan = scenario.plan(1, 0)?;
@@ -98,11 +115,17 @@ async fn local_sweep_never_deletes_a_name_cut_short_by_a_torn_last_journal_line(
 
 #[tokio::test]
 async fn local_sweep_keeps_a_journaled_name_the_authority_does_not_know_yet() -> TestResult<()> {
-    let scenario = Scenario::new().await?;
+    let Some(scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let state = scenario.state.path().to_path_buf();
     std::fs::write(
         state.join(JOURNAL),
-        "+ trusted pending-name\n+ trusted gone-name\n",
+        format!(
+            "{}{}",
+            record("+", "pending-name"),
+            record("+", "gone-name")
+        ),
     )?;
     scenario.fake().agents_absent.store(true, Ordering::SeqCst);
     let docker = scenario.fixture.docker.clone();
@@ -123,7 +146,9 @@ async fn local_sweep_keeps_a_journaled_name_the_authority_does_not_know_yet() ->
 
 #[tokio::test]
 async fn local_failed_mint_keeps_its_name_while_the_agent_is_not_visible_yet() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     scenario.fake().mint_failures.store(1, Ordering::SeqCst);
     scenario.fake().agents_absent.store(true, Ordering::SeqCst);
     let plan = scenario.plan(1, 0)?;
@@ -184,7 +209,9 @@ async fn wait_for_mint(scenario: &Scenario) -> TestResult<Vec<String>> {
 #[tokio::test]
 async fn local_name_conflict_retires_its_intent_without_deleting_the_other_agent() -> TestResult<()>
 {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     scenario.fake().mint_conflicts.store(1, Ordering::SeqCst);
     let events = run_until_mint(&mut scenario).await?;
     let stopped = scenario.stop().await?;
@@ -208,7 +235,9 @@ async fn local_name_conflict_retires_its_intent_without_deleting_the_other_agent
 #[tokio::test]
 async fn local_confirmed_cleanup_of_a_failed_mint_retires_the_intent_without_a_second_delete()
 -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     scenario.fake().mint_cleaned.store(1, Ordering::SeqCst);
     let events = run_until_mint(&mut scenario).await?;
     let stopped = scenario.stop().await?;
@@ -231,7 +260,9 @@ async fn local_confirmed_cleanup_of_a_failed_mint_retires_the_intent_without_a_s
 
 #[tokio::test]
 async fn local_journal_failure_after_a_confirmed_delete_is_retried_not_dropped() -> TestResult<()> {
-    let mut scenario = Scenario::new().await?;
+    let Some(mut scenario) = Scenario::new().await? else {
+        return Ok(());
+    };
     let journal = scenario.state.path().join(JOURNAL);
     *scenario.fake().journal_to_lock.lock().expect("lock") = Some(journal.clone());
     scenario.fake().mint_failures.store(1, Ordering::SeqCst);

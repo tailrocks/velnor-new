@@ -100,7 +100,15 @@ fn mapping(lines: &mut Vec<Line>, start: usize, indent: usize) -> Result<(Node, 
     let mut at = start;
     while at < lines.len() && lines[at].0 == indent && !lines[at].1.starts_with("- ") {
         let (key, value) = split(&lines[at].1)?;
-        if value.is_empty() {
+        if value == "|" {
+            let mut text = Vec::new();
+            at += 1;
+            while at < lines.len() && lines[at].0 > indent {
+                text.push(lines[at].1.clone());
+                at += 1;
+            }
+            items.push((key, Node::Scalar(text.join("\n"))));
+        } else if value.is_empty() {
             let nested = lines
                 .get(at + 1)
                 .filter(|next| next.0 > indent)
@@ -177,4 +185,17 @@ fn scalar(value: &str) -> Result<Node, String> {
             .trim_end()
             .to_owned(),
     ))
+}
+
+pub(crate) fn document(text: &str) -> Result<serde_json::Value, serde_saphyr::Error> {
+    let mut budget = serde_saphyr::Budget::default();
+    budget.max_depth = 32;
+    budget.max_nodes = 262_144;
+    budget.max_events = 524_288;
+    budget.max_total_scalar_bytes = 16 * 1024 * 1024;
+    budget.max_documents = 1;
+    budget.enforce_alias_anchor_ratio = false;
+    let mut options = serde_saphyr::Options::default();
+    options.budget = Some(budget);
+    serde_saphyr::from_str_with_options(text, options)
 }

@@ -4,7 +4,7 @@
 use std::collections::BTreeSet;
 use std::error::Error;
 
-use velnor_gen::expected_files;
+use crate::release_unguarded::expected_release;
 use velnor_model::{
     PackageName, RELEASE_CONFIG_PATH, RELEASE_WORKFLOW_PATH, RepoPath, RepoView, Target,
     TargetKind, TargetName,
@@ -90,7 +90,7 @@ pub(crate) fn release_view(
         roots.iter().map(|root| join_manifest(root.dir)).collect()
     };
     let refs: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let mut view = view(&refs, None)?;
+    let mut view = view(&refs, Some(b"full_run = \"off\"\n"))?;
     for (root, manifest) in roots.iter().zip(&manifests) {
         let metadata = view
             .rust_metadata
@@ -158,7 +158,7 @@ pub(crate) fn render(
     roots: &[Root],
     release_toml: Option<&str>,
 ) -> Result<(String, Node), Box<dyn Error>> {
-    let mut files = expected_files(&release_view(roots, release_toml)?)?;
+    let mut files = expected_release(&release_view(roots, release_toml)?)?;
     let text = files
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("release.yml was not rendered")?;

@@ -11,7 +11,17 @@ pub(crate) fn pins() -> ProductReleasePins {
         macos_x86_64_setup: setup,
         install_gate_tools_argv: argv(&["mise", "install", "gh@2.103.2"]),
         install_build_tools_argv: argv(&["mise", "install", "rust@1.91.0", "mr-boxington@1.0.0"]),
-        install_qualify_tools_argv: argv(&["mise", "install", "opentofu@1.13.2"]),
+        install_qualify_tools_argv: [
+            "mise",
+            "install",
+            "rust@1.91.0",
+            "bun@1.4.4",
+            "jactionlint@2.103.2",
+            "shellcheck@0.11.0",
+        ]
+        .into_iter()
+        .map(str::to_owned)
+        .collect(),
         qualify_mbx_action_steps: [fixture_step(), fixture_step(), fixture_step()],
         install_runner_build_tools_argv: install_runner_build_tools_argv(),
         install_gh_argv: argv(&["mise", "install", "gh@2.103.2"]),
@@ -52,12 +62,16 @@ pub(crate) fn pins() -> ProductReleasePins {
         verify_rust_argv: verify_rust_argv(),
         mr_boxington_version: "1.0.0".to_owned(),
         gh_version: "2.103.2".to_owned(),
+        bun_version: "1.4.4".to_owned(),
+        runner_workspace: velnor_actions_contract::config::RunnerWorkspaceConfig::default(),
     }
 }
 
 pub(crate) fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: "0.1.55".to_owned(),
         hosted_label: "ubuntu-26.04".to_owned(),
         scale_set: Schema2WorkflowRequest::canonical_scale_set()?,
@@ -99,7 +113,7 @@ fn image_release_builds_both_images_with_the_approved_source_revision() -> Resul
     let output = Command::new("/bin/sh")
         .arg("-c")
         .arg(&script)
-        .env("PATH", dir.path())
+        .env("PATH", format!("{}:/usr/bin:/bin", dir.path().display()))
         .env("BUILD_LOG", &log)
         .env("VELNOR_SOURCE_SHA", source)
         .output()?;
@@ -122,7 +136,7 @@ fn image_release_builds_both_images_with_the_approved_source_revision() -> Resul
         !Command::new("/bin/sh")
             .arg("-c")
             .arg(script)
-            .env("PATH", dir.path())
+            .env("PATH", format!("{}:/usr/bin:/bin", dir.path().display()))
             .env("BUILD_LOG", &missing_log)
             .env_remove("VELNOR_SOURCE_SHA")
             .output()?
@@ -160,7 +174,9 @@ fn release_consumers_keep_the_build_artifact_identity_on_job_reruns() -> Result<
     assert_build_only_artifact_steps(workflow, "publish-images")?;
 
     let binary_request = Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
         workflows: BTreeSet::from([RoutingWorkflow::MacosBinaryRelease]),
         ..request()?
     };

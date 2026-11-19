@@ -32,10 +32,10 @@ struct File<'a> {
 }
 
 #[derive(Debug, Deserialize)]
-pub(crate) struct ApiRelease {
-    pub(crate) id: u64,
-    pub(crate) tag_name: String,
-    pub(crate) draft: bool,
+struct ApiRelease {
+    id: u64,
+    tag_name: String,
+    draft: bool,
     author: Option<ApiAuthor>,
     upload_url: String,
 }
@@ -284,14 +284,14 @@ fn draft(github: &dyn GitHub, repo: &Repo, request: &Request) -> Result<Found, C
     }
 }
 
-pub(crate) fn made_by(release: &ApiRelease, bot: &str) -> bool {
+fn made_by(release: &ApiRelease, bot: &str) -> bool {
     release
         .author
         .as_ref()
         .is_some_and(|author| author.login == bot && author.kind == "Bot")
 }
 
-pub(crate) fn author(release: &ApiRelease) -> String {
+fn author(release: &ApiRelease) -> String {
     release.author.as_ref().map_or_else(
         || "nobody".to_owned(),
         |author| format!("{} ({})", author.login, author.kind),
@@ -319,7 +319,7 @@ fn assets(github: &dyn GitHub, repo: &Repo, id: u64) -> Result<Vec<ApiAsset>, Ci
     })
 }
 
-pub(crate) fn pages<T: DeserializeOwned>(
+fn pages<T: DeserializeOwned>(
     github: &dyn GitHub,
     what: &str,
     path: impl Fn(u32) -> String,

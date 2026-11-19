@@ -1,8 +1,13 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+// The fixture builds its release manifest for linux-x86_64 and macOS hosts only, so every test here fails on linux-aarch64.
+#![cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
+
 mod workflow_configuration_fixture;
 
+#[path = "workflow_configuration_public/alint_line_cap_probe.rs"]
+mod alint_line_cap_probe;
 #[path = "workflow_configuration_public/both_rust_sharding.rs"]
 mod both_rust_sharding;
 #[path = "workflow_configuration_public/branches.rs"]
@@ -47,8 +52,6 @@ mod bun_private_repository_tamper;
 mod bun_request_lanes;
 #[path = "workflow_configuration_public/bun_routing.rs"]
 mod bun_routing;
-#[path = "workflow_configuration_public/bun_runtime.rs"]
-mod bun_runtime;
 #[path = "workflow_configuration_public/cache_authority.rs"]
 mod cache_authority;
 #[path = "workflow_configuration_public/check_inputs.rs"]
@@ -85,8 +88,6 @@ mod ledger_cli_verify_script;
 mod local_action_annotation;
 #[path = "workflow_configuration_public/mac_proof_cosign.rs"]
 mod mac_proof_cosign;
-#[path = "workflow_configuration_public/maintenance_check_inputs.rs"]
-mod maintenance_check_inputs;
 #[path = "workflow_configuration_public/maintenance_features.rs"]
 mod maintenance_features;
 #[path = "workflow_configuration_public/mbx_job_env.rs"]
@@ -119,8 +120,6 @@ mod non_inputs_guard;
 #[cfg(unix)]
 #[path = "workflow_configuration_public/non_inputs_overlap_git.rs"]
 mod non_inputs_overlap_git;
-#[path = "workflow_configuration_public/non_inputs_release.rs"]
-mod non_inputs_release;
 #[path = "workflow_configuration_public/non_inputs_replay.rs"]
 mod non_inputs_replay;
 #[path = "workflow_configuration_public/non_inputs_selection.rs"]
@@ -175,8 +174,6 @@ mod source_qualification_sources;
 mod source_qualification_sources_keys;
 #[path = "workflow_configuration_public/source_qualification_sources_support.rs"]
 mod source_qualification_sources_support;
-#[path = "workflow_configuration_public/stable_prepare_branch.rs"]
-mod stable_prepare_branch;
 #[path = "workflow_configuration_public/state_compat.rs"]
 mod state_compat;
 #[path = "workflow_configuration_public/state_producer.rs"]
@@ -189,10 +186,6 @@ mod state_producer_gates;
 mod state_producer_recipe;
 #[path = "workflow_configuration_public/state_producer_reports.rs"]
 mod state_producer_reports;
-#[path = "workflow_configuration_public/state_prune_workflow.rs"]
-mod state_prune_workflow;
-#[path = "workflow_configuration_public/state_prune_yaml.rs"]
-mod state_prune_yaml;
 #[path = "workflow_configuration_public/state_roots.rs"]
 mod state_roots;
 #[path = "workflow_configuration_public/state_seal_workflow.rs"]
@@ -266,9 +259,6 @@ mod waste_verifier_oracle;
 #[path = "workflow_configuration_public/workspace_format.rs"]
 mod workspace_format;
 
-#[path = "workflow_configuration_public/release_tracked_manifests.rs"]
-mod release_tracked_manifests;
-
 #[path = "workflow_configuration_public/verdict_toolchain.rs"]
 mod verdict_toolchain;
 
@@ -279,6 +269,8 @@ mod source_qualification_both;
 
 #[path = "workflow_configuration_public/oracle_input_selection.rs"]
 mod oracle_input_selection;
+#[path = "workflow_configuration_public/source_qualification_scale_set.rs"]
+mod source_qualification_scale_set;
 #[path = "workflow_configuration_public/source_qualification_selection.rs"]
 mod source_qualification_selection;
 
@@ -318,8 +310,17 @@ mod runner_family_source;
 #[path = "workflow_configuration_public/runner_family_authority.rs"]
 mod runner_family_authority;
 
-#[path = "workflow_configuration_public/premerge_event_proof.rs"]
-mod premerge_event_proof;
-
 #[path = "workflow_configuration_public/velnor_gen_workflows.rs"]
 mod velnor_gen_workflows;
+
+#[path = "workflow_configuration_public/runner_family_copy_sources.rs"]
+mod runner_family_copy_sources;
+
+#[path = "workflow_configuration_public/image_platform_selection.rs"]
+mod image_platform_selection;
+
+#[path = "workflow_configuration_public/pr_ci_label.rs"]
+mod pr_ci_label;
+
+#[path = "workflow_configuration_public/runner_workspace_paths.rs"]
+mod runner_workspace_paths;

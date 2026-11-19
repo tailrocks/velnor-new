@@ -20,6 +20,7 @@ mod intents;
 mod launch;
 pub(in crate::journal) mod reservation;
 mod runtime;
+mod scale_set_delete;
 mod scope;
 mod session;
 pub(super) mod storage;
@@ -50,7 +51,14 @@ pub(crate) use reservation::{
     PreJitBootstrapContainer, PreJitCleanupInventory, PreJitCreateSpec, PreJitInitializerIdentity,
     PreJitNetworkIdentity, PreJitStorageObject,
 };
-pub(crate) use reservation::{UnboundInitializer, UnboundRetirementClaim, UnboundRetirementPhase};
+pub(crate) use reservation::{
+    UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,
+    UnboundRetirementPhase,
+};
+pub(crate) use scale_set_delete::{
+    ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode, ScaleSetDeleteRecord,
+    ScaleSetDeleteTarget, ScaleSetDeleted,
+};
 
 pub(in crate::journal) async fn validate_resources_bound(
     connection: &turso::Connection,
@@ -60,7 +68,7 @@ pub(in crate::journal) async fn validate_resources_bound(
     reservation::resources_bound(connection, connection_id, intent_id).await
 }
 
-pub(in crate::journal) async fn reservation_release_ready(
+pub(crate) async fn reservation_release_ready(
     connection: &turso::Connection,
     reservation_id: i64,
 ) -> Result<bool, crate::error::HostError> {
@@ -95,12 +103,12 @@ pub(crate) use reservation::{
     RecordedStorageNetwork, RequestPhysicalReservationResult, ReservationRequest,
     StorageAdmissionSample, StorageCleanupIdentity, StorageCleanupObserverWitness,
     StorageFilesystemKind, StorageInitializationClaim, StorageInodePolicy, StorageMedium,
-    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRemovalClaim,
-    StorageObjectCreateClaim, StorageObserver, StoragePoolLimit, StoragePoolObservation,
-    StoragePoolObservationInput, StorageProfile, StorageProvisioningAdmission,
-    StorageProvisioningMemoryObservation, StorageProvisioningPlan, StorageProvisioningRole,
-    StorageRole, StorageRoleLimit, StorageSampleIdentity, VerifiedMetadataInitialization,
-    VerifiedMetadataInitializationHandoff,
+    StorageMetadataSettlementClaim, StorageNetworkCreateClaim, StorageNetworkRecoveryIdentity,
+    StorageNetworkRemovalClaim, StorageObjectCreateClaim, StorageObserver, StoragePoolLimit,
+    StoragePoolObservation, StoragePoolObservationInput, StorageProfile,
+    StorageProvisioningAdmission, StorageProvisioningMemoryObservation, StorageProvisioningPlan,
+    StorageProvisioningRole, StorageRole, StorageRoleLimit, StorageSampleIdentity,
+    VerifiedMetadataInitialization, VerifiedMetadataInitializationHandoff,
 };
 
 pub(crate) use runtime::{EngineContext, SourceAuthorizationBinding};

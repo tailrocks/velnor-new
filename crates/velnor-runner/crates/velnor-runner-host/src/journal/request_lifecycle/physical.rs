@@ -95,6 +95,10 @@ impl ConnectionJournal {
         let Some((scale_set_id, witness_request_id)) = result else {
             return Ok(None);
         };
+        crate::journal::connection::reservation::jit_conflict::stamp_dispatch_claim(
+            self, intent_id,
+        )
+        .await?;
         Ok(Some(RunnerJitClaim {
             connection_id: self.connection_id().clone(),
             scale_set_id,

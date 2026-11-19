@@ -46,26 +46,17 @@ an enabled section requires exactly one of the two.
 
 ## 2. Pinned release-plz toolchain selection
 
-The table records the initial 2026-09-30 qualification. Velnor's current
-release-plz CLI pin is `0.3.172`, with crate checksum and source evidence in
-[`freshness-evidence-2026-10-13.md`](../implemented/freshness-evidence-2026-10-13.md).
-Reverify at execution. Pin the executable content and Action identity
-separately. No runtime `latest` lookup and no recompilation of the coordinator
-on every release.
+The release-plz CLI version and Linux x64 archive URL and SHA-256 come from
+`mise.lock`. The generator validates the lock entry and carries its URL and
+digest into the release plan. Generated release jobs download the archive,
+check it with `sha256sum --check`, and extract it before checkout and release
+credentials.
 
-| Component | Selection | Evidence |
-|---|---|---|
-| release-plz CLI | `0.3.169` (initial qualified baseline) | `release-plz-v0.3.169` release exists; tag `63a04978…`, commit `786894b6…` |
-| GitHub Action | `release-plz/action@v0.5.139` pinned to full SHA `b8d6b54b02889ff2ae2bb82e8b57c3a8fc1683a5` | Tag verified via `git ls-remote` on `release-plz/action`; peeled commit recorded |
-| Binary digest | TBD-integrator | Upstream publishes no checksum asset for `release-plz-v0.3.169`; the integrator MUST measure and record the SHA-256 of the exact consumed artifact out of band before protected use |
-
-Install-chain note: at the pinned Action tag, `action.yml` declares the
-`version` input with `default: "0.3.169"` — the Action release is paired with
-the CLI release, and the Action downloads the CLI from the official
-`release-plz/release-plz` release assets. Generated workflows MUST still set
-`command` and `version` explicitly on every invocation (§6); they MUST NOT
-rely on Action defaults, and MUST NOT use the Action's dual-command default
-or its partial dry-run behavior as a substitute for an explicit phase.
+`RELEASE_PLZ_CKSUM` in `crates/velnor-actions-mise/src/release_plz.rs` is the
+crates.io checksum for the `release-plz` 0.4.3 source crate. It does not verify
+the GitHub binary archive and the generator does not use it for installation.
+The generated release steps do not use `release-plz/action` or install
+release-plz through mise.
 
 ## 3. Selection contract
 
@@ -147,9 +138,9 @@ publish_features = ["pty"]
 
 `publish_features` requests verification with the feature; consumers still
 choose their own features. Keep `release-pr` and `release` invocations
-separate. When using the upstream Action, always set `command` and the exact
-binary `version`. Do not invent repeated package flags and do not treat JSON
-output as a no-side-effect release plan.
+separate. Generated steps run the pinned coordinator binary directly and do
+not use the upstream Action's `command` or `version` inputs. Do not invent
+repeated package flags or treat JSON output as a no-side-effect release plan.
 
 ## 7. Workflow boundaries and per-job permissions
 
@@ -256,9 +247,6 @@ registry, and immutable source. A dispatch MUST NOT widen this record.
 
 ## 9. Tag collision and registry absence
 
-The inspected release-plz 0.3.169 code returns early from the per-package
-release path when its expected tag already exists. Therefore:
-
 - Tag-exists-but-crate-absent is a collision/incomplete release report, never
   success. A zero exit, an existing tag, or an empty release-plz result is not
   proof of publication.
@@ -294,16 +282,6 @@ Recovery is per operation and per package:
 | Version exists with wrong ownership or contents | Stop; no overwrite, delete, yank, rebrand, or version switch without an explicit separately authorized remedy |
 | Cancellation/crash | Retain a durable incomplete receipt and revalidate before resuming |
 
-release-plz prints its JSON only after every package of a root is done, and
-returns early for a tag that exists, so a rerun after a partial failure gets
-nothing back for the packages the first run released. The tag job therefore
-also derives the tag of each released package from the checked-out version and
-its tag pattern, and records every one whose tag exists, whose release is not
-yet published, and which has exactly one draft release that the release App
-created; a draft anyone else created, or a second draft, fails the job. A
-recovered tag passes the same ancestry check as a fresh one, and its package
-output feeds the same finalizer and build jobs (helper 0.1.81+).
-
 No broad ignore-errors, no success on an empty result, no republishing every
 member after a partial failure. Use release-plz for publication with thin
 verification/reconciliation around it; do not assume a rerun repairs all
@@ -333,8 +311,7 @@ headers, credential-provider output, or private key material.
 - For exact-source bootstrap, the config comes from the trusted
   workflow/policy checkout while release-plz operates on a separate clean
   source checkout; never dirty the release checkout to insert config.
-- Qualified release-plz 0.3.169 requirements (observed 2026-09-30): the
-  git token arrives via the `GIT_TOKEN` env binding (upstream never
+- The git token arrives via the `GIT_TOKEN` env binding (upstream never
   reads `GITHUB_TOKEN`) and is required in every phase, including
   `--dry-run`; `release-pr` pushes its branch and `release` pushes
   tags, so those checkouts persist credentials while all others stay

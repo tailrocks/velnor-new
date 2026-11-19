@@ -1,24 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::{
-    path::Path,
-    time::{Duration, Instant},
-};
+use std::{path::Path, time::Duration};
 
 use bollard::Docker;
-use tokio::time::{Instant as TokioInstant, timeout_at};
+use tokio::time::{Instant, timeout_at};
 
 use crate::{
     config::HostConfig,
+    error::HostError,
     journal::Journal,
     launch::{
         ImageAuthority, SelectedEngineContext, VerifiedWorkerImages,
         bootstrap::{
-            UncertainRecovery, recover_uncertain_reservations, retire_uncertain_unbound_pairs,
+            INITIALIZER_RECOVERY_BUDGET, UncertainRecovery, UncertainRecoveryWork,
+            retire_uncertain_unbound_pairs, uncertain_recovery_work,
         },
     },
 };
+
+#[path = "removal_proof.rs"]
+mod removal_proof;
 
 pub(crate) const REMOVED_STARTUP_BUDGET: Duration = Duration::from_secs(120);
 
@@ -41,47 +43,83 @@ pub(crate) async fn reconcile_removed_at_startup(startup: &RemovedStartup<'_>) {
             defer(binding);
             break;
         }
+        removal_proof::record_github_absence(startup, binding).await;
         let scope = match startup.journal.existing_connection_scope(binding).await {
             Ok(scope) => scope,
             Err(error) => {
-                eprintln!(
-                    "host controller removed connection held connection={} reason={error}",
-                    binding.connection_id
-                );
+                held(binding, error);
                 continue;
             }
         };
-        let Ok(recovered) = timeout_at(
-            TokioInstant::from_std(startup.deadline),
-            Box::pin(recover_uncertain_reservations(&UncertainRecovery {
-                docker: startup.docker,
-                journal: startup.journal,
-                scope: &scope,
-                engine: startup.engine,
-                images: startup.images,
-                image_authority: startup.image_authority,
-                pass: 0,
-            })),
-        )
-        .await
-        else {
-            defer(binding);
-            break;
+        let recovery = UncertainRecovery {
+            docker: startup.docker,
+            journal: startup.journal,
+            scope: &scope,
+            engine: startup.engine,
+            images: startup.images,
+            image_authority: startup.image_authority,
+            pass: 0,
         };
-        let retired = retire_uncertain_unbound_pairs(
-            startup.deadline,
-            startup.docker,
-            &scope,
-            startup.engine,
-        )
-        .await;
-        if let Err(error) = recovered.and(retired) {
-            eprintln!(
-                "host controller removed connection held connection={} reason={error}",
-                binding.connection_id
-            );
+        let discovered = timeout_at(startup.deadline, uncertain_recovery_work(&recovery)).await;
+        match discovered {
+            Ok(Ok(work)) => recover_work(work, &recovery, startup.deadline).await,
+            Ok(Err(error)) => {
+                let retired = retire_uncertain_unbound_pairs(
+                    startup.deadline,
+                    startup.docker,
+                    &scope,
+                    startup.engine,
+                )
+                .await;
+                held(binding, retired.err().unwrap_or(error));
+            }
+            Err(_) => {
+                defer(binding);
+                break;
+            }
         }
     }
+}
+
+async fn recover_work(
+    work: Vec<UncertainRecoveryWork>,
+    recovery: &UncertainRecovery<'_>,
+    deadline: Instant,
+) {
+    let mut initializer_deadline = None;
+    for item in work {
+        if Instant::now() >= deadline {
+            break;
+        }
+        match item {
+            UncertainRecoveryWork::Initializer(initializer) => {
+                let until = *initializer_deadline.get_or_insert_with(|| {
+                    deadline.min(Instant::now() + INITIALIZER_RECOVERY_BUDGET)
+                });
+                if Instant::now() < until {
+                    initializer.recover_before(recovery, until, deadline).await;
+                }
+            }
+            UncertainRecoveryWork::AssignedPair(pair) => {
+                if timeout_at(deadline, Box::pin(pair.recover(recovery)))
+                    .await
+                    .is_err()
+                {
+                    break;
+                }
+            }
+            UncertainRecoveryWork::UnboundPair(pair) => {
+                pair.recover_before(recovery, deadline).await;
+            }
+        }
+    }
+}
+
+fn held(binding: &crate::config::RepositoryConnection, error: HostError) {
+    eprintln!(
+        "host controller removed connection held connection={} reason={error}",
+        binding.connection_id
+    );
 }
 
 fn defer(binding: &crate::config::RepositoryConnection) {
