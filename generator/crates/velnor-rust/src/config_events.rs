@@ -32,12 +32,12 @@ pub(crate) fn full_run(value: String) -> Result<FullRun, Reason> {
     })
 }
 
-pub(crate) fn docs_run(configured: Option<&str>) -> Result<DocsRun, Reason> {
+pub(crate) fn docs_run(key: &'static str, configured: Option<&str>) -> Result<DocsRun, Reason> {
     match configured {
         None | Some("always") => Ok(DocsRun::Always),
         Some("post_merge") => Ok(DocsRun::PostMerge),
         Some(other) => Err(Reason::InvalidValue {
-            key: "docs",
+            key,
             value: other.to_owned(),
         }),
     }

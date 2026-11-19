@@ -13,7 +13,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 29] = [
+const KEYS: [&str; 30] = [
     "private_sources",
     "cache_check_blocks",
     "cache_debug",
@@ -24,6 +24,7 @@ const KEYS: [&str; 29] = [
     "crates_mirror",
     "mbx_shared_store",
     "docs",
+    "check_alone",
     "timeout_minutes",
     "exclude",
     "non_inputs",
@@ -59,6 +60,7 @@ struct RawConfig {
     private_sources: Option<crate::config_private::RawPrivateSources>,
     mbx_shared_store: Option<bool>,
     docs: Option<String>,
+    check_alone: Option<String>,
     timeout_minutes: Option<u16>,
     #[serde(default)]
     exclude: Vec<String>,
@@ -147,7 +149,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        docs_run: docs_run(raw.docs.as_deref()).map_err(invalid)?,
+        docs_run: docs_run("docs", raw.docs.as_deref()).map_err(invalid)?,
+        check_alone_run: docs_run("check_alone", raw.check_alone.as_deref()).map_err(invalid)?,
         private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
