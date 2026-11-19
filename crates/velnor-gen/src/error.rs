@@ -33,7 +33,7 @@ pub enum GenerateError {
     CheckAloneHelperTooOld(HelperVersion),
     TooManySourceRoots(usize),
     FamilyTagHelperTooOld(HelperVersion),
-    LaneGuardHelperTooOld(HelperVersion),
+    TestLaneHelperTooOld(HelperVersion),
     HelperLockLacksMacos {
         version: HelperVersion,
         runner: String,
@@ -110,9 +110,9 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} does not know the check_alone key of .velnor/rust-ci.toml; pin velnor-ci 0.1.91 or later with `velnor-gen pin-helper 0.1.91`"
             ),
-            Self::LaneGuardHelperTooOld(version) => write!(
+            Self::TestLaneHelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot run lane-guard; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"
+                "velnor-ci {version} does not know the test_lane key of .velnor/rust-ci.toml; pin velnor-ci 0.1.93 or later with `velnor-gen pin-helper 0.1.93`"
             ),
             Self::HelperLockLacksMacos { version, runner } => write!(
                 f,

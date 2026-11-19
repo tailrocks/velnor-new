@@ -13,7 +13,7 @@ const GUARD_RUN: &str = ". \"$VELNOR_EXEC\" run -- velnor-ci lane-guard --featur
 type Guard = (String, usize, serde_json::Value);
 
 fn jobs_of(config: &str) -> Result<serde_json::Value, Box<dyn std::error::Error>> {
-    let repo = lane_view("0.1.86", config)?;
+    let repo = lane_view("0.1.93", config)?;
     Ok(crate::yaml_tree::document(&workflow(&repo)?)?["jobs"].clone())
 }
 
@@ -96,25 +96,28 @@ fn a_guard_on_a_non_root_lane_runs_in_that_roots_directory() -> TestResult {
 }
 
 #[test]
-fn a_filtered_lane_needs_helper_0_1_86() -> TestResult {
-    let off = format!("full_run = 'off'\n{LANE}");
-    for helper in ["0.1.81", "0.1.85"] {
-        let error = workflow(&lane_view(helper, &off)?)
-            .err()
-            .ok_or("an old helper was accepted")?;
-        let text = error.to_string();
-        assert!(
-            text.contains(&format!("velnor-ci {helper} cannot run lane-guard"))
-                && text.contains("pin-helper 0.1.86"),
-            "{text}"
-        );
-        assert!(
-            error
-                .downcast_ref::<GenerateError>()
-                .is_some_and(|e| matches!(e, GenerateError::LaneGuardHelperTooOld(_))),
-            "{text}"
-        );
+fn a_test_lane_needs_a_helper_that_reads_the_key_0_1_93() -> TestResult {
+    let unfiltered = "[[test_lane]]\nroot = '.'\nfeatures = ['local-mode']\n";
+    for lane in [format!("full_run = 'off'\n{LANE}"), unfiltered.to_owned()] {
+        for helper in ["0.1.81", "0.1.86", "0.1.92"] {
+            let error = workflow(&lane_view(helper, &lane)?)
+                .err()
+                .ok_or("an old helper was accepted")?;
+            let text = error.to_string();
+            assert!(
+                text.contains(&format!(
+                    "velnor-ci {helper} does not know the test_lane key"
+                )) && text.contains("pin-helper 0.1.93"),
+                "{text}"
+            );
+            assert!(
+                error
+                    .downcast_ref::<GenerateError>()
+                    .is_some_and(|e| matches!(e, GenerateError::TestLaneHelperTooOld(_))),
+                "{text}"
+            );
+        }
+        assert!(workflow(&lane_view("0.1.93", &lane)?).is_ok());
     }
-    assert!(workflow(&lane_view("0.1.86", &off)?).is_ok());
     Ok(())
 }
