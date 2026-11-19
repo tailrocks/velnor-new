@@ -26,6 +26,7 @@ on:
           - pressure
           - mask
           - outputs
+          - js-pin
 permissions: {}
 jobs:
   js-hosted:
@@ -108,6 +109,28 @@ jobs:
         run: echo expected-negative
       - name: Intentional failure
         run: exit 1
+  js-pin-hosted:
+    name: Pinned JavaScript / GitHub hosted
+    if: '${{ inputs.mode == ''js-pin'' }}'
+    permissions: {}
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Pinned script
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: 'console.log(''js-pin-ok'')'
+  js-pin-scale-set:
+    name: Pinned JavaScript / Velnor Scale Set
+    if: '${{ inputs.mode == ''js-pin'' }}'
+    permissions: {}
+    runs-on: '${{ (!startsWith(github.event_name, ''pull_request'') || github.event.pull_request.head.repo.full_name == github.repository) && ''ubuntu-26.04-scale-set'' || ''ubuntu-26.04'' }}'
+    timeout-minutes: 5
+    steps:
+      - name: Pinned script
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3
+        with:
+          script: 'console.log(''js-pin-ok'')'
   composite-hosted:
     name: Composite / GitHub hosted
     if: '${{ inputs.mode == ''composite'' }}'
