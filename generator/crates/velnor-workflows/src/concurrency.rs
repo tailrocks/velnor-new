@@ -73,7 +73,7 @@ fn literal_byte(byte: u8) -> bool {
 
 pub(crate) fn refuse_shared_group(
     id: &str,
-    caller: [Option<&Concurrency>; 2],
+    own_groups: [Option<&Concurrency>; 2],
     target: &CallTarget,
     declared: &[Workflow],
 ) -> Result<(), WorkflowsError> {
@@ -83,10 +83,10 @@ pub(crate) fn refuse_shared_group(
     let Some(callee) = declared.iter().find(|flow| &flow.file == file) else {
         return Ok(());
     };
-    let mut called = Vec::new();
-    groups_of(callee, declared, &mut called);
-    let shared = caller.into_iter().flatten().find(|own| {
-        called.iter().any(|other| {
+    let mut nested = Vec::new();
+    groups_of(callee, declared, &mut nested);
+    let shared = own_groups.into_iter().flatten().find(|own| {
+        nested.iter().any(|other| {
             other.group == own.group && (own.cancel_in_progress || other.cancel_in_progress)
         })
     });
