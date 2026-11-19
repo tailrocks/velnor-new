@@ -34,8 +34,12 @@ mod git;
 mod git_witness;
 mod http;
 mod image_candidate;
+mod input_scopes;
 mod input_snapshot;
+mod input_target;
 mod inputs;
+mod inputs_batch;
+mod inputs_git;
 mod manifests;
 mod merge_group;
 mod plan;
@@ -54,7 +58,9 @@ mod report_inputs;
 mod required;
 mod resolve_qualification;
 mod restored;
+mod restored_targets;
 mod run;
+mod scope_cache;
 mod setup;
 mod small;
 mod sources;
@@ -69,13 +75,16 @@ use std::{path::Path, process::ExitCode};
 
 pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
-pub use self::cold::{cold_on_failure, every_root_target, root_target};
+pub use self::cold::{cold_on_failure, every_root_target};
+pub use self::input_target::{CaseSensitivity, check_input_target_with};
 pub use self::inputs::{restore_inputs, save_inputs};
+pub use self::inputs_batch::restore_inputs_batch_with;
 pub use self::restored::{break_time_ties, break_time_ties_with};
+pub use self::scope_cache::ScopeCacheIo;
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
+    ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand, ReleaseGateArgs,
     SourcesCommand, TestGroupsCommand,
 };
 use crate::collect::collect;
@@ -157,50 +166,6 @@ pub fn main() -> ExitCode {
     }
 }
 
-fn budget_limit() -> Result<Option<u64>, CiError> {
-    match std::env::var("VELNOR_CACHE_BUDGET_BYTES") {
-        Ok(text) if !text.trim().is_empty() => text
-            .trim()
-            .parse()
-            .map(Some)
-            .map_err(|_| CiError::new("VELNOR_CACHE_BUDGET_BYTES is not a number of bytes")),
-        _ => Ok(None),
-    }
-}
-
-fn run_decide(args: DecideArgs) -> Result<String, CiError> {
-    let temp = std::env::var_os("RUNNER_TEMP")
-        .filter(|dir| !dir.is_empty())
-        .ok_or_else(|| {
-            CiError::new("set RUNNER_TEMP to the directory containing velnor-run.log")
-        })?;
-    let log_path = Path::new(&temp).join("velnor-run.log");
-    let log = fs::read(&log_path)
-        .map_err(|e| CiError::new(format!("cannot read {}: {e}", log_path.display())))?;
-    let target = cache_paths::validated(&current_dir()?, &args.target_dir)?;
-    let manifests = cache_paths::list("VELNOR_CACHE_MANIFESTS")?.unwrap_or(args.manifest_path);
-    let refusal = cache_sources::refusal(&current_dir()?, &manifests)?;
-    let sources = refusal.is_none();
-    let decision = if let Some(reason) = refusal {
-        Decision {
-            save: false,
-            report: reason,
-        }
-    } else {
-        let counts = activity::activity()?
-            .unwrap_or_else(|| crate::logscan::scan(&String::from_utf8_lossy(&log)));
-        cache::decide_counts(
-            &counts,
-            &target,
-            args.archive.as_deref(),
-            now_seconds(),
-            budget_limit()?,
-        )?
-    };
-    append_outputs(&format!("save={}\nsources={sources}\n", decision.save))?;
-    Ok(decision.report)
-}
-
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
         Command::Delta(command) => delta::run(command),
@@ -209,15 +174,18 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
         Command::Bench(BenchCommand::Budget(args)) => budget::run_budget(&args),
         Command::Inputs(InputsCommand::Save(args)) => {
-            save_inputs(&current_dir()?, &args.target_dir)
+            inputs_batch::save_args(&current_dir()?, &args)
         }
         Command::Inputs(InputsCommand::Restore(args)) => {
             let root = current_dir()?;
-            cold_on_failure(
-                &[cache_paths::validated(&root, &args.target_dir)?],
-                "inputs restore",
-                || restore_inputs(&root, &args.target_dir),
-            )
+            input_target::check_target(&root, &args.target_dir)?;
+            restored_targets::record(&root, &args.target_dir)?;
+            cold_on_failure(&[root.join(&args.target_dir)], "inputs restore", || {
+                restore_inputs(&root, &args.target_dir)
+            })
+        }
+        Command::Inputs(InputsCommand::RestoreAll(args)) => {
+            inputs_batch::restore_args(&current_dir()?, &args)
         }
         Command::Inputs(InputsCommand::Audit(AuditArgs { write })) => audit_inputs(
             &current_dir()?,
@@ -257,7 +225,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
-        Command::Cache(CacheCommand::Decide(args)) => run_decide(args),
+        Command::Cache(CacheCommand::Decide(args)) => cache::run_decide(&args),
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),

@@ -21,7 +21,8 @@ pub(super) fn read(directory: &Path) -> Result<ReportCheckout, CiError> {
     let tracked = super::inputs::tracked_paths(directory)?;
     let tracked_paths = tracked
         .paths
-        .into_iter()
+        .iter()
+        .filter_map(|path| path.to_str())
         .map(RepoPath::new)
         .collect::<Result<BTreeSet<_>, _>>()
         .map_err(ci)?;

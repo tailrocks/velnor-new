@@ -106,6 +106,87 @@ fn a_symlinked_incremental_directory_fails_without_save_authorization() {
 }
 
 #[test]
+fn explicit_restore_targets_preserve_cargo_configuration_before_any_expiry() {
+    let repo = setup();
+    for target in ["build-cache", ".cargo"] {
+        repo.write_unstaged(&format!("{target}/.velnor/born"), "2000-01-01\n");
+        repo.write_unstaged(&format!("{target}/sentinel"), "keep\n");
+    }
+    let config = "[build]\njobs = 2\n";
+    repo.write_unstaged(".cargo/config.toml", config);
+    for operation in ["save", "restore"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+            .args(["inputs", operation, "--target-dir", ".cargo"])
+            .current_dir(repo.root())
+            .output()
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        assert!(!output.status.success(), "{operation}: {output:?}");
+        assert!(!repo.root().join(".cargo/.velnor/inputs.tsv").exists());
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args([
+            "restored",
+            "--target-dir",
+            "build-cache",
+            "--target-dir",
+            ".cargo",
+        ])
+        .env("VELNOR_BASE_MAX_AGE_DAYS", "7")
+        .env_remove("GITHUB_OUTPUT")
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".cargo/config.toml")).unwrap_or_default(),
+        config
+    );
+    for target in ["build-cache", ".cargo"] {
+        assert_eq!(
+            fs::read_to_string(repo.root().join(target).join("sentinel")).unwrap_or_default(),
+            "keep\n"
+        );
+    }
+}
+
+#[test]
+fn old_restored_receipts_cannot_expire_cargo_configuration() {
+    let repo = setup();
+    let config = "[build]\njobs = 2\n";
+    repo.write_unstaged(".cargo/config.toml", config);
+    for target in ["build-cache", ".cargo"] {
+        repo.write_unstaged(&format!("{target}/.velnor/born"), "2000-01-01\n");
+        repo.write_unstaged(&format!("{target}/sentinel"), "keep\n");
+    }
+    let target =
+        fs::canonicalize(repo.root().join(".cargo")).unwrap_or_else(|e| unreachable!("{e}"));
+    let text = target.to_str().unwrap_or_else(|| unreachable!());
+    let name = velnor_rust::sha256_hex(text.as_bytes());
+    repo.write_unstaged(
+        &format!(".git/velnor-restored-targets/{name}.json"),
+        &serde_json::to_string(&target).unwrap_or_else(|e| unreachable!("{e}")),
+    );
+    let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+        .args(["restored", "--target-dir", "build-cache"])
+        .env("VELNOR_BASE_MAX_AGE_DAYS", "7")
+        .env_remove("GITHUB_OUTPUT")
+        .current_dir(repo.root())
+        .output()
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    assert!(!output.status.success(), "{output:?}");
+    assert_eq!(
+        fs::read_to_string(repo.root().join(".cargo/config.toml")).unwrap_or_default(),
+        config
+    );
+    for target in ["build-cache", ".cargo"] {
+        assert_eq!(
+            fs::read_to_string(repo.root().join(target).join("sentinel")).unwrap_or_default(),
+            "keep\n"
+        );
+    }
+}
+
+#[test]
 fn configured_target_is_expired_and_removed_on_restoration_failure() {
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
@@ -122,7 +203,7 @@ fn configured_target_is_expired_and_removed_on_restoration_failure() {
                 .unwrap_or_else(|e| unreachable!("{e}"));
             let blob = String::from_utf8_lossy(&blob.stdout).trim().to_owned();
             let mut entry = format!("100644,{blob},").into_bytes();
-            entry.extend_from_slice(b"non-utf8-\xff");
+            entry.extend_from_slice(b"build-cache/non-utf8-\xff");
             let status = Command::new("git")
                 .args(["update-index", "--add", "--cacheinfo"])
                 .arg(OsStr::from_bytes(&entry))
@@ -141,8 +222,22 @@ fn configured_target_is_expired_and_removed_on_restoration_failure() {
             .current_dir(repo.root())
             .output()
             .unwrap_or_else(|e| unreachable!("{e}"));
-        assert!(output.status.success(), "{output:?}");
-        assert!(!repo.root().join("build-cache").exists(), "{output:?}");
+        if invalid_path {
+            assert!(!output.status.success(), "{output:?}");
+            assert!(
+                String::from_utf8_lossy(&output.stderr)
+                    .contains("cache target contains tracked content"),
+                "{output:?}"
+            );
+            assert_eq!(
+                fs::read_to_string(repo.root().join("build-cache/debug/deps/app"))
+                    .unwrap_or_default(),
+                "old"
+            );
+        } else {
+            assert!(output.status.success(), "{output:?}");
+            assert!(!repo.root().join("build-cache").exists(), "{output:?}");
+        }
         assert!(repo.root().join("Cargo.lock").is_file());
     }
 }

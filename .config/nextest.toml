@@ -59,6 +59,10 @@ filter = 'package(=velnor-gen) and test(=helper_tool_paths::setup_records_non_de
 slow-timeout = { period = "10s", terminate-after = 1 }
 
 [[profile.default.overrides]]
+filter = "package(=velnor-ci) and (test(io_restore_cargo::) | test(io_restore_cold_cargo::) | test(io_raw_paths::) | test(io_cold_targets::) | test(io_shared_targets::) | test(io_foreign_targets::) | test(io_restored_targets::) | test(io_snapshot_storage::) | test(io_inputs_scope::) | test(io_inputs_batch::) | test(io_scope_cache::) | test(io_scope_cache_races::) | test(io_scope_cache_paths::))"
+slow-timeout = { period = "30s", terminate-after = 1 }
+
+[[profile.default.overrides]]
 filter = 'package(=velnor-ci) and (test(crates_mirror) | test(=audit::migration::targets::a_cross_target_created_by_cargo_at_the_source_root_does_not_hide_source_changes))'
 slow-timeout = { period = "30s", terminate-after = 1 }
 

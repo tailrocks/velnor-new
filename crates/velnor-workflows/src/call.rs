@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 
 use crate::check::Context;
 use crate::error::{WorkflowsError, refuse};
-use crate::expression::{Scope, check, is_identifier, whole_expression};
+use crate::expression::{Scope, check, is_identifier, result_type, whole_expression};
 use crate::plan::{Call, CallTarget, CallValue, InputKind, Workflow};
 use crate::raw::RawJob;
 
@@ -104,7 +104,9 @@ fn fence_callee(
     target: &CallTarget,
     ctx: &Context<'_>,
 ) -> Result<(), WorkflowsError> {
-    let started_by_a_pull_request = ctx.triggers.pull_request.is_some() || ctx.triggers.merge_group;
+    let started_by_a_pull_request = ctx.triggers.pull_request.is_some()
+        || ctx.triggers.merge_group
+        || ctx.triggers.workflow_run.is_some();
     let outside = match target {
         CallTarget::Local(_) | CallTarget::Pinned(_) => true,
         CallTarget::Declared(file) => ctx
@@ -115,7 +117,7 @@ fn fence_callee(
     };
     if started_by_a_pull_request && outside {
         return refuse(format!(
-            "job {id} calls {uses}, which runs jobs this model cannot check or put behind the fork fence, from a workflow that a pull_request or merge_group event starts; call a workflow declared earlier in this file instead, or start this workflow from push, schedule, workflow_dispatch or workflow_call only"
+            "job {id} calls {uses}, which runs jobs this model cannot check or put behind the fork fence, from a workflow that a pull_request, merge_group or workflow_run event starts; call a workflow declared earlier in this file instead, or start this workflow from push, schedule, workflow_dispatch or workflow_call only"
         ));
     }
     Ok(())
@@ -205,9 +207,16 @@ fn value(
     match raw {
         toml::Value::String(text) if text.contains("${{") => {
             check(text, scope)?;
-            Ok(CallValue::Expression(
-                whole_expression(text).unwrap_or_default().to_owned(),
-            ))
+            let inner = whole_expression(text).unwrap_or_default();
+            if let Some(found) = result_type(inner)
+                && !found.fits(kind)
+            {
+                return Err(mismatch(&format!(
+                    "an expression that evaluates to {}",
+                    found.name()
+                )));
+            }
+            Ok(CallValue::Expression(inner.to_owned()))
         }
         toml::Value::String(text) => match kind {
             None | Some(InputKind::String | InputKind::Environment | InputKind::Choice(_)) => {
