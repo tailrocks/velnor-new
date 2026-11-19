@@ -27,7 +27,6 @@ pub(super) async fn request(
     ok.then(|| bytes.to_vec())
 }
 
-/// Transport health: the endpoint answered with an HTTP success.
 pub(super) async fn wait_for(
     proxy: &Proxy,
     path: &str,
@@ -37,7 +36,6 @@ pub(super) async fn wait_for(
     poll(proxy, path, deadline, what, |_| Ok(())).await
 }
 
-/// Runner readiness: the answer must be JSON with `"online": true`.
 pub(super) async fn wait_online(
     proxy: &Proxy,
     path: &str,
@@ -78,7 +76,7 @@ async fn poll(
         }
         if tokio::time::Instant::now() >= deadline {
             return Err(io::Error::other(format!(
-                "{what} did not connect within 60 s (last state: {last})"
+                "{what} did not connect before the readiness deadline (last state: {last})"
             )));
         }
         tokio::time::sleep(Duration::from_millis(200)).await;

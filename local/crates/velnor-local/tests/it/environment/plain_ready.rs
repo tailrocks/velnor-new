@@ -54,11 +54,11 @@ fn online_when_ready(path: &str, ready: bool) -> String {
 async fn up_waits_until_the_plain_runner_reports_online_not_just_http_200() {
     let dir = temp_dir("environment-plain-online");
     let delay = std::time::Duration::from_millis(700);
+    let started = tokio::time::Instant::now();
     let address = runner_service(online_when_ready, delay).await;
     let env = Environment::at(&dir, Published(address))
         .await
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let started = tokio::time::Instant::now();
     let up = env.up(&dir, &plain(&dir, 1, 0)).await;
     assert!(up.is_ok(), "{:?}", up.err());
     assert!(
@@ -72,8 +72,9 @@ async fn up_error(answer: fn(&str, bool) -> String, runners: (u16, u16)) -> Stri
     let address = runner_service(answer, std::time::Duration::from_secs(3600)).await;
     let env = Environment::at(&dir, Published(address))
         .await
-        .unwrap_or_else(|e| unreachable!("{e}"));
-    let limit = std::time::Duration::from_secs(70);
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .with_ready_timeout(std::time::Duration::from_millis(1500));
+    let limit = std::time::Duration::from_secs(30);
     let args = plain(&dir, runners.0, runners.1);
     let up = tokio::time::timeout(limit, env.up(&dir, &args)).await;
     up.unwrap_or_else(|_| unreachable!("up hung past the readiness deadline"))
@@ -82,7 +83,7 @@ async fn up_error(answer: fn(&str, bool) -> String, runners: (u16, u16)) -> Stri
         .to_string()
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn up_fails_with_a_clear_reason_when_a_plain_runner_stays_offline() {
     let error = up_error(online_when_ready, (1, 0)).await;
     assert!(
@@ -91,24 +92,33 @@ async fn up_fails_with_a_clear_reason_when_a_plain_runner_stays_offline() {
     );
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn up_fails_when_the_online_answer_is_malformed_or_missing() {
-    for answer in [
-        (|_: &str, _: bool| "not json".to_owned()) as fn(&str, bool) -> String,
-        |path, _| {
-            if path.contains("isagentonline") {
-                "{}".to_owned()
-            } else {
-                "{\"value\":[]}".to_owned()
-            }
-        },
+    for (answer, state) in [
+        (
+            (|_: &str, _: bool| "not json".to_owned()) as fn(&str, bool) -> String,
+            "malformed answer",
+        ),
+        (
+            |path, _| {
+                if path.contains("isagentonline") {
+                    "{}".to_owned()
+                } else {
+                    "{\"value\":[]}".to_owned()
+                }
+            },
+            "no boolean `online`",
+        ),
     ] {
         let error = up_error(answer, (1, 0)).await;
-        assert!(error.contains("runner 1"), "{error}");
+        assert!(
+            error.contains("runner 1") && error.contains(state),
+            "{error}"
+        );
     }
 }
 
-#[tokio::test(start_paused = true)]
+#[tokio::test]
 async fn up_requires_every_trusted_and_fork_plain_runner_online() {
     fn only_trusted(path: &str, _: bool) -> String {
         if path.contains("isagentonline") {
