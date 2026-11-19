@@ -193,6 +193,10 @@ fn the_real_release_plz_toml_validates_with_a_tools_release() -> TestResult {
         if with_workspace {
             with_metadata(&mut files, &[("Cargo.toml", &members)]);
         }
+        let manifest = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../Cargo.toml");
+        files
+            .cargo_manifest_texts
+            .insert("Cargo.toml".to_owned(), std::fs::read_to_string(manifest)?);
         let plan = ReleasePlan::read(&files)?;
         assert_eq!(plan.binaries.len(), 2);
         for binary in &plan.binaries {
