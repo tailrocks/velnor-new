@@ -6,7 +6,7 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 use std::process::Command;
 
-use super::prepare::{MISE, Setup, digest, prepare, reported, scratch_root};
+use super::prepare::{MISE, OsRelease, Setup, digest, prepare, reported, scratch_root};
 
 fn compat_with(name: &str, change: impl FnOnce(&mut Setup)) -> String {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
@@ -82,7 +82,7 @@ fn compat_follows_the_distro_in_os_release() {
         let path = dir.join(name);
         fs::write(&path, body).unwrap_or_else(|e| unreachable!("{e}"));
         let path: &'static str = Box::leak(path.display().to_string().into_boxed_str());
-        compat_with("compat-inputs", |setup| {
+        compat_with("compat-os-release", |setup| {
             setup.env.push(("VELNOR_OS_RELEASE", path));
         })
     };
@@ -110,10 +110,10 @@ fn an_unreadable_os_release_fails_prepare_instead_of_sharing_a_digest() {
 #[test]
 fn a_platform_without_os_release_still_prepares_with_its_own_identity() {
     let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
-    setup.os_release = false;
+    setup.os_release = OsRelease::Platform;
     let run = prepare("compat-no-os-release-platform", &setup);
     assert!(run.output.status.success(), "{:?}", run.output);
-    assert!(!digest(&run).is_empty());
+    assert_ne!(digest(&run), "");
 }
 
 #[test]
