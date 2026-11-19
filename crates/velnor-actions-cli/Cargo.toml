@@ -12,7 +12,6 @@ autotests = false
 [[bin]]
 name = "velnor-actions"
 path = "src/main.rs"
-test = false
 
 [[example]]
 name = "image-publication-fixture"

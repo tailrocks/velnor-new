@@ -6,6 +6,7 @@ mod base_steps;
 mod cache;
 mod cache_upload;
 mod cargo;
+mod draft_steps;
 mod env;
 mod events;
 mod gate;
@@ -20,6 +21,8 @@ mod release_family;
 mod release_finalize;
 mod release_outputs;
 mod release_steps;
+mod reusable;
+mod reusable_on;
 mod rules;
 mod steps;
 mod workflow;
@@ -32,15 +35,16 @@ use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 use crate::events::{concurrency, triggers};
 pub use crate::pinned_actions::{
-    ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
-    PINNED_ACTIONS, PinnedAction,
+    ACTIONS_CACHE, ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
+    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
 };
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
+pub use crate::reusable::{REUSABLE_HEADER, render_reusable};
 pub use crate::rules::{
     ALLOWED_ACTIONS, APP_TOKEN_ACTION, MAX_CACHE_KEY_CHARACTERS, MAX_ENV_CHARACTERS,
-    MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
-    RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
+    MAX_RUN_CHARACTERS, RenderedConcurrency, RenderedJob, RenderedMatrix, RenderedMatrixSource,
+    RenderedStep, RenderedWorkflow, Rule, RuleViolation, SETUP_VELNOR_ACTION, Value, check_rules,
 };
 use crate::steps::rendered_job;
 use crate::workflow::yaml_job;

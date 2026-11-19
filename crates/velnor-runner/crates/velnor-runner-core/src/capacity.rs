@@ -53,6 +53,13 @@ impl Capacity {
         if let Some(slot) = self.slots.values().find(|slot| slot.intent == intent) {
             return Ok(slot.grant);
         }
+        if self
+            .slots
+            .get(&worker)
+            .is_some_and(|slot| slot.state.counts_capacity())
+        {
+            return Err(StateError::DuplicateAcquire);
+        }
         if u32::try_from(self.occupancy()).unwrap_or(u32::MAX) >= self.max {
             return Err(StateError::CapacityExhausted);
         }

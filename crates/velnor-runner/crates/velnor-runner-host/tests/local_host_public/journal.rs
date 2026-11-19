@@ -12,6 +12,14 @@ use super::support::TestResult;
 
 const JOURNAL: &str = "minted-agents.log";
 
+fn record(kind: &str, name: &str) -> String {
+    let body = format!("{kind} trusted {name}");
+    let sum = body.bytes().fold(0x811c_9dc5_u32, |hash, byte| {
+        (hash ^ u32::from(byte)).wrapping_mul(0x0100_0193)
+    });
+    format!("{body} {sum:08x}\n")
+}
+
 fn registered(events: &[String]) -> Vec<String> {
     events
         .iter()
@@ -80,7 +88,12 @@ async fn local_sweep_never_deletes_a_name_cut_short_by_a_torn_last_journal_line(
     let state = scenario.state.path().to_path_buf();
     std::fs::write(
         state.join(JOURNAL),
-        "+ trusted whole-name\n+ trusted retired-name\n- trusted retired-name\n+ trusted torn-na",
+        format!(
+            "{}{}{}+ trusted torn-na",
+            record("+", "whole-name"),
+            record("+", "retired-name"),
+            record("-", "retired-name")
+        ),
     )?;
     let docker = scenario.fixture.docker.clone();
     let plan = scenario.plan(1, 0)?;
@@ -108,7 +121,11 @@ async fn local_sweep_keeps_a_journaled_name_the_authority_does_not_know_yet() ->
     let state = scenario.state.path().to_path_buf();
     std::fs::write(
         state.join(JOURNAL),
-        "+ trusted pending-name\n+ trusted gone-name\n",
+        format!(
+            "{}{}",
+            record("+", "pending-name"),
+            record("+", "gone-name")
+        ),
     )?;
     scenario.fake().agents_absent.store(true, Ordering::SeqCst);
     let docker = scenario.fixture.docker.clone();

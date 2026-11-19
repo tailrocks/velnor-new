@@ -12,7 +12,7 @@ use velnor_actions_contract::config::EPHEMERAL_CHECK_ADMISSION_CONDITION;
 use velnor_actions_contract::workflow::{
     CacheAccess, Concurrency, Job, JobEnv, JobTimeout, PermissionLevel, Permissions, Step,
     StepKind, Trigger, WorkflowIr, expand_workflow_with_lane_plan, fork_fenced_condition,
-    scale_set_support_jobs,
+    fork_fenced_condition_admitting_dispatch, scale_set_control_jobs, scale_set_support_jobs,
 };
 use velnor_actions_contract::{ContractError, VelnorConfig};
 
@@ -263,4 +263,55 @@ fn the_fence_admits_only_trusted_events_and_never_widens() {
         EPHEMERAL_CHECK_ADMISSION_CONDITION
             .contains("github.event.pull_request.head.repo.full_name == github.repository")
     );
+}
+
+#[test]
+fn schema2_control_jobs_are_override_keys_and_listed_for_the_scale_set()
+-> Result<(), Box<dyn Error>> {
+    let ids = [
+        "plan",
+        "selection",
+        "ordinary-harness",
+        "source-qualification",
+    ];
+    let overrides: serde_json::Map<String, serde_json::Value> = ids
+        .iter()
+        .map(|id| {
+            (
+                (*id).to_owned(),
+                json!({ "profile": "local", "role": "control" }),
+            )
+        })
+        .collect();
+    let config = config(&serde_json::Value::Object(overrides))?;
+    expand_workflow_with_lane_plan(&workflow(), &config, None)?;
+    let moved: Vec<String> = scale_set_control_jobs(&config).into_iter().collect();
+    assert_eq!(
+        moved,
+        [
+            "ordinary-harness",
+            "plan",
+            "selection",
+            "source-qualification"
+        ]
+    );
+    let hosted = self::config(&json!({ "selection": { "profile": "hosted", "role": "control" } }))?;
+    assert!(scale_set_control_jobs(&hosted).is_empty());
+    Ok(())
+}
+
+#[test]
+fn the_dispatch_fence_adds_only_workflow_dispatch() {
+    let fenced = fork_fenced_condition_admitting_dispatch(Some("always()"));
+    assert_eq!(
+        fenced,
+        format!(
+            "(always()) && ({EPHEMERAL_CHECK_ADMISSION_CONDITION} || github.event_name == 'workflow_dispatch')"
+        )
+    );
+    assert_eq!(
+        fork_fenced_condition_admitting_dispatch(Some(&fenced)),
+        fenced
+    );
+    assert!(!fenced.contains("pull_request_target"));
 }
