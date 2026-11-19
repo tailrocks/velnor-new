@@ -39,13 +39,33 @@ pub const DOCKER_BUILD_PUSH: PinnedAction = PinnedAction {
     commit: "c3c9e263c25d99ce0380d002d59b67737d91b0dc",
     tag: "v7.4.0",
 };
+pub const GITHUB_SCRIPT: PinnedAction = PinnedAction {
+    action: "actions/github-script",
+    commit: "3a2844b7e9c422d3c10d287c895573f7108da1b3",
+    tag: "v9.0.0",
+};
+pub const MR_BOXINGTON: PinnedAction = PinnedAction {
+    action: "jdx/mr-boxington-action",
+    commit: "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
+    tag: "v1.7.3",
+};
+/// The combined cache action, at the same commit as `actions/cache/restore`
+/// and `actions/cache/save`.
+pub const ACTIONS_CACHE: PinnedAction = PinnedAction {
+    action: "actions/cache",
+    commit: "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
+    tag: "v6.1.0",
+};
 
-pub const PINNED_ACTIONS: [PinnedAction; 5] = [
+pub const PINNED_ACTIONS: [PinnedAction; 8] = [
     ATTEST_BUILD_PROVENANCE,
     ALINT,
     DOCKER_LOGIN,
     DOCKER_SETUP_BUILDX,
     DOCKER_BUILD_PUSH,
+    GITHUB_SCRIPT,
+    MR_BOXINGTON,
+    ACTIONS_CACHE,
 ];
 
 #[derive(Clone, Copy)]

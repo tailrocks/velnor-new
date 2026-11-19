@@ -1,0 +1,10 @@
+                        // velnor-local: a job with `actions: write` in its own permissions (the job's, else the workflow's; no key is read-only), on an event that is not a pull request, gets a signed grant as github.token. The API stub lets only such a job list and delete caches. Every other job keeps the token it had.
+                        if(jobPermissions != null && wevent != null && !wevent.StartsWith("pull_request") && calculatedPermissions.TryGetValue("actions", out var actionsPermission) && actionsPermission == "write") {
+                            github_token = new VariableValue(tokenHandler.WriteToken(tokenHandler.CreateToken(new SecurityTokenDescriptor {
+                                Subject = new ClaimsIdentity(new Claim[] { new Claim("velnor", "job-cache-admin"), new Claim("repository", repo), new Claim("event", wevent), new Claim("job", name), new Claim("runid", runid.ToString()), new Claim("actions", "write") }),
+                                Expires = DateTime.UtcNow.AddMinutes(timeoutMinutes + 10),
+                                Issuer = myIssuer,
+                                Audience = myAudience,
+                                SigningCredentials = new SigningCredentials(mySecurityKey, SecurityAlgorithms.RsaSha256)
+                            })), true);
+                        }
