@@ -288,10 +288,10 @@ jobs:
           key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Dependency policy
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_deny == ''run'' }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-deny check'
+        run: '. "$VELNOR_EXEC" run -- cargo-deny --locked check'
       - name: Unused dependencies
         if: '${{ !cancelled() && steps.plan.outcome == ''success'' && steps.plan.outputs.rust_machete == ''run'' }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-machete'
+        run: '. "$VELNOR_EXEC" run -- cargo machete'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'

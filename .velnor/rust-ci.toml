@@ -6,6 +6,18 @@ exclude = ["fixtures/**"]
 required_check = "rust-required"
 helper = { path = "ci-helper" }
 
+[[inputs]]
+glob = "scripts/ci-fixtures.sh"
+packages = ["velnor-actions-cli", "velnor-archive-guard"]
+
+[[inputs]]
+glob = "LICENSE"
+packages = ["velnor-actions-workflow-renderer"]
+
+[[inputs]]
+glob = "NOTICE"
+packages = ["velnor-actions-workflow-renderer"]
+
 [crates_mirror]
 runner = "ubuntu-26.04-scale-set"
 registry = "sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/"
