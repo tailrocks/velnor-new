@@ -96,7 +96,7 @@ fn shell_words(text: &str) -> Vec<String> {
 
 #[test]
 fn the_generated_step_parses_with_this_cli() -> TestResult {
-    let files = expected_files(&view("0.1.86", LANE)?)?;
+    let files = expected_files(&view("0.1.93", LANE)?)?;
     let text = files
         .get(&RepoPath::new(WORKFLOW)?)
         .ok_or("the workflow was not rendered")?;

@@ -13,6 +13,7 @@ use crate::containers::{container, services};
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope, check_condition, is_identifier};
 use crate::job_env::{JobExtras, job_env};
+use crate::job_limits;
 use crate::matrix::matrix;
 use crate::plan::{
     Body, Concurrency, DEFAULT_RUNNER, DEFAULT_TIMEOUT_MINUTES, Job, Output, Step, Triggers,
@@ -113,6 +114,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
             "the workflow {file} needs at least one [[workflow.job]]"
         ));
     }
+    job_limits::containers_on_linux(&runner, &fork_runner, &jobs)?;
     if let Some(call) = &triggers.workflow_call {
         check_outputs(&file, &call.outputs, &jobs)?;
     }
@@ -228,6 +230,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         (&raw.env, raw.cache_mode.as_deref()),
         [condition.as_deref(), ctx.condition],
     )?;
+    let has_container = raw.container.is_some();
     let mut job = Job {
         name: raw.name.clone(),
         needs: raw.needs.clone(),
@@ -243,7 +246,7 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         outputs: Vec::new(),
         matrix,
         container: raw.container.map(|raw| container(&id, raw)).transpose()?,
-        services: services(&id, raw.service)?,
+        services: services(&id, raw.service, has_container)?,
         steps: Vec::new(),
         call: None,
         id,
@@ -295,6 +298,7 @@ fn fill_steps(
         steps.push(checked);
     }
     require_permissions(&job.id, &steps, &job.permissions)?;
+    job_limits::write_token(&job.id, &steps, &job.permissions)?;
     job.outputs = outputs
         .into_iter()
         .map(|(name, value)| Ok((name.clone(), output(&job.id, &name, &value, &steps)?)))
@@ -355,10 +359,7 @@ fn declared_access(
             ));
         }
     }
-    if environment.is_some_and(|name| name.trim().is_empty()) {
-        return refuse(format!("job {id} environment must not be empty"));
-    }
-    Ok(())
+    job_limits::environment(id, environment)
 }
 
 fn output(job: &str, name: &str, value: &str, steps: &[Step]) -> Result<String, WorkflowsError> {
