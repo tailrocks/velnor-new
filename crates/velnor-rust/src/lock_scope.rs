@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use velnor_model::{CacheKey, Job, LockIdentity, PrepareLocks, RepoFacts, RootSlug, StepKind};
 
-const SCOPED_LOCKS_HELPER: (u64, u64, u64) = (0, 1, 103);
+const SCOPED_LOCKS_HELPER: (u64, u64, u64) = (0, 1, 104);
 
 pub(crate) fn apply(facts: &RepoFacts, jobs: &mut [Job]) {
     let scoped = facts

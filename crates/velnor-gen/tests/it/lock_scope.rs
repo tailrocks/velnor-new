@@ -41,8 +41,8 @@ fn prepare_runs(job: &Value) -> Vec<&str> {
 }
 
 #[test]
-fn a_helper_before_0_1_103_runs_a_plain_prepare_everywhere() -> TestResult {
-    let workflow = rendered("0.1.102")?;
+fn a_helper_before_0_1_104_runs_a_plain_prepare_everywhere() -> TestResult {
+    let workflow = rendered("0.1.103")?;
     let mut seen = 0;
     for job in workflow["jobs"]
         .as_object()
@@ -59,8 +59,8 @@ fn a_helper_before_0_1_103_runs_a_plain_prepare_everywhere() -> TestResult {
 }
 
 #[test]
-fn from_0_1_103_prepare_names_exactly_the_roots_its_job_reads() -> TestResult {
-    let workflow = rendered("0.1.103")?;
+fn from_0_1_104_prepare_names_exactly_the_roots_its_job_reads() -> TestResult {
+    let workflow = rendered("0.1.104")?;
     let (mut single, mut none) = (0, 0);
     for (id, job) in workflow["jobs"].as_object().into_iter().flatten() {
         let read = read_roots(job);
