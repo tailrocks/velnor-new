@@ -129,7 +129,11 @@ fn an_excluded_example_and_a_nested_workspace_are_not_packages_of_the_root() {
         std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()),
     ))
     .unwrap_or_else(|e| unreachable!("{e}"));
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| env!("CARGO").into());
+    // Not `CARGO` from the environment: a CI job that configured the crates mirror has
+    // `CARGO` set to the mirror wrapper, which would forward back into this stub forever.
+    // Not `CARGO` from the environment: a CI job that configured the crates mirror has
+    // `CARGO` set to the mirror wrapper, which would forward back into this stub forever.
+    let cargo = env!("CARGO");
     let stub = checkout.0.join("bin/cargo");
     checkout
         .write(
