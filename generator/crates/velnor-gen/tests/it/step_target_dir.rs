@@ -11,7 +11,7 @@ use crate::pipeline::{view, workflow};
 
 const WORKSPACE: &str = "${{ github.workspace }}/";
 const TARGET_VARIABLE: &str = "CARGO_TARGET_DIR";
-const NON_BUILDING: [&str; 3] = ["cargo-fmt", "cargo-deny", "cargo-machete"];
+const NON_BUILDING: [&str; 4] = ["cargo-fmt", "cargo-deny", "cargo-machete", "cargo fetch"];
 
 fn with_target_dir(
     repo: &mut RepoView,
@@ -48,9 +48,9 @@ fn builds(step: &Value) -> bool {
         .skip(1)
         .find(|segment| segment.starts_with("cargo"))
         .is_some_and(|command| {
-            !NON_BUILDING
-                .iter()
-                .any(|tool| command.split_whitespace().next() == Some(*tool))
+            !NON_BUILDING.iter().any(|tool| {
+                command == *tool || command.starts_with(&format!("{tool} "))
+            })
         })
 }
 
