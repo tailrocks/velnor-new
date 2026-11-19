@@ -23,7 +23,7 @@ pub(crate) struct Scope<'a> {
     pub(crate) needed_outputs: &'a [(&'a str, &'a str)],
     pub(crate) steps: Vec<String>,
     /// The events of the workflow, as `Triggers::events` lists them.
-    pub(crate) events: &'a [&'static str],
+    pub(crate) events: Vec<&'static str>,
 }
 
 pub(crate) fn is_identifier(text: &str, dashes: bool) -> bool {
