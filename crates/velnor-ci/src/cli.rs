@@ -35,6 +35,11 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     #[command(
+        subcommand,
+        about = "Restore and stage the PR's cumulative build delta"
+    )]
+    Delta(crate::delta_cli::DeltaCommand),
+    #[command(
         about = "Write ci-metrics.json and the lane summary; --check checks lane artifacts for cache waste"
     )]
     Report(ReportArgs),

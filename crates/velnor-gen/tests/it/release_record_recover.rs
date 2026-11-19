@@ -43,7 +43,7 @@ fn names(tag: &Node) -> Vec<&str> {
 #[test]
 fn the_record_step_runs_after_the_tag_steps_and_names_the_config_so_a_rerun_recovers_the_drafts_release_plz_skipped()
 -> TestResult {
-    let tag = tag_job("0.1.92", &[APP], ONE_ROOT)?;
+    let tag = tag_job("0.1.93", &[APP], ONE_ROOT)?;
     let run = record(&tag)?
         .get("run")
         .and_then(Node::text)
@@ -68,7 +68,7 @@ fn the_record_step_runs_after_the_tag_steps_and_names_the_config_so_a_rerun_reco
 #[test]
 fn the_record_step_reads_with_the_job_token_and_the_pinned_toolchain_never_the_app_token()
 -> TestResult {
-    let tag = tag_job("0.1.92", &[APP], ONE_ROOT)?;
+    let tag = tag_job("0.1.93", &[APP], ONE_ROOT)?;
     let step = record(&tag)?;
     assert_eq!(
         step.at(&["env", "GITHUB_TOKEN"]).and_then(Node::text),
@@ -89,6 +89,18 @@ fn the_record_step_reads_with_the_job_token_and_the_pinned_toolchain_never_the_a
 #[test]
 fn a_helper_without_the_recovery_flags_records_only_what_release_plz_printed() -> TestResult {
     let tag = tag_job("0.1.91", &[APP], ONE_ROOT)?;
+    let run = record(&tag)?
+        .get("run")
+        .and_then(Node::text)
+        .ok_or("no run")?;
+    assert!(!run.contains("--app"), "{run}");
+    assert!(!run.contains("--config"), "{run}");
+    Ok(())
+}
+
+#[test]
+fn a_helper_at_0192_predates_the_recovery_flags_and_gets_none() -> TestResult {
+    let tag = tag_job("0.1.92", &[APP], ONE_ROOT)?;
     let run = record(&tag)?
         .get("run")
         .and_then(Node::text)

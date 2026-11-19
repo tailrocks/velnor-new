@@ -79,13 +79,65 @@ fn each_family_renders_its_key_and_ordered_fallbacks() -> TestResult {
         }),
         RenderedKey {
             key: format!(
-                "velnor-dlt-rust-test-root-{HOST}-{COMPAT}-${{{{ steps.restored.outputs.base8 }}}}-${{{{ github.run_id }}}}"
+                "velnor-dlt-pr${{{{ github.event.pull_request.number }}}}-rust-test.root.{HOST}-{COMPAT}-${{{{ steps.delta_base_root.outputs.base8 }}}}-${{{{ github.run_id }}}}"
             ),
             restore_keys: vec![format!(
-                "velnor-dlt-rust-test-root-{HOST}-{COMPAT}-${{{{ steps.restored.outputs.base8 }}}}-"
+                "velnor-dlt-pr${{{{ github.event.pull_request.number }}}}-rust-test.root.{HOST}-{COMPAT}-${{{{ steps.delta_base_root.outputs.base8 }}}}-"
             )],
         }
     );
+    Ok(())
+}
+
+#[test]
+fn a_delta_key_is_never_equal_to_or_a_prefix_of_a_base_key() -> TestResult {
+    let mut keys = Vec::new();
+    for (manifest, target) in [("Cargo.toml", "target"), ("lab/Cargo.toml", "lab/target")] {
+        let root = CacheRoot::new(&RepoPath::new(manifest)?, RepoPath::new(target)?);
+        for job in ["rust", "rust-test", "dlt"] {
+            let job = JobId::new(job)?;
+            keys.push(CacheKey::Target {
+                job: job.clone(),
+                root: root.clone(),
+                host: Host,
+            });
+            keys.push(CacheKey::Delta {
+                job,
+                root: root.clone(),
+                host: Host,
+            });
+        }
+        keys.push(CacheKey::Sources {
+            host: Host,
+            lane: root,
+        });
+    }
+    keys.push(CacheKey::Tools { host: Host });
+    let mut tags = std::collections::BTreeSet::new();
+    let mut deltas = Vec::new();
+    let mut bases = Vec::new();
+    for key in &keys {
+        tags.insert(key.tag());
+        let rendered = render_key(key);
+        let family = format!("velnor-{}-", key.tag());
+        for value in std::iter::once(rendered.key).chain(rendered.restore_keys) {
+            assert!(value.starts_with(&family), "{value}");
+            if matches!(key, CacheKey::Delta { .. }) {
+                deltas.push(value);
+            } else {
+                bases.push(value);
+            }
+        }
+    }
+    assert_eq!(tags.len(), 4, "{tags:?}");
+    assert!(!deltas.is_empty() && !bases.is_empty());
+    for delta in &deltas {
+        for base in &bases {
+            assert_ne!(delta, base);
+            assert!(!delta.starts_with(base.as_str()), "{base} prefixes {delta}");
+            assert!(!base.starts_with(delta.as_str()), "{delta} prefixes {base}");
+        }
+    }
     Ok(())
 }
 

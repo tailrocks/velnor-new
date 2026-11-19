@@ -44,6 +44,8 @@ mod declared_strict;
 mod declared_triggers;
 mod declared_workflow;
 mod default_branch;
+mod delta_budget;
+mod delta_cache;
 mod detect;
 mod doc_steps;
 mod docs_run;

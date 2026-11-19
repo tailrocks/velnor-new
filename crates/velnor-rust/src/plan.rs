@@ -38,6 +38,15 @@ const IGNORED_COUNT_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 #[must_use]
 pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
+    plan_with(facts, true)
+}
+
+#[must_use]
+pub fn plan_without_deltas(facts: &RepoFacts) -> WorkflowPlan {
+    plan_with(facts, false)
+}
+
+fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
     let suffixed = facts.rust_roots.len() > 1;
     let decisions: Vec<ShapeDecision> = facts
         .rust_roots
@@ -63,13 +72,13 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         .iter()
         .zip(decisions)
         .flat_map(|(root, decision)| {
-            let lane = Lane::root(RootSlug::of(&root.manifest), single);
+            let lane = Lane::root(RootSlug::of(&root.manifest), single, deltas);
             root_jobs(facts, root, decision, suffixed, &lane)
         })
         .collect();
     jobs.extend(audit_job(facts, &jobs));
     if facts.policy.any() {
-        jobs.push(policy_job(facts, &Lane::policy(single)));
+        jobs.push(policy_job(facts, &Lane::policy(single, deltas)));
     }
     jobs.extend(crate::lint_jobs::lint_jobs(facts));
     let draft_guard = draft_guard(facts);
@@ -84,7 +93,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.insert(0, plan_job(facts, used, used_group_outputs(&jobs)));
     }
     if let Some(root) = helper_root {
-        jobs.insert(1, helper_job(facts, root));
+        jobs.insert(1, helper_job(facts, root, deltas));
     }
     apply_extensions(facts, &mut jobs, single);
     jobs.extend(budget_job(facts));
@@ -116,10 +125,11 @@ fn apply_extensions(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     crate::docs_post_merge::apply(facts, jobs);
 }
 
-fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
+fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
+        deltas,
     };
     let mut steps = setup(facts, root, &lane, &HELPER_JOB);
     steps.push(Step {
@@ -274,6 +284,7 @@ pub(crate) fn setup_roots(
             root: cache_root,
             host: Host,
         })));
+        toolchain.extend(crate::delta_cache::restore(facts, root, family, lane));
     }
     toolchain.extend(restore_file_times(roots));
     toolchain.extend(restored(facts));
