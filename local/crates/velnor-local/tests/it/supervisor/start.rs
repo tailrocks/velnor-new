@@ -14,7 +14,7 @@ use crate::support::temp_dir;
 #[tokio::test]
 async fn start_creates_the_keys_folder_private() {
     let dir = temp_dir("supervisor-keys-fresh");
-    let _ = supervisor::start(&dir).await;
+    supervisor::start(&dir).await.ok();
     assert_eq!(mode(&dir.join("keys")), 0o700);
 }
 
@@ -24,14 +24,14 @@ async fn start_tightens_a_keys_folder_that_is_looser() {
     std::fs::create_dir_all(dir.join("keys")).unwrap_or_else(|e| unreachable!("{e}"));
     std::fs::set_permissions(dir.join("keys"), std::fs::Permissions::from_mode(0o755))
         .unwrap_or_else(|e| unreachable!("{e}"));
-    let _ = supervisor::start(&dir).await;
+    supervisor::start(&dir).await.ok();
     assert_eq!(mode(&dir.join("keys")), 0o700);
 }
 
 #[tokio::test]
 async fn start_creates_the_authority_folder_private() {
     let dir = temp_dir("supervisor-authority-fresh");
-    let _ = supervisor::start(&dir).await;
+    supervisor::start(&dir).await.ok();
     assert_eq!(mode(&dir.join("authority")), 0o700);
 }
 
@@ -44,7 +44,7 @@ async fn start_tightens_an_authority_folder_that_is_looser() {
         std::fs::Permissions::from_mode(0o755),
     )
     .unwrap_or_else(|e| unreachable!("{e}"));
-    let _ = supervisor::start(&dir).await;
+    supervisor::start(&dir).await.ok();
     assert_eq!(mode(&dir.join("authority")), 0o700);
 }
 
@@ -82,7 +82,7 @@ async fn a_cancelled_start_stops_the_authority_process_it_spawned() {
         std::thread::sleep(Duration::from_millis(50));
     }
     if !gone {
-        let _ = Command::new("kill").args(["-KILL", &pid]).status();
+        Command::new("kill").args(["-KILL", &pid]).status().ok();
     }
     assert!(gone, "process {pid} outlived the cancelled start");
 }

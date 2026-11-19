@@ -8,7 +8,7 @@ use velnor_model::{
     PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
 };
 
-use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, head, job, step};
+use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, step};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
@@ -28,7 +28,10 @@ impl Lane {
     }
 
     pub(crate) fn policy(single: bool) -> Self {
-        Self::root(RootSlug::from_static("policy"), single)
+        Self {
+            slug: RootSlug::from_static("policy"),
+            plan: Some(if single { RUST_JOB } else { PLAN_JOB }),
+        }
     }
 
     fn from(&self) -> PlanFrom {
@@ -40,7 +43,8 @@ impl Lane {
             slug: self.slug.clone(),
             need,
             from: self.from(),
-            package: None,
+            packages: Vec::new(),
+            unselected: false,
             group: None,
         }
     }
@@ -52,10 +56,31 @@ impl Lane {
         })
     }
 
-    fn package_gate(&self, package: PackageName) -> Gate {
+    fn package_gate(&self, packages: Vec<PackageName>) -> Gate {
         Gate {
-            package: Some(package),
+            packages,
             ..self.gate(GateNeed::PackageArgs)
+        }
+    }
+
+    /// The notice that stands in for a feature lane the plan did not select.
+    pub(crate) fn skipped_lane(
+        &self,
+        features: &[String],
+        packages: &[PackageName],
+        root: &RustRoot,
+    ) -> Step {
+        Step {
+            gate: Some(Gate {
+                unselected: true,
+                ..self.package_gate(packages.to_vec())
+            }),
+            directory: root.manifest.parent(),
+            when: When::NotCancelled,
+            ..step(StepKind::TestSetup {
+                name: format!("Skip test lane (features: {})", features.join(",")),
+                run: "echo 'skipped: no selected packages'".to_owned(),
+            })
         }
     }
 
@@ -70,12 +95,15 @@ impl Lane {
     pub(crate) fn cargo(&self, command: CargoCommand, root: Option<&RustRoot>) -> Step {
         let gate = match command {
             CargoCommand::Doctest => Some(self.gate(GateNeed::Doctests)),
-            CargoCommand::Doc => Some(self.gate(GateNeed::Docs)),
+            CargoCommand::Doc | CargoCommand::DocFeatures { .. } => Some(self.gate(GateNeed::Docs)),
             CargoCommand::Deny { .. } => Some(self.gate(GateNeed::Deny)),
             CargoCommand::Machete => Some(self.gate(GateNeed::Machete)),
             CargoCommand::CheckAlone { ref package }
             | CargoCommand::TestTarget { ref package, .. } => {
-                Some(self.package_gate(package.clone()))
+                Some(self.package_gate(vec![package.clone()]))
+            }
+            CargoCommand::NextestFeatures { ref packages, .. } if !packages.is_empty() => {
+                Some(self.package_gate(packages.clone()))
             }
             _ => self.steps(),
         };
@@ -131,12 +159,31 @@ pub(crate) fn used_outputs(jobs: &[Job]) -> Vec<(RootSlug, GateNeed)> {
     used.into_iter().collect()
 }
 
+pub(crate) fn expose_read_outputs(jobs: &mut [Job], source: &JobId) {
+    let read: BTreeSet<(RootSlug, GateNeed)> = jobs
+        .iter()
+        .filter(|job| &job.id != source)
+        .flat_map(|job| {
+            job.gate
+                .iter()
+                .chain(job.steps.iter().filter_map(|step| step.gate.as_ref()))
+        })
+        .filter(|gate| matches!(&gate.from, PlanFrom::Job(job) if job == source))
+        .flat_map(Gate::outputs)
+        .collect();
+    for job in jobs.iter_mut().filter(|job| &job.id == source) {
+        job.plan_outputs.extend(read.iter().cloned());
+        job.plan_outputs.sort();
+        job.plan_outputs.dedup();
+    }
+}
+
 pub(crate) fn plan_job(
     facts: &RepoFacts,
     outputs: Vec<(RootSlug, GateNeed)>,
     group_outputs: Vec<(RootSlug, JobId)>,
 ) -> Job {
-    let mut steps = head(facts, PLAN_DEPTH);
+    let mut steps = head(facts, PLAN_DEPTH, None);
     steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     Job {
         plan_outputs: outputs,
@@ -155,6 +202,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         } else {
             CHECKOUT_DEPTH
         },
+        None,
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));

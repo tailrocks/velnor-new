@@ -44,6 +44,25 @@ pub struct Triggers {
     pub workflow_run: Option<WorkflowRun>,
 }
 
+impl Triggers {
+    /// The names of the events that start the workflow, in the order the file writes them.
+    #[must_use]
+    pub fn events(&self) -> Vec<&'static str> {
+        [
+            (self.workflow_call.is_some(), "workflow_call"),
+            (self.workflow_dispatch.is_some(), "workflow_dispatch"),
+            (!self.schedule.is_empty(), "schedule"),
+            (self.push.is_some(), "push"),
+            (self.pull_request.is_some(), "pull_request"),
+            (self.merge_group, "merge_group"),
+            (self.workflow_run.is_some(), "workflow_run"),
+        ]
+        .into_iter()
+        .filter_map(|(present, name)| present.then_some(name))
+        .collect()
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct WorkflowCall {
     pub inputs: Vec<Input>,
@@ -304,6 +323,7 @@ impl Action {
     #[must_use]
     pub fn needs_permissions(self) -> &'static [(&'static str, &'static str)] {
         match self {
+            Self::Checkout => &[("contents", "read")],
             Self::AttestBuildProvenance => &[("id-token", "write"), ("attestations", "write")],
             _ => &[],
         }
@@ -334,6 +354,7 @@ impl WorkflowsPlan {
             }
             workflows.push(checked);
         }
+        crate::workflow_run::check_chains(&workflows)?;
         Ok(Self { workflows })
     }
 }

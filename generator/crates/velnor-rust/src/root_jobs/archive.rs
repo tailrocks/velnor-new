@@ -106,7 +106,11 @@ impl RootJobs<'_> {
         let cargo = group.is_some_and(|group| group.needs.contains(&TestNeed::Cargo));
         let docker = group.is_some_and(|group| group.needs.contains(&TestNeed::Docker));
         let mirror = || mirror_step_on(self.facts, &runner).map(|step| self.gated(step.kind));
-        let mut steps = head(self.facts, CHECKOUT_DEPTH);
+        let mut steps = head(
+            self.facts,
+            CHECKOUT_DEPTH,
+            crate::sparse::paths(self.facts, std::slice::from_ref(self.root)),
+        );
         steps.extend(mirror());
         steps.extend(tools_restore(self.facts).into_iter().map(|restore| Step {
             gate: self.lane.steps(),

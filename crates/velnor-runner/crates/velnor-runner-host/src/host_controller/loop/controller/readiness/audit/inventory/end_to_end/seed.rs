@@ -10,6 +10,7 @@ use super::TestResult;
 use crate::config::HostConfig;
 use crate::controller_ipc::SessionPollReceipt;
 use crate::journal::{ConnectionJournal, Journal};
+pub(super) use crate::launch::bootstrap::unbound_pair_fixtures::seed::unguarded;
 use crate::launch::{CompletedHeaderPoll, SelectedEngineContext};
 
 pub(super) const CONNECTION: &str = "conn-test-1";
@@ -145,30 +146,6 @@ fn hex(bytes: &[u8]) -> String {
 
 async fn execute(journal: &Journal, sql: &str) -> TestResult<()> {
     journal.connection().await?.execute(sql, ()).await?;
-    Ok(())
-}
-
-pub(super) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
-    let connection = journal.connection().await?;
-    let mut rows = connection
-        .query(
-            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
-            (),
-        )
-        .await?;
-    let mut saved = Vec::new();
-    while let Some(row) = rows.next().await? {
-        saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
-    }
-    for (name, _) in &saved {
-        execute(journal, &format!("DROP TRIGGER {name}")).await?;
-    }
-    for sql in statements {
-        execute(journal, sql).await?;
-    }
-    for (_, sql) in saved {
-        execute(journal, &sql).await?;
-    }
     Ok(())
 }
 

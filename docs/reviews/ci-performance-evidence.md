@@ -60,7 +60,7 @@ without proof.
 
 - Record stored and extracted bytes, restore/verify/import/save time, peak CPU/RAM/disk, key cardinality, writer ownership and retention/pruning for each changed family.
 - Calculate peak aggregate usage including existing consumer caches, platform/root variants, old/new generations and concurrent saves; show admission headroom in bytes, not just nominal quota.
-- Check the [adopted cache budgets](../proposed/cache-decisions.md), [compiled-state admission](../proposed/compiled-state-persistence.md#budget) and [current platform limits](../proposed/github-actions-reference.md#performance-review-sources); reject cache thrashing, duplicate payloads and capacity increases used to hide waste.
+- Check the [adopted cache budgets](../proposed/cache-decisions.md) and [current platform limits](../proposed/github-actions-reference.md#performance-review-sources); reject cache thrashing, duplicate payloads and capacity increases used to hide waste.
 
 ## Verify before approving
 

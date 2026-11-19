@@ -96,3 +96,31 @@ pub(crate) fn raw_packaging(
         })
         .collect()
 }
+
+pub(crate) fn smoke_steps(binary: &BinaryPlan, platform: Platform) -> Vec<RenderedStep> {
+    if !binary.smoke {
+        return Vec::new();
+    }
+    let name = stem(binary, &binary.bin, platform);
+    let executable = word(binary, &format!("./{name}"));
+    let in_folder = |step: RenderedStep| RenderedStep {
+        working_directory: versioned(binary).then(|| STAGE.to_owned()),
+        ..step
+    };
+    vec![
+        in_folder(command(
+            format!("Run {name}"),
+            format!("{executable} --version"),
+        )),
+        RenderedStep {
+            env: variables(&[(
+                "TAG",
+                &format!("${{{{ needs.tag.outputs.{} }}}}", binary.package),
+            )]),
+            ..in_folder(command(
+                format!("Check the tag against the version of {name}"),
+                format!("{executable} check-tag \"$TAG\""),
+            ))
+        },
+    ]
+}

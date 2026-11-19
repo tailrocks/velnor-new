@@ -229,16 +229,24 @@ async fn trigger_sql(journal: &Journal, names: &[&str]) -> TestResult<Vec<String
 }
 
 pub(crate) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
+    let words: std::collections::BTreeSet<String> = statements
+        .iter()
+        .flat_map(|sql| sql.split(|c: char| !(c.is_ascii_alphanumeric() || c == '_')))
+        .map(str::to_ascii_lowercase)
+        .collect();
     let connection = journal.connection().await?;
     let mut rows = connection
         .query(
-            "SELECT name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
+            "SELECT name, tbl_name, sql FROM sqlite_schema WHERE type = 'trigger' ORDER BY rowid",
             (),
         )
         .await?;
     let mut saved = Vec::new();
     while let Some(row) = rows.next().await? {
-        saved.push((row.get::<String>(0)?, row.get::<String>(1)?));
+        let table: String = row.get(1)?;
+        if words.contains(&table.to_ascii_lowercase()) {
+            saved.push((row.get::<String>(0)?, row.get::<String>(2)?));
+        }
     }
     for (name, _) in &saved {
         execute(journal, &format!("DROP TRIGGER {name}")).await?;

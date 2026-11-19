@@ -15,6 +15,7 @@ pub struct RustCiConfig {
     pub private_sources: Option<PrivateSources>,
     pub mbx_store: MbxStore,
     pub docs_run: DocsRun,
+    pub check_alone_run: DocsRun,
     pub timeout_minutes: u16,
     pub exclude: Vec<PathGlob>,
     pub non_inputs: Vec<PathGlob>,
@@ -36,8 +37,48 @@ pub struct RustCiConfig {
     pub mbx_remote: MbxRemote,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub test_lanes: Vec<TestLane>,
+    pub budget: Option<SpeedBudget>,
     pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
+    pub checkout: CheckoutScope,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SpeedBudget {
+    pub pr_wall_seconds: u64,
+    pub main_wall_seconds: u64,
+    pub runner_seconds: u64,
+    pub setup_seconds: u64,
+}
+
+impl SpeedBudget {
+    #[must_use]
+    pub fn enabled(&self) -> bool {
+        self.pr_wall_seconds > 0
+            || self.main_wall_seconds > 0
+            || self.runner_seconds > 0
+            || self.setup_seconds > 0
+    }
+
+    #[must_use]
+    pub fn wall_seconds(&self, pull_request: bool) -> u64 {
+        if pull_request {
+            self.pr_wall_seconds
+        } else {
+            self.main_wall_seconds
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TestLane {
+    pub root: Option<RepoPath>,
+    pub features: Vec<String>,
+    pub filter: Option<String>,
+    pub lint: bool,
+    pub doc: bool,
+    pub packages: Vec<PackageName>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -142,6 +183,7 @@ impl Default for RustCiConfig {
             private_sources: None,
             mbx_store: MbxStore::Private,
             docs_run: DocsRun::Always,
+            check_alone_run: DocsRun::Always,
             timeout_minutes: 30,
             exclude: Vec::new(),
             non_inputs: Vec::new(),
@@ -163,8 +205,11 @@ impl Default for RustCiConfig {
             mbx_remote: MbxRemote::Off,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            test_lanes: Vec::new(),
+            budget: None,
             lint: Vec::new(),
             test_groups: Vec::new(),
+            checkout: CheckoutScope::Full,
         }
     }
 }
@@ -182,4 +227,10 @@ pub struct PrivateSources {
     pub private_key: String,
     pub owner: String,
     pub repositories: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckoutScope {
+    Full,
+    Sparse,
 }

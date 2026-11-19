@@ -143,7 +143,7 @@ impl<B: Backend> Authority<B> {
         }
         let digest = ring::digest::digest(&ring::digest::SHA256, &content);
         Some(digest.as_ref().iter().fold(String::new(), |mut hex, byte| {
-            let _ = write!(hex, "{byte:02x}");
+            write!(hex, "{byte:02x}").ok();
             hex
         }))
     }

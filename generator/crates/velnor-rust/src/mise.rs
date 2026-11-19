@@ -8,6 +8,7 @@ use velnor_model::{RepoFacts, RepoPath, ToolPin, ToolPins};
 
 use crate::error::{DetectError, Reason};
 use crate::harness::uses_nextest;
+use crate::lint_tools::applies;
 use crate::mise_lock::{is_rustup_tool, lock_platform, prebuilt_platforms};
 use crate::toml_file::table;
 
@@ -205,15 +206,8 @@ fn check_prebuilt(facts: &RepoFacts) -> Result<(), DetectError> {
     let Some(platform) = lock_platform(&facts.config.runner) else {
         return Ok(());
     };
-    let os = platform.split('-').next().unwrap_or(platform);
     let source_built = facts.tools.tools.iter().find(|(name, pin)| {
-        let filtered_out = !pin.os_filters.is_empty()
-            && pin.os_filters.len() == pin.requested.len()
-            && pin
-                .os_filters
-                .values()
-                .all(|names| !names.iter().any(|filter| filter == os));
-        !is_rustup_tool(name) && !filtered_out && !pin.prebuilt.contains(platform)
+        !is_rustup_tool(name) && applies(pin, Some(platform)) && !pin.prebuilt.contains(platform)
     });
     match source_built {
         Some((tool, _)) => Err(DetectError::ToolNotPrebuilt {

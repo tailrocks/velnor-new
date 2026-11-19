@@ -4,7 +4,9 @@
 use std::ffi::OsStr;
 use std::path::Path;
 
-use velnor_rust::{LOCK_PATH, commit_url, pin_lock, release_version, sums_url};
+use velnor_rust::{
+    LOCK_PATH, binary_sums_url, commit_url, lists_binary_sums, pin_lock, release_version, sums_url,
+};
 
 use crate::require_compatible;
 
@@ -16,10 +18,20 @@ pub(super) fn pin_helper(root: &Path, version: &str) -> Result<String, Error> {
     let root = toplevel(root)?;
     let sums = download(&root, &sums_url(&version))?;
     let commit = download(&root, &commit_url(&version))?;
+    let sums = String::from_utf8_lossy(&sums);
+    let binary_sums = if lists_binary_sums(&sums) {
+        Some(download(&root, &binary_sums_url(&version))?)
+    } else {
+        None
+    };
     let lock = pin_lock(
         version.as_str(),
         &String::from_utf8_lossy(&commit),
-        &String::from_utf8_lossy(&sums),
+        &sums,
+        binary_sums
+            .as_deref()
+            .map(String::from_utf8_lossy)
+            .as_deref(),
     )
     .map_err(Error::Lock)?;
     write_lock(&root, &lock)?;

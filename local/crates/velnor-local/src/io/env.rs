@@ -23,6 +23,7 @@ use crate::doctor::{CACHE_IMAGE as LOCAL_IMAGE, RUNNER_IMAGE};
 pub use engine::{DockerCli, Engine};
 pub(super) use engine::{program, words};
 pub const READY_TIMEOUT: Duration = Duration::from_secs(60);
+const RUNNER_START: &str = "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1 -e VELNOR_CRATES_MIRROR=off";
 const OPENSSL: &str = "openssl genrsa -out /keys/token.pem 2048 && openssl rsa -in /keys/token.pem -RSAPublicKey_out -outform DER -out /keys/token.pub.der";
 
 #[derive(Debug)]
@@ -64,7 +65,7 @@ impl<E: Engine> Environment<E> {
             digest.as_ref()[..4]
                 .iter()
                 .fold("velnor-local-".to_owned(), |mut name, byte| {
-                    let _ = write!(name, "{byte:02x}");
+                    write!(name, "{byte:02x}").ok();
                     name
                 });
         Ok(Self {
@@ -137,7 +138,7 @@ impl<E: Engine> Environment<E> {
         self.down().await?;
         let started = self.start_all(repo, args, &local).await;
         if started.is_err() {
-            let _ = self.down().await;
+            self.down().await.ok();
         }
         started
     }
@@ -263,7 +264,7 @@ impl<E: Engine> Environment<E> {
             );
             self.start(
                 &format!("{prefix}runner-{number}"),
-                "run -d --platform linux/arm64 -e GITHUB_ACTIONS_RUNNER_FORCE_GHES=1",
+                RUNNER_START,
                 &[
                     &strs(&local.runner)[..],
                     &[RUNNER_IMAGE, "sh", "-c", &register],

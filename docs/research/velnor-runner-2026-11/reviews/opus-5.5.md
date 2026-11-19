@@ -49,7 +49,7 @@ Four facts I verified matter for all three proposals:
 
 ### 3. Missed bottlenecks and risks
 
-- **F2.** A never mentions the 20-job Free-plan limit or the two non-CI workflows that saturate it. After Phase 0, release jobs, state-seal and Source qualification still queue behind Job image candidate.
+- **F2.** A never mentions the 20-job Free-plan limit or the two non-CI workflows that saturate it. After Phase 0, release jobs, state seal and Source qualification still queue behind Job image candidate.
 - **Merge-queue throughput.** The ruleset sets `max_entries_to_build 2`. PR #1271 entered the queue at 07:49Z on 11-18, and its merge_group run was created at 14:56Z (`gh api .../issues/1271/timeline`). 35 of 150 PRs entered the queue more than once (T7). A optimises time-to-verdict and says nothing about push-to-merge, which is the brief's metric.
 - **Cold-path slowdown.** Today one pod can burst to 84 cores. A caps build pods at 8 Guaranteed CPUs (§6.2), so lock bumps, new nodes and evictions compile 481 crates at 8-way parallelism. Cold tails get worse while warm medians improve, and A gives no cold-path number.
 - **Cancelled PR runs.** 45% of PR runs are cancelled (T1). Their minutes are excluded from the samples, and they still take cluster slots during fan-out.
@@ -90,7 +90,7 @@ A is the most balanced design document, but it would not reach the minimum at th
 
 ### 3. Missed bottlenecks and risks
 
-- **Delivery risk.** B's Phase 1 ("Week 1") includes the velnor-gen cutover (#1290, open), deleting state-seal, and moving every gate. Phases 3–4 replace ARC, the runner host and the official worker within 9 weeks. Legacy reached 804k lines with "no performance improvement accepted yet" (E.7) and incidents #389 and #408. Nothing in B's plan prices those failure modes.
+- **Delivery risk.** B's Phase 1 ("Week 1") includes the velnor-gen cutover (#1290, open), deleting state seal, and moving every gate. Phases 3–4 replace ARC, the runner host and the official worker within 9 weeks. Legacy reached 804k lines with "no performance improvement accepted yet" (E.7) and incidents #389 and #408. Nothing in B's plan prices those failure modes.
 - **B's own numbers do not justify Phase 4.** B measures a native worker's gain at about 2.5–4.5 s per job (§2 H2), yet it plans a 10k-line native worker to chase ~10 s. The Phase 4 targets are not supported by that arithmetic.
 - **Missing default-feature check.** Running runner-host tests only with `--features local-mode` removes the default-feature build, which is the build that ships. Keep a default `cargo check`/clippy pass.
 - **Merge-queue re-entry (23% of PRs, T7)** and the 45% cancellation rate are not costed.

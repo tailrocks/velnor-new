@@ -24,6 +24,18 @@ impl ReleaseError {
                 f,
                 ".velnor/release.toml: package {package} has more than one [[binaries]] entry"
             ),
+            Self::KeyNeedsFormat {
+                package,
+                key,
+                format,
+            } => write!(
+                f,
+                ".velnor/release.toml: binary {package} sets {key}, which needs format = \"{format}\""
+            ),
+            Self::MuslNeedsLinux { package } => write!(
+                f,
+                ".velnor/release.toml: binary {package} sets target = \"musl\", which needs a linux platform"
+            ),
             Self::InvalidBundle {
                 package,
                 entry,

@@ -8,10 +8,28 @@ use crate::lint::LintCommand;
 use crate::plan::CargoCommand;
 use crate::verdict::VerdictSpec;
 
+pub const BUDGET_STEP: &str = "budget";
+pub const BUDGET_JOB: &str = "rust-budget";
+pub const BUDGET_PR_WALL: &str = "budget_pr_wall_seconds";
+pub const BUDGET_MAIN_WALL: &str = "budget_main_wall_seconds";
+pub const BUDGET_RUNNER: &str = "budget_runner_seconds";
+pub const BUDGET_SETUP: &str = "budget_setup_seconds";
+pub const RUN_WALL: &str = "run_wall_seconds";
+pub const RUN_RUNNER: &str = "run_runner_seconds";
+pub const BUDGET_OUTPUTS: [&str; 6] = [
+    BUDGET_PR_WALL,
+    BUDGET_MAIN_WALL,
+    BUDGET_RUNNER,
+    BUDGET_SETUP,
+    RUN_WALL,
+    RUN_RUNNER,
+];
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StepKind {
     Checkout {
         depth: u32,
+        sparse: Option<Vec<String>>,
     },
     InstallTools {
         only: Option<String>,
@@ -37,6 +55,7 @@ pub enum StepKind {
         manifests: Vec<RepoPath>,
         target: RepoPath,
         archive: Option<RepoPath>,
+        budget_bytes: u64,
     },
     CacheResult(Vec<(JobId, TrimFamily)>),
     CacheVerify {
@@ -103,6 +122,9 @@ pub enum StepKind {
     CheckMetrics {
         needs_max_bytes: usize,
         trusted_api: bool,
+    },
+    Budget {
+        last: usize,
     },
 }
 

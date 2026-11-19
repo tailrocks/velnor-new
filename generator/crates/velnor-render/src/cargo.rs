@@ -6,13 +6,14 @@ use velnor_model::{
     TargetKind, TargetName,
 };
 
+use crate::cargo_features::NO_TESTS_PASS;
 use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
 use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
 const FINGERPRINT_LOG: &str =
     "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
-const DOC_RUN: &str =
+pub(crate) const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 #[derive(Clone, Copy)]
@@ -110,12 +111,22 @@ fn cargo_command(
     match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
+        CargoCommand::ClippyFeatures { features } => {
+            crate::cargo_features::clippy_features(cargo, features)
+        }
         CargoCommand::NextestBuild => nextest_build(nextest),
         CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
             &format!("--workspace --locked{nextest}"),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
+        CargoCommand::NextestFeatures {
+            features,
+            filter,
+            ci_profile,
+            ..
+        } => crate::cargo_features::nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::NextestRunArchive {
             file,
             filter,
@@ -129,6 +140,7 @@ fn cargo_command(
             ),
             filter,
             *ci_profile,
+            NO_TESTS_PASS,
         ),
         CargoCommand::NextestArchive { file } => (
             BUILD_TESTS_STEP.into(),
@@ -157,6 +169,9 @@ fn cargo_command(
             format!("cargo test --doc --workspace --locked{cargo}"),
             vec![],
         ),
+        CargoCommand::DocFeatures { features } => {
+            crate::cargo_features::doc_features(cargo, features)
+        }
         CargoCommand::Doc => ("Documentation".into(), format!("{DOC_RUN}{cargo}"), vec![]),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
@@ -194,7 +209,7 @@ fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
     }
 }
 
-fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
+pub(crate) fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
     (
         LINT_STEP.into(),
         [format!(
@@ -293,16 +308,17 @@ fn nextest_build(format: &str) -> (String, String, Vec<(String, Value)>) {
     )
 }
 
-fn nextest_run(
+pub(crate) fn nextest_run(
     scope: &str,
     filter: &FilterRef,
     ci_profile: bool,
+    no_tests: &str,
 ) -> (String, String, Vec<(String, Value)>) {
     let profile = if ci_profile { " --profile ci" } else { "" };
     (
         TEST_STEP.into(),
         format!(
-            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests=pass",
+            "cargo-nextest nextest run {scope}{profile} --no-fail-fast --ignore-default-filter --status-level pass -E \"{}\" --no-tests={no_tests}",
             nextest_filter(filter)
         ),
         vec![],
@@ -313,6 +329,7 @@ fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
         FilterRef::All => "$TEST_FILTER".to_owned(),
         FilterRef::AllExcept(binaries) => without_binaries("($TEST_FILTER)".to_owned(), binaries),
+        FilterRef::Expr { expr, except } => crate::cargo_features::expr(expr, except),
         FilterRef::Group {
             include,
             exclude,
@@ -331,13 +348,13 @@ fn nextest_filter(filter: &FilterRef) -> String {
     }
 }
 
-fn without_binaries(base: String, binaries: &[String]) -> String {
+pub(crate) fn without_binaries(base: String, binaries: &[String]) -> String {
     binaries
         .iter()
         .fold(base, |text, id| format!("{text} - binary_id(={id})"))
 }
 
-fn feature_flag(features: &[String]) -> String {
+pub(crate) fn feature_flag(features: &[String]) -> String {
     if features.is_empty() {
         String::new()
     } else {

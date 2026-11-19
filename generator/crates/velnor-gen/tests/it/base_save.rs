@@ -16,7 +16,7 @@ pub(crate) fn pinned(version: &str, config: &str) -> Result<RepoView, Box<dyn st
     repo.tracked_paths.insert(LOCK_PATH);
     repo.files.insert(
         LOCK_PATH,
-        pin_lock(version, COMMIT_FILE, SUMS)?.into_bytes(),
+        pin_lock(version, COMMIT_FILE, SUMS, None)?.into_bytes(),
     );
     Ok(repo)
 }

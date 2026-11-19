@@ -19,6 +19,7 @@ use super::request::LocalPairRequest;
 
 pub(super) enum MetadataUpload<'a> {
     Initialize(Vec<u8>),
+    LocalCi(Vec<u8>),
     Control { name: &'a str, bytes: &'a [u8] },
 }
 
@@ -33,6 +34,11 @@ impl Publication {
         match upload {
             MetadataUpload::Initialize(archive) => Ok(Self {
                 purpose: "init".to_owned(),
+                archive,
+                command: None,
+            }),
+            MetadataUpload::LocalCi(archive) => Ok(Self {
+                purpose: "local-ci".to_owned(),
                 archive,
                 command: None,
             }),
