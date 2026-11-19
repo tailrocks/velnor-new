@@ -21,8 +21,6 @@ const TOP_FILES: [&str; 12] = [
 ];
 const TOP_DIRECTORIES: [&str; 3] = [".cargo", ".config", ".velnor"];
 
-/// Non-cone sparse-checkout patterns for a lane over `roots`, or `None` when
-/// the reads of the lane are not fully known and the whole tree is needed.
 pub(crate) fn paths(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {
     if facts.config.checkout == CheckoutScope::Full
         || roots.is_empty()
