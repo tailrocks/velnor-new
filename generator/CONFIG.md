@@ -94,6 +94,8 @@ With `velnor-ci` 0.1.86 or later in the lock, `mbx_shared_store = true` also ren
 
 `docs = "post_merge"` in `.velnor/rust-ci.toml` runs the `Documentation` step (`cargo doc`) only on `push`, `schedule` and `workflow_dispatch`, so a pull request and a `merge_group` run skip it. The default, `"always"`, keeps the step on every event. The step needs no helper version. mbx caches rustdoc, but it keys each crate's action on the whole workspace source tree, so any source change misses every crate and a pull request recompiles all the docs; the doc check then moves to the run after the merge.
 
+`check_alone = "post_merge"` does the same for the per-crate `Check <crate> alone` steps. They compile each crate with only its own feature set, so their dependency artifacts differ from the workspace lint and build steps and a pull request rarely finds them in the mbx cache. They keep their value as the check that a crate declares every feature it needs, and the run after the merge keeps that check. The default is `"always"`.
+
 ## Test setup steps
 
 A test that needs a fixture, such as a built example executable or a provisioned service, declares one step per fixture. The generator runs each step before the first test step of every job of that root, in the order written. Each step is one command, because a generated `run:` value is one command with no shell logic; the logic lives in a script the repository commits. The script exports variables to later steps through `$GITHUB_ENV`.
