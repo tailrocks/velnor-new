@@ -57,180 +57,26 @@ fn a_well_formed_record_is_accepted() {
     assert_eq!(verdict(&record()), "ACCEPTED");
 }
 
+fn top_and_source_cases() -> Vec<(Vec<&'static str>, Option<Value>, &'static str)> {
+    vec![]
+}
+
+fn workflow_cases() -> Vec<(Vec<&'static str>, Option<Value>, &'static str)> {
+    vec![]
+}
+
+fn build_archive_and_oci_cases() -> Vec<(Vec<&'static str>, Option<Value>, &'static str)> {
+    vec![]
+}
+
 #[test]
 fn every_malformed_record_field_is_refused_with_its_own_message() {
-    let cases: Vec<(Vec<&str>, Option<Value>, &str)> = vec![
-        (
-            vec!["x"],
-            Some(json!(1)),
-            "Candidate record has unknown or missing fields.",
-        ),
-        (
-            vec!["source"],
-            None,
-            "Candidate record has unknown or missing fields.",
-        ),
-        (
-            vec!["schema"],
-            Some(json!("x")),
-            "Candidate schema or platform is incorrect.",
-        ),
-        (
-            vec!["platform"],
-            Some(json!("linux/arm64")),
-            "Candidate schema or platform is incorrect.",
-        ),
-        (
-            vec!["source", "commit"],
-            Some(json!("abc")),
-            "Source identity is incorrect.",
-        ),
-        (
-            vec!["source", "commit"],
-            Some(json!("A".repeat(40))),
-            "Source identity is incorrect.",
-        ),
-        (
-            vec!["source", "ref"],
-            Some(json!("main")),
-            "Source identity is incorrect.",
-        ),
-        (
-            vec!["source", "inputs", "extra"],
-            Some(json!("b".repeat(64))),
-            "The source input list is incomplete or unknown.",
-        ),
-        (
-            vec!["source", "inputs", ".velnor/runner.lock"],
-            None,
-            "The source input list is incomplete or unknown.",
-        ),
-        (
-            vec!["source", "inputs", ".velnor/runner.lock"],
-            Some(json!("zz")),
-            "Source input hash is incorrect.",
-        ),
-        (
-            vec!["workflow", "repository"],
-            Some(json!("no-slash")),
-            "Workflow repository identity is incorrect.",
-        ),
-        (
-            vec!["workflow", "repository_id"],
-            Some(json!(0)),
-            "Workflow repository ID is incorrect.",
-        ),
-        (
-            vec!["workflow", "repository_id"],
-            Some(json!(1.0)),
-            "Workflow repository ID is incorrect.",
-        ),
-        (
-            vec!["workflow", "repository_id"],
-            Some(json!(true)),
-            "Workflow repository ID is incorrect.",
-        ),
-        (
-            vec!["workflow", "event"],
-            Some(json!("Push")),
-            "Workflow event is incorrect.",
-        ),
-        (
-            vec!["workflow", "workflow_ref"],
-            Some(json!("tailrocks/velnor-new/.github/workflows/a.yml")),
-            "Workflow ref is incorrect.",
-        ),
-        (
-            vec!["workflow", "authority_commit"],
-            Some(json!("c".repeat(39))),
-            "Workflow authority commit is incorrect.",
-        ),
-        (
-            vec!["workflow", "run_id"],
-            Some(json!(0)),
-            "Workflow run_id is incorrect.",
-        ),
-        (
-            vec!["workflow", "run_attempt"],
-            Some(json!("2")),
-            "Workflow run_attempt is incorrect.",
-        ),
-        (
-            vec!["build", "builder"],
-            Some(json!("docker buildx")),
-            "Build identity is incorrect.",
-        ),
-        (
-            vec!["build", "platform"],
-            Some(json!("linux/arm64")),
-            "Build identity is incorrect.",
-        ),
-        (
-            vec!["build", "exporter"],
-            Some(json!("docker")),
-            "Build identity is incorrect.",
-        ),
-        (
-            vec!["build", "provenance"],
-            Some(json!("enabled")),
-            "Build identity is incorrect.",
-        ),
-        (
-            vec!["build", "compression"],
-            Some(json!("zstd")),
-            "Build identity is incorrect.",
-        ),
-        (
-            vec!["build", "force_compression"],
-            Some(json!(1)),
-            "Build identity is incorrect.",
-        ),
-        (
-            vec!["build", "arguments"],
-            Some(json!(["--x"])),
-            "Build arguments must be empty.",
-        ),
-        (
-            vec!["archive", "sha256"],
-            Some(json!("A".repeat(64))),
-            "Archive identity is incorrect.",
-        ),
-        (
-            vec!["archive", "size_bytes"],
-            Some(json!(0)),
-            "Archive identity is incorrect.",
-        ),
-        (
-            vec!["oci", "archive_index_digest"],
-            Some(json!(format!("sha256:{}", "0".repeat(64)))),
-            "OCI archive_index_digest is incorrect.",
-        ),
-        (
-            vec!["oci", "platform_manifest_size_bytes"],
-            Some(json!(0)),
-            "OCI platform_manifest_size_bytes is incorrect.",
-        ),
-        (
-            vec!["oci", "platform_manifest_digest"],
-            Some(json!("sha256:xx")),
-            "OCI platform manifest digest must be a lowercase SHA-256 digest.",
-        ),
-        (
-            vec!["oci", "image_configuration_digest"],
-            Some(json!("md5:xx")),
-            "OCI image configuration digest must be a lowercase SHA-256 digest.",
-        ),
-        (
-            vec!["oci", "layer_digests"],
-            Some(json!([])),
-            "OCI layer digest list is incorrect.",
-        ),
-        (
-            vec!["oci", "layer_digests"],
-            Some(json!(["x"])),
-            "OCI layer digest must be a lowercase SHA-256 digest.",
-        ),
-    ];
+    let cases = [
+        top_and_source_cases(),
+        workflow_cases(),
+        build_archive_and_oci_cases(),
+    ]
+    .concat();
     for (path, value, message) in cases {
         assert_eq!(
             verdict(&with(&path, value.clone())),

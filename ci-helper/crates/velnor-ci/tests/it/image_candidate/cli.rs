@@ -111,7 +111,7 @@ impl Candidate {
 
 impl Drop for Candidate {
     fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.dir);
+        fs::remove_dir_all(&self.dir).ok();
     }
 }
 
