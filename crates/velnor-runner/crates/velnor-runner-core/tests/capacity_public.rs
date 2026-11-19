@@ -5,16 +5,23 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 
 use velnor_runner_core::{
-    AcquireIntentId, Capacity, CleanupProof, Epoch, OwnedIds, StateError, WorkerId, WorkerState,
+    Capacity, CleanupProof, Epoch, OwnedIds, StateError, WorkerId, WorkerState,
 };
 
-fn worker(raw: u64) -> WorkerId {
-    WorkerId::new(raw).unwrap_or_else(|error| std::panic::panic_any(error))
+#[cfg(test)]
+mod ids {
+    use velnor_runner_core::{AcquireIntentId, WorkerId};
+
+    pub fn worker(raw: u64) -> WorkerId {
+        WorkerId::new(raw).expect("nonzero worker")
+    }
+
+    pub fn intent(raw: u64) -> AcquireIntentId {
+        AcquireIntentId::new(raw).expect("nonzero intent")
+    }
 }
 
-fn intent(raw: u64) -> AcquireIntentId {
-    AcquireIntentId::new(raw).unwrap_or_else(|error| std::panic::panic_any(error))
-}
+use ids::{intent, worker};
 
 fn owned() -> OwnedIds {
     OwnedIds {
