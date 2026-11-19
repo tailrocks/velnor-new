@@ -7,7 +7,7 @@ use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
     MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType, RepoFacts,
     RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
-    When, WorkflowPlan,
+    PushAfterMergeGroup, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -85,6 +85,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     if facts.config.cache_debug == CacheDebug::On {
         upload_cargo_logs(&mut jobs);
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
+        crate::merge_group_skip::apply(&mut jobs, single);
     }
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
@@ -396,6 +399,8 @@ pub(crate) fn step(kind: StepKind) -> Step {
         directory: None,
         target_dir: None,
         when: When::Success,
+        skip_on_draft: false,
+        skip_after_merge_group: None,
         pr: PrRun::Always,
         gate: None,
         reads: None,

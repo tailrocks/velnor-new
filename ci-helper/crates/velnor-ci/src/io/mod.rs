@@ -23,6 +23,7 @@ mod git_witness;
 mod http;
 mod inputs;
 mod manifests;
+mod merge_group;
 mod plan;
 pub mod preview;
 pub mod pump;
@@ -117,6 +118,7 @@ pub fn main() -> ExitCode {
     }
     if let Command::Sources(SourcesCommand::Fetch(args)) = &cli.command {
         return sources::fetch(args);
+    }
     if let Command::LaneGuard(args) = &cli.command {
         return lane_guard::run(args);
     }
@@ -191,6 +193,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::WriteRequest(args) => write_request::run(&args),
         Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),
@@ -226,6 +229,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
         Command::VerifyMacProof => preview::cli::verify_mac_proof(),
         Command::RunAuthority(args) => preview::cli::run_authority(&args),
+        Command::AdmitPreview => preview::admit::admit_preview(),
         Command::Run(_) | Command::Sources(_) => {
             Err(CiError::new("run and sources are handled before commands"))
         }

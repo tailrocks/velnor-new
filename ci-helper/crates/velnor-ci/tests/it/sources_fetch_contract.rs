@@ -9,7 +9,7 @@ use std::process::Command;
 use clap::Parser;
 use velnor_ci::cli::{Cli, Command as CiCommand, SourcesCommand};
 use velnor_model::{
-    Concurrency, Job, JobId, Permissions, PullRequestType, RepoPath, RootSlug, RunnerLabel, Step,
+    Concurrency, Job, JobId, Permissions, PrRun, PullRequestType, RepoPath, RootSlug, RunnerLabel, Step,
     StepKind, Triggers, WORKFLOW_PATH, When, WorkflowPlan,
 };
 use velnor_render::render;
@@ -37,10 +37,11 @@ fn rendered_run(manifests: &[&str]) -> String {
             comment: None,
             needs: Vec::new(),
             when: When::Success,
-            skip_on_draft: false,
+            pr: PrRun::Always,
             runs_on: RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
             permissions: Permissions::default(),
             timeout_minutes: 10,
+            reports_ignored: false,
             gate: None,
             plan_outputs: Vec::new(),
             steps: vec![Step {
@@ -51,7 +52,9 @@ fn rendered_run(manifests: &[&str]) -> String {
                 directory: None,
                 target_dir: None,
                 when: When::FetchSources,
+                pr: PrRun::Always,
                 skip_on_draft: false,
+                skip_after_merge_group: None,
                 gate: None,
                 reads: None,
             }],

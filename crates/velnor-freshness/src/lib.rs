@@ -19,6 +19,7 @@ mod probe;
 mod process;
 mod release_support;
 mod repo_file;
+pub mod request;
 mod time;
 mod validation;
 

@@ -17,7 +17,8 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{
-    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, RepoFacts, RepoPath, RepoView,
+    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, PushAfterMergeGroup, RepoFacts,
+    RepoPath, RepoView,
 };
 use velnor_render::render;
 use velnor_rust::{
@@ -115,6 +116,13 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
+        && !release.version().at_least((0, 1, 82))
+    {
+        return Err(GenerateError::MergeGroupHelperTooOld(
+            release.version().clone(),
+        ));
     }
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(

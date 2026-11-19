@@ -12,9 +12,10 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 23] = [
+const KEYS: [&str; 24] = [
     "cache_check_blocks",
     "cache_debug",
+    "ci",
     "runner",
     "fork_runner",
     "crates_mirror",
@@ -43,6 +44,7 @@ const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 struct RawConfig {
     cache_check_blocks: Option<bool>,
     cache_debug: Option<bool>,
+    ci: Option<crate::config_ci::RawCi>,
     runner: Option<String>,
     fork_runner: Option<String>,
     crates_mirror: Option<crate::config_mirror::RawCratesMirror>,
@@ -134,6 +136,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         test_setup,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
+        push_after_merge_group: crate::config_ci::push_after_merge_group(raw.ci),
         crates_mirror: raw
             .crates_mirror
             .map(crate::config_mirror::mirror)
@@ -156,19 +159,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
-        exclude: excludes(raw.exclude).map_err(invalid)?,
+        exclude: crate::config_exclude::excludes(raw.exclude).map_err(invalid)?,
     })
-}
-
-fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
-    let invalid = |value| Reason::InvalidValue {
-        key: "exclude",
-        value,
-    };
-    entries
-        .into_iter()
-        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
-        .collect()
 }
 
 fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
