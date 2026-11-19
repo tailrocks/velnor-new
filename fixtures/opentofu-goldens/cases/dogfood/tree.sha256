@@ -27,10 +27,10 @@
 - a82dacf5de7249e9c60c842884e655d158d70fa98678b244da6992f40fa4a5ab  ./.github/workflows/freshness.yml
 - abdfcddf1ca15e6c74573901781d63d52408b55d1bd3ceea6b6eb447b4f90de2  ./.github/workflows/homebrew-adoption.yml
 - 9d88c84cac33de2b06be528aa9cf8803ecb9f237e8e602460e2c1e02742c3930  ./.github/workflows/job-image-candidate.yml
-- 66bae351d1340504857053a96d9c249bb1034ef739cb2588870da6757e40009d  ./.github/workflows/product-release-binary.yml
-- 6fcbe3012ec24eefe0358626ba21daeaf0a53f4411f296be63e7dfe926f9cc84  ./.github/workflows/product-release-generator.yml
-- 14e15f882fe28ba0a5fd16b131344d855e558a568ed840e78376bf5c6ea7563c  ./.github/workflows/product-release-images.yml
-- f2ab6e134b13547fbf76de3ce4a6e032a9c1ec4c4053c1cbbe51924d8e02bfb2  ./.github/workflows/product-release.yml
+- 7e0ea3b591e476e9e2ecca02a748a9fe5fd1a98cfc5a0f121bb977cc5594497c  ./.github/workflows/product-release-binary.yml
+- d3751b46e9c393336c96b1d0c27ed77104a1cf534273718620cf3f4717b0b3c3  ./.github/workflows/product-release-generator.yml
+- d4766026fd9761f7cad1acd1fefbb441c277fed67910342447a5b19d2a0d66f8  ./.github/workflows/product-release-images.yml
+- 828c03525047eea7f4e13fcfe28b50add4e9a06c3ba2a25d9efb0d935c8eb599  ./.github/workflows/product-release.yml
 - 1ef523f8af5b641fa619f94b0e7fbfbdb2fec703cfb0d6af842a41f5634ce45c  ./.github/workflows/qualification.yml
 - 634e90b2f05f25197a92e1cfd4e3366ddeea01ab6ea50f95fd59c40c41067c6a  ./.github/workflows/release-rust-ci-tools.yml
 - 6f970547177f43c6d02b825fa76c984302483b89b9ac83e1abf7eabdc6873832  ./.github/workflows/source-preview-mac-proof.yml
