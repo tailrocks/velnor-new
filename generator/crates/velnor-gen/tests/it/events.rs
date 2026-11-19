@@ -184,14 +184,14 @@ fn a_machete_pin_filtered_to_another_os_does_not_enable_the_policy_lane() -> Tes
         )
     };
     let elsewhere = with(&[("mise.toml", &mise("macos"))], None)?;
-    assert!(!elsewhere.contains("cargo-machete"), "{elsewhere}");
+    assert!(!elsewhere.contains("cargo machete"), "{elsewhere}");
     let here = with(&[("mise.toml", &mise("linux"))], None)?;
-    assert!(here.contains("cargo-machete"), "{here}");
+    assert!(here.contains("cargo machete"), "{here}");
     let mac = with(
         &[("mise.toml", &mise("macos"))],
         Some(b"runner = \"macos-latest\"\n"),
     )?;
-    assert!(mac.contains("cargo-machete"), "{mac}");
+    assert!(mac.contains("cargo machete"), "{mac}");
     Ok(())
 }
 
@@ -206,12 +206,12 @@ fn a_machete_pin_reads_mise_os_arch_filters_and_darwin_as_macos() -> TestResult 
         &[("mise.toml", &mise("linux/x64"))],
         Some(b"runner = \"ubuntu-latest\"\n"),
     )?;
-    assert!(linux_arch.contains("cargo-machete"), "{linux_arch}");
+    assert!(linux_arch.contains("cargo machete"), "{linux_arch}");
     let darwin = with(
         &[("mise.toml", &mise("darwin"))],
         Some(b"runner = \"macos-latest\"\n"),
     )?;
-    assert!(darwin.contains("cargo-machete"), "{darwin}");
+    assert!(darwin.contains("cargo machete"), "{darwin}");
     Ok(())
 }
 
@@ -252,7 +252,7 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
     let deny = with(&[("deny.toml", ""), ("mise.toml", DENY_MISE)], None)?;
     assert!(deny.contains("  policy:\n"), "{deny}");
     assert!(deny.contains("cargo-deny check"), "{deny}");
-    assert!(!deny.contains("cargo-machete"), "{deny}");
+    assert!(!deny.contains("cargo machete"), "{deny}");
     assert!(deny.contains("      - policy\n"), "{deny}");
     let machete = with(
         &[(
@@ -262,7 +262,7 @@ fn the_policy_lane_exists_only_for_a_deny_config_or_a_pinned_machete() -> TestRe
         None,
     )?;
     assert!(machete.contains("  policy:\n"), "{machete}");
-    assert!(machete.contains("cargo-machete"), "{machete}");
+    assert!(machete.contains("cargo machete"), "{machete}");
     assert!(!machete.contains("cargo-deny"), "{machete}");
     Ok(())
 }
