@@ -160,7 +160,7 @@ fn a_lock_written_before_manifests_still_parses_and_a_lock_with_them_round_trips
         format_inputs_lock(&without_identity(&parsed)),
         "a.txt\tutil\nb.txt\tapp\n"
     );
-    // A velnor-ci before 0.1.100 splits at the first tab only, so the manifest becomes part of
+    // A velnor-ci before 0.1.101 splits at the first tab only, so the manifest becomes part of
     // the package name, which a name may not hold: it refuses the line instead of misreading it.
     assert!(PackageName::new("util\ta/util/Cargo.toml").is_err());
     Ok(())
@@ -211,15 +211,15 @@ fn pinned(version: &str, lock: &str) -> Result<RepoView, Box<dyn std::error::Err
 #[test]
 fn a_lock_with_manifests_needs_a_helper_that_reads_them() -> TestResult {
     let identified = "README.md\tpackage-0\tCargo.toml\n";
-    let error = velnor_gen::expected_with_notes(&pinned("0.1.99", identified)?)
-        .expect_err("the 0.1.99 pin was accepted");
+    let error = velnor_gen::expected_with_notes(&pinned("0.1.100", identified)?)
+        .expect_err("the 0.1.100 pin was accepted");
     let GenerateError::InputsLockHelperTooOld(version) = &error else {
         return Err(format!("unexpected error: {error}").into());
     };
-    assert_eq!(version.to_string(), "0.1.99");
-    assert!(error.to_string().contains("0.1.100"), "{error}");
+    assert_eq!(version.to_string(), "0.1.100");
+    assert!(error.to_string().contains("0.1.101"), "{error}");
 
-    workflow(&pinned("0.1.100", identified)?)?;
-    workflow(&pinned("0.1.99", "README.md\tpackage-0\n")?)?;
+    workflow(&pinned("0.1.101", identified)?)?;
+    workflow(&pinned("0.1.100", "README.md\tpackage-0\n")?)?;
     Ok(())
 }

@@ -10,7 +10,7 @@ use crate::error::{DetectError, Reason};
 
 pub const INPUTS_LOCK: RepoPath = RepoPath::from_static(".velnor/rust-inputs.lock");
 /// The first `velnor-ci` that reads a lock line naming its package's manifest.
-pub const INPUTS_IDENTITY_HELPER: (u64, u64, u64) = (0, 1, 100);
+pub const INPUTS_IDENTITY_HELPER: (u64, u64, u64) = (0, 1, 101);
 const REPOSITORY: &str = ".";
 
 #[must_use]
@@ -121,7 +121,7 @@ pub fn unlisted(found: &CompileInputs, listed: &CompileInputs) -> CompileInputs 
         .collect()
 }
 
-/// The inputs with every manifest dropped: the name-only lines a velnor-ci before 0.1.100 reads.
+/// The inputs with every manifest dropped: the name-only lines a velnor-ci before 0.1.101 reads.
 #[must_use]
 pub fn without_identity(inputs: &CompileInputs) -> CompileInputs {
     inputs
@@ -162,7 +162,7 @@ pub fn inputs_lock_text(inputs: &CompileInputs, identified: bool) -> String {
     }
 }
 
-/// Whether any line of the lock carries a manifest, which a velnor-ci before 0.1.100 refuses.
+/// Whether any line of the lock carries a manifest, which a velnor-ci before 0.1.101 refuses.
 #[must_use]
 pub fn lock_is_identified(bytes: &[u8]) -> bool {
     bytes

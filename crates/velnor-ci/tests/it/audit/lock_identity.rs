@@ -33,13 +33,13 @@ fn read_lock(repo: &Repo) -> String {
 }
 
 #[test]
-fn a_pin_before_0_1_100_keeps_the_name_only_lock_format_it_can_read() {
-    assert_eq!(written_under("0.1.99"), NAME_ONLY);
+fn a_pin_before_0_1_101_keeps_the_name_only_lock_format_it_can_read() {
+    assert_eq!(written_under("0.1.100"), NAME_ONLY);
 }
 
 #[test]
-fn a_pin_of_0_1_100_gets_the_manifest_of_each_package_on_every_line() {
-    let lock = written_under("0.1.100");
+fn a_pin_of_0_1_101_gets_the_manifest_of_each_package_on_every_line() {
+    let lock = written_under("0.1.101");
     let mut expected = String::new();
     for line in NAME_ONLY.lines() {
         let manifest = if line.ends_with("\ttop") {
@@ -58,7 +58,7 @@ fn a_name_only_lock_still_passes_the_audit_under_a_pin_that_reads_manifests() {
     unit(
         &repo,
         ".velnor/rust-ci.lock",
-        &HELPER_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.100\""),
+        &HELPER_LOCK.replace("version = \"0.1.81\"", "version = \"0.1.101\""),
     );
     unit(&repo, ".velnor/rust-inputs.lock", NAME_ONLY);
     repo.git(&["add", "--all"]);
