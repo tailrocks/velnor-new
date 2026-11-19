@@ -165,7 +165,15 @@ fn the_inputs_lock_becomes_facts_and_a_bad_line_or_an_unknown_package_is_an_erro
 }
 
 fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
-    let view = repo(
+    embedding_with_links(&[], files, check)
+}
+
+fn embedding_with_links(
+    links: &[&str],
+    files: &[(&str, &str)],
+    check: &[(&str, &[&str])],
+) -> TestResult {
+    let mut view = repo(
         vec![(
             "Cargo.toml",
             vec![
@@ -177,6 +185,10 @@ fn embedding(files: &[(&str, &str)], check: &[(&str, &[&str])]) -> TestResult {
         )],
         files,
     )?;
+    for link in links {
+        view.tracked_paths.insert(path(link));
+        view.symlinks.insert(path(link));
+    }
     let facts = detect(&view)?;
     let selected = |changed_file: &str| {
         let changes = velnor_model::ChangeSet {
@@ -240,5 +252,20 @@ fn an_embedded_path_that_cannot_be_resolved_selects_its_crate_on_any_change() ->
             ("docs/guide.md", &["app", "reader"]),
             ("docs/other.md", &["reader"]),
         ],
+    )
+}
+
+#[test]
+fn a_crate_with_a_symlinked_source_is_selected_by_any_change_because_its_target_is_unread()
+-> TestResult {
+    embedding_with_links(
+        &["crates/app/src/shared.rs"],
+        &[
+            ("crates/app/src/lib.rs", ""),
+            ("crates/tool/src/lib.rs", ""),
+            ("crates/reader/src/lib.rs", ""),
+            ("crates/left/src/lib.rs", ""),
+        ],
+        &[("docs/shared.rs", &["app"]), ("docs/other.md", &["app"])],
     )
 }

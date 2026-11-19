@@ -32,6 +32,15 @@ pub(crate) fn embedded_inputs(view: &RepoView, roots: &[RustRoot]) -> CompileInp
                 inputs.entry(key).or_default().insert(member.name.clone());
             }
         }
+        // A symlinked source is not read, so the file it points at and what
+        // that file embeds are unknown: any change selects the package.
+        if view
+            .symlinks
+            .iter()
+            .any(|link| is_rust_source(link) && under(member.directory.as_ref(), link))
+        {
+            inputs.entry(None).or_default().insert(member.name.clone());
+        }
     }
     inputs
 }
@@ -102,7 +111,8 @@ fn literal(rest: &str) -> Option<String> {
     (!value.contains('\\')).then(|| value.to_owned())
 }
 
-pub(crate) fn is_rust_source(path: &RepoPath) -> bool {
+#[must_use]
+pub fn is_rust_source(path: &RepoPath) -> bool {
     std::path::Path::new(path.as_str())
         .extension()
         .is_some_and(|extension| extension == "rs")
