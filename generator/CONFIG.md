@@ -186,6 +186,8 @@ needs = ["docker"]
 test_threads = 2
 timeout_minutes = 30
 runner = "ubuntu-latest"
+paths = ["app/migrations/**"]
+events = ["push", "schedule"]
 root = "."
 ```
 
@@ -194,7 +196,7 @@ root = "."
 - `needs` lists what the job needs before the tests start. `"docker"` adds a step that runs `docker info`, so a runner without Docker fails there. `"cargo"` installs the full toolchain, as the build job does, but restores no target or sources cache. Nothing else is installed: a group with no need installs only cargo-nextest. A test that calls `cargo` may print `Compiling` for its own build, and it must not rebuild the suite.
 - `test_threads` (1 to 256) becomes `--test-threads` for that job only. `timeout_minutes` (1 to 360) and `runner` replace the repository values for that job only.
 - `root` is the folder of the Cargo root's `Cargo.toml`, or `.`. It is required when the repository has several Cargo roots, and it must name a root with nextest tests.
-- `paths` and `events` are in the model but refused for now, because choosing groups at run time needs the plan. A group runs whenever its root is selected.
+- `paths` (globs, as in `inputs`) and `events` (`pull_request`, `push`, `merge_group`, `schedule`, `workflow_dispatch`) are optional. A group with neither key runs whenever its root is selected. A group with either key is decided at run time by `velnor-ci plan`, which writes one output `rust_<root>_group_<name>` (`run` or `skip`) that is the job's `if`. The group runs when its root has a selected package and one of these holds, in this order: the event is a push to the default branch (every group runs, but only where the default lanes select the root); the event is listed in `events`; the event is a merge group and the group sets no `paths` (`events` never skip a group on a merge group); a changed path matches `paths`; every package is selected. Otherwise the job is skipped, and the `Required` check expects it to be skipped. On a merge group, `paths` are matched against the merge group's own base to head diff, the same diff the default lanes select by; when that diff cannot be computed, every package is selected and every group runs. `velnor-ci plan --explain` and the plan summary say why each group ran or was skipped. On a push to the default branch the groups follow exactly the same selection as the default lanes, neither stricter nor looser: with `on_main = "affected"` a docs-only push selects no package, so the lanes and every group skip; with `on_main = "everything"` the lanes and every group run. The default job still leaves out the group's tests, so tests of a skipped group do not run in that workflow run.
 
 A repository with any `[[test_groups]]` splits each root that has a group into the archive build job and the test jobs, whatever `shape` is: the group jobs run from the archive of the build job (`shape = "groups"`), and lint and doctests stay on the build job. The default job `rust-test-default` leaves out every group's tests with `and not (<filter>)`, and every group job is a need of the `Required` check. Two groups with one name in one root are refused. The key needs `velnor-ci` 0.1.82 or later, because the helper reads the same file.
 

@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use velnor_runner_host::launch_agent_plist;
 
 use super::LABEL;
+use crate::state_directory::user_home;
 
 pub(super) fn render_plist(binary: &Path, state: &Path, logs: &Path) -> Option<String> {
     let binary = binary
@@ -30,18 +31,16 @@ pub(super) fn with_state(plist: &str, state: &Path) -> Option<String> {
     ))
 }
 
-pub(crate) fn log_dir() -> PathBuf {
-    home().join("Library/Logs/Velnor")
+pub(crate) fn log_dir() -> Option<PathBuf> {
+    Some(user_home()?.join("Library/Logs/Velnor"))
 }
 
-pub(super) fn plist_path() -> PathBuf {
-    home()
-        .join("Library/LaunchAgents")
-        .join(format!("{LABEL}.plist"))
-}
-
-fn home() -> PathBuf {
-    std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from)
+pub(super) fn plist_path() -> Option<PathBuf> {
+    Some(
+        user_home()?
+            .join("Library/LaunchAgents")
+            .join(format!("{LABEL}.plist")),
+    )
 }
 
 pub(super) fn with_logs(plist: &str, log_dir: &Path) -> Option<String> {
