@@ -9,6 +9,7 @@ use crate::ids::{PackageName, RepoPath};
 pub const WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/rust-ci.yml");
 pub const RELEASE_WORKFLOW_PATH: RepoPath = RepoPath::from_static(".github/workflows/release.yml");
 pub const RELEASE_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/release.toml");
+pub const WORKFLOWS_CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/workflows.toml");
 pub const RELEASE_PLZ_FILE: &str = "release-plz.toml";
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]

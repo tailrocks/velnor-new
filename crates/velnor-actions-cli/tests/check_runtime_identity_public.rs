@@ -29,6 +29,10 @@ use identity_support::{git, git_output};
 #[path = "check_runtime_identity_progress.rs"]
 mod progress;
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn exported_execute_check_binds_current_runtime_and_rejects_stale_plan()
 -> Result<(), Box<dyn Error>> {

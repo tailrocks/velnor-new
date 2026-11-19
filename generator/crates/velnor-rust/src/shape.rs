@@ -4,6 +4,7 @@
 use velnor_model::{Shape, ShapeDecision, Timings};
 
 use crate::config::CONFIG_PATH;
+use crate::error::Reason;
 use crate::timings::TIMINGS_PATH;
 
 pub const SECOND_JOB_COST_SECONDS: u64 = 5;
@@ -54,5 +55,18 @@ pub fn decide_shape(configured: Option<Shape>, timings: Option<&Timings>) -> Sha
                 "one job: the shorter build takes {shorter} s, not longer than the {SECOND_JOB_COST_SECONDS} s a second job adds (#585)"
             ),
         )
+    }
+}
+
+pub(crate) fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {
+    match configured {
+        None | Some("auto") => Ok(None),
+        Some("one-job") => Ok(Some(Shape::OneJob)),
+        Some("lint-test") => Ok(Some(Shape::LintAndTest)),
+        Some("groups") => Ok(Some(Shape::BuildThenGroups)),
+        Some(other) => Err(Reason::InvalidValue {
+            key: "shape",
+            value: other.to_owned(),
+        }),
     }
 }

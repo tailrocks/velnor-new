@@ -7,7 +7,6 @@ use zeroize::Zeroizing;
 
 use crate::config::{DeveloperImages, HostConfig, KeychainReference};
 use crate::error::HostError;
-use crate::keychain::load_secret;
 
 pub(crate) enum ImageAuthority {
     Release(Zeroizing<Vec<u8>>),
@@ -21,7 +20,7 @@ impl ImageAuthority {
             return Ok(Self::Developer(images.clone()));
         }
         let reference = validated_reference(config)?;
-        let bytes = load_secret(reference.service(), reference.account())?;
+        let bytes = reference.load()?;
         token_text(&bytes)?;
         Ok(Self::Release(bytes))
     }

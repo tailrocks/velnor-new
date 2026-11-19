@@ -194,7 +194,6 @@ pub struct StateCompat {
     pub uname_s: String,
     pub uname_m: String,
     pub store: String,
-    pub checkout: String,
 }
 
 impl StateCompat {
@@ -223,7 +222,6 @@ impl StateCompat {
             format!("uname_m={}", self.uname_m),
             format!("ImageOS={}", self.image_os),
             format!("store={}", self.store),
-            format!("checkout={}", self.checkout),
         ]);
         lines
     }
