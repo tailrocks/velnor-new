@@ -14,8 +14,8 @@ fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Job
         .and_then(|name| facts.tools.tools.get(name))
         .is_some_and(|pin| {
             !pin.locked.is_empty()
-                && pin.locked.iter().all(|version| {
-                    HelperVersion::new(version.clone())
+                && pin.locked.iter().all(|lock| {
+                    HelperVersion::new(lock.version.clone())
                         .is_ok_and(|version| version.at_least((0, 9, 123)))
                 })
         });

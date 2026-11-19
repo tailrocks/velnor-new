@@ -52,9 +52,7 @@ pub(crate) fn triggers(facts: &RepoFacts) -> Triggers {
         pull_request: PullRequestType::ALL
             .into_iter()
             .chain(
-                facts
-                    .config
-                    .skip_draft_pull_requests
+                (facts.config.skip_draft_pull_requests || facts.config.pr_ci == PrCi::Label)
                     .then_some(PullRequestType::ConvertedToDraft),
             )
             .chain((facts.config.pr_ci == PrCi::Label).then_some(PullRequestType::Labeled))

@@ -1,18 +1,20 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::HelperRelease;
+use velnor_model::{HelperRelease, PrivateSources};
 use velnor_release::{BinaryPlan, FamilyPlan, RELEASE_APP_SLUG, ReleasePlan, TAG_JOB_BASE_MINUTES};
 
 use crate::release::{
     FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT, after_the_gate,
     newest_check, only_while_newest,
 };
-use crate::release_assets::asset;
+use crate::release_assets::{bind_version, published_files, quoted, read_version};
 use crate::release_binaries::{
     BUILD_TIMEOUT_MINUTES, DIST, PUBLISH_TIMEOUT_MINUTES, SUMS_FILE, artifact, build_steps,
     command, download, download_to, target, upload,
 };
+use crate::release_checks::{family_publish_needs, tag_needs};
+use crate::release_context::{BuildContext, Private};
 use crate::release_steps::{
     TOOLCHAIN, app_token, checkout, expression, join, permissions, shell_word, variables,
 };
@@ -25,19 +27,20 @@ const VERSIONS_ARTIFACT: &str = "family-versions";
 const VERSIONS_DIR: &str = "family-versions";
 const TAG_OUTPUT: &str = "needs.family.outputs.tag";
 const COMMIT_OUTPUT: &str = "needs.family.outputs.commit";
-const BUILD_OUTPUT: &str = "needs.family.outputs.build == 'true'";
+pub(crate) const BUILD_OUTPUT: &str = "needs.family.outputs.build == 'true'";
 
 pub(crate) fn family_jobs(
     plan: &ReleasePlan,
     family: &FamilyPlan,
     helper: &HelperRelease,
+    private: Option<&PrivateSources>,
 ) -> Vec<RenderedJob> {
     let mut jobs = vec![versions_job(plan, helper), tag_job(plan, family, helper)];
     jobs.extend(plan.binaries.iter().flat_map(|binary| {
         binary
             .platforms
             .iter()
-            .map(|platform| build(binary, *platform))
+            .map(|platform| build(binary, *platform, helper, private))
     }));
     jobs.push(sums(plan));
     jobs.push(publish(plan, helper));
@@ -161,14 +164,23 @@ fn tag_job(plan: &ReleasePlan, family: &FamilyPlan, helper: &HelperRelease) -> R
             .collect(),
         timeout_minutes: TAG_JOB_BASE_MINUTES,
         steps,
-        needs: vec!["gate".to_owned(), VERSIONS_JOB.to_owned()],
+        needs: ["gate".to_owned(), VERSIONS_JOB.to_owned()]
+            .into_iter()
+            .chain(tag_needs(plan))
+            .collect(),
         ..after_the_gate("family")
     }
 }
 
-fn build(binary: &BinaryPlan, platform: velnor_model::Platform) -> RenderedJob {
+fn build(
+    binary: &BinaryPlan,
+    platform: velnor_model::Platform,
+    helper: &HelperRelease,
+    private: Option<&PrivateSources>,
+) -> RenderedJob {
     let (runner, _) = target(platform, binary);
     let source = format!("refs/tags/${{{{ {TAG_OUTPUT} }}}}");
+    let tag = format!("${{{{ {TAG_OUTPUT} }}}}");
     let check = RenderedStep {
         env: variables(&[
             ("VERIFIED", VERIFIED_COMMIT),
@@ -185,7 +197,16 @@ fn build(binary: &BinaryPlan, platform: velnor_model::Platform) -> RenderedJob {
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
         timeout_minutes: BUILD_TIMEOUT_MINUTES,
-        steps: build_steps(binary, platform, &source, check),
+        steps: build_steps(
+            binary,
+            platform,
+            BuildContext {
+                source: &source,
+                same_commit: check,
+                tag: &tag,
+                private: private.map(|sources| Private { helper, sources }),
+            },
+        ),
         ..after_the_family(
             &format!("build-{}-{}", binary.package, platform.file_suffix()),
             Vec::new(),
@@ -193,16 +214,39 @@ fn build(binary: &BinaryPlan, platform: velnor_model::Platform) -> RenderedJob {
     }
 }
 
-fn artifacts(plan: &ReleasePlan) -> Vec<(String, String)> {
+fn artifacts(plan: &ReleasePlan) -> Vec<(String, Vec<String>)> {
     plan.binaries
         .iter()
         .flat_map(|binary| {
-            binary
-                .platforms
-                .iter()
-                .map(|platform| (artifact(binary, *platform), asset(binary, *platform)))
+            binary.platforms.iter().map(|platform| {
+                (
+                    artifact(binary, *platform),
+                    published_files(binary, *platform),
+                )
+            })
         })
         .collect()
+}
+
+fn files(plan: &ReleasePlan) -> Vec<String> {
+    plan.binaries
+        .iter()
+        .flat_map(|binary| {
+            let names: Vec<String> = binary
+                .platforms
+                .iter()
+                .flat_map(|platform| published_files(binary, *platform))
+                .collect();
+            quoted(binary, &names)
+        })
+        .collect()
+}
+
+fn read_family_version(plan: &ReleasePlan) -> Option<RenderedStep> {
+    let tag = format!("${{{{ {TAG_OUTPUT} }}}}");
+    plan.binaries
+        .iter()
+        .find_map(|binary| read_version(binary, &tag))
 }
 
 fn sums(plan: &ReleasePlan) -> RenderedJob {
@@ -210,8 +254,8 @@ fn sums(plan: &ReleasePlan) -> RenderedJob {
         .into_iter()
         .map(|(name, _)| download(name))
         .collect();
-    let names: Vec<String> = artifacts(plan).into_iter().map(|(_, file)| file).collect();
-    let names = names.join(" ");
+    steps.extend(read_family_version(plan));
+    let names = files(plan).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
         steps.push(RenderedStep {
@@ -227,6 +271,7 @@ fn sums(plan: &ReleasePlan) -> RenderedJob {
         "family-sums".to_owned(),
         format!("{DIST}/{SUMS_FILE}"),
     ));
+    bind_version(&mut steps);
     let builds = plan
         .binaries
         .iter()
@@ -250,7 +295,8 @@ fn publish(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![install_helper(helper)];
     steps.extend(artifacts(plan).into_iter().map(|(name, _)| download(name)));
     steps.push(download("family-sums".to_owned()));
-    let files: Vec<String> = artifacts(plan).into_iter().map(|(_, file)| file).collect();
+    steps.extend(read_family_version(plan));
+    let files = files(plan);
     steps.push(RenderedStep {
         name: "Publish the family release".to_owned(),
         env: variables(&[
@@ -264,11 +310,18 @@ fn publish(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
         )),
         ..RenderedStep::default()
     });
+    bind_version(&mut steps);
     RenderedJob {
         permissions: permissions(&[("contents", "write")]),
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
-        ..after_the_family("publish-family", vec!["sums-family".to_owned()])
+        ..after_the_family(
+            "publish-family",
+            ["sums-family".to_owned()]
+                .into_iter()
+                .chain(family_publish_needs(plan))
+                .collect(),
+        )
     }
 }

@@ -6,16 +6,19 @@ use std::io::Write;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 use crate::error::CiError;
 use crate::mbx_seed::SEED_DIR_ENV;
-use crate::mbx_store::{SHARED_DIR_ENV, trusted_event};
+use crate::mbx_store::{SHARED_DIR_ENV, random_u64, trusted_event, writable_by_job};
 
 pub const TOOLS_DIR: &str = "tools";
 pub const HOME_PATHS: [&str; 2] = [".local/share/mise", ".rustup"];
 pub const KEEP_KEYS: usize = 2;
 const MARKER: &str = ".complete";
+const STAGING_PREFIX: &str = ".staging-";
+const LOCK_PREFIX: &str = ".lock-";
+const STALE_AFTER: Duration = Duration::from_hours(1);
 const COPY: &str = "/bin/cp";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
@@ -46,6 +49,8 @@ pub enum Outcome {
     Rejected(&'static str),
     Saved { to: PathBuf },
     AlreadySaved,
+    Busy,
+    Failed(&'static str),
     Untrusted,
 }
 
@@ -79,14 +84,14 @@ pub fn run(inputs: &Inputs<'_>) -> Outcome {
             } else {
                 inputs.seed_dir
             };
-            restore(inputs, dir)
+            restore(inputs, dir, !trusted)
         }
         Verb::Save if !trusted => Outcome::Untrusted,
         Verb::Save => save(inputs),
     }
 }
 
-fn base(dir: Option<&str>, owner: u32) -> Result<PathBuf, Outcome> {
+fn base(dir: Option<&str>, owner: u32, read_only: bool) -> Result<PathBuf, Outcome> {
     let Some(dir) = dir.filter(|dir| !dir.is_empty()) else {
         return Err(Outcome::NotOffered);
     };
@@ -104,6 +109,9 @@ fn base(dir: Option<&str>, owner: u32) -> Result<PathBuf, Outcome> {
     }
     if metadata.mode() & 0o002 != 0 {
         return Err(reject("world-writable"));
+    }
+    if read_only && writable_by_job(dir) {
+        return Err(reject("writable by this job"));
     }
     Ok(dir.to_path_buf())
 }
@@ -137,8 +145,8 @@ fn copy_tree(from: &Path, to: &Path) -> bool {
             .is_ok_and(|status| status.success())
 }
 
-fn restore(inputs: &Inputs<'_>, dir: Option<&str>) -> Outcome {
-    let base = match base(dir, inputs.owner) {
+fn restore(inputs: &Inputs<'_>, dir: Option<&str>, read_only: bool) -> Outcome {
+    let base = match base(dir, inputs.owner, read_only) {
         Ok(base) => base,
         Err(outcome) => return outcome,
     };
@@ -154,8 +162,60 @@ fn restore(inputs: &Inputs<'_>, dir: Option<&str>) -> Outcome {
     Outcome::Restored { from: entry }
 }
 
+struct Lock(PathBuf);
+
+impl Drop for Lock {
+    fn drop(&mut self) {
+        fs::remove_dir(&self.0).ok();
+    }
+}
+
+enum Claim {
+    Won(Lock),
+    Held,
+    Broken,
+}
+
+fn stale(path: &Path) -> bool {
+    fs::metadata(path)
+        .and_then(|metadata| metadata.modified())
+        .is_ok_and(|modified| modified.elapsed().is_ok_and(|age| age > STALE_AFTER))
+}
+
+fn claim(tools: &Path, key: &str) -> Claim {
+    let path = tools.join(format!("{LOCK_PREFIX}{key}"));
+    for _ in 0..2 {
+        match fs::create_dir(&path) {
+            Ok(()) => return Claim::Won(Lock(path)),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                if !stale(&path) {
+                    return Claim::Held;
+                }
+                fs::remove_dir_all(&path).ok();
+            }
+            Err(_) => return Claim::Broken,
+        }
+    }
+    Claim::Held
+}
+
+fn sweep(tools: &Path) {
+    let Ok(entries) = fs::read_dir(tools) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if (name.starts_with(STAGING_PREFIX) || name.starts_with(LOCK_PREFIX))
+            && stale(&entry.path())
+        {
+            fs::remove_dir_all(entry.path()).ok();
+        }
+    }
+}
+
 fn save(inputs: &Inputs<'_>) -> Outcome {
-    let base = match base(inputs.shared_dir, inputs.owner) {
+    let base = match base(inputs.shared_dir, inputs.owner, false) {
         Ok(base) => base,
         Err(outcome) => return outcome,
     };
@@ -165,24 +225,41 @@ fn save(inputs: &Inputs<'_>) -> Outcome {
         return Outcome::AlreadySaved;
     }
     if fs::create_dir_all(&tools).is_err() {
-        return Outcome::Rejected("cannot create the tools directory");
+        return Outcome::Failed("cannot create the tools directory");
     }
-    let staging = tools.join(format!(".staging-{}-{}", inputs.key, std::process::id()));
-    fs::remove_dir_all(&staging).ok();
-    let copied = HOME_PATHS
-        .iter()
-        .all(|path| copy_tree(&inputs.home.join(path), &staging.join(slot(path))))
+    let _lock = match claim(&tools, inputs.key) {
+        Claim::Won(lock) => lock,
+        Claim::Held => return Outcome::Busy,
+        Claim::Broken => return Outcome::Failed("cannot lock the key"),
+    };
+    sweep(&tools);
+    if complete(&entry, inputs.owner) {
+        return Outcome::AlreadySaved;
+    }
+    let staging = tools.join(format!(
+        "{STAGING_PREFIX}{}-{:016x}",
+        inputs.key,
+        random_u64()
+    ));
+    let copied = fs::create_dir(&staging).is_ok()
+        && HOME_PATHS
+            .iter()
+            .all(|path| copy_tree(&inputs.home.join(path), &staging.join(slot(path))))
         && fs::File::create(staging.join(MARKER)).is_ok();
     if !copied {
         fs::remove_dir_all(&staging).ok();
-        return Outcome::Rejected("the copy to the store failed");
+        return Outcome::Failed("the copy to the store failed");
     }
     if fs::symlink_metadata(&entry).is_ok() {
         fs::remove_dir_all(&entry).ok();
     }
     if fs::rename(&staging, &entry).is_err() {
         fs::remove_dir_all(&staging).ok();
-        return Outcome::AlreadySaved;
+        return if complete(&entry, inputs.owner) {
+            Outcome::AlreadySaved
+        } else {
+            Outcome::Failed("the entry could not be published")
+        };
     }
     prune(&tools, inputs.key);
     Outcome::Saved { to: entry }
@@ -229,6 +306,10 @@ pub fn message(outcome: &Outcome) -> String {
             format!("velnor: tools saved to the node store {}\n", to.display())
         }
         Outcome::AlreadySaved => "velnor: the node store already holds this key\n".to_owned(),
+        Outcome::Busy => "velnor: another job is saving this key to the node store\n".to_owned(),
+        Outcome::Failed(reason) => {
+            format!("::error::tools were not saved to the node store ({reason})\n")
+        }
         Outcome::Untrusted => {
             "velnor: tools are saved to the node store on trusted events only\n".to_owned()
         }

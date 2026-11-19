@@ -46,8 +46,8 @@ fn compiler_artifacts_follow_report_support_and_nextest_version() -> TestResult 
                         *bytes = String::from_utf8(bytes.clone())?
                         .replace("example.invalid", "fixtures.invalid")
                         .replace(
-                            "[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"",
-                            &format!("[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"{nextest}\""),
+                            "[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"0.9.151\"\nspecifiers = [\"0.9.151\"]",
+                            &format!("[[tools.\"aqua:nextest-rs/nextest/cargo-nextest\"]]\nversion = \"{nextest}\"\nspecifiers = [\"{nextest}\"]"),
                         )
                         .into_bytes();
                     }

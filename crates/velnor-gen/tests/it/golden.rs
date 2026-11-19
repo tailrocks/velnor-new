@@ -12,7 +12,7 @@ use similar::TextDiff;
 use velnor_gen::expected_with_notes;
 use velnor_gen::io::{Error as IoError, SAMPLE_REPOSITORY};
 use velnor_model::{RepoPath, RepoView, RepositoryIdentity};
-use velnor_rust::{manifests, metadata_roots, reduce_metadata, wanted_files};
+use velnor_rust::{is_rust_source, manifests, metadata_roots, reduce_metadata, wanted_files};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
@@ -116,7 +116,7 @@ pub(crate) fn load(sample: &Path) -> Result<RepoView, Box<dyn Error>> {
         .chain(manifests(&tracked_paths))
         .collect();
     for link in &symlinks {
-        if wanted.contains(link) {
+        if wanted.contains(link) && !is_rust_source(link) {
             return Err(Box::new(IoError::NotRegular(link.clone())));
         }
     }
