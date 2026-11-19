@@ -103,6 +103,7 @@ mod pipeline;
 mod plan_job;
 mod plan_job_wait;
 mod policy_exceptions;
+mod policy_plan;
 mod pr_ci;
 mod pr_ci_labels;
 mod pr_ci_sim;
