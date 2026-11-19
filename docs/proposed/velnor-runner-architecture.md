@@ -1028,16 +1028,19 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
   pre-commit hooks call `velnor check <name>`, so their keys are the gate's.
 - **Trust tiers, shown to users:** T0 Mac native and T1 sealed Linux on a Mac, advice only (never a
   slot; a Mac key signs only in an advisory namespace); T2 a cluster candidate, node-signed, which may
-  fill one witness slot; T3 trusted, on `main` after A1. The gate is unchanged: two T2-or-better
+  fill one witness slot; T3 trusted, on `main` after A1. T0 stays in the daemon's local journal and
+  never enters the ledger. The gate is unchanged: two T2-or-better
   witnesses per new key on distinct nodes, seeds and generations, then A1; an arm64 key never equals
   an amd64 key, so a Mac pass proves nothing to the gate and a Mac fail is a useful red. The planner
   keeps host, execution and target triples apart: a cross-built arm64 binary satisfies only its own
   released obligation. Work run early is charged once, to the claimant, in the runner-minutes.
-- **Verify and ship.** `velnor verify` fills both slots on two nodes against `merge-tree(queue tip,
+- **Verify and ship.** `velnor verify` fills both slots on two nodes (`--witnesses=1` fills one and
+  leaves the other to the label) against `merge-tree(queue tip,
   tree)` and shows both SHAs; `velnor ship` runs it, pushes, labels with the agent's App identity and
   enables auto-merge, an explicit act under decision 12. The control plane derives the PR's subject
   tree itself, never from the client. `velnor wait` long-polls the verdict and returns the failing
-  test id, its signature and the last log lines, and streams queue-tip moves so a stale merge base
+  test id, its signature and the last log lines as an NDJSON failure packet with a `velnor repro`
+  command (the first red cancels sibling work no other request shares), and streams queue-tip moves so a stale merge base
   is visible. Any two qualified runs fill a record: a builder agent's run and its verifier
   subagent's run on another node, with distinct seeds, are its two witnesses.
 - **Ledger first.** `velnor resolve` (and the wrapper, automatically) asks the ledger before running:
@@ -1084,7 +1087,7 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1272 agent-hours of building and 120 of review,
+(v2, decisions 1–24 and the rulings) sizes about 1276 agent-hours of building and 120 of review,
 about 4.4 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0

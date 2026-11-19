@@ -248,7 +248,8 @@ to the node mirror, and runs the tree merged with the queue tip in the gate's ow
 two cluster nodes. The results are candidate records with the gate's keys, so the label later reads
 them instead of running them. **`velnor ship`** does `verify`, pushes, adds the label with your
 agent identity and turns on auto-merge. **`velnor wait`** follows the verdict and prints the failing
-test, its signature and the last log lines. **`velnor resolve`** asks the ledger, without running
+test, its signature and the last log lines; **`velnor repro`** reruns that failure the same way.
+`velnor verify --witnesses=1` runs one witness and leaves the second to the label. **`velnor resolve`** asks the ledger, without running
 anything, which checks are already done, running, or still needed. **`velnor why-red`** says whether
 a failure on an unchanged key is also red on `main`, a known flake, or new on your tree.
 

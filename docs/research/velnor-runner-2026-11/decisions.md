@@ -1161,6 +1161,14 @@ mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
 | A22 matrix oracle | Merged into AN11's lab | AN11 |
 | Q-AN1 arm64 worker, Q-AN4 dedicated agent worker | Merged into D26 and D25 | 13 |
 
+### Group 42: agent-native answer by Gemini 4 Neon
+
+| Idea | Decision | v3 section; plan |
+|---|---|---|
+| A16 failure packet, `velnor repro`, fail-fast cancel of unshared siblings | Adopted: a red is already final, so cancelling unshared work loses nothing | 8.6; AN12 |
+| A26 `--quorum` | Adopted inversely: `verify` fills both by default, `--witnesses=1` fills one | 8.6 |
+| C7 what is stored | Settled: T0 stays in the local journal, never in the ledger | 8.6 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the
