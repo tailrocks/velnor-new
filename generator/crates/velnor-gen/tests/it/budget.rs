@@ -11,7 +11,7 @@ use crate::facts::TestResult;
 use crate::pipeline::{HELPER_LOCK, view, workflow};
 
 fn pinned(version: &str) -> String {
-    String::from_utf8_lossy(HELPER_LOCK).replace("0.1.79", version)
+    String::from_utf8_lossy(HELPER_LOCK).replace("0.1.81", version)
 }
 
 fn budgeted(version: &str, config: &str) -> Result<RepoView, Box<dyn Error>> {

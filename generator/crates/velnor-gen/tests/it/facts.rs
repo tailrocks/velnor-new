@@ -143,9 +143,7 @@ pub(crate) fn repo(
         view.tracked_paths.insert(lock.clone());
         view.files.insert(
             lock,
-            String::from_utf8(crate::pipeline::HELPER_LOCK.to_vec())?
-                .replace("0.1.79", "0.1.81")
-                .into_bytes(),
+            String::from_utf8(crate::pipeline::HELPER_LOCK.to_vec())?.into_bytes(),
         );
     }
     Ok(view)

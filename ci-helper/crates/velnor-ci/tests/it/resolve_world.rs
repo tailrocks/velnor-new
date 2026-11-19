@@ -7,16 +7,19 @@
 //! world; the tests run `velnor-ci` in the same world.
 
 use std::collections::BTreeMap;
-use std::fmt::Write as _;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::OnceLock;
 
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
 
 use crate::support::fresh_dir;
+
+use crate::resolve_wire::zip_of;
+pub(crate) use crate::resolve_wire::{
+    artifact_route, branch_route, digest_b3, list_route, repo_route, run_route, sha256, zip_route,
+    zip_with,
+};
 
 pub(crate) const REPO: &str = "tailrocks/velnor-new";
 pub(crate) const WORKFLOW: &str = ".github/workflows/ci.yml";
@@ -78,36 +81,6 @@ pub(crate) fn copy_repo(dest: &Path) {
         .status()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(copied.success(), "cp -R of the template repository");
-}
-
-pub(crate) fn digest_b3(bytes: &[u8]) -> String {
-    format!("b3-{}", blake3::hash(bytes).to_hex())
-}
-
-pub(crate) fn sha256(bytes: &[u8]) -> String {
-    let mut text = String::from("sha256:");
-    for byte in Sha256::digest(bytes) {
-        write!(text, "{byte:02x}").unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    text
-}
-
-fn zip_of(name: &str, bytes: &[u8]) -> Vec<u8> {
-    let mut out = Vec::new();
-    {
-        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(&mut out));
-        let options = zip::write::SimpleFileOptions::default()
-            .compression_method(zip::CompressionMethod::Stored);
-        zip.start_file(name, options)
-            .unwrap_or_else(|e| unreachable!("{e}"));
-        zip.write_all(bytes).unwrap_or_else(|e| unreachable!("{e}"));
-        zip.finish().unwrap_or_else(|e| unreachable!("{e}"));
-    }
-    out
-}
-
-pub(crate) fn zip_with(name: &str, bytes: &[u8]) -> Vec<u8> {
-    zip_of(name, bytes)
 }
 
 /// What is odd about where the op runs, besides the request, the API and the commits.
@@ -411,28 +384,4 @@ impl World {
             node.run["head_sha"] = json!(sha);
         }
     }
-}
-
-pub(crate) fn run_route(id: u64) -> String {
-    format!("repos/{REPO}/actions/runs/{id}/attempts/1")
-}
-
-pub(crate) fn list_route(id: u64) -> String {
-    format!("repos/{REPO}/actions/runs/{id}/artifacts?per_page=100")
-}
-
-pub(crate) fn artifact_route(id: u64) -> String {
-    format!("repos/{REPO}/actions/artifacts/{}", 5000 + id)
-}
-
-pub(crate) fn zip_route(id: u64) -> String {
-    format!("{}/zip", artifact_route(id))
-}
-
-pub(crate) fn repo_route() -> String {
-    format!("repos/{REPO}")
-}
-
-pub(crate) fn branch_route() -> String {
-    format!("repos/{REPO}/branches/main")
 }

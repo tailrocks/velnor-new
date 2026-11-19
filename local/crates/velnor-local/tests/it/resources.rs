@@ -192,7 +192,10 @@ async fn the_limits_reach_the_authority_process_that_plans_the_pairs() {
     .await;
     let args = std::fs::read_to_string(dir.join("args")).unwrap_or_default();
     let pid = std::fs::read_to_string(dir.join("authority/pid")).unwrap_or_default();
-    let _ = Process::new("kill").args(["-KILL", pid.trim()]).status();
+    Process::new("kill")
+        .args(["-KILL", pid.trim()])
+        .status()
+        .ok();
     assert!(started.is_ok(), "{started:?}");
     assert!(args.contains("--runner-memory-bytes 1073741824"), "{args}");
     assert!(args.contains("--runner-cpu-millicores 1500"), "{args}");

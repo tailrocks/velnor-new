@@ -37,7 +37,10 @@ fn release_yml_has_empty_workflow_permissions_and_exact_job_permissions() -> Tes
         ]
     );
     assert_eq!(permissions("release-pr")?, [pair("contents", "read")]);
-    assert_eq!(permissions("tag")?, [pair("contents", "read")]);
+    assert_eq!(
+        permissions("tag")?,
+        [pair("contents", "read"), pair("pull-requests", "read")]
+    );
     let (_, publishing) = render(
         &[Root {
             publishes: true,
@@ -167,10 +170,10 @@ fn release_yml_hands_the_app_token_only_to_release_plz_after_everything_is_insta
                 ]);
             let branch_only =
                 env_is(&[("BRANCH", "${{ github.event.repository.default_branch }}")]);
-            let check = step
-                .get("run")
-                .and_then(Node::text)
-                .is_some_and(|run| run.starts_with("velnor-ci release check-config"));
+            let check = step.get("run").and_then(Node::text).is_some_and(|run| {
+                run.starts_with("velnor-ci release check-config")
+                    || run.starts_with("velnor-ci release preflight")
+            });
             assert!(
                 newest || branch_only || check || step.get("env").is_none(),
                 "{id}"
@@ -206,6 +209,10 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
     let base = "--forge github --git-token \"$GITHUB_TOKEN\"";
     let exec = "\"$RUNNER_TEMP/release-plz\"";
     let refuse = "velnor-ci release check-config release-plz.toml tools/release-plz.toml --tag-pattern release-plz.toml 'app-v{{ version }}' --tag-pattern release-plz.toml '{{ package }}-v{{ version }}' --tag-pattern tools/release-plz.toml 'tools-v{{ version }}' --tag-pattern tools/release-plz.toml '{{ package }}-v{{ version }}' --repo=\"$REPOSITORY\" --manifests";
+    let tag_refuse = format!(
+        "{} --branch-prefix release-plz.toml release-plz-app- --branch-prefix tools/release-plz.toml release-plz-tools- --repo=\"$REPOSITORY\" --manifests --released-versions",
+        refuse.trim_end_matches(" --repo=\"$REPOSITORY\" --manifests")
+    );
     let mut prepared: Vec<String> = [
         "curl --fail --silent --show-error --location --output \"$RUNNER_TEMP/release-plz.tar.gz\" 'https://github.com/release-plz/release-plz/releases/download/release-plz-v0.4.3/release-plz-x86_64-unknown-linux-gnu.tar.gz'",
         "printf '%s  %s/release-plz.tar.gz\\n' a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90 \"$RUNNER_TEMP\" > \"$RUNNER_TEMP/release-plz.sha256\"",
@@ -224,10 +231,15 @@ fn release_yml_runs_one_release_plz_command_per_root_and_records_every_output() 
         ),
     ]);
     assert_eq!(runs("release-pr")?, pr_runs);
+    let refuse_at = prepared.len() - 1;
+    prepared[refuse_at] = tag_refuse;
+    prepared.push(
+        "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" --branch-prefix=release-plz-app- --branch-prefix=release-plz-tools-".to_owned(),
+    );
     prepared.extend([
             format!("{exec} release {base} --manifest-path Cargo.toml --config release-plz.toml -o json > \"$RUNNER_TEMP/release-0.json\""),
             format!("{exec} release {base} --manifest-path tools/Cargo.toml --config tools/release-plz.toml -o json > \"$RUNNER_TEMP/release-1.json\""),
-            "velnor-ci release record \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\"".to_owned(),
+            "velnor-ci release record --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\"".to_owned(),
     ]);
     assert_eq!(runs("tag")?, prepared);
     for id in ["gate", "release-pr", "tag"] {

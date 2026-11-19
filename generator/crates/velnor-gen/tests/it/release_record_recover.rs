@@ -18,7 +18,7 @@ const ONE_ROOT: &str = "roots = [\".\"]\n";
 fn tag_job(helper: &str, roots: &[Root], config: &str) -> Result<Node, Box<dyn Error>> {
     let mut view = release_view(roots, Some(config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", helper).into_bytes());
     let text = expected_files(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;

@@ -112,6 +112,8 @@ pub(super) fn assert_notes(
         "stable-sources-producer-linux",
         "stable-sources-linux-warm",
         "stable-sources-linux-cold",
+        "mbx-cache-write-hosted",
+        "mbx-cache-read-hosted",
     ]));
     assert_eq!(listed("a step shell is not written"), shell_steps);
     assert_eq!(listed("a container is written as a mapping"), containers);

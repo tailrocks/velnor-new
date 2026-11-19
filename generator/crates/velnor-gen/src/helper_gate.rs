@@ -1,11 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{
-    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, PushAfterMergeGroup, RepoFacts,
-};
+use velnor_model::{HelperRelease, HelperVersion, MbxStore, PrCi, PushAfterMergeGroup, RepoFacts};
 
-use crate::{BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError};
+use crate::{BUDGET_HELPER, COMPATIBLE_HELPER_SERIES, GenerateError, HELPER_MINIMUM};
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -13,12 +11,8 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
         .as_ref()
         .ok_or(GenerateError::HelperNotPinned)?;
     require_compatible(release.version())?;
-    if (facts.config.on_main == OnMain::Everything || facts.config.full_run != FullRun::Off)
-        && !release.version().at_least((0, 1, 81))
-    {
-        return Err(GenerateError::InputsBuildHelperTooOld(
-            release.version().clone(),
-        ));
+    if !release.version().at_least(HELPER_MINIMUM) {
+        return Err(GenerateError::HelperTooOld(release.version().clone()));
     }
     if !facts.config.test_groups.is_empty() && !release.version().at_least((0, 1, 82)) {
         return Err(GenerateError::TestGroupsHelperTooOld(
@@ -43,15 +37,15 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
             release.version().clone(),
         ));
     }
-    if facts.config.budget.is_some_and(|budget| budget.enabled())
-        && !release.version().at_least(BUDGET_HELPER)
-    {
-        return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
-    }
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
         ));
+    }
+    if facts.config.budget.is_some_and(|budget| budget.enabled())
+        && !release.version().at_least(BUDGET_HELPER)
+    {
+        return Err(GenerateError::BudgetHelperTooOld(release.version().clone()));
     }
     Ok(release)
 }

@@ -8,7 +8,7 @@ use velnor_rust::LOCK_PATH;
 
 use crate::release_fixture::{APP, LOCK, Root, TOOLS, release_view, steps};
 use crate::release_unguarded::expected_release;
-use crate::release_yml_binaries::{job, runs};
+use crate::release_yml_binaries::job;
 use crate::yaml_tree::{Node, parse};
 use velnor_gen::GenerateError;
 
@@ -24,7 +24,7 @@ pub(crate) fn render_with(
 ) -> Result<Node, Box<dyn Error>> {
     let mut view = release_view(roots, Some(config))?;
     view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", helper).into_bytes());
+        .insert(LOCK_PATH, LOCK.replace("0.1.81", helper).into_bytes());
     let text = expected_release(&view)?
         .remove(&RELEASE_WORKFLOW_PATH)
         .ok_or("no release.yml")?;
@@ -125,16 +125,6 @@ fn the_tag_job_checks_the_release_source_read_only_before_the_app_token_is_minte
             .and_then(Node::text),
         Some("read")
     );
-    let older = binaries("0.1.80")?;
-    assert!(
-        runs(job(&older, "tag")?)
-            .iter()
-            .all(|run| !run.contains("preflight"))
-    );
-    assert_eq!(
-        job(&older, "tag")?.at(&["permissions", "pull-requests"]),
-        None
-    );
     Ok(())
 }
 
@@ -162,32 +152,6 @@ fn a_build_compares_its_checkout_with_the_commit_the_tag_job_recorded() -> TestR
         checked += 1;
     }
     assert_eq!(checked, 4);
-    Ok(())
-}
-
-#[test]
-fn a_helper_without_the_commit_flags_keeps_the_head_sha_check_which_a_merge_commit_fails()
--> TestResult {
-    let tree = binaries("0.1.80")?;
-    let tag = job(&tree, "tag")?;
-    assert_eq!(
-        runs(tag).last().copied(),
-        Some(
-            "velnor-ci release record \"$RUNNER_TEMP/release-0.json\" \"$RUNNER_TEMP/release-1.json\""
-        )
-    );
-    assert_eq!(
-        tag.get("outputs").map(Node::keys),
-        Some(vec!["app", "tools"])
-    );
-    let check = find_check(
-        job(&tree, "build-app-linux-x64")?,
-        "test \"$CHECKED_OUT\" = \"$COMMIT\"",
-    )?;
-    assert_eq!(
-        check.at(&["env", "COMMIT"]).and_then(Node::text),
-        Some("${{ github.event.workflow_run.head_sha }}")
-    );
     Ok(())
 }
 
@@ -223,8 +187,7 @@ fn a_package_named_like_another_packages_commit_output_is_refused_at_generation(
         &[APP, SHADOW],
         Some("roots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n"),
     )?;
-    view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
+    view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     let Err(GenerateError::Rules(violations)) = expected_release(&view) else {
         return Err("rendered".into());
     };
@@ -246,8 +209,7 @@ fn an_assetless_package_named_like_another_packages_commit_output_is_refused_at_
         publishes: false,
     };
     let mut view = release_view(&[APP, SHADOW], Some("roots = [\".\", \"tools\"]\n"))?;
-    view.files
-        .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.81").into_bytes());
+    view.files.insert(LOCK_PATH, LOCK.as_bytes().to_vec());
     let Err(GenerateError::Rules(violations)) = expected_release(&view) else {
         return Err("rendered".into());
     };

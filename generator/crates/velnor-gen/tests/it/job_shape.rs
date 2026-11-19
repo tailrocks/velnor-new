@@ -94,10 +94,10 @@ pub(crate) fn job_ids(facts: &RepoFacts) -> Vec<String> {
 #[test]
 fn the_job_ids_do_not_grow_with_the_number_of_crates() {
     for (shape, ids) in [
-        (None, vec!["rust", "required"]),
+        (None, vec!["rust", "required", "cache"]),
         (
             Some(Shape::LintAndTest),
-            vec!["rust-plan", "rust-lint", "rust-test", "required"],
+            vec!["rust-plan", "rust-lint", "rust-test", "required", "cache"],
         ),
     ] {
         let mut small = facts(vec![("Cargo.toml", crates(3))]);
@@ -195,7 +195,10 @@ fn the_single_job_runs_each_check_once_in_order_then_each_crate_with_a_library_o
     );
     for shape in [Shape::LintAndTest, Shape::BuildThenGroups] {
         no_tests.config.shape = Some(shape);
-        assert_eq!(job_ids(&no_tests), ["rust-plan", "rust-lint", "required"]);
+        assert_eq!(
+            job_ids(&no_tests),
+            ["rust-plan", "rust-lint", "required", "cache"]
+        );
     }
     Ok(())
 }

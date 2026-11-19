@@ -4,7 +4,6 @@
 use std::fmt::Write;
 use std::fs::{self, File, FileTimes};
 use std::path::Path;
-use std::process::Command;
 use std::time::{Duration, UNIX_EPOCH};
 
 use super::{audit, own_units, unit, workspace_below_the_root};
@@ -13,7 +12,7 @@ use crate::io::Repo;
 const OUTPUT: &str = "rust/target/debug/build/lib-f000000000000008/output";
 
 pub(super) fn build(repo: &Repo, output: &str, target: Option<&Path>) {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    let mut command = super::velnor_ci();
     command.current_dir(repo.root());
     if let Some(target) = target {
         command.env("CARGO_TARGET_DIR", target);
@@ -85,7 +84,7 @@ fn a_declared_directory_without_a_prebuild_inventory_is_stale() {
     own_units(&repo, "rust/target/debug", &[]);
     unit(&repo, OUTPUT, "cargo:rerun-if-changed=../..\n");
     repo.set_mtime(OUTPUT, UNIX_EPOCH + Duration::from_secs(3_000_000_001));
-    let unchanged = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let unchanged = super::velnor_ci()
         .current_dir(repo.root())
         .args(["inputs", "build", "--", "true"])
         .output()
@@ -119,7 +118,7 @@ fn a_source_root_used_as_the_target_excludes_its_generated_artifacts() {
         "debug/new-artifact",
         UNIX_EPOCH + Duration::from_secs(4_000_000_000),
     );
-    let written = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let written = super::velnor_ci()
         .current_dir(repo.root())
         .env("CARGO_TARGET_DIR", repo.root())
         .args(["inputs", "audit", "--write"])
@@ -201,7 +200,7 @@ fn a_first_build_captures_inventory_before_its_target_exists() {
         "cargo:rerun-if-changed=../../shared\n",
     );
     assert!(!repo.root().join("rust/target").exists());
-    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci")).current_dir(repo.root()).args(["inputs", "build", "--", "sh", "-c", "mkdir -p rust/target; mv staged/debug rust/target/debug; touch -m -t 206501010000 rust/target/debug/build/lib-f000000000000008/output"]).output().unwrap_or_else(|e| unreachable!("{e}"));
+    let built = super::velnor_ci().current_dir(repo.root()).args(["inputs", "build", "--", "sh", "-c", "mkdir -p rust/target; mv staged/debug rust/target/debug; touch -m -t 206501010000 rust/target/debug/build/lib-f000000000000008/output"]).output().unwrap_or_else(|e| unreachable!("{e}"));
     assert!(built.status.success(), "{built:?}");
     let written = audit(&repo, &["--write"]);
     assert!(written.status.success(), "{written:?}");
@@ -215,7 +214,7 @@ fn a_first_build_captures_inventory_before_its_target_exists() {
 #[test]
 fn a_failed_build_cannot_attach_inventory_to_its_partial_output() {
     let repo = declared_repository();
-    let failed = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let failed = super::velnor_ci()
         .current_dir(repo.root())
         .args([
             "inputs",
@@ -262,7 +261,7 @@ fn membership_changes_during_the_build_do_not_become_the_prebuild_inventory() {
     let repo = workspace_below_the_root();
     own_units(&repo, "rust/target/debug", &[]);
     unit(&repo, OUTPUT, "cargo:rerun-if-changed=../../shared\n");
-    let built = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
+    let built = super::velnor_ci()
         .current_dir(repo.root())
         .args([
             "inputs", "build", "--", "sh", "-c",

@@ -53,6 +53,9 @@ pub(crate) struct RawCase {
     #[serde(default)]
     pub(crate) service: Vec<RawService>,
     #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+    pub(crate) cache_mode: Option<String>,
+    #[serde(default)]
     pub(crate) step: Vec<RawStep>,
 }
 
@@ -160,6 +163,9 @@ pub(crate) struct RawJob {
     pub(crate) concurrency: Option<RawConcurrency>,
     #[serde(default)]
     pub(crate) permissions: BTreeMap<String, String>,
+    #[serde(default)]
+    pub(crate) env: BTreeMap<String, String>,
+    pub(crate) cache_mode: Option<String>,
     #[serde(default)]
     pub(crate) outputs: BTreeMap<String, String>,
     pub(crate) matrix: Option<RawMatrix>,

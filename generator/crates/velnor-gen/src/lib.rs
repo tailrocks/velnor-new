@@ -5,7 +5,7 @@ pub mod cli;
 mod delta_cache;
 mod drifts;
 mod error;
-mod helper;
+mod helper_gate;
 pub mod io;
 mod plan_render;
 mod release;
@@ -15,24 +15,25 @@ mod workflow_triggers;
 pub use crate::release::{release_ruleset, release_ruleset_drift};
 pub use drifts::{Drift, drift};
 pub use error::GenerateError;
-pub use helper::require_compatible;
+use helper_gate::check_helper;
+pub use helper_gate::require_compatible;
 pub use velnor_workflows::HELPER_COMMANDS;
 
 use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{CacheKey, FullRun, OnMain, RepoPath, RepoView, StepKind};
+use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_tools, detect, metadata_file, silent_build_scripts,
     source_roots_over_limit, suggest_groups as suggested_groups,
 };
 
-use crate::helper::check_helper;
 use crate::plan_render::plan_and_render;
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
 pub const COMPATIBLE_HELPER_SERIES: (u64, u64) = (0, 1);
-pub const RELEASE_HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 80);
+pub const HELPER_MINIMUM: (u64, u64, u64) = (0, 1, 81);
 pub const BUDGET_HELPER: (u64, u64, u64) = (0, 1, 92);
 
 pub fn generated_files(view: &RepoView) -> Result<BTreeMap<RepoPath, String>, GenerateError> {

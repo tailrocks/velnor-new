@@ -24,7 +24,7 @@ exec \"$(basename \"$0\")\" \"$@\"\n";
 fn a_cache_entry_swapped_for_a_fifo_after_the_checks_cannot_hang_the_install() -> TestResult {
     let install = Install::new("cache-swap")?;
     let (cache, entry) = seed_entry(&install)?;
-    fs::write(&entry, install.binary)?;
+    fs::write(&entry, fs::read(install.archive_path())?)?;
     fs::set_permissions(&entry, fs::Permissions::from_mode(0o755))?;
     let shims = install.work.join("shims");
     fs::create_dir_all(&shims)?;

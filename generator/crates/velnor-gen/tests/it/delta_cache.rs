@@ -32,7 +32,11 @@ fn a_source_helper_locked_below_the_restoring_release_is_refused() -> TestResult
         .err()
         .ok_or("accepted")?;
     let message = error.to_string();
-    assert!(message.contains("helper.path"), "{message}");
+    assert!(
+        message.contains("older than this generator supports"),
+        "{message}"
+    );
+    assert!(message.contains("0.1.80"), "{message}");
     assert!(message.contains("0.1.81"), "{message}");
     Ok(())
 }
@@ -44,6 +48,9 @@ fn config_for(version: &str) -> &'static str {
         ""
     }
 }
+
+/// The oldest helper the generator accepts: it has no delta command, so the lane gets no delta steps.
+const OLDEST_HELPER: &str = "0.1.81";
 
 #[test]
 fn pr_delta_keys_preserve_every_identity_dimension_in_every_restore_fallback() -> TestResult {
@@ -73,7 +80,7 @@ fn pr_delta_keys_preserve_every_identity_dimension_in_every_restore_fallback() -
 #[test]
 fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -> TestResult {
     for shape in ["", "shape = \"lint-test\"", "shape = \"groups\""] {
-        for (id, lane) in jobs("0.1.93", shape)? {
+        for (id, lane) in jobs("0.1.95", shape)? {
             if !lane.contains("cache decide") {
                 continue;
             }
@@ -155,7 +162,7 @@ fn supported_lanes_restore_pr_deltas_then_save_after_the_last_compiling_step() -
 }
 
 fn custom_targets_omit_deltas() -> TestResult {
-    let mut custom = pinned("0.1.93", "")?;
+    let mut custom = pinned("0.1.95", "")?;
     let config = RepoPath::new(".cargo/config.toml")?;
     custom.tracked_paths.insert(config.clone());
     custom
@@ -187,7 +194,7 @@ fn assert_delta_saves_are_not_cancelled(lane: &str) -> TestResult {
 }
 
 fn private_sources_disable_deltas() -> TestResult {
-    let mut private_sources = pinned("0.1.93", "")?;
+    let mut private_sources = pinned("0.1.95", "")?;
     private_sources.files.insert(
         RepoPath::new("Cargo.lock")?,
         b"version = 4\n\n[[package]]\nname = \"dep\"\nversion = \"1.0.0\"\nsource = \"git+https://github.com/example/private#0123456789abcdef\"\n".to_vec(),
@@ -209,7 +216,7 @@ fn private_sources_disable_deltas() -> TestResult {
 fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResult {
     for path in ["target.velnor-delta", "target.velnor-delta/owned"] {
         let path = RepoPath::new(path)?;
-        let mut repo = pinned("0.1.93", "")?;
+        let mut repo = pinned("0.1.95", "")?;
         repo.tracked_paths.insert(path.clone());
         repo.files.insert(path.clone(), b"project data".to_vec());
         let error = expected_files(&repo).expect_err("tracked staging must not be overwritten");
@@ -223,16 +230,16 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
         "target.velnor-delta-other/owned",
     ] {
         let path = RepoPath::new(path)?;
-        let mut repo = pinned("0.1.93", "")?;
+        let mut repo = pinned("0.1.95", "")?;
         repo.tracked_paths.insert(path.clone());
         repo.files.insert(path, b"project data".to_vec());
         assert!(workflow(&repo)?.contains("Restore the delta cache"));
     }
     for unsupported in ["old-helper", "private-source", "custom-target"] {
         let version = if unsupported == "old-helper" {
-            "0.1.80"
+            OLDEST_HELPER
         } else {
-            "0.1.93"
+            "0.1.95"
         };
         let mut repo = pinned(version, config_for(version))?;
         let path = RepoPath::new(if unsupported == "custom-target" {
@@ -264,7 +271,7 @@ fn delta_staging_rejects_tracked_files_only_when_the_lane_uses_it() -> TestResul
 
 #[test]
 fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags() -> TestResult {
-    for (version, source) in [("0.1.80", false), ("0.1.93", false), ("0.1.93", true)] {
+    for (version, source) in [(OLDEST_HELPER, false), ("0.1.95", false), ("0.1.95", true)] {
         let repo = if source {
             source_repo(version)?
         } else {
@@ -273,7 +280,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
         let text = workflow(&repo)?;
         let files = expected_files(&repo)?;
         let cleanup = files.get(&velnor_render::DELTA_CLEANUP_PATH);
-        if version == "0.1.80" {
+        if version == OLDEST_HELPER {
             assert!(!text.contains("velnor-ci delta"));
             assert!(cleanup.is_none());
             continue;
@@ -308,7 +315,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
             ),
             "{cleanup}"
         );
-        assert!(cleanup.contains("Install velnor-ci 0.1.93"), "{cleanup}");
+        assert!(cleanup.contains("Install velnor-ci 0.1.95"), "{cleanup}");
         assert!(
             cleanup.contains("velnor-ci cache trim-deltas --run-id \"$RUN_ID\""),
             "{cleanup}"
@@ -332,6 +339,7 @@ fn a_workspace_with_many_crates_stages_its_delta_through_one_package_variable() 
     let repo = crate::golden::load(
         &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/lab-150"),
     )?;
+    let repo = with_helper(repo, "0.1.93", "0.1.95")?;
     let files = expected_files(&repo)?;
     let text = files
         .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
@@ -347,6 +355,35 @@ fn a_workspace_with_many_crates_stages_its_delta_through_one_package_variable() 
         .collect();
     assert!(packages.contains(&"app"), "{stage}");
     assert!(packages.contains(&"grow-149"), "{stage}");
+    Ok(())
+}
+
+/// Re-pins a sample's helper lock to a release the sample does not lock itself.
+fn with_helper(
+    mut repo: RepoView,
+    from: &str,
+    to: &str,
+) -> Result<RepoView, Box<dyn std::error::Error>> {
+    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
+    let text = String::from_utf8(repo.files.remove(&lock).ok_or("no helper lock")?)?;
+    if !text.contains(from) {
+        return Err(format!("the sample lock does not pin {from}").into());
+    }
+    repo.files.insert(lock, text.replace(from, to).into_bytes());
+    Ok(repo)
+}
+
+#[test]
+fn a_workspace_locked_at_0_1_93_renders_no_delta_steps() -> TestResult {
+    let repo = crate::golden::load(
+        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/lab-150"),
+    )?;
+    let files = expected_files(&repo)?;
+    let text = files
+        .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
+        .ok_or("no rust-ci workflow")?;
+    assert!(!text.contains("velnor-ci delta"), "{text}");
+    assert!(!text.contains("the delta cache"), "{text}");
     Ok(())
 }
 
@@ -372,11 +409,21 @@ fn source_identity(lane: &str) -> Result<(), Box<dyn std::error::Error>> {
 
 #[test]
 fn delta_steps_need_a_helper_that_has_the_delta_command() -> TestResult {
-    let old = workflow(&pinned("0.1.81", "")?)?;
+    let old = workflow(&pinned(OLDEST_HELPER, "")?)?;
     assert!(!old.contains("velnor-ci delta"), "{old}");
     assert!(!old.contains("velnor-dlt-"), "{old}");
-    let new = workflow(&pinned("0.1.93", "")?)?;
+    let new = workflow(&pinned("0.1.95", "")?)?;
     assert!(new.contains("velnor-ci delta prepare"), "{new}");
     assert!(new.contains("Restore the delta cache"), "{new}");
+    Ok(())
+}
+
+#[test]
+fn helper_0_1_94_gets_no_delta_steps_and_0_1_95_gets_them() -> TestResult {
+    let refused = workflow(&pinned("0.1.94", "")?)?;
+    assert!(!refused.contains("velnor-ci delta"), "{refused}");
+    assert!(!refused.contains("the delta cache"), "{refused}");
+    let accepted = workflow(&pinned("0.1.95", "")?)?;
+    assert!(accepted.contains("velnor-ci delta prepare"), "{accepted}");
     Ok(())
 }

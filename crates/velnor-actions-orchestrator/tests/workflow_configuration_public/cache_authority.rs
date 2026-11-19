@@ -12,7 +12,7 @@ use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 use super::maintenance_features::owner_feature_repo;
 use super::tools_producers::{POLICIES, is_tools_producer};
 use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
-use super::waste_oracle::{Files, files_of, files_of_repo};
+use super::waste_oracle::{Files, files_of};
 use super::workflow_configuration_fixture;
 
 const CI_PATH: &str = ".github/workflows/ci.yml";
@@ -32,21 +32,6 @@ const NON_DEFAULT_BRANCH: &str =
 const TRUSTED_PUSH: &str = "github.event_name == 'push'";
 const PROTECTED_REF: &str = "github.ref_protected == true";
 const DEFAULT_MODE: &str = "DEFAULT";
-const COMMITTED_WORKFLOWS: [&str; 12] = [
-    "cache-prune.yml",
-    "ci.yml",
-    "freshness.yml",
-    "homebrew-adoption.yml",
-    "job-image-candidate.yml",
-    "product-release-binary.yml",
-    "product-release-generator.yml",
-    "product-release-images.yml",
-    "product-release.yml",
-    "qualification.yml",
-    "source-qualification.yml",
-    "state-seal.yml",
-];
-
 struct JobModes {
     id: String,
     mode: Option<String>,

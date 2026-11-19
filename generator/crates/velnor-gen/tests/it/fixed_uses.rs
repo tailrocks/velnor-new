@@ -353,12 +353,23 @@ fn yaml_files(dir: &Path, found: &mut Vec<std::path::PathBuf>) -> TestResult {
     Ok(())
 }
 
+const JOB_CACHE_MODES: [&str; 4] = [
+    "    cache-mode: read",
+    "    cache-mode: write",
+    "    cache-mode: write-only",
+    "    cache-mode: none",
+];
+
 fn without_github_mode(text: &str) -> String {
-    text.replace("github-cache-mode", "")
+    text.lines()
+        .filter(|line| !JOB_CACHE_MODES.contains(line))
+        .collect::<Vec<_>>()
+        .join("\n")
+        .replace("github-cache-mode", "")
 }
 
 #[test]
-fn no_rendered_workflow_contains_the_non_github_cache_mode_key() -> TestResult {
+fn no_rendered_workflow_writes_cache_mode_but_as_a_job_level_literal() -> TestResult {
     let (release, _) = app()?;
     assert!(!without_github_mode(&release).contains("cache-mode"));
     let rust_ci = render_workflow(
