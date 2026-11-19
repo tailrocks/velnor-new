@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_runner_core::{
-    AcquireIntentId, Effect, Epoch, ProvisionIntentId, StateError, WorkerEvent, WorkerState,
-    transition,
+    AcquireIntentId, Effect, Epoch, OwnershipFailure, ProvisionIntentId, StateError, WorkerEvent,
+    WorkerState, transition,
 };
 
 #[cfg(test)]
