@@ -18,16 +18,21 @@ fn workflow_with_helper(helper: &str) -> Result<String, Box<dyn std::error::Erro
 
 #[test]
 fn a_helper_that_predates_the_member_lock_key_keeps_hashing_the_lock_file() -> TestResult {
-    let text = workflow_with_helper("0.1.83")?;
-    assert!(text.contains("hashFiles(''Cargo.lock'')"), "{text}");
-    assert!(text.contains("hashFiles(''lab/Cargo.lock'')"));
-    assert!(!text.contains(".outputs.lock_"));
+    for helper in ["0.1.83", "0.1.84", "0.1.85"] {
+        let text = workflow_with_helper(helper)?;
+        assert!(
+            text.contains("hashFiles(''Cargo.lock'')"),
+            "{helper}: {text}"
+        );
+        assert!(text.contains("hashFiles(''lab/Cargo.lock'')"), "{helper}");
+        assert!(!text.contains(".outputs.lock_"), "{helper}");
+    }
     Ok(())
 }
 
 #[test]
 fn a_helper_with_the_member_lock_key_reads_it_from_the_prepare_step_for_every_root() -> TestResult {
-    let text = workflow_with_helper("0.1.85")?;
+    let text = workflow_with_helper("0.1.86")?;
     assert!(!text.contains("Cargo.lock"), "{text}");
     for slug in ["root", "lab"] {
         let lock = format!("steps.prepare.outputs.lock_{slug}");

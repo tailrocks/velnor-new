@@ -14,7 +14,7 @@ use crate::plan::{job, step};
 const TRIM_JOB: JobId = JobId::from_static("rust-trim");
 
 const SAVING_HELPER: (u64, u64, u64) = (0, 1, 81);
-const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 85);
+const MEMBER_LOCK_HELPER: (u64, u64, u64) = (0, 1, 86);
 
 pub(crate) fn cache_root(facts: &RepoFacts, root: &RustRoot) -> CacheRoot {
     let lock = if facts
