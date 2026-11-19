@@ -12,9 +12,7 @@
 mod check_deadline;
 pub use check_deadline::{CheckDeadline, DeadlineError};
 pub mod owned_archive_guard;
-pub use owned_archive_guard::{
-    validate_qualification_manifest, validate_qualification_output_bindings,
-};
+pub use owned_archive_guard::validate_qualification_output_bindings;
 
 #[path = "../build_support/archive_guard_inputs.rs"]
 mod archive_guard_inputs;

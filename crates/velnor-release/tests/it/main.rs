@@ -26,6 +26,7 @@ mod refs;
 mod refusals;
 mod registry;
 mod release_versions;
+mod shipped_crates;
 mod sources;
 mod symlinks;
 mod tags;

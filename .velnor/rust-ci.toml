@@ -8,6 +8,9 @@ docs = "post_merge"
 check_alone = "post_merge"
 pr_ci = "label"
 
+[ci]
+skip_push_after_merge_group = true
+
 [crates_mirror]
 runner = "ubuntu-26.04-scale-set"
 registry = "sparse+https://crates-mirror.velnor-system.svc.cluster.local/index/"

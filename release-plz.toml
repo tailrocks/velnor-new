@@ -34,6 +34,30 @@ release = false
 name = "velnor-gen"
 release = false
 
+# Compiled into velnor-ci and velnor-gen (#1628). Every crate a shipped binary
+# compiles in must be listed (velnor-release check_shipped), so a change in it
+# is seen here. release = false keeps them out of release-plz: the family tag
+# releases the tools, and its version is bumped by hand.
+[[package]]
+name = "velnor-model"
+release = false
+
+[[package]]
+name = "velnor-release"
+release = false
+
+[[package]]
+name = "velnor-render"
+release = false
+
+[[package]]
+name = "velnor-rust"
+release = false
+
+[[package]]
+name = "velnor-workflows"
+release = false
+
 # Group "runner". Lead: owns the tag and the GitHub release.
 [[package]]
 name = "velnor-runner-cli"

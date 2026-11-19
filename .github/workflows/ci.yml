@@ -76,13 +76,29 @@ jobs:
         with:
           fetch-depth: "0"
           persist-credentials: "false"
+      - name: Fetch release tags
+        run: git fetch --force --tags --quiet origin
       - name: Self-test the gate check
         run: |
-          if bash scripts/check-helper-gates.sh --diff scripts/fixtures/gate-bad.diff --current 0.1.100; then
+          fixtures=scripts/fixtures
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-bad.diff" --current 0.1.100; then
             echo "the check accepted a gate that is already released" >&2
             exit 1
           fi
-          bash scripts/check-helper-gates.sh --diff scripts/fixtures/gate-good.diff --current 0.1.100
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-unmarked.diff" --current 0.1.100; then
+            echo "the check accepted an unmarked correction of a released gate" >&2
+            exit 1
+          fi
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-wrong-tag.diff" --current 0.1.100; then
+            echo "the check accepted a correction marker that names the wrong tag" >&2
+            exit 1
+          fi
+          if bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-previous.diff" --current 0.1.100; then
+            echo "the check accepted a correction whose commit already shipped in the previous release" >&2
+            exit 1
+          fi
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-good.diff" --current 0.1.100
+          bash scripts/check-helper-gates.sh --diff "$fixtures/gate-correction-good.diff" --current 0.1.100
       - name: Check the added gates against the base
         env:
           BASE_REF: ${{ github.base_ref }}

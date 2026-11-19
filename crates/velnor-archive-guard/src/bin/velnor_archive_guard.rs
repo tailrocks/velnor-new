@@ -102,15 +102,6 @@ fn qualification_mode(
     arguments: &mut impl Iterator<Item = OsString>,
 ) -> Option<Result<(), String>> {
     let result = match mode {
-        "qualification-manifest" => {
-            let Some(path) = arguments.next() else {
-                return Some(Err("candidate manifest path is required".into()));
-            };
-            if arguments.next().is_some() {
-                return Some(Err("unexpected archive guard argument".into()));
-            }
-            owned_archive_guard::validate_qualification_manifest(std::path::Path::new(&path))
-        }
         "qualification-output-bindings" => {
             let Some(manifest) = arguments.next() else {
                 return Some(Err("candidate manifest path is required".into()));
