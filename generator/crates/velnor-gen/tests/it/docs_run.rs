@@ -25,7 +25,7 @@ fn documentation_conditions(config: &str) -> Result<Vec<String>, Box<dyn std::er
 fn documentation_runs_on_every_event_unless_configured() -> TestResult {
     for config in ["", "docs = \"always\"\n"] {
         let conditions = documentation_conditions(config)?;
-        assert!(!conditions.is_empty());
+        assert_ne!(conditions.len(), 0);
         assert!(conditions.iter().all(|c| !c.contains("github.event_name")));
     }
     Ok(())
@@ -34,7 +34,7 @@ fn documentation_runs_on_every_event_unless_configured() -> TestResult {
 #[test]
 fn post_merge_documentation_skips_pull_requests_and_merge_groups() -> TestResult {
     let conditions = documentation_conditions("docs = \"post_merge\"\n")?;
-    assert!(!conditions.is_empty());
+    assert_ne!(conditions.len(), 0);
     for condition in &conditions {
         assert!(condition.contains(POST_MERGE), "{condition}");
         assert!(condition.contains("!cancelled()"), "{condition}");
@@ -43,7 +43,6 @@ fn post_merge_documentation_skips_pull_requests_and_merge_groups() -> TestResult
 }
 
 #[test]
-fn an_unknown_docs_mode_is_refused() -> TestResult {
+fn an_unknown_docs_mode_is_refused() {
     assert!(documentation_conditions("docs = \"never\"\n").is_err());
-    Ok(())
 }

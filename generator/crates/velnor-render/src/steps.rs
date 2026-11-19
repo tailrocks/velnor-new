@@ -204,13 +204,7 @@ fn rendered_steps(
         );
         body.condition = all_conditions(
             body.condition.take(),
-            condition(
-                step.when,
-                step.gate.as_ref(),
-                setup,
-                step.pr,
-                &extra,
-            ),
+            condition(step.when, step.gate.as_ref(), setup, step.pr, &extra),
         );
         body.working_directory = step.directory.as_ref().map(ToString::to_string);
     }

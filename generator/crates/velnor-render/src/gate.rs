@@ -21,6 +21,7 @@ const RELATED_EVENT: &str = "(github.event.action != 'labeled' || github.event.l
 const SAME_REPOSITORY: &str = "github.event.pull_request.head.repo.full_name == github.repository";
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
+const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 pub(crate) const TOOLS_STEP: &str = "tools";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
@@ -122,20 +123,12 @@ pub(crate) fn condition(
         When::Success => {}
         When::Finalizer => parts.push(NOT_CANCELLED.to_owned()),
         When::Always => parts.push(ALWAYS.to_owned()),
-        When::NotCancelled => {
+        When::NotCancelled | When::NotCancelledPostMerge => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
                 parts.push(SETUP_DONE.to_owned());
             }
-        }
-        When::NotCancelledPostMerge => {
-            parts.push(NOT_CANCELLED.to_owned());
-            if setup != Setup::Before {
-                parts.push(SETUP_DONE.to_owned());
-            }
-            parts.push(format!(
-                "(github.event_name == '{PUSH}' || github.event_name == '{SCHEDULE}' || github.event_name == 'workflow_dispatch')"
-            ));
+            parts.extend((when == When::NotCancelledPostMerge).then(|| POST_MERGE_EVENTS.to_owned()));
         }
         When::CacheDebug => {
             parts.push(NOT_CANCELLED.to_owned());

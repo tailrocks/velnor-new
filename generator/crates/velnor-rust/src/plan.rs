@@ -4,8 +4,8 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
-    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, DocsRun, HelperCommand, Host, Job,
-    JobId, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
+    Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
+    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
     TargetName, Toolchain, Triggers, When, WorkflowPlan,
 };
@@ -89,32 +89,11 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
         crate::merge_group_skip::apply(&mut jobs, single);
     }
-    if facts.config.docs_run == DocsRun::PostMerge {
-        for step in jobs.iter_mut().flat_map(|job| job.steps.iter_mut()) {
-            if step.kind == StepKind::Cargo(CargoCommand::Doc) {
-                step.when = When::NotCancelledPostMerge;
-            }
-        }
-    }
+    crate::docs_post_merge::apply(facts, &mut jobs);
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
-        triggers: Triggers {
-            pull_request: PullRequestType::ALL
-                .into_iter()
-                .chain(
-                    facts
-                        .config
-                        .skip_draft_pull_requests
-                        .then_some(PullRequestType::ConvertedToDraft),
-                )
-                .chain((facts.config.pr_ci == PrCi::Label).then_some(PullRequestType::Labeled))
-                .collect(),
-            push_branch: Some(facts.config.default_branch.clone()),
-            merge_group: true,
-            schedule: schedule(facts),
-            workflow_dispatch: true,
-        },
+        triggers: triggers(facts),
         concurrency: match facts.config.pr_ci {
             PrCi::Always => Concurrency::CancelOlderPullRequestRuns,
             PrCi::Label => Concurrency::CancelOlderPullRequestRunsExceptUnrelatedLabels,
@@ -122,6 +101,25 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         permissions: Permissions(BTreeMap::from([(PermissionScope::Contents, Access::Read)])),
         fork_runner: facts.config.fork_runner.clone(),
         jobs,
+    }
+}
+
+fn triggers(facts: &RepoFacts) -> Triggers {
+    Triggers {
+        pull_request: PullRequestType::ALL
+            .into_iter()
+            .chain(
+                facts
+                    .config
+                    .skip_draft_pull_requests
+                    .then_some(PullRequestType::ConvertedToDraft),
+            )
+            .chain((facts.config.pr_ci == PrCi::Label).then_some(PullRequestType::Labeled))
+            .collect(),
+        push_branch: Some(facts.config.default_branch.clone()),
+        merge_group: true,
+        schedule: schedule(facts),
+        workflow_dispatch: true,
     }
 }
 

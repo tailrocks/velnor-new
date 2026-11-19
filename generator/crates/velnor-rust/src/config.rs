@@ -7,6 +7,7 @@ use velnor_model::{
     TargetName,
 };
 
+use crate::config_events::{docs_run, on_main};
 use crate::error::{DetectError, Reason};
 use crate::toml_file::table;
 
@@ -120,8 +121,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         .map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
-    let on_main =
-        crate::config_events::on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
+    let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
     let full_run = match raw.full_run {
         None => defaults.full_run,
         Some(value) => crate::config_events::full_run(value).map_err(invalid)?,
@@ -144,7 +144,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        docs_run: crate::config_events::docs_run(raw.docs.as_deref()).map_err(invalid)?,
+        docs_run: docs_run(raw.docs.as_deref()).map_err(invalid)?,
         mbx_store: raw.mbx_shared_store.unwrap_or(false).into(),
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
