@@ -21,7 +21,7 @@ use rules::{
     validate_suite_targets_and_env,
 };
 
-/// The engine no longer emits pull_request/push Rust suites or gates `Required`
+/// The engine no longer emits `pull_request/push` Rust suites or gates `Required`
 /// on them; accepting one would silently run nothing.
 const MOVED_SUITE: &str = "pull_request/push Rust suites moved to velnor-gen's rust-ci.yml; declare them in .velnor/rust-ci.toml (only suites with workflow_dispatch or schedule triggers are supported here, and required = true is refused)";
 
