@@ -8,24 +8,17 @@ This page is for a project that runs `velnor-gen`. It says what the generated wo
 
 ### What a run selects
 
-The first step of a run is `velnor-ci plan`. It lists the changed files, finds the packages that own them, and adds every package that depends on one of them. Each later step runs only for the packages and roots the plan selected. A run that selects no package skips the Rust steps. `velnor-ci plan --explain` prints each selected package with its reason, each step it left out and why, and what to add to the config for a file it cannot place.
+The first step of a run is `velnor-ci plan`. It lists the changed files, finds the packages that own them, and adds every package that depends on one of them. Each later step runs only for the packages and roots the plan selected. A run that selects no package skips the Rust steps. When more than half of the packages are selected, the run selects everything. `velnor-ci plan --explain` prints each selected package with its reason, each step it left out and why, and what to add to the config for a file it cannot place.
 
 - A pull request is judged by its diff. A push to the default branch and a merge queue run are judged by their diff when `on_main = "affected"` (the default), and select everything when `on_main = "everything"`.
 - A scheduled run and a manual run select everything. `full_run` sets the schedule: `"nightly"` (default), `"hourly"`, `"weekly"`, `"off"` or a cron expression. For the built-in schedules `"hourly"`, `"nightly"` and `"weekly"`, the minute, hour and weekday come from a hash of the repository name, so projects do not start together. A cron expression runs as written.
 - These changes select everything: a toolchain file, a Cargo config, a root `Cargo.toml` (unless only workspace dependency versions changed together with the lock), `mise.toml`, `mise.lock`, `.velnor/rust-ci.toml`, the generated workflow, and any file the plan cannot place. A changed `Cargo.lock` selects the packages that reach a changed entry, and everything when that cannot be told.
 - `docs/`, `LICENSES/`, `NOTICE`, `CODEOWNERS`, `LICENSE*` and root-level `*.md` files select nothing (`default_ignores = true`), except a file inside a package directory or inside a Cargo root below the repository top, because the build can read it. `inputs` and `non_inputs` map other files to packages or to nothing.
-- When more than half of the packages are selected, the run selects everything.
 - Documentation and doctest steps run only when the project has doc comments or doctests. On a full run they always run. They also always run when a procedural macro or build script generates code, or a dependency comes from outside the repository, because the generator cannot see every doc comment then.
 
 ### One job by default
 
-The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots, test groups and `[[lint]]` entries only. A second job costs start-up time, so the generator adds one only when it pays (`crates/velnor-rust/src/shape.rs`).
-
-| `shape` | Jobs | Chosen when |
-|---|---|---|
-| `one-job` | `rust` | `auto` and `.velnor/rust-ci-timings.json` has no entry for the root, or the shorter of its lint build and test build takes 5 s or less |
-| `lint-test` | `rust-lint`, `rust-test` | `auto` and the shorter build takes more than 5 s |
-| `groups` | `rust-lint`, `rust-test` (builds the tests once), `rust-test-default`, `rust-test-<name>` | `shape = "groups"`, or the root has a `[[test_groups]]` entry |
+The default shape is one job, `rust`, for each Cargo root. The generator never makes a job per crate. A crate gets a step (`Check <crate> alone`), not a job. The job count grows with Cargo roots, test groups and `[[lint]]` entries only. A second job costs start-up time, so the generator adds one only when it pays (`crates/velnor-rust/src/shape.rs`). The `shape` key chooses the layout; the table of the three shapes and the rule for `auto` is in [`generator/CONFIG.md`](../generator/CONFIG.md#run-selection).
 
 `velnor-ci timings --repo owner/name` writes the timings file from the medians of at least three of the ten most recent first-attempt runs that pushed to the default branch or ran for a pull request into it. The generator writes the reason for the chosen shape into the workflow. A project with one root and one job has no `rust-plan` job; its plan is a step. Any other layout adds `rust-plan` first, and with several roots every job id gets a root suffix.
 
@@ -139,7 +132,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |
 | `cache_budget_bytes` | `8000000000` | cache budget, at most 8 GB |
-| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed of the workflow, checked by `rust-budget` on the default branch or the scheduled run (needs `velnor-ci` 0.1.92) |
+| `budget` | none | table; `pr_wall_seconds`, `main_wall_seconds`, `runner_seconds`, `setup_seconds` bound the speed, checked by `rust-budget` (needs `velnor-ci` 0.1.92) |
 | `cache_check_blocks` | `false` | the `Cache` check joins `Required` |
 | `cache_debug` | `false` | cargo fingerprint log, see above |
 | `ci_debuginfo` | `"line-tables-only"` | `full`, `line-tables-only` or `none` |
