@@ -1737,7 +1737,7 @@ jobs:
         run: '. "$VELNOR_EXEC" run -- cargo-deny --manifest-path ''local/Cargo.toml'' check'
       - name: Unused dependencies
         if: '${{ !cancelled() && needs.rust-plan.outputs.rust_machete == ''run'' }}'
-        run: '. "$VELNOR_EXEC" run -- cargo-machete'
+        run: '. "$VELNOR_EXEC" run -- cargo machete'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'

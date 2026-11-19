@@ -4,7 +4,7 @@
       "members": [
         {
           "name": "velnor-actions-contract",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-contract/Cargo.toml",
           "dependencies": [
             {
@@ -139,7 +139,7 @@
         },
         {
           "name": "velnor-archive-guard",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-archive-guard/Cargo.toml",
           "dependencies": [
             {
@@ -329,7 +329,7 @@
         },
         {
           "name": "velnor-actions-mise",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-mise/Cargo.toml",
           "dependencies": [
             {
@@ -400,7 +400,7 @@
         },
         {
           "name": "velnor-actions-tofu",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-tofu/Cargo.toml",
           "dependencies": [
             {
@@ -453,7 +453,7 @@
         },
         {
           "name": "velnor-actions-rust",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-rust/Cargo.toml",
           "dependencies": [
             {
@@ -550,7 +550,7 @@
         },
         {
           "name": "velnor-actions-actionlint",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-actionlint/Cargo.toml",
           "dependencies": [
             {
@@ -574,7 +574,7 @@
         },
         {
           "name": "velnor-actions-workflow-renderer",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-workflow-renderer/Cargo.toml",
           "dependencies": [
             {
@@ -852,7 +852,7 @@
         },
         {
           "name": "velnor-actions-bun",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-bun/Cargo.toml",
           "dependencies": [
             {
@@ -891,7 +891,7 @@
         },
         {
           "name": "velnor-actions-dbt",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-dbt/Cargo.toml",
           "dependencies": [
             {
@@ -925,7 +925,7 @@
         },
         {
           "name": "velnor-actions-orchestrator",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-orchestrator/Cargo.toml",
           "dependencies": [
             {
@@ -1232,7 +1232,7 @@
         },
         {
           "name": "velnor-actions-ansible",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-ansible/Cargo.toml",
           "dependencies": [
             {
@@ -1266,7 +1266,7 @@
         },
         {
           "name": "velnor-actions-gradle",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-gradle/Cargo.toml",
           "dependencies": [
             {
@@ -1290,7 +1290,7 @@
         },
         {
           "name": "velnor-actions-cli",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-cli/Cargo.toml",
           "dependencies": [
             {
@@ -1658,7 +1658,7 @@
         },
         {
           "name": "velnor-actions-freshness",
-          "version": "0.1.81",
+          "version": "0.1.82",
           "manifest": "crates/velnor-actions-freshness/Cargo.toml",
           "dependencies": [
             {
@@ -3332,23 +3332,23 @@
     }
   },
   "manifests": {
-    "Cargo.toml": "2c838b0a7c9902ec2d38606eef1510115281ccb400cc443e7915eeb50db830d5",
+    "Cargo.toml": "3a1d26ca60a6e14c8d9bb0da01044d5c3b13aa6b09dc40a01c8fb54cc7a19ea1",
     "ci-helper/Cargo.toml": "fb3550bb8e3743f3be2ecbced69fa2328b3054f2046213a49f006064abf316ec",
     "ci-helper/crates/velnor-ci/Cargo.toml": "752df3b1d467404cf1a5685798949a0513b278ba97fb84f411535a5487d61113",
-    "crates/velnor-actions-actionlint/Cargo.toml": "10e6b0506b8302c0f2cc7707a9817ac90153cd79fe91e59aaae6cb6370155206",
-    "crates/velnor-actions-ansible/Cargo.toml": "96fad9ebb9abf36cb64b1d75a257b28c930583f274f37ce174cf99739eb71851",
-    "crates/velnor-actions-bun/Cargo.toml": "7e6fbccf03da95509df829c46d03a27dbd4eb7b31c6fe8dc87f534b3694f0c14",
-    "crates/velnor-actions-cli/Cargo.toml": "2f6635e93b3ed5e4e3f7e7ac7311f69c09d4cf20b1d51ec4c0fd730efa3d3c02",
+    "crates/velnor-actions-actionlint/Cargo.toml": "7fc5bdb266e2a0f9335b250acecdd1f97ddbcee27322e6f90855b82fad1b6a04",
+    "crates/velnor-actions-ansible/Cargo.toml": "df14f689efc7246f0a4043d8032ec785555d71143f1aa85387b09ed34240b7f3",
+    "crates/velnor-actions-bun/Cargo.toml": "ad06f4370b77872dcc37f86f92ce558c9d9b30d1c56765aea33d070fa9a564b8",
+    "crates/velnor-actions-cli/Cargo.toml": "d9ec1f95ba9e9cef8cea847e5812b76dd4f9e6b8bf4fe99395ffd38aba8718c3",
     "crates/velnor-actions-contract/Cargo.toml": "b7eedfa01557ebecd74241e94f111cc706d434df4c629668b58fcec59b1fcaa3",
-    "crates/velnor-actions-dbt/Cargo.toml": "2a367c1327cc1d95e395ee7800393786c8a40322f0117c6f0f9186cb426e2f42",
+    "crates/velnor-actions-dbt/Cargo.toml": "78d142959ce5344dd3fe3f9ad3ee17f48aaf58ab43faab24587b7b26df951d3e",
     "crates/velnor-actions-freshness/Cargo.toml": "599ba78bcef762ac75ccc17c932bf7288b68fd41d6d6808fb03f3fb62862b6b1",
     "crates/velnor-actions-gradle/Cargo.toml": "837cbc05ffb13c48d287c397b3574241e41a4ac712ae2f028e844f4f0734d0fc",
-    "crates/velnor-actions-mise/Cargo.toml": "c31fa725f5990e6acd09b6ee1ce1da210162971d26ea7c827b466aea355c9b31",
-    "crates/velnor-actions-orchestrator/Cargo.toml": "ba030619136bf3bc556f1990fec8cfde3e1bc9c9d1ce57ad5286898485ba4a76",
-    "crates/velnor-actions-rust/Cargo.toml": "11fbaf88ae2f673b88b381dca3caee85eae3353011cc01b32d0aa8f145af2ea1",
-    "crates/velnor-actions-tofu/Cargo.toml": "546762cc8455efea21812d906724c1be02c13637d7e7465b64e06e6c135c8272",
-    "crates/velnor-actions-workflow-renderer/Cargo.toml": "b00dbc220719ed8f7749213295465e6f5efbad2f41e3e438982d508ec327ffc0",
-    "crates/velnor-archive-guard/Cargo.toml": "2f1bf5db4a3a87a3317d8844ffb6d70edaf1afcba816e52356c933eb914866f2",
+    "crates/velnor-actions-mise/Cargo.toml": "2c20ced017b9fdaa96b42b5087bb10dc0b3302133fe29f31109ac411239d90b3",
+    "crates/velnor-actions-orchestrator/Cargo.toml": "5b672843a75d2658e9bc889dbb92989ae2dcff25b906a5fcaa8738201af5177d",
+    "crates/velnor-actions-rust/Cargo.toml": "ef5987ecae9083d12b876fc5f4cbfd6c31abeff5a147b7b4c62ea252cfdda68a",
+    "crates/velnor-actions-tofu/Cargo.toml": "07f783ad6343158762250014686772d6cf9931023dcd4935f5f3efe3ce5b4318",
+    "crates/velnor-actions-workflow-renderer/Cargo.toml": "2ba8866f619fe0d1a3418f8a631c8453def2ce92288eccedb44102c36137e9f8",
+    "crates/velnor-archive-guard/Cargo.toml": "379015dd4bd2dda00d4fa6dab8fe8c1dd87699975aa519b203a1f3370d78517a",
     "crates/velnor-runner/Cargo.toml": "75742814fbdc055c2a4dd1d443a8e4904c3b5e93d67421e9688727c0cdae805a",
     "crates/velnor-runner/crates/velnor-resource-probe/Cargo.toml": "1f100fc0a051e100e7927d67a8aa0559df5a24d6cf16364d15579a58b42e9ced",
     "crates/velnor-runner/crates/velnor-runner-attestation/Cargo.toml": "e94b811ef028c715446fab764ac33ada288400ab521325a37367ebc04cf11dc0",
