@@ -49,19 +49,18 @@ const RUN_OPTIONS: &[&str] = &[
     "--test-threads",
 ];
 
+/// The command an `inputs build` wrapper runs, after any `--directory` options.
+fn audited(command: &[String]) -> Option<&[String]> {
+    let program = command.first()?.rsplit('/').next()?;
+    if program != "velnor-ci" || command.get(1..3)? != ["inputs", "build"] {
+        return None;
+    }
+    let dashes = command.iter().position(|arg| arg == "--")?;
+    command.get(dashes + 1..)
+}
+
 fn nextest_run(command: &[String]) -> Option<&[String]> {
-    let command = if command
-        .first()
-        .and_then(|program| program.rsplit('/').next())
-        == Some("velnor-ci")
-        && command
-            .get(1..4)
-            .is_some_and(|args| args == ["inputs", "build", "--"])
-    {
-        &command[4..]
-    } else {
-        command
-    };
+    let command = audited(command).unwrap_or(command);
     let program = command
         .first()
         .and_then(|program| program.rsplit('/').next())

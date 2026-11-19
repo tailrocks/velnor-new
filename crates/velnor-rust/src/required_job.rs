@@ -44,12 +44,18 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
             _ => Vec::new(),
         })
         .collect();
+    let skip = job
+        .skip_after_merge_group
+        .as_ref()
+        .map(|_| JobCondition::MergeGroupNotPassed);
     let when = match job.when {
         When::FullAudit => Some(JobCondition::ScheduleOrDispatch),
         When::FullAuditOrPush => Some(JobCondition::ScheduleOrPushOrDispatch),
-        When::Scheduled => Some(JobCondition::Schedule),
+        When::Scheduled | When::ScheduledAfterNeeds => Some(JobCondition::Schedule),
         When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
-        When::DefaultBranchPush => Some(JobCondition::DefaultBranchPush),
+        When::DefaultBranchPush | When::DefaultBranchPushAfterNeeds => {
+            Some(JobCondition::DefaultBranchPush)
+        }
         When::Success
         | When::NotCancelled
         | When::NotCancelledPostMerge
@@ -71,7 +77,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::PrimeToolsFromNetwork
         | When::SaveToolsOnDefaultBranch => None,
     };
-    gate.into_iter().chain(when).collect()
+    gate.into_iter().chain(when).chain(skip).collect()
 }
 
 pub(crate) fn spec(plan: JobId, jobs: &[Job]) -> VerdictSpec {

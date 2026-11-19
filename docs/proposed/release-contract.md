@@ -312,7 +312,7 @@ headers, credential-provider output, or private key material.
   with an explicit per-job `permissions:` block. (Under
   `velnor-repository-v1` the same filename keeps its existing Velnor-internal
   meaning.)
-- `.github/release-plz.toml`: the generated normal effective release-plz
+- `release-plz.toml`: the generated normal effective release-plz
   config; workflows pass it via release-plz's explicit config argument. No
   second user-owned root config is silently created.
 - `.github/release-plz-bootstrap.toml`: the generated bootstrap-only variant

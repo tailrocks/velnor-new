@@ -19,8 +19,8 @@ use super::{
     ConnectionPollContext,
 };
 
-const RESTORE_RETRY: Duration = Duration::from_secs(30);
-const RESTORE_ATTEMPT_DEADLINE: Duration = Duration::from_secs(10);
+pub(super) const RESTORE_RETRY: Duration = Duration::from_secs(30);
+pub(super) const RESTORE_ATTEMPT_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum RestoreMode {
@@ -124,7 +124,16 @@ pub(super) async fn restore_active_credentials(
         return false;
     }
     let deadline = tokio::time::Instant::now() + RESTORE_ATTEMPT_DEADLINE;
-    let authority = restore_before_deadline(deadline, async || {
+    let authority = restore_link_before_deadline(prepared, context, deadline).await;
+    restore_credentials_from_authority(prepared, mode, deadline, authority).await
+}
+
+pub(super) async fn restore_link_before_deadline(
+    prepared: &PreparedConnection,
+    context: &ConnectionPollContext<'_>,
+    deadline: tokio::time::Instant,
+) -> Result<(crate::listen::Link, crate::listen::Secret, i64), String> {
+    restore_before_deadline(deadline, async || {
         restore_bound_session(&prepared.scope, prepared.set_id, async || {
             let request = PrepareConnectionRequest {
                 state: context.state,
@@ -143,8 +152,7 @@ pub(super) async fn restore_active_credentials(
         })
         .await
     })
-    .await;
-    restore_credentials_from_authority(prepared, mode, deadline, authority).await
+    .await
 }
 
 async fn restore_before_deadline<C, E: Display>(
@@ -178,6 +186,13 @@ pub(super) async fn restore_credentials_from_authority(
             let (mut link, github_pat, restored_set_id) = authority?;
             if restored_set_id != set_id {
                 return Err(HostError::Ownership.to_string());
+            }
+            if scope
+                .scale_set_recorded_deleted(set_id)
+                .await
+                .map_err(|error| error.to_string())?
+            {
+                return Err("scale set recorded deleted".to_owned());
             }
             let target = scope
                 .session_header_allocation(session_intent)

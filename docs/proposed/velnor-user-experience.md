@@ -89,7 +89,7 @@ runner_lock = ".velnor/runner.lock"  # the official runner pin that exists today
 image = "ghcr.io/tailrocks/velnor-official@sha256:<digest>"
 
 [velnor.executor.job_types]          # Actions jobs that stay jobs: release, image, scheduled
-"release-rust-ci-tools" = "native"
+"release"               = "native"
 "product-release"       = "native"
 "job-image-candidate"   = "native"
 
@@ -130,8 +130,7 @@ namespace = "velnor-system"
 
 [sites.de.storage.tiers]
 local      = { backend = "filesystem", path = "/var/lib/velnor/l0" }   # node NVMe on XFS
-site       = { backend = "s3", kind = "rustfs-cluster", endpoint = "http://rustfs.velnor-system.svc:9000",
-               durability = "strict", credentials = { secret = "velnor-rustfs" } }
+site       = { backend = "s3", kind = "rustfs-cluster", endpoint = "http://rustfs.velnor-system.svc:9000", durability = "strict", credentials = { secret = "velnor-rustfs" } }
 cross-site = { backend = "replication", from = "fi" }                    # background warmth only
 # Any S3 store works the same way, e.g. { backend = "s3", kind = "aws", bucket = "..." }.
 

@@ -16,7 +16,6 @@ fn is_check(kind: &StepKind) -> bool {
     }
 }
 
-/// A lint or test command. Builds, archives and cache saves keep running.
 /// Exhaustive, so a new command must be classified here when it is added.
 fn is_check_command(command: &CargoCommand) -> bool {
     match command {
@@ -41,9 +40,6 @@ fn is_check_command(command: &CargoCommand) -> bool {
     }
 }
 
-/// Lets the lint and test steps skip when `skip_push` says a `merge_group` run
-/// of this workflow already passed on this commit. Builds and cache saves keep
-/// running.
 pub(crate) fn apply(jobs: &mut [Job], single: bool) {
     for job in jobs.iter_mut() {
         let from = if !single {
@@ -61,7 +57,19 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
         if is_lint_job(job) {
             skip_lint_job(job, &from, single);
         }
+        if is_archive_consumer(job) {
+            job.skip_after_merge_group = Some(from);
+        }
     }
+}
+
+fn is_archive_consumer(job: &Job) -> bool {
+    job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::Cargo(CargoCommand::NextestRunArchive { .. })
+        )
+    })
 }
 
 fn is_lint_job(job: &Job) -> bool {
@@ -79,9 +87,6 @@ fn skip_lint_job(job: &mut Job, from: &PlanFrom, single: bool) {
     }
 }
 
-/// Asks the helper, right after the plan, whether a `merge_group` run of this
-/// workflow already passed on this commit. `required` names the job of that run
-/// whose success counts while the run is still going.
 pub(crate) fn ask(facts: &RepoFacts, jobs: &mut [Job], single: bool) {
     let required = facts.config.required_check.as_str();
     let asker = if single { RUST_JOB } else { PLAN_JOB };
@@ -173,6 +178,7 @@ mod tests {
             permissions: Permissions(BTreeMap::new()),
             timeout_minutes: 30,
             gate: None,
+            skip_after_merge_group: None,
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,

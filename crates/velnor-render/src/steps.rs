@@ -65,7 +65,13 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
         env,
         needs: job.needs.iter().map(ToString::to_string).collect(),
         condition: Some(crate::base_steps::audited_lane(
-            admission(job.when, job.gate.as_ref(), job.pr),
+            admission(
+                job.when,
+                job.gate.as_ref(),
+                job.pr,
+                &job.needs,
+                job.skip_after_merge_group.as_ref(),
+            ),
             job,
         )),
         runs_on: job.runs_on.as_str().to_owned(),

@@ -37,7 +37,7 @@ fork_runner = "ubuntu-24.04"
 
 ## Skip the push run after a merge queue run
 
-`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.88 or later, the first release that has the command `merge-group-passed`; an older release is refused at generation. The push is matched to the queue run by commit id, so the merge queue must keep the commit it tested (a squash or a fast-forward merge, as in this repository's ruleset). A queue that rebases or creates a merge commit pushes a different commit, and then the push never skips. A queue run that is still running counts when its `Required` job has already succeeded, and the job is found by the name in `required_check` (`velnor-ci` 0.1.98 or later; an earlier release waits for the whole queue run to complete).
+`[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.103 or later, the first release whose `merge-group-passed` reads only the latest merge_group run on the commit and knows the job conditions of the skipped test jobs; an older release is refused at generation. The push is matched to the queue run by commit id, so the merge queue must keep the commit it tested (a squash or a fast-forward merge, as in this repository's ruleset). A queue that rebases or creates a merge commit pushes a different commit, and then the push never skips. A queue run that is still running counts when its `Required` job has already succeeded, and the job is found by the name in `required_check` (`velnor-ci` 0.1.98 or later; an earlier release waits for the whole queue run to complete).
 
 ```toml
 [ci]
@@ -46,7 +46,7 @@ skip_push_after_merge_group = true
 
 The merge queue fast-forwards the commit it tested, so the push to the default branch has the SHA of the `merge_group` run. On such a push, the plan job (or the single job, right after its plan) runs `velnor-ci merge-group-passed`. That step asks the GitHub API for runs of this same workflow file with `event=merge_group`, `head_sha=$GITHUB_SHA` and a completed, successful conclusion, and writes `skip=true` when one exists. It reads `github.token` and the plan job gains `actions: read`, nothing more.
 
-When the flag is true, Format, Lint, Documentation, the single-crate checks, test setup, tests, doctests, `cargo deny` and `cargo machete` skip. A lane that planned everything again because its base expired runs its checks anyway, because the plan of the queue run did not cover the added packages. Builds that warm the caches and every cache save keep running, so the caches stay warm. When the workflow has a plan job (more than one job), every non-Rust `[[lint]]` job also waits for the plan job and skips all its steps on such a push; the job still succeeds, so the gate needs no change for it. A single-job workflow has no plan job to read, so each of its `[[lint]]` jobs runs `velnor-ci merge-group-passed` itself (after installing `velnor-ci`, with `actions: read`) and skips all its steps on such a push, as the plan-job form does. The `Required` gate then passes without test counts for this case only: the event is `push` and the plan job output `skip_push` is exactly `true`. Any other value, event or a failed job fails the gate as before.
+When the flag is true, Format, Lint, Documentation, the single-crate checks, test setup, tests, doctests, `cargo deny` and `cargo machete` skip, and a test job that only runs archived tests (a test group in a workflow with a build job) does not start at all. A lane that planned everything again because its base expired runs its checks anyway, because the plan of the queue run did not cover the added packages. Builds that warm the caches and every cache save keep running, so the caches stay warm. When the workflow has a plan job (more than one job), every non-Rust `[[lint]]` job also waits for the plan job and skips all its steps on such a push; the job still succeeds, so the gate needs no change for it. A single-job workflow has no plan job to read, so each of its `[[lint]]` jobs runs `velnor-ci merge-group-passed` itself (after installing `velnor-ci`, with `actions: read`) and skips all its steps on such a push, as the plan-job form does. The `Required` gate then passes without test counts for this case only: the event is `push` and the plan job output `skip_push` is exactly `true`. Any other value, event or a failed job fails the gate as before.
 
 The step fails safe. A non-push event, a missing variable, an API error, an unreadable response, a missing run, a run that failed, or a run that is still going without a succeeded `Required` job all write `skip=false`, and everything runs. The step is `continue-on-error`, so a crash also runs everything.
 
@@ -138,7 +138,7 @@ A test that needs a fixture, such as a built example executable or a provisioned
 [[test_setup]]
 root = "."
 name = "Prepare the fixtures"
-run = "bash scripts/ci-fixtures.sh"
+run = "bash scripts/prepare-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
@@ -182,7 +182,7 @@ The pinned velnor-ci reads `.velnor/rust-ci.toml` at run time and rejects a key 
 The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool.
 ## Optional speed budget
 
-The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request. It runs after the required check has ended, which does not wait for it, so its failure never fails the required check.
+The new generator accepts a speed budget in `.velnor/rust-ci.toml`. It is off when the table is absent, and every key is off when it is `0`. The generator emits a `rust-budget` job when at least one key is set. The job runs on the scheduled full run when `full_run` is set, and on every push to the default branch when it is not. It never runs on a pull request. It runs after the required check has ended, also when a job before it was skipped, and only when the required check succeeded. The required check does not wait for it, so its failure never fails the required check. A run that failed the budget is not a sample for the next run, so a breach clears with the next run that is fast again.
 
 ```toml
 [budget]
@@ -192,7 +192,7 @@ runner_seconds = 0
 setup_seconds = 0
 ```
 
-`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it collects the last ten successful first attempts of the generated workflow for each kind of event, compares the medians of that window and the latest run of each kind with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
+`pr_wall_seconds` bounds the wall time of a pull request run, `main_wall_seconds` the wall time of a default branch run, `runner_seconds` the summed runner time of a run, and `setup_seconds` the time from the start of a job to its first cargo command. The job runs `velnor-ci bench budget --last 10`: it measures the run that executes it so far, collects the successful first attempts of the generated workflow before it for each kind of event (ten runs in the window with the running one), compares the median of that window and the running run with the budget, prints the three jobs whose duration is furthest above their median, and fails when a measurement is above its budget or when the runs do not have a measurement the budget needs. The generator requires a pinned `velnor-ci` release of at least `0.1.92` when the table holds a budget.
 
 The check fails closed. A budget for a kind of run there is none of is a failure, not a pass, and so is a budget whose runs do not carry a measurement it needs. The report is printed before the check fails, so that the breach is read next to the medians it broke.
 
@@ -200,7 +200,7 @@ A budget is a number the project measures, not a number it guesses: set every ke
 
 ## Optional sparse checkout
 
-`sparse_checkout = true` in `.velnor/rust-ci.toml` makes the checkout step of each Rust lane job list only what that lane reads: its root and its members, the roots it depends on, the lockfiles and tool files at the repository top, `.cargo/`, `.config/`, `.velnor/`, and every path of the inputs lock and of declared `[[inputs]]`. It is `false` by default, and then the generated workflow is unchanged. The plan, policy and audit-plan jobs keep the full tree. The lane keeps a full checkout when a root manifest sits at the repository top, when the inputs lock has a repository-wide read, or when `[[test_setup]]` is set, because those reads are unknown. A test that reads a tracked file outside the list fails with a missing file; add that path under `[[inputs]]`.
+`sparse_checkout = true` in `.velnor/rust-ci.toml` makes the checkout step of each Rust lane job list only what that lane reads: its root and its members, the roots it depends on, the lockfiles and tool files at the repository top, `.cargo/`, `.config/`, `.velnor/`, and every path of the inputs lock and of declared `[[inputs]]`. It is `false` by default, and then the generated workflow is unchanged. The plan, policy and audit-plan jobs keep the full tree. The lane keeps a full checkout when a root manifest sits at the repository top, when the inputs lock has a repository-wide read, or when `[[test_setup]]` is set, because those reads are unknown. A test that reads a tracked file outside the list fails with a missing file; add that path under `[[inputs]]`. From `velnor-ci` 0.1.103, the `velnor-ci report` step of the failed lane finds each such path in the test output (a "No such file or directory" line that names a tracked file the checkout skipped) and prints the `[[inputs]]` entry to add in the lane's section of the job summary, which the `Required` job repeats. With the setting off, `velnor-gen generate` prints one note when the tracked files outside the paths the Rust jobs read add up to more than 100 MiB.
 
 ## Run selection
 
@@ -380,7 +380,7 @@ With `bins`, each extra binary is published the same way, as its own `<bin>-<pla
 
 ## Optional release asset names
 
-A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<target-triple>.tar.gz` by default, for example `app-x86_64-unknown-linux-musl.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional, and an entry without it generates the same workflow as before.
+A `[[binaries]]` entry in `.velnor/release.toml` publishes `<bin>-<target-triple>.tar.gz` by default, for example `app-x86_64-unknown-linux-musl.tar.gz`. `asset_name` replaces the name without the `.tar.gz` suffix, so a consumer that expects an exact file name, such as a package manager recipe, keeps it. The key is optional; without it the default name above applies.
 
 ```toml
 [[binaries]]
@@ -397,7 +397,7 @@ The placeholders are `{{ bin }}`, `{{ platform }}` (`linux-x64`), `{{ target }}`
 
 ### Raw binary keys
 
-Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
+Three keys of a raw `[[binaries]]` entry add what the old `release-rust-ci-tools.yml` (now `release.yml`) did. All are off by default, and then the generated workflow is byte-identical to one generated without them.
 
 ```toml
 [[binaries]]
@@ -419,7 +419,7 @@ A repository that must pass its own checks before a release publishes declares o
 ```toml
 [[checks]]
 name = "Qualify linux"
-run = "bash scripts/qualify-linux.sh"
+run = "bash scripts/qualify.sh"
 before = "publish"
 artifacts = ["app-linux-x64"]
 needs = ["Verify release inputs"]

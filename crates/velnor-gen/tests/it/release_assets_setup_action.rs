@@ -110,8 +110,8 @@ fn archives_produced(
     assert_eq!(&added, targets);
     let produced: BTreeSet<String> = built
         .iter()
-        .filter(|run| run.starts_with("tar -czf "))
-        .filter_map(|run| run.split_whitespace().nth(2))
+        .filter(|run| run.starts_with("tar ") && run.contains(" -czf "))
+        .filter_map(|run| run.split_whitespace().find(|word| word.contains(".tar.gz")))
         .map(str::to_owned)
         .collect();
     assert!(produced.is_superset(expected), "{produced:?} {expected:?}");

@@ -214,3 +214,54 @@ fn the_mbx_script_parses_and_refuses_an_unknown_phase() -> TestResult {
     assert!(String::from_utf8_lossy(&unknown.stderr).contains("no-such-phase"));
     Ok(())
 }
+
+/// Jobs whose only step is `exit 1`: a dispatch that matches one of them fails the run.
+fn failing_jobs(workflow: &Value) -> Result<Vec<String>, Box<dyn Error>> {
+    let mut conditions = Vec::new();
+    for job in jobs_of(workflow)?.values() {
+        let exits = job
+            .get("steps")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .any(|step| step.get("run").map(text).as_deref() == Some("exit 1"));
+        if exits {
+            conditions.push(job.get("if").map(text).ok_or("failing job: no if")?);
+        }
+    }
+    Ok(conditions)
+}
+
+#[test]
+fn a_mode_that_no_job_runs_fails_the_run_instead_of_skipping_every_job() -> TestResult {
+    let workflow = generated()?;
+    let offered: BTreeSet<String> = workflow
+        .pointer("/on/workflow_dispatch/inputs/mode/options")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(text)
+        .collect();
+    let guarded = failing_jobs(&workflow)?
+        .iter()
+        .any(|condition| condition.contains("!(") && modes(condition) == offered);
+    assert!(
+        guarded,
+        "no job fails the run when inputs.mode is none of the offered modes"
+    );
+    Ok(())
+}
+
+#[test]
+fn stable_sources_outside_a_non_default_branch_fails_the_run() -> TestResult {
+    let workflow = generated()?;
+    let guarded = failing_jobs(&workflow)?.iter().any(|condition| {
+        condition.contains("inputs.mode == 'stable-sources'")
+            && condition.contains("github.event.repository.default_branch")
+    });
+    assert!(
+        guarded,
+        "no job fails the run for stable-sources on the default branch"
+    );
+    Ok(())
+}

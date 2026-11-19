@@ -66,7 +66,7 @@ enforces the same limit before parsing and rejects unknown keys or missing
 keys.
 
 The probe uses safe Rust APIs only. The filesystem query uses the exact pinned
-`rustix` registry dependency in the nested runner workspace; no FFI or
+`rustix` registry dependency in the runner crates of the root workspace; no FFI or
 `unsafe` code is allowed. The executable is statically linked for
 `x86_64-unknown-linux-musl` and has no dynamic runtime dependencies.
 

@@ -40,7 +40,7 @@ pub use sample::{
     Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
     recording_of, relocate_metadata, write_sample,
 };
-use tracked::tracked;
+use tracked::{tracked, tracked_sizes};
 use workflows::{ENGINE_CONFIG, workflow_paths};
 
 #[must_use]
@@ -186,6 +186,11 @@ fn execute(cli: &Cli) -> Result<Vec<Drift>, Error> {
         for note in notes(&view).map_err(Error::Generate)? {
             eprintln!("velnor-gen: note: {note}");
         }
+        if let Some(note) =
+            crate::sparse_note(&view, &tracked_sizes(&root, &view)).map_err(Error::Generate)?
+        {
+            eprintln!("velnor-gen: note: {note}");
+        }
     }
     if let Some(Drift::Foreign(path)) = drifts.iter().find(|d| matches!(d, Drift::Foreign(_))) {
         return Err(Error::Foreign(path.clone()));
@@ -310,7 +315,13 @@ pub fn view_of(
 ) -> Result<Recorded, Error> {
     let mut view = view_from(root, tracked_paths, symlinks)?;
     let mut recorded = BTreeMap::new();
-    for manifest in metadata_roots(&view).map_err(Error::Detect)? {
+    // Manifests under the samples folder are recorded data, never roots of the checkout.
+    let sample_prefix = format!("{SAMPLES}/");
+    let roots = metadata_roots(&view).map_err(Error::Detect)?;
+    for manifest in roots
+        .into_iter()
+        .filter(|manifest| !manifest.as_str().starts_with(&sample_prefix))
+    {
         let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
             *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
         });

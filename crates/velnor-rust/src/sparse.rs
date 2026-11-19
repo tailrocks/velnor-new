@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
-use velnor_model::{CheckoutScope, RepoFacts, RepoPath, RustRoot, Unread};
+use velnor_model::{CheckoutScope, PathGlob, RepoFacts, RepoPath, RustRoot, Unread};
 
 const TOP_FILES: [&str; 12] = [
     "Cargo.toml",
@@ -23,8 +23,14 @@ const TOP_DIRECTORIES: [&str; 3] = [".cargo", ".config", ".velnor"];
 const EVERY_MANIFEST: &str = "**/Cargo.toml";
 
 pub(crate) fn paths(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {
-    if facts.config.checkout == CheckoutScope::Full
-        || roots.is_empty()
+    if facts.config.checkout == CheckoutScope::Full {
+        return None;
+    }
+    listing(facts, roots)
+}
+
+fn listing(facts: &RepoFacts, roots: &[RustRoot]) -> Option<Vec<String>> {
+    if roots.is_empty()
         || !facts.config.test_setup.is_empty()
         || facts.compile_inputs.contains_key(&None)
     {
@@ -142,4 +148,28 @@ fn directory(manifest: &RepoPath) -> Option<String> {
         Some("") => None,
         Some(parent) => Some(format!("/{parent}")),
     }
+}
+
+#[must_use]
+pub fn bytes_outside_lanes(facts: &RepoFacts, sizes: &BTreeMap<RepoPath, u64>) -> Option<u64> {
+    let globs = listing(facts, &facts.rust_roots)?
+        .iter()
+        .map(|pattern| listed_glob(pattern))
+        .collect::<Option<Vec<PathGlob>>>()?;
+    Some(
+        sizes
+            .iter()
+            .filter(|(path, _)| !globs.iter().any(|glob| glob.matches(path)))
+            .map(|(_, size)| size)
+            .sum(),
+    )
+}
+
+fn listed_glob(pattern: &str) -> Option<PathGlob> {
+    let mut text = String::with_capacity(pattern.len());
+    let mut chars = pattern.trim_start_matches('/').chars();
+    while let Some(c) = chars.next() {
+        text.push(if c == '\\' { chars.next()? } else { c });
+    }
+    PathGlob::new(text.trim_end_matches('/')).ok()
 }

@@ -115,6 +115,7 @@ pub(super) fn run_report(args: &ReportArgs) -> Result<String, CiError> {
             .push(format!("Download provenance unavailable: {error}"));
     }
     activity_metrics(&mut metrics, &log_bytes);
+    super::report_sparse::collect_hints(&mut metrics, &log_bytes);
     metrics.violations = waste(&metrics);
     let summary = metrics.summary();
     fs::write(

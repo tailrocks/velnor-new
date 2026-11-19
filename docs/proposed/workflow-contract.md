@@ -20,8 +20,7 @@ versus Nextest independently from explicit repository evidence; it does not impo
 The V1 workspace contains eight purpose-specific crates under `crates/`: `velnor-actions-contract`,
 `velnor-actions-rust`, `velnor-actions-tofu`, `velnor-actions-mise`, `velnor-actions-actionlint`,
 `velnor-actions-workflow-renderer`, `velnor-actions-orchestrator`, and `velnor-actions-cli`, plus repository
-maintenance crates `velnor-actions-freshness` and `velnor-archive-guard`. Runner support lives in the nested
-`crates/velnor-runner-*` workspace. Generic package names such as `velnor-model`, `velnor-core`, `velnor-rust`,
+maintenance crates `velnor-actions-freshness` and `velnor-archive-guard`. Runner support lives in the `crates/velnor-runner-*` crates of the root workspace. Generic package names such as `velnor-model`, `velnor-core`, `velnor-rust`,
 `velnor-util`, and `velnor-common` are forbidden.
 
 ```text

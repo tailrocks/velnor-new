@@ -16,12 +16,14 @@ pub enum JobCondition {
     ScheduleOrDispatch,
     ScheduleOrPushOrDispatch,
     DefaultBranchPush,
+    MergeGroupNotPassed,
 }
 
 impl JobCondition {
     pub fn parse(text: &str) -> Result<Self, String> {
         match text {
             "policy" => Ok(Self::Policy),
+            "not-merge-group-passed" => Ok(Self::MergeGroupNotPassed),
             "schedule" => Ok(Self::Schedule),
             "schedule-or-dispatch" => Ok(Self::ScheduleOrDispatch),
             "schedule-or-push-or-dispatch" => Ok(Self::ScheduleOrPushOrDispatch),
@@ -54,6 +56,7 @@ impl fmt::Display for JobCondition {
             Self::ScheduleOrPushOrDispatch => f.write_str("schedule-or-push-or-dispatch"),
             Self::ScheduleOrPush => f.write_str("schedule-or-push"),
             Self::DefaultBranchPush => f.write_str("default-branch-push"),
+            Self::MergeGroupNotPassed => f.write_str("not-merge-group-passed"),
         }
     }
 }

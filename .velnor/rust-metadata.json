@@ -246,7 +246,7 @@
         },
         {
           "name": "velnor-ci",
-          "version": "0.1.101",
+          "version": "0.1.102",
           "manifest": "crates/velnor-ci/Cargo.toml",
           "dependencies": [
             {
@@ -408,7 +408,7 @@
         },
         {
           "name": "velnor-gen",
-          "version": "0.1.101",
+          "version": "0.1.102",
           "manifest": "crates/velnor-gen/Cargo.toml",
           "dependencies": [
             {
@@ -1903,19 +1903,9 @@
               "kinds": [
                 "lib"
               ],
-              "tests": false,
-              "doctest": false,
-              "source": "crates/velnor-runner-qualification/src/lib.rs",
-              "requires_features": false
-            },
-            {
-              "name": "log_frames",
-              "kinds": [
-                "test"
-              ],
               "tests": true,
               "doctest": false,
-              "source": "crates/velnor-runner-qualification/tests/log_frames.rs",
+              "source": "crates/velnor-runner-qualification/src/lib.rs",
               "requires_features": false
             },
             {
@@ -1957,8 +1947,8 @@
     "Cargo.toml": "a5ac4db6031ede31c5bef0717860dc7f7d8fc9700030f61c679e9fb30a0bf9c3",
     "crates/velnor-archive-guard/Cargo.toml": "356ce922bab3fde3d252c3ce4c1df930585520a280fb8c51ba0641b8bab5d67a",
     "crates/velnor-cache-rules/Cargo.toml": "b1f91a7da1743297b500893e7ce85fb1cfb03f2f854c757beabba023089930e2",
-    "crates/velnor-ci/Cargo.toml": "826ceed26b4d6c8a7161c465b48d0937c6cffae9313b20556404042be5de7a57",
-    "crates/velnor-gen/Cargo.toml": "4b5bce090ef8c5cef7d0bde2b272db3ec0697cf43098218ee58c04a8a79fd1df",
+    "crates/velnor-ci/Cargo.toml": "ee3d87824489630fbd65606be59a3a831f10db31d09a76a4f2998facb3a583d6",
+    "crates/velnor-gen/Cargo.toml": "b058fae41d08065274e7fb6bf0e5d394450dc2118e2e648bb4cbc297bf5be9e4",
     "crates/velnor-local/Cargo.toml": "135ee0d6c76460e5f6abde1b52a4020cec8070d6f484fde78f3efe1026a6dda1",
     "crates/velnor-model/Cargo.toml": "81beeea9d092277193e6261630bac58c9e1cf354c97983761fdc74776a3486ef",
     "crates/velnor-release/Cargo.toml": "dca29d0f14443af5811f5454770fce6193056a6e8e3c0c72ae1729399b176459",
@@ -1970,9 +1960,9 @@
     "crates/velnor-runner-github/Cargo.toml": "2554a74db1c7c02032fb7ec7fad8c8ec56534affaf7a873516ebf4f413ea8251",
     "crates/velnor-runner-host/Cargo.toml": "7cbfcea88d7426bbfe204a53d6ac4ab09287d9524e0a7ef06ce318f70863767e",
     "crates/velnor-runner-image-manifest/Cargo.toml": "88138fa1bdeb8d4db2fbcf5f126cfb43aa182904d1e40ae8a09e848999d6da04",
-    "crates/velnor-runner-qualification/Cargo.toml": "ceefa102f9e966829b637c466f4a22b411b377e813070808ec2e84e878f5f2f3",
+    "crates/velnor-runner-qualification/Cargo.toml": "ec7d6d10f70bd284156c4f5849d6b3ca6c9fe90eb97f0ac93d79c9d9663ad731",
     "crates/velnor-rust/Cargo.toml": "5e8773ce8e9f74dbf90e98642945018ac85b8eb70dd90d2253be000ad923b3b1",
     "crates/velnor-workflows/Cargo.toml": "26ef029ca472eafa3858636f2fdf6cf1d2643b0132ba22313a3c9a5e79a8050f"
   },
-  "layout": "3da07944745aff682012b55c358c3fe5949cb246ecfeb5950bc6e599b9cec844"
+  "layout": "9e624710886adfbc4d436c33a901fc359dd54df661f5b7915f0969139de03850"
 }
