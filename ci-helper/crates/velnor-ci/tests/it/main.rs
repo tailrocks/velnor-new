@@ -68,10 +68,7 @@ mod prepare_components;
 mod prepare_configs;
 mod prepare_inputs;
 mod prepare_install;
-<<<<<<< HEAD
 mod qualification_compare;
-||||||| 75f8119299
-=======
 mod prepare_lock_key;
 mod preview_admit;
 mod preview_admit_deadline;
@@ -89,7 +86,6 @@ mod preview_sealed;
 mod preview_world;
 mod private_check;
 mod private_queue;
->>>>>>> origin/main
 mod release_branch_prefix;
 mod release_cargo_discovery;
 mod release_check_config;
