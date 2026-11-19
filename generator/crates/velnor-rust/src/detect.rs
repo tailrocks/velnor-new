@@ -147,16 +147,6 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
-    if config.helper.is_some()
-        && !helper
-            .as_ref()
-            .is_some_and(|release| release.version().at_least((0, 1, 81)))
-    {
-        return Err(DetectError::invalid(
-            &LOCK_PATH,
-            Reason::HelperSourceRelease,
-        ));
-    }
     refuse_locked_credentials(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let deny_configs = deny_configs(view, &rust_roots);

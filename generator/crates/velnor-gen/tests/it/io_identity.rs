@@ -29,7 +29,7 @@ fn checkout_with(path: &Path, config: &str) -> TestResult {
     fs::write(path.join(".velnor/rust-ci.toml"), config)?;
     fs::write(
         path.join(".velnor/rust-ci.lock"),
-        crate::release_fixture::LOCK.replace("0.1.79", "0.1.81"),
+        crate::release_fixture::LOCK,
     )?;
     let sample = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/full-run-weekly/view");
     fs::copy(sample.join("mise.toml"), path.join("mise.toml"))?;

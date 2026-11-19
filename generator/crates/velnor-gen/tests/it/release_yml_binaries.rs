@@ -84,7 +84,7 @@ fn release_yml_has_one_build_job_per_binary_and_platform_then_sums_and_publish()
     assert!(
         jobs(&without)?
             .iter()
-            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag"))
+            .all(|(id, _)| matches!(*id, "gate" | "release-pr" | "tag" | "finalize"))
     );
     Ok(())
 }
@@ -182,7 +182,7 @@ fn release_yml_build_packs_the_named_bin_and_uploads_exactly_that_file() -> Test
     assert_eq!(
         runs(build),
         [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add aarch64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package app --bin rg --target aarch64-unknown-linux-musl --target-dir target",
@@ -216,7 +216,7 @@ fn release_yml_builds_a_root_package_from_its_own_manifest_and_target_directory(
     assert_eq!(
         runs(build),
         [
-            "test \"$CHECKED_OUT\" = \"$COMMIT\"",
+            "test -n \"$COMMIT\" -a \"$CHECKED_OUT\" = \"$COMMIT\"",
             "sudo apt-get install --yes musl-tools",
             "rustup target add x86_64-unknown-linux-musl",
             "cargo build --release --locked --manifest-path Cargo.toml --package tools --bin tools --target x86_64-unknown-linux-musl --target-dir target",
@@ -350,7 +350,10 @@ fn release_yml_publish_checks_out_nothing_runs_one_command_and_holds_only_conten
 fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> TestResult {
     let (_, tree) = two_binaries()?;
     let outputs = job(&tree, "tag")?.get("outputs").ok_or("no outputs")?;
-    assert_eq!(outputs.keys(), ["app", "tools"]);
+    assert_eq!(
+        outputs.keys(),
+        ["app", "tools", "app_commit", "tools_commit"]
+    );
     for package in ["app", "tools"] {
         assert_eq!(
             outputs.get(package).and_then(Node::text),
@@ -358,7 +361,10 @@ fn release_yml_tag_exports_the_released_tag_of_each_binary_package_only() -> Tes
         );
     }
     let (_, without) = two_roots()?;
-    assert!(job(&without, "tag")?.get("outputs").is_none());
+    assert_eq!(
+        job(&without, "tag")?.get("outputs").map(Node::keys),
+        Some(vec!["app", "tools"])
+    );
     Ok(())
 }
 

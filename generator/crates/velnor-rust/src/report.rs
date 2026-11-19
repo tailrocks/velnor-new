@@ -10,13 +10,6 @@ use velnor_model::{
 };
 
 fn attach(facts: &RepoFacts, jobs: &mut [Job], maintenance: Option<&Job>) -> Option<Job> {
-    let released = facts
-        .helper
-        .as_ref()
-        .is_some_and(|helper| helper.version().at_least((0, 1, 81)));
-    if !released {
-        return None;
-    }
     let nextest_artifacts = crate::mise::nextest_tool(&facts.tools)
         .and_then(|name| facts.tools.tools.get(name))
         .is_some_and(|pin| {

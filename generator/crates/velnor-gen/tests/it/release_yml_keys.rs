@@ -26,7 +26,10 @@ fn a_binary_package_named_like_a_yaml_scalar_gets_a_quoted_output_key() -> TestR
         );
         assert_eq!(
             job(&tree, "tag")?.get("outputs").map(Node::keys),
-            Some(vec![format!("'{name}'").as_str()]),
+            Some(vec![
+                format!("'{name}'").as_str(),
+                format!("{name}_commit").as_str()
+            ]),
             "{name}"
         );
     }

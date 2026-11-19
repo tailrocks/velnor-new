@@ -10,9 +10,8 @@ use crate::golden::{load, samples};
 use crate::pipeline::{HELPER_LOCK, view, workflow};
 
 fn released(version: &str, roots: &[&str]) -> Result<String, Box<dyn std::error::Error>> {
-    let config = (version == "0.1.80").then_some(b"full_run = \"off\"\n".as_slice());
-    let mut view = view(roots, config)?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", version, 1);
+    let mut view = view(roots, None)?;
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.81", version, 1);
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
     workflow(&view)
@@ -67,21 +66,8 @@ fn a_helper_that_has_gate_renders_a_verified_gate_without_a_checkout() -> TestRe
 }
 
 #[test]
-fn a_helper_without_gate_keeps_the_old_verdict_step() -> TestResult {
-    let text = released("0.1.80", &["Cargo.toml", "lab/Cargo.toml"])?;
-    let job = required(&text)?;
-    assert!(job.contains(
-        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
-    ));
-    assert!(job.contains("Fail when a Rust job failed or was cancelled"));
-    assert!(!job.contains("velnor-ci gate"));
-    assert!(!text.contains("_tests"));
-    Ok(())
-}
-
-#[test]
 fn the_required_job_cannot_be_skipped_when_the_run_is_cancelled() -> TestResult {
-    for version in ["0.1.80", "0.1.81"] {
+    for version in ["0.1.81"] {
         let text = released(version, &["Cargo.toml", "lab/Cargo.toml"])?;
         let job = required(&text)?;
         let condition = job
@@ -243,7 +229,7 @@ fn an_oversized_main_workflow_is_rejected_before_returning_generated_files() -> 
 
 fn many_members(count: usize) -> Result<velnor_model::RepoView, Box<dyn std::error::Error>> {
     let mut view = view(&["Cargo.toml", "lab/Cargo.toml"], None)?;
-    let lock = String::from_utf8(HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.81", 1);
+    let lock = String::from_utf8(HELPER_LOCK.to_vec())?;
     view.files
         .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
     let metadata = view

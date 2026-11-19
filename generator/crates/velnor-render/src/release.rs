@@ -12,9 +12,8 @@ use crate::release_family::family_jobs;
 use crate::release_finalize::{finalize_job, without_binary};
 use crate::release_outputs::{commit_outputs, output_collisions};
 use crate::release_steps::{
-    APP_TOKEN_OUTPUT, TAGGED_COMMIT_HELPER, app_token, checkout, expression, install_release_plz,
-    label, permissions, refuse_commands, release_plz_arguments, release_plz_step, shell_word,
-    variables,
+    APP_TOKEN_OUTPUT, app_token, checkout, expression, install_release_plz, label, permissions,
+    refuse_commands, release_plz_arguments, release_plz_step, shell_word, variables,
 };
 use crate::rules::{
     MAX_WORKFLOW_BYTES, RenderedConcurrency, RenderedJob, RenderedStep, RenderedWorkflow, Rule,
@@ -45,7 +44,7 @@ pub fn render_release(
     branch: &str,
 ) -> Result<BTreeMap<RepoPath, String>, Vec<RuleViolation>> {
     let tag_job = tag(plan, helper);
-    let collisions = output_collisions(plan, helper, &tag_job.id);
+    let collisions = output_collisions(plan, &tag_job.id);
     if !collisions.is_empty() {
         return Err(collisions);
     }
@@ -189,7 +188,7 @@ fn release_pr(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
     steps.push(on_the_default_branch());
-    steps.push(refuse_commands(&plan.roots, helper.version(), false));
+    steps.push(refuse_commands(&plan.roots, false));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "write"),
@@ -230,8 +229,8 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     steps.push(install_helper(helper));
     steps.push(checkout(VERIFIED_COMMIT, 0));
     steps.push(newest_check());
-    steps.push(refuse_commands(&plan.roots, helper.version(), true));
-    steps.extend(source_preflight(plan, helper));
+    steps.push(refuse_commands(&plan.roots, true));
+    steps.push(source_preflight(plan));
     steps.push(app_token(&[
         ("contents", "write"),
         ("pull-requests", "read"),
@@ -248,12 +247,9 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             ),
         )
     }));
-    steps.push(record(helper, &files));
+    steps.push(record(&files));
     only_while_newest(&mut steps);
-    let mut scopes = vec![("contents", "read")];
-    if helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        scopes.push(("pull-requests", "read"));
-    }
+    let mut scopes = vec![("contents", "read"), ("pull-requests", "read")];
     if plan.roots.iter().any(|root| root.publishes_to_crates_io) {
         scopes.push(("id-token", "write"));
     }
@@ -267,12 +263,12 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
             .tagged_binaries()
             .iter()
             .map(|binary| binary.package.clone())
-            .chain(without_binary(plan, helper))
+            .chain(without_binary(plan))
             .map(|package| {
                 let output = format!("${{{{ steps.record.outputs.{package} }}}}");
                 (package, output)
             })
-            .chain(commit_outputs(plan, helper))
+            .chain(commit_outputs(plan))
             .collect(),
         needs: [String::from("gate")]
             .into_iter()
@@ -287,17 +283,14 @@ fn tag(plan: &ReleasePlan, helper: &HelperRelease) -> RenderedJob {
     }
 }
 
-fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<RenderedStep> {
-    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        return None;
-    }
+fn source_preflight(plan: &ReleasePlan) -> RenderedStep {
     let prefixes = plan
         .roots
         .iter()
         .map(|root| format!("--branch-prefix={}", shell_word(&root.pr_branch_prefix)))
         .collect::<Vec<_>>()
         .join(" ");
-    Some(RenderedStep {
+    RenderedStep {
         name: "Check that release-plz would tag the verified commit".to_owned(),
         env: variables(&[
             ("GITHUB_TOKEN", "${{ github.token }}"),
@@ -308,19 +301,11 @@ fn source_preflight(plan: &ReleasePlan, helper: &HelperRelease) -> Option<Render
             "velnor-ci release preflight --repo=\"$REPOSITORY\" --verified-commit=\"$COMMIT\" {prefixes}"
         )),
         ..RenderedStep::default()
-    })
+    }
 }
 
-fn record(helper: &HelperRelease, files: &[String]) -> RenderedStep {
+fn record(files: &[String]) -> RenderedStep {
     let files = files.join(" ");
-    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        return RenderedStep {
-            id: Some("record".to_owned()),
-            name: "Record the released packages".to_owned(),
-            run: Some(format!("velnor-ci release record {files}")),
-            ..RenderedStep::default()
-        };
-    }
     RenderedStep {
         id: Some("record".to_owned()),
         name: "Record the released packages and the commits their tags are on".to_owned(),

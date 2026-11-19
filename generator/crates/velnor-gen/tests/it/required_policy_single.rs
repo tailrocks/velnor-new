@@ -18,9 +18,7 @@ fn rendered() -> Result<String, Box<dyn std::error::Error>> {
         ("mise.toml", MISE.as_bytes().to_vec()),
         (
             ".velnor/rust-ci.lock",
-            String::from_utf8(HELPER_LOCK.to_vec())?
-                .replacen("0.1.79", "0.1.81", 1)
-                .into_bytes(),
+            String::from_utf8(HELPER_LOCK.to_vec())?.into_bytes(),
         ),
     ] {
         let path = RepoPath::new(path)?;

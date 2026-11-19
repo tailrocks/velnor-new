@@ -270,20 +270,3 @@ fn jactionlint_without_a_pinned_shellcheck_turns_shellcheck_off() -> TestResult 
     );
     Ok(())
 }
-
-#[test]
-fn a_helper_without_the_gate_still_makes_the_required_job_wait_for_every_lint_job() -> TestResult {
-    let mut repo = repo(&format!("full_run = 'off'\n{LINT}"))?;
-    let lock =
-        String::from_utf8(crate::pipeline::HELPER_LOCK.to_vec())?.replacen("0.1.79", "0.1.80", 1);
-    repo.files
-        .insert(RepoPath::new(".velnor/rust-ci.lock")?, lock.into_bytes());
-    let text = workflow(&repo)?;
-    let needs = needs_of(&text)?;
-    for id in IDS {
-        assert!(needs.contains(&id.to_owned()), "{id}: {needs:?}");
-    }
-    assert!(text.contains("Fail when a Rust job failed or was cancelled"));
-    assert!(!text.contains("GATE_SPEC"));
-    Ok(())
-}

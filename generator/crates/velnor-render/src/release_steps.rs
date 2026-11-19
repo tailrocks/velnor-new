@@ -1,15 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::{HelperVersion, RELEASE_PLZ_FILE};
+use velnor_model::RELEASE_PLZ_FILE;
 use velnor_release::{ReleasePlan, RootPlan};
 
 use crate::rules::{APP_TOKEN_ACTION, RenderedStep, Value};
 use crate::steps::{CHECKOUT, MISE, MISE_VERSION};
 
-pub(crate) const TAG_PATTERN_HELPER: (u64, u64, u64) = (0, 1, 80);
-pub(crate) const RELEASED_VERSIONS_HELPER: (u64, u64, u64) = (0, 1, 81);
-pub(crate) const TAGGED_COMMIT_HELPER: (u64, u64, u64) = (0, 1, 81);
 pub(crate) const COMMIT_OUTPUT_SUFFIX: &str = "_commit";
 pub(crate) const APP_TOKEN_COMMIT: &str = "f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc";
 pub(crate) const APP_TOKEN_VERSION: &str = "v3.4.0";
@@ -143,19 +140,13 @@ pub(crate) fn app_token(scopes: &[(&str, &str)]) -> RenderedStep {
     }
 }
 
-pub(crate) fn refuse_commands(
-    roots: &[RootPlan],
-    helper: &HelperVersion,
-    tag_job: bool,
-) -> RenderedStep {
+pub(crate) fn refuse_commands(roots: &[RootPlan], tag_job: bool) -> RenderedStep {
     let files: Vec<String> = roots
         .iter()
         .map(|root| shell_word(&join(&root.root, RELEASE_PLZ_FILE)))
         .collect();
-    let binds_tags = helper.at_least(TAG_PATTERN_HELPER);
     let tags: Vec<String> = roots
         .iter()
-        .filter(|_| binds_tags)
         .flat_map(|root| {
             let file = join(&root.root, RELEASE_PLZ_FILE);
             root.packages
@@ -173,7 +164,7 @@ pub(crate) fn refuse_commands(
         .collect();
     let prefixes: Vec<String> = roots
         .iter()
-        .filter(|_| binds_tags && tag_job && helper.at_least(TAGGED_COMMIT_HELPER))
+        .filter(|_| tag_job)
         .map(|root| {
             format!(
                 "--branch-prefix {} {}",
@@ -182,28 +173,23 @@ pub(crate) fn refuse_commands(
             )
         })
         .collect();
-    let (name, env) = if binds_tags {
-        let mut env = variables(&[
-            ("GITHUB_TOKEN", "${{ github.token }}"),
-            ("REPOSITORY", "${{ github.repository }}"),
-        ]);
-        env.push((
-            "RUSTUP_TOOLCHAIN".to_owned(),
-            Value::Text(TOOLCHAIN.to_owned()),
-        ));
-        env.extend(
-            NO_PROGRAM_VARIABLES
-                .iter()
-                .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
-        );
-        let name = if prefixes.is_empty() {
-            "Refuse a release-plz config that runs commands, changes the tag patterns or names another registry"
-        } else {
-            "Refuse a release-plz config that runs commands, changes the tag patterns or the branch prefixes or names another registry"
-        };
-        (name, env)
+    let mut env = variables(&[
+        ("GITHUB_TOKEN", "${{ github.token }}"),
+        ("REPOSITORY", "${{ github.repository }}"),
+    ]);
+    env.push((
+        "RUSTUP_TOOLCHAIN".to_owned(),
+        Value::Text(TOOLCHAIN.to_owned()),
+    ));
+    env.extend(
+        NO_PROGRAM_VARIABLES
+            .iter()
+            .map(|(key, value)| ((*key).to_owned(), Value::Text((*value).to_owned()))),
+    );
+    let name = if prefixes.is_empty() {
+        "Refuse a release-plz config that runs commands, changes the tag patterns or names another registry"
     } else {
-        ("Refuse a release-plz config that runs commands", Vec::new())
+        "Refuse a release-plz config that runs commands, changes the tag patterns or the branch prefixes or names another registry"
     };
     RenderedStep {
         name: name.to_owned(),
@@ -215,11 +201,8 @@ pub(crate) fn refuse_commands(
             ))
             .chain(tags)
             .chain(prefixes)
-            .chain(binds_tags.then(|| "--repo=\"$REPOSITORY\" --manifests".to_owned()))
-            .chain(
-                (binds_tags && tag_job && helper.at_least(RELEASED_VERSIONS_HELPER))
-                    .then(|| "--released-versions".to_owned()),
-            )
+            .chain(["--repo=\"$REPOSITORY\" --manifests".to_owned()])
+            .chain(tag_job.then(|| "--released-versions".to_owned()))
             .collect::<Vec<_>>()
             .join(" "),
         ),

@@ -3,13 +3,12 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::HelperRelease;
 use velnor_release::ReleasePlan;
 
-use crate::release_steps::{COMMIT_OUTPUT_SUFFIX, TAGGED_COMMIT_HELPER};
+use crate::release_steps::COMMIT_OUTPUT_SUFFIX;
 use crate::rules::{Rule, RuleViolation};
 
-fn recorded_outputs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<String> {
+fn recorded_outputs(plan: &ReleasePlan) -> Vec<String> {
     let packages: BTreeSet<&String> = plan
         .roots
         .iter()
@@ -21,22 +20,15 @@ fn recorded_outputs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<String> {
         })
         .chain(plan.tagged_binaries().iter().map(|binary| &binary.package))
         .collect();
-    let commits = helper.version().at_least(TAGGED_COMMIT_HELPER);
     packages
         .into_iter()
-        .flat_map(|package| {
-            std::iter::once(package.clone()).chain(commits.then(|| commit_output(package)))
-        })
+        .flat_map(|package| [package.clone(), commit_output(package)])
         .collect()
 }
 
-pub(crate) fn output_collisions(
-    plan: &ReleasePlan,
-    helper: &HelperRelease,
-    job: &str,
-) -> Vec<RuleViolation> {
+pub(crate) fn output_collisions(plan: &ReleasePlan, job: &str) -> Vec<RuleViolation> {
     let mut seen = BTreeSet::new();
-    recorded_outputs(plan, helper)
+    recorded_outputs(plan)
         .into_iter()
         .filter(|name| !seen.insert(name.clone()))
         .map(|name| RuleViolation {
@@ -47,10 +39,7 @@ pub(crate) fn output_collisions(
         .collect()
 }
 
-pub(crate) fn commit_outputs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<(String, String)> {
-    if !helper.version().at_least(TAGGED_COMMIT_HELPER) {
-        return Vec::new();
-    }
+pub(crate) fn commit_outputs(plan: &ReleasePlan) -> Vec<(String, String)> {
     plan.tagged_binaries()
         .iter()
         .map(|binary| {

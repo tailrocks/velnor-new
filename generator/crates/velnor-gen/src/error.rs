@@ -9,7 +9,7 @@ use velnor_render::RuleViolation;
 use velnor_rust::{DetectError, MAX_SOURCE_ROOTS, MetadataFileError};
 use velnor_workflows::WorkflowsError;
 
-use crate::{COMPATIBLE_HELPER_SERIES, RELEASE_HELPER_MINIMUM};
+use crate::{COMPATIBLE_HELPER_SERIES, HELPER_MINIMUM};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenerateError {
@@ -20,11 +20,9 @@ pub enum GenerateError {
     NoReleaseConfig,
     ReleaseToolchainPath,
     HelperNotPinned,
-    ReleaseHelperTooOld(HelperVersion),
-    MirrorHelperTooOld(HelperVersion),
+    HelperTooOld(HelperVersion),
     PrivateSourcesHelperTooOld(HelperVersion),
     MbxStoreHelperTooOld(HelperVersion),
-    InputsBuildHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     TestGroupsHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
@@ -57,23 +55,18 @@ impl fmt::Display for GenerateError {
             Self::HelperNotPinned => f.write_str(
                 "velnor-ci is not pinned: every generated job runs it, so pin a release with `velnor-gen pin-helper <version>`",
             ),
-            Self::ReleaseHelperTooOld(version) => write!(
+            Self::HelperTooOld(version) => write!(
                 f,
-                "velnor-ci {version} cannot check the release on the released commit, because it does not recheck the live tag ruleset or the manifests; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
-                RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2,
-                RELEASE_HELPER_MINIMUM.0, RELEASE_HELPER_MINIMUM.1, RELEASE_HELPER_MINIMUM.2
+                "velnor-ci {version} is older than this generator supports; pin velnor-ci {}.{}.{} or later with `velnor-gen pin-helper {}.{}.{}`",
+                HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2,
+                HELPER_MINIMUM.0, HELPER_MINIMUM.1, HELPER_MINIMUM.2
             ),
             Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.85 or later"),
             Self::TooManySourceRoots(roots) => write!(
                 f,
                 "the repository has {roots} Cargo roots, and the shared Sources cache makes every saving lane fetch every root, which keeps the generated workflow within its size limit only up to {MAX_SOURCE_ROOTS} roots; reduce the Cargo roots to {MAX_SOURCE_ROOTS} or fewer, or pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`, whose `velnor-ci sources fetch --roots` replaces the per-root steps (tailrocks/velnor-new#1362)"
             ),
-            Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
             Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"),
-            Self::InputsBuildHelperTooOld(version) => write!(
-                f,
-                "velnor-ci {version} cannot record pre-build directory inventories for inputs audit; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"
-            ),
             Self::PrCiHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} does not know the pr_ci key of .velnor/rust-ci.toml; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"

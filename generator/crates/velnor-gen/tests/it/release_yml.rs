@@ -111,6 +111,9 @@ fn release_yml_runs_every_job_after_the_gate_only_when_it_is_ready_on_a_green_pu
             if *id == "release-pr" {
                 want.insert(NEWEST.to_owned());
             }
+            if *id == "finalize" {
+                continue;
+            }
             if !matches!(*id, "release-pr" | "tag") {
                 let package = package_of(id, &packages)?;
                 want.insert(format!("needs.tag.outputs.{package} != ''"));
