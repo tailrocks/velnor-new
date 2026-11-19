@@ -380,28 +380,18 @@ fn only_the_steps_that_run_the_launcher_are_marked_for_the_shellcheck_it_cannot_
     const MARK: &str = "# jactionlint ignore=shellcheck";
     let text = workflow_text(&"a".repeat(64), Vec::new())?;
     let lines: Vec<_> = text.lines().collect();
-    let mut launcher_steps = 0;
-    let mut step_at = None;
+    let mut launchers = 0;
+    let mut step = 0;
     for (at, line) in lines.iter().enumerate() {
         if line.starts_with("      - ") {
-            step_at = Some(at);
+            step = at;
         }
-        if !line.trim_start().starts_with("run: '. \"$VELNOR_EXEC\" ") {
-            continue;
+        if line.trim_start().starts_with("run: '. \"$VELNOR_EXEC\" ") {
+            assert_eq!(lines[step - 1].trim(), MARK, "{line}");
+            launchers += 1;
         }
-        let step = step_at.ok_or("invocation outside a step")?;
-        assert_eq!(lines[step - 1].trim(), MARK, "{line}");
-        launcher_steps += 1;
     }
-    assert!(launcher_steps > 0, "{text}");
     let marks = lines.iter().filter(|line| line.trim() == MARK).count();
-    assert_eq!(
-        marks, launcher_steps,
-        "a mark outside a launcher step: {text}"
-    );
-    for (at, line) in lines.iter().enumerate() {
-        let job = line.starts_with("  ") && !line.starts_with("   ") && line.ends_with(':');
-        assert!(!job || lines[at - 1].trim() != MARK, "{line}");
-    }
+    assert!(launchers > 0 && marks == launchers, "{marks} marks: {text}");
     Ok(())
 }

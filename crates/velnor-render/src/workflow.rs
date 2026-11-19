@@ -14,7 +14,7 @@ use velnor_model::{
 /// True for every event except a pull request from a fork.
 pub(crate) const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
 
-/// Where the generated workflow tells jactionlint that ShellCheck cannot follow
+/// Where the generated workflow tells jactionlint that `ShellCheck` cannot follow
 /// the launcher: on each launcher step, or, when that would push the file past
 /// the size GitHub accepts, once on each job that has one.
 #[derive(Clone, Copy, PartialEq, Eq)]
