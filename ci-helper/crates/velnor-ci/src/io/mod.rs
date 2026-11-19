@@ -46,6 +46,7 @@ mod qualification;
 mod recording;
 mod registry;
 mod release;
+mod release_align;
 mod report;
 mod report_checkout;
 mod report_inputs;
@@ -233,6 +234,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
         Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
+        Command::Release(ReleaseCommand::Align(args)) => release_align::run_align(&args),
         Command::Plan(args) => plan::run_plan(&args),
         Command::MergeGroupPassed => Ok(merge_group::run()),
         Command::WriteRequest(args) => write_request::run(&args),

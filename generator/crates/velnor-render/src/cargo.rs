@@ -13,7 +13,7 @@ use crate::steps::{RUN, RUN_DOCTESTS, TEST_STEP_ID};
 
 const FINGERPRINT_LOG: &str =
     "cargo::compiler::fingerprint=info,cargo::core::compiler::fingerprint=info";
-const DOC_RUN: &str =
+pub(crate) const DOC_RUN: &str =
     "cargo doc --workspace --no-deps --locked --config 'build.rustdocflags=[\"-D\",\"warnings\"]'";
 
 #[derive(Clone, Copy)]
@@ -111,6 +111,9 @@ fn cargo_command(
     match command {
         CargoCommand::FmtCheck => ("Format".into(), "cargo-fmt --all --check".into(), vec![]),
         CargoCommand::Clippy { extra } => clippy(cargo, extra),
+        CargoCommand::ClippyFeatures { features } => {
+            crate::cargo_features::clippy_features(cargo, features)
+        }
         CargoCommand::NextestBuild => nextest_build(nextest),
         CargoCommand::NextestRun { filter, ci_profile } => nextest_run(
             &format!("--workspace --locked{nextest}"),
@@ -166,6 +169,9 @@ fn cargo_command(
             format!("cargo test --doc --workspace --locked{cargo}"),
             vec![],
         ),
+        CargoCommand::DocFeatures { features } => {
+            crate::cargo_features::doc_features(cargo, features)
+        }
         CargoCommand::Doc => ("Documentation".into(), format!("{DOC_RUN}{cargo}"), vec![]),
         CargoCommand::CheckAlone { package } => (
             format!("Check {package} alone"),
@@ -203,7 +209,7 @@ fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
     }
 }
 
-fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
+pub(crate) fn clippy(cargo: &str, extra: &[String]) -> (String, String, Vec<(String, Value)>) {
     (
         LINT_STEP.into(),
         [format!(
