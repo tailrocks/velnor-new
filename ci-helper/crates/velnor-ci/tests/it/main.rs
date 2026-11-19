@@ -5,6 +5,7 @@ mod audit;
 mod base_expiry;
 mod bench_compare;
 mod cache;
+mod cache_budget;
 mod cache_flow;
 mod cache_retention_flow;
 
@@ -41,6 +42,7 @@ mod io_restore;
 mod io_restore_symlinks;
 mod io_stderr;
 mod logscan;
+mod mbx_store;
 mod plan;
 mod plan_api;
 mod plan_git;

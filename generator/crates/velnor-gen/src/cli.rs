@@ -35,7 +35,9 @@ pub enum Command {
         #[arg(help = "The release version, MAJOR.MINOR.PATCH")]
         version: String,
     },
-    #[command(about = "Exit 1 unless the tag is rust-ci-v followed by the version of this program")]
+    #[command(
+        about = "Exit 1 unless the tag is rust-ci-v or tools-v followed by the version of this program"
+    )]
     CheckTag {
         #[arg(help = "The release tag")]
         tag: String,

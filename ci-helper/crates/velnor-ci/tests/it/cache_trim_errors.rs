@@ -4,32 +4,45 @@
 use std::collections::BTreeMap;
 use std::process::Command;
 
-use crate::io::{Repo, serve};
+use crate::io::{Repo, serve_with_status};
 
 #[test]
 fn trim_list_errors_fail_the_job() {
-    check_trim(None, false);
+    check_trim(&[], false);
 }
 
 #[test]
 fn trim_delete_errors_fail_the_job() {
     check_trim(
-        Some(r#"{"actions_caches":[{"id":1,"key":"base-1","created_at":"2026-11-17T00:00:00Z"}]}"#),
+        &[
+            (
+                LISTING,
+                200,
+                r#"{"total_count":1,"actions_caches":[{"id":1,"key":"base-1","created_at":"2026-11-17T00:00:00Z"}]}"#,
+            ),
+            ("/repos/owner/name/actions/caches/1", 500, ""),
+        ],
         false,
     );
 }
 
 #[test]
 fn trim_with_no_stale_entries_succeeds() {
-    check_trim(Some(r#"{"actions_caches":[]}"#), true);
+    check_trim(
+        &[(LISTING, 200, r#"{"total_count":0,"actions_caches":[]}"#)],
+        true,
+    );
 }
 
-fn check_trim(listing: Option<&str>, empty: bool) {
-    let responses = listing.map(|body| (
-            "/repos/owner/name/actions/caches?key=base-&ref=refs%2Fheads%2Fmain&per_page=100&page=1".to_owned(),
-            body.to_owned(),
-        )).into_iter().collect::<BTreeMap<_, _>>();
-    let api = serve(responses);
+const LISTING: &str =
+    "/repos/owner/name/actions/caches?key=base-&ref=refs%2Fheads%2Fmain&per_page=100&page=1";
+
+fn check_trim(responses: &[(&str, u16, &str)], empty: bool) {
+    let responses = responses
+        .iter()
+        .map(|(path, code, body)| ((*path).to_owned(), (*code, (*body).to_owned())))
+        .collect::<BTreeMap<_, _>>();
+    let api = serve_with_status(responses);
     let repo = Repo::new("trim-http-errors");
     let output = Command::new(env!("CARGO_BIN_EXE_velnor-ci"))
         .args(["cache", "trim", "--prefix", "base-", "--keep", "0"])
