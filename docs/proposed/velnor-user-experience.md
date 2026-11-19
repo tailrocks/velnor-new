@@ -255,7 +255,8 @@ anything, which checks are already done, running, or still needed.
 that matches a CI check (`cargo nextest run -p velnor-ci`, `cargo clippy …`) asks the ledger first,
 then runs on a warm cluster node in the `interactive` class and shows a trust tier; anything else
 runs on your Mac as before, as advice. Your Mac also runs a quick local pass in parallel to find
-reds early; its green never counts.
+reds early; its green is marked provisional and never counts. The `hk` pre-commit hooks call the same
+check names.
 
 ```console
 $ velnor verify

@@ -1114,6 +1114,18 @@ mostly a lookup. Decisions 1–24 and the gate's meaning are unchanged.
 | A21 dev traffic feeds graduation | Adopted (shadow pairs) | AN08 |
 | A07 arm64 lane | Owner question D26, default nothing built | 13 |
 
+### Group 37: agent-native answer by Claude Opus 5.5
+
+| Idea | Decision | v3 section; plan |
+|---|---|---|
+| A04 local races remote | Adopted: first red reported, local green provisional | 8.6; AN10 |
+| A10 ledger ask before editing (44 of 107 sessions) | Adopted inside `velnor resolve` | 8.6 |
+| A24 `hk` hooks through Velnor | Adopted via check names | 8.6; AN10 |
+| Time-separated witnesses | Adopted as a lab C2 arm (agent at t0, label at t1) | 10.3 |
+| A22 ejection prediction (Q6) | Lab, not an owner question: decision 10 allows speculation with numbers; dropped under 2% | AN11 |
+| A08 variant (c): Mac Docker as an arm64 slot | Rejected: the owner's premise makes Mac results advice; detection of amd64-only flakes would fall from 1−(1−p)² to p | — |
+| A13 Mac signer | Already §8.6: advisory namespace only | 8.6 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the

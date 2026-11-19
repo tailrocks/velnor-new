@@ -1018,7 +1018,9 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
 - **Where it runs.** Counting commands go to a warm node of the agent's site in the `interactive`
   class; per command class, a replay of 200 recorded commands sets the route (remote by default where
   its P50 is within 1 s of the Mac's: today's Mac nextest P50 is 7.2 s [M, agent transcripts]). The
-  Mac keeps a non-minting fast-red lane (incremental, changed tests first), shown as advice.
+  Mac keeps a non-minting fast-red lane (incremental, changed tests first) that races the remote
+  run: the first red is reported at once, and a local green is shown as provisional. The `hk`
+  pre-commit hooks call `velnor check <name>`, so their keys are the gate's.
 - **Trust tiers, shown to users:** T0 Mac native and T1 sealed Linux on a Mac, advice only (never a
   slot; a Mac key signs only in an advisory namespace); T2 a cluster candidate, node-signed, which may
   fill one witness slot; T3 trusted, on `main` after A1. The gate is unchanged: two T2-or-better
@@ -1030,8 +1032,9 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
   tree itself, never from the client. `velnor wait` long-polls the verdict and returns the failing
   test id, its signature and the last log lines.
 - **Ledger first.** `velnor resolve` (and the wrapper, automatically) asks the ledger before running:
-  a hit returns its record, in-flight work is joined, and the gate re-resolves everything under the
-  current epoch; a stale or unreachable ledger means run fresh. `verify` soaks new or changed test
+  a hit returns its record (44 of 107 agent sessions ran cargo on a tree before editing it [M, Opus
+  transcripts]), in-flight work is joined, and the gate re-resolves everything under the current
+  epoch; a stale or unreachable ledger means run fresh. `verify` soaks new or changed test
   ids 20 times under seeds and CPU pressure at batch priority; soak runs never fill a slot.
 - **The `interactive` class** sits between gate and PR work, with a per-identity budget (30 CPU-min
   an hour, then demoted to PR class), never touching the merge, gate or A1 reservations.
@@ -1069,7 +1072,7 @@ and the label then mostly finds the work done. The gate's meaning and decisions 
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 1238 agent-hours of building and 120 of review,
+(v2, decisions 1–24 and the rulings) sizes about 1252 agent-hours of building and 120 of review,
 about 4.3 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits, file conflicts and, for the speed claim, the benchmark arms (run one at a time) do. Phase 0
@@ -1123,7 +1126,7 @@ A missed milestone holds the next cohort until explained. Items are 2–8 agent-
 |---|---|---|---|
 | A. GitHub semantics | A lab repository with a ruleset, a merge queue and a test App: no status; App `pending`; App `success`, then one more push; the context from a user token and from `GITHUB_TOKEN`; a status only on the test-merge SHA; a required Actions job with `if: false`; a skipped caller whose inner job is required; a dispatched run; two PRs at one SHA; queue entries with no report, `failure` and `success`; labels changed with `GITHUB_TOKEN`, an App token and a user token; the state-machine cases of section 8.2 | The no-status, pending, foreign-source and skipped-caller cases block; App `success` merges until the next push; a queue entry lands only on `success`; the read-back shows the App context required on both subjects | Today's gate, hardened and bound to 15368; the App only observes |
 | B. Build matrix | One idle worker, three repetitions: B1 dependency `opt-level` 0 and 3 against assertions on and off, whole suite; B2 reflink against a read-only overlayfs lower layer with 1, 4 and 6 sandboxes, page cache per additional sandbox, bytes copied up per build (cargo's hard links copy up), the canaries of section 7.3, and digests against a cold build (a lower layer never replaces the full tree hash); B5 the narrowed step 3 over 300 diffs that add or remove a path plus planted cases (`foo/mod.rs` beside `foo.rs`, a new `tests/x.rs`, a file a build script globs or a proc macro lists, a new `clippy.toml`, `rustfmt.toml` or `.cargo/config.toml` below the root); B3 seeding, lockfile changes and the wait-or-fetch-or-cold crossover under load, by `mbx-cache`, file-delta sync, compressed layers and a signed chunk manifest of chunks ≥ 4 MiB; B4 incremental on and off over 300 replayed diffs and 20 planted failing edits | B2: every canary rebuilds and digests match; B5: every planted case rebuilds and every digest equals cold; B3: a transport beats a cold build on more than 10% of requests; B4: zero differences | Reflink; cold second witness; `CARGO_INCREMENTAL=0` for receipts; the `opt-level` override with checks on, its gain uncounted |
-| C. Shadow ledger | Beside production for 300 merges: C1 whole-tree and per-obligation hits of each merge group against the PR's records; C2 twins on two nodes against two runs 30 min apart, on 20 tests with seeded failure probabilities of 0.05–0.2 | C2: joint pass rates match (1−p)² | Groups derive their own vectors and execute every miss |
+| C. Shadow ledger | Beside production for 300 merges: C1 whole-tree and per-obligation hits of each merge group against the PR's records; C2 twins on two nodes against two runs 30 min apart, and an agent's run at t0 against the label's at t1, on 20 tests with seeded failure probabilities of 0.05–0.2 | C2: joint pass rates match (1−p)² | Groups derive their own vectors and execute every miss |
 | D. Docker class | The three Docker-needing binaries, 200 runs each, under a private privileged daemon, a rootless daemon and a microVM, on both backends | Equal pass, fail and skip sets; nothing one request leaves is visible to the next | A private privileged daemon per request, or refusal |
 
 ## 11. Proving the speed
