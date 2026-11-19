@@ -40,9 +40,9 @@ supported = ["ubuntu-26.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.2.6"
-sha = "f5be966e4a917d54244728e6a5fdcd1d93a35e6c"
-reviewed = "2026-11-03"
+version = "v5.2.9"
+sha = "236a21c3b91f5db6d4e174b348674a0f0caac06d"
+reviewed = "2026-11-19"
 
 [[actions]]
 name = "actions/checkout"

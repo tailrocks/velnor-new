@@ -78,7 +78,7 @@ jobs:
           persist-credentials: "false"
       - &s1
         name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           cache: "false"
           cache_save: "false"
@@ -351,7 +351,7 @@ jobs:
         id: v2
         uses: ./.github/actions/velnor-tools-prelude-u26 # zizmor: ignore[self-repository]
         with:
-          d: 924ced60a9ba5b2f4777ac8dd5715e422dcf8decb9abfd446b6beb9f992329ce-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
+          d: 15df22ffd5170c22a842d50947852036fd02d547b6bede370b68843d7ca86930-${{ env.VELNOR_TOOL_BUN }}-${{ env.VELNOR_TOOL_BUN_LOCK }}-${{ env.VELNOR_TOOL_JACTIONLINT }}-${{ env.VELNOR_TOOL_JACTIONLINT_LOCK }}-${{ env.VELNOR_TOOL_MR_BOXINGTON }}-${{ env.VELNOR_TOOL_MR_BOXINGTON_LOCK }}-${{ env.VELNOR_TOOL_NEXTEST }}-${{ env.VELNOR_TOOL_NEXTEST_LOCK }}-${{ env.VELNOR_TOOL_OPENTOFU }}-${{ env.VELNOR_TOOL_OPENTOFU_LOCK }}-${{ env.VELNOR_TOOL_RUST }}-${{ env.VELNOR_TOOL_RUST_LOCK }}-${{ env.VELNOR_TOOL_SHELLCHECK }}-${{ env.VELNOR_TOOL_SHELLCHECK_LOCK }}
       - &s17
         name: Restore Mise tools
         id: tools-restore

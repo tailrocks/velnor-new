@@ -132,8 +132,8 @@ Workflow to generate
     - state-seal-generator (9 steps)
     - state-seal-local (9 steps)
     - state-seal-root (9 steps)
-    - tools-producer-06f9acb0 (8 steps)
-    - tools-producer-c957c0bd (8 steps)
+    - tools-producer-8fb609c1 (8 steps)
+    - tools-producer-a9a62f35 (8 steps)
     - 29 Rust crate jobs
       Timeout: 45 minutes per crate job
       Obligations: Clippy -> build -> run tests -> doc build -> format check
@@ -315,7 +315,7 @@ Workflow to generate
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
     - asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
-    - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+    - jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
     - jdx/mr-boxington-action@88acf2bb50552c7c508cbac13e5f8c576b95b1de
   Ineligible: stack/rust/ci-helper/crates/velnor-ci/doctest/default has no test targets; no test command emitted
   Ineligible: stack/rust/crates/velnor-actions-actionlint/doctest/default has no test targets; no test command emitted

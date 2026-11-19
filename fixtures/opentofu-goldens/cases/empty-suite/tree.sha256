@@ -13,5 +13,5 @@
 - 21c1719ef4501fa94bca63a40d08f600b1079aed21b926f8780725987ae56140  ./.github/scripts/velnor-tools-cache-identity.sh
 - 5082eacfbb025c257a5b6ba0776e7aaa2eb3d91f1fd06a40ab3b24adf01a0096  ./.github/velnor/task-execution-manifest-v1.json
 - 6b206bf8744c7d72fe5a88b72590e52f0d92b72fed78be14738298cc6256c6a4  ./.github/workflows/cache-prune.yml
-- 21f983a22d5ff887f62b1b0c2a04f123744f9c4284146b012a067b66d2cfea75  ./.github/workflows/ci.yml
-- cb1bca434974786c4076c6e9fa58d5655c23c7b4a0cd8fb76fc7a9f95339b1ea  ./.github/workflows/state-seal.yml
+- b552d4a754eb13e363b2b30dffa08a3cd629cb02a384ffc2468de15f9fda8cc9  ./.github/workflows/ci.yml
+- 7fe40ab91e2cd7509a68a99dada6f571458f06cc6e3cb7896e74c568e60e2f7a  ./.github/workflows/state-seal.yml

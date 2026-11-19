@@ -69,7 +69,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -216,7 +216,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -394,7 +394,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627
@@ -535,7 +535,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: ead2414251e8f2909cc7564f8ab5fd1feea6962ed77d0177776d72e08ae747a0
@@ -615,7 +615,7 @@ jobs:
           persist-credentials: "false"
           ref: ${{ inputs.source_sha }}
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -734,7 +734,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -865,7 +865,7 @@ jobs:
       VELNOR_RELEASE_GH_VERSION: ${{ needs.candidate-manifest.outputs.gh_version }}
     steps:
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -997,7 +997,7 @@ jobs:
         shell: bash
         run: "set -eu\ntest \"$GITHUB_EVENT_NAME\" = push\ntest \"$GITHUB_REF\" = refs/heads/main\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\""
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -1108,7 +1108,7 @@ jobs:
           path: "${{ runner.temp }}/velnor/cargo/registry/index\n${{ runner.temp }}/velnor/cargo/registry/cache\n${{ runner.temp }}/velnor/cargo/git/db"
           restore-keys: ${{steps.cache-keys.outputs.sources_restore_keys}}
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 7129dbab31d698f9028db9374f7ba7987232b0426f837dcbce437130a61415f9
@@ -1188,7 +1188,7 @@ jobs:
         shell: bash
         run: "set -eu\ntest \"$GITHUB_EVENT_NAME\" = push\ntest \"$GITHUB_REF\" = refs/heads/main\ntest \"$GITHUB_WORKFLOW_SHA\" = \"$GITHUB_SHA\"\ntest \"$(git rev-parse HEAD)\" = \"$GITHUB_SHA\""
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627
@@ -1275,7 +1275,7 @@ jobs:
         shell: bash
         run: "set -eu\ncase \"$RUNNER_TEMP\" in /*) ;; *) exit 1 ;; esac\nmkdir -p \"$RUNNER_TEMP/velnor\"\nrm -rf -- \"$RUNNER_TEMP/velnor/cargo\"\nmkdir -m 700 \"$RUNNER_TEMP/velnor/cargo\""
       - name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           version: 2026.11.1
           sha256: 9ca1005930fed90e0f4c30d9b13fe4530fe88d0549a71349716a3aab9051c627
