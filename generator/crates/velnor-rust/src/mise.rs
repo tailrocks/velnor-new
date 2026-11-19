@@ -77,10 +77,11 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
     let unknown = parsed.keys().find(|key| {
         ![
             "tools",
-            "vars",
             "settings",
             "min_version",
             "tasks",
+            "task_templates",
+            "vars",
             "wrappers",
         ]
         .contains(&key.as_str())
@@ -95,28 +96,38 @@ fn validate_config(config: &RepoPath, bytes: &[u8]) -> Result<(), DetectError> {
         .and_then(|settings| settings.get("cargo"))
         .and_then(Value::as_table)
         .and_then(|cargo| cargo.keys().find(|key| key.as_str() != "binstall"));
+    let vars_directive = parsed
+        .get("vars")
+        .and_then(Value::as_table)
+        .and_then(|vars| vars.keys().find(|key| key.starts_with('_')));
     let postinstall = parsed
         .get("tools")
         .and_then(Value::as_table)
         .is_some_and(|tools| tools.values().any(runs_a_command));
-    let templates = parsed.iter().any(|(key, value)| {
-        if ["tools", "vars"].contains(&key.as_str()) {
-            runs_exec(value)
-        } else {
-            has_template(value)
-        }
-    });
+    let templates = parsed
+        .iter()
+        .filter(|(key, _)| !matches!(key.as_str(), "tasks" | "task_templates"))
+        .any(|(key, value)| {
+            if ["tools", "vars"].contains(&key.as_str()) {
+                runs_exec(value)
+            } else {
+                has_template(value)
+            }
+        });
     if let Some(name) = unknown
         .or(unknown_setting)
         .or(unknown_cargo_setting)
+        .or(vars_directive)
         .map(String::as_str)
         .or(postinstall.then_some("tools.postinstall"))
-        .or(templates.then_some("template"))
     {
         return Err(DetectError::invalid(
             config,
             Reason::MiseOverridesFlags(name.to_owned()),
         ));
+    }
+    if templates {
+        return Err(DetectError::invalid(config, Reason::MiseTemplate));
     }
     Ok(())
 }

@@ -117,6 +117,7 @@ pub(crate) fn package(
                     name: PackageName::new(*name)?,
                     kind: *kind,
                     platform: None,
+                    optional: false,
                     manifest: Some(path(manifest)?),
                     features: Vec::new(),
                     rename: None,

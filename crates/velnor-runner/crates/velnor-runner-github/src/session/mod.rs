@@ -16,7 +16,7 @@ pub(crate) use error::reject;
 pub(crate) use retry::{API_QUERY, bearer, execute, json_content, user_agent};
 
 pub use acknowledge::{Ack, AckScope, ack};
-pub use close::delete_session;
+pub use close::{SessionClose, delete_session};
 pub use config::{jit, jit_request};
 pub use error::SessionError;
 pub use jobs::acquire;

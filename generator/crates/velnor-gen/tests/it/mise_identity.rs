@@ -185,7 +185,7 @@ fn linux_aarch64_uses_arm_policy_tools_and_prebuilts() -> TestResult {
     assert!(!platform.matches("linux/x64"));
     assert!(
         crate::mise_platform::generate("linux/arm64", "linux-aarch64", true, true)?
-            .contains("cargo-deny check")
+            .contains("cargo-deny --config")
     );
     assert!(
         crate::mise_platform::generate("linux/x64", "linux-aarch64", true, true)

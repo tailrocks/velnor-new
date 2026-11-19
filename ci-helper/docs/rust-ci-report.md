@@ -33,7 +33,8 @@ deliberately when changing this contract.
   several crates, so the summary reports repository fetches and leaves their
   crate count unknown.
 - `downloaded` and `slowest_tests` are aggregate display fields. The latter is
-  capped at ten entries. `tests_run` is a display-only workflow value.
+  capped at ten entries, longest first, equal times in name order. Every
+  test job, including each test group job, reports its own list. `tests_run` is a display-only workflow value.
 - `first_cargo_seconds` measures job start to the first Cargo invocation, or
   is `null` when the API cannot establish the job start time.
 - `diagnostics` describe optional or incomplete telemetry. `verification_errors`

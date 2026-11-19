@@ -50,12 +50,12 @@ fn generator_policy_tools_follow_mise_os_and_architecture_filters() -> TestResul
     let unix = generate("unix", "ubuntu-latest", true, true);
     assert!(
         unix.as_ref()
-            .is_ok_and(|text| text.contains("cargo-deny check")),
+            .is_ok_and(|text| text.contains("cargo-deny --config")),
         "{unix:?}"
     );
     let wrong_arch = generate("linux/arm64", "ubuntu-latest", true, true);
     assert!(wrong_arch.is_err_and(|error| error.contains("cargo-deny is not pinned")));
-    assert!(generate("linux/arm64", "ubuntu-24.04-arm", true, true)?.contains("cargo-deny check"));
+    assert!(generate("linux/arm64", "ubuntu-24.04-arm", true, true)?.contains("cargo-deny --config"));
     Ok(())
 }
 
@@ -63,7 +63,7 @@ fn generator_policy_tools_follow_mise_os_and_architecture_filters() -> TestResul
 fn self_hosted_labels_preserve_os_filter_matching() -> TestResult {
     let runner = "self-hosted-linux-x64";
     let linux = generate("linux", runner, true, true)?;
-    assert!(linux.contains("cargo-deny check"));
+    assert!(linux.contains("cargo-deny --config"));
     assert!(
         generate("macos", runner, true, true)
             .is_err_and(|error| error.contains("cargo-deny is not pinned"))
@@ -165,7 +165,7 @@ fn macos_large_and_xlarge_use_their_distinct_runner_architectures() {
         let present = generate(own, runner, true, true);
         if !present
             .as_ref()
-            .is_ok_and(|text| text.contains("cargo-deny check"))
+            .is_ok_and(|text| text.contains("cargo-deny --config"))
         {
             mismatches.push(format!("{runner} applicable policy: {present:?}"));
         }

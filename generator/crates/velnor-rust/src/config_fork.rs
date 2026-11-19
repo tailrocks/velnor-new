@@ -26,7 +26,10 @@ pub(crate) fn fork_runner(
         value: label.clone(),
     };
     let fork = RunnerLabel::new(label.clone()).map_err(|_| invalid())?;
-    let compatible = platform.is_none() || lock_platform(&fork) == platform;
+    let compatible = match platform {
+        Some(primary) => lock_platform(&fork).as_ref() == Some(&primary),
+        None => lock_platform(&fork).as_deref() == Some("linux-x64"),
+    };
     if github_hosted(fork.as_str()) && compatible {
         Ok(fork)
     } else {

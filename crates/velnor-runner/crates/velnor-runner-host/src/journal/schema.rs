@@ -20,6 +20,10 @@ mod jit_conflict_settlement;
 pub(in crate::journal) mod jit_interrupted_claims;
 mod jit_tombstone_completion;
 #[cfg(test)]
+pub(in crate::journal) use driver::migrate_historical_to;
+#[cfg(test)]
+mod historical_tamper_tests;
+#[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v45;
 #[cfg(test)]
 pub(in crate::journal) use driver::bootstrap_historical_v46;
@@ -51,6 +55,8 @@ mod remote;
 mod request_ledger;
 mod request_reservations;
 mod scale_set_create;
+mod scale_set_delete;
+mod scale_set_unverified;
 mod session;
 mod session_refresh;
 mod source_authorization;
@@ -68,7 +74,7 @@ mod tamper_tests;
 mod validation;
 mod worker_health;
 
-pub(super) const JOURNAL_VERSION: i64 = 52;
+pub(super) const JOURNAL_VERSION: i64 = 59;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
 
@@ -131,11 +137,26 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v53(conn).await?;
+    scale_set_delete::validate(conn).await?;
+    scale_set_unverified::validate(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v52(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     validate_persisted_schema_v42(conn).await?;
     unbound_retirement::validate(conn).await?;
     jit_interrupted_claims::validate(conn).await?;
     jit_claim_deadline::validate(conn).await?;
     jit_tombstone_completion::validate(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v53(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v52(conn).await?;
+    execution_authorization::validate_v53(conn).await
 }
 
 #[cfg(test)]
@@ -164,7 +185,6 @@ async fn validate_persisted_schema_v46(conn: &turso::Connection) -> Result<(), H
 
 mod legacy_validation;
 pub(super) use legacy_validation::{
-    validate_persisted_schema_v19, validate_persisted_schema_v20, validate_persisted_schema_v27,
     validate_persisted_schema_v32, validate_persisted_schema_v33, validate_persisted_schema_v34,
     validate_persisted_schema_v36, validate_persisted_schema_v37, validate_persisted_schema_v38,
     validate_persisted_schema_v39,

@@ -280,7 +280,9 @@ fn report_cache_descriptors_preserve_literal_roots_without_github_expressions() 
                     for key in ["family", "restore_step", "save_step"] {
                         assert!(cache[key].as_str().is_some_and(|value| !value.is_empty()));
                     }
-                    if !cache["root"].is_null() {
+                    if cache["family"] == "sources" {
+                        assert!(cache["root"].is_null(), "{cache}");
+                    } else if !cache["root"].is_null() {
                         assert_eq!(cache["root"], root);
                         reported_root = true;
                     }
@@ -374,7 +376,10 @@ fn assert_metrics_policy(workflow: &serde_json::Value) -> TestResult {
                     step["name"].as_str(),
                     Some("Save the target cache" | "Save the sources cache")
                 );
-            let verification = step["run"] == "velnor-ci cache verify --key \"$CACHE_KEY\"";
+            let verification = step["run"] == "velnor-ci cache verify --key \"$CACHE_KEY\""
+                || step["name"]
+                    .as_str()
+                    .is_some_and(|name| name.starts_with("Fetch the sources of root "));
             assert_eq!(
                 step["continue-on-error"].as_bool().unwrap_or(false),
                 producer || verified_save || verification,

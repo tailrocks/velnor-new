@@ -1,0 +1,18 @@
+runner = "ubuntu-26.04-scale-set"
+
+[[lint]]
+kind = "jactionlint"
+config = ".github/jactionlint.yaml"
+
+[[lint]]
+kind = "alint"
+config = ".alint.yml"
+probe = "scripts/alint-line-cap-probe.sh"
+
+[[lint]]
+kind = "mise-task"
+id = "generator-samples"
+name = "Generator samples"
+task = "lint-generator-samples"
+tools = ["jactionlint"]
+timeout_minutes = 5
