@@ -75,6 +75,7 @@ pub enum StepKind {
     },
     Cargo(CargoCommand),
     Helper(HelperCommand),
+    InputsAuditRoot(Option<RepoPath>),
     InputsSave {
         target: RepoPath,
         cli: InputsCli,

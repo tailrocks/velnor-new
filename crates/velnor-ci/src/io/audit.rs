@@ -6,6 +6,7 @@ mod freshness;
 mod groups;
 mod inventory;
 mod options;
+mod selection;
 mod setup;
 
 pub(crate) use build::build;
@@ -29,6 +30,7 @@ use crate::coverage::{Built, Fingerprint, Unit, UnitKind};
 use crate::error::CiError;
 use crate::platform::Platforms;
 use groups::{group_dirs, shared_groups, workspaces};
+use selection::{selected, within};
 
 mod dep_info;
 
@@ -58,7 +60,7 @@ pub(super) struct Audit<'a> {
 pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, CiError> {
     let failed = |e: &dyn std::fmt::Display| CiError::new(e.to_string());
     let mut checkout = read_checkout(directory).map_err(|e| failed(&e))?;
-    let listed = checkout
+    let mut listed = checkout
         .view
         .files
         .remove(&INPUTS_LOCK)
@@ -70,6 +72,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
     let workspaces = workspaces(&facts, &checkout.root)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
+    let chosen = selected(&facts, &shared, options.root.as_deref())?;
     let groups = group_dirs(&facts, &checkout.root);
     let mut audit = setup::begin(
         &checkout,
@@ -78,7 +81,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         &groups,
         options.max_directory_entries,
     );
-    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups)? {
+    for (unit, file, indices) in setup::gathered_files(&workspaces, &shared, &groups, &chosen)? {
         audit.record(&indices, &file, unit)?;
     }
     audit.orphans();
@@ -106,7 +109,7 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
                 )
         })
         .collect();
-    setup::complete(&facts, &effective, &audit.built, &platforms)?;
+    setup::complete(&facts, &chosen, &effective, &audit.built, &platforms)?;
     audit.check_stale()?;
     let identified = facts
         .helper
@@ -118,6 +121,9 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         let lock = checkout.root.join(INPUTS_LOCK.as_str());
         write_lock(&lock, &audit.found, identified)?;
         return Ok(format!("wrote {INPUTS_LOCK}: {summary}\n"));
+    }
+    if options.root.is_some() {
+        listed = within(listed, &facts, &chosen);
     }
     compare(&audit.found, &listed, &summary, identified)
 }
