@@ -49,36 +49,7 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
     let (selections, changes, kind) =
         choose(args, &checkout, &facts, name.as_deref(), event.as_ref())?;
     let groups = plan_groups(&facts, kind, &changes.paths, &selections);
-    let steps = facts
-        .rust_roots
-        .iter()
-        .map(|whole| {
-            let selection = selections.get(&whole.manifest);
-            if matches!(selection, Some(RustSelection::None)) {
-                return Ok((
-                    whole.manifest.clone(),
-                    optional_steps(whole, &BTreeMap::new(), true),
-                ));
-            }
-            let root = &scoped(whole, selection);
-            let found = if matches!(selection, Some(RustSelection::Some(_))) {
-                member_sources(&facts, root, &checkout.view.tracked_paths)
-            } else {
-                root_sources(&facts, root, &checkout.view.tracked_paths)
-            };
-            let steps = match found {
-                None => optional_steps(root, &BTreeMap::new(), true),
-                Some(paths) => match read_sources(&checkout.root, &paths) {
-                    Ok(Some(sources)) => optional_steps(root, &sources, full),
-                    Ok(None) | Err(GenError::NotRegular(_)) => {
-                        optional_steps(root, &BTreeMap::new(), true)
-                    }
-                    Err(error) => return Err(ci(error)),
-                },
-            };
-            Ok((whole.manifest.clone(), steps))
-        })
-        .collect::<Result<Steps, CiError>>()?;
+    let steps = plan_steps(&facts, &checkout, &selections, full)?;
     let everything = selections.values().any(|selection| {
         matches!(selection, RustSelection::All(trigger) if !matches!(trigger, AllTrigger::MostPackages(_)))
     });
@@ -116,6 +87,44 @@ pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
         outputs
     };
     Ok(report + &warnings(&new))
+}
+
+fn plan_steps(
+    facts: &velnor_model::RepoFacts,
+    checkout: &Checkout,
+    selections: &BTreeMap<RepoPath, RustSelection>,
+    full: bool,
+) -> Result<Steps, CiError> {
+    facts
+        .rust_roots
+        .iter()
+        .map(|whole| {
+            let selection = selections.get(&whole.manifest);
+            if matches!(selection, Some(RustSelection::None)) {
+                return Ok((
+                    whole.manifest.clone(),
+                    optional_steps(whole, &BTreeMap::new(), true),
+                ));
+            }
+            let root = &scoped(whole, selection);
+            let found = if matches!(selection, Some(RustSelection::Some(_))) {
+                member_sources(facts, root, &checkout.view.tracked_paths)
+            } else {
+                root_sources(facts, root, &checkout.view.tracked_paths)
+            };
+            let steps = match found {
+                None => optional_steps(root, &BTreeMap::new(), true),
+                Some(paths) => match read_sources(&checkout.root, &paths) {
+                    Ok(Some(sources)) => optional_steps(root, &sources, full),
+                    Ok(None) | Err(GenError::NotRegular(_)) => {
+                        optional_steps(root, &BTreeMap::new(), true)
+                    }
+                    Err(error) => return Err(ci(error)),
+                },
+            };
+            Ok((whole.manifest.clone(), steps))
+        })
+        .collect()
 }
 
 fn event_kind(name: Option<&str>, manual: bool) -> EventKind {
