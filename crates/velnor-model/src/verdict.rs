@@ -65,7 +65,7 @@ impl fmt::Display for JobCondition {
 pub struct VerdictJob {
     pub id: JobId,
     pub when: Vec<JobCondition>,
-    pub tests: Option<RootSlug>,
+    pub tests: Vec<RootSlug>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,15 +90,21 @@ impl VerdictSpec {
                     .map(JobCondition::parse)
                     .collect::<Result<_, _>>()?
             };
-            let slug = tests
+            let slugs = tests
                 .remove(&id)
-                .map(RootSlug::new)
-                .transpose()
-                .map_err(|e| e.to_string())?;
+                .map(|roots| {
+                    roots
+                        .split(',')
+                        .map(RootSlug::new)
+                        .collect::<Result<Vec<_>, _>>()
+                        .map_err(|e| e.to_string())
+                })
+                .transpose()?
+                .unwrap_or_default();
             parsed.push(VerdictJob {
                 id,
                 when,
-                tests: slug,
+                tests: slugs,
             });
         }
         if let Some(id) = tests.keys().next() {
@@ -144,8 +150,14 @@ impl VerdictSpec {
             parts.push(format!("--job {}={when}", job.id));
         }
         for job in &self.jobs {
-            if let Some(slug) = &job.tests {
-                parts.push(format!("--tests {}={slug}", job.id));
+            if !job.tests.is_empty() {
+                let slugs = job
+                    .tests
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(",");
+                parts.push(format!("--tests {}={slugs}", job.id));
             }
         }
         parts.join(" ")

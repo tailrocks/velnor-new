@@ -6,7 +6,7 @@ use crate::error::HostError;
 use crate::journal::Journal;
 
 use super::ConnectionJournal;
-use super::scale_set_delete::has_pending_scale_set_delete;
+use super::scale_set_delete::{has_pending_scale_set_delete, restart_after_deleted_set};
 use super::session::has_work_besides_bound_session;
 use super::storage::{
     connection_record, digest, has_ambiguous_legacy_work, has_connection_work, in_transaction,
@@ -119,6 +119,7 @@ impl Journal {
             {
                 return Ok(false);
             }
+            restart_after_deleted_set(connection, connection_id).await?;
             if retired {
                 connection
                     .execute(

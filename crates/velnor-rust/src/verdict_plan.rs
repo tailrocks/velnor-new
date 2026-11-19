@@ -92,7 +92,7 @@ impl PlanOutput {
                 advisory.insert(job.id.clone());
             }
             planned.insert(job.id.clone(), holds);
-            if let Some(slug) = &job.tests {
+            for slug in &job.tests {
                 let expected = flag(GateNeed::TestsExpected.output_name(slug), "run", "skip")?;
                 let jobs = test_lanes.entry(slug.clone()).or_default();
                 if expected {

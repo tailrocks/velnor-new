@@ -134,6 +134,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `default_ignores` | `true` | documentation and licence files select nothing |
 | `nextest_harnesses` | none | `package:target` entries for `harness = false` test targets that nextest can run; the others run in a direct step |
 | `test_setup` | none | `[[test_setup]]` fixture steps that run before tests |
+| `workspace_groups` | none | `[[workspace_groups]]` entries: Cargo workspaces that share one job set and one build folder, see `generator/CONFIG.md` |
 | `lint` | none | `[[lint]]` jobs for checks that are not cargo |
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |

@@ -21,9 +21,19 @@ pub(super) struct Freshness {
 }
 
 impl Freshness {
-    pub(super) fn new(workspaces: &[Workspace], max_directory_entries: usize) -> Self {
+    pub(super) fn new(
+        workspaces: &[Workspace],
+        groups: &[PathBuf],
+        max_directory_entries: usize,
+    ) -> Self {
+        let mut targets = inventory::exclusions(workspaces);
+        targets.extend(
+            groups
+                .iter()
+                .map(|dir| fs::canonicalize(dir).unwrap_or_else(|_| velnor_rust::normalize(dir))),
+        );
         Self {
-            targets: inventory::exclusions(workspaces),
+            targets,
             directories: BTreeMap::new(),
             remaining: max_directory_entries,
         }

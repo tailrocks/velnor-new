@@ -16,7 +16,8 @@ use velnor_gen::io::read_checkout;
 use velnor_model::RepoFacts;
 use velnor_rust::{detect, sha256_hex};
 
-use super::super::units::{UnitFile, Workspace, apart, unit_files, workspace};
+use super::super::units::{UnitFile, Workspace, apart, unit_files};
+use super::groups::{group_dirs, scan_dirs, shared_groups, standalone, workspaces};
 use super::inventory::{self, Evidence};
 use crate::cli::InputsBuildArgs;
 use crate::error::CiError;
@@ -29,6 +30,7 @@ struct Builder<'a> {
     repository: PathBuf,
     facts: RepoFacts,
     workspaces: Vec<Workspace>,
+    directories: Vec<PathBuf>,
     targets: BTreeSet<PathBuf>,
     roots: BTreeSet<PathBuf>,
     declared: BTreeSet<PathBuf>,
@@ -40,14 +42,17 @@ type Identities = BTreeMap<PathBuf, (String, SystemTime)>;
 pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, CiError> {
     let checkout = read_checkout(directory).map_err(|e| CiError::new(e.to_string()))?;
     let facts = detect(&checkout.view).map_err(|e| CiError::new(e.to_string()))?;
-    let workspaces = facts
-        .rust_roots
-        .iter()
-        .map(|root| workspace(&checkout.root.join(root.manifest.as_str()), None))
-        .collect::<Result<Vec<_>, _>>()?;
-    apart(&workspaces)?;
+    let standalone = standalone(&facts);
+    let workspaces = workspaces(&facts, &checkout.root)?;
+    apart(&workspaces, &shared_groups(&facts))?;
+    let directories = scan_dirs(&workspaces);
     let invocation = Invocation::new(&args.command);
-    invocation.validate_targets(directory, &workspaces)?;
+    invocation.validate_targets(
+        directory,
+        &workspaces,
+        &standalone,
+        &group_dirs(&facts, &checkout.root),
+    )?;
     let mut roots = BTreeSet::from([checkout.root.clone()]);
     roots.extend(args.directory.iter().map(|root| directory.join(root)));
     let mut builder = Builder {
@@ -56,6 +61,7 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
         facts,
         targets: inventory::exclusions(&workspaces),
         workspaces,
+        directories,
         roots,
         declared: BTreeSet::new(),
         location: fs::canonicalize(invocation.location(directory))
@@ -156,8 +162,8 @@ impl Builder<'_> {
 
     fn identities(&self) -> Result<Identities, CiError> {
         let mut before = BTreeMap::new();
-        for workspace in &self.workspaces {
-            for (unit, path) in unit_files(&workspace.target_directory)? {
+        for directory in &self.directories {
+            for (unit, path) in unit_files(directory)? {
                 if output(&unit) {
                     before.insert(path.clone(), identity(&path)?);
                 }
@@ -187,9 +193,9 @@ impl Builder<'_> {
         before: &Identities,
     ) -> Result<(), CiError> {
         let started = self
-            .workspaces
+            .directories
             .iter()
-            .map(|workspace| clock::Clock::new(&workspace.target_directory))
+            .map(|directory| clock::Clock::new(directory))
             .collect::<Result<Vec<_>, _>>()
             .map_err(|error| {
                 CiError::new(format!("cannot establish build filesystem clock: {error}"))
@@ -236,15 +242,15 @@ impl Builder<'_> {
         }
         let bytes = serde_json::to_vec(&evidence).map_err(|e| CiError::new(e.to_string()))?;
         let digest = sha256_hex(&bytes);
-        for (workspace, started) in self.workspaces.iter().zip(started) {
-            let store = workspace.target_directory.join(inventory::STORE);
+        for (directory, started) in self.directories.iter().zip(started) {
+            let store = directory.join(inventory::STORE);
             let saved = store.join(format!("{digest}.json"));
             if complete && status.success() {
                 fs::create_dir_all(&store)
                     .and_then(|()| fs::write(&saved, &bytes))
                     .map_err(|e| CiError::new(format!("cannot save input inventory: {e}")))?;
             }
-            for (unit, file) in unit_files(&workspace.target_directory)? {
+            for (unit, file) in unit_files(directory)? {
                 if !output(&unit) {
                     continue;
                 }

@@ -11,7 +11,8 @@ pub struct Host;
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CacheRoot {
     slug: RootSlug,
-    manifest: RepoPath,
+    label: String,
+    locks: Vec<RepoPath>,
     target_dir: RepoPath,
     lock: LockIdentity,
 }
@@ -28,7 +29,26 @@ impl CacheRoot {
     pub fn new(manifest: &RepoPath, target_dir: RepoPath) -> Self {
         Self {
             slug: RootSlug::of(manifest),
-            manifest: manifest.clone(),
+            label: manifest
+                .parent()
+                .map_or_else(|| ".".to_owned(), |directory| directory.to_string()),
+            locks: vec![manifest.sibling(&CARGO_LOCK)],
+            target_dir,
+            lock: LockIdentity::File,
+        }
+    }
+
+    #[must_use]
+    pub fn group(
+        slug: RootSlug,
+        label: String,
+        locks: Vec<RepoPath>,
+        target_dir: RepoPath,
+    ) -> Self {
+        Self {
+            slug,
+            label,
+            locks,
             target_dir,
             lock: LockIdentity::File,
         }
@@ -51,8 +71,13 @@ impl CacheRoot {
     }
 
     #[must_use]
-    pub fn lock_file(&self) -> RepoPath {
-        self.manifest.sibling(&CARGO_LOCK)
+    pub fn label(&self) -> &str {
+        &self.label
+    }
+
+    #[must_use]
+    pub fn locks(&self) -> &[RepoPath] {
+        &self.locks
     }
 
     #[must_use]

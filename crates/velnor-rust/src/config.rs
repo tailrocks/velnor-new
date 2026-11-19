@@ -59,6 +59,8 @@ struct RawConfig {
     #[serde(default)]
     test_groups: Vec<crate::config_test_groups::RawTestGroup>,
     #[serde(default)]
+    workspace_groups: Vec<crate::groups::RawGroup>,
+    #[serde(default)]
     test_lane: Vec<crate::config_test_lane::RawTestLane>,
 }
 
@@ -104,10 +106,12 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
     let lint = crate::config_lint::parse(raw.lint).map_err(invalid)?;
     let test_groups = crate::config_test_groups::parse(raw.test_groups).map_err(invalid)?;
+    let workspace_groups = crate::groups::parse(raw.workspace_groups).map_err(invalid)?;
     let test_lanes = crate::config_test_lane::parse(raw.test_lane).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
+        workspace_groups,
         budget: crate::config_budget::parse(bytes).map_err(invalid)?,
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,

@@ -17,6 +17,7 @@ const POLICY_JOB: JobId = JobId::from_static("policy");
 pub(crate) struct Lane {
     pub(crate) slug: RootSlug,
     pub(crate) plan: Option<JobId>,
+    pub(crate) per_root: bool,
     pub(crate) deltas: bool,
 }
 
@@ -25,6 +26,7 @@ impl Lane {
         Self {
             slug,
             plan: (!single).then_some(PLAN_JOB),
+            per_root: false,
             deltas,
         }
     }
@@ -33,7 +35,17 @@ impl Lane {
         Self {
             slug: RootSlug::from_static("policy"),
             plan: Some(if single { RUST_JOB } else { PLAN_JOB }),
+            per_root: false,
             deltas,
+        }
+    }
+
+    pub(crate) fn with_slug(&self, slug: RootSlug, per_root: bool) -> Self {
+        Self {
+            slug,
+            plan: self.plan.clone(),
+            per_root,
+            deltas: self.deltas,
         }
     }
 
@@ -88,7 +100,7 @@ impl Lane {
     }
 
     pub(crate) fn steps(&self) -> Option<Gate> {
-        self.plan.is_none().then(|| self.gate(GateNeed::Selected))
+        (self.plan.is_none() || self.per_root).then(|| self.gate(GateNeed::Selected))
     }
 
     pub(crate) fn job(&self) -> Option<Gate> {
@@ -125,6 +137,7 @@ impl Lane {
                 .filter(|_| command.builds())
                 .map(|root| root.target_dir.clone()),
             kind: StepKind::Cargo(command),
+            manifest: None,
             when: When::NotCancelled,
             skip_on_draft: false,
             skip_after_merge_group: None,
