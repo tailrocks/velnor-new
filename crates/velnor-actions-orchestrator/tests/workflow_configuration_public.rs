@@ -281,6 +281,8 @@ mod source_qualification_both;
 
 #[path = "workflow_configuration_public/oracle_input_selection.rs"]
 mod oracle_input_selection;
+#[path = "workflow_configuration_public/source_qualification_scale_set.rs"]
+mod source_qualification_scale_set;
 #[path = "workflow_configuration_public/source_qualification_selection.rs"]
 mod source_qualification_selection;
 
@@ -331,3 +333,9 @@ mod runner_family_copy_sources;
 
 #[path = "workflow_configuration_public/image_platform_selection.rs"]
 mod image_platform_selection;
+
+#[path = "workflow_configuration_public/pr_ci_label.rs"]
+mod pr_ci_label;
+
+#[path = "workflow_configuration_public/runner_workspace_paths.rs"]
+mod runner_workspace_paths;

@@ -69,11 +69,20 @@ fn verify_run(
     if run.event != input.event_name
         || run.repository.id != expected.id
         || !run.repository.full_name.eq_ignore_ascii_case(&name)
-        || (input.event_name != "pull_request" && run.head_sha != input.tested_sha)
+        || (input.event_name != "pull_request"
+            && (run.head_sha != input.tested_sha || !event_ref_is_run_branch(input, run)))
     {
         return Err(HookSourceError::Mismatch);
     }
     Ok(())
+}
+
+fn event_ref_is_run_branch(input: &UntrustedHookSourceInput, run: &WorkflowRun) -> bool {
+    let name = input
+        .event_ref
+        .strip_prefix("refs/heads/")
+        .or_else(|| input.event_ref.strip_prefix("refs/tags/"));
+    name.is_some() && name == run.head_branch.as_deref()
 }
 
 fn verify_root_ref(

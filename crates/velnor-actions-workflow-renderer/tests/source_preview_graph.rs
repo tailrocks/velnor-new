@@ -222,8 +222,8 @@ fn preview_qualifier_executes_exact_downloaded_payload_without_publication_autho
     assert!(qualifier.contains("Restore Cargo sources"));
     assert!(qualifier.contains("actions/cache/restore@"));
     assert!(!qualifier.contains("actions/cache/save@"));
-    assert!(qualifier.contains("runner.temp }}/velnor/cargo/registry/index"));
-    assert!(qualifier.contains("runner.temp }}/velnor/cargo/registry/cache"));
+    assert!(qualifier.contains("/home/runner/work/_temp/velnor/cargo/registry/index"));
+    assert!(qualifier.contains("/home/runner/work/_temp/velnor/cargo/registry/cache"));
     let script = step_script(qualifier, "Qualify exact source preview bytes")?;
     assert!(script.contains(
         "check \"$GITHUB_WORKSPACE/source-preview/velnor-actions-x86_64-unknown-linux-gnu\""
