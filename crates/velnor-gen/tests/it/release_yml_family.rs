@@ -278,7 +278,7 @@ fn a_family_binary_may_bundle_bins_files_and_name_its_assets() -> TestResult {
         run.starts_with("cargo build") && run.contains("--package app --bin app --bin rg --target")
     }));
     assert!(commands.iter().any(|run| run.starts_with(
-        "tar -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
+        "tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
     )), "{commands:?}");
     let publish = runs(job(&tree, "publish-family")?)
         .last()

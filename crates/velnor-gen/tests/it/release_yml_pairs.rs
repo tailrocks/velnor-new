@@ -144,7 +144,7 @@ fn a_versioned_archive_packs_the_extra_bins_and_files_under_the_expanded_name() 
     let commands = runs(job(&tree, "build-app-linux-x64")?);
     assert!(
         commands.contains(
-            &"tar -czf \"$RUNNER_TEMP/stage/app-${VERSION}-linux-x64.tar.gz\" -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
+            &"tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf \"$RUNNER_TEMP/stage/app-${VERSION}-linux-x64.tar.gz\" -C target/x86_64-unknown-linux-musl/release app rg -C \"$GITHUB_WORKSPACE\" LICENSE"
         ),
         "{commands:?}"
     );

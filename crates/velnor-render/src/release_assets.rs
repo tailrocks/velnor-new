@@ -113,12 +113,26 @@ pub(crate) fn bind_version(steps: &mut [RenderedStep]) {
     }
 }
 
-pub(crate) fn pack(binary: &BinaryPlan, file: &str, release_dir: &str) -> String {
+// GNU tar on the Linux release runners: the same inputs give the same bytes,
+// whatever the checkout's mtimes, owners and directory order. bsdtar (macOS)
+// has no `--sort`, so macOS archives keep the plain command.
+const REPRODUCIBLE: &str = "--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner ";
+
+pub(crate) fn pack(
+    binary: &BinaryPlan,
+    platform: Platform,
+    file: &str,
+    release_dir: &str,
+) -> String {
     let members = contents(binary);
+    let flags = match platform {
+        Platform::LinuxX64 | Platform::LinuxArm64 => REPRODUCIBLE,
+        Platform::MacosArm64 => "",
+    };
     if versioned(binary) {
-        format!("tar -czf \"{STAGE_SHELL}/{file}\" -C {release_dir}{members}")
+        format!("tar {flags}-czf \"{STAGE_SHELL}/{file}\" -C {release_dir}{members}")
     } else {
-        format!("tar -czf {} -C {release_dir}{members}", shell_word(file))
+        format!("tar {flags}-czf {} -C {release_dir}{members}", shell_word(file))
     }
 }
 
@@ -130,7 +144,7 @@ pub(crate) fn archive_packaging(
 ) -> Vec<RenderedStep> {
     let mut steps = vec![command(
         format!("Pack {file}"),
-        pack(binary, file, release_dir),
+        pack(binary, platform, file, release_dir),
     )];
     steps.extend(binary.checksum_files.map(|Checksum::Sha256| {
         let checksum = if platform == Platform::MacosArm64 {

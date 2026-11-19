@@ -19,6 +19,7 @@ const TRIPLES: [(&str, &str); 3] = [
     ("macos-arm64", "aarch64-apple-darwin"),
 ];
 
+const REPRODUCIBLE: &str = "--sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner ";
 const DEFAULT: &str = "[[binaries]]\npackage = \"app\"\n";
 const SIDECARS: &str = "[[binaries]]\npackage = \"app\"\nchecksum_files = \"sha256\"\n";
 const HOST: &str = "[[binaries]]\npackage = \"app\"\nplatforms = [\"macos-arm64\", \"linux-x64\"]\nattest = true\nchecksum_files = \"sha256\"\nbins = [{ bin = \"rg\" }]\ninclude = [\"LICENSE\", \"NOTICE\"]\n";
@@ -79,7 +80,8 @@ fn archives_are_named_after_the_binary_and_the_rust_target_triple() -> TestResul
         assert_eq!(
             pack,
             format!(
-                "tar -czf {} -C target/{triple}/release app",
+                "tar {}-czf {} -C target/{triple}/release app",
+                if platform.starts_with("linux") { REPRODUCIBLE } else { "" },
                 archive(triple)
             )
         );
@@ -106,6 +108,25 @@ fn sha256sums_lists_exactly_the_archives_by_default() -> TestResult {
     let want: BTreeSet<String> = TRIPLES.iter().map(|(_, triple)| archive(triple)).collect();
     assert_eq!(summed(&tree)?, want);
     assert!(!tree_text(&tree).contains(".sha256"));
+    Ok(())
+}
+
+#[test]
+fn archives_are_packed_reproducibly() -> TestResult {
+    let (_, tree) = render(&[APP], Some(DEFAULT))?;
+    let pack = runs(job(&tree, "build-app-linux-x64")?)
+        .into_iter()
+        .find(|run| run.starts_with("tar "))
+        .ok_or("no pack step")?;
+    for flag in [
+        "--sort=name",
+        "--mtime=@0",
+        "--owner=0",
+        "--group=0",
+        "--numeric-owner",
+    ] {
+        assert!(pack.contains(flag), "{pack}");
+    }
     Ok(())
 }
 
@@ -243,7 +264,7 @@ fn an_archive_may_name_the_gnu_target() -> TestResult {
     let commands = runs(build);
     assert!(commands.contains(&"rustup target add aarch64-unknown-linux-gnu"));
     assert!(commands.contains(
-        &"tar -czf app-aarch64-unknown-linux-gnu.tar.gz -C target/aarch64-unknown-linux-gnu/release app"
+        &"tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf app-aarch64-unknown-linux-gnu.tar.gz -C target/aarch64-unknown-linux-gnu/release app"
     ));
     assert!(!commands.iter().any(|run| run.contains("musl")));
     Ok(())
@@ -258,7 +279,7 @@ fn an_explicit_asset_name_still_replaces_the_triple_name() -> TestResult {
         ),
     )?;
     assert!(runs(job(&tree, "build-app-linux-x64")?).contains(
-        &"tar -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app"
+        &"tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -czf app_linux-x64.tar.gz -C target/x86_64-unknown-linux-musl/release app"
     ));
     Ok(())
 }
