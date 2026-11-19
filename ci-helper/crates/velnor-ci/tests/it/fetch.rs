@@ -177,6 +177,12 @@ fn the_token_reaches_only_the_real_cargo_and_git_and_is_revoked_after_the_fetch(
         assert!(!environment.contains("hostile"), "{environment}");
         assert!(!environment.contains("CARGO_NET_OFFLINE"), "{environment}");
         assert!(environment.contains("GIT_CONFIG_NOSYSTEM=1"));
+        assert!(
+            environment
+                .lines()
+                .any(|line| line == "GIT_ALLOW_PROTOCOL=https:http:file"),
+            "{environment}"
+        );
     }
     assert!(!cargo_env.contains("PRIVATE_TOKEN"), "{cargo_env}");
     let requests = api.requests.lock().map_err(|e| e.to_string())?.clone();
@@ -201,6 +207,7 @@ fn without_a_token_the_fetch_is_offline_and_a_miss_says_why() -> TestResult {
         "fetch --locked --manifest-path Cargo.toml --offline"
     );
     assert!(!fixture.log("cargo.env").contains("GIT_CONFIG_KEY_0=url."));
+    assert!(!fixture.log("cargo.env").contains("GIT_ALLOW_PROTOCOL"));
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("fork"), "{stderr}");
     assert!(api.requests.lock().map_err(|e| e.to_string())?.is_empty());

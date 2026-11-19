@@ -25,10 +25,9 @@ const FORWARDED_VARIABLES: [&str; 9] = [
     "NO_PROXY",
     "no_proxy",
 ];
-/// Restored Cargo git databases carry their own hooks and config; these command-line
-/// settings outrank them, so a hook a cached repository holds cannot run with the token.
 const GUARDED_GIT_SETTINGS: [(&str, &str); 2] =
     [("core.hooksPath", "/dev/null"), ("core.fsmonitor", "false")];
+const TOKEN_GIT_PROTOCOLS: &str = "https:http:file";
 const SERVER_VARIABLE: &str = "VELNOR_SERVER_URL";
 const DEFAULT_SERVER: &str = "https://github.com";
 const REVOKE_PATH: &str = "/installation/token";
@@ -312,6 +311,7 @@ impl Trusted {
                 .filter_map(|name| Some((OsString::from(name), non_empty_variable(name)?))),
         );
         if let Some(token) = token {
+            environment.push(("GIT_ALLOW_PROTOCOL".into(), TOKEN_GIT_PROTOCOLS.into()));
             let base = format!(
                 "url.https://x-access-token:{token}@{}/.insteadOf",
                 server.authority

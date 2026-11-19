@@ -74,7 +74,7 @@ pub enum Command {
     )]
     Fetch(FetchArgs),
     #[command(
-        about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY and its head sha is the queue entry's sha. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork, a sha mismatch or anything else, so that no token is created"
+        about = "Run before the private-source token step on a merge_group event: read the queue entry from VELNOR_MERGE_GROUP_HEAD_REF (gh-readonly-queue/<base>/pr-<number>-<sha>), look the pull request up with GET /repos/$GITHUB_REPOSITORY/pulls/<number> on the API in VELNOR_API_URL with the job token in GITHUB_TOKEN, and write allowed=true to $GITHUB_OUTPUT only when its head repository is $GITHUB_REPOSITORY, its author is not a bot and its head sha is the queue entry's sha. It then lists the queue refs of the base and requires the entry's queue ref to still be at GITHUB_SHA; every other entry whose queue commit is in the checkout (compare of the base with GITHUB_SHA, at most 300 commits) must pass the same pull request check. A queue of 100 or more entries is refused. Writes allowed=false and exits 0 for a malformed reference, a failed lookup, a fork, a bot, a sha mismatch, a queue ref that moved away from GITHUB_SHA, an exceeded list or compare bound or anything else, so that no token is created"
     )]
     PrivateTokenAllowed,
     #[command(

@@ -11,10 +11,6 @@ const PROXY: &str = "rustup";
 const TOOLCHAIN_VARIABLE: &str = "RUSTUP_TOOLCHAIN";
 const PASSED: [&str; 3] = ["PATH", "HOME", "RUSTUP_HOME"];
 
-/// A rustup proxy picks its toolchain from `rust-toolchain.toml` in the checkout,
-/// which can name a toolchain `path` the checkout carries, and that toolchain's
-/// `cargo` would start with the token in its environment. Ask rustup which toolchain
-/// the runner selected, from a directory the checkout does not control, and pin it.
 pub(super) fn pin(
     cargo: &Path,
     environment: &[(OsString, OsString)],
