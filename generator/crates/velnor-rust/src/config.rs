@@ -131,12 +131,7 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        private_sources: raw
-            .private_sources
-            .as_ref()
-            .map(crate::config_private::private_sources)
-            .transpose()
-            .map_err(invalid)?,
+        private_sources: crate::config_private::optional(raw.private_sources).map_err(invalid)?,
         nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
