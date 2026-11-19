@@ -332,19 +332,9 @@ if [ "$GITHUB_EVENT_NAME" = pull_request ]; then
     echo 'FATAL: pull_request event lacks a valid base branch name' >&2
     exit 1
   fi
-  # The ancestry checks read commit objects only, so they run in a scratch
-  # bare repository that gets a treeless (--filter=tree:0) fetch of the base
-  # branch: the whole commit graph, no trees or blobs. Fetching into the
-  # shallow checkout instead would cross its shallow boundary and download
-  # the boundary commits' trees and blobs a second time. A server that
-  # ignores the filter just sends more objects; a failed fetch is fatal.
-  # A merge first parent that is absent from the base branch history is not
-  # an ancestor either, so the check below rejects it.
   base_history="$RUNNER_TEMP/base-branch-history.git"
   rm -rf "$base_history"
   GIT_OPTIONAL_LOCKS=0 git init --quiet --bare "$base_history"
-  # GIT_NO_LAZY_FETCH keeps any later read of a filtered-out object from
-  # silently downloading it; such a read fails instead.
   base_history_git() {
     GIT_OPTIONAL_LOCKS=0 GIT_NO_LAZY_FETCH=1 git --git-dir="$base_history" "$@"
   }
