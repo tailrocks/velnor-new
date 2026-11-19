@@ -18,7 +18,7 @@ concurrency:
 jobs:
   plan:
     name: Plan
-    runs-on: ubuntu-26.04
+    runs-on: [velnor, ubuntu-26.04-scale-set]
     timeout-minutes: 15
     env:
       RUSTUP_AUTO_INSTALL: "0"
@@ -232,7 +232,10 @@ jobs:
           name: velnor-plan-r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           path: ${{ runner.temp }}/velnor/r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}
           retention-days: "30"
-    if: github.event_name == 'pull_request'
+    if: (github.event_name == 'pull_request') && (github.event_name == 'push' || github.event_name == 'merge_group' || (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository) || github.event_name == 'workflow_dispatch')
+    defaults:
+      run:
+        shell: bash -e {0}
   selection:
     name: Select source qualification
     needs:
