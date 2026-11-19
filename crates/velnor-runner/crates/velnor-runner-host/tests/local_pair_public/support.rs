@@ -247,6 +247,10 @@ pub(crate) fn request(environment: &str, network: &str, image: &str) -> LocalPai
         runner_memory_bytes: 1_073_741_824,
         dind_cpu_millicores: 500,
         dind_memory_bytes: 1_073_741_824,
+        home_bytes: 2_147_483_648,
+        work_bytes: 2_147_483_648,
+        tmp_bytes: 2_147_483_648,
+        local_ci: None,
     }
 }
 

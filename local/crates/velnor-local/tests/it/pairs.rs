@@ -224,3 +224,21 @@ fn label_takes_comma_separated_and_repeated_values_and_refuses_what_a_shell_woul
         );
     }
 }
+
+#[test]
+fn the_plan_names_the_local_velnor_ci_only_when_one_is_given() {
+    let sides = [(Side::Trusted, "n".to_owned(), 1)];
+    let mut input = PlanInput {
+        environment: "velnor-local-ab",
+        authority: "127.0.0.1:5311",
+        token: "t0k3n",
+        docker: "unix:///var/run/docker.sock",
+        runner_image: "sha256:aa",
+        dind_image: "sha256:bb",
+        sides: &sides,
+        ..PlanInput::default()
+    };
+    assert!(plan(&input).get("local_ci").is_none());
+    input.local_ci = Some("/x/velnor-ci");
+    assert_eq!(plan(&input)["local_ci"], "/x/velnor-ci");
+}

@@ -119,11 +119,12 @@ pub fn render(snapshot: &Snapshot) -> String {
     } else {
         snapshot.pairs.join("  ")
     };
-    let _ = writeln!(text, "  pairs: {pairs}");
-    let _ = writeln!(
+    writeln!(text, "  pairs: {pairs}").ok();
+    writeln!(
         text,
         "  last refusal: {}",
         snapshot.refusal.as_deref().unwrap_or("none")
-    );
+    )
+    .ok();
     text
 }

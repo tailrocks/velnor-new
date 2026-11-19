@@ -7,6 +7,8 @@ use crate::config::RunnerPlatform;
 use crate::error::HostError;
 use crate::worker::{ResourceBudget, ResourceBudgetConfig, WorkerIdentityNames};
 
+use super::storage::Sizes;
+
 const OPERATIONAL_RESERVE_BYTES: u64 = 1024 * 1024 * 1024;
 const RESERVED_NETWORKS: [&str; 4] = ["bridge", "host", "none", "default"];
 const LOCAL_NETWORK_PREFIX: &str = "velnor-local-";
@@ -27,6 +29,11 @@ pub struct LocalPairRequest {
     pub runner_memory_bytes: u64,
     pub dind_cpu_millicores: u64,
     pub dind_memory_bytes: u64,
+    pub home_bytes: u64,
+    pub work_bytes: u64,
+    pub tmp_bytes: u64,
+    #[serde(default)]
+    pub local_ci: Option<String>,
 }
 
 pub(super) struct Validated {
@@ -34,6 +41,7 @@ pub(super) struct Validated {
     pub(super) budget: ResourceBudget,
     pub(super) names: WorkerIdentityNames,
     pub(super) pair: String,
+    pub(super) sizes: Sizes,
 }
 
 pub(super) fn validate(request: &LocalPairRequest) -> Result<Validated, HostError> {
@@ -44,6 +52,10 @@ pub(super) fn validate(request: &LocalPairRequest) -> Result<Validated, HostErro
         || !image_id(&request.runner_image)
         || !image_id(&request.dind_image)
         || request.sequence == 0
+        || request
+            .local_ci
+            .as_deref()
+            .is_some_and(|path| request.side != "trusted" || !valid_local_ci(path))
     {
         return Err(HostError::Config);
     }
@@ -56,6 +68,12 @@ pub(super) fn validate(request: &LocalPairRequest) -> Result<Validated, HostErro
         operational_memory_reserve_bytes: OPERATIONAL_RESERVE_BYTES,
     }
     .validate()?;
+    let sizes = Sizes {
+        home: request.home_bytes,
+        work: request.work_bytes,
+        tmp: request.tmp_bytes,
+    }
+    .checked()?;
     let mut nonce = [0_u8; 16];
     getrandom::fill(&mut nonce).map_err(|_| HostError::Identity)?;
     let names = WorkerIdentityNames::from_nonce(&crate::digest_hex::lowercase_hex(&nonce))?;
@@ -65,7 +83,14 @@ pub(super) fn validate(request: &LocalPairRequest) -> Result<Validated, HostErro
         budget,
         names,
         pair,
+        sizes,
     })
+}
+
+const MAX_LOCAL_CI_PATH: usize = 4096;
+
+pub(super) fn valid_local_ci(path: &str) -> bool {
+    path.starts_with('/') && path.len() <= MAX_LOCAL_CI_PATH && !path.contains('\0')
 }
 
 fn valid_environment(value: &str) -> bool {

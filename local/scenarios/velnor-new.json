@@ -1,0 +1,10 @@
+{
+  "description": "A push to the default branch saves the caches. Then a pull request appends a comment line to crates/velnor-archive-guard/src/lib.rs, a crate of velnor-new, and a second commit to that branch is pushed to the same pull request, so its run follows the first one's caches.",
+  "steps": [
+    {"push": "{default}"},
+    {"commit": {"branch": "velnor-new", "append": "crates/velnor-archive-guard/src/lib.rs", "line": "// velnor-local velnor-new"}},
+    {"open_pull_request": {"head": "velnor-new", "base": "{default}"}},
+    {"commit": {"branch": "velnor-new", "append": "crates/velnor-archive-guard/src/lib.rs", "line": "// velnor-local velnor-new, again"}},
+    {"push": "velnor-new"}
+  ]
+}

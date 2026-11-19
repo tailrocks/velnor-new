@@ -107,7 +107,7 @@ fn interrupted_by(signal: &str) -> (Option<i32>, Vec<String>) {
         .position(|call| call.starts_with("network create"))
         .unwrap_or_else(|| unreachable!("no network create"));
     let after = all[started + 1..].to_vec();
-    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::remove_dir_all(&dir).ok();
     (status.and_then(|status| status.code()), after)
 }
 
