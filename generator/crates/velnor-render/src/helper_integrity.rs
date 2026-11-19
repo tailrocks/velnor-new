@@ -8,6 +8,8 @@ use crate::yaml::{Yaml, entry, text};
 
 pub(crate) const DEFAULT_SHELL: &str = "bash -p {0}";
 
+pub(crate) const SHELLCHECK_IGNORE: &str = "jactionlint ignore=shellcheck";
+
 pub(crate) const INVOCATION_PREFIX: &str = ". \"$VELNOR_EXEC\" ";
 
 pub(crate) fn defaults(jobs: &[RenderedJob]) -> Option<Yaml> {

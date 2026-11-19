@@ -44,6 +44,7 @@ mod io_restore_symlinks;
 mod io_stderr;
 mod lane_guard;
 mod logscan;
+mod mbx_seed;
 mod mbx_store;
 mod plan;
 mod plan_api;

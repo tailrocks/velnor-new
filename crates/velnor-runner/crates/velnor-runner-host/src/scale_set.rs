@@ -261,7 +261,7 @@ pub(crate) fn observe_scale_set_runners(
         pat,
     )
     .map_err(map_repository)?;
-    let (mut transport, admin) = open_admin(pat, &scope)?;
+    let (mut transport, admin) = open_admin(pat, &scope, binding)?;
     let request = ScaleSetCreateRequest::new(binding, 1).map_err(map_host)?;
     let owned = get_runner_scale_set_by_id(
         &mut transport,
