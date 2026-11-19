@@ -36,17 +36,29 @@ fn effective<'a>(job: &'a Value, step: &'a Value) -> Option<&'a str> {
 }
 
 #[test]
-fn a_job_whose_cargo_steps_share_one_root_sets_the_target_directory_once_at_job_level() -> TestResult {
+fn a_job_whose_cargo_steps_share_one_root_sets_the_target_directory_once_at_job_level() -> TestResult
+{
     let mut single = 0;
     for (id, job) in jobs(&workflow(&view(&["Cargo.toml"], None)?)?)? {
         let job_level = job["env"][TARGET_VARIABLE].as_str();
         if job_level.is_some() {
             single += 1;
-            assert_eq!(job["env"].as_object().map(|env| env.len()), Some(1), "{id}");
-            assert!(step_targets(&job).is_empty(), "{id}: {:?}", step_targets(&job));
+            assert_eq!(
+                job["env"].as_object().map(serde_json::Map::len),
+                Some(1),
+                "{id}"
+            );
+            assert!(
+                step_targets(&job).is_empty(),
+                "{id}: {:?}",
+                step_targets(&job)
+            );
         }
     }
-    assert!(single >= 1, "at least one single-root job renders job-level env");
+    assert!(
+        single >= 1,
+        "at least one single-root job renders job-level env"
+    );
     Ok(())
 }
 
@@ -64,7 +76,10 @@ fn a_job_that_spans_roots_keeps_each_cargo_step_target_directory() -> TestResult
             assert!(targets.is_empty(), "{id}");
         }
     }
-    assert!(mixed >= 1, "a job spanning two roots keeps step-level values");
+    assert!(
+        mixed >= 1,
+        "a job spanning two roots keeps step-level values"
+    );
     Ok(())
 }
 

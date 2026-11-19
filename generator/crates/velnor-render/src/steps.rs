@@ -124,11 +124,12 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
 }
 
 fn shared_target_dir(job: &Job) -> Option<&RepoPath> {
-    if job
-        .steps
-        .iter()
-        .any(|step| matches!(step.kind, StepKind::Cargo(CargoCommand::NextestRunArchive { .. })))
-    {
+    if job.steps.iter().any(|step| {
+        matches!(
+            step.kind,
+            StepKind::Cargo(CargoCommand::NextestRunArchive { .. })
+        )
+    }) {
         return None;
     }
     let mut building = job
@@ -137,12 +138,12 @@ fn shared_target_dir(job: &Job) -> Option<&RepoPath> {
         .filter(|step| matches!(&step.kind, StepKind::Cargo(command) if command.builds()));
     let first = building.next()?;
     let target = first.target_dir.as_ref()?;
-    let one_root = building.all(|step| {
-        step.target_dir.as_ref() == Some(target) && step.directory == first.directory
-    }) && job
-        .steps
-        .iter()
-        .all(|step| step.directory.is_none() || step.directory == first.directory);
+    let one_root = building
+        .all(|step| step.target_dir.as_ref() == Some(target) && step.directory == first.directory)
+        && job
+            .steps
+            .iter()
+            .all(|step| step.directory.is_none() || step.directory == first.directory);
     one_root.then_some(target)
 }
 
