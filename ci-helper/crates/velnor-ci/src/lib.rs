@@ -38,6 +38,7 @@ pub mod release_preflight;
 pub mod release_published;
 pub mod report;
 mod report_caches;
+pub mod reports;
 pub mod required;
 pub mod rulesets;
 pub mod scope;

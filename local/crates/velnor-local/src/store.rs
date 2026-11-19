@@ -189,6 +189,21 @@ impl Index {
 }
 
 impl Index {
+    /// Drops what belongs to the run that just ended and keeps the cache
+    /// content: the registered pull request bases (pull request numbers
+    /// restart at 1 and the next run may use another default branch) and the
+    /// reservations that were never committed (they are keyed by the old
+    /// run's writer and would block the same keys for an hour). Returns the
+    /// dropped reservations so the caller can remove their partial uploads.
+    pub fn end_run(&mut self) -> Vec<Record> {
+        self.pull_request_bases.clear();
+        let (pending, kept) = std::mem::take(&mut self.records)
+            .into_iter()
+            .partition(|record| !record.committed);
+        self.records = kept;
+        pending
+    }
+
     #[must_use]
     pub fn listed(&self, repository: &str, now: u64) -> Vec<Record> {
         let live: HashSet<EntryId> = self

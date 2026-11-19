@@ -373,3 +373,28 @@ fn trusted_helper_arguments_still_reject_shell_syntax() -> TestResult {
     }
     Ok(())
 }
+
+#[test]
+fn every_job_that_runs_the_launcher_is_marked_for_the_shellcheck_it_cannot_follow() -> TestResult {
+    let text = workflow_text(&"a".repeat(64), Vec::new())?;
+    let lines: Vec<_> = text.lines().collect();
+    let mut marked_jobs = 0;
+    let mut job_at = None;
+    for (at, line) in lines.iter().enumerate() {
+        if line.starts_with("  ") && !line.starts_with("   ") && line.trim_end().ends_with(':') {
+            job_at = Some(at);
+        }
+        if !line.trim_start().starts_with("run: '. \"$VELNOR_EXEC\" ") {
+            continue;
+        }
+        let job = job_at.ok_or("invocation outside a job")?;
+        assert_eq!(
+            lines[job - 1].trim(),
+            "# jactionlint ignore=shellcheck",
+            "{line}"
+        );
+        marked_jobs += 1;
+    }
+    assert!(marked_jobs > 0, "{text}");
+    Ok(())
+}
