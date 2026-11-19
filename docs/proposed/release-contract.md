@@ -182,7 +182,7 @@ Rules:
   resolves the commit of each recorded
   tag, requires it to equal the verified commit, and exports it as
   `<package>_commit`; the build jobs compare their checkout with that output
-  (helper 0.1.92+).
+  (helper 0.1.81+).
 - Publish only from repository-local generated jobs on fresh GitHub-hosted
   runners, an explicitly preconfigured protected environment, and trusted
   eligible branch/dispatch events. Never publish from PRs,
