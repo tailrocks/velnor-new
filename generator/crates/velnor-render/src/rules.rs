@@ -4,23 +4,36 @@
 use std::fmt;
 
 use crate::key_length::longest_cache_key;
+use crate::pinned_actions::{
+    ACTIONS_CACHE, ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
+    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, credential_rules, pin_rules,
+};
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 9] = [
+pub const ALLOWED_ACTIONS: [&str; 17] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
     "actions/cache/save",
     "actions/upload-artifact",
     "actions/download-artifact",
-    "actions/attest-build-provenance",
     MISE_ACTION,
     SETUP_VELNOR_ACTION,
+    MBX_ACTION,
+    ATTEST_BUILD_PROVENANCE.action,
+    ALINT.action,
+    DOCKER_LOGIN.action,
+    DOCKER_SETUP_BUILDX.action,
+    DOCKER_BUILD_PUSH.action,
+    GITHUB_SCRIPT.action,
+    MR_BOXINGTON.action,
+    ACTIONS_CACHE.action,
 ];
 
+pub(crate) const MBX_ACTION: &str = "jdx/mr-boxington-action";
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
@@ -76,6 +89,15 @@ pub struct RenderedMatrix {
     pub max_parallel: Option<u16>,
 }
 
+/// A job `container:` or one service; `ports` is empty for a job container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedContainer {
+    pub image: String,
+    pub ports: Vec<String>,
+    pub options: Option<String>,
+    pub env: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -89,12 +111,15 @@ pub struct RenderedJob {
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<RenderedMatrix>,
+    pub container: Option<RenderedContainer>,
+    pub services: Vec<(String, RenderedContainer)>,
     /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
     pub uses: Option<String>,
     pub with: Vec<(String, Value)>,
     pub runs_on: String,
     pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
+    pub env: Vec<(String, Value)>,
     pub steps: Vec<RenderedStep>,
 }
 
@@ -113,6 +138,14 @@ pub enum Rule {
     NotExactlyOneOfRunAndUses,
     ActionNotAllowed(String),
     ActionNotPinned(String),
+    ActionPinMismatch {
+        action: String,
+        commit: &'static str,
+    },
+    LiteralCredential {
+        action: String,
+        input: String,
+    },
     MiseActionInTokenJob,
     MiseReadsRepositoryConfig,
     TokenJobRunnerNotX64(String),
@@ -164,6 +197,14 @@ impl fmt::Display for RuleViolation {
             Rule::ActionNotPinned(action) => {
                 write!(f, "action {action} is not pinned to a full commit SHA")
             }
+            Rule::ActionPinMismatch { action, commit } => write!(
+                f,
+                "action {action} is accepted only at commit {commit}; use that commit"
+            ),
+            Rule::LiteralCredential { action, input } => write!(
+                f,
+                "action {action} input {input} is a literal; pass it through a secrets or env expression"
+            ),
             Rule::MiseActionInTokenJob => f.write_str(
                 "a job that holds the release App token uses jdx/mise-action, which reads the repository's mise config",
             ),
@@ -221,9 +262,11 @@ pub fn check_rules(workflow: &RenderedWorkflow) -> Result<(), Vec<RuleViolation>
 
 fn holds_app_token(job: &RenderedJob) -> bool {
     job.steps.iter().any(|step| {
-        step.uses
-            .as_deref()
-            .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
+        step.id.as_deref() != Some(crate::private_steps::TOKEN_STEP)
+            && step
+                .uses
+                .as_deref()
+                .is_some_and(|uses| uses.split('@').next() == Some(APP_TOKEN_ACTION))
     })
 }
 
@@ -268,6 +311,7 @@ fn step_rules(step: &RenderedStep) -> Vec<Rule> {
     if let Some(uses) = &step.uses {
         action_rules(uses, &mut rules);
     }
+    credential_rules(step, &mut rules);
     if let Some(length) = longest_cache_key(step)
         && length > MAX_CACHE_KEY_CHARACTERS
     {
@@ -334,7 +378,9 @@ fn action_rules(uses: &str, rules: &mut Vec<Rule>) {
         && reference
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte));
-    if !pinned {
+    if pinned {
+        pin_rules(action, reference, rules);
+    } else {
         rules.push(Rule::ActionNotPinned(uses.to_owned()));
     }
 }

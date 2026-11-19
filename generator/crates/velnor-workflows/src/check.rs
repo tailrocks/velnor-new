@@ -6,9 +6,9 @@ use std::collections::BTreeMap;
 use velnor_model::github_hosted;
 
 use crate::call::{call, refuse_step_keys};
-use crate::cases::cases;
 use crate::check_step::step;
 use crate::concurrency::concurrency;
+use crate::containers::{container, services};
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{Level, Scope, check_condition, is_identifier};
 use crate::matrix::matrix;
@@ -91,15 +91,7 @@ pub(crate) fn workflow(raw: RawWorkflow, earlier: &[Workflow]) -> Result<Workflo
         .map(|raw| concurrency(&format!("the workflow {file}"), raw))
         .transpose()?;
     let mut jobs: Vec<Job> = Vec::new();
-    let mut raw_jobs = raw.job;
-    raw_jobs.extend(cases(
-        &file,
-        raw.hosted_runner.as_deref(),
-        raw.scale_set_runner.as_deref(),
-        raw.case,
-        &triggers,
-    )?);
-    for job in raw_jobs {
+    for job in raw.job {
         let checked = self::job(job, &ctx, &jobs)?;
         jobs.push(checked);
     }
@@ -182,6 +174,7 @@ fn job_shape(raw: &RawJob, earlier: &[Job]) -> Result<u16, WorkflowsError> {
 
 fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
+    let raw_id = id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
     let job_concurrency = raw
@@ -215,7 +208,6 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
     let condition = scope_conditions(ctx, raw.condition.as_deref(), &scope)?;
     let mut job = Job {
         id,
-        name: raw.name.clone(),
         needs: raw.needs.clone(),
         condition,
         helper: raw.helper,
@@ -226,6 +218,11 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         permissions: raw.permissions.clone().into_iter().collect(),
         outputs: Vec::new(),
         matrix,
+        container: raw
+            .container
+            .map(|raw| container(&raw_id, raw))
+            .transpose()?,
+        services: services(&raw_id, raw.service)?,
         steps: Vec::new(),
         call: None,
     };

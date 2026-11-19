@@ -48,7 +48,7 @@ fn assert_scope(name: &str, command: &[&str], present: &[&str], absent: &[&str])
     assert!(output.status.success(), "{output:?}");
     assert_eq!(
         written,
-        "existing=1\ntests_run=1\ntests_listed=1\ntests_by_package=kept=1/1\n"
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
     );
     let args = list_args(&temp);
     assert_list_args(&args, present, absent);

@@ -17,12 +17,13 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{
-    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, RepoFacts, RepoPath, RepoView,
+    FullRun, HelperRelease, HelperVersion, MbxStore, OnMain, PrCi, PushAfterMergeGroup, RepoFacts,
+    RepoPath, RepoView,
 };
 use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_required_check, check_tools, detect, metadata_file, plan,
-    silent_build_scripts,
+    silent_build_scripts, source_roots_over_limit,
 };
 
 pub const NO_FULL_RUN_NOTE: &str = "on_main is \"affected\" and full_run is \"off\", so no run ever selects everything and a gap in selection would go unnoticed";
@@ -68,6 +69,9 @@ pub fn expected_with_notes(
     let facts = detect(view)?;
     let helper = check_helper(&facts)?;
     check_tools(&facts)?;
+    if let Some(roots) = source_roots_over_limit(&facts) {
+        return Err(GenerateError::TooManySourceRoots(roots));
+    }
     let plan = plan(&facts);
     check_required_check(&facts, &plan)?;
     let mut files = render(&plan).map_err(GenerateError::Rules)?;
@@ -76,6 +80,7 @@ pub fn expected_with_notes(
     files.extend(release);
     let mut notes = facts.timings_notes;
     notes.extend(facts.private_sources);
+    notes.extend(facts.private_suggestion);
     notes.extend(release_notes);
     Ok((files, notes))
 }
@@ -107,10 +112,25 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
             release.version().clone(),
         ));
     }
+    if facts.config.pr_ci == PrCi::Label && !release.version().at_least((0, 1, 86)) {
+        return Err(GenerateError::PrCiHelperTooOld(release.version().clone()));
+    }
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
     }
-    if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 84)) {
+    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
+        return Err(GenerateError::PrivateSourcesHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed
+        && !release.version().at_least((0, 1, 82))
+    {
+        return Err(GenerateError::MergeGroupHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
             release.version().clone(),
         ));

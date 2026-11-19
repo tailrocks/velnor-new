@@ -1,6 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+// The fixture builds its release manifest for linux-x86_64 and macOS hosts only, so every test here fails on linux-aarch64.
+#![cfg(not(all(target_os = "linux", target_arch = "aarch64")))]
+
 mod workflow_configuration_fixture;
 
 #[path = "workflow_configuration_public/alint_line_cap_probe.rs"]
@@ -281,6 +284,8 @@ mod source_qualification_both;
 
 #[path = "workflow_configuration_public/oracle_input_selection.rs"]
 mod oracle_input_selection;
+#[path = "workflow_configuration_public/source_qualification_scale_set.rs"]
+mod source_qualification_scale_set;
 #[path = "workflow_configuration_public/source_qualification_selection.rs"]
 mod source_qualification_selection;
 

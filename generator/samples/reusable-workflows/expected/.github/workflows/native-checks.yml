@@ -16,6 +16,7 @@ defaults:
   run:
     shell: 'bash -p {0}'
 jobs:
+  # jactionlint ignore=shellcheck
   plan:
     permissions: {}
     outputs:
@@ -46,6 +47,7 @@ jobs:
           GH_TOKEN: '${{ github.token }}'
           SDK_VERSION: '${{ inputs.sdk_version }}'
         run: '. "$VELNOR_EXEC" plan'
+  # jactionlint ignore=shellcheck
   check:
     needs:
       - plan
