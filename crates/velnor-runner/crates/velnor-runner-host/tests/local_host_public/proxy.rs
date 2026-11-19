@@ -17,6 +17,7 @@ pub(crate) enum Wait {
     Forward,
     Fail,
     Finish,
+    Missing,
 }
 
 pub(crate) struct Faults {
@@ -95,6 +96,7 @@ impl Faults {
                 Wait::Forward => None,
                 Wait::Fail => Some((500, "{\"message\":\"injected\"}")),
                 Wait::Finish => Some((200, "{\"StatusCode\":0}")),
+                Wait::Missing => Some((404, "{\"message\":\"No such container\"}")),
             };
         }
         let removal = line.starts_with("DELETE ")
