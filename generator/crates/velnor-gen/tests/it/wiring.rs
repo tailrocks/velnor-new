@@ -236,11 +236,11 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let job = policy_job(&text(&files)?);
     assert!(
-        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny check"#),
+        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny --locked check"#),
         "{job}"
     );
     assert!(
-        job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' check"),
+        job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' --locked check"),
         "{job}"
     );
     Ok(())
@@ -319,7 +319,7 @@ fn a_multi_root_repository_audits_the_inputs_from_one_job_that_builds_every_root
         .split("\n  rust-inputs-audit:\n")
         .nth(1)
         .ok_or("no audit job")?
-        .split("\n  rust-trim:\n")
+        .split("\n  # jactionlint ignore=shellcheck\n  rust-trim:\n")
         .next()
         .ok_or("no audit job")?;
     assert!(
