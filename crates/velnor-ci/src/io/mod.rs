@@ -25,6 +25,7 @@ mod delta_snapshot;
 mod delta_source;
 mod delta_tree;
 mod delta_trim;
+mod early_list;
 mod fetch;
 mod fetch_credentials;
 mod fetch_reports;
@@ -64,8 +65,7 @@ mod write_request;
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
-use std::path::Path;
-use std::process::ExitCode;
+use std::{path::Path, process::ExitCode};
 
 pub use self::audit::{AuditOptions, audit_inputs};
 pub use self::cache::{Decision, Expiry, decide, expire_old_bases};
