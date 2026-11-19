@@ -82,10 +82,10 @@ impl RootJobs<'_> {
         commands: impl IntoIterator<Item = CargoCommand>,
     ) -> impl Iterator<Item = Step> {
         let lane = self.lane;
-        let directory = self.root.manifest.parent();
+        let root = self.root;
         commands
             .into_iter()
-            .map(move |command| lane.cargo(command, directory.clone()))
+            .map(move |command| lane.cargo(command, Some(root)))
     }
 
     fn saves(&self, job: &JobId, archive: Option<RepoPath>, sources: bool) -> Vec<Step> {
@@ -184,6 +184,7 @@ impl RootJobs<'_> {
     fn nextest_run(&self) -> Option<CargoCommand> {
         self.nextest.then(|| CargoCommand::NextestRun {
             filter: self.filter(),
+            ci_profile: self.root.nextest_ci_profile,
         })
     }
 
@@ -342,6 +343,7 @@ impl RootJobs<'_> {
             self.cargo(vec![CargoCommand::NextestRunArchive {
                 file: ARCHIVE_FILE,
                 filter: self.filter(),
+                ci_profile: self.root.nextest_ci_profile,
             }])
             .map(|step| Step {
                 when: When::Success,

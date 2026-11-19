@@ -20,6 +20,9 @@ permissions:
 concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+env:
+  MISE_AUTO_INSTALL: 'false'
+  RUSTUP_AUTO_INSTALL: '0'
 defaults:
   run:
     shell: 'bash -p {0}'
@@ -87,7 +90,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -201,59 +204,94 @@ jobs:
         run: '. "$VELNOR_EXEC" run -- cargo-fmt --all --check'
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_docs || needs.rust-plan.outputs.rust_root_docs) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check velnor-actions-actionlint alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-actionlint '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-actionlint --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-ansible alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-ansible '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-ansible --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-bun alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-bun '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-bun --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-cli alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-cli '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-cli --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-contract alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-contract '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-contract --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-dbt alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-dbt '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-dbt --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-freshness alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-freshness '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-freshness --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-gradle alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-gradle '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-gradle --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-mise alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-mise '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-mise --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-orchestrator alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-orchestrator '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-orchestrator --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-rust alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-rust '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-rust --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-tofu alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-tofu '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-tofu --locked --message-format=json-render-diagnostics'
       - name: Check velnor-actions-workflow-renderer alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-actions-workflow-renderer '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-actions-workflow-renderer --locked --message-format=json-render-diagnostics'
       - name: Check velnor-archive-guard alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' -p velnor-archive-guard '') || contains(format('' {0} '', (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args)), '' --workspace '')) }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-archive-guard --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_root_test_filter || needs.rust-plan.outputs.rust_root_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
@@ -326,7 +364,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_ci_helper_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -446,24 +484,33 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_ci_helper_mode || needs.rust-plan.outputs.rust_ci_helper_mode) != ''none'' && (steps.replan.outputs.rust_ci_helper_docs || needs.rust-plan.outputs.rust_ci_helper_docs) == ''run'' && (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args) != '''' }}'
         working-directory: ci-helper
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check velnor-ci alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args)), '' -p velnor-ci '') || contains(format('' {0} '', (steps.replan.outputs.rust_ci_helper_package_args || needs.rust-plan.outputs.rust_ci_helper_package_args)), '' --workspace '')) }}'
         working-directory: ci-helper
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-ci --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: ci-helper
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
         env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_ci_helper_test_filter || needs.rust-plan.outputs.rust_ci_helper_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
@@ -537,7 +584,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_crates_velnor_runner_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -657,52 +704,75 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_crates_velnor_runner_mode || needs.rust-plan.outputs.rust_crates_velnor_runner_mode) != ''none'' && (steps.replan.outputs.rust_crates_velnor_runner_docs || needs.rust-plan.outputs.rust_crates_velnor_runner_docs) == ''run'' && (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args) != '''' }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check velnor-resource-probe alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-resource-probe '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-resource-probe --locked --message-format=json-render-diagnostics'
       - name: Check velnor-runner-attestation alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-attestation '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-attestation --locked --message-format=json-render-diagnostics'
       - name: Check velnor-runner-cli alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-cli '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-cli --locked --message-format=json-render-diagnostics'
       - name: Check velnor-runner-core alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-core '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-core --locked --message-format=json-render-diagnostics'
       - name: Check velnor-runner-github alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-github '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-github --locked --message-format=json-render-diagnostics'
       - name: Check velnor-runner-host alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-host '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-host --locked --message-format=json-render-diagnostics'
       - name: Check velnor-runner-image-manifest alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-image-manifest '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-image-manifest --locked --message-format=json-render-diagnostics'
       - name: Check velnor-runner-qualification alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' -p velnor-runner-qualification '') || contains(format('' {0} '', (steps.replan.outputs.rust_crates_velnor_runner_package_args || needs.rust-plan.outputs.rust_crates_velnor_runner_package_args)), '' --workspace '')) }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-runner-qualification --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
         env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_crates_velnor_runner_test_filter || needs.rust-plan.outputs.rust_crates_velnor_runner_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
@@ -776,7 +846,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_generator_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_generator_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -896,36 +966,51 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_generator_mode || needs.rust-plan.outputs.rust_generator_mode) != ''none'' && (steps.replan.outputs.rust_generator_docs || needs.rust-plan.outputs.rust_generator_docs) == ''run'' && (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args) != '''' }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check velnor-gen alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-gen '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-gen --locked --message-format=json-render-diagnostics'
       - name: Check velnor-model alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-model '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-model --locked --message-format=json-render-diagnostics'
       - name: Check velnor-render alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-render '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-render --locked --message-format=json-render-diagnostics'
       - name: Check velnor-rust alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' -p velnor-rust '') || contains(format('' {0} '', (steps.replan.outputs.rust_generator_package_args || needs.rust-plan.outputs.rust_generator_package_args)), '' --workspace '')) }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-rust --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
         env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_generator_test_filter || needs.rust-plan.outputs.rust_generator_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
@@ -999,7 +1084,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_local_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_local_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -1119,28 +1204,39 @@ jobs:
       - name: Lint
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
         run: '. "$VELNOR_EXEC" run -- cargo-clippy clippy --workspace --all-targets --locked --message-format=json-render-diagnostics -- -D warnings'
       - name: Documentation
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_local_mode || needs.rust-plan.outputs.rust_local_mode) != ''none'' && (steps.replan.outputs.rust_local_docs || needs.rust-plan.outputs.rust_local_docs) == ''run'' && (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args) != '''' }}'
         working-directory: local
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
         run: '. "$VELNOR_EXEC" run -- cargo doc --workspace --no-deps --locked --config ''build.rustdocflags=["-D","warnings"]'' --message-format=json-render-diagnostics'
       - name: Check velnor-cache-rules alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' -p velnor-cache-rules '') || contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' --workspace '')) }}'
         working-directory: local
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-cache-rules --locked --message-format=json-render-diagnostics'
       - name: Check velnor-local alone
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' -p velnor-local '') || contains(format('' {0} '', (steps.replan.outputs.rust_local_package_args || needs.rust-plan.outputs.rust_local_package_args)), '' --workspace '')) }}'
         working-directory: local
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
         run: '. "$VELNOR_EXEC" run -- cargo check -p velnor-local --locked --message-format=json-render-diagnostics'
       - name: Build the tests
         if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         working-directory: local
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --ignore-default-filter --no-run'
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
         env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
           TEST_FILTER: '${{ steps.replan.outputs.rust_local_test_filter || needs.rust-plan.outputs.rust_local_test_filter }}'
         run: '. "$VELNOR_EXEC" run -- cargo-nextest nextest run --workspace --locked --cargo-message-format=json-render-diagnostics --no-fail-fast --ignore-default-filter --status-level pass -E "$TEST_FILTER" --no-tests=pass'
       - name: velnor-ci inputs save
@@ -1409,22 +1505,32 @@ jobs:
         run: '. "$VELNOR_EXEC" plan --full'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: ci-helper
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/ci-helper/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: crates/velnor-runner
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/crates/velnor-runner/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: generator
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/generator/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: Build every target
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' }}'
         working-directory: local
+        env:
+          CARGO_TARGET_DIR: '${{ github.workspace }}/local/target'
         run: '. "$VELNOR_EXEC" run -- velnor-ci inputs build -- cargo build --workspace --all-targets --locked --message-format=json-render-diagnostics'
       - name: velnor-ci inputs audit
         run: '. "$VELNOR_EXEC" inputs audit'

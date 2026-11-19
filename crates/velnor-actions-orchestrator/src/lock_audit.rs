@@ -121,7 +121,7 @@ pub(crate) fn audit_prepare_installs_with_catalog_and_verifiers(
         }
     }
     for command in validator_commands {
-        audit_validator_command(command, &mut subjects, &mut blocking);
+        audit_validator_command(command, catalog, &mut subjects, &mut blocking);
     }
     subjects.sort_by(|left, right| left.display.cmp(&right.display));
     subjects.dedup();
