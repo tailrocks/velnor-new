@@ -30,6 +30,7 @@ fn rendered_run(manifests: &[&str]) -> String {
         },
         concurrency: Concurrency::CancelOlderPullRequestRuns,
         permissions: Permissions::default(),
+        fork_runner: RunnerLabel::new("ubuntu-latest").unwrap_or_else(|e| unreachable!("{e}")),
         jobs: vec![Job {
             id: JobId::new("rust").unwrap_or_else(|e| unreachable!("{e}")),
             name: None,
@@ -48,6 +49,7 @@ fn rendered_run(manifests: &[&str]) -> String {
                     manifests,
                 },
                 directory: None,
+                target_dir: None,
                 when: When::FetchSources,
                 skip_on_draft: false,
                 gate: None,
