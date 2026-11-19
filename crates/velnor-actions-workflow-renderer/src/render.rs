@@ -182,7 +182,7 @@ pub fn finalize_jobs(
         closure::check_internal_staged(id, job, ctx.preseed)?;
     }
     crate::tools_producer::add_tools_producers(&mut jobs, ctx.pull_request_cache_policy)?;
-    crate::sources_producer::add_sources_producer(&mut jobs)?;
+    crate::sources_producer::add_sources_producer(&mut jobs, &ctx.runs_on)?;
     crate::tofu_producer::add_tofu_providers_producers(&mut jobs)?;
     crate::tofu_stage::stage_tofu_jobs(&mut jobs, ctx.max_parallel_jobs);
     closure::check_plan_anchor(&jobs)?;
@@ -284,6 +284,7 @@ fn merged_jobs(
         &workflow_task_ids,
     )?;
     crate::required_gate::insert_required_gate(&mut jobs)?;
+    crate::support_placement::apply(&mut jobs, ctx)?;
     msrv::check_no_msrv(&jobs)?;
     support::check_candidate_invariants(&jobs)?;
     support::check_final_gate(&jobs)?;

@@ -49,6 +49,7 @@ pub(super) fn render_context(
         preseed: runtime.preseed(),
         workflow_tasks: input.workflow_tasks,
         lane_plan: None,
+        scale_set_support_jobs: std::collections::BTreeSet::new(),
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
         mise_quiet: input.config.workflow.mise_quiet,
         plan_consumer_env: runtime.plan_consumer_env().clone(),
@@ -59,6 +60,12 @@ pub(super) fn render_context(
             .rust
             .as_ref()
             .map(|rust| rust.non_inputs.clone())
+            .unwrap_or_default(),
+        pr_ci: input
+            .config
+            .execution
+            .as_ref()
+            .map(|execution| execution.pr_ci)
             .unwrap_or_default(),
     })
 }

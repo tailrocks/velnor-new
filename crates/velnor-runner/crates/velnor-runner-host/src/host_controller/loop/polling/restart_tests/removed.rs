@@ -115,18 +115,16 @@ impl Controller {
 }
 
 /// Freezes the clock the production deadlines read. A paused tokio clock jumps to the next timer
-/// whenever the runtime goes idle, which a loopback socket round trip does, so a task that stays
-/// runnable keeps it still. A frozen clock moves only through `advance`, so machine load cannot
-/// expire a deadline or let one pass.
-struct Frozen(tokio::task::JoinHandle<()>);
+/// whenever the runtime goes idle, which a loopback socket round trip does. An outstanding
+/// blocking task inhibits that jump, so the clock moves only through `advance`, and the blocked
+/// thread idles instead of spinning. Machine load cannot expire a deadline or let one pass.
+struct Frozen(Option<std::sync::mpsc::Sender<()>>);
 
 fn freeze() -> Frozen {
     tokio::time::pause();
-    Frozen(tokio::spawn(async {
-        loop {
-            tokio::task::yield_now().await;
-        }
-    }))
+    let (release, held) = std::sync::mpsc::channel::<()>();
+    drop(tokio::task::spawn_blocking(move || held.recv().ok()));
+    Frozen(Some(release))
 }
 
 impl Frozen {
@@ -137,7 +135,7 @@ impl Frozen {
 
 impl Drop for Frozen {
     fn drop(&mut self) {
-        self.0.abort();
+        drop(self.0.take());
         tokio::time::resume();
     }
 }

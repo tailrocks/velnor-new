@@ -109,6 +109,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
     .map_err(|error| fail(&format!("authority rejected:{error}")))?;
     Ok(RenderContext {
         lane_plan: None,
+        scale_set_support_jobs: std::collections::BTreeSet::new(),
         authority_steps,
         generator_version: env!("CARGO_PKG_VERSION").to_owned(),
         controller: velnor_actions_workflow_renderer::render::ControllerLocator::PinnedRelease {
@@ -128,6 +129,7 @@ fn context(jobs: &BTreeMap<String, Job>) -> Result<RenderContext, Box<dyn Error>
         tool_pins: Vec::new(),
         max_parallel_jobs: config.workflow.max_parallel_jobs,
         non_inputs: velnor_actions_contract::NonInputs::default(),
+        pr_ci: velnor_actions_contract::PrCiMode::Off,
     })
 }
 

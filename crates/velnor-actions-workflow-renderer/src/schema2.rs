@@ -84,6 +84,7 @@ pub struct Schema2WorkflowRequest {
     pub mise_pin_qualification: Option<MisePinQualificationPins>,
     pub product_release: Option<ProductReleasePins>,
     pub runner_image_family: Option<velnor_actions_contract::config::MacRunnerQualificationConfig>,
+    pub pr_ci: velnor_actions_contract::PrCiMode,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,4 +1,4 @@
-Velnor Actions plan 0.1.80
+Velnor Actions plan 0.1.81
 Repository: <repo>
 
 Detected stacks
@@ -85,12 +85,11 @@ Workflow to generate
     - alint (3 steps)
     - check-generator-samples (7 steps)
     - check-maintenance-helpers (7 steps)
-    - jactionlint (7 steps)
+    - jactionlint (5 steps)
     - plan (18 steps)
     - required (10 steps)
     - required-gate (1 steps)
     - sources-producer (15 steps)
-    - tools-producer-caf63d48 (9 steps)
     - no matrix entries (no-work workflow)
   Parallel: single job; no matrix fan-out
   Critical path: stack/mise/generator-samples/check/default (1 tasks)
