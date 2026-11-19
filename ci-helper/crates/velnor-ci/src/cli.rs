@@ -6,11 +6,15 @@ use std::path::PathBuf;
 use clap::{Args, Parser, Subcommand};
 use velnor_model::{InvalidId, RepoPath};
 
+mod fetch_reports;
 mod gate;
 mod report;
+mod resolve_qualification;
+pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use gate::GateArgs;
 pub use report::ReportArgs;
+pub use resolve_qualification::ResolveQualificationArgs;
 pub use write_request::WriteRequestArgs;
 
 #[derive(Debug, Parser)]
@@ -45,6 +49,10 @@ pub enum Command {
     )]
     Gate(GateArgs),
     #[command(
+        about = "Download every report artifact the plan expects, all at once from one listing of the run: read the artifact names from matrix.include[].artifact_id of <run-dir>/plan.json, list the run's artifacts, download each expected one over --connections connections (three attempts each) and extract it to <run-dir>/reports/<artifact name>. Every expected artifact is attempted before the command fails; exit 1 names each one that was never uploaded, expired or could not be downloaded, and a missing or malformed plan.json. Reads GITHUB_TOKEN, which needs actions: read"
+    )]
+    FetchReports(FetchReportsArgs),
+    #[command(
         about = "Exit 1 unless the tag is rust-ci-v or tools-v followed by the version of this program"
     )]
     CheckTag(CheckTagArgs),
@@ -61,6 +69,10 @@ pub enum Command {
         about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
     )]
     WriteRequest(WriteRequestArgs),
+    #[command(
+        about = "On a workflow_dispatch qualification run, resolve the predecessor the request names: re-read that run attempt through the GitHub API (default branch, event, conclusion, workflow path, repository), walk its receipt artifacts, derive the source delta from git for useful_delta, and write $RUNNER_TEMP/velnor/qualification-cache-admission.json. Writes nothing for a phase with no predecessor. Reads GH_TOKEN (or GITHUB_TOKEN) and GITHUB_API_URL; run in the checkout"
+    )]
+    ResolveQualification(ResolveQualificationArgs),
     #[command(
         about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
     )]

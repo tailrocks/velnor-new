@@ -19,6 +19,14 @@ pub(crate) fn writes_base(facts: &RepoFacts) -> bool {
     facts.private_sources.is_none() && has_saving_helper(facts)
 }
 
+pub const MAX_SOURCE_ROOTS: usize = 16;
+
+#[must_use]
+pub fn source_roots_over_limit(facts: &RepoFacts) -> Option<usize> {
+    (writes_base(facts) && facts.rust_roots.len() > MAX_SOURCE_ROOTS)
+        .then_some(facts.rust_roots.len())
+}
+
 pub(crate) fn has_saving_helper(facts: &RepoFacts) -> bool {
     facts
         .helper
@@ -45,6 +53,17 @@ pub(crate) fn restored(facts: &RepoFacts) -> Vec<Step> {
         StepKind::Helper(HelperCommand::Restored(expiry))
     };
     std::iter::once(step(restore)).chain(replan).collect()
+}
+
+pub(crate) fn sources_locks(facts: &RepoFacts) -> Step {
+    let mut locks: Vec<RepoPath> = facts
+        .rust_roots
+        .iter()
+        .map(|root| root.manifest.sibling(&RepoPath::from_static("Cargo.lock")))
+        .collect();
+    locks.sort();
+    locks.dedup();
+    step(StepKind::SourcesLocks(locks))
 }
 
 pub(crate) fn saving_run(run: Step) -> Step {
@@ -102,11 +121,26 @@ pub(crate) fn save_steps(
         },
     ];
     if sources {
+        let lane_slug = cache_root.slug().clone();
+        steps.extend(
+            facts
+                .rust_roots
+                .iter()
+                .enumerate()
+                .map(|(position, other)| Step {
+                    directory: other.manifest.parent(),
+                    when: When::FetchSources,
+                    ..step(StepKind::SourcesFetch {
+                        lane: lane_slug.clone(),
+                        position,
+                    })
+                }),
+        );
         steps.push(Step {
             when: When::SaveSources,
             ..step(StepKind::CacheSave(CacheKey::Sources {
                 host: Host,
-                root: cache_root,
+                lane: cache_root,
             }))
         });
     }
@@ -149,7 +183,7 @@ pub(crate) fn trim_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
         name: Some("Cache maintenance".to_owned()),
         needs,
         when: When::SaveBase,
-        skip_on_draft: false,
+        pr: crate::plan::quick(facts),
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Actions, Access::Write),
             (PermissionScope::PullRequests, Access::Read),
