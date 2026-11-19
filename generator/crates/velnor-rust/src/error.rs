@@ -57,6 +57,12 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
+    LintToolUnpinned(String),
+    LintDuplicate(String),
+    LintKeyForeign {
+        kind: String,
+        key: &'static str,
+    },
     UnknownTestGroupRoot(String),
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
@@ -294,10 +300,15 @@ impl fmt::Display for Reason {
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
-            Self::InvalidPatch(key) => write!(
-                f,
-                "{key} must be a table whose path is a folder in the repository"
-            ),
+            Self::LintToolUnpinned(_)
+            | Self::LintDuplicate(_)
+            | Self::LintKeyForeign { .. } => self.fmt_config(f),
+            Self::InvalidPatch(key) => {
+                write!(
+                    f,
+                    "{key} must be a table whose path is a folder in the repository"
+                )
+            }
         }
     }
 }

@@ -150,6 +150,26 @@ pub enum Command {
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+    #[command(subcommand, about = "Decide the qualification workflow")]
+    Qualification(QualificationCommand),
+}
+
+#[derive(Debug, Subcommand)]
+pub enum QualificationCommand {
+    #[command(
+        about = "Read the needs context from NEEDS_JSON and exit 1 unless every --lane job succeeded, which is the verdict of the qualification compare job. Fails when NEEDS_JSON is unset or invalid, a lane is missing from needs, or a lane result is missing, skipped, cancelled, failure or unknown. Prints a table and appends it to $GITHUB_STEP_SUMMARY"
+    )]
+    Compare(QualificationCompareArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct QualificationCompareArgs {
+    #[arg(
+        long,
+        default_values = ["verify-hosted", "verify-scale-set"],
+        help = "Job id of a lane the compare job needs; repeat for each lane"
+    )]
+    pub lane: Vec<String>,
 }
 
 #[derive(Debug, Args)]

@@ -14,6 +14,7 @@ mod header;
 mod helper_integrity;
 mod helper_steps;
 mod key_length;
+mod lint_steps;
 mod pinned_actions;
 mod private_steps;
 mod release;

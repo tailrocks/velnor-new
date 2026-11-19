@@ -33,6 +33,7 @@ mod plan_request;
 pub mod preview;
 mod private_check;
 pub mod pump;
+mod qualification;
 mod recording;
 mod registry;
 mod release;
@@ -63,7 +64,8 @@ pub use self::restored::{break_time_ties, break_time_ties_with};
 pub use self::timings::write_report;
 use crate::cli::{
     AuditArgs, BenchCommand, CacheCommand, CheckTagArgs, Cli, CollectArgs, Command, CompareArgs,
-    DecideArgs, ImageCommand, InputsCommand, ReleaseCommand, ReleaseGateArgs, SourcesCommand,
+    DecideArgs, ImageCommand, InputsCommand, QualificationCommand, ReleaseCommand,
+    ReleaseGateArgs, SourcesCommand,
 };
 use crate::collect::collect;
 use crate::compare::{compare, compare_across_populations};
@@ -203,6 +205,9 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::WriteRequest(args) => write_request::run(&args),
         Command::ResolveQualification(args) => resolve_qualification::run(&args),
         Command::Gate(args) => required::run_gate(&args),
+        Command::Qualification(QualificationCommand::Compare(args)) => {
+            qualification::run_compare(&args)
+        }
         Command::FetchReports(args) => fetch_reports::run_fetch_reports(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),

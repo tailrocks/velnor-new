@@ -35,6 +35,7 @@ pub mod preview;
 pub mod private_token;
 pub mod progress_evidence;
 pub mod publish;
+pub mod qualification;
 pub mod release;
 pub mod release_commit;
 pub mod release_family;

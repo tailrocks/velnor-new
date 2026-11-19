@@ -13,6 +13,7 @@ mod cargo_log;
 mod classify;
 mod compat;
 mod config;
+mod config_branch;
 mod config_cache;
 
 mod config_ci;
@@ -20,6 +21,7 @@ mod config_events;
 mod config_exclude;
 mod config_fork;
 mod config_helper;
+mod config_lint;
 mod config_mirror;
 mod config_test_groups;
 
@@ -32,9 +34,11 @@ mod doc_steps;
 mod docs_post_merge;
 mod embedded;
 mod error;
+mod error_config;
 mod external_config;
 mod harness;
 mod lane;
+mod lint_jobs;
 mod lock;
 mod lock_affected;
 mod lock_key;
