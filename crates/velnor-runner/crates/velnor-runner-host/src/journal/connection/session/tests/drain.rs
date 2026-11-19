@@ -336,7 +336,13 @@ async fn one_connections_work_does_not_drain_or_block_another_scope() -> TestRes
 #[tokio::test(flavor = "multi_thread")]
 async fn host_wide_drain_counts_an_unresolved_refresh_of_a_bound_session() -> TestResult {
     let fx = fixture().await?;
-    let intent = bind_session(&fx.scope, "0123456789abcdef0123456789abcdef", "session-1", 1).await?;
+    let intent = bind_session(
+        &fx.scope,
+        "0123456789abcdef0123456789abcdef",
+        "session-1",
+        1,
+    )
+    .await?;
     fx.scope.session_header_allocation(intent).await?;
     assert!(fx.journal.is_drained().await?);
     let claim = fx
