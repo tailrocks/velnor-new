@@ -6,14 +6,17 @@ use velnor_runner_core::{
     transition,
 };
 
+#[cfg(test)]
 fn intent() -> AcquireIntentId {
     AcquireIntentId::new(2).expect("non-zero intent")
 }
 
+#[cfg(test)]
 fn epoch() -> Epoch {
     Epoch::new(7)
 }
 
+#[cfg(test)]
 fn acquiring() -> WorkerState {
     WorkerState::Acquiring {
         intent: intent(),
@@ -21,6 +24,7 @@ fn acquiring() -> WorkerState {
     }
 }
 
+#[cfg(test)]
 fn acquired() -> WorkerState {
     transition(&acquiring(), &WorkerEvent::Acquired { epoch: epoch() })
         .expect("Acquired is legal while acquiring")
@@ -54,7 +58,10 @@ fn acquire_started_after_success_is_illegal() {
 #[test]
 fn acquire_uncertain_after_success_is_illegal() {
     assert_eq!(
-        transition(&acquired(), &WorkerEvent::AcquireUncertain { epoch: epoch() }),
+        transition(
+            &acquired(),
+            &WorkerEvent::AcquireUncertain { epoch: epoch() }
+        ),
         Err(StateError::IllegalTransition)
     );
 }
