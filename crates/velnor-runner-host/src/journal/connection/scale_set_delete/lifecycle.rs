@@ -103,8 +103,9 @@ pub(in crate::journal::connection) async fn restart_after_deleted_set(
 }
 
 fn require_one(changed: Result<u64, turso::Error>) -> Result<(), HostError> {
-    match changed {
-        Ok(1) => Ok(()),
-        _ => Err(HostError::Journal),
+    if changed.is_ok_and(|rows| rows == 1) {
+        Ok(())
+    } else {
+        Err(HostError::Journal)
     }
 }

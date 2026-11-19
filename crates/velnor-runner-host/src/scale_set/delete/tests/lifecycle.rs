@@ -157,7 +157,7 @@ async fn a_refused_create_whose_set_is_already_gone_sends_no_delete() -> TestRes
     let mut api = FakeScaleSetApi::with(&[]);
     let outcome = recover_intended_delete(&mut api, "admin-token", &refused.scoped).await?;
     assert_eq!(outcome, Some(ScaleSetDeleteOutcome::Deleted));
-    assert!(api.deletes.is_empty());
+    assert_eq!(api.deletes, Vec::<i64>::new());
     assert_create_can_proceed(&refused).await
 }
 
