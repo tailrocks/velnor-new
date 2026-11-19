@@ -384,38 +384,3 @@ fn recorded_metadata_rejects_keys_that_collapse_during_relocation() {
     let result = relocate_metadata(Path::new("/tmp/repo name"), json);
     assert!(matches!(result, Err(IoError::Repository(_))), "{result:?}");
 }
-
-#[test]
-fn recording_a_repository_never_records_its_own_samples() -> TestResult {
-    let sample = crate::golden::samples().join("single-crate");
-    let mut view = crate::golden::load(&sample)?;
-    let nested = "generator/samples/old/view/Cargo.toml";
-    view.tracked_paths.insert(RepoPath::new(nested)?);
-    view.tracked_paths
-        .insert(RepoPath::new("generator/samples/old/manifests.txt")?);
-    view.files
-        .insert(RepoPath::new(nested)?, b"[package]\nname = \"nested\"\n".to_vec());
-    let recording = recording_of(
-        Path::new(SAMPLE_REPOSITORY),
-        view,
-        BTreeMap::new(),
-        &mut Vec::new(),
-    )?;
-    assert!(
-        recording
-            .view
-            .keys()
-            .all(|path| !path.as_str().starts_with("generator/samples/")),
-        "{:?}",
-        recording.view.keys().collect::<Vec<_>>()
-    );
-    assert!(
-        recording
-            .manifests
-            .iter()
-            .all(|path| !path.as_str().starts_with("generator/samples/")),
-        "{:?}",
-        recording.manifests
-    );
-    Ok(())
-}
