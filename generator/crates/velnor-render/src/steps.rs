@@ -38,8 +38,7 @@ const CACHE_SAVE: &str = "actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1
 const A_NEED_FAILED: &str =
     "${{ contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled') }}";
 
-pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
-    let (restores, audit) = crate::base_steps::job_setup(job);
+fn cargo_lane(job: &Job) -> CargoLane {
     let artifacts = job
         .steps
         .iter()
@@ -54,7 +53,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             _ => None,
         })
         .unwrap_or(ArtifactFormat::Disabled);
-    let lane = CargoLane {
+    CargoLane {
         artifacts,
         cache_debug: job
             .steps
@@ -64,7 +63,12 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
             .steps
             .iter()
             .any(|step| matches!(step.kind, StepKind::PrivateFetch { .. })),
-    };
+    }
+}
+
+pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob {
+    let (restores, audit) = crate::base_steps::job_setup(job);
+    let lane = cargo_lane(job);
     let tests = job
         .steps
         .iter()
