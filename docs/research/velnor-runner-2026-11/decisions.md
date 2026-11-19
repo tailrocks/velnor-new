@@ -999,6 +999,17 @@ cluster test.
 | G13 linker and debuginfo, K18 | Measured in BM11 with digests re-proved | plan BM11 |
 | C15 overhead | Settled: ≤ 3% of suite wall and ≤ 1.5 s per obligation at P50 | 6.4 |
 
+### Group 31: fastest-runner critique by Claude Fable 5.2
+
+| Point | Decision | v3 section |
+|---|---|---|
+| G01 high-clock nodes, K11 | Owner question D20 (spend; I104); recommended for the benchmark first | 13; plan BM15 |
+| G16 one compile for two witnesses | Owner question D21; recommended no | 13 |
+| G15 resident planner, pre-cloned sandboxes | Adopted | 5.5; plan P09 |
+| G04 earlier `velnor verify` | Adopted: after exact-tree records, not after per-root keys | plan V11 |
+| O06 flake budget | Accepted: the budget is per two-witness record | 1.3 |
+| O18 cohort | Accepted: S3 covers every class; conformance is a timed obligation of the PRs that need it | 5.7, 11 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the

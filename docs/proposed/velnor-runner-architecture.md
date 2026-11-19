@@ -112,8 +112,9 @@ changed obligations even on an identical tree.
 A *false failure* is a required run that fails on inputs where an immediate rerun passes; it costs a
 rerun or a queue ejection, and every queued entry behind an ejection is rebuilt.
 
-- **Budget:** at most 3% false failures per required run once verification leaves today's full
-  runs, and 1% at the goals, each claimed only after about 300 rerun pairs sampled both ways under
+- **Budget:** per verification record, which has two witnesses, at most 3% false failures once
+  verification leaves today's full runs and 1% at the goals, so each witness may fail falsely about
+  half as often (two runs at today's 8.1% fail together-or-either 15.5% of the time); each claimed only after about 300 rerun pairs sampled both ways under
   load (zero disagreements in 299 bound the rate just under 1% at 95%). "Not requested" never
   counts. Today's 8.1% [M] comes from full runs.
 - **Act:** retries stay at 0, so a flaky test fails and is counted. Two false failures in seven days
@@ -371,8 +372,8 @@ against warm pods (provision to first step under load, section 11).
 2. **Resolve and execute.** Each record is satisfied (every slot holds a passing, current, unrevoked
    receipt), in flight (join it) or open (schedule the missing witnesses); C5 always schedules.
    Obligations are plain commands (`cargo`, `cargo clippy`, `cargo doc`, `cargo nextest`) run through
-   `velnor-ci` in a warm sandbox over a reflink clone of a verified generation; the agent observes
-   them and signs one receipt per witness.
+   `velnor-ci` in a sandbox pre-cloned from a verified generation, planned by a resident planner;
+   the agent observes them and signs one receipt per witness.
 3. **Actions jobs** (release, image, scheduled): the dispatcher holds every JIT identity, picks the
    node (warm state, site, class, reserved merge path), then acquires and hands over the job.
 4. **Report.** The fenced writer posts `Velnor / Verified` when every record of the head's vector is
@@ -419,7 +420,8 @@ same maintained adapter production may select.
   order, cancellation and timeouts must be equal, unless an owner-signed allow-list entry covers a
   difference. 100% per backend, zero secret leaks, and at least 95% of about 30 executor mutants
   killed before the harness's green counts.
-- **When.** On every executor, native-action or protocol change; nightly; within 14 days of each
+- **When.** As an obligation of every PR that changes an executor, a native action or the protocol
+  code, timed per PR in the class mix; nightly; within 14 days of each
   official release against its tag (v2.338.2, `d1eb12d4`, today); as sampled shadow runs.
 - **Drift.** Deadlines per version from the deprecations endpoint (2.337.0 stops on 2026-12-25,
   2.338.0 on 2027-01-04): an alarm 21 days ahead, a page on a critical update; unknown protocol
@@ -1005,8 +1007,8 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 988 agent-hours of building and 120 of review,
-about 3.4 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
+(v2, decisions 1–24 and the rulings) sizes about 998 agent-hours of building and 120 of review,
+about 3.5 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min
 at P50 [E]. Its first ten items are listed there.
@@ -1141,5 +1143,7 @@ where release bytes are built (D12).
 | D16 | Does a `velnor:verify` label added while the PR was a draft start verification when it becomes ready? | An agent opens a draft, labels it early, then marks it ready; today nothing would run until it re-labels or pushes | Recommend yes: the label states intent and the reconciler can read it from state. Default no, the literal reading of decision 12's step 2 | day 2 |
 | D18 | May Velnor land merges itself (a merge train that fast-forwards `main` by compare-and-swap after verifying the exact resulting tree), instead of GitHub's merge queue? Decision 7 keeps GitHub's queue | A green PR waits 19 s for GitHub to form its group and 26 s to merge it, even when the group's tree was verified seconds earlier | About 45 s per merge [M: medians of 19 s and 26 s], about half the 85 s goal estimate, more in bursts | Not now. Measure GitHub's share on 50–200 auto-merged PRs and shadow a compare-and-swap train for tree-match and latency; bring the numbers back before changing decision 7 | day 8 |
 | D19 | May Velnor compile and test a ready PR's pushes before the label, at idle priority, so the label finds the work done? Decision 12 says an unlabelled push starts nothing | An agent pushes, then labels 2 min later; today the label starts a 15–25 s compile and the tests | About 15–25 s off label-to-verdict [E], for about 5–10 runner-min per speculated head, 45% of which are superseded | No: keep decision 12. Use pre-push `velnor verify` (decision 10c) instead, which gives the same lookup when the agent asks for it | day 3 |
+| D20 | Rent one high-clock node per site (Ryzen 9950X or EPYC 4564P class) now, instead of after the test-floor fixes? | The workers are EPYC 9454P throughput parts; one rustc front end and the longest test run on one core | 1.3–1.5× on the compile and longest-test chain [E, I104]: helper class about 25 → 18 s | Rent one now for the hardware benchmark only (BM15); move the verdict classes onto it if the ratio is ≥ 1.15 | day 4 |
+| D21 | After compile reuse graduates, may one compile feed both test witnesses (the second runs the first's digest-bound binary on another node)? | Today each witness compiles its own binary, so a stale build on one node is cross-checked by the other | No wall time; about 3 runner-min per merged PR | No: the second compile is the cross-check the two-witness rule and ruling Q12 rely on | day 7 |
 | D22 | May the benchmark rent comparator arms (one of Namespace, Blacksmith or Depot, and GitHub larger runners) and run velnor-new's replayed heads on them? | Without a rented arm, "fastest" can only mean faster than our own baselines | None directly; it decides how wide the claim can be | Yes, one rented arm and GitHub larger runners, measurement only, for about a week; nothing they produce counts as a verdict | day 5 |
 | D17 | Who may approve a reduction (an obligation or test removed from the inventory)? | A PR deletes a slow test file; the head plan lists fewer tests than `main`'s | Recommend: only the owner, through a signed inventory entry. Default: no reduction is accepted | day 3 |

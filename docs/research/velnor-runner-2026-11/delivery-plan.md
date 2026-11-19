@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 988 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.4 days of fleet time (988 ÷ 12 builders ≈ 82 h). Coding does not set the dates.
+- **Total work:** about 998 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.5 days of fleet time (998 ÷ 12 builders ≈ 83 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -350,7 +350,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | V08 | Per-root keys | Dependency contracts per obligation, always including every tracked file in each ancestor directory of the root (`rustfmt.toml`, `clippy.toml`, `deny.toml`, `rust-toolchain.toml`, `Cargo.*`, `mise.*`) and `.cargo/`, `.config/`, `.github/`, `.velnor/`; enforced by V07 on every execution; the sibling-file canary | V07, V04 | 12 | strong | 3,000 clean per kind; the canary is caught | — |
 | V09 | Flake sampler | 300 paired reruns | B15 | 3 | cheap | Rate with an interval | — |
 | V10 | Queue-tip speculation | Shadow, then on | V04 | 8 | strong | ≥ 60% match over 50 merges, else deleted | — |
-| V11 | `velnor verify` (stretch) | Pre-push verify in the sealed sandbox, either backend | V08 | 10 | strong | Verdict ≤ 10 s after a preflighted push | — |
+| V11 | `velnor verify` | Pre-push verify of the exact candidate tree and predicted queue base in the sealed sandbox, both witnesses, either backend | V04 | 10 | strong | Verdict ≤ 10 s after a preflighted push | — |
 | V12 | C5 classifier | The trusted planner's scan for clock, randomness, network and event reads | G03 | 6 | strong | The 11 clock-reading test files are C5 | — |
 | V14 | No-`.git` census | Find obligations that need Git metadata (`root.rs:22` runs `git rev-parse --show-toplevel`); give them a read-only repository at the subject commit, keyed by it | G03 | 4 | mid | Every obligation passes without `.git` or is listed and keyed by commit | — |
 | V13 | Per-package keys (stretch) | Contracts per package closure | V08 | 16 | strong | 3,000 clean per kind | — |
@@ -429,10 +429,12 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | BM12 | Page-cache contention (lab B2+) | 1, 4 and 6 build sandboxes running test, clippy and doc lanes beside RustFS and a cold A1 build, reflink against read-only overlayfs; `fincore`, PSI, major faults | C05, ST04 | 6 | mid | P90 slowdown ≤ 1.25× idle; no OOM; digests equal cold | — |
 | BM13 | Per-execution overhead | Suite wall with and without the read audit; tree-hash time by file count; C5 time per obligation; a sealed lower layer with a delta hash as the candidate | V07, C10 | 6 | mid | ≤ 3% of suite wall and ≤ 1.5 s per obligation at P50 | — |
 | BM14 | GitHub's share and a shadow train | 50–200 auto-merged PRs: `success` to enqueue to group to merge; a shadow compare-and-swap train measured for tree match and latency, landing nothing | B04, L07 | 6 | mid | Numbers for owner question D18 | — |
+| BM15 | Hardware floor (K11) | Runner-root cold build, the 20 slowest tests and S6's matrix on a 9454P worker against one rented high-clock node | D20 | 4 | mid | Ratio published; verdict classes move only at ≥ 1.15 | — |
+| P09 | Resident planner, pre-cloned sandboxes | The planner stays resident; sandboxes are pre-cloned from the sealed generation | V01, C05 | 6 | mid | Stage 1b ≤ 0.5 s, sandbox ready ≤ 0.3 s at P50 | — |
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 144 items, about 988 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 146 items, about 998 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
