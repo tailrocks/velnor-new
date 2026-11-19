@@ -68,6 +68,8 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::Always
         | When::CacheDebug
         | When::ClearRunLabel
+        | When::RestoreToolsUnlessLocal
+        | When::SaveToolsUnlessLocal
         | When::SaveToolsOnDefaultBranch => None,
     };
     gate.into_iter().chain(when).collect()

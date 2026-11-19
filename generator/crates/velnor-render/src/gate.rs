@@ -23,6 +23,7 @@ const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 const POST_MERGE_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
 pub(crate) const TOOLS_STEP: &str = "tools";
+pub(crate) const TOOLS_LOCAL_STEP: &str = "toolslocal";
 pub(crate) const BASE_STEP: &str = "base";
 pub(crate) const SOURCES_LOCKS_STEP: &str = "sources_locks";
 const SAVING_EVENTS: &str = "(github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')";
@@ -184,10 +185,9 @@ pub(crate) fn condition(
             parts.push(SAME_REPOSITORY.to_owned());
             parts.push(has_label(CI_RUN_LABEL));
         }
-        When::SaveToolsOnDefaultBranch => {
-            parts.push(ON_DEFAULT_BRANCH.to_owned());
-            parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
-        }
+        When::SaveToolsOnDefaultBranch
+        | When::SaveToolsUnlessLocal
+        | When::RestoreToolsUnlessLocal => tools_parts(when, &mut parts),
     }
     parts.extend(pr_parts(pr));
     parts.extend(extra.iter().cloned());
@@ -198,6 +198,16 @@ pub(crate) fn condition(
         None
     } else {
         Some(format!("${{{{ {} }}}}", parts.join(" && ")))
+    }
+}
+
+fn tools_parts(when: When, parts: &mut Vec<String>) {
+    if when != When::RestoreToolsUnlessLocal {
+        parts.push(ON_DEFAULT_BRANCH.to_owned());
+        parts.push(format!("steps.{TOOLS_STEP}.outputs.cache-hit != 'true'"));
+    }
+    if when != When::SaveToolsOnDefaultBranch {
+        parts.push(format!("steps.{TOOLS_LOCAL_STEP}.outputs.hit != 'true'"));
     }
 }
 
