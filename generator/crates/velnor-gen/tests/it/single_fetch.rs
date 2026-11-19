@@ -44,7 +44,7 @@ fn savers(text: &str) -> Vec<(String, String)> {
 fn a_helper_with_sources_fetch_gets_one_step_listing_every_root_in_order() -> TestResult {
     let text = workflow(&repo(
         &["Cargo.toml", "xtask/Cargo.toml", "tools/Cargo.toml"],
-        "0.1.82",
+        "0.1.84",
     )?)?;
     let savers = savers(&text);
     assert!(savers.len() >= 3, "{}", savers.len());
@@ -77,7 +77,7 @@ fn a_helper_with_sources_fetch_gets_one_step_listing_every_root_in_order() -> Te
 
 #[test]
 fn the_sources_save_still_requires_the_one_fetch_to_succeed() -> TestResult {
-    let text = workflow(&repo(&["Cargo.toml", "xtask/Cargo.toml"], "0.1.82")?)?;
+    let text = workflow(&repo(&["Cargo.toml", "xtask/Cargo.toml"], "0.1.84")?)?;
     let savers = savers(&text);
     assert!(savers.len() >= 2, "{}", savers.len());
     for (id, block) in savers {
@@ -116,10 +116,32 @@ fn a_helper_without_sources_fetch_keeps_one_step_per_root_and_the_sixteen_root_r
 }
 
 #[test]
+fn the_released_helpers_without_sources_fetch_keep_the_per_root_steps_and_the_limit() -> TestResult
+{
+    for helper in ["0.1.82", "0.1.83"] {
+        let text = workflow(&repo(&["Cargo.toml", "xtask/Cargo.toml"], helper)?)?;
+        for (id, block) in savers(&text) {
+            assert!(step(&block, FETCH_STEP).is_none(), "{helper} {id}");
+            assert!(
+                step(&block, "Fetch the sources of root 1").is_some(),
+                "{helper} {id}"
+            );
+        }
+        let manifests = many(17);
+        let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
+        match expected_with_notes(&repo(&names, helper)?) {
+            Err(GenerateError::TooManySourceRoots(17)) => {}
+            other => return Err(format!("{helper}: {:?}", other.map(|_| ())).into()),
+        }
+    }
+    Ok(())
+}
+
+#[test]
 fn twenty_roots_fit_the_workflow_limit_with_the_single_fetch_step() -> TestResult {
     let manifests = many(20);
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let text = workflow(&repo(&names, "0.1.82")?)?;
+    let text = workflow(&repo(&names, "0.1.84")?)?;
     assert!(text.len() <= 500_000, "{} bytes", text.len());
     let savers = savers(&text);
     assert!(savers.len() >= 20, "{}", savers.len());
