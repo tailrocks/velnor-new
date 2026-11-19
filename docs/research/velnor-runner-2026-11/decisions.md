@@ -317,6 +317,10 @@ in the design review. "Same as" marks a merged duplicate.
 | N96 | The compile jobserver's width follows the node's free CPUs at sandbox start (16 up to 64), while nextest's threads stay at the class's fixed CPU count. | Gemini 4 Neon | — | Adopted (v3) | A lone PR on an idle node builds faster without changing any key: compile parallelism changes no output, and the test thread count stays in the key. |
 | N97 | Split every looped test (40, 12, 10, 6 and 4 cases) into one test per case and drop `test-threads=1` once tests use private temp directories and ports. | Gemini 4 Neon; earlier I059 | — | Adopted (v3) | The loops, not the cases, set today's floor. |
 | N98 | Race a local delta build against a cross-node fill when a node lacks the needed generation; the first verified result wins and the other is cancelled. | Muse Wonder Full (Rust-only round) | — | Adopted (v3) | A duplicate kept because it is faster, with the numbers: a fill took 39.9 s against a 92 s cold build, and 43.4 s against 67.4 s on a lockfile change [M]. |
+| N99 | Deliver by the agent-fleet plan: per-job-type cohorts ordered to relieve the critical path, milestones in days set by the binding constraint (CI and queue throughput, reviews and owner decisions, conformance evidence, capacity), and a deletion list per milestone. | Delivery plan (synthesis), from the owner's decisions 15, 16 and 18 | — | Adopted (v3) | About 560 agent-hours of building and 100 of review, about 2.3 days of fleet time; coding does not set the dates. Committed targets by day 10.5 at P50 (13.5 at P90); stretch measured by day 16–18. |
+| N100 | Land the phase-0 configuration first. | Delivery plan | — | Adopted (v3) | It cuts an agent PR's cycle from 94 to about 34 min at P50 and saves about 17 h of CI waiting at P50 (60 h at P90) on a critical path of about 14 dependent PRs [E]. |
+| N101 | Per-type cutover criteria in counts: 100% of the type's cases on Kubernetes, every mutant caught, N replayed pairs with no unexplained difference, every step made to fail red as on the oracle, start latency no worse than ARC's at P90. | Delivery plan (D11) | — | Adopted (v3) | Nothing moves back after a move (decision 18), so the bar is set before it; the deterministic made-to-fail check is the zero-false-green test. |
+| N102 | The final deletion keeps the official runner's image and launch code. | Owner (decisions 19, 20) amending the delivery plan's F01 | — | Adopted (v3) | The plan, written before decisions 19 and 20, deleted the official-runner image; GitHub Official and the reference executor need it. ARC's velnor-new scale set, the wrapper unless review keeps it, velnor-local's pair mode and the Turso journal are still deleted. |
 
 
 ## Load-bearing decisions
@@ -732,6 +736,28 @@ default, marked "pending ruling" in the design.
 | The Worker evaluates expressions twice, with a compare mode | Recorded as evidence for pending ruling Q4 | — |
 | File-delta sync as the default cross-node transport | Recorded under pending ruling Q16 | `mbx-cache` keeps its owner-approved threshold |
 | Every landed tree in full within 24 h | Superseded by A1 within 2 h at P90 | — |
+
+### Muse Wonder: no separate group
+
+Its surviving ideas are already in v3 from other groups or earlier rounds, so it gets no group of
+its own: the closed native action set with refusal before the job and qualified SHAs (N62), the
+reserved merge path (N38), per-class reporting (design §1.1), one builder per `main` tip with the
+profile in its key (superseded by N80), and three parallel executions (recorded under pending ruling
+Q12). Its "not requested" job that fails with a distinct gate reason is moot once `Required` is an
+App check that stays pending (N74).
+
+### Group 21: the delivery plan
+
+- The phases are replaced by the agent-fleet plan (N99): per-job-type cohorts, milestones by day
+  with the constraint that sets each date, and a deletion list per milestone; the phase-0
+  configuration lands first (N100).
+- Per-type cutover criteria are counted before each move (N101); after it, sampled shadow runs
+  continue and a divergence is fixed forward.
+- The plan's final deletion is amended by decisions 19 and 20: the official runner's image and
+  launch code stay (N102).
+- The first ten work items are the plan's first ten, with scope, acceptance and dependency.
+- The owner questions are the plan's decision pack minus what the owner already decided: D13 (park
+  the old runner's PRs) by decision 16, and D6 (the lab's reference executor) by decision 19.
 
 ## Design review
 
