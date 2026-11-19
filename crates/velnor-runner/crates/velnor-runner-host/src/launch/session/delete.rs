@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_runner_github::{QueueSession, Transport, delete_session};
+use velnor_runner_github::{QueueSession, SessionClose, Transport, delete_session};
 
-use crate::journal::{ConnectionJournal, HeaderAllocation};
+use crate::journal::{ConnectionJournal, HeaderAllocation, ScaleSetDeleteGate};
 use crate::listen::{Link, Secret};
 
 use super::{DeletedSession204, SessionDeleteOutcome};
@@ -47,14 +47,17 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
         return SessionDeleteOutcome::NotReady;
     };
 
-    if delete_session(
+    let closed = match delete_session(
         transport,
         allocation.scale_set_id(),
         allocation.session_id(),
         admin_token,
-    )
-    .is_err()
-    {
+    ) {
+        Ok(SessionClose::Closed) => true,
+        Ok(SessionClose::Gone) => created_set_deleted_by_us(scoped).await,
+        Err(_) => false,
+    };
+    if !closed {
         let _ignored = scoped
             .mark_session_delete_uncertain(session_intent_id, attempt)
             .await;
@@ -78,3 +81,18 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
         Err(_) => SessionDeleteOutcome::Held,
     }
 }
+
+/// A 404 on the session is "already gone" only when the journal proves this
+/// controller deleted the set that held it: deleting the set takes its
+/// sessions with it, and `disconnect --wait` deletes a created set before the
+/// connection leaves `host.toml`, which is when the session delete runs.
+async fn created_set_deleted_by_us(scoped: &ConnectionJournal) -> bool {
+    matches!(
+        scoped.scale_set_delete_gate().await,
+        Ok(ScaleSetDeleteGate::Deleted)
+    )
+}
+
+#[cfg(test)]
+#[path = "delete/tests.rs"]
+mod tests;

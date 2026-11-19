@@ -4,6 +4,7 @@
 use std::path::Path;
 
 use crate::journal::Journal;
+use crate::journal::schema::execution_authorization::tests::fixture::downgrade_to_v52;
 
 type TestResult<T = ()> = Result<T, Box<dyn std::error::Error>>;
 
@@ -25,17 +26,26 @@ async fn scalar(path: &Path, query: &str) -> TestResult<i64> {
     Ok(rows.next().await?.ok_or("missing row")?.get::<i64>(0)?)
 }
 
+/// A journal in the shape the given schema version really had: v57 differs
+/// from the current shape only by the missing table, and v52 is the oldest
+/// shape this chain still starts from, built by the helper the v52 to v53
+/// migration tests use. Reopening it runs the real intermediate migrations.
 async fn journal_below_the_table(version: i64) -> TestResult<tempfile::TempDir> {
     let directory = tempfile::tempdir()?;
     let path = directory.path().join("journal.db");
-    execute(
-        &path,
-        &[
-            &format!("DROP TABLE {TABLE}"),
-            &format!("PRAGMA user_version = {version}"),
-        ],
-    )
-    .await?;
+    {
+        let journal = Journal::open(&path).await?;
+        if version == 52 {
+            downgrade_to_v52(&journal).await?;
+        }
+        let connection = journal.connection().await?;
+        connection
+            .execute(&format!("DROP TABLE {TABLE}"), ())
+            .await?;
+        connection
+            .execute(&format!("PRAGMA user_version = {version}"), ())
+            .await?;
+    }
     Ok(directory)
 }
 
@@ -80,8 +90,8 @@ async fn a_v58_journal_with_a_widened_table_is_rejected() -> TestResult {
 }
 
 #[tokio::test]
-async fn versions_outside_the_migration_chain_stay_fail_closed() -> TestResult {
-    for version in [53_i64, 56, 59] {
+async fn versions_above_the_migration_chain_stay_fail_closed() -> TestResult {
+    for version in [59_i64, 60, 1000] {
         let directory = tempfile::tempdir()?;
         let path = directory.path().join("journal.db");
         execute(&path, &[&format!("PRAGMA user_version = {version}")]).await?;
