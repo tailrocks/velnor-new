@@ -35,7 +35,7 @@ pub(super) async fn bootstrap(connection: &turso::Connection) -> Result<(), Host
     Ok(())
 }
 
-pub(super) async fn migrate_v52_to_v57(connection: &turso::Connection) -> Result<(), HostError> {
+pub(super) async fn migrate_v56_to_v57(connection: &turso::Connection) -> Result<(), HostError> {
     connection
         .execute("DROP TRIGGER doctor_probe_transition_guard", ())
         .await

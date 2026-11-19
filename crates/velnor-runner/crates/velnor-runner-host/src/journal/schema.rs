@@ -68,10 +68,6 @@ mod tamper_tests;
 mod validation;
 mod worker_health;
 
-// Schema 53 through 56 are reserved by the agreed order in
-// ~/.cache/velnor-journal-version-order.md (#1277, #1280, #1283, #1075). This branch
-// lands at 57 and applies directly from main's v52 until those land; see
-// ~/.cache/velnor-1078-body.md for the rebase steps that must run before merge.
 pub(super) const JOURNAL_VERSION: i64 = 57;
 use current_columns::CURRENT_COLUMNS;
 pub(super) use validation::validate_persisted_schema_v35;
@@ -135,11 +131,24 @@ async fn bootstrap_current_schema(conn: &turso::Connection) -> Result<(), HostEr
 }
 
 async fn validate_persisted_schema(conn: &turso::Connection) -> Result<(), HostError> {
+    validate_persisted_schema_v53(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v52(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
     validate_persisted_schema_v42(conn).await?;
     unbound_retirement::validate(conn).await?;
     jit_interrupted_claims::validate(conn).await?;
     jit_claim_deadline::validate(conn).await?;
     jit_tombstone_completion::validate(conn).await
+}
+
+pub(in crate::journal::schema) async fn validate_persisted_schema_v53(
+    conn: &turso::Connection,
+) -> Result<(), HostError> {
+    validate_persisted_schema_v52(conn).await?;
+    execution_authorization::validate_v53(conn).await
 }
 
 #[cfg(test)]
