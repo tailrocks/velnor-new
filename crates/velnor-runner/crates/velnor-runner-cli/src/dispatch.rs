@@ -14,6 +14,8 @@ use crate::args::{Cli, Command, CredentialAction, DaemonAction, JournalAction};
 mod connect;
 mod connect_authority;
 mod connect_config;
+#[cfg(test)]
+mod connect_tests;
 mod connection_state;
 mod credential;
 mod disconnect;
