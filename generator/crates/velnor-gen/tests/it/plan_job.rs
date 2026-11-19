@@ -122,7 +122,7 @@ fn more_than_one_job_start_a_plan_job_that_installs_nothing_and_every_lane_waits
             );
         }
         assert!(text.contains(&format!(
-            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
+            "    needs:\n      - rust-plan\n      - rust-inputs-audit\n    if: '${{{{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_{slug}_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}}}'\n"
         )));
     }
     assert!(!text.contains("_doctests"), "{text}");

@@ -136,6 +136,24 @@ fn assert_mirror_before_tools(steps: &[serde_json::Value], mirror: Option<usize>
 }
 
 #[test]
+fn machete_runs_through_cargo_with_and_without_the_mirror() -> TestResult {
+    for (runner, mirror_runner) in [
+        ("mirror-box", "mirror-box"),
+        ("ubuntu-latest", "mirror-box"),
+    ] {
+        let text = workflow(&mirrored_repo(runner, mirror_runner, "")?)?;
+        let mirrored = text.contains("\"$VELNOR_EXEC\" crates-mirror");
+        assert_eq!(mirrored, runner == "mirror-box", "{text}");
+        assert!(text.contains("run -- cargo machete'"), "{mirrored}: {text}");
+        assert!(
+            !text.contains("cargo-machete machete"),
+            "{mirrored}: {text}"
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn in_job_planning_selects_work_before_configuring_the_mirror() -> TestResult {
     for shape in ["one-job", "lint-test", "groups"] {
         let config = format!("runner = 'mirror-box'\nshape = '{shape}'\n{MIRROR}");
