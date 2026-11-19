@@ -42,7 +42,7 @@ fn trust_follows_the_event_and_the_default_branch() {
         (
             "merge_group",
             "refs/heads/gh-readonly-queue/main/pr-1-a",
-            true,
+            false,
         ),
         ("push", "refs/heads/feature", false),
         ("push", "refs/tags/main", false),
@@ -65,7 +65,7 @@ fn trust_follows_the_event_and_the_default_branch() {
 fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
     let host = host("mbx-store-trusted");
     let shared = host.root.join("shared");
-    for (event, git_ref) in [("push", "refs/heads/main"), ("merge_group", "refs/heads/q")] {
+    for (event, git_ref) in [("push", "refs/heads/main"), ("schedule", "refs/heads/main")] {
         let outcome = run(&host, event, git_ref, Some(&shared));
         assert_eq!(
             env_lines(&outcome),
@@ -82,7 +82,7 @@ fn a_trusted_event_uses_the_shared_directory_with_pod_private_shims() {
         .unwrap_or_default();
     assert_eq!(mode, 0o700);
     let leftovers: Vec<_> = fs::read_dir(&shared)
-        .map(|d| d.count())
+        .map(Iterator::count)
         .into_iter()
         .collect();
     assert_eq!(
@@ -104,6 +104,30 @@ fn a_pull_request_never_gets_the_shared_directory() {
     assert_eq!(outcome, Outcome::Untrusted);
     assert_eq!(env_lines(&outcome), "");
     assert!(!host.root.join("temp/velnor-mbx-shims").exists());
+}
+
+#[test]
+fn a_merge_group_never_gets_the_shared_directory() {
+    let host = host("mbx-store-queue");
+    let outcome = run(
+        &host,
+        "merge_group",
+        "refs/heads/gh-readonly-queue/main/pr-1-a",
+        Some(&host.root.join("shared")),
+    );
+    assert_eq!(outcome, Outcome::Untrusted);
+    assert_eq!(env_lines(&outcome), "");
+}
+
+#[test]
+fn a_stale_probe_file_does_not_block_the_shared_directory() {
+    let host = host("mbx-store-stale");
+    let shared = host.root.join("shared");
+    let stale = shared.join(format!(".velnor-probe-{}", std::process::id()));
+    fs::write(&stale, "").unwrap_or_else(|e| unreachable!("{e}"));
+    let outcome = run(&host, "push", "refs/heads/main", Some(&shared));
+    assert!(matches!(outcome, Outcome::Shared { .. }), "{outcome:?}");
+    assert!(stale.exists());
 }
 
 #[test]

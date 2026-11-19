@@ -1,15 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Lets the runner host redirect the MBX compiler store to a shared directory.
-//!
-//! The runner pod sets `VELNOR_MBX_SHARED_DIR`. The workflow `env` context
-//! cannot see that variable, so this command decides at run time and exports
-//! `MBX_CACHE_DIR` and a pod-private `MBX_SHIMS_DIR` through `$GITHUB_ENV`.
-//! Only trusted events (a push or schedule on the default branch, and
-//! merge_group) use the shared directory; every other event, and every
-//! directory that fails validation, keeps MBX's own per-job store.
-
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::DirBuilderExt;
@@ -31,22 +22,15 @@ pub struct Inputs<'a> {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    /// The runner offered no shared directory.
     NotOffered,
-    /// The event may run untrusted code, so it never writes to the shared store.
     Untrusted,
-    /// The offered directory failed a check; the private store stays in force.
     Rejected(&'static str),
-    Shared {
-        dir: PathBuf,
-        shims: PathBuf,
-    },
+    Shared { dir: PathBuf, shims: PathBuf },
 }
 
 #[must_use]
 pub fn trusted_event(event_name: &str, git_ref: &str, default_branch: Option<&str>) -> bool {
     match event_name {
-        "merge_group" => true,
         "push" | "schedule" => default_branch
             .filter(|branch| !branch.is_empty())
             .is_some_and(|branch| git_ref.strip_prefix("refs/heads/") == Some(branch)),
@@ -95,14 +79,34 @@ fn validated(dir: &Path) -> Result<PathBuf, &'static str> {
     if fs::canonicalize(dir).map_err(|_| "unreadable")? != dir {
         return Err("path contains a symlink");
     }
-    let probe = dir.join(format!(".velnor-probe-{}", std::process::id()));
-    fs::OpenOptions::new()
-        .write(true)
-        .create_new(true)
-        .open(&probe)
-        .map_err(|_| "not writable")?;
-    fs::remove_file(&probe).map_err(|_| "not writable")?;
+    probe_writable(dir)?;
     Ok(dir.to_path_buf())
+}
+
+fn probe_writable(dir: &Path) -> Result<(), &'static str> {
+    for _ in 0..8 {
+        let probe = dir.join(format!(".velnor-probe-{:016x}", random_u64()));
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&probe)
+        {
+            Ok(file) => {
+                drop(file);
+                return fs::remove_file(&probe).map_err(|_| "not writable");
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {}
+            Err(_) => return Err("not writable"),
+        }
+    }
+    Err("not writable")
+}
+
+fn random_u64() -> u64 {
+    use std::hash::{BuildHasher, Hasher};
+    let mut hasher = std::collections::hash_map::RandomState::new().build_hasher();
+    hasher.write_u32(std::process::id());
+    hasher.finish()
 }
 
 fn private_shims(runner_temp: &Path) -> Result<PathBuf, &'static str> {
@@ -121,7 +125,6 @@ fn private_shims(runner_temp: &Path) -> Result<PathBuf, &'static str> {
     }
 }
 
-/// The text for `$GITHUB_ENV`; empty unless the shared store is selected.
 #[must_use]
 pub fn env_lines(outcome: &Outcome) -> String {
     match outcome {
