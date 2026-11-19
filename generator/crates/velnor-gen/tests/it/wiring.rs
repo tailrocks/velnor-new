@@ -242,11 +242,13 @@ fn the_policy_lane_checks_every_cargo_root() -> TestResult {
     track(&mut files, "mise.toml", MISE_WITH_MACHETE)?;
     let job = policy_job(&text(&files)?);
     assert!(
-        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny --locked check"#),
+        job.contains(r#""$VELNOR_EXEC" run -- cargo-deny --config 'deny.toml' --locked check"#),
         "{job}"
     );
     assert!(
-        job.contains("cargo-deny --manifest-path 'lab/Cargo.toml' --locked check"),
+        job.contains(
+            "cargo-deny --manifest-path 'lab/Cargo.toml' --config 'deny.toml' --locked check"
+        ),
         "{job}"
     );
     Ok(())

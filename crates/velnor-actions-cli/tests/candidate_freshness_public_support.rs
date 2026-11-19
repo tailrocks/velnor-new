@@ -41,7 +41,7 @@ fn public_generation_keeps_plan_bootstrap_and_uses_required_verdict_controller()
     assert!(required.contains("3caad6b07553a6840496b9a729bfaac86efa8071be2d32268b06a63d2c1aa9e7"));
     assert!(required.contains("ff0f3ce3e7f87c172dbfc3b4ff9640f82c5a6905"));
     assert!(
-        required.contains("gh@2.103.3"),
+        required.contains("gh@2.104.0"),
         "Required helper catalog changed"
     );
     assert_required_pipeline(&paths)?;

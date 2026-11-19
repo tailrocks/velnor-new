@@ -62,4 +62,31 @@ impl ConnectionJournal {
             Ok(true)
         }).await
     }
+
+    pub(crate) async fn record_unbound_container_absent(
+        &self,
+        claim: &UnboundRetirementClaim,
+        role: &str,
+        name: &str,
+    ) -> Result<(), HostError> {
+        self.validate_claim_identity(claim)?;
+        in_transaction(self.journal_ref(), async |connection| {
+            self.validate_scope(connection).await?;
+            validate_claim_in_transaction(connection, claim).await?;
+            connection
+                .execute(
+                    "INSERT OR IGNORE INTO unbound_container_absences VALUES(?1,?2,?3,?4)",
+                    (
+                        claim.reservation_id,
+                        role,
+                        name,
+                        claim.generation.load(std::sync::atomic::Ordering::Acquire),
+                    ),
+                )
+                .await
+                .map_err(|_| HostError::Journal)?;
+            Ok(())
+        })
+        .await
+    }
 }

@@ -297,6 +297,10 @@ fn job_env() -> Yaml {
             "PR_BASE_SHA".to_owned(),
             Yaml::str("${{ github.event.pull_request.base.sha || '' }}"),
         ),
+        (
+            "PR_BASE_REF".to_owned(),
+            Yaml::str("${{ github.event.pull_request.base.ref || '' }}"),
+        ),
     ])
 }
 

@@ -2,10 +2,16 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{HelperRelease, Platform};
-use velnor_release::{BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
+use velnor_release::{BinaryFormat, BinaryPlan, RELEASE_APP_SLUG, ReleasePlan};
 
 use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_COMMIT};
+use crate::release_assets::{
+    STAGE, asset, assets, bind_version, pack, quoted, read_version, selection, uploaded, versioned,
+};
+use crate::release_attest::{attest, verifications};
+use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
+use crate::release_raw::raw_packaging;
 use crate::release_steps::{
     TAGGED_COMMIT_HELPER, checkout, expression, install_tool, join, permissions, shell_word,
     variables,
@@ -33,26 +39,38 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
                 .map(|platform| build(binary, *platform, helper))
                 .collect();
             jobs.push(sums(binary));
-            jobs.push(publish(binary, helper));
+            jobs.push(publish(plan, binary, helper));
             jobs
         })
         .collect()
 }
 
-pub(crate) fn target(platform: Platform) -> (&'static str, &'static str) {
-    match platform {
-        Platform::LinuxX64 => ("ubuntu-24.04", "x86_64-unknown-linux-musl"),
-        Platform::LinuxArm64 => ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl"),
-        Platform::MacosArm64 => ("macos-15", "aarch64-apple-darwin"),
+pub(crate) fn target(platform: Platform, format: BinaryFormat) -> (&'static str, &'static str) {
+    match (platform, format) {
+        (Platform::LinuxX64, BinaryFormat::Archive) => {
+            ("ubuntu-24.04", "x86_64-unknown-linux-musl")
+        }
+        (Platform::LinuxX64, BinaryFormat::Raw) => ("ubuntu-24.04", "x86_64-unknown-linux-gnu"),
+        (Platform::LinuxArm64, BinaryFormat::Archive) => {
+            ("ubuntu-24.04-arm", "aarch64-unknown-linux-musl")
+        }
+        (Platform::LinuxArm64, BinaryFormat::Raw) => {
+            ("ubuntu-24.04-arm", "aarch64-unknown-linux-gnu")
+        }
+        (Platform::MacosArm64, _) => ("macos-15", "aarch64-apple-darwin"),
     }
 }
 
-pub(crate) fn asset(binary: &BinaryPlan, platform: Platform) -> String {
-    format!("{}-{}.tar.gz", binary.bin, platform.file_suffix())
+pub(crate) fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
+    artifact_name(&binary.package, platform)
 }
 
-pub(crate) fn artifact(binary: &BinaryPlan, platform: Platform) -> String {
-    format!("{}-{}", binary.package, platform.file_suffix())
+pub(crate) fn artifact_name(package: &str, platform: Platform) -> String {
+    format!("{package}-{}", platform.file_suffix())
+}
+
+pub(crate) fn build_id(package: &str, platform: Platform) -> String {
+    format!("build-{package}-{}", platform.file_suffix())
 }
 
 fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
@@ -70,7 +88,7 @@ fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> Rende
 }
 
 fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> RenderedJob {
-    let (runner, _) = target(platform);
+    let (runner, _) = target(platform, binary.format);
     RenderedJob {
         permissions: permissions(&[("contents", "read")]),
         runs_on: runner.to_owned(),
@@ -81,11 +99,7 @@ fn build(binary: &BinaryPlan, platform: Platform, helper: &HelperRelease) -> Ren
             &tagged_source(binary),
             same_commit(binary, helper),
         ),
-        ..behind_the_gate(
-            format!("build-{}-{}", binary.package, platform.file_suffix()),
-            binary,
-            Vec::new(),
-        )
+        ..behind_the_gate(build_id(&binary.package, platform), binary, Vec::new())
     }
 }
 
@@ -95,7 +109,7 @@ pub(crate) fn build_steps(
     source: &str,
     same_commit: RenderedStep,
 ) -> Vec<RenderedStep> {
-    let (_, triple) = target(platform);
+    let (_, triple) = target(platform, binary.format);
     let suffix = platform.file_suffix();
     let file = asset(binary, platform);
     let profile = binary.profile.as_deref();
@@ -109,6 +123,13 @@ pub(crate) fn build_steps(
         |name| format!("--profile {name}"),
     );
     let linux = triple.ends_with("linux-musl");
+    let packaging = match binary.format {
+        BinaryFormat::Archive => vec![command(
+            format!("Pack {file}"),
+            pack(binary, &file, &release_dir),
+        )],
+        BinaryFormat::Raw => raw_packaging(binary, platform, triple, &release_dir),
+    };
     let mut steps = vec![
         RenderedStep {
             id: Some("source".to_owned()),
@@ -138,17 +159,25 @@ pub(crate) fn build_steps(
             ..command(
                 format!("Build {} for {suffix}", binary.package),
                 format!(
-                    "cargo build {profile_flag} --locked --manifest-path Cargo.toml --package {} --bin {} --target {triple} --target-dir target",
-                    binary.package, binary.bin
+                    "cargo build {profile_flag} --locked --manifest-path Cargo.toml{} --target {triple} --target-dir target",
+                    selection(binary)
                 ),
             )
         },
-        command(
-            format!("Pack {file}"),
-            format!("tar -czf {file} -C {release_dir} {}", binary.bin),
-        ),
-        upload(artifact(binary, platform), file),
     ]);
+    steps.extend(read_version(binary));
+    if versioned(binary) {
+        steps.push(command(
+            "Create the stage folder".to_owned(),
+            format!("mkdir {STAGE}"),
+        ));
+    }
+    steps.extend(packaging);
+    steps.push(upload(
+        artifact(binary, platform),
+        uploaded(binary, platform),
+    ));
+    bind_version(&mut steps);
     steps
 }
 
@@ -188,7 +217,8 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
         .iter()
         .map(|platform| download(artifact(binary, *platform)))
         .collect();
-    let names = assets(binary).join(" ");
+    steps.extend(read_version(binary));
+    let names = quoted(binary, &assets(binary)).join(" ");
     for (tool, on_macos) in [("sha256sum", false), ("shasum -a 256", true)] {
         let comparison = if on_macos { "==" } else { "!=" };
         steps.push(RenderedStep {
@@ -200,12 +230,21 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
             )
         });
     }
+    if binary.attest {
+        steps.push(attest(binary));
+    }
     steps.push(upload(
         format!("{}-sums", binary.package),
         format!("{DIST}/{SUMS_FILE}"),
     ));
+    bind_version(&mut steps);
     RenderedJob {
-        no_permissions: true,
+        no_permissions: !binary.attest,
+        permissions: if binary.attest {
+            permissions(&[("attestations", "write"), ("id-token", "write")])
+        } else {
+            Vec::new()
+        },
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
@@ -213,7 +252,7 @@ fn sums(binary: &BinaryPlan) -> RenderedJob {
     }
 }
 
-fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
+fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
     let mut steps = vec![install_helper(helper)];
     steps.extend(
         binary
@@ -222,6 +261,10 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
             .map(|platform| download(artifact(binary, *platform))),
     );
     steps.push(download(format!("{}-sums", binary.package)));
+    steps.extend(read_version(binary));
+    if binary.attest {
+        steps.extend(verifications(binary));
+    }
     steps.push(RenderedStep {
         name: format!("Publish the release of {}", binary.package),
         env: variables(&[
@@ -234,19 +277,27 @@ fn publish(binary: &BinaryPlan, helper: &HelperRelease) -> RenderedJob {
         ]),
         run: Some(format!(
             "velnor-ci release publish --repo=\"$REPOSITORY\" --tag=\"$TAG\" --app={RELEASE_APP_SLUG} --dir={DIST} {}",
-            assets(binary).join(" ")
+            quoted(binary, &assets(binary)).join(" ")
         )),
         ..RenderedStep::default()
     });
+    bind_version(&mut steps);
     RenderedJob {
-        permissions: permissions(&[("contents", "write")]),
+        permissions: if binary.attest {
+            permissions(&[("attestations", "read"), ("contents", "write")])
+        } else {
+            permissions(&[("contents", "write")])
+        },
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
         ..behind_the_gate(
             format!("publish-{}", binary.package),
             binary,
-            vec![format!("sums-{}", binary.package)],
+            [format!("sums-{}", binary.package)]
+                .into_iter()
+                .chain(publish_needs(plan, binary))
+                .collect(),
         )
     }
 }
@@ -255,15 +306,7 @@ fn builds(binary: &BinaryPlan) -> Vec<String> {
     binary
         .platforms
         .iter()
-        .map(|platform| format!("build-{}-{}", binary.package, platform.file_suffix()))
-        .collect()
-}
-
-fn assets(binary: &BinaryPlan) -> Vec<String> {
-    binary
-        .platforms
-        .iter()
-        .map(|platform| asset(binary, *platform))
+        .map(|platform| build_id(&binary.package, *platform))
         .collect()
 }
 
@@ -294,13 +337,17 @@ pub(crate) fn upload(name: String, path: String) -> RenderedStep {
 }
 
 pub(crate) fn download(name: String) -> RenderedStep {
+    download_to(name, DIST)
+}
+
+pub(crate) fn download_to(name: String, path: &str) -> RenderedStep {
     RenderedStep {
         name: format!("Download {name}"),
         uses: Some(DOWNLOAD_ARTIFACT.to_owned()),
         uses_comment: Some(DOWNLOAD_VERSION.to_owned()),
         with: vec![
             ("name".to_owned(), Value::Text(name)),
-            ("path".to_owned(), Value::Text(DIST.to_owned())),
+            ("path".to_owned(), Value::Text(path.to_owned())),
         ],
         ..RenderedStep::default()
     }

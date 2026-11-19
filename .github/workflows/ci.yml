@@ -55,13 +55,13 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Run Alint
-        uses: asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
+        uses: asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3
         with:
           config: .alint.yml
           fail-on-warning: "true"
           format: github
           path: .
-          version: v0.21.0
+          version: v0.22.1
       - name: Check the Rust line cap with probe files
         if: hashFiles('scripts/alint-line-cap-probe.sh') != ''
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/alint-line-cap-probe.sh
@@ -89,7 +89,7 @@ jobs:
         run: "sh -c 'unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL ACTIONS_RUNTIME_TOKEN GITHUB_TOKEN MISE_GITHUB_TOKEN GH_TOKEN GH_HOST GH_CONFIG_DIR; set -eu; mktemp \"${RUNNER_TEMP:-${TMPDIR:-/tmp}}/non-input-paths.XXXXXX\" | { read -r list; trap '\\''rm -f \"$list\"'\\'' EXIT; git ls-files -z -- '\\'':(glob)docs/**'\\'' > \"$list\"; xargs -0 sh -c '\\''for p; do if [ -e \"$p\" ] || [ -L \"$p\" ]; then printf \"non_input_present:%s\\n\" \"$p\" >&2; exit 1; fi; done'\\'' sh < \"$list\"; exit; }'"
       - &s4
         name: Setup Mise
-        uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
           cache: "false"
           cache_save: "false"

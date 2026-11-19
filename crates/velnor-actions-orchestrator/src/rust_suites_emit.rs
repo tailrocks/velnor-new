@@ -9,16 +9,15 @@ use velnor_actions_actionlint::actions::{MR_BOXINGTON_ACTION_SHA, MR_BOXINGTON_A
 use velnor_actions_contract::{Job, RustSuiteConfig, StepRole, VelnorConfig};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 use velnor_actions_rust::CompileDriver as RustCompileDriver;
+use velnor_actions_workflow_renderer::CompileDriver;
 use velnor_actions_workflow_renderer::rust_suites::{
-    RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflows, standalone_tools_donors,
+    RustSuitesRenderSpec, build_ci_suite_jobs, standalone_tools_donors,
 };
-use velnor_actions_workflow_renderer::{CompileDriver, RenderedFile};
 
 use crate::OrchestratorError;
 use crate::config::CONFIG_REL;
 use crate::discover::{Discovery, PlannedWorkspace, workspace_manifest};
 use crate::pins::resolve_mise_setup;
-use crate::prepare::GenerationPreparation;
 use crate::workflow::CHECKOUT_USES;
 
 pub(crate) struct OrchestratorCiSuiteBuild {
@@ -193,18 +192,6 @@ fn replace_ci_suite_verifiers(
         }
     }
     Ok(())
-}
-
-pub(crate) fn suite_workflow_files(
-    prep: &GenerationPreparation,
-) -> Result<Vec<RenderedFile>, OrchestratorError> {
-    validate_suites_against_repo(&prep.root, &prep.config, &prep.discovery)?;
-    let catalog = &prep.emission_catalog();
-    let Some(spec) = build_render_spec(&prep.config, &prep.runner_label, &prep.discovery, catalog)?
-    else {
-        return Ok(Vec::new());
-    };
-    Ok(render_suites_workflows(&spec)?)
 }
 
 fn build_render_spec(

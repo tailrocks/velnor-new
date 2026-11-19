@@ -83,14 +83,6 @@ pub(crate) fn fetch_steps_for_crate(
     fetch_steps_with(catalog, roots, &env, false, all_features)
 }
 
-pub(crate) fn fetch_steps_for_preview(
-    catalog: &ToolCatalog,
-    roots: &[String],
-    env: &BTreeMap<String, String>,
-) -> Result<Vec<Step>, OrchestratorError> {
-    fetch_steps_with(catalog, roots, env, true, false)
-}
-
 fn fetch_steps_with(
     catalog: &ToolCatalog,
     roots: &[String],

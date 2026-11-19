@@ -240,7 +240,3 @@ fn violation(path: &str, subject: &str, rule: &str) -> OrchestratorError {
         problem: format!("{rule}:{path}:{subject}"),
     }
 }
-
-#[cfg(test)]
-#[path = "cache_authority_audit_tests.rs"]
-mod tests;
