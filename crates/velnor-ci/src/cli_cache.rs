@@ -7,6 +7,10 @@ use std::path::PathBuf;
 #[derive(Debug, Subcommand)]
 pub enum CacheCommand {
     #[command(
+        about = "In trusted workflow_run cleanup, validate the completed same-repository PR run and keep its newest delta per lane"
+    )]
+    TrimDeltas(crate::delta_cli::TrimDeltasArgs),
+    #[command(
         about = "Read velnor-run.log in $RUNNER_TEMP and write the step output save=true when the run compiled, checked or documented at least one crate, save=false otherwise or when any checkout Cargo.lock has dependency sources not proven public; a missing or unreadable run log is an error; with true, remove <target>/<profile>/incremental and <target>/<triple>/<profile>/incremental, remove the --archive file, write target/.velnor/born with today's date when it is missing, and print the size of --target-dir"
     )]
     Decide(DecideArgs),

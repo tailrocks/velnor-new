@@ -39,7 +39,7 @@ fn names_of(lane: &str) -> Vec<&str> {
 #[test]
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
-    let mut repo = locked("0.1.81")?;
+    let mut repo = locked("0.1.93")?;
     repo.files.insert(
         RepoPath::new(".velnor/rust-ci.toml")?,
         b"full_run = \"nightly\"\n".to_vec(),
@@ -63,7 +63,7 @@ fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_res
             .iter()
             .position(|name| *name == "velnor-ci restored")
             .ok_or("no restored step")?;
-        assert_eq!(order[restored - 2], "Restore the target cache", "{lane}");
+        assert_eq!(order[restored - 2], "velnor-ci delta apply", "{lane}");
         assert_eq!(order[restored - 1], "velnor-ci inputs restore", "{lane}");
         assert_eq!(order[restored + 1], "velnor-ci plan --full", "{lane}");
         assert_eq!(order[restored + 2], "Format", "{lane}");

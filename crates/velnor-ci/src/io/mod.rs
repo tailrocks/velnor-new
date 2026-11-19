@@ -18,6 +18,13 @@ mod configurations;
 mod crates_mirror;
 mod crates_mirror_dispatch;
 mod crates_mirror_mise;
+mod delta;
+mod delta_freshness;
+mod delta_paths;
+mod delta_snapshot;
+mod delta_source;
+mod delta_tree;
+mod delta_trim;
 mod fetch;
 mod fetch_credentials;
 mod fetch_reports;
@@ -26,6 +33,7 @@ mod git;
 mod git_witness;
 mod http;
 mod image_candidate;
+mod input_snapshot;
 mod inputs;
 mod manifests;
 mod merge_group;
@@ -195,6 +203,7 @@ fn run_decide(args: DecideArgs) -> Result<String, CiError> {
 
 fn run(cli: Cli) -> Result<String, CiError> {
     match cli.command {
+        Command::Delta(command) => delta::run(command),
         Command::Report(args) => report::run_report(&args),
         Command::Bench(BenchCommand::Collect(args)) => run_collect(&args),
         Command::Bench(BenchCommand::Compare(args)) => run_compare(&args),
@@ -252,6 +261,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
+        Command::Cache(CacheCommand::TrimDeltas(args)) => delta_trim::run(args.run_id),
         Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
         Command::Restored(args) => small::run_restored(args),
         Command::ValidateArtifactId => small::run_validate_artifact_id(),

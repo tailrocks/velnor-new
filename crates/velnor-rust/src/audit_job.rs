@@ -19,6 +19,7 @@ pub(crate) fn audit_job(facts: &RepoFacts, jobs: &[Job]) -> Option<Job> {
     let lane = Lane {
         slug: RootSlug::from_static("inputs_audit"),
         plan: Some(PLAN_JOB),
+        deltas: false,
     };
     let families: Vec<JobId> = facts
         .rust_roots

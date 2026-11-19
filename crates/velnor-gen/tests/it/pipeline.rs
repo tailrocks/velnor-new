@@ -75,10 +75,20 @@ pub(crate) fn pin_helper(view: &mut RepoView, version: &str) -> Result<(), Box<d
     Ok(())
 }
 
+/// The same repository pinned to the first helper release that has the delta commands.
+pub(crate) fn with_deltas(mut view: RepoView) -> Result<RepoView, Box<dyn Error>> {
+    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
+    let text = String::from_utf8(view.files.remove(&lock).ok_or("no helper lock")?)?;
+    view.files
+        .insert(lock, text.replace("0.1.81", "0.1.95").into_bytes());
+    Ok(view)
+}
+
 pub(crate) fn workflow(view: &RepoView) -> Result<String, Box<dyn Error>> {
     let mut locked = view.clone();
     crate::facts::lock_pinned_tools(&mut locked)?;
     let mut files = expected_with_notes(&locked).map(|(files, _)| files)?;
+    files.remove(&velnor_render::DELTA_CLEANUP_PATH);
     let text = files
         .remove(&RepoPath::new(WORKFLOW)?)
         .ok_or("the workflow was not rendered")?;

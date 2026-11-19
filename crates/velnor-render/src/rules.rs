@@ -36,7 +36,7 @@ pub(crate) const MBX_ACTION: &str = "jdx/mr-boxington-action";
 pub(crate) const MISE_ACTION: &str = "jdx/mise-action";
 
 pub const MAX_RUN_CHARACTERS: usize = 2_000;
-pub(crate) const MAX_WORKFLOW_BYTES: usize = 500_000;
+pub const MAX_WORKFLOW_BYTES: usize = 500_000;
 pub const MAX_CACHE_KEY_CHARACTERS: usize = 512;
 pub const MAX_ENV_CHARACTERS: usize = 100_000;
 

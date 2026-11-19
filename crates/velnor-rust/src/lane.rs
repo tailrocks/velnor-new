@@ -17,20 +17,23 @@ const POLICY_JOB: JobId = JobId::from_static("policy");
 pub(crate) struct Lane {
     pub(crate) slug: RootSlug,
     pub(crate) plan: Option<JobId>,
+    pub(crate) deltas: bool,
 }
 
 impl Lane {
-    pub(crate) fn root(slug: RootSlug, single: bool) -> Self {
+    pub(crate) fn root(slug: RootSlug, single: bool, deltas: bool) -> Self {
         Self {
             slug,
             plan: (!single).then_some(PLAN_JOB),
+            deltas,
         }
     }
 
-    pub(crate) fn policy(single: bool) -> Self {
+    pub(crate) fn policy(single: bool, deltas: bool) -> Self {
         Self {
             slug: RootSlug::from_static("policy"),
             plan: Some(if single { RUST_JOB } else { PLAN_JOB }),
+            deltas,
         }
     }
 
