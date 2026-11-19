@@ -54,7 +54,7 @@ pub enum Command {
     )]
     Gate(GateArgs),
     #[command(
-        about = "Download every report artifact the plan expects, all at once from one listing of the run: read the artifact names from matrix.include[].artifact_id of <run-dir>/plan.json, list the run's artifacts, download each expected one over --connections connections (three attempts each) and extract it to <run-dir>/reports/<artifact name>. Every expected artifact is attempted before the command fails; exit 1 names each one that was never uploaded, expired or could not be downloaded, and a missing or malformed plan.json. Reads GITHUB_TOKEN, which needs actions: read"
+        about = "Download every report artifact the plan expects, all at once from one listing of the run: read the artifact names from matrix.include[].artifact_id of <run-dir>/plan.json, list the run's artifacts, download each expected one over --connections connections and extract it to <run-dir>/reports/<artifact name>; the listing and every download get three attempts, all artifacts together may extract to at most --max-extract-bytes, and two live artifacts with one expected name are an error. Every expected artifact is attempted before the command fails; exit 1 names each one that was never uploaded, expired or could not be downloaded, and a missing, oversized, non-regular, symbolic-link or malformed plan.json (a repeated object key is malformed). Reads GITHUB_TOKEN, which needs actions: read"
     )]
     FetchReports(FetchReportsArgs),
     #[command(
@@ -520,6 +520,22 @@ pub enum BenchCommand {
     Collect(CollectArgs),
     #[command(about = "Print a markdown table comparing two metrics files")]
     Compare(CompareArgs),
+    #[command(
+        about = "Compare the speed budget of .velnor/rust-ci.toml with the last successful runs of the generated workflow: read the budget, collect the last --last successful attempt-1 runs of each event, compare their medians and their latest run with the budget, print the three jobs whose duration is furthest above their median, and exit 1 on a breach or on a measurement the budget needs but the runs do not have. Reads GITHUB_TOKEN, which needs actions: read; run in the checkout"
+    )]
+    Budget(BudgetArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BudgetArgs {
+    #[arg(
+        long,
+        default_value_t = 10,
+        help = "How many successful runs of each event to measure"
+    )]
+    pub last: usize,
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: Option<String>,
 }
 
 #[derive(Debug, Args)]

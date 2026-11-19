@@ -39,7 +39,7 @@ fn names_of(lane: &str) -> Vec<&str> {
 #[test]
 fn every_lane_restores_the_file_times_of_its_root_between_the_caches_and_the_restored_step()
 -> TestResult {
-    let mut repo = locked("0.1.82")?;
+    let mut repo = locked("0.1.92")?;
     repo.files.insert(
         RepoPath::new(".velnor/rust-ci.toml")?,
         b"full_run = \"nightly\"\n".to_vec(),
@@ -85,7 +85,7 @@ fn a_helper_older_than_0_1_81_gets_no_inputs_restore_and_a_newer_one_gets_it() -
     let old = workflow(&locked("0.1.79")?)?;
     assert!(!old.contains("inputs restore"), "{old}");
     assert!(old.contains("name: velnor-ci restored"), "{old}");
-    for version in ["0.1.82", "0.1.100"] {
+    for version in ["0.1.92", "0.1.100"] {
         let text = workflow(&locked(version)?)?;
         assert_eq!(
             named(&text, "velnor-ci inputs restore").len(),

@@ -5,7 +5,7 @@ use velnor_gen::{GenerateError, expected_with_notes};
 use velnor_model::{RepoPath, RepoView};
 
 use crate::facts::TestResult;
-use crate::pipeline::view;
+use crate::pipeline::{before_deltas, view};
 
 fn roots(count: usize) -> Vec<String> {
     (0..count)
@@ -22,7 +22,7 @@ fn roots(count: usize) -> Vec<String> {
 fn repo(count: usize) -> Result<RepoView, Box<dyn std::error::Error>> {
     let manifests = roots(count);
     let names: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    view(&names, None)
+    before_deltas(view(&names, None)?)
 }
 
 fn refusal(view: &RepoView) -> Option<String> {

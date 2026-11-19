@@ -37,8 +37,37 @@ pub struct RustCiConfig {
     pub mbx_remote: MbxRemote,
     pub push_after_merge_group: PushAfterMergeGroup,
     pub test_setup: Vec<TestSetup>,
+    pub budget: Option<SpeedBudget>,
     pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
+    pub checkout: CheckoutScope,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct SpeedBudget {
+    pub pr_wall_seconds: u64,
+    pub main_wall_seconds: u64,
+    pub runner_seconds: u64,
+    pub setup_seconds: u64,
+}
+
+impl SpeedBudget {
+    #[must_use]
+    pub fn enabled(&self) -> bool {
+        self.pr_wall_seconds > 0
+            || self.main_wall_seconds > 0
+            || self.runner_seconds > 0
+            || self.setup_seconds > 0
+    }
+
+    #[must_use]
+    pub fn wall_seconds(&self, pull_request: bool) -> u64 {
+        if pull_request {
+            self.pr_wall_seconds
+        } else {
+            self.main_wall_seconds
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -165,8 +194,10 @@ impl Default for RustCiConfig {
             mbx_remote: MbxRemote::Off,
             push_after_merge_group: PushAfterMergeGroup::Run,
             test_setup: Vec::new(),
+            budget: None,
             lint: Vec::new(),
             test_groups: Vec::new(),
+            checkout: CheckoutScope::Full,
         }
     }
 }
@@ -184,4 +215,10 @@ pub struct PrivateSources {
     pub private_key: String,
     pub owner: String,
     pub repositories: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CheckoutScope {
+    Full,
+    Sparse,
 }

@@ -73,7 +73,7 @@ queue, a download or a cold cache. Section 9 takes each remaining term to its fl
 I read every workflow in `.github/workflows/`, velnor-gen's release renderer
 (`generator/crates/velnor-render/src/release_binaries.rs`) and its samples, and the `ci-helper` gate.
 Costs are runner-minutes (job wall time) [M] unless marked: §A of the evidence, my earlier 10-run
-samples, and 8-run job reads made this round for the release, source-preview and state-seal workflows.
+samples, and 8-run job reads made this round for the release, source-preview and state seal workflows.
 A design "sandbox-minute" is the same unit: the wall time a sandbox exists.
 
 | # | Operation | Stages that run it today | Same input? | Today's cost | Decision | Mechanism |

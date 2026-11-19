@@ -303,7 +303,7 @@ Hard decision 3 keeps full runs on push and merge group as the backstop, "until 
 - **Merge group:** run only the jobs whose verdict key has never passed. My estimate is 342 of 2,910 package-jobs (−88%); the median merge-group run needs 2 packages and 24 of 97 need none [M, `reuse.py`].
   - Caveat: this is a package-level approximation. Root files conservatively select everything.
   - Runtime cross-crate reads are missed, so the tracer's real numbers will be higher. Phase 3 measures them.
-- **Push to main:** skip CI when the same SHA, or the same tree, passed the merge-group run (120 of 159 [EP]). The node builder's post-merge warm-up writes the trusted cache, so it replaces both the push run and the state-seal workflow.
+- **Push to main:** skip CI when the same SHA, or the same tree, passed the merge-group run (120 of 159 [EP]). The node builder's post-merge warm-up writes the trusted cache, so it replaces both the push run and the state seal workflow.
 - **Merge queue settings:**
   - `max_entries_to_build` 2 → 6: cluster capacity is ample, and 11-18 showed that 2 cannot keep up.
   - Agents enable auto-merge when they open a PR, which removes the 7.5 min median, 88 min p90, green-to-enqueue delay [M].

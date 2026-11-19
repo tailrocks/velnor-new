@@ -107,7 +107,10 @@ fn a_delta_key_is_never_equal_to_or_a_prefix_of_a_base_key() -> TestResult {
                 host: Host,
             });
         }
-        keys.push(CacheKey::Sources { host: Host, lane: root });
+        keys.push(CacheKey::Sources {
+            host: Host,
+            lane: root,
+        });
     }
     keys.push(CacheKey::Tools { host: Host });
     let mut tags = std::collections::BTreeSet::new();

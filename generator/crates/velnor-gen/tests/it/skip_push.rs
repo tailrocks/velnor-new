@@ -21,7 +21,7 @@ fn repo(
     let lock = path(".velnor/rust-ci.lock")?;
     let old = String::from_utf8(repo.files[&lock].clone())?;
     repo.files
-        .insert(lock, old.replace("0.1.82", helper).into_bytes());
+        .insert(lock, old.replace("0.1.92", helper).into_bytes());
     Ok(repo)
 }
 

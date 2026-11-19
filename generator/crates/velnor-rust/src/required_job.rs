@@ -55,6 +55,7 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         When::FullAuditOrPush => Some(JobCondition::ScheduleOrPushOrDispatch),
         When::Scheduled => Some(JobCondition::Schedule),
         When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
+        When::DefaultBranchPush => Some(JobCondition::DefaultBranchPush),
         When::Success
         | When::NotCancelled
         | When::NotCancelledPostMerge
@@ -75,7 +76,8 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
         | When::SaveToolsUnlessLocal
         | When::SaveToolsOnDefaultBranch => None,
     };
-    gate.into_iter().chain(when).collect()
+    let advisory = (job.id == crate::plan::BUDGET_JOB).then_some(JobCondition::Advisory);
+    gate.into_iter().chain(when).chain(advisory).collect()
 }
 
 pub(crate) fn spec(plan: JobId, jobs: &[Job]) -> VerdictSpec {

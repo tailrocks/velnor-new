@@ -17,7 +17,7 @@ fn repo(manifests: &[&str], helper: &str) -> Result<RepoView, Box<dyn std::error
     let lock = RepoPath::new(".velnor/rust-ci.lock")?;
     let text = String::from_utf8(repo.files.remove(&lock).ok_or("no helper lock")?)?;
     repo.files
-        .insert(lock, text.replace("0.1.82", helper).into_bytes());
+        .insert(lock, text.replace("0.1.92", helper).into_bytes());
     Ok(repo)
 }
 

@@ -5,7 +5,7 @@ use crate::lane::Lane;
 use crate::plan::step;
 use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoFacts, RustRoot, Step, StepKind, When};
 
-const DELTA_HELPER: (u64, u64, u64) = (0, 1, 82);
+const DELTA_HELPER: (u64, u64, u64) = (0, 1, 92);
 
 pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId, lane: &Lane) -> Vec<Step> {
     if !supported(facts, root, lane.deltas) {

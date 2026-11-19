@@ -5,15 +5,15 @@ use std::fmt;
 
 use crate::key_length::longest_cache_key;
 use crate::pinned_actions::{
-    ACTIONS_CACHE, ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
-    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, credential_rules, pin_rules,
+    ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
+    GITHUB_SCRIPT, MR_BOXINGTON, credential_rules, pin_rules,
 };
 
 pub const SETUP_VELNOR_ACTION: &str = "tailrocks/velnor-new/actions/setup-velnor";
 
 pub const APP_TOKEN_ACTION: &str = "actions/create-github-app-token";
 
-pub const ALLOWED_ACTIONS: [&str; 17] = [
+pub const ALLOWED_ACTIONS: [&str; 16] = [
     "actions/checkout",
     APP_TOKEN_ACTION,
     "actions/cache/restore",
@@ -24,7 +24,6 @@ pub const ALLOWED_ACTIONS: [&str; 17] = [
     SETUP_VELNOR_ACTION,
     MBX_ACTION,
     ATTEST_BUILD_PROVENANCE.action,
-    ALINT.action,
     DOCKER_LOGIN.action,
     DOCKER_SETUP_BUILDX.action,
     DOCKER_BUILD_PUSH.action,

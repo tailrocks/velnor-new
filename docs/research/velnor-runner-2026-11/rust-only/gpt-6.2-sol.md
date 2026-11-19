@@ -113,7 +113,7 @@ Reconcile the named jobs, fixtures, and feature modes with the new inventory bef
 | Artifact transfer, release publish and readback | P/Q/M/R/N/C | Same bytes, distinct external IDs. | Product publishers 5.72–5.78 min including macOS. Tools retained 0.01255 GB of artifacts [M]. | Local CAS reads. Export once for each required GitHub effect. Verify exact asset set. |
 | Rust CI tools and SDK preview channels | M/R/N | Partial. Target/format/version can differ. | Tools tag 7.23 min including 2.90 macOS. Preview Linux artifact 0.0160 GB [M]. | Use main payloads. Keep policy and channel receipts distinct. |
 
-Live sources are `repo/.github/workflows/{ci,source-qualification,job-image-candidate,state-seal,cache-prune,qualification,freshness}.yml`,
+Live sources are `repo/.github/workflows/{ci,source-qualification,job-image-candidate,state seal,cache-prune,qualification,freshness}.yml`,
 `product-release.yml:12–252`, `product-release-{images,binary,generator}.yml`, `product-release-generator.yml:979–1346` and `release-rust-ci-tools.yml:15–240`.
 Generated release sources are `repo/generator/samples/release-bin/view/{release-plz.toml,.velnor/release.toml}`,
 `repo/generator/crates/velnor-render/src/{release.rs:178–251,release_binaries.rs:42–119,164–183}` and `repo/ci-helper/crates/velnor-ci/src/{gate.rs:44,publish.rs:59,release_preflight.rs:30}`.
@@ -262,7 +262,7 @@ Qualify Docker services and job containers as distinct runtime features.
 | `actions/download-artifact` | Resolve authorized run/name/ID or pattern, verify digest, keep merge/extract semantics. Read authorized local bytes if present. | 20 / 33 s matrix download. 2 s bundle, 18–49 s images in one release. | 0.2–1 s small local report. 1–3 s for 1.116 GB at 1–2 GB/s plus metadata. |
 | `jdx/mise-action` | Use checksum-pinned local tools, honor config/dir, PATH, env and install/cache modes. | Setup 2 / 4 s in 6,113 steps. Pinned tools 10 / 18 s in cluster sample. | 0.2–1 s activation. Baked image pays install once per input. |
 | `jdx/mr-boxington-action` | Pinned mbx from local store, exact setup and post, private target. Remove step from default Cargo lane. | Setup 1 / 2 s. Post 0 / 1 s. | 0.1–0.5 s when admitted. |
-| `actions/attest` | Native Sigstore statement over approved subjects and predicate. Scoped job OIDC, signing, GitHub bundle and required registry upload. | Custom state-seal predicate unsplit. | ~0.1 s metadata plus 2–10 s new signing/confirmation. Reuse identical verified claim. |
+| `actions/attest` | Native Sigstore statement over approved subjects and predicate. Scoped job OIDC, signing, GitHub bundle and required registry upload. | Custom state seal predicate unsplit. | ~0.1 s metadata plus 2–10 s new signing/confirmation. Reuse identical verified claim. |
 | `actions/attest-build-provenance` | Same adapter with provenance schema. Preserve builder, workflow/ref, subject, bundle outputs and readback. | 2 s Linux generator, 9 s images. Bundle readback 11 s in sample. | 2–10 s new claim, off ordinary merge path. |
 | `asamarts/alint` | Verified local binary with specified config, format, path and warning policy. Keep line-cap probe. | 1 / 2 s in 191 steps. | 0.3–2 s fresh. Reuse exact lint proof. |
 | `actions/create-github-app-token` | Release credential broker exchanges allowed repo/install scope. Mask output and revoke in post as required. | Generated sample only. | 0.3–2 s each for mint/revoke. |

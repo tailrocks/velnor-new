@@ -4,7 +4,7 @@
 use crate::facts::TestResult;
 use crate::pipeline::view;
 use velnor_gen::expected_with_notes;
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::RepoPath;
 
 const WORKFLOW: &str = ".github/workflows/rust-ci.yml";
 
@@ -20,20 +20,12 @@ fn long_named_roots(count: usize) -> Vec<String> {
         .collect()
 }
 
-fn with_helper(mut repo: RepoView, helper: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
-    let lock = RepoPath::new(".velnor/rust-ci.lock")?;
-    let text = String::from_utf8(repo.files.remove(&lock).ok_or("no helper lock")?)?;
-    repo.files
-        .insert(lock, text.replace("0.1.82", helper).into_bytes());
-    Ok(repo)
-}
-
 #[test]
 fn a_workflow_that_does_not_fit_keeps_its_checks_and_reports_the_delta_layer_it_left_out()
 -> TestResult {
     let manifests = long_named_roots(20);
     let roots: Vec<&str> = manifests.iter().map(String::as_str).collect();
-    let (files, notes) = expected_with_notes(&with_helper(view(&roots, None)?, "0.1.86")?)?;
+    let (files, notes) = expected_with_notes(&view(&roots, None)?)?;
     let text = files.get(&RepoPath::new(WORKFLOW)?).ok_or("no workflow")?;
     assert!(
         text.len() <= velnor_render::MAX_WORKFLOW_BYTES,

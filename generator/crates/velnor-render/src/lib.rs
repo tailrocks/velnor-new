@@ -6,6 +6,7 @@ mod base_steps;
 mod cache;
 mod cache_upload;
 mod cargo;
+mod checkout_step;
 mod combined_cache;
 mod delta_cleanup;
 mod delta_steps;
@@ -45,8 +46,8 @@ pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 pub use crate::delta_cleanup::{DELTA_CLEANUP_PATH, delta_cleanup};
 use crate::events::{concurrency, triggers};
 pub use crate::pinned_actions::{
-    ACTIONS_CACHE, ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
-    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
+    ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
+    GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
 };
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
