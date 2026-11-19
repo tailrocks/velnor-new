@@ -173,9 +173,9 @@ fn update_optional(
     total: &mut u64,
 ) -> Result<(), Box<dyn Error>> {
     safe_relative(relative)?;
-    watched.push(root_path.join(relative));
     match read_file(root, relative, FILE_LIMIT) {
         Ok(bytes) => {
+            watched.push(root_path.join(relative));
             add_total(total, bytes.len())?;
             digest.update(relative.as_bytes());
             digest.update([0, 1]);
