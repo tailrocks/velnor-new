@@ -161,7 +161,7 @@ One typical PR (the 47% class touching only `generator/` or `ci-helper/`), label
 |---|---|---|---|
 | 1. Event, webhook, job offer | push → run 1–2 s; run → first job 2 s p50, 226 s p90; hosted Plan queue 5.5 min median | webhook 1–2 s; the reconciler within 10 s | Verification starts from the label or labelled push; no Actions job is on the verdict path |
 | 2. Acquire | 13 s p50, 27 s p90 from job created to started, n = 1,124 (scale set, ruling V5) | not on the verdict path | Obligations are not Actions jobs; Actions jobs (release, image, scheduled) acquire on pre-registered JIT identities |
-| 3. Sandbox start | ARC pod about 6 s (436 starts) plus a dind probe | ≤ 0.3 s | Warm pool; reflink clone 0.25 s [M] |
+| 3. Sandbox start | ARC pod about 6 s (436 starts) plus a dind probe | ≤ 1 s P90 for provision, attach and spawn (only the 0.25 s clone is [M]) | Warm pool; the clone lands in the warm pod's pre-mounted volume, since a running pod takes no new mount |
 | 4. Checkout | 6 s per job × 31–39 jobs; Plan 12 s | ≤ 1 s | Node mirror; a reflink clone of a sealed tree plus the changed files, then a full tree check (section 7.4) |
 | 5. Toolchain and tools | 10 s median, 18 s p90, plus mise 2 s and action downloads 4.4 s per job | ≈ 0 s | Read-only verified tool store; native actions |
 | 6. Dependency fetch | 3.5–6.1 s per job; sources cache 0 of 48 | 0 s (≈ 3 s on a lockfile change) | Site crates mirror and node crate store |
@@ -519,7 +519,10 @@ is well designed for this architecture.
   `velnor-ci`'s `now_seconds()` (`io/mod.rs:210`) feeds cache and recording decisions [C]. Ten more
   test files use only `Instant` deadlines: a load-dependent flake risk inside the flake budget, not a
   C5 input. Nothing is reused on a time-to-live; the share of obligations and obligation-seconds in
-  C5 is measured before any target counts it (section 11).
+  C5 is measured before any target counts it (section 11). Repository work shrinks C5: realtime reads
+  go through one injectable clock fixed per obligation and recorded in its key (A2 still shifts it
+  to catch date bombs), and `CARGO_MANIFEST_DIR` climbs become declared fixture lists. A process-wide
+  clock shim is not used: it would silently change what every test checks.
 - **The obligation vector.** For every subject SHA the planner derives every obligation and key;
   the ledger resolves the vector against current, unrevoked records. An "instant" verdict
   (rebase-only push, identical group tree) needs zero C5 obligations and zero misses; otherwise the
@@ -1007,7 +1010,7 @@ would build the product once per closure, not per tip; it is a lab item. macOS l
 ## 10. Delivery: per-job-type migration, milestones and deletions
 
 Agents do all the work (decision 15). The [delivery plan](../research/velnor-runner-2026-11/delivery-plan.md)
-(v2, decisions 1–24 and the rulings) sizes about 998 agent-hours of building and 120 of review,
+(v2, decisions 1–24 and the rulings) sizes about 1008 agent-hours of building and 120 of review,
 about 3.5 days for 12 builders, 4 reviewers and an orchestrator, so coding does not set the dates:
 velnor-new's CI and queue, reviews, owner decisions, conformance and parity evidence, capacity, API
 limits and file conflicts do. Phase 0 comes first: an agent PR's cycle falls from 94 to about 34 min

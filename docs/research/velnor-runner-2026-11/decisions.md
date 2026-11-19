@@ -1010,6 +1010,13 @@ cluster test.
 | O06 flake budget | Accepted: the budget is per two-witness record | 1.3 |
 | O18 cohort | Accepted: S3 covers every class; conformance is a timed obligation of the PRs that need it | 5.7, 11 |
 
+### Group 32: fastest-runner critique by Gemini 4 Carbon
+
+| Point | Decision | v3 section |
+|---|---|---|
+| O27 sandbox start; C12 | Accepted: stage 3 budgeted at ≤ 1 s P90 for provision, attach and spawn; clones land in a pre-mounted volume; C12 unresolved until K17 (plan P08) | 3 |
+| G18 C5 elimination | Adopted as clock injection and fenced fixtures; a process-wide clock shim rejected | 6.1; plan T08 |
+
 ## Design review
 
 The eight design critiques and the comparison that verified them are the input here; ids are the

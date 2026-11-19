@@ -23,8 +23,8 @@ Code was re-read at velnor-new `d6be276a6c` and velnor-legacy `1b9fc038`. Labels
 
 - **Fleet assumed:** N = 12 builder agents, 4 reviewer agents and 1 orchestrator, around the clock.
   Only the owner's decisions are human. Section 7.6 explains why more builders buy almost nothing.
-- **Total work:** about 998 agent-hours of building plus about 120 of review (section 3.2's sum),
-  about 3.5 days of fleet time (998 ÷ 12 builders ≈ 83 h). Coding does not set the dates.
+- **Total work:** about 1008 agent-hours of building plus about 120 of review (section 3.2's sum),
+  about 3.5 days of fleet time (1008 ÷ 12 builders ≈ 84 h). Coding does not set the dates.
 - **What sets the dates (decision 15):** (a) velnor-new's own CI and merge queue; (b) review gates
   and owner decisions, including engine releases; (c) evidence: conformance pairs, gate parity and
   clean reuse comparisons; (d) free cluster capacity, GitHub API limits and shared-file conflicts.
@@ -394,6 +394,7 @@ The full push run stays until A1 replaces it (V05): it is today's third executio
 | T05 | Git differential speed | A sealed no-checkout fixture cloned per accepted glob, batching and sharding of `non_inputs_differential.rs` with the original assertions | — | 6 | mid | The full suite still runs; time measured against 679 s | — |
 | T07 | Split monolithic crates | `velnor-ci` (15.2k source, 25.7k test lines) and `velnor-gen` (about 27.5k) into leaf crates of about 10k lines along module lines, so a non-incremental edit recompiles less | — | 12 | mid | Same test IDs; edit-to-test time on 30 replayed diffs measured | The monolithic crates |
 | P08 | Namespace slots (lab) | Direct namespace and cgroup v2 slots in the node agent as a Kubernetes-backend variant, against warm pods: 200 provision-to-first-step cycles at 80% CPU (K17) | P04 | 10 | strong | Same kit and proofs; adopted only if faster at P90 | — |
+| T08 | Clock injection and fenced fixtures | Route `velnor-ci`'s `now_seconds()` and the 5 realtime-reading test files through one injectable clock fixed per obligation; replace `CARGO_MANIFEST_DIR` climbs with declared fixture lists | BM05 | 10 | mid | Same assertions; BM05's C5 share falls; A2 still catches a planted date bomb | The climbs it replaces |
 | T06 | One `tests/it` per package | 356 binaries → one per package | — | 8 | mid | Same test IDs; link passes counted | The separate binaries |
 | S01 | Cluster policy | Priority classes, the reserved merge path (a pair of distinct warm slots for a group that misses), A1's share, memory watermark requeue, PID limits, per-org quotas | D8 | 6 | mid | No OOM in a week; batch requeued first | — |
 | S02 | Control plane | Three k3s servers across failure domains; a third-site witness for shared fences | D8 | 4 | mid | Server and site loss drills pass | — |
@@ -434,7 +435,7 @@ arms run one at a time on the same two FI workers, so arms, not agents, set the 
 | V15 | Fast-red lane | Non-minting incremental build, `cargo check`, changed and historically failing tests first; failure to `Velnor / Details`, twins cancelled | V03 | 6 | mid | Never writes `success`; time to first red measured | — |
 | C12 | Twin generations | Each landed tip built cold twice on two nodes, sealed only on equal digests; witness 2 over the twin | C05, C06 | 8 | strong | Witness-2 delta equals witness 1's on 50 sequential commits | — |
 
-**Sum:** 146 items, about 998 agent-hours of building plus about 120 of review (about 110 PRs ×
+**Sum:** 147 items, about 1008 agent-hours of building plus about 120 of review (about 110 PRs ×
 0.7 h, plus 30 strong reviews × 1.5 h).
 
 ### 3.3 Owner decisions
