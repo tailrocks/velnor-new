@@ -11,8 +11,6 @@ use velnor_actions_contract::WorkflowPolicy;
 use super::one_job_per_crate::mbx_repo_for;
 use super::workflow_configuration_fixture::{self};
 
-pub(super) const RUST_SUITE: &str = "\n[[stacks.rust.suites]]\nid = \"proof-suite\"\nprofile = \"default\"\ntriggers = [\"pull_request\", \"push\"]\nrequired = true\npackage = \"demo\"\nmanifest_path = \"crates/demo/Cargo.toml\"\n";
-
 pub(super) const STANDALONE_SUITE: &str = "\n[[stacks.rust.suites]]\nid = \"nightly-suite\"\nprofile = \"default\"\ntriggers = [\"workflow_dispatch\"]\npackage = \"demo\"\nmanifest_path = \"crates/demo/Cargo.toml\"\n";
 
 pub(super) const NAMED_CHECK: &str = "\n[[checks]]\nid = \"unit\"\ntask = \"fixture-check\"\ninputs = [\"crates/demo/Cargo.toml\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n";
@@ -40,7 +38,6 @@ pub(super) fn rust_repo(
     if let Some(glob) = non_inputs {
         config.extend(["non_inputs = [\"", glob, "\"]\n"]);
     }
-    config.push_str(RUST_SUITE);
     config.push_str(STANDALONE_SUITE);
     config.push_str(NAMED_CHECK);
     fs::write(

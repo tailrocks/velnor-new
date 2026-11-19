@@ -105,6 +105,8 @@ mod one_job_per_crate;
 mod release_bun_prerequisite;
 #[path = "workflow_configuration_public/rust_ci_removed.rs"]
 mod rust_ci_removed;
+#[path = "workflow_configuration_public/rust_suites_moved.rs"]
+mod rust_suites_moved;
 #[path = "workflow_configuration_public/rust_tree_pin_rendered.rs"]
 mod rust_tree_pin_rendered;
 #[path = "workflow_configuration_public/scoped_check_selection.rs"]

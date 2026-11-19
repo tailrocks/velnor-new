@@ -271,12 +271,6 @@ impl RustSuiteConfig {
     }
 
     #[must_use]
-    pub fn has_pr_or_push_trigger(&self) -> bool {
-        self.triggers.contains(&RustSuiteTrigger::PullRequest)
-            || self.triggers.contains(&RustSuiteTrigger::Push)
-    }
-
-    #[must_use]
     pub fn has_schedule_trigger(&self) -> bool {
         self.triggers.contains(&RustSuiteTrigger::Schedule)
     }
