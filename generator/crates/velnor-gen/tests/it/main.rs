@@ -38,6 +38,7 @@ mod harness_kinds;
 mod harness_undecided;
 mod helper_integrity;
 mod helper_perl_environment;
+mod helper_release_tag;
 mod helper_source;
 mod helper_startup;
 mod helper_tool_paths;

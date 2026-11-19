@@ -358,7 +358,7 @@ pub(crate) fn install_helper(release: &HelperRelease) -> RenderedStep {
     RenderedStep {
         name: format!("Install velnor-ci {version}"),
         uses: Some(format!("{SETUP_VELNOR_ACTION}@{}", release.action())),
-        uses_comment: Some(format!("rust-ci-v{version}")),
+        uses_comment: Some(version.release_tag()),
         with,
         ..RenderedStep::default()
     }
