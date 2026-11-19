@@ -64,6 +64,19 @@ pub(crate) async fn run_created_delete<T: Transport + ?Sized>(
     }
 }
 
+pub(crate) async fn recover_intended_delete<T: Transport + ?Sized>(
+    transport: &mut T,
+    admin_token: &str,
+    scoped: &ConnectionJournal,
+) -> Result<Option<ScaleSetDeleteOutcome>, HostError> {
+    if !scoped.has_intended_scale_set_delete().await? {
+        return Ok(None);
+    }
+    run_created_delete(transport, admin_token, scoped)
+        .await
+        .map(Some)
+}
+
 async fn send<T: Transport + ?Sized>(
     transport: &mut T,
     admin_token: &str,
