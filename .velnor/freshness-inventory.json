@@ -233,15 +233,6 @@
       "expires": "2026-12-03"
     },
     {
-      "key": "gh",
-      "held_version": "2.103.3",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v2.104.0 published 2026-11-12T19:03:51Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-16..2026-11-30): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
       "key": "nextest",
       "held_version": "0.9.151",
       "owner": "Alexey Zhokhov",
@@ -291,12 +282,12 @@
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
-      "latest": "v2.104.0",
+      "latest": "v2.105.0",
       "name": "gh",
-      "pinned": "2.103.3",
-      "qualified": "2.103.3",
+      "pinned": "2.105.0",
+      "qualified": "2.105.0",
       "source": "https://api.github.com/repos/cli/cli/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
