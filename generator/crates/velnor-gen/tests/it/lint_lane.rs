@@ -136,6 +136,18 @@ fn a_mise_task_without_tools_installs_mise_but_no_tools() -> TestResult {
 }
 
 #[test]
+fn a_mise_task_installs_the_configured_backend_qualified_tool_key() -> TestResult {
+    let config = "[[lint]]\nkind = 'mise-task'\ntask = 'check'\ntools = ['cargo-nextest']\n";
+    let jobs = jobs(config)?;
+    let install = &jobs["lint-check"]["steps"][1];
+    assert_eq!(
+        install["with"]["install_args"],
+        "aqua:nextest-rs/nextest/cargo-nextest"
+    );
+    Ok(())
+}
+
+#[test]
 fn a_repository_without_lint_entries_renders_no_lint_job() -> TestResult {
     let jobs = jobs("")?;
     assert!(

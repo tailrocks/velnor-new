@@ -33,7 +33,13 @@ fn install(facts: &RepoFacts, lint: &LintJob) -> Vec<Step> {
             vec![step(StepKind::InstallMise)]
         }
         LintKind::MiseTask { tools, .. } => vec![step(StepKind::InstallTools {
-            only: Some(tools.join(" ")),
+            only: Some(
+                tools
+                    .iter()
+                    .map(|tool| resolved(facts, tool))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+            ),
         })],
     }
 }
