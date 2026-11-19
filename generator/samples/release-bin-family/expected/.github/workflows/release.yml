@@ -281,7 +281,7 @@ jobs:
           GITHUB_TOKEN: '${{ steps.app.outputs.token }}'
           REPOSITORY: '${{ github.repository }}'
           COMMIT: '${{ github.event.workflow_run.head_sha }}'
-        run: 'velnor-ci release family-tag --repo="$REPOSITORY" --verified-commit="$COMMIT" --tag-pattern=''v{{ version }}'' --package=app "$RUNNER_TEMP/family-0.json"'
+        run: 'velnor-ci release family-tag --repo="$REPOSITORY" --verified-commit="$COMMIT" --tag-pattern=''tools-v{{ version }}'' --package=app "$RUNNER_TEMP/family-0.json"'
   build-app-linux-x64:
     needs:
       - gate

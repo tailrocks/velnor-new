@@ -1,5 +1,5 @@
 after = ["CI", "Rust CI"]
-family_tag = "v{{ version }}"
+family_tag = "tools-v{{ version }}"
 
 [[binaries]]
 package = "app"

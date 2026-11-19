@@ -15,12 +15,16 @@ use crate::yaml_tree::{Node, parse};
 
 type TestResult = Result<(), Box<dyn Error>>;
 
-const FAMILY: &str = "family_tag = \"v{{ version }}\"\nroots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
+const FAMILY: &str = "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\n[[binaries]]\npackage = \"app\"\n[[binaries]]\npackage = \"tools\"\nplatforms = [\"linux-x64\", \"macos-arm64\"]\n";
 
 fn release_plz(root: &Root, release: bool) -> String {
+    release_plz_tagged(root, release, "{{ package }}-v{{ version }}")
+}
+
+fn release_plz_tagged(root: &Root, release: bool, tag: &str) -> String {
     let listed = if release { "" } else { "release = false\n" };
     format!(
-        "[workspace]\ngit_tag_name = \"{{{{ package }}}}-v{{{{ version }}}}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npr_branch_prefix = \"{}\"\ngit_only = true\n\n[[package]]\nname = \"{}\"\n{listed}",
+        "[workspace]\ngit_tag_name = \"{tag}\"\ngit_release_draft = true\nrelease_always = false\nsemver_check = false\npr_branch_prefix = \"{}\"\ngit_only = true\n\n[[package]]\nname = \"{}\"\n{listed}",
         root.prefix, root.package
     )
 }
@@ -29,18 +33,25 @@ fn render_family(
     config: &str,
     release: bool,
 ) -> Result<Result<Node, GenerateError>, Box<dyn Error>> {
+    render_family_tagged(config, release, "{{ package }}-v{{ version }}")
+}
+
+fn render_family_tagged(
+    config: &str,
+    release: bool,
+    app_tag: &str,
+) -> Result<Result<Node, GenerateError>, Box<dyn Error>> {
     let mut view = release_view(&[APP, TOOLS], Some(config))?;
     view.files
         .insert(LOCK_PATH, LOCK.replace("0.1.79", "0.1.83").into_bytes());
-    for (root, path) in [
-        (&APP, "release-plz.toml"),
-        (&TOOLS, "tools/release-plz.toml"),
-    ] {
-        view.files.insert(
-            RepoPath::new(path)?,
-            release_plz(root, release).into_bytes(),
-        );
-    }
+    view.files.insert(
+        RepoPath::new("release-plz.toml")?,
+        release_plz_tagged(&APP, release, app_tag).into_bytes(),
+    );
+    view.files.insert(
+        RepoPath::new("tools/release-plz.toml")?,
+        release_plz(&TOOLS, release).into_bytes(),
+    );
     match expected_files(&view) {
         Ok(mut files) => {
             let text = files
@@ -131,7 +142,7 @@ fn family_job_binds_the_tag_to_the_verified_commit_with_the_helper() -> TestResu
         .ok_or("no tagging step")?;
     for part in [
         "--verified-commit=\"$COMMIT\"",
-        "--tag-pattern='v{{ version }}'",
+        "--tag-pattern='tools-v{{ version }}'",
         "--package=app",
         "--package=tools",
         "family-0.json",
@@ -166,7 +177,7 @@ fn family_tag_needs_a_helper_that_knows_the_command() -> TestResult {
 #[test]
 fn family_tag_config_is_refused_when_it_cannot_name_one_tag_for_released_binaries() -> TestResult {
     let named = render_family(
-        &FAMILY.replace("v{{ version }}", "{{ package }}-v{{ version }}"),
+        &FAMILY.replace("tools-v{{ version }}", "{{ package }}-v{{ version }}"),
         false,
     )?;
     assert!(matches!(
@@ -183,7 +194,7 @@ fn family_tag_config_is_refused_when_it_cannot_name_one_tag_for_released_binarie
         )))
     ));
     let empty = render_family(
-        "family_tag = \"v{{ version }}\"\nroots = [\".\", \"tools\"]\n",
+        "family_tag = \"tools-v{{ version }}\"\nroots = [\".\", \"tools\"]\n",
         false,
     )?;
     assert!(matches!(
@@ -192,5 +203,22 @@ fn family_tag_config_is_refused_when_it_cannot_name_one_tag_for_released_binarie
             FamilyError::WithoutBinaries
         )))
     ));
+    Ok(())
+}
+
+#[test]
+fn the_group_prefixed_family_tag_is_still_refused_when_a_release_plz_root_uses_it() -> TestResult {
+    let clash = render_family_tagged(FAMILY, false, "tools-v{{ version }}")?;
+    assert!(
+        matches!(
+            clash,
+            Err(GenerateError::Release(
+                ReleaseError::TagsMayCollide { .. } | ReleaseError::DuplicateTagPattern { .. }
+            ))
+        ),
+        "a family tag equal to a release-plz tag must be refused"
+    );
+    let apart = render_family_tagged(FAMILY, false, "app-v{{ version }}")?;
+    assert!(apart.is_ok(), "a distinct release-plz tag must pass");
     Ok(())
 }
