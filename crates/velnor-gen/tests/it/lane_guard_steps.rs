@@ -49,7 +49,10 @@ fn a_filtered_lane_is_followed_by_exactly_one_guard_step() -> TestResult {
     let (id, position, step) = &found[0];
     let lane = lane_steps(&jobs);
     assert_eq!(&lane[0].0, id);
-    assert!(lane[0].1 < *position && *position <= lane[0].1 + 2, "{lane:?}");
+    assert!(
+        lane[0].1 < *position && *position <= lane[0].1 + 2,
+        "{lane:?}"
+    );
     assert_eq!(step["name"], "Test lane guard (features: local-mode)");
     assert_eq!(step["run"], GUARD_RUN);
     let run = step["run"].as_str().ok_or("no run")?;
@@ -81,8 +84,7 @@ fn an_unfiltered_lane_has_no_guard() -> TestResult {
 
 #[test]
 fn a_guard_on_a_non_root_lane_runs_in_that_roots_directory() -> TestResult {
-    let config =
-        "[[test_lane]]\nroot = 'tools'\nfeatures = ['a', 'b']\npackages = ['package-1']\nfilter = 'test(~x)'\n";
+    let config = "[[test_lane]]\nroot = 'tools'\nfeatures = ['a', 'b']\npackages = ['package-1']\nfilter = 'test(~x)'\n";
     let found = guards(&jobs_of(config)?);
     assert_eq!(found.len(), 1, "{found:?}");
     assert_eq!(found[0].2["working-directory"], "tools");

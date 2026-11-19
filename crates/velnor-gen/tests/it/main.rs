@@ -55,7 +55,6 @@ mod events_policy;
 mod facts;
 mod feature_lane_scope;
 mod feature_lanes;
-mod lane_guard_steps;
 mod fixed_uses;
 mod fork_fence;
 mod fork_fence_invariant;
@@ -74,6 +73,7 @@ mod helper_source;
 mod helper_startup;
 mod helper_tool_paths;
 mod helper_workflow_size;
+mod lane_guard_steps;
 mod mbx_store;
 
 mod inputs;
