@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, PackageName, RepoPath, StepKind,
-    TEST_STEP, TargetKind, TargetName,
+    BUILD_TESTS_STEP, CargoCommand, FilterRef, Job, LINT_STEP, RepoPath, StepKind, TEST_STEP,
+    TargetKind, TargetName,
 };
 
 use crate::cargo_features::NO_TESTS_PASS;
+use crate::cargo_path::{manifest_flag, nextest_archive, test_target};
 pub(crate) use crate::cargo_target::{hoist_target_dir, target_dir_env};
 use crate::gate::CACHE_DEBUG_ON;
 use crate::rules::{RenderedStep, Value};
@@ -199,40 +200,6 @@ fn cargo_command(
     }
 }
 
-fn nextest_archive(
-    nextest: &str,
-    file: &RepoPath,
-    path: &str,
-) -> (String, String, Vec<(String, Value)>) {
-    (
-        BUILD_TESTS_STEP.into(),
-        format!(
-            "cargo-nextest nextest archive{path} --workspace --locked{nextest} --archive-file '{}'",
-            file.as_str().replace('\'', "'\\''")
-        ),
-        vec![],
-    )
-}
-
-fn test_target(
-    cargo: &str,
-    package: &PackageName,
-    target: &TargetName,
-    kind: TargetKind,
-    features: &[String],
-    path: &str,
-) -> (String, String, Vec<(String, Value)>) {
-    (
-        format!("Test {package} {target}"),
-        format!(
-            "cargo test{path} -p {package} --locked{cargo} {}{}",
-            test_selector(kind, target),
-            feature_flag(features)
-        ),
-        vec![],
-    )
-}
-
 fn inventory_prefix(command: &CargoCommand, audit: bool) -> &'static str {
     if audit
         && !matches!(
@@ -325,15 +292,6 @@ pub(crate) fn nextest_run(
     )
 }
 
-fn manifest_flag(manifest: Option<&RepoPath>) -> String {
-    manifest.map_or_else(String::new, |path| {
-        format!(
-            " --manifest-path '{}'",
-            path.as_str().replace('\'', "'\\''")
-        )
-    })
-}
-
 fn nextest_filter(filter: &FilterRef) -> String {
     match filter {
         FilterRef::All => "$TEST_FILTER".to_owned(),
@@ -374,7 +332,7 @@ pub(crate) fn feature_flag(features: &[String]) -> String {
     }
 }
 
-fn test_selector(kind: TargetKind, target: &TargetName) -> String {
+pub(crate) fn test_selector(kind: TargetKind, target: &TargetName) -> String {
     match kind {
         TargetKind::Lib | TargetKind::ProcMacro => "--lib".to_owned(),
         TargetKind::Bin => format!("--bin={target}"),

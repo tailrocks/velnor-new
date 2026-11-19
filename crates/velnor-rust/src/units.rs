@@ -3,9 +3,10 @@
 
 use std::collections::BTreeSet;
 
-use velnor_model::{CacheRoot, RepoFacts, RepoPath, RootSlug, RustRoot};
+use velnor_model::{CacheRoot, RepoFacts, RepoPath, RootSlug, RustRoot, Step, StepKind, Timings};
 
 use crate::base_cache::cache_root;
+use crate::plan::step;
 use crate::roots::CARGO_LOCK;
 
 pub(crate) struct Unit {
@@ -90,4 +91,40 @@ pub(crate) fn units(facts: &RepoFacts) -> Vec<Unit> {
         });
     }
     units
+}
+
+pub(crate) fn restore_file_times(units: &[Unit]) -> Vec<Step> {
+    units
+        .iter()
+        .flat_map(|unit| {
+            if unit.grouped {
+                vec![Step {
+                    directory: None,
+                    ..step(StepKind::InputsRestore(unit.target_dir.clone()))
+                }]
+            } else {
+                unit.roots
+                    .iter()
+                    .map(|root| Step {
+                        directory: root.manifest.parent(),
+                        ..step(StepKind::InputsRestore(root.target_dir.clone()))
+                    })
+                    .collect()
+            }
+        })
+        .collect()
+}
+
+pub(crate) fn timings(facts: &RepoFacts, unit: &Unit) -> Option<Timings> {
+    let mut total = Timings::default();
+    for root in &unit.roots {
+        let timings = facts.timings.get(&root.manifest)?;
+        total.lint_build_seconds += timings.lint_build_seconds;
+        total.test_build_seconds += timings.test_build_seconds;
+        total.test_seconds += timings.test_seconds;
+        for (binary, seconds) in &timings.test_binary_seconds {
+            *total.test_binary_seconds.entry(binary.clone()).or_default() += seconds;
+        }
+    }
+    Some(total)
 }

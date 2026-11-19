@@ -7,7 +7,7 @@ use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
     MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun,
     PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
-    TargetName, Timings, Toolchain, When, WorkflowPlan,
+    TargetName, Toolchain, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -44,7 +44,10 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     let decisions: Vec<ShapeDecision> = units
         .iter()
         .map(|unit| {
-            let decision = decide_shape(facts.config.shape, timings(facts, unit).as_ref());
+            let decision = decide_shape(
+                facts.config.shape,
+                crate::units::timings(facts, unit).as_ref(),
+            );
             if unit.grouped {
                 decision
             } else {
@@ -279,7 +282,7 @@ pub(crate) fn setup_units(
             host: Host,
         })));
     }
-    toolchain.extend(restore_file_times(units));
+    toolchain.extend(crate::units::restore_file_times(units));
     toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
@@ -311,42 +314,6 @@ fn add_mbx_remote(jobs: &mut [Job]) {
             job.steps.insert(at + 1, cache);
         }
     }
-}
-
-fn restore_file_times(units: &[Unit]) -> Vec<Step> {
-    units
-        .iter()
-        .flat_map(|unit| {
-            if unit.grouped {
-                vec![Step {
-                    directory: None,
-                    ..step(StepKind::InputsRestore(unit.target_dir.clone()))
-                }]
-            } else {
-                unit.roots
-                    .iter()
-                    .map(|root| Step {
-                        directory: root.manifest.parent(),
-                        ..step(StepKind::InputsRestore(root.target_dir.clone()))
-                    })
-                    .collect()
-            }
-        })
-        .collect()
-}
-
-fn timings(facts: &RepoFacts, unit: &Unit) -> Option<Timings> {
-    let mut total = Timings::default();
-    for root in &unit.roots {
-        let timings = facts.timings.get(&root.manifest)?;
-        total.lint_build_seconds += timings.lint_build_seconds;
-        total.test_build_seconds += timings.test_build_seconds;
-        total.test_seconds += timings.test_seconds;
-        for (binary, seconds) in &timings.test_binary_seconds {
-            *total.test_binary_seconds.entry(binary.clone()).or_default() += seconds;
-        }
-    }
-    Some(total)
 }
 
 pub(crate) fn quick(facts: &RepoFacts) -> PrRun {

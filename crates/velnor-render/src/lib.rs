@@ -8,6 +8,7 @@ mod cache;
 mod cache_upload;
 mod cargo;
 mod cargo_features;
+mod cargo_path;
 mod cargo_target;
 mod checkout_step;
 mod combined_cache;
