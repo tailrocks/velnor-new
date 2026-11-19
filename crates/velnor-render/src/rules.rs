@@ -78,7 +78,10 @@ pub enum RenderedMatrixSource {
     /// `fromJSON(<expression>)`, such as `needs.plan.outputs.matrix`.
     Output(String),
     /// Static axes, each with its values.
-    Axes(Vec<(String, Vec<String>)>),
+    Axes {
+        axes: Vec<(String, Vec<String>)>,
+        include: Vec<Vec<(String, String)>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -12,12 +12,13 @@ const SHORT_ID: usize = 12;
 pub(super) fn hold_lines(
     rows: &[IntentRow],
     observed_docker: &[String],
+    absent_docker: &[String],
     github: &GithubObservation,
 ) -> Vec<String> {
     rows.iter()
         .filter(|row| !row.cleanup_proven)
         .filter_map(|row| {
-            let reasons = reasons(row, observed_docker, github);
+            let reasons = reasons(row, observed_docker, absent_docker, github);
             (!reasons.is_empty()).then(|| line(row, &reasons))
         })
         .collect()
@@ -26,17 +27,22 @@ pub(super) fn hold_lines(
 fn reasons(
     row: &IntentRow,
     observed_docker: &[String],
+    absent_docker: &[String],
     github: &GithubObservation,
 ) -> Vec<&'static str> {
     let mut reasons = Vec::new();
     if matches!(row.state, IntentState::Pending | IntentState::Uncertain) {
         reasons.push("launch state unsettled");
-    } else if row
+    } else if let Some(id) = row
         .docker_id
         .as_ref()
-        .is_some_and(|id| !observed_docker.contains(id))
+        .filter(|id| !observed_docker.contains(id))
     {
-        reasons.push("container not confirmed gone");
+        reasons.push(if absent_docker.contains(id) {
+            "container absent, cleanup not proven"
+        } else {
+            "container not confirmed gone"
+        });
     }
     let runner = row.github_runner_id.as_deref().filter(|id| !id.is_empty());
     if let Some(runner) = runner {
