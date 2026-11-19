@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_model::{
-    BUDGET_MODES_HELPER, DocsRun, HelperRelease, HelperVersion, MbxStore, Platform, PrCi,
-    PushAfterMergeGroup, RepoFacts,
+    BUDGET_MODES_HELPER, CacheDebug, DocsRun, HelperRelease, HelperVersion, MbxStore, Platform,
+    PrCi, PushAfterMergeGroup, RepoFacts,
 };
 
 use velnor_rust::INPUTS_IDENTITY_HELPER;
@@ -15,6 +15,12 @@ use crate::{
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
 const HOSTED_HELPER: (u64, u64, u64) = (0, 1, 99);
 const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
+/// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `cache_debug` key.
+// helper-gate: first in rust-ci-v0.1.82 via bfc3528bd7
+pub(crate) const CACHE_DEBUG_HELPER: (u64, u64, u64) = (0, 1, 82);
+/// The first `velnor-ci` that names the `required_check` check when it reads a queued run.
+// helper-gate: first in tools-v0.1.97 via af11477df1
+pub(crate) const REQUIRED_CHECK_HELPER: (u64, u64, u64) = (0, 1, 97);
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
@@ -90,6 +96,19 @@ pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, Generate
     }
     if facts.config.mbx_store == MbxStore::Shared && !release.version().at_least((0, 1, 85)) {
         return Err(GenerateError::MbxStoreHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.cache_debug == CacheDebug::On && !release.version().at_least(CACHE_DEBUG_HELPER)
+    {
+        return Err(GenerateError::CacheDebugHelperTooOld(
+            release.version().clone(),
+        ));
+    }
+    if facts.config.required_check != "Required"
+        && !release.version().at_least(REQUIRED_CHECK_HELPER)
+    {
+        return Err(GenerateError::RequiredCheckHelperTooOld(
             release.version().clone(),
         ));
     }

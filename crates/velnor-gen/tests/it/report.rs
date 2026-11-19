@@ -8,7 +8,7 @@ use velnor_rust::{detect, plan};
 
 #[test]
 fn required_check_cannot_duplicate_the_cache_report_display_name() -> TestResult {
-    for (version, name, valid) in [("0.1.81", "Cache", false), ("0.1.81", "Gate", true)] {
+    for (version, name, valid) in [("0.1.97", "Cache", false), ("0.1.97", "Gate", true)] {
         let config = format!("required_check = \"{name}\"\n");
         let view = crate::base_save::pinned(version, &config)?;
         let result = velnor_gen::expected_with_notes(&view);

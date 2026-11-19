@@ -68,3 +68,34 @@ fn pr_ci_label_renders_on_the_first_helper_that_knows_the_key() -> Result<(), Bo
     assert!(!refused.contains("HelperTooOld"), "{refused}");
     Ok(())
 }
+
+const CACHE_DEBUG: &str = "cache_debug = true\n";
+const REQUIRED_CHECK: &str = "required_check = \"Gate\"\n";
+
+#[test]
+fn cache_debug_is_refused_before_the_helper_knows_the_key() -> Result<(), Box<dyn Error>> {
+    let refused = refusal(CACHE_DEBUG, "0.1.81")?;
+    assert!(refused.contains("CacheDebugHelperTooOld"), "{refused}");
+    Ok(())
+}
+
+#[test]
+fn cache_debug_renders_on_the_first_helper_that_knows_the_key() -> Result<(), Box<dyn Error>> {
+    let refused = refusal(CACHE_DEBUG, "0.1.82")?;
+    assert!(!refused.contains("HelperTooOld"), "{refused}");
+    Ok(())
+}
+
+#[test]
+fn a_required_check_name_is_refused_before_the_helper_reads_it() -> Result<(), Box<dyn Error>> {
+    let refused = refusal(REQUIRED_CHECK, "0.1.96")?;
+    assert!(refused.contains("RequiredCheckHelperTooOld"), "{refused}");
+    Ok(())
+}
+
+#[test]
+fn a_required_check_name_renders_on_the_first_helper_that_reads_it() -> Result<(), Box<dyn Error>> {
+    let refused = refusal(REQUIRED_CHECK, "0.1.97")?;
+    assert!(!refused.contains("HelperTooOld"), "{refused}");
+    Ok(())
+}
