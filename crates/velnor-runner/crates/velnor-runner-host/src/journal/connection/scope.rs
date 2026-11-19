@@ -114,7 +114,9 @@ impl Journal {
             if stored_identity != identity {
                 return Err(HostError::Journal);
             }
-            if has_connection_work(connection, connection_id).await? {
+            if has_connection_work(connection, connection_id).await?
+                || has_pending_scale_set_delete(connection, connection_id).await?
+            {
                 return Ok(false);
             }
             if retired {
