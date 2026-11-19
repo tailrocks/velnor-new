@@ -13,7 +13,7 @@ use crate::{
 
 /// The first `velnor-ci` whose `.velnor/rust-ci.toml` parser accepts the `hosted` key.
 const HOSTED_HELPER: (u64, u64, u64) = (0, 1, 99);
-const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 102);
+const MERGE_GROUP_HELPER: (u64, u64, u64) = (0, 1, 103);
 
 pub(crate) fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     let release = facts
