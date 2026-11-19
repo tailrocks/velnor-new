@@ -73,8 +73,16 @@ runs:
             [ -n "$dir" ] && [ -f "$dir/velnor-ci" ] && [ ! -L "$dir/velnor-ci" ] && [ -x "$dir/velnor-ci" ] || continue
             bounded_copy "$dir/velnor-ci" "$staging/velnor-ci" || continue
           else
-            echo "Downloading $RELEASES/rust-ci-v$VERSION/velnor-ci-$platform"
-            curl --fail --silent --show-error --location --retry 3 --max-filesize "$MAX_BYTES" --output "$staging/velnor-ci" "$RELEASES/rust-ci-v$VERSION/velnor-ci-$platform" || fail "downloading velnor-ci $VERSION $platform failed, or the file is larger than $MAX_BYTES bytes"
+            downloaded=
+            for tag in "tools-v$VERSION" "rust-ci-v$VERSION"; do
+              echo "Downloading $RELEASES/$tag/velnor-ci-$platform"
+              if curl --fail --silent --show-error --location --retry 3 --max-filesize "$MAX_BYTES" --output "$staging/velnor-ci" "$RELEASES/$tag/velnor-ci-$platform"; then
+                downloaded=1
+                break
+              fi
+              rm -f "$staging/velnor-ci"
+            done
+            [ -n "$downloaded" ] || fail "downloading velnor-ci $VERSION $platform from the release tag tools-v$VERSION or rust-ci-v$VERSION failed, or the file is larger than $MAX_BYTES bytes"
             [ "$(wc -c < "$staging/velnor-ci")" -le "$MAX_BYTES" ] || fail "the velnor-ci $VERSION $platform download is larger than $MAX_BYTES bytes"
           fi
           if [ "$(digest "$staging/velnor-ci")" = "$expected" ]; then
