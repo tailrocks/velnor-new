@@ -35,6 +35,7 @@ mod declared_containers;
 mod declared_fixture;
 mod declared_helper_integrity;
 mod declared_image_jobs;
+mod declared_job_limits;
 mod declared_jobs;
 mod declared_local_actions;
 mod declared_paths;

@@ -35,6 +35,7 @@ const PULL_REQUEST_TYPES: [&str; 21] = [
 ];
 const EVERY_PATH: &str = "**";
 const MIN_SCHEDULE_GAP_MINUTES: u32 = 5;
+const MAX_DISPATCH_INPUTS: usize = 25;
 const WORKFLOW_RUN_TYPES: [&str; 3] = ["completed", "requested", "in_progress"];
 
 /// Reads `[workflow.on]` and the call inputs and outputs. Without an `on`
@@ -277,9 +278,18 @@ fn patterns(file: &str, what: &str, values: Vec<String>) -> Result<Vec<String>, 
 }
 
 fn inputs(file: &str, raw: Vec<RawInput>, dispatch: bool) -> Result<Vec<Input>, WorkflowsError> {
+    if dispatch && raw.len() > MAX_DISPATCH_INPUTS {
+        return refuse(format!(
+            "the workflow_dispatch trigger of {file} declares {} inputs, and GitHub allows {MAX_DISPATCH_INPUTS}",
+            raw.len()
+        ));
+    }
     let mut inputs: Vec<Input> = Vec::new();
     for input in raw {
-        if !is_identifier(&input.name, true) || inputs.iter().any(|seen| seen.name == input.name) {
+        let repeated = inputs
+            .iter()
+            .any(|seen| seen.name.eq_ignore_ascii_case(&input.name));
+        if !is_identifier(&input.name, true) || repeated {
             return refuse(format!(
                 "the input {:?} of {file} is not a unique identifier",
                 input.name
