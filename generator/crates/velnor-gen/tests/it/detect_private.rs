@@ -10,7 +10,7 @@ use crate::facts::TestResult;
 const SUGGESTION: &str = "add a [private_sources] table to .velnor/rust-ci.toml";
 
 fn with_source(source: &str, owner: Option<&str>) -> Result<RepoView, Box<dyn std::error::Error>> {
-    let mut view = pinned("0.1.82", "")?;
+    let mut view = pinned("0.1.86", "")?;
     if let Some(name) = owner {
         view.repository = RepositoryIdentity::Named(name.to_owned());
     }

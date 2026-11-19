@@ -58,7 +58,7 @@ impl fmt::Display for GenerateError {
             ),
             Self::MbxStoreHelperTooOld(version) => write!(f, "velnor-ci {version} cannot select the shared MBX store; pin velnor-ci 0.1.84 or later"),
             Self::MirrorHelperTooOld(version) => write!(f, "velnor-ci {version} cannot configure crates_mirror; pin velnor-ci 0.1.81 or later"),
-            Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"),
+            Self::PrivateSourcesHelperTooOld(version) => write!(f, "velnor-ci {version} cannot fetch private sources; pin velnor-ci 0.1.86 or later with `velnor-gen pin-helper 0.1.86`"),
             Self::InputsBuildHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot record pre-build directory inventories for inputs audit; pin velnor-ci 0.1.81 or later with `velnor-gen pin-helper 0.1.81`"

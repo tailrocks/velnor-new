@@ -121,7 +121,7 @@ fn the_token_reaches_only_the_fetch_step_and_every_cargo_command_after_it_runs_o
         let repo = private_repo(
             &["Cargo.toml", "tools/Cargo.toml"],
             &format!("{shape}{SECTION}"),
-            "0.1.82",
+            "0.1.86",
         )?;
         let text = workflow(&repo)?;
         let mut fetches = 0;
@@ -150,7 +150,7 @@ fn the_token_reaches_only_the_fetch_step_and_every_cargo_command_after_it_runs_o
 
 #[test]
 fn without_the_section_the_workflow_has_no_token_and_no_offline_flag() -> TestResult {
-    let mut repo = private_repo(&["Cargo.toml"], SECTION, "0.1.82")?;
+    let mut repo = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
     repo.files.insert(
         path(".velnor/rust-ci.toml")?,
         b"full_run = 'off'\n".to_vec(),
@@ -181,11 +181,20 @@ fn a_misconfigured_section_or_an_old_helper_is_refused() -> TestResult {
         format!("{SECTION}extra = 1\n"),
     ];
     for section in bad {
-        let repo = private_repo(&["Cargo.toml"], &section, "0.1.82")?;
+        let repo = private_repo(&["Cargo.toml"], &section, "0.1.86")?;
         assert!(workflow(&repo).is_err(), "{section}");
     }
-    let old = private_repo(&["Cargo.toml"], SECTION, "0.1.81")?;
-    assert!(workflow(&old).is_err_and(|error| error.to_string().contains("0.1.82")));
+    for released in ["0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
+        let old = private_repo(&["Cargo.toml"], SECTION, released)?;
+        assert!(
+            workflow(&old).is_err_and(|error| error
+                .to_string()
+                .contains("pin velnor-ci 0.1.86 or later")),
+            "{released}"
+        );
+    }
+    let current = private_repo(&["Cargo.toml"], SECTION, "0.1.86")?;
+    assert!(workflow(&current).is_ok());
     Ok(())
 }
 
@@ -205,7 +214,7 @@ fn misses(condition: &str, hits: &[&str]) -> Result<bool, Box<dyn std::error::Er
 
 #[test]
 fn an_exact_sources_hit_skips_the_token_and_the_fetch_and_a_partial_hit_fetches() -> TestResult {
-    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.82")?;
+    let repo = private_repo(&["Cargo.toml", "tools/Cargo.toml"], SECTION, "0.1.86")?;
     let text = workflow(&repo)?;
     let mut checked = 0;
     for job in jobs(&text)? {

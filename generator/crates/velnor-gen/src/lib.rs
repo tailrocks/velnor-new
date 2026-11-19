@@ -109,7 +109,7 @@ fn check_helper(facts: &RepoFacts) -> Result<&HelperRelease, GenerateError> {
     if facts.config.crates_mirror.is_some() && !release.version().at_least((0, 1, 81)) {
         return Err(GenerateError::MirrorHelperTooOld(release.version().clone()));
     }
-    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 82)) {
+    if facts.config.private_sources.is_some() && !release.version().at_least((0, 1, 86)) {
         return Err(GenerateError::PrivateSourcesHelperTooOld(
             release.version().clone(),
         ));
