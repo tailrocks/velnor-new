@@ -109,7 +109,6 @@ pub struct Step {
     pub manifest: Option<RepoPath>,
     pub target_dir: Option<RepoPath>,
     pub when: When,
-    pub skip_on_draft: bool,
     pub skip_after_merge_group: Option<PlanFrom>,
     pub skip_when_cold: bool,
     pub pr: PrRun,
