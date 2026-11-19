@@ -77,6 +77,7 @@ pub(crate) struct Setup {
     pub populate: Option<Populate>,
     pub release: &'static str,
     pub env: Vec<(&'static str, &'static str)>,
+    pub os_release: bool,
 }
 
 impl Setup {
@@ -95,6 +96,7 @@ impl Setup {
             populate: None,
             release: "1.99.1",
             env: Vec::new(),
+            os_release: true,
         }
     }
 }
@@ -209,8 +211,10 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))
         .env("CARGO_HOME", &cargo_home)
         .env("GITHUB_ENV", &env_file)
-        .env("GITHUB_OUTPUT", &outputs)
-        .env("VELNOR_OS_RELEASE", &os_release);
+        .env("GITHUB_OUTPUT", &outputs);
+    if setup.os_release {
+        command.env("VELNOR_OS_RELEASE", &os_release);
+    }
     for (name, value) in &setup.env {
         command.env(name, value);
     }

@@ -106,6 +106,16 @@ fn an_unreadable_os_release_fails_prepare_instead_of_sharing_a_digest() {
     assert!(run.outputs.is_empty(), "{}", run.outputs);
 }
 
+#[cfg(not(target_os = "linux"))]
+#[test]
+fn a_platform_without_os_release_still_prepares_with_its_own_identity() {
+    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+    setup.os_release = false;
+    let run = prepare("compat-no-os-release-platform", &setup);
+    assert!(run.output.status.success(), "{:?}", run.output);
+    assert!(!digest(&run).is_empty());
+}
+
 #[test]
 fn rust_before_1_71_gets_numeric_debug_values() {
     let mut setup = Setup::new(reported("1.70.0", Some("0.9.151")));

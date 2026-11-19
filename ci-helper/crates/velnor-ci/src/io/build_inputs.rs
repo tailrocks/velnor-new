@@ -71,10 +71,14 @@ pub(super) fn release_of(verbose: &str) -> Result<(u32, u32), CiError> {
 
 pub(super) fn image_identity() -> Result<String, CiError> {
     let image_os = std::env::var("ImageOS").unwrap_or_default();
-    let path = std::env::var_os(OS_RELEASE_OVERRIDE).unwrap_or_else(|| OS_RELEASE.into());
+    let explicit = std::env::var_os(OS_RELEASE_OVERRIDE);
+    if explicit.is_none() && !cfg!(target_os = "linux") {
+        return Ok(format!("{image_os}|{}|", std::env::consts::OS));
+    }
+    let path = explicit.unwrap_or_else(|| OS_RELEASE.into());
     let os_release = std::fs::read_to_string(&path).map_err(|e| {
         CiError::new(format!(
-            "cannot read the OS identity from {}: {e}; without it the cache cannot tell runner images apart, so the cache is not used",
+            "cannot read the OS identity from {}: {e}; without it the cache cannot tell runner images apart, so prepare fails rather than share a cache",
             Path::new(&path).display()
         ))
     })?;
