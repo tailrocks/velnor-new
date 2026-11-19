@@ -35,6 +35,7 @@ pub enum StepKind {
         lane: JobId,
         family: TrimFamily,
     },
+    CacheBudget(u64),
     RustComponents(Vec<String>),
     RustTargets(Vec<String>),
     UploadArchive {

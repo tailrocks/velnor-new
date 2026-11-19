@@ -6,6 +6,7 @@ mod archive_witness;
 mod audit;
 mod build_inputs;
 mod cache;
+pub mod cache_api;
 mod cache_paths;
 mod cache_sources;
 mod cache_upload;
@@ -51,7 +52,7 @@ use crate::cli::{
     DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
-use crate::compare::compare;
+use crate::compare::{compare, compare_across_populations};
 use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
@@ -187,6 +188,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
+        Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
         Command::Restored(args) => {
             let root = current_dir()?;
             let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
@@ -296,7 +298,13 @@ pub fn write_metrics(path: &Path, metrics: &RunMetrics) -> Result<(), CiError> {
 }
 
 fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
-    compare(&read_metrics(&args.a)?, &read_metrics(&args.b)?)
+    let a = read_metrics(&args.a)?;
+    let b = read_metrics(&args.b)?;
+    if args.allow_different_populations {
+        compare_across_populations(&a, &b)
+    } else {
+        compare(&a, &b)
+    }
 }
 
 pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {

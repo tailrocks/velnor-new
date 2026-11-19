@@ -24,7 +24,16 @@ use jobs::{
 
 pub(super) const WORKFLOW_PATH: &str = ".github/workflows/source-qualification.yml";
 
-const SOURCES_FETCH_ROOTS: [&str; 2] = ["", "crates/velnor-runner"];
+/// Source qualification binds to the pull request's base and head, so it runs
+/// at PR time for every non-draft PR and never on `merge_group`.
+const SOURCE_QUALIFICATION_JOBS: [&str; 6] = [
+    "plan",
+    "selection",
+    "ordinary-harness",
+    "keep-harness",
+    "generation-checks",
+    "source-qualification",
+];
 const SOURCES_CARGO_HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
 
 pub(super) fn render(
@@ -61,7 +70,7 @@ pub(super) fn render(
         GATHER_JOB_ID.to_owned(),
         routing::gather_job(&runner, plan)?,
     ));
-    Ok(Yaml::Map(vec![
+    let mut document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
         (
             "on".to_owned(),
@@ -93,7 +102,17 @@ pub(super) fn render(
             ]),
         ),
         ("jobs".to_owned(), Yaml::Map(jobs)),
-    ]))
+    ]);
+    crate::pr_ci::apply(
+        &mut document,
+        request.pr_ci,
+        crate::pr_ci::PrCiShape {
+            quick: &SOURCE_QUALIFICATION_JOBS,
+            claim: false,
+            merge_group: false,
+        },
+    )?;
+    Ok(document)
 }
 
 fn read_permissions() -> Yaml {
@@ -111,7 +130,7 @@ fn producer_job(
         crate::non_input_checkout::restrict_checkout_yaml(checkout_step(), &plan.non_inputs);
     steps.push(prepare_step());
     steps.extend(phase_steps(&[VERIFY_CHECKOUT_PHASE]));
-    steps.extend(sources_restore_steps(producer.id, runner_label)?);
+    steps.extend(sources_restore_steps(pins, producer.id, runner_label)?);
     steps.push(mise_step(pins)?);
     steps.extend(phase_steps(PRELUDE_AFTER_MISE_BEFORE_PREFETCH));
     steps.push(prefetch_step());
@@ -137,10 +156,11 @@ fn producer_job(
 }
 
 pub(super) fn sources_restore_steps(
+    pins: &ProductReleasePins,
     job_id: &str,
     runner_label: &str,
 ) -> Result<Vec<Yaml>, RenderError> {
-    let roots = SOURCES_FETCH_ROOTS.map(str::to_owned);
+    let roots = pins.runner_workspace.fetch_roots();
     let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[], &[])
         .map_err(sources_restore_error)?;
     steps
