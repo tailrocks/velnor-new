@@ -111,7 +111,7 @@ fn the_policy_lane_runs_its_policy_steps_without_a_restore_term() -> TestResult 
         "{runs:?}"
     );
     assert!(
-        runs.iter().any(|run| run.contains("cargo-machete")),
+        runs.iter().any(|run| run.contains("cargo machete")),
         "{runs:?}"
     );
     assert!(
