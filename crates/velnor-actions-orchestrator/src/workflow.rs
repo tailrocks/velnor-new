@@ -31,6 +31,7 @@ use velnor_actions_workflow_renderer::render::{
 use velnor_actions_workflow_renderer::steps::PLAN_OPERATION;
 
 use crate::OrchestratorError;
+use crate::discover::Discovery;
 use crate::workflow_jobs::{final_job, lint_job};
 
 #[path = "workflow_policy.rs"]
@@ -95,6 +96,7 @@ fn workflow_ir(
 
 fn support_workflow(
     policy: WorkflowPolicy,
+    discovery: &Discovery,
     verify: &[ValidatorKind],
 ) -> Option<VelnorSupportWorkflow> {
     let mut support = match policy {
@@ -108,6 +110,11 @@ fn support_workflow(
         }
         WorkflowPolicy::VelnorRepositoryV1 => policy.support_workflow(),
     };
+    if discovery.workspaces.is_empty() {
+        support
+            .validators
+            .retain(|validator| *validator != ValidatorKind::CargoDeny);
+    }
     if policy == WorkflowPolicy::VelnorRepositoryV1 {
         for kind in verify {
             if !support.validators.contains(kind) {

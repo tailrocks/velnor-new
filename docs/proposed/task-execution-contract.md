@@ -339,7 +339,8 @@ profile = "smoke"
 run_ignored = "only"
 partitions = 2
 build = "archive"
-triggers = ["workflow_dispatch"]
+required = true
+triggers = ["pull_request", "push", "workflow_dispatch"]
 dispatch_inputs = { tier = ["smoke", "all"] }
 filter_input = "test_filter"
 artifacts = [{ name = "tier-smoke-{shard}", paths = ["target/snapshots/actual", "target/snapshots/diff"], when = "failure", retention_days = 14 }]
@@ -381,9 +382,9 @@ Each `[[stacks.rust.suites]]` entry validates fail-closed before rendering:
 - `test_threads`: optional `1..=64`, exported as `NEXTEST_TEST_THREADS`.
 - `runner_label`: optional catalog runner label override; defaults to `workflow.runner_label` or the latest pinned default.
 - `workflow`: optional standalone workflow slug (`[a-z0-9][a-z0-9_-]*` without `.yml`, default `"suites"` emitting `.github/workflows/suites.yml`); reserved generator slugs (`ci`, `freshness`, `release`, `binary-release`, `tofu-apply`, `qualification`, `product-release`, `monitoring`) are rejected.
-- `triggers`: non-empty deduplicated list of `"pull_request" | "push" | "schedule" | "workflow_dispatch"`. `pull_request` and `push` are refused (`pull_request/push Rust suites moved to velnor-gen's rust-ci.yml; declare them in .velnor/rust-ci.toml`), so `triggers` must be set explicitly; suites with `schedule` or `workflow_dispatch` emit into `.github/workflows/<workflow>.yml`.
+- `triggers`: non-empty deduplicated list of `"pull_request" | "push" | "schedule" | "workflow_dispatch"` (default `["pull_request", "push"]`). Suites with `pull_request` or `push` emit into `ci.yml`; suites with `schedule` or `workflow_dispatch` emit into `.github/workflows/<workflow>.yml`.
 - `schedule`: non-empty list of 5-field cron expressions with validated numeric bounds (`minute 0..=59`, `hour 0..=23`, `day-of-month 1..=31`, `month 1..=12`, `day-of-week 0..=7`); required when `triggers` includes `"schedule"` and rejected otherwise.
-- `required`: boolean (default `false`); `true` is refused with the same message, because only velnor-gen's `rust-ci.yml` can gate `Required` now.
+- `required`: boolean (default `false`); requires `pull_request` or `push` trigger and adds the suite's `ci.yml` jobs to `Required`'s `needs`.
 - `cancel_in_progress`: optional boolean overriding concurrency `cancel-in-progress` on standalone suite workflows (default `false`).
 - `allow_failure`: boolean (default `false`), setting job `continue-on-error: true` when enabled.
 - `filter` and `filter_input`: optional static Nextest filterset passed via `-E`, and optional `[workflow.dispatch.inputs.<name>]` key bound at runtime via `VELNOR_SUITE_FILTERSET` (requires `workflow_dispatch` trigger). When both `filter` and `filter_input` are set on a suite, `filter_input` is appended as an additional `-E` argument when non-empty, intersecting with the static `filter`.

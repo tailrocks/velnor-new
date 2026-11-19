@@ -102,6 +102,7 @@ fn workflow_section(out: &mut String, prep: &GenerationPreparation, jobs: &BTree
     );
     pin_lines(out, jobs);
     ineligible_lines(out, prep);
+    feature_lines(out, prep);
     push(
         out,
         "  Pull-request execution narrows crate obligations through its event-time affected-work plan.",
@@ -239,6 +240,30 @@ fn ineligible_lines(out: &mut String, prep: &GenerationPreparation) {
                 &format!(
                     "  Ineligible: {} has no test targets; no test command emitted",
                     task.task_id
+                ),
+            );
+        }
+    }
+}
+
+fn feature_lines(out: &mut String, prep: &GenerationPreparation) {
+    for fallback in &prep.discovery.feature_fallbacks {
+        let requested = fallback.requested.join(",");
+        if fallback.used_defaults() {
+            push(
+                out,
+                &format!(
+                    "  Features: {} [{}] declares none of [{requested}]; using default features",
+                    fallback.package_name, fallback.configuration
+                ),
+            );
+        } else {
+            let applied = fallback.applied.join(",");
+            push(
+                out,
+                &format!(
+                    "  Features: {} [{}] requested [{requested}]; applied [{applied}]",
+                    fallback.package_name, fallback.configuration
                 ),
             );
         }

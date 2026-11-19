@@ -95,22 +95,6 @@ fn check_evidence_wires_identity() -> Result<(), Box<dyn Error>> {
             "record_attestation_path = Path(sys.argv[9])",
             "record attestation input",
         ),
-        (
-            "rust_ci_runs_path = Path(sys.argv[11])",
-            "Rust CI runs input",
-        ),
-        (
-            "rust_ci_jobs_path = Path(sys.argv[12])",
-            "Rust CI jobs input",
-        ),
-        (
-            "rust_ci_recheck_path = Path(sys.argv[13])",
-            "Rust CI recheck input",
-        ),
-        (
-            "identity_module.select_rust_ci_gate(",
-            "Rust CI gate selection",
-        ),
     ] {
         require(&program, needle, label)?;
     }
@@ -204,18 +188,6 @@ fn check_rendered_identity_steps(text: &str) -> Result<(), Box<dyn Error>> {
     require_order(
         text,
         "velnor-ci-runs.json",
-        "velnor-candidate-artifact.json",
-        "evidence input order",
-    )?;
-    require_order(
-        text,
-        "velnor-ci-runs.json",
-        "velnor-rust-ci-runs.json",
-        "evidence input order",
-    )?;
-    require_order(
-        text,
-        "velnor-rust-ci-recheck.json",
         "velnor-candidate-artifact.json",
         "evidence input order",
     )?;
@@ -330,21 +302,6 @@ fn gc1_t51_evidence_rejects_unbound_identity() -> Result<(), Box<dyn Error>> {
     let (code, _, _) = run_evidence_program(&fixture, &bad_ci, &bad_ci.record, &[])?;
     if code == 0 {
         return Err(fail("evidence program accepted its failed CI"));
-    }
-    let mut red_rust = evidence_inputs();
-    red_rust.rust_ci_runs = red_rust
-        .rust_ci_runs
-        .replacen("\"success\"", "\"failure\"", 1);
-    let mut moved_rust = evidence_inputs();
-    moved_rust.rust_ci_recheck = moved_rust
-        .rust_ci_recheck
-        .replacen("\"id\":78", "\"id\":79", 1);
-    for (label, bad) in [("red", red_rust), ("moved", moved_rust)] {
-        let (code, output, _) = run_evidence_program(&fixture, &bad, &bad.record, &[])?;
-        if code == 0 {
-            return Err(fail(&format!("evidence program accepted {label} Rust CI")));
-        }
-        require(&output, "Rust CI", "Rust CI rejection")?;
     }
     let mut bad_inputs = evidence_inputs();
     bad_inputs.authenticated_source =

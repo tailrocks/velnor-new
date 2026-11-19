@@ -106,7 +106,7 @@ fn step_text(text: &str, name: &str) -> Result<StepText, Box<dyn Error>> {
 }
 
 fn render_tree_text(policy: WorkflowPolicy) -> Result<Vec<(String, String)>, Box<dyn Error>> {
-    let repo = mbx_repo_for(true, policy)?;
+    let repo = mbx_repo_for(false, policy)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     Ok(tree
         .files

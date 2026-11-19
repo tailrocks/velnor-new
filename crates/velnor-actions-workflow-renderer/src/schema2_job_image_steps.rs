@@ -33,26 +33,6 @@ pub(super) fn fetch_ci_runs_step() -> Yaml {
     ])
 }
 
-pub(super) fn fetch_rust_ci_step() -> Yaml {
-    Yaml::Map(vec![
-        (
-            "name".to_owned(),
-            Yaml::str("Fetch the Rust CI gate for the candidate source"),
-        ),
-        ("shell".to_owned(), Yaml::str("bash")),
-        ("env".to_owned(), gh_env()),
-        (
-            "run".to_owned(),
-            Yaml::str(format!(
-                "set -euo pipefail\nauthority=\"$VELNOR_IMAGE_AUTHORITY_DIR\"\nruns=\"repos/$GITHUB_REPOSITORY/actions/workflows/rust-ci.yml/runs?head_sha=$GITHUB_SHA&per_page=100\"\ngh api \"$runs\" > \"{runs}\"\nselected=\"$(python3 - \"$authority\" \"{runs}\" \"$GITHUB_SHA\" <<'VELNOR_RUST_CI_EOF'\nimport json\nimport sys\nsys.path.insert(0, sys.argv[1])\nimport job_image_authority_identity as identity_module\nwith open(sys.argv[2], \"rb\") as stream:\n    selected = identity_module.select_rust_ci_run(json.load(stream), sys.argv[3])\nprint(selected[\"run_id\"], selected[\"run_attempt\"])\nVELNOR_RUST_CI_EOF\n)\"\nread -r run_id run_attempt <<<\"$selected\"\ngh api --paginate --slurp \"repos/$GITHUB_REPOSITORY/actions/runs/$run_id/attempts/$run_attempt/jobs?per_page=100\" > \"{jobs}\"\ngh api \"$runs\" > \"{recheck}\"",
-                runs = authority::RUST_CI_RUNS_PATH,
-                jobs = authority::RUST_CI_JOBS_PATH,
-                recheck = authority::RUST_CI_RECHECK_PATH
-            )),
-        ),
-    ])
-}
-
 pub(super) fn fetch_artifact_response_step() -> Yaml {
     Yaml::Map(vec![
         (

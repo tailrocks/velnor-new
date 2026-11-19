@@ -3,23 +3,31 @@
 
 use super::{PreparedWorkflow, WorkflowBuildInput, problem};
 use crate::OrchestratorError;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
 use velnor_actions_contract::{Job, Stack};
 use velnor_actions_workflow_renderer::native_authority::{
-    GeneratedWorkflowKind, LogicalJobFact, LogicalJobSource, NativeTaskFact,
+    GeneratedWorkflowKind, LogicalJobFact, LogicalJobSource, NativeTaskFact, SuitePhase,
     TofuTaskFact,
 };
 
 type Sources = BTreeMap<String, LogicalJobSource>;
 type TaskGroups<'a> = BTreeMap<String, Vec<&'a velnor_actions_contract::ProposedTask>>;
 
+struct TaskInventory<'a> {
+    groups: TaskGroups<'a>,
+    seed_ids: BTreeMap<String, String>,
+}
+
 pub(super) fn graph(
     input: &WorkflowBuildInput<'_>,
     prepared: &PreparedWorkflow,
     jobs: &BTreeMap<String, Job>,
 ) -> Result<Vec<LogicalJobFact>, OrchestratorError> {
-    let tasks = task_inventory(input)?;
+    let TaskInventory {
+        groups: tasks,
+        seed_ids,
+    } = task_inventory(input)?;
     let mut sources = Sources::new();
     let mut ordered = Vec::new();
     for (id, members) in &tasks {
@@ -31,6 +39,10 @@ pub(super) fn graph(
     }
     insert_named_checks(input, &mut sources, &mut ordered);
     insert_gradle(input, &mut sources, &mut ordered);
+    insert_suites(input, jobs, &mut sources, &mut ordered);
+    for (id, root) in seed_ids {
+        sources.insert(id, LogicalJobSource::StateProducer { root });
+    }
     insert_workflow_tasks(prepared, jobs, &mut sources);
     if jobs.contains_key(LEDGER_CLI_JOB_ID) {
         sources.insert(LEDGER_CLI_JOB_ID.to_owned(), LogicalJobSource::LedgerCli);
@@ -64,9 +76,10 @@ pub(super) fn graph(
 
 fn task_inventory<'a>(
     input: &'a WorkflowBuildInput<'_>,
-) -> Result<TaskGroups<'a>, OrchestratorError> {
+) -> Result<TaskInventory<'a>, OrchestratorError> {
     let owners = crate::crate_job_ids::JobOwners::new(&input.discovery.proposals)?;
-    let mut tasks = TaskGroups::new();
+    let mut tasks = BTreeMap::<String, Vec<&velnor_actions_contract::ProposedTask>>::new();
+    let mut seed_roots = BTreeSet::new();
     for task in input
         .discovery
         .proposals
@@ -74,10 +87,27 @@ fn task_inventory<'a>(
         .filter(|task| crate::crate_jobs::is_runnable(task))
     {
         if let Some(id) = owners.for_member(task)? {
+            if task.identity.compile_driver == "mbx" {
+                seed_roots.insert(
+                    crate::source_prep::workspace_root_for_manifest(
+                        &task.identity.unit_path,
+                        input.fetch_roots,
+                    )
+                    .to_owned(),
+                );
+            }
             tasks.entry(id).or_default().push(task);
         }
     }
-    Ok(tasks)
+    let roots: Vec<String> = seed_roots.into_iter().collect();
+    let seed_ids = crate::crate_jobs::state_producer::producer_job_ids(&roots)?
+        .into_iter()
+        .zip(roots)
+        .collect::<BTreeMap<_, _>>();
+    Ok(TaskInventory {
+        groups: tasks,
+        seed_ids,
+    })
 }
 
 fn task_source(
@@ -172,6 +202,33 @@ fn insert_gradle(input: &WorkflowBuildInput<'_>, sources: &mut Sources, ordered:
                     project: project.clone(),
                 },
             );
+        }
+    }
+}
+
+fn insert_suites(
+    input: &WorkflowBuildInput<'_>,
+    jobs: &BTreeMap<String, Job>,
+    sources: &mut Sources,
+    ordered: &mut Vec<String>,
+) {
+    if let Some(rust) = &input.config.stacks.rust {
+        for suite in &rust.suites {
+            for (id, phase) in [
+                (format!("suite-build-{}", suite.id), SuitePhase::Build),
+                (format!("suite-{}", suite.id), SuitePhase::Run),
+            ] {
+                if jobs.contains_key(&id) {
+                    ordered.push(id.clone());
+                    sources.insert(
+                        id,
+                        LogicalJobSource::Suite {
+                            id: suite.id.clone(),
+                            phase,
+                        },
+                    );
+                }
+            }
         }
     }
 }

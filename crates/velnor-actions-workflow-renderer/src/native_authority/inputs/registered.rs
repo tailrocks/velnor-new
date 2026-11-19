@@ -2,14 +2,17 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    LogicalJobFact, LogicalJobSource, NativeAuthorityError, NativeAuthorityInput, invalid,
-    validate_root,
+    LogicalJobFact, LogicalJobSource, NativeAuthorityError, NativeAuthorityInput, SuitePhase,
+    invalid, seeds, validate_root,
 };
 use std::collections::{BTreeMap, BTreeSet};
 
 pub(super) struct RegisteredSources {
+    seed_ids: BTreeMap<String, String>,
+    seen_seeds: BTreeSet<String>,
     gradle: BTreeSet<(String, String)>,
     seen_gradle: BTreeSet<(String, String)>,
+    seen_suites: BTreeSet<String>,
     generated: BTreeMap<String, super::generated::GeneratedOwner>,
     seen_generated: BTreeSet<String>,
     seen_workflow: BTreeSet<String>,
@@ -18,12 +21,21 @@ pub(super) struct RegisteredSources {
 
 impl RegisteredSources {
     pub(super) fn new(input: &NativeAuthorityInput<'_>) -> Result<Self, NativeAuthorityError> {
+        let roots = seeds::roots(input)?;
+        let seed_ids = seeds::state_producer_job_ids(&roots)?
+            .into_iter()
+            .zip(roots)
+            .map(|(id, root)| (root, id))
+            .collect();
         let gradle = gradle_projects(input)?;
         Ok(Self {
             generated: super::generated::inventory(input)?,
             seen_generated: BTreeSet::new(),
+            seed_ids,
+            seen_seeds: BTreeSet::new(),
             gradle,
             seen_gradle: BTreeSet::new(),
+            seen_suites: BTreeSet::new(),
             seen_workflow: BTreeSet::new(),
             seen_ledger_cli: false,
         })
@@ -60,6 +72,7 @@ impl RegisteredSources {
                 Ok(true)
             }
             LogicalJobSource::Gradle { root, project } => self.gradle(fact, root, project),
+            LogicalJobSource::Suite { id, phase } => self.suite(fact, id, *phase, input),
             LogicalJobSource::WorkflowTask { owner } => self.workflow_task(fact, owner, input),
             LogicalJobSource::GeneratedWorkflowTask { owner, kind } => {
                 let source = self
@@ -71,6 +84,14 @@ impl RegisteredSources {
                     || !self.seen_generated.insert(fact.id.clone())
                 {
                     return Err(invalid("native_generated_task_identity"));
+                }
+                Ok(false)
+            }
+            LogicalJobSource::StateProducer { root } => {
+                if !self.seen_seeds.insert(root.clone())
+                    || self.seed_ids.get(root) != Some(&fact.id)
+                {
+                    return Err(invalid("native_seed_job_identity"));
                 }
                 Ok(false)
             }
@@ -146,11 +167,38 @@ impl RegisteredSources {
         Ok(true)
     }
 
+    fn suite(
+        &mut self,
+        fact: &LogicalJobFact,
+        id: &str,
+        phase: SuitePhase,
+        input: &NativeAuthorityInput<'_>,
+    ) -> Result<bool, NativeAuthorityError> {
+        let suite = input
+            .config
+            .stacks
+            .rust
+            .as_ref()
+            .and_then(|rust| rust.suites.iter().find(|suite| suite.id == id))
+            .ok_or_else(|| invalid("native_suite_unknown"))?;
+        let expected = match phase {
+            SuitePhase::Build => format!("suite-build-{id}"),
+            SuitePhase::Run => format!("suite-{id}"),
+        };
+        self.seen_suites.insert(fact.id.clone());
+        if fact.id != expected || !suite.has_pr_or_push_trigger() {
+            return Err(invalid("native_suite_job_identity"));
+        }
+        Ok(suite.required)
+    }
+
     pub(super) fn finish(
         self,
         input: &NativeAuthorityInput<'_>,
     ) -> Result<(), NativeAuthorityError> {
-        if self.seen_gradle != self.gradle {
+        if self.seen_seeds != self.seed_ids.keys().cloned().collect()
+            || self.seen_gradle != self.gradle
+        {
             return Err(invalid("native_graph_incomplete_sources"));
         }
         if self.seen_generated
@@ -161,6 +209,24 @@ impl RegisteredSources {
                 .collect()
         {
             return Err(invalid("native_generated_inventory_incomplete"));
+        }
+        let mut suites = BTreeSet::new();
+        if let Some(rust) = &input.config.stacks.rust {
+            for suite in rust
+                .suites
+                .iter()
+                .filter(|suite| suite.has_pr_or_push_trigger())
+            {
+                suites.insert(format!("suite-{}", suite.id));
+                if suite.partitions > 1
+                    && suite.build == velnor_actions_contract::RustSuiteBuildMode::Archive
+                {
+                    suites.insert(format!("suite-build-{}", suite.id));
+                }
+            }
+        }
+        if self.seen_suites != suites {
+            return Err(invalid("native_graph_incomplete_suites"));
         }
         let mut workflow = input
             .config

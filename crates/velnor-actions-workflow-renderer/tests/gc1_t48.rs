@@ -301,16 +301,10 @@ mod gc1_t48_runner_preview;
 #[path = "runner_image_artifact_guard_public.rs"]
 mod runner_image_artifact_guard_public;
 
-#[path = "gc1_t48_generator_release_rust_ci.rs"]
-mod gc1_t48_generator_release_rust_ci;
 #[path = "gc1_t48_publish_checkout.rs"]
 mod gc1_t48_publish_checkout;
-#[path = "gc1_t48_release_eligibility_rust_ci.rs"]
-mod gc1_t48_release_eligibility_rust_ci;
 #[path = "gc1_t48_release_supersession.rs"]
 mod gc1_t48_release_supersession;
-#[path = "gc1_t48_rust_ci_gate_fake.rs"]
-mod gc1_t48_rust_ci_gate_fake;
 
 #[path = "release_build_authority.rs"]
 mod release_build_authority;

@@ -113,6 +113,19 @@ fn runner_family_obligation_tracks_inputs_and_skips_docs_only() -> TestResult {
             Some(expected),
             "{path}"
         );
+        if path.starts_with("scripts/generator-release/") {
+            for job in [
+                "rust-velnor-resource-probe",
+                "rust-velnor-runner-host",
+                "rust-velnor-actions-cli",
+            ] {
+                assert_eq!(
+                    run.jobs()?.get(job).map(String::as_str),
+                    Some("not_affected"),
+                    "{path} selected {job}"
+                );
+            }
+        }
         if path == "docs/guide.md" {
             let push = plan(root, "push", Some(&repo.base), &head)?;
             assert_eq!(

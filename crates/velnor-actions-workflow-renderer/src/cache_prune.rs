@@ -4,7 +4,7 @@
 use velnor_actions_contract::RunsOn;
 use velnor_actions_contract::workflow::cache_family::CacheFamily;
 use velnor_actions_contract::workflow::state_seal::{
-    STATE_SEAL_PREDICATE_TYPE, state_seal_signer_workflow,
+    STATE_SEAL_PREDICATE_TYPE, STATE_SEAL_WORKFLOW_NAME, state_seal_signer_workflow,
 };
 
 use crate::RenderError;
@@ -117,9 +117,10 @@ pub fn render_cache_prune_yml(
         ));
     }
     let workflow = quote_scalar(workflow_name);
+    let sealed = quote_scalar(STATE_SEAL_WORKFLOW_NAME);
     let script = prune_script().replace('\\', "\\\\").replace('"', "\\\"");
     let body = format!(
-        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n          HEAD_BRANCH: ${{{{ github.event.workflow_run.head_branch }}}}\n        run: \"{script}\"\n"
+        "name: Cache prune\n\"on\":\n  workflow_run:\n    workflows:\n      - {workflow} # zizmor: ignore[dangerous-triggers]\n      - {sealed} # zizmor: ignore[dangerous-triggers]\n    types:\n      - completed\n    branches:\n      - {default_branch}\npermissions: {{}}\ncache-mode: read\nconcurrency:\n  group: velnor-cache-prune\n  cancel-in-progress: false\njobs:\n  prune:\n    name: Prune superseded cache entries\n    if: github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == '{default_branch}' && github.event.workflow_run.head_repository.full_name == github.repository && github.event.workflow_run.conclusion != 'cancelled'\n    runs-on: {label}\n    timeout-minutes: 5\n    permissions:\n      actions: write\n      attestations: read\n    steps:\n      - name: Prune superseded cache entries\n        env:\n          GH_TOKEN: ${{{{ github.token }}}}\n          GH_REPO: ${{{{ github.repository }}}}\n          HEAD_BRANCH: ${{{{ github.event.workflow_run.head_branch }}}}\n        run: \"{script}\"\n"
     );
     Ok(RenderedFile {
         path: CACHE_PRUNE_PATH.to_owned(),

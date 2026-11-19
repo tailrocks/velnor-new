@@ -2,6 +2,7 @@ Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
+.github/actions/declared-task-0/action.yml
 .github/actions/generator-release-build-linux/action.yml
 .github/actions/generator-release-build-macos-intel/action.yml
 .github/actions/generator-release-build-macos/action.yml
@@ -9,11 +10,19 @@ Repository: <repo>
 .github/actions/generator-release-qualify-linux/action.yml
 .github/actions/generator-release-qualify-macos-intel/action.yml
 .github/actions/generator-release-qualify-macos/action.yml
+.github/actions/u26/action.yml
+.github/actions/velnor-tool-seed/action.yml
+.github/actions/velnor-tools-cache-restore/action.yml
+.github/actions/velnor-tools-cache-scrub/action.yml
+.github/actions/velnor-tools-prelude-u26/action.yml
 .github/actions/velnor-verify-jactionlint/action.yml
 .github/actions/velnor-verify-restored-rust/action.yml
 .github/actions/velnor-verify-rust-manifest/action.yml
 .github/dco.yml
 .github/jactionlint.yaml
+.github/scripts/velnor-tools-cache-identity.sh
+.github/velnor/producer-executions-v1.json
+.github/velnor/task-execution-manifest-v1.json
 .github/workflows/cache-prune.yml
 .github/workflows/ci.yml
 .github/workflows/freshness.yml
@@ -28,6 +37,7 @@ Repository: <repo>
 .github/workflows/source-preview-publication.yml
 .github/workflows/source-preview-runtime.yml
 .github/workflows/source-qualification.yml
+.github/workflows/state-seal.yml
 mise.lock is read-only input; Velnor never modifies it
 mise.toml is read-only input; Velnor never modifies it
 rust-toolchain.toml is read-only input; Velnor never modifies it
@@ -35,4 +45,4 @@ shadowed_nextest_config: .config/nextest.toml shadowed by ci-helper/.config/next
 shadowed_nextest_config: .config/nextest.toml shadowed by crates/velnor-runner/.config/nextest.toml; profile selected from crates/velnor-runner/.config/nextest.toml
 shadowed_nextest_config: .config/nextest.toml shadowed by generator/.config/nextest.toml; profile selected from generator/.config/nextest.toml
 shadowed_nextest_config: .config/nextest.toml shadowed by local/.config/nextest.toml; profile selected from local/.config/nextest.toml
-tool_install_unverified:1 installs skip verification: gh@2.103.3(no_entry); install on the CI platform and commit the lock to verify them
+tool_install_unverified:4 installs skip verification: cargo-machete@0.9.2(no_entry), crane@0.22.1(no_entry), gh@2.103.3(no_entry), rust@1.99.1(no_checksums); install on the CI platform and commit the lock to verify them

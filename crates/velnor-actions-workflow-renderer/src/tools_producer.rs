@@ -31,9 +31,10 @@ struct ToolsProducerPlan {
 pub(crate) fn add_tools_producers(
     jobs: &mut BTreeMap<String, Job>,
     policy: PullRequestCachePolicy,
+    standalone_donors: &BTreeMap<String, Job>,
 ) -> Result<(), RenderError> {
     let mut built = Vec::new();
-    for plan in plan(jobs)? {
+    for plan in plan(jobs, standalone_donors)? {
         let job = build(&plan, policy)?;
         validate_tools_producer(&job, &plan.id).map_err(RenderError::Contract)?;
         built.push((plan.id.clone(), job));
@@ -46,9 +47,12 @@ pub(crate) fn add_tools_producers(
     Ok(())
 }
 
-fn plan(jobs: &BTreeMap<String, Job>) -> Result<Vec<ToolsProducerPlan>, RenderError> {
+fn plan(
+    jobs: &BTreeMap<String, Job>,
+    standalone_donors: &BTreeMap<String, Job>,
+) -> Result<Vec<ToolsProducerPlan>, RenderError> {
     let mut donors: BTreeMap<ToolsDigest, &Job> = BTreeMap::new();
-    for (id, job) in jobs {
+    for (id, job) in jobs.iter().chain(standalone_donors) {
         if job.producer_kind().is_some() {
             continue;
         }

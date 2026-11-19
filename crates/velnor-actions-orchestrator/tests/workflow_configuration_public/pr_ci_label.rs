@@ -20,7 +20,7 @@ const IGNORED_EVENTS: &str = "(github.event.action == 'labeled' && github.event.
 fn config(pr_ci: Option<&str>) -> String {
     let pr_ci = pr_ci.map_or_else(String::new, |mode| format!("pr_ci = \"{mode}\"\n"));
     format!(
-        "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nworkflows = [\"generator_release\"]\n{pr_ci}\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n\n[[checks]]\nid = \"unit\"\ntask = \"fixture-check\"\ninputs = [\"Cargo.toml\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"
+        "schema = 2\n[workflow]\npolicy = \"consumer-v1\"\ndefault_branch = \"testmain\"\n\n[execution]\ndefault_profile = \"hosted\"\nhosted_profile = \"hosted\"\nscale_set_profile = \"local\"\nworkflows = [\"generator_release\"]\n{pr_ci}\n[execution.profiles.hosted]\nkind = \"github-hosted\"\nlabel = \"ubuntu-26.04\"\nplatform = \"linux/amd64\"\n\n[execution.profiles.local]\nkind = \"github-scale-set\"\nname = \"ubuntu-26.04-scale-set\"\nlabels = [\"velnor\", \"ubuntu-26.04-scale-set\"]\nplatform = \"linux/amd64\"\n"
     )
 }
 
@@ -29,10 +29,6 @@ fn render(pr_ci: Option<&str>) -> Result<BTreeMap<String, String>, Box<dyn Error
     fs::write(
         repo.path().join("Cargo.toml"),
         "[package]\nname = \"velnor-actions-cli\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
-    )?;
-    fs::write(
-        repo.path().join("mise.toml"),
-        "[tasks.fixture-check]\nrun = \"true\"\n",
     )?;
     let prepared = prepare(repo.path())?;
     let tree = render_staged_tree(&prepared)?;
@@ -82,8 +78,8 @@ fn pr_ci_label_rewrites_the_ci_workflow() -> Result<(), Box<dyn Error>> {
     assert!(plan.contains(&format!("    if: ${{{{ ({ADMIT_GATE}) }}}}\n")));
     assert!(!plan.contains(FULL_GATE));
 
-    let check = rendered_job_block(ci, "check-unit")?;
-    assert!(check.contains(&format!("({ADMIT_GATE}) && ({FULL_GATE})")));
+    let rust = rendered_job_block(ci, "rust-velnor-actions-cli")?;
+    assert!(rust.contains(&format!("({ADMIT_GATE}) && ({FULL_GATE})")));
 
     let required = rendered_job_block(ci, "required")?;
     assert!(required.contains(&format!(

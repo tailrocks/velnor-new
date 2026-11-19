@@ -239,6 +239,7 @@ fn assert_source_free_boundary(jobs: &BTreeMap<String, Job>) -> Result<(), Box<d
 }
 
 fn assert_helper_versions(jobs: &BTreeMap<String, Job>, helper_version: &str) {
+    let mut task_executions = 0;
     let mut native_check_executions = 0;
     for job in jobs.values() {
         for step in &job.steps {
@@ -247,7 +248,10 @@ fn assert_helper_versions(jobs: &BTreeMap<String, Job>, helper_version: &str) {
                 StepKind::TaskExecution {
                     report_helper_version,
                     ..
-                } => assert_eq!(report_helper_version, helper_version),
+                } => {
+                    task_executions += 1;
+                    assert_eq!(report_helper_version, helper_version);
+                }
                 StepKind::NativeCheckExecution { sdk_version, .. } => {
                     native_check_executions += 1;
                     assert_eq!(sdk_version, helper_version);
@@ -256,6 +260,7 @@ fn assert_helper_versions(jobs: &BTreeMap<String, Job>, helper_version: &str) {
             }
         }
     }
+    assert!(task_executions > 0, "fixture has no crate task to verify");
     assert_eq!(native_check_executions, 1);
 }
 

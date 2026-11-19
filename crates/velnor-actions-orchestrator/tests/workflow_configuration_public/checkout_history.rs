@@ -146,6 +146,7 @@ fn only_the_promised_jobs_take_the_push_aware_checkout_depth() -> Result<(), Box
         ("jactionlint", None),
         ("plan", Some(PUSH_AWARE_DEPTH)),
         ("required", Some("\"0\"")),
+        ("rust-demo", None),
     ]
     .into_iter()
     .map(|(job, depth)| (job.to_owned(), depth.map(str::to_owned)))

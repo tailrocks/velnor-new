@@ -55,36 +55,35 @@ fn commit_all(root: &Path, message: &str) -> Result<String, Box<dyn Error>> {
     git_output(root, &["rev-parse", "HEAD"])
 }
 
-fn scoped_check(id: &str, input: &str) -> String {
-    format!(
-        "\n[[checks]]\nid = \"{id}\"\ntask = \"fixture-check\"\nselection = \"declared_inputs\"\ninputs = [\"{input}\"]\ntools = []\n[checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n"
-    )
-}
-
-fn write_input(root: &Path, relative: &str, body: &str) -> Result<(), Box<dyn Error>> {
-    let file = root.join(relative);
-    fs::create_dir_all(file.parent().ok_or("input has no parent")?)?;
-    fs::write(file, body)?;
-    Ok(())
-}
-
 fn origin() -> Result<Origin, Box<dyn Error>> {
-    let mut config = workflow_configuration_fixture::config_with_verification_branch(None);
-    config.push_str(&scoped_check("a-b", "crates/a-b/input.txt"));
-    config.push_str(&scoped_check("c", "crates/a/c/input.txt"));
+    let config = workflow_configuration_fixture::config_with_verification_branch(None);
     let dir = workflow_configuration_fixture::make_repo(&config)?;
     let root = dir.path();
     fs::write(
         root.join("mise.toml"),
-        "[tasks.fixture-check]\nrun = \"true\"\n",
+        format!(
+            "[tools]\nrust = \"{}\"\n",
+            velnor_actions_mise::RUST_VERSION
+        ),
     )?;
-    write_input(root, "crates/a-b/input.txt", "0\n")?;
-    write_input(root, "crates/a/c/input.txt", "0\n")?;
+    for (relative_root, package_name) in [("crates/a-b", "a-b"), ("crates/a/c", "c")] {
+        workflow_configuration_fixture::add_independent_mbx_package(
+            root,
+            relative_root,
+            package_name,
+        )?;
+    }
     let first = commit_all(root, "base")?;
-    write_input(root, "crates/a-b/input.txt", "1\n")?;
+    fs::write(
+        root.join("crates/a-b/src/lib.rs"),
+        "pub fn f() -> u8 { 1 }\n",
+    )?;
     let second = commit_all(root, "change a-b")?;
     workflow_configuration_fixture::git(&["checkout", "-q", "-b", "pr", &first], root)?;
-    write_input(root, "crates/a/c/input.txt", "2\n")?;
+    fs::write(
+        root.join("crates/a/c/src/lib.rs"),
+        "pub fn f() -> u8 { 2 }\n",
+    )?;
     let pr_head = commit_all(root, "change c")?;
     workflow_configuration_fixture::git(&["checkout", "-q", "testmain"], root)?;
     workflow_configuration_fixture::git(&["merge", "-q", "--no-ff", "pr", "-m", "merge"], root)?;

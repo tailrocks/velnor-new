@@ -58,8 +58,6 @@ pub mod release_eligibility;
 mod resource_probe_image;
 #[path = "schema2_runner_image_qualification.rs"]
 mod runner_image_qualification;
-#[path = "schema2_rust_ci_gate.rs"]
-mod rust_ci_gate;
 #[path = "schema2_generator_source_qualification.rs"]
 mod source_qualification;
 #[path = "schema2_stable_sources_qualification.rs"]
@@ -79,6 +77,8 @@ pub struct Schema2WorkflowRequest {
     pub version: String,
     pub hosted_label: String,
     pub scale_set: ScaleSetSelector,
+    /// Control jobs `execution.overrides` places on the scale set.
+    pub scale_set_jobs: BTreeSet<String>,
     pub workflows: BTreeSet<RoutingWorkflow>,
     pub mbx_qualification: Option<MbxQualificationPins>,
     pub mise_pin_qualification: Option<MisePinQualificationPins>,

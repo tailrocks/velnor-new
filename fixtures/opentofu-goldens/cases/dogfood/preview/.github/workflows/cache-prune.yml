@@ -4,6 +4,7 @@ name: Cache prune
   workflow_run:
     workflows:
       - CI # zizmor: ignore[dangerous-triggers]
+      - State seal # zizmor: ignore[dangerous-triggers]
     types:
       - completed
     branches:

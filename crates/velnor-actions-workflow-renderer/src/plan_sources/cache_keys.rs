@@ -3,28 +3,43 @@
 
 use std::collections::BTreeMap;
 
+use velnor_actions_contract::ContractError;
+use velnor_actions_contract::workflow::cache_family::StateUnit;
 use velnor_actions_contract::workflow::cache_family::{
-    CACHE_KEYS_STEP_NAME, CARGO_HOME_EXPR, CacheFamily, RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL,
-    SOURCES_KEY_OUTPUT, SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT, SOURCES_SNAPSHOT_OUTPUT,
-    TRUST_OUTPUT, tofu_providers_key_output,
+    CACHE_KEYS_STEP_NAME, CacheFamily, RootSlug, S256, SOURCES_CACHE_HOME, SOURCES_KEY_OUTPUT,
+    SOURCES_RESTORE_KEYS_OUTPUT, SOURCES_SAVE_OUTPUT, SOURCES_SNAPSHOT_OUTPUT, TRUST_OUTPUT,
+    state_snapshot_output, tofu_providers_key_output,
 };
+use velnor_actions_contract::workflow::state_seal::state_compat_output;
 use velnor_actions_contract::{Step, StepId, StepRole, validate_fetch_root};
 use velnor_actions_mise::{PinnedTool, ToolCatalog};
 
 use super::PlanSourcesError;
+use crate::state_fragments::{lock_digest_lines, snapshot_lines};
 
 pub const DEFAULT_REF_ENV: &str = "VELNOR_DEFAULT_REF";
 const DEFAULT_REF_EXPR: &str =
     "${{ format('refs/heads/{0}', github.event.repository.default_branch) }}";
 const OUTPUT_DELIMITER: &str = "VELNOR_CACHE_KEYS_EOF";
+const VERSION_ENV: &str = "VELNOR_MBX_BUNDLE_VERSION";
+const TOOLCHAIN_ENV: &str = "VELNOR_MBX_BUNDLE_TOOLCHAIN";
 const MAX_KEY: usize = velnor_actions_contract::cachekey::MAX_CACHE_KEY_BYTES;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StateRootPlan {
+    pub root: String,
+    pub pathspecs: Vec<String>,
+    pub task_set: S256,
+    pub producer_recipe: S256,
+}
 
 pub fn cache_keys_step(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
+    state_roots: &[StateRootPlan],
 ) -> Result<Option<Step>, PlanSourcesError> {
-    if fetch_roots.is_empty() && tofu_roots.is_empty() {
+    if fetch_roots.is_empty() && tofu_roots.is_empty() && state_roots.is_empty() {
         return Ok(None);
     }
     let mut script = prelude();
@@ -40,10 +55,23 @@ pub fn cache_keys_step(
             .map_err(PlanSourcesError::Contract)?;
         script.extend(tofu_commands(catalog, tofu_roots)?);
     }
+    for (ordinal, plan) in state_roots.iter().enumerate() {
+        script.extend(state_commands(ordinal, plan)?);
+    }
     script.push(format!(
         "printf '%s\\n' \"{TRUST_OUTPUT}=$trust\" >> \"$GITHUB_OUTPUT\""
     ));
-    let env = BTreeMap::from([(DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned())]);
+    let mut env = BTreeMap::from([(DEFAULT_REF_ENV.to_owned(), DEFAULT_REF_EXPR.to_owned())]);
+    if !state_roots.is_empty() {
+        env.insert(
+            VERSION_ENV.to_owned(),
+            catalog.version(PinnedTool::MrBoxington).to_owned(),
+        );
+        env.insert(
+            TOOLCHAIN_ENV.to_owned(),
+            catalog.version(PinnedTool::Rust).to_owned(),
+        );
+    }
     let mut step = crate::steps::shell_step(
         CACHE_KEYS_STEP_NAME,
         vec!["sh".to_owned(), "-c".to_owned(), script.join("; ")],
@@ -92,7 +120,7 @@ fn compat_header(family: CacheFamily, root_locator: Option<&str>, file: &str) ->
 
 fn sources_commands(fetch_roots: &[String]) -> Result<Vec<String>, PlanSourcesError> {
     let prefix = CacheFamily::Sources.key_prefix();
-    let home = CARGO_HOME_EXPR.replace(RUNNER_TEMP_EXPR, RUNNER_TEMP_SHELL);
+    let home = SOURCES_CACHE_HOME;
     let mut script = compat_header(CacheFamily::Sources, None, "$d/sources-compat");
     script.push(format!(
         "printf '%s\\n' \"{home}\" >> \"$d/sources-compat\""
@@ -164,6 +192,71 @@ fn tofu_commands(
             format!("printf '%s\\n' \"{output}=$tkey\" >> \"$GITHUB_OUTPUT\""),
         ]);
     }
+    Ok(script)
+}
+
+fn pathspec(spec: &str) -> Result<String, PlanSourcesError> {
+    let safe = !spec.is_empty()
+        && spec.bytes().all(|b| {
+            b.is_ascii_alphanumeric()
+                || matches!(
+                    b,
+                    b'.' | b'_' | b'/' | b'*' | b'?' | b':' | b'(' | b')' | b'-' | b'[' | b']'
+                )
+        });
+    if safe {
+        Ok(format!("'{spec}'"))
+    } else {
+        Err(PlanSourcesError::Contract(ContractError::identity(
+            "state.pathspec",
+            format!("pathspec_not_shell_safe:{spec}"),
+        )))
+    }
+}
+
+fn state_commands(ordinal: usize, plan: &StateRootPlan) -> Result<Vec<String>, PlanSourcesError> {
+    let slug = RootSlug::from_root(&plan.root).map_err(PlanSourcesError::Contract)?;
+    let output = state_snapshot_output(&slug);
+    let specs = plan
+        .pathspecs
+        .iter()
+        .map(|spec| pathspec(spec))
+        .collect::<Result<Vec<_>, _>>()?
+        .join(" ");
+    let file = format!("$d/rust-inputs-{ordinal}");
+    let compat_root = if plan.root.is_empty() {
+        "."
+    } else {
+        plan.root.as_str()
+    };
+    let mut script = lock_digest_lines(
+        "$d",
+        &format!("$GITHUB_WORKSPACE/{}", workspace_lock(&plan.root)),
+        "lock_h",
+    );
+    script.push(format!(
+        "if (cd \"$GITHUB_WORKSPACE\" && git ls-files -s -- {specs}) > \"{file}\" 2>/dev/null; then s256 \"{file}\"; ri_h=\"s256-$h\"; {}; printf '%s\\n' \"{output}=$snap\" >> \"$GITHUB_OUTPUT\"; else printf '%s\\n' '::warning::state snapshot unavailable for root {}'; fi",
+        snapshot_lines(
+            "$d",
+            "$lock_h",
+            "$ri_h",
+            &plan.task_set.to_string(),
+            &plan.producer_recipe.to_string(),
+        )
+        .join("; "),
+        slug,
+    ));
+    script.extend(crate::cache_steps::compat_head_lines(
+        "$d",
+        &format!("${{{VERSION_ENV}}}"),
+        &format!("${{{TOOLCHAIN_ENV}}}"),
+        compat_root,
+        StateUnit::Union.as_str(),
+    ));
+    script.push(format!(
+        "printf '%s\\n' \"{}=s256-$h\" >> \"$GITHUB_OUTPUT\"",
+        state_compat_output(slug.as_str())
+    ));
     Ok(script)
 }
 

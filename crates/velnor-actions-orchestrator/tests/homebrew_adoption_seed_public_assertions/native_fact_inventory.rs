@@ -50,6 +50,9 @@ pub(crate) fn assert_tofu_inventory_rejected(
             ..PlanJobToolNeeds::default()
         },
         rust_detected: false,
+        state_roots: &[],
+        seal: &velnor_actions_workflow_renderer::plan_sources::state_select::StateSealPlan::default(
+        ),
     };
     NativeAuthority::build(input)
         .map_err(|error| io::Error::other(format!("valid ToFu inventory rejected: {error:?}")))?;

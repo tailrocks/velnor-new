@@ -4,18 +4,19 @@
 use std::error::Error;
 
 use velnor_actions_contract::workflow::ledger_cli::LEDGER_CLI_JOB_ID;
-use velnor_actions_contract::{PLAN_JOB_ID, WorkflowPolicy};
+use velnor_actions_contract::{CRATE_JOB_ID_PREFIX, PLAN_JOB_ID, WorkflowPolicy};
 use velnor_actions_orchestrator::{WasteFinding, prepare, render_staged_tree, waste_findings};
 
-use super::one_job_per_crate::mbx_repo_for;
+use super::maintenance_features::owner_feature_repo;
 use super::tools_producers::{POLICIES, finalized};
 use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
 use super::waste_lint::{CI_PATH, plain_shell_step, run_without_homes};
 use super::waste_oracle::{self as oracle, Files, JobUse, files_of, files_of_repo};
+use super::waste_verifier_oracle::{VerifierScan, verifier_homes};
 use super::workflow_configuration_fixture;
 
 const FRESHNESS_PATH: &str = ".github/workflows/freshness.yml";
-const UNCOVERED_WORKFLOWS: [&str; 7] = [
+const UNCOVERED_WORKFLOWS: [&str; 8] = [
     "job-image-candidate.yml",
     "product-release-binary.yml",
     "product-release-generator.yml",
@@ -23,6 +24,7 @@ const UNCOVERED_WORKFLOWS: [&str; 7] = [
     "product-release.yml",
     "qualification.yml",
     "release-rust-ci-tools.yml",
+    "rust-ci.yml",
 ];
 
 fn assert_no_violations(label: &str, jobs: &[JobUse]) {
@@ -38,7 +40,13 @@ fn assert_velnor_repository_guards(files: &Files, jobs: &[JobUse]) -> Result<(),
     for path in [CI_PATH, FRESHNESS_PATH] {
         assert!(files.contains_key(path), "{path} is not rendered");
     }
-    for id in ["freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
+    for id in [
+        "cargo-machete",
+        "cargo-deny",
+        "freshness",
+        LEDGER_CLI_JOB_ID,
+        PLAN_JOB_ID,
+    ] {
         oracle::find(jobs, id)?;
     }
     for id in ["freshness", LEDGER_CLI_JOB_ID, PLAN_JOB_ID] {
@@ -47,13 +55,23 @@ fn assert_velnor_repository_guards(files: &Files, jobs: &[JobUse]) -> Result<(),
             "{id} is not a toolchain job"
         );
     }
+    assert!(
+        jobs.iter()
+            .any(|job| job.job.starts_with(CRATE_JOB_ID_PREFIX) && job.is_user()),
+        "no crate job uses the toolchain"
+    );
+    let deny = oracle::find(jobs, "cargo-deny")?;
+    assert!(
+        !deny.installs_rust && !deny.words.is_empty(),
+        "cargo-deny no longer exercises the clean-cwd exemption: {deny:?}"
+    );
     Ok(())
 }
 
 #[test]
 fn every_toolchain_job_in_the_rendered_trees_has_auto_install_off() -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {
-        let repo = mbx_repo_for(true, policy)?;
+        let repo = owner_feature_repo(policy, false, "default", "default")?;
         let prepared = prepare(repo.path())?;
         let files = files_of(&render_staged_tree(&prepared)?)?;
         let label = format!("{policy:?}");
@@ -66,6 +84,48 @@ fn every_toolchain_job_in_the_rendered_trees_has_auto_install_off() -> Result<()
     let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
     let files = files_of(&render_staged_tree(&prepare(repo.path())?)?)?;
     assert_no_violations("suites", &oracle::scan(&files, |_| true)?);
+    Ok(())
+}
+
+fn assert_verifiers_read_the_installed_homes(
+    label: &str,
+    files: &Files,
+) -> Result<VerifierScan, Box<dyn Error>> {
+    let scan = verifier_homes(files)?;
+    assert!(!scan.checked.is_empty(), "{label}: no Rust verifier found");
+    assert_eq!(scan.skipped, Vec::<String>::new(), "{label}");
+    assert_eq!(scan.violations, Vec::<String>::new(), "{label}");
+    Ok(scan)
+}
+
+#[test]
+fn every_rust_verifier_reads_the_toolchain_home_its_job_installs_into() -> Result<(), Box<dyn Error>>
+{
+    for policy in POLICIES {
+        let repo = owner_feature_repo(policy, false, "default", "default")?;
+        let files = files_of(&render_staged_tree(&prepare(repo.path())?)?)?;
+        let scan = assert_verifiers_read_the_installed_homes(&format!("{policy:?}"), &files)?;
+        if policy == WorkflowPolicy::VelnorRepositoryV1 {
+            let has = |file: &str, job: &str| {
+                scan.checked
+                    .iter()
+                    .any(|checked| checked.file == file && checked.job == job)
+            };
+            assert!(has(FRESHNESS_PATH, "freshness"), "{:?}", scan.checked);
+            assert!(has(CI_PATH, PLAN_JOB_ID), "{:?}", scan.checked);
+            assert!(
+                scan.checked
+                    .iter()
+                    .any(|checked| checked.via_composite
+                        && checked.job.starts_with(CRATE_JOB_ID_PREFIX)),
+                "{:?}",
+                scan.checked
+            );
+        }
+    }
+    let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
+    let files = files_of(&render_staged_tree(&prepare(repo.path())?)?)?;
+    assert_verifiers_read_the_installed_homes("suites", &files)?;
     Ok(())
 }
 

@@ -85,8 +85,6 @@ def select():
             and generator["sha256"] == digest(os.environ.get("BINARY_SHA256", "")),
             "plan controller identity mismatch")
     routes = json.loads(os.environ["CLI_ROUTES"])
-    if routes == []:
-        return "run"
     require(isinstance(routes, list) and routes and len(routes) == len(set(routes))
             and all(isinstance(route, str) and route in (CLI, CLI + "__hosted", CLI + "__local")
                     for route in routes), "invalid CLI route")

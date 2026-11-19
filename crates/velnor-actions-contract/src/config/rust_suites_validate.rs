@@ -21,10 +21,6 @@ use rules::{
     validate_suite_targets_and_env,
 };
 
-/// The engine no longer emits `pull_request/push` Rust suites or gates `Required`
-/// on them; accepting one would silently run nothing.
-const MOVED_SUITE: &str = "pull_request/push Rust suites moved to velnor-gen's rust-ci.yml; declare them in .velnor/rust-ci.toml (only suites with workflow_dispatch or schedule triggers are supported here, and required = true is refused)";
-
 fn cfg_err(file: &str, key: impl Into<String>, problem: impl Into<String>) -> ContractError {
     ContractError::config(file, key, problem)
 }
@@ -302,14 +298,6 @@ fn validate_suite_triggers_and_schedule(
             ));
         }
     }
-    if suite.required {
-        return Err(cfg_err(file, format!("{prefix}.required"), MOVED_SUITE));
-    }
-    if trigger_set.contains(&RustSuiteTrigger::PullRequest)
-        || trigger_set.contains(&RustSuiteTrigger::Push)
-    {
-        return Err(cfg_err(file, format!("{prefix}.triggers"), MOVED_SUITE));
-    }
     if trigger_set.contains(&RustSuiteTrigger::Schedule) {
         if suite.schedule.is_empty() {
             return Err(cfg_err(
@@ -341,6 +329,16 @@ fn validate_suite_triggers_and_schedule(
             file,
             format!("{prefix}.cancel_in_progress"),
             "schedule_suite_cannot_cancel_in_progress",
+        ));
+    }
+    if suite.required
+        && (!trigger_set.contains(&RustSuiteTrigger::PullRequest)
+            || !trigger_set.contains(&RustSuiteTrigger::Push))
+    {
+        return Err(cfg_err(
+            file,
+            format!("{prefix}.required"),
+            "required_suite_requires_pr_and_push_triggers",
         ));
     }
     if suite.allow_failure && suite.required {

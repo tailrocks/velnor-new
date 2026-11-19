@@ -87,6 +87,7 @@ fn assert_declared_check_mise(jobs: &BTreeMap<String, Job>) -> Result<(), Box<dy
 }
 
 pub(super) fn assert_current_mise_jobs(jobs: &BTreeMap<String, Job>) -> Result<(), Box<dyn Error>> {
+    let mut ordinary_task = false;
     for (id, job) in jobs {
         if id.starts_with("check-fixture-mise-") {
             continue;
@@ -106,7 +107,29 @@ pub(super) fn assert_current_mise_jobs(jobs: &BTreeMap<String, Job>) -> Result<(
             .ok_or_else(|| io::Error::other(format!("unsupported fixture target {id}")))?;
         let current = velnor_actions_mise::current_mise_binary(target);
         assert_setup(job, id, velnor_actions_mise::MISE_VERSION, current.sha256)?;
+        ordinary_task |= job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::TaskExecution { .. }));
     }
+    assert!(
+        ordinary_task,
+        "fixture omitted ordinary Rust task execution"
+    );
+    let nextest = format!(
+        "aqua:nextest-rs/nextest/cargo-nextest@{}",
+        velnor_actions_mise::catalog::NEXTEST_VERSION
+    );
+    assert!(
+        jobs.values()
+            .flat_map(|job| &job.steps)
+            .any(|step| match &step.kind {
+                StepKind::Shell { run, .. } | StepKind::TaskExecution { argv: run, .. } =>
+                    run.contains(&nextest),
+                _ => false,
+            }),
+        "ordinary Nextest pin changed with helper runtime"
+    );
     Ok(())
 }
 

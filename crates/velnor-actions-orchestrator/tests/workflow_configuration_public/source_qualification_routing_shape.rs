@@ -162,7 +162,7 @@ fn source_qualification_stays_bound_to_each_preparations_checkout_and_plan()
             .iter()
             .find(|step| step["name"] == "Admit source qualification selection")
             .ok_or("route")?;
-        assert_eq!(route["env"]["CLI_ROUTES"], "[]");
+        assert_eq!(route["env"]["CLI_ROUTES"], "[\"rust-velnor-actions-cli\"]");
     }
     Ok(())
 }

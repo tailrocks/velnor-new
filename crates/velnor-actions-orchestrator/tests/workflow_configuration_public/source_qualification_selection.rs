@@ -82,7 +82,34 @@ fn prepare_artifact(
 ) -> Result<(String, String), Box<dyn Error>> {
     let artifact = temp.join("source-qualification-plan");
     fs::create_dir(&artifact)?;
-    let admitted_plan = plan.clone();
+    let mut admitted_plan = plan.clone();
+    if [
+        "job_missing",
+        "job_duplicate",
+        "lane_wrong",
+        "lane_disposition",
+    ]
+    .contains(&mutation)
+    {
+        let jobs = admitted_plan["jobs"].as_array_mut().ok_or("jobs")?;
+        let position = jobs
+            .iter()
+            .position(|job| {
+                job["job_id"].as_str().is_some_and(|id| {
+                    id == "rust-velnor-actions-cli" || id == "rust-velnor-actions-cli__hosted"
+                })
+            })
+            .ok_or("CLI job")?;
+        if mutation == "job_missing" {
+            jobs.remove(position);
+        } else if mutation == "job_duplicate" {
+            jobs.push(jobs[position].clone());
+        } else if mutation == "lane_wrong" {
+            jobs[position]["lane"]["logical_job_id"] = json!("rust-wrong");
+        } else {
+            jobs[position]["disposition"] = json!("not_affected");
+        }
+    }
     let bytes = serde_json::to_vec(&admitted_plan)?;
     let sha = hex_digest(&bytes);
     fs::write(artifact.join("plan.json"), &bytes)?;
@@ -214,10 +241,10 @@ pub(super) fn run_selector(
 }
 
 #[test]
-fn source_qualification_admits_every_bound_plan_and_refuses_unbound_artifacts()
+fn source_qualification_routes_real_plans_and_refuses_unbound_artifacts()
 -> Result<(), Box<dyn Error>> {
     for (path, expected, operation) in [
-        ("docs/guide.md", "run", "write"),
+        ("docs/guide.md", "skip", "write"),
         ("fixtures/oracle.txt", "run", "write"),
         ("scripts/phase.sh", "run", "write"),
         ("crates/guard/src/lib.rs", "run", "write"),
@@ -256,19 +283,7 @@ fn source_qualification_admits_every_bound_plan_and_refuses_unbound_artifacts()
         let (success, output) = run_selector(repo.path(), command, &run.value["plan"], "")?;
         assert!(success, "{path}");
         assert_eq!(output.trim(), format!("decision={expected}"));
-        assert_eq!(
-            run.value["plan"]["jobs"]
-                .as_array()
-                .ok_or("jobs")?
-                .iter()
-                .filter(|job| job["job_id"]
-                    .as_str()
-                    .is_some_and(|id| id.starts_with("rust-")))
-                .count(),
-            0,
-            "{path}: Rust crate jobs are gone, so the routes are empty"
-        );
-        {
+        if expected == "skip" {
             for mutation in [
                 "tampered",
                 "missing",
@@ -283,6 +298,8 @@ fn source_qualification_admits_every_bound_plan_and_refuses_unbound_artifacts()
                 "extra",
                 "matrix_mismatch",
                 "matrix_hash_missing",
+                "job_missing",
+                "job_duplicate",
                 "repo_mismatch",
                 "head_missing",
                 "head_string",

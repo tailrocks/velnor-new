@@ -36,6 +36,24 @@ const SOURCE_QUALIFICATION_JOBS: [&str; 6] = [
 ];
 const SOURCES_CARGO_HOME: &str = velnor_actions_contract::workflow::cache_family::CARGO_HOME_EXPR;
 
+fn triggers() -> Yaml {
+    Yaml::Map(vec![
+        (
+            "pull_request".to_owned(),
+            Yaml::Map(vec![(
+                "types".to_owned(),
+                Yaml::Seq(
+                    crate::render::EXPECTED_PR_TYPES
+                        .iter()
+                        .map(|kind| Yaml::str(*kind))
+                        .collect(),
+                ),
+            )]),
+        ),
+        ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
+    ])
+}
+
 pub(super) fn render(
     request: &Schema2WorkflowRequest,
     source_plan: Option<&SourceQualificationPlan>,
@@ -51,45 +69,36 @@ pub(super) fn render(
             "source_qualification_requires_generator_release".to_owned(),
         ));
     }
-    let runner = super::RunnerSpec::hosted(&request.hosted_label)?;
     let plan = source_plan.ok_or_else(routing::invalid)?;
     let mut jobs = vec![
-        ("plan".to_owned(), routing::plan_job(plan)?),
+        (
+            "plan".to_owned(),
+            routing::plan_job(plan, &request.control_runner("plan")?)?,
+        ),
         (
             "selection".to_owned(),
-            routing::selection_job(plan, &runner)?,
+            routing::selection_job(plan, &request.control_runner("selection")?)?,
         ),
     ];
     for producer in PRODUCER_JOBS {
         jobs.push((
             producer.id.to_owned(),
-            producer_job(&runner, &request.hosted_label, pins, producer, plan)?,
+            producer_job(
+                &request.control_runner(producer.id)?,
+                &request.control_label(producer.id),
+                pins,
+                producer,
+                plan,
+            )?,
         ));
     }
     jobs.push((
         GATHER_JOB_ID.to_owned(),
-        routing::gather_job(&runner, plan)?,
+        routing::gather_job(&request.control_runner(GATHER_JOB_ID)?, plan)?,
     ));
     let mut document = Yaml::Map(vec![
         ("name".to_owned(), Yaml::str("Source qualification")),
-        (
-            "on".to_owned(),
-            Yaml::Map(vec![
-                (
-                    "pull_request".to_owned(),
-                    Yaml::Map(vec![(
-                        "types".to_owned(),
-                        Yaml::Seq(
-                            crate::render::EXPECTED_PR_TYPES
-                                .iter()
-                                .map(|kind| Yaml::str(*kind))
-                                .collect(),
-                        ),
-                    )]),
-                ),
-                ("workflow_dispatch".to_owned(), Yaml::Map(Vec::new())),
-            ]),
-        ),
+        ("on".to_owned(), triggers()),
         ("permissions".to_owned(), read_permissions()),
         (
             "concurrency".to_owned(),
@@ -161,7 +170,7 @@ pub(super) fn sources_restore_steps(
     runner_label: &str,
 ) -> Result<Vec<Yaml>, RenderError> {
     let roots = pins.runner_workspace.fetch_roots();
-    let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[])
+    let steps = crate::plan_sources::cache_steps_for_plan(&ToolCatalog::pinned(), &roots, &[], &[])
         .map_err(sources_restore_error)?;
     steps
         .into_iter()
@@ -195,7 +204,7 @@ fn job_head(
     gate: Vec<(String, Yaml)>,
 ) -> Result<Vec<(String, Yaml)>, RenderError> {
     let mut fields = vec![("name".to_owned(), Yaml::str(name))];
-    fields.extend(gate);
+    fields.extend(fence_gate(runner, gate));
     fields.extend([
         ("runs-on".to_owned(), runner.runs_on.clone()),
         (
@@ -209,6 +218,26 @@ fn job_head(
         ("permissions".to_owned(), read_permissions()),
     ]);
     Ok(fields)
+}
+
+/// Applies the fork fence to the `if` of a job placed on the scale set.
+pub(super) fn fence_gate(
+    runner: &super::RunnerSpec,
+    mut gate: Vec<(String, Yaml)>,
+) -> Vec<(String, Yaml)> {
+    let current = gate.iter().position(|(key, _)| key == "if");
+    let text = current.and_then(|at| match &gate[at].1 {
+        Yaml::Str(text) => Some(text.clone()),
+        _ => None,
+    });
+    if let Some(fenced) = runner.fence(text.as_deref()) {
+        let value = Yaml::str(fenced);
+        match current {
+            Some(at) => gate[at].1 = value,
+            None => gate.push(("if".to_owned(), value)),
+        }
+    }
+    gate
 }
 
 fn producer_artifact(job_id: &str) -> String {

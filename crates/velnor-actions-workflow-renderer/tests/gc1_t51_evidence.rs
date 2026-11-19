@@ -27,9 +27,6 @@ pub(crate) struct EvidenceInputs {
     pub(crate) record: String,
     pub(crate) archive: Vec<u8>,
     pub(crate) ci_runs: String,
-    pub(crate) rust_ci_runs: String,
-    pub(crate) rust_ci_jobs: String,
-    pub(crate) rust_ci_recheck: String,
     pub(crate) authenticated_source: String,
     pub(crate) artifact_response: String,
     pub(crate) attestation: String,
@@ -49,9 +46,6 @@ pub(crate) fn evidence_inputs() -> EvidenceInputs {
         record,
         archive,
         ci_runs: ci_runs_json(),
-        rust_ci_runs: rust_ci_runs_json(),
-        rust_ci_jobs: rust_ci_jobs_json(),
-        rust_ci_recheck: rust_ci_runs_json(),
         authenticated_source: authenticated_source_json(),
         artifact_response: artifact_response_json(),
         attestation,
@@ -214,34 +208,6 @@ sys.argv = PROGRAM_ARGV
 exec(compile(SCRIPT.read_text(), str(SCRIPT), "exec"))
 "#;
 
-const IDENTITY_ENV: [(&str, &str); 11] = [
-    ("VELNOR_IDENTITY_SOURCE", SOURCE_SHA),
-    ("VELNOR_IDENTITY_REPOSITORY", "tailrocks/velnor-new"),
-    ("VELNOR_IDENTITY_REPOSITORY_ID", "1390620900"),
-    ("VELNOR_IDENTITY_EVENT", "workflow_dispatch"),
-    ("VELNOR_IDENTITY_REF", "refs/heads/main"),
-    ("VELNOR_WORKFLOW_REF", WORKFLOW_REF),
-    ("VELNOR_RUN_ID", "7"),
-    ("VELNOR_RUN_ATTEMPT", "2"),
-    ("VELNOR_ARTIFACT_ID", "9"),
-    ("VELNOR_REGISTRY_ACTOR", "actor"),
-    ("VELNOR_REGISTRY_TOKEN", "password-value"),
-];
-
-fn write_rust_paths(
-    fixture: &Fixture,
-    inputs: &EvidenceInputs,
-) -> Result<Vec<String>, Box<dyn Error>> {
-    [
-        ("rust-ci-runs.json", &inputs.rust_ci_runs),
-        ("rust-ci-jobs.json", &inputs.rust_ci_jobs),
-        ("rust-ci-recheck.json", &inputs.rust_ci_recheck),
-    ]
-    .into_iter()
-    .map(|(name, text)| write_bytes(fixture.root.path(), name, text.as_bytes()))
-    .collect()
-}
-
 pub(crate) fn run_evidence_program(
     fixture: &Fixture,
     inputs: &EvidenceInputs,
@@ -267,7 +233,6 @@ pub(crate) fn run_evidence_program(
         "ci-runs.json",
         inputs.ci_runs.as_bytes(),
     )?;
-    let rust_paths = write_rust_paths(fixture, inputs)?;
     let source_path = write_bytes(
         fixture.root.path(),
         "authenticated-source.json",
@@ -307,8 +272,17 @@ pub(crate) fn run_evidence_program(
         .arg(&archive_attestation_path)
         .arg(&record_attestation_path)
         .arg(&closure_path)
-        .args(rust_paths)
-        .envs(IDENTITY_ENV);
+        .env("VELNOR_IDENTITY_SOURCE", SOURCE_SHA)
+        .env("VELNOR_IDENTITY_REPOSITORY", "tailrocks/velnor-new")
+        .env("VELNOR_IDENTITY_REPOSITORY_ID", "1390620900")
+        .env("VELNOR_IDENTITY_EVENT", "workflow_dispatch")
+        .env("VELNOR_IDENTITY_REF", "refs/heads/main")
+        .env("VELNOR_WORKFLOW_REF", WORKFLOW_REF)
+        .env("VELNOR_RUN_ID", "7")
+        .env("VELNOR_RUN_ATTEMPT", "2")
+        .env("VELNOR_ARTIFACT_ID", "9")
+        .env("VELNOR_REGISTRY_ACTOR", "actor")
+        .env("VELNOR_REGISTRY_TOKEN", "password-value");
     for (name, value) in extra_env {
         output.env(name, value);
     }

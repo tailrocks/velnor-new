@@ -17,9 +17,10 @@ mod task_sources;
 mod tools;
 
 pub(crate) use graph::AuthorityBinding;
+pub use inputs::state_producer_job_ids;
 pub use inputs::{
     CargoWorkspaceFact, GeneratedSourceFact, GeneratedWorkflowKind, GradleRootFact, LogicalJobFact,
-    LogicalJobSource, NativeTaskFact, RustTaskFact, TofuTaskFact, WorkspaceFormatFact,
+    LogicalJobSource, NativeTaskFact, RustTaskFact, SuitePhase, TofuTaskFact, WorkspaceFormatFact,
     WorkspacePackageFact,
 };
 pub use task_sources::WorkflowSourceFact;
@@ -68,6 +69,8 @@ pub struct NativeAuthorityInput<'a> {
     pub workspace_format: Option<&'a WorkspaceFormatFact>,
     pub tools: crate::native_job_builders::PlanJobToolNeeds,
     pub rust_detected: bool,
+    pub state_roots: &'a [crate::plan_sources::cache_keys::StateRootPlan],
+    pub seal: &'a crate::plan_sources::state_select::StateSealPlan,
 }
 
 #[derive(Debug, Clone)]

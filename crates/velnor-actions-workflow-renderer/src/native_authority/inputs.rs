@@ -87,6 +87,11 @@ pub enum GeneratedWorkflowKind {
     Dbt,
     Ansible,
 }
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SuitePhase {
+    Build,
+    Run,
+}
 #[derive(Debug, Clone)]
 pub enum LogicalJobSource {
     Task(NativeTaskFact),
@@ -97,12 +102,19 @@ pub enum LogicalJobSource {
         root: String,
         project: String,
     },
+    Suite {
+        id: String,
+        phase: SuitePhase,
+    },
     WorkflowTask {
         owner: String,
     },
     GeneratedWorkflowTask {
         owner: String,
         kind: GeneratedWorkflowKind,
+    },
+    StateProducer {
+        root: String,
     },
     LedgerCli,
 }
@@ -185,8 +197,10 @@ pub(super) fn admit_manifest(
 pub(super) mod generated;
 mod graph;
 mod registered;
+mod seeds;
 mod task_ids;
 mod tool_needs;
 
 pub use generated::GeneratedSourceFact;
 pub(super) use graph::validate_graph;
+pub use seeds::state_producer_job_ids;

@@ -9,6 +9,7 @@ use crate::RenderError;
 pub mod cache_keys;
 pub mod cargo_fetch;
 pub mod source_cache;
+pub mod state_select;
 
 #[derive(Debug)]
 pub enum PlanSourcesError {
@@ -23,12 +24,14 @@ pub fn cache_steps_for_plan(
     catalog: &ToolCatalog,
     fetch_roots: &[String],
     tofu_roots: &[String],
+    state_roots: &[cache_keys::StateRootPlan],
 ) -> Result<Vec<Step>, PlanSourcesError> {
     let mut restore = Vec::new();
     restore.extend(cache_keys::cache_keys_step(
         catalog,
         fetch_roots,
         tofu_roots,
+        state_roots,
     )?);
     if !fetch_roots.is_empty() {
         restore.push(source_cache::plan_sources_restore()?);

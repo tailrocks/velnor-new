@@ -126,6 +126,10 @@ fn metadata_ir(
         if let LogicalJobSource::NamedCheck { id } = &fact.source {
             job.steps.push(named_check_metadata(input, id)?);
         }
+        if matches!(fact.source, LogicalJobSource::StateProducer { .. }) {
+            job.steps
+                .push(crate::state_seal::producer_steps::state_produced_step()?);
+        }
         if matches!(fact.source, LogicalJobSource::LedgerCli) {
             job.steps.push(crate::ledger_cli_build_step(
                 &velnor_actions_mise::ToolCatalog::pinned(),
@@ -282,6 +286,9 @@ fn validators(
         if !validators.contains(&kind) {
             validators.push(kind);
         }
+    }
+    if input.cargo_workspaces.is_empty() {
+        validators.retain(|kind| *kind != ValidatorKind::CargoDeny);
     }
     Ok(validators)
 }

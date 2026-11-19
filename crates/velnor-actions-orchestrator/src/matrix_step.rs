@@ -25,7 +25,7 @@ pub(crate) use cosign::prepare_runtime_cosign_step;
 mod tofu_env;
 
 pub(crate) use tools::{
-    CrateSuite, LaneTools, prepare_crate_tools_step,
+    CrateSuite, LaneTools, crate_needs_generate_validators, prepare_crate_tools_step,
     prepare_runtime_gh_step, suite_for_package, verify_validators_step,
 };
 

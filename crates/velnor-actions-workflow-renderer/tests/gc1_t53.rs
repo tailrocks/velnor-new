@@ -61,7 +61,7 @@ fn mise_setup() -> MiseSetup {
 
 fn spec() -> RustSuitesRenderSpec {
     let mut suite = RustSuiteConfig::new("t53snap", "default");
-    suite.triggers = vec![RustSuiteTrigger::WorkflowDispatch];
+    suite.triggers = vec![RustSuiteTrigger::Push, RustSuiteTrigger::WorkflowDispatch];
     RustSuitesRenderSpec {
         suites: vec![suite],
         workflow_dispatch: None,

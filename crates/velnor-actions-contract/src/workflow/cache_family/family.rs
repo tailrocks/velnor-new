@@ -21,10 +21,12 @@ pub const SOURCE_SUBSET: [&str; 3] = ["registry/index", "registry/cache", "git/d
 
 pub const TOFU_PROVIDER_CACHE_BASE_EXPR: &str = "${{ runner.temp }}/velnor/tofu-cache";
 
+pub const SOURCES_CACHE_HOME: &str = "/home/runner/work/_temp/velnor/cargo";
+
 const SOURCES_PATHS: [&str; 3] = [
-    "${{ runner.temp }}/velnor/cargo/registry/index",
-    "${{ runner.temp }}/velnor/cargo/registry/cache",
-    "${{ runner.temp }}/velnor/cargo/git/db",
+    "/home/runner/work/_temp/velnor/cargo/registry/index",
+    "/home/runner/work/_temp/velnor/cargo/registry/cache",
+    "/home/runner/work/_temp/velnor/cargo/git/db",
 ];
 const TOFU_PROVIDERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/tofu-cache/{root}"];
 const BUN_INSTALL_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/bun-cache"];
@@ -32,10 +34,14 @@ const PLAYWRIGHT_BROWSERS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ms-play
 const DBT_PACKAGES_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/dbt-packages/{root}"];
 const PYTHON_VENV_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/uv-cache"];
 const ANSIBLE_COLLECTIONS_PATHS: [&str; 1] = ["${{ runner.temp }}/velnor/ansible-collections"];
-pub const COMPLETE_STATE_ROOT_EXPR: &str = "${{ runner.temp }}/velnor-gc1/state";
+pub const STATE_RUNNER_TEMP: &str = "/home/runner/work/_temp";
+
+pub const MBX_STORE_DIR: &str = "/home/runner/work/_temp/velnor/mbx";
+
+pub const COMPLETE_STATE_ROOT_EXPR: &str = "/home/runner/work/_temp/velnor-gc1/state";
 
 pub const COMPLETE_STATE_TRANSPORT_EXPR: &str =
-    "${{ runner.temp }}/velnor-gc1/transport/state/payload.tar.zst";
+    "/home/runner/work/_temp/velnor-gc1/transport/state/payload.tar.zst";
 
 const STATE_PATHS: [&str; 1] = [COMPLETE_STATE_ROOT_EXPR];
 

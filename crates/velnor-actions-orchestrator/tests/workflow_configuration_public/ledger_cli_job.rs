@@ -14,8 +14,8 @@ use velnor_actions_contract::{
 use velnor_actions_orchestrator::prepare;
 
 use super::one_job_per_crate::{
-    Rendered, crate_jobs, group_fixtures, is_emit, mbx_repo_for, mbx_repo_with_crate_timeout,
-    render, tofu_fixture, tofu_fixture_for,
+    Rendered, crate_jobs, is_emit, mbx_repo_for, mbx_repo_with_crate_timeout, render,
+    rust_fixtures, tofu_fixture, tofu_fixture_for,
 };
 use super::tools_producers::is_upload;
 
@@ -23,7 +23,7 @@ const BINARY: &str = "$RUNNER_TEMP/velnor/ledger-cli/velnor-actions";
 const ARTIFACT_NAME_EXPR: &str = "${{ needs.ledger-cli.outputs.artifact_name }}";
 
 pub(super) fn velnor_fixtures() -> Result<Vec<Rendered>, Box<dyn Error>> {
-    let mut fixtures: Vec<Rendered> = group_fixtures()?
+    let mut fixtures: Vec<Rendered> = rust_fixtures()?
         .into_iter()
         .filter(|fixture| fixture.policy == WorkflowPolicy::VelnorRepositoryV1)
         .collect();
@@ -122,7 +122,7 @@ fn velnor_repository_has_one_ledger_cli_job() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn ledger_cli_build_budget_ignores_a_one_minute_crate_timeout() -> Result<(), Box<dyn Error>> {
-    let repo = mbx_repo_with_crate_timeout(true, WorkflowPolicy::VelnorRepositoryV1, Some(1))?;
+    let repo = mbx_repo_with_crate_timeout(false, WorkflowPolicy::VelnorRepositoryV1, Some(1))?;
     let Rendered { jobs, .. } = render(
         "one-minute-crates",
         &repo,
@@ -176,7 +176,7 @@ fn crate_and_tofu_jobs_fetch_verify_then_emit() -> Result<(), Box<dyn Error>> {
             let last_task = job
                 .steps
                 .iter()
-                .rposition(|step| step.role == Some(StepRole::TofuProviderUse))
+                .rposition(|step| matches!(step.kind, StepKind::TaskExecution { .. }))
                 .ok_or("no task step")?;
             let (download_at, download) = one(job, "Download ledger CLI")?;
             let (verify_at, verify) = one(job, "Verify ledger CLI")?;
@@ -218,7 +218,7 @@ fn crate_and_tofu_jobs_fetch_verify_then_emit() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn consumer_policy_has_no_ledger_cli_job() -> Result<(), Box<dyn Error>> {
-    let mut fixtures: Vec<Rendered> = group_fixtures()?
+    let mut fixtures: Vec<Rendered> = rust_fixtures()?
         .into_iter()
         .filter(|fixture| fixture.policy == WorkflowPolicy::ConsumerV1)
         .collect();
@@ -307,7 +307,7 @@ fn ledger_cli_restores_sources_read_only_before_an_offline_build() -> Result<(),
 #[test]
 fn velnor_repository_without_root_cargo_lock_cannot_build_the_ledger_cli()
 -> Result<(), Box<dyn Error>> {
-    let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
+    let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
     fs::remove_file(repo.path().join("Cargo.lock"))?;
     let error = prepare(repo.path())
         .err()

@@ -158,7 +158,7 @@ fn scalar(value: &str) -> Result<String, Box<dyn Error>> {
 }
 
 fn rendered_verify() -> Result<RenderedVerify, Box<dyn Error>> {
-    let repo = mbx_repo_for(true, WorkflowPolicy::VelnorRepositoryV1)?;
+    let repo = mbx_repo_for(false, WorkflowPolicy::VelnorRepositoryV1)?;
     let tree = render_staged_tree(&prepare(repo.path())?)?;
     let workflow = tree.get(WORKFLOW_PATH).ok_or("no ci workflow")?;
     rendered_step(workflow, "Verify ledger CLI")

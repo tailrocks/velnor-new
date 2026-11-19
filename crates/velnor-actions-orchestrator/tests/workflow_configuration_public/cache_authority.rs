@@ -5,19 +5,22 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 
 use velnor_actions_contract::{
-    CacheAccess, CacheWriter, Job, StepKind, WorkflowIr, WorkflowPolicy,
+    CRATE_JOB_ID_PREFIX, CacheAccess, CacheWriter, Job, WorkflowIr, WorkflowPolicy,
 };
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 
-use super::one_job_per_crate::mbx_repo_for;
+use super::maintenance_features::owner_feature_repo;
 use super::tools_producers::{POLICIES, is_tools_producer};
 use super::tools_producers_donors::SCHEDULED_SUITES_CONFIG;
 use super::waste_oracle::{Files, files_of, files_of_repo};
 use super::workflow_configuration_fixture;
 
 const CI_PATH: &str = ".github/workflows/ci.yml";
+const STATE_SEAL_PATH: &str = ".github/workflows/state-seal.yml";
 const QUALIFICATION_PATH: &str = ".github/workflows/qualification.yml";
+const VELNOR_GEN_PATH: &str = ".github/workflows/rust-ci.yml";
 const SOURCES_PRODUCER: &str = "sources-producer";
+const STATE_SEAL_PREFIX: &str = "state-seal-";
 const QUALIFICATION_WRITERS: [&str; 4] = [
     "cache-scale-set",
     "empty-cache-hosted",
@@ -29,8 +32,7 @@ const NON_DEFAULT_BRANCH: &str =
 const TRUSTED_PUSH: &str = "github.event_name == 'push'";
 const PROTECTED_REF: &str = "github.ref_protected == true";
 const DEFAULT_MODE: &str = "DEFAULT";
-const NATIVE_CHECK: &str = "\n[[native_checks]]\nid = \"fixture-native-tree\"\noperation = \"tap_tree\"\n[native_checks.runner]\nlabel = \"ubuntu-26.04\"\nplatform = \"linux_x64\"\nexecutor = \"hosted\"\n";
-const COMMITTED_WORKFLOWS: [&str; 11] = [
+const COMMITTED_WORKFLOWS: [&str; 12] = [
     "cache-prune.yml",
     "ci.yml",
     "freshness.yml",
@@ -42,6 +44,7 @@ const COMMITTED_WORKFLOWS: [&str; 11] = [
     "product-release.yml",
     "qualification.yml",
     "source-qualification.yml",
+    "state-seal.yml",
 ];
 
 struct JobModes {
@@ -113,15 +116,18 @@ fn expected_writer(path: &str, id: &str) -> bool {
     if path == QUALIFICATION_PATH {
         return QUALIFICATION_WRITERS.contains(&id);
     }
-    path == CI_PATH
-        && (id.starts_with("tools-producer-")
+    if path == STATE_SEAL_PATH {
+        return id.starts_with("tools-producer-")
             || id == SOURCES_PRODUCER
-            || id.starts_with("providers-producer-"))
+            || id.starts_with(STATE_SEAL_PREFIX);
+    }
+    id.starts_with("providers-producer-")
 }
 
 fn workflow_files(files: &Files) -> impl Iterator<Item = (&String, &String)> {
     files.iter().filter(|(path, _)| {
         path.starts_with(".github/workflows/")
+            && path.as_str() != VELNOR_GEN_PATH
             && std::path::Path::new(path)
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("yml"))
@@ -170,11 +176,8 @@ fn check_files(label: &str, files: &Files) -> BTreeMap<String, BTreeSet<String>>
 }
 
 fn fixture(policy: WorkflowPolicy) -> Result<tempfile::TempDir, Box<dyn Error>> {
-    let repo = mbx_repo_for(true, policy)?;
-    let config = repo.path().join(".velnor/config.toml");
-    let mut text = std::fs::read_to_string(&config)?;
-    text.push_str(NATIVE_CHECK);
-    std::fs::write(&config, text)?;
+    let repo = owner_feature_repo(policy, false, "default", "default")?;
+    workflow_configuration_fixture::write_root_cargo_lock(repo.path(), &["demo", "maintenance"])?;
     Ok(repo)
 }
 
@@ -199,12 +202,15 @@ fn every_generated_workflow_resolves_read_except_declared_writers() -> Result<()
         let files = rendered(policy)?;
         let writers = check_files(&label, &files);
         let ci = writers.get(CI_PATH).ok_or("ci.yml not rendered")?;
+        assert!(ci.is_empty(), "{label}: ci.yml holds writers: {ci:?}");
+        let sealed = writers
+            .get(STATE_SEAL_PATH)
+            .ok_or("state-seal.yml not rendered")?;
         assert!(
-            ci.iter().any(|id| id.starts_with("tools-producer-")),
-            "{label}: no tools producer writes: {ci:?}"
+            sealed.iter().any(|id| id.starts_with("tools-producer-")),
+            "{label}: no tools producer writes: {sealed:?}"
         );
-        assert!(ci.iter().any(|id| id.starts_with("providers-producer-")));
-        assert!(ci.contains(SOURCES_PRODUCER), "{label}: {ci:?}");
+        assert!(sealed.contains(SOURCES_PRODUCER), "{label}: {sealed:?}");
         assert!(workflow_files(&files).count() >= 2, "{label}");
     }
     let repo = workflow_configuration_fixture::make_repo(SCHEDULED_SUITES_CONFIG)?;
@@ -233,7 +239,11 @@ fn every_generated_workflow_resolves_read_except_declared_writers() -> Result<()
         )
     );
     let ci = writers.get(CI_PATH).ok_or("committed ci.yml missing")?;
-    assert!(ci.contains(SOURCES_PRODUCER), "{ci:?}");
+    assert!(ci.is_empty(), "committed ci.yml holds writers: {ci:?}");
+    let sealed = writers
+        .get(STATE_SEAL_PATH)
+        .ok_or("committed state-seal.yml missing")?;
+    assert!(sealed.contains(SOURCES_PRODUCER), "{sealed:?}");
     Ok(())
 }
 
@@ -268,14 +278,9 @@ fn a_writer_role_on_a_job_that_runs_task_code_fails_generation() -> Result<(), B
         let (ir, jobs) = finalized_with_sources(policy)?;
         validated(&ir, &jobs)?;
         let crate_id = jobs
-            .iter()
-            .find(|(_, job)| {
-                job.steps
-                    .iter()
-                    .any(|step| matches!(step.kind, StepKind::NativeCheckExecution { .. }))
-            })
-            .map(|(id, _)| id)
-            .ok_or("no job that runs task code")?;
+            .keys()
+            .find(|id| id.starts_with(CRATE_JOB_ID_PREFIX))
+            .ok_or("no crate job")?;
         for writer in [CacheWriter::ToolsProducer, CacheWriter::SourcesProducer] {
             rejected(
                 &ir,

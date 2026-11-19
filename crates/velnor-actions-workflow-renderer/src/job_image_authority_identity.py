@@ -17,8 +17,6 @@ REPOSITORY = "tailrocks/velnor-new"
 REPOSITORY_ID = 1390620900
 WORKFLOW = "tailrocks/velnor-new/.github/workflows/job-image-candidate.yml"
 ARTIFACT_PREFIX = "velnor-job-image-candidate-"
-RUST_CI_PATH = ".github/workflows/rust-ci.yml"
-RUST_REQUIRED_JOB = "rust-required"
 MAX_JSON_BYTES = 2 * 1024 * 1024
 ATTESTATION_LIMIT = 1000
 MAX_ATTESTATION_BYTES = 32 * 1024 * 1024
@@ -197,13 +195,13 @@ def validate_artifact_record(value, identity):
     return artifact["id"]
 
 
-def _latest_main_push_run(value, source, path, name):
+def select_ci_run(value, source):
     if not isinstance(value, dict) or not isinstance(value.get("workflow_runs"), list):
-        raise AuthorityError(f"Canonical {name} run response has an incorrect format.")
+        raise AuthorityError("Canonical CI run response has an incorrect format.")
     runs = [
         run for run in value["workflow_runs"]
         if isinstance(run, dict)
-        and run.get("path") == path
+        and run.get("path") == ".github/workflows/ci.yml"
         and run.get("event") == "push"
         and run.get("head_branch") == "main"
         and run.get("head_sha") == source
@@ -213,50 +211,13 @@ def _latest_main_push_run(value, source, path, name):
         and type(run.get("run_attempt")) is int
     ]
     if not runs:
-        raise AuthorityError(f"No canonical main {name} push run exists for this source.")
+        raise AuthorityError("No canonical main CI push run exists for this source.")
     runs.sort(key=lambda item: (item["run_number"], item["id"]))
     latest = runs[-1]
     same_number = [item for item in runs if item["run_number"] == latest["run_number"]]
     if len(same_number) != 1 or latest.get("status") != "completed" or latest.get("conclusion") != "success":
-        raise AuthorityError(f"The latest canonical main {name} run has no `success` conclusion.")
+        raise AuthorityError("The latest canonical main CI run has no `success` conclusion.")
     return {"run_id": latest["id"], "run_attempt": latest["run_attempt"]}
-
-
-def select_ci_run(value, source):
-    return _latest_main_push_run(value, source, ".github/workflows/ci.yml", "CI")
-
-
-def select_rust_ci_run(value, source):
-    return _latest_main_push_run(value, source, RUST_CI_PATH, "Rust CI")
-
-
-def select_rust_ci_gate(runs, jobs, recheck, source):
-    selected = select_rust_ci_run(runs, source)
-    if not isinstance(jobs, list) or not all(
-        isinstance(page, dict) and isinstance(page.get("jobs"), list) for page in jobs
-    ):
-        raise AuthorityError("Rust CI job response has an incorrect format.")
-    matches = [
-        job for page in jobs for job in page["jobs"]
-        if isinstance(job, dict)
-        and job.get("name") == RUST_REQUIRED_JOB
-        and job.get("conclusion") != "skipped"
-    ]
-    if len(matches) != 1:
-        raise AuthorityError("The Rust CI run must have exactly one non-skipped `rust-required` job.")
-    job = matches[0]
-    if (
-        job.get("run_id") != selected["run_id"]
-        or job.get("run_attempt") != selected["run_attempt"]
-        or job.get("head_sha") != source
-        or job.get("head_branch") != "main"
-    ):
-        raise AuthorityError("The `rust-required` job is not on the selected Rust CI run.")
-    if job.get("status") != "completed" or job.get("conclusion") != "success":
-        raise AuthorityError("The `rust-required` job has no `success` conclusion.")
-    if select_rust_ci_run(recheck, source) != selected:
-        raise AuthorityError("The latest Rust CI run changed during the check.")
-    return selected
 
 
 def _attestation_mismatch(item, identity, expected_subjects):

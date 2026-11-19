@@ -3,6 +3,7 @@
 
 use super::{NativeAuthorityError, NativeAuthorityInput};
 use crate::render::ValidatorCommand;
+use velnor_actions_contract::{ValidatorKind, WorkflowPolicy};
 
 pub mod vectors;
 pub mod verify;
@@ -22,6 +23,32 @@ pub(super) fn build(
     input: &NativeAuthorityInput<'_>,
 ) -> Result<Vec<ValidatorCommand>, NativeAuthorityError> {
     let mut commands = Vec::new();
+    if input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1 {
+        let workspaces = input
+            .cargo_workspaces
+            .iter()
+            .map(|workspace| workspace.root.clone())
+            .collect::<Vec<_>>();
+        if !workspaces.is_empty() {
+            commands.push(ValidatorCommand {
+                validator: ValidatorKind::CargoDeny,
+                name: crate::steps::DENY_STEP_NAME.to_owned(),
+                argv: vectors::deny_argv(
+                    &workspaces,
+                    velnor_actions_contract::workflow::scale_set_support_jobs(input.config)
+                        .contains(ValidatorKind::CargoDeny.job_id()),
+                )
+                .map_err(NativeAuthorityError::Support)?,
+                prepare_argv: Vec::new(),
+            });
+        }
+        commands.push(ValidatorCommand {
+            validator: ValidatorKind::CargoMachete,
+            name: crate::steps::MACHETE_STEP_NAME.to_owned(),
+            argv: vectors::machete_argv().map_err(NativeAuthorityError::Support)?,
+            prepare_argv: vectors::machete_install_argv().map_err(NativeAuthorityError::Support)?,
+        });
+    }
     let verify = verify::verify_kinds(&input.config.workflow.verify.jobs)
         .map_err(NativeAuthorityError::Support)?;
     verify::push_verify_commands(&mut commands, &verify, &input.config.workflow.verify)

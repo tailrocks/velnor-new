@@ -348,8 +348,6 @@ fn ci_check_step(pins: &crate::schema2::ProductReleasePins) -> Result<Yaml, crat
 
 pub(super) fn ci_check_script() -> String {
     let listing_function = super::super::ci_run_lookup::bash_function();
-    let rust_gate_functions = super::super::rust_ci_gate::bash_functions();
-    let rust_gate_call = super::super::rust_ci_gate::call();
     format!(
         r#"set -eu
 test "$GITHUB_REPOSITORY" = '{REPOSITORY}'
@@ -358,16 +356,6 @@ test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
 test "$GITHUB_WORKFLOW_SHA" = "$GITHUB_SHA"
 test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
 {listing_function}
-repository='{REPOSITORY}'
-source_sha="$GITHUB_SHA"
-fail() {{
-  printf 'verify release source: %s\n' "$1" >&2
-  exit 1
-}}
-gh_api() {{
-  gh api "$@"
-}}
-{rust_gate_functions}
 runs="$(list_exact_source_ci_runs 'verify release source' gh api --paginate --slurp "repos/{REPOSITORY}/actions/workflows/{CI_WORKFLOW}/runs?head_sha=$GITHUB_SHA&per_page=100")"
 run="$(printf '%s\n' "$runs" | jq -ce --arg sha "$GITHUB_SHA" --arg repo '{REPOSITORY}' '[.[] | (.workflow_runs // [])[] | select(.path == ".github/workflows/{CI_WORKFLOW}" and .head_sha == $sha and .head_branch == "main" and .head_repository.full_name == $repo and .event == "push")] | sort_by([.run_number, .id]) | last // error("no exact-source main CI run")')"
 test "$(printf '%s\n' "$run" | jq -r .status)" = completed
@@ -376,7 +364,6 @@ run_id="$(printf '%s\n' "$run" | jq -r .id)"
 attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
 jobs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
 printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .conclusion != "skipped")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == "main" and .[0].status == "completed" and .[0].conclusion == "success"' >/dev/null
-{rust_gate_call}
 test "$(gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }

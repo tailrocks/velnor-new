@@ -9,7 +9,7 @@ use velnor_actions_actionlint::{
 pub const ATTEST_BUILD_PROVENANCE_USES: &str =
     "actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8";
 pub const CREATE_GITHUB_APP_TOKEN_USES: &str =
-    "actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510";
+    "actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc";
 use velnor_actions_contract::{Step, StepKind, StepRole};
 
 use crate::{RenderError, commands, marker};
@@ -79,8 +79,8 @@ pub const ACQUIRE_TIMEOUT_MINUTES: i64 =
 pub const RUN_KEY_EXPR: &str = "r${{ github.run_id }}-a${{ env.VELNOR_RUN_KEY_ATTEMPT }}";
 pub const MATRIX_REPORT_UPLOAD_NAME: &str = "Upload matrix report";
 pub const CRATE_REPORT_UPLOAD_NAME: &str = "Upload crate reports";
-pub const MACHETE_STEP_NAME: &str = "Run cargo-machete";
 pub const DENY_STEP_NAME: &str = "Run cargo-deny";
+pub const MACHETE_STEP_NAME: &str = "Run cargo-machete";
 
 pub fn scan_for_private_subcommands(text: &str) -> Result<(), RenderError> {
     for token in FORBIDDEN_TOKENS {

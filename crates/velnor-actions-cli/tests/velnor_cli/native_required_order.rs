@@ -12,7 +12,15 @@ use std::{
 #[path = "../../../test_support/root_cargo_lock.rs"]
 mod root_cargo_lock;
 
-const EXPECTED_NEEDS: [&str; 3] = ["plan", "jactionlint", "alint"];
+const EXPECTED_NEEDS: [&str; 7] = [
+    "plan",
+    "rust-sample",
+    "rust-sample-agent-status",
+    "jactionlint",
+    "alint",
+    "cargo-deny",
+    "cargo-machete",
+];
 
 #[test]
 fn public_plan_and_generation_preserve_native_required_order() -> Result<(), Box<dyn Error>> {

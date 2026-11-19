@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use tempfile::TempDir;
 use velnor_actions_contract::{
-    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig, RustSuiteTrigger, validate_rust_suites,
+    RESERVED_SUITE_WORKFLOW_SLUGS, RustSuiteConfig, validate_rust_suites,
 };
 use velnor_actions_orchestrator::{GenerateOptions, generate, prepare, render_staged_tree};
 use velnor_actions_workflow_renderer::MARKER_PREFIX;
@@ -109,7 +109,6 @@ fn generator_release_owns_source_qualification_lifecycle() -> Result<(), Box<dyn
 fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entries() {
     assert!(RESERVED_SUITE_WORKFLOW_SLUGS.contains(&"source-qualification"));
     let mut suite = RustSuiteConfig::new("project-check", "default");
-    suite.triggers = vec![RustSuiteTrigger::WorkflowDispatch];
     suite.workflow = Some("source-qualification".to_owned());
     let suite_error = validate_rust_suites(&[suite], ".velnor/config.toml")
         .expect_err("generator-owned workflow slug must reject suite collision");
@@ -120,7 +119,6 @@ fn source_qualification_reservations_reject_collisions_and_allow_unrelated_entri
     );
 
     let mut unrelated = RustSuiteConfig::new("project-check", "default");
-    unrelated.triggers = vec![RustSuiteTrigger::WorkflowDispatch];
     unrelated.workflow = Some("project-checks".to_owned());
     validate_rust_suites(&[unrelated], ".velnor/config.toml")
         .expect("unrelated suite workflow slug must remain valid");
@@ -167,7 +165,7 @@ fn assert_manual_native_validator_step(rendered: &str) -> Result<(), Box<dyn Err
     Ok(())
 }
 
-fn generator_config(enabled: bool) -> String {
+pub(super) fn generator_config(enabled: bool) -> String {
     let workflows = if enabled {
         "workflows = [\"generator_release\"]\n"
     } else {
@@ -189,4 +187,18 @@ fn preview_generation(
         },
     )?;
     Ok(destination)
+}
+
+#[test]
+fn source_qualification_cannot_emit_without_a_cli_route() -> Result<(), Box<dyn Error>> {
+    let repo = workflow_configuration_fixture::make_repo(&generator_config(true))?;
+    let prepared = prepare(repo.path())?;
+    let error = render_staged_tree(&prepared)
+        .err()
+        .ok_or("qualification emitted without its CLI route")?;
+    assert!(
+        error.to_string().contains("source_qualification_cli_route"),
+        "{error}"
+    );
+    Ok(())
 }

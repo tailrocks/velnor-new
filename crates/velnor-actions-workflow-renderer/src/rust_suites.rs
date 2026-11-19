@@ -42,9 +42,47 @@ pub struct RustSuitesRenderSpec {
     pub non_inputs: velnor_actions_contract::NonInputs,
 }
 
+#[derive(Debug, Clone)]
+pub struct RustSuiteCiJobs {
+    pub jobs: BTreeMap<String, Job>,
+    pub drivers: BTreeMap<String, CompileDriver>,
+}
+
 pub(super) struct SuiteJob {
     pub(super) id: String,
     pub(super) job: Job,
+    pub(super) driver: CompileDriver,
+}
+
+pub fn build_ci_suite_jobs(spec: &RustSuitesRenderSpec) -> Result<RustSuiteCiJobs, RenderError> {
+    validate_spec(spec)?;
+    let mut jobs = BTreeMap::new();
+    let mut drivers = BTreeMap::new();
+    for suite in &spec.suites {
+        if !suite.has_pr_or_push_trigger() {
+            continue;
+        }
+        for suite_job in build_suite_jobs_for_entry(suite, spec, false)? {
+            drivers.insert(suite_job.id.clone(), suite_job.driver);
+            jobs.insert(suite_job.id, suite_job.job);
+        }
+    }
+    Ok(RustSuiteCiJobs { jobs, drivers })
+}
+
+pub fn standalone_tools_donors(
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    validate_spec(spec)?;
+    let entries: Vec<&RustSuiteConfig> = spec
+        .suites
+        .iter()
+        .filter(|suite| has_standalone_trigger(suite))
+        .collect();
+    if entries.is_empty() {
+        return Ok(BTreeMap::new());
+    }
+    document::standalone_tools_donors(&entries, spec)
 }
 
 pub fn render_suites_workflow(spec: &RustSuitesRenderSpec) -> Result<Option<String>, RenderError> {
@@ -152,6 +190,7 @@ pub(super) fn build_suite_jobs_for_entry(
         vec![SuiteJob {
             id: format!("suite-{name}"),
             job,
+            driver: spec.compile_driver,
         }]
     } else {
         match suite.build {
@@ -272,10 +311,12 @@ fn build_sharded_archive_jobs(
         SuiteJob {
             id: build_id,
             job: build_job,
+            driver: spec.compile_driver,
         },
         SuiteJob {
             id: run_id,
             job: run_job,
+            driver: CompileDriver::Cargo,
         },
     ])
 }
@@ -311,6 +352,7 @@ fn build_sharded_inline_job(
             Vec::new(),
             job_steps,
         ),
+        driver: spec.compile_driver,
     })
 }
 

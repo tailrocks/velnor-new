@@ -11,7 +11,6 @@ use velnor_actions_contract::{
 };
 
 use super::tools_producers::{finalized, is_tools_producer, is_upload, positions};
-use super::tools_producers_task_step::task_execution_step;
 
 const INVALID_PRODUCER: &str = "mixed_or_invalid_producer";
 const CHECK_JOB_ONLY: &str = "check_runner_requires_check_job";
@@ -294,9 +293,10 @@ fn donors(jobs: &Jobs) -> Result<Donors, Box<dyn Error>> {
             .cloned()
     };
     Ok(Donors {
-        task: task_execution_step()?,
+        task: find(&|step| matches!(step.kind, StepKind::TaskExecution { .. }))
+            .ok_or("no task step")?,
         upload: find(&is_upload).ok_or("no upload step")?,
-        check: find(&|step| step.role == Some(StepRole::Jactionlint)).ok_or("no check step")?,
+        check: find(&|step| step.role == Some(StepRole::CargoDeny)).ok_or("no check step")?,
         check_runner: CheckRunner {
             label: "ubuntu-26.04".to_owned(),
             platform: CheckPlatform::LinuxX64,
@@ -310,7 +310,7 @@ fn donors(jobs: &Jobs) -> Result<Donors, Box<dyn Error>> {
                     && job
                         .steps
                         .iter()
-                        .any(|step| step.role == Some(StepRole::TofuProviderUse))
+                        .any(|step| matches!(step.kind, StepKind::TaskExecution { .. }))
             })
             .cloned()
             .ok_or("no crate job")?,

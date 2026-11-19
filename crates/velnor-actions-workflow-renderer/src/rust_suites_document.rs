@@ -107,6 +107,15 @@ fn standalone_suite_jobs(
     Ok(jobs)
 }
 
+pub(super) fn standalone_tools_donors(
+    entries: &[&RustSuiteConfig],
+    spec: &RustSuitesRenderSpec,
+) -> Result<BTreeMap<String, Job>, RenderError> {
+    let mut jobs = standalone_suite_jobs(entries, spec)?;
+    prepare_suite_tools(&mut jobs, spec)?;
+    Ok(jobs)
+}
+
 fn prepare_suite_tools(
     jobs: &mut BTreeMap<String, Job>,
     spec: &RustSuitesRenderSpec,

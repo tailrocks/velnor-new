@@ -195,19 +195,6 @@ pub(crate) fn ci_runs_json() -> String {
     )
 }
 
-pub(crate) fn rust_ci_runs_json() -> String {
-    format!(
-        "{{\"workflow_runs\":[{{\"path\":\".github/workflows/rust-ci.yml\",\"event\":\"push\",\"head_branch\":\"main\",\"head_sha\":\"{SOURCE_SHA}\",\"head_repository\":{{\"full_name\":\"tailrocks/velnor-new\"}},\"run_number\":4,\"id\":78,\"run_attempt\":1,\"status\":\"completed\",\"conclusion\":\"success\"}}]}}"
-    )
-}
-
-pub(crate) fn rust_ci_jobs_json() -> String {
-    let name = crate::rust_ci_gate_golden::gate_job_name();
-    format!(
-        "[{{\"jobs\":[{{\"name\":\"{name}\",\"run_id\":78,\"run_attempt\":1,\"head_sha\":\"{SOURCE_SHA}\",\"head_branch\":\"main\",\"status\":\"completed\",\"conclusion\":\"success\"}}]}}]"
-    )
-}
-
 pub(crate) fn artifact_response_json() -> String {
     format!(
         "{{\"artifacts\":[{{\"name\":\"velnor-job-image-candidate-2\",\"id\":9,\"expired\":false,\"workflow_run\":{{\"id\":7,\"head_sha\":\"{SOURCE_SHA}\",\"head_branch\":\"main\"}}}}]}}"
@@ -344,6 +331,7 @@ pub(crate) fn pins() -> ProductReleasePins {
 
 pub(crate) fn request() -> Result<Schema2WorkflowRequest, Box<dyn Error>> {
     Ok(Schema2WorkflowRequest {
+        scale_set_jobs: std::collections::BTreeSet::new(),
         runner_image_family: None,
         pr_ci: velnor_actions_contract::PrCiMode::Off,
         version: "0.1.55".to_owned(),

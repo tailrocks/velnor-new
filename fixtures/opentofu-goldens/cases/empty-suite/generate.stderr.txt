@@ -2,6 +2,7 @@ Preview: <preview>
 Repository: <repo>
 .github/AGENTS.md
 .github/CLAUDE.md
+.github/actions/declared-task-0/action.yml
 .github/actions/u26/action.yml
 .github/actions/velnor-tool-seed/action.yml
 .github/actions/velnor-tools-cache-restore/action.yml
@@ -12,7 +13,10 @@ Repository: <repo>
 .github/actions/velnor-verify-rust-manifest/action.yml
 .github/jactionlint.yaml
 .github/scripts/velnor-tools-cache-identity.sh
+.github/velnor/task-execution-manifest-v1.json
+.github/workflows/cache-prune.yml
 .github/workflows/ci.yml
+.github/workflows/state-seal.yml
 mise.lock not found; Velnor will not create or refresh it
 mise.toml not found; Velnor will use its pinned tools
 persist_evidence: no MBX or Nextest usage detected; to adopt either, add a durable signal

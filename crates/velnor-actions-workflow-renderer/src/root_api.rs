@@ -47,7 +47,8 @@ pub use crate::render::{
     action_pins, finalize_jobs, not_affected_gate, render_workflow_ir, render_workflow_ir_strict,
 };
 pub use crate::rust_suites::{
-    RustSuitesRenderSpec, render_suites_workflow, render_suites_workflows,
+    RustSuiteCiJobs, RustSuitesRenderSpec, build_ci_suite_jobs, render_suites_workflow,
+    render_suites_workflows,
 };
 pub use crate::schema2::{
     MbxQualificationPins, MisePinQualificationPins, ProductReleasePins, Schema2WorkflowRequest,

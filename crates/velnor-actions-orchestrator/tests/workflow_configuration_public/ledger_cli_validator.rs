@@ -14,7 +14,7 @@ use velnor_actions_contract::{
 use velnor_actions_workflow_renderer::plan_sources::source_cache::producer_sources_steps;
 
 use super::ledger_cli_job::velnor_fixtures;
-use super::one_job_per_crate::{Rendered, crate_jobs, group_fixtures};
+use super::one_job_per_crate::{Rendered, crate_jobs, rust_fixtures};
 
 type Jobs = BTreeMap<String, Job>;
 
@@ -338,7 +338,7 @@ fn ledger_cli_validator_rejects_each_mutation() -> Result<(), Box<dyn Error>> {
 
 #[test]
 fn consumer_policy_rejects_cross_job_artifacts() -> Result<(), Box<dyn Error>> {
-    let fixture = group_fixtures()?
+    let fixture = rust_fixtures()?
         .into_iter()
         .find(|fixture| fixture.policy == WorkflowPolicy::ConsumerV1)
         .ok_or("no consumer fixture")?;

@@ -2,8 +2,39 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    OrchestratorError, PreparedWorkflow, Step, ToolCatalog, WorkflowBuildInput, WorkflowPolicy,
+    BTreeMap, Job, OrchestratorError, PLAN_JOB_ID, PreparedWorkflow, Step, ToolCatalog,
+    WorkflowBuildInput, WorkflowPolicy,
 };
+
+pub(super) fn attach_state_roots(
+    input: &WorkflowBuildInput<'_>,
+    prepared: &PreparedWorkflow,
+    jobs: &mut BTreeMap<String, Job>,
+) -> Result<(), OrchestratorError> {
+    let state_roots = crate::state_roots::plans(input.discovery, jobs, &prepared.state_recipes)?;
+    let seal = crate::state_roots::seal_plan(jobs)?;
+    if state_roots.is_empty() && seal.roots.is_empty() {
+        return Ok(());
+    }
+    let tofu_roots = crate::tofu_cache::tofu_cache_roots(input.discovery)?;
+    let plan = jobs
+        .get_mut(PLAN_JOB_ID)
+        .ok_or_else(|| OrchestratorError::Contract {
+            problem: "plan_job_missing".to_owned(),
+        })?;
+    velnor_actions_workflow_renderer::native_job_builders::plan_state_roots(
+        plan,
+        &prepared.helper_catalog,
+        input.fetch_roots,
+        &tofu_roots,
+        &state_roots,
+        &seal,
+    )
+    .map_err(crate::workflow_jobs::map_native_job_builder_error)?;
+    plan.permissions
+        .get_or_insert_with(crate::workflow_jobs::read_actions_permissions);
+    Ok(())
+}
 
 pub(super) fn required_controller(
     input: &WorkflowBuildInput<'_>,

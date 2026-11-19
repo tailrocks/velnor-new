@@ -9,7 +9,7 @@ use velnor_actions_workflow_renderer::render::RenderedFile;
 use super::audit;
 
 const WORKFLOWS: [&str; 2] = [
-    ".github/workflows/ci.yml",
+    ".github/workflows/state-seal.yml",
     ".github/workflows/qualification.yml",
 ];
 

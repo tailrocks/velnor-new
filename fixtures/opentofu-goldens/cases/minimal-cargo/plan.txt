@@ -18,12 +18,24 @@ Workflow to generate
     - plan (13 steps)
     - required (10 steps)
     - required-gate (1 steps)
+    - rust-minimal-cargo (19 steps)
     - tools-producer-36cc6f04 (9 steps)
     - tools-producer-67ffdb60 (10 steps)
-    - no matrix entries (no-work workflow)
-  Parallel: single job; no matrix fan-out
-  Critical path: none (no obligations)
-  Clippy memory groups: 0; barriers: 0
+    - tools-producer-dc27f1ea (11 steps)
+    - 1 Rust crate job
+      Timeout: 5 minutes per crate job
+      Obligations: Clippy -> run tests -> doctests -> doc build -> format check
+      Entries:
+        - rust-minimal-cargo
+      Obligations:
+        - stack/rust/root/clippy/default
+        - stack/rust/root/doc/default
+        - stack/rust/root/doctest/default
+        - stack/rust/root/fmt/default
+        - stack/rust/root/test/default
+  Parallel: 1 execution job; dependencies preserved; no matrix fan-out
+  Critical path: stack/rust/root/clippy/default (1 tasks)
+  Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools
   Jactionlint: 2.4.0 pinned, profile correctness
   Action pins: 6

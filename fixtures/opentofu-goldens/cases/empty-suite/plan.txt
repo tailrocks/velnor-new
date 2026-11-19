@@ -19,12 +19,23 @@ Workflow to generate
     - plan (13 steps)
     - required (10 steps)
     - required-gate (1 steps)
+    - rust-empty-suite (18 steps)
     - tools-producer-36cc6f04 (9 steps)
+    - tools-producer-36dc5056 (11 steps)
     - tools-producer-4c12bb75 (10 steps)
-    - no matrix entries (no-work workflow)
-  Parallel: single job; no matrix fan-out
-  Critical path: none (no obligations)
-  Clippy memory groups: 0; barriers: 0
+    - 1 Rust crate job
+      Timeout: 5 minutes per crate job
+      Obligations: Clippy -> build -> doc build -> format check
+      Entries:
+        - rust-empty-suite
+      Obligations:
+        - stack/rust/root/build/default
+        - stack/rust/root/clippy/default
+        - stack/rust/root/doc/default
+        - stack/rust/root/fmt/default
+  Parallel: 1 execution job; dependencies preserved; no matrix fan-out
+  Critical path: stack/rust/root/build/default (1 tasks)
+  Clippy memory groups: 1; barriers: 0
   Cache layers: Mise tools
   Jactionlint: 2.4.0 pinned, profile correctness
   Action pins: 6
@@ -34,6 +45,8 @@ Workflow to generate
     - actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333
     - actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
     - jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
+  Ineligible: stack/rust/root/doctest/default has no test targets; no test command emitted
+  Ineligible: stack/rust/root/nextest/default has no test targets; no test command emitted
   Pull-request execution narrows crate obligations through its event-time affected-work plan.
 
 Required-check migration

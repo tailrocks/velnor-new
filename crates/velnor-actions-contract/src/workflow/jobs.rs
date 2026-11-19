@@ -115,8 +115,8 @@ impl ValidatorKind {
     }
 
     #[must_use]
-    pub fn repository_validators() -> [Self; 1] {
-        [Self::Alint]
+    pub fn repository_validators() -> [Self; 3] {
+        [Self::Alint, Self::CargoDeny, Self::CargoMachete]
     }
 }
 

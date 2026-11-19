@@ -15,7 +15,7 @@ use velnor_actions_contract::{
 };
 use velnor_actions_orchestrator::{finalized_jobs, prepare, render_staged_tree};
 
-use super::one_job_per_crate::mbx_repo_for;
+use super::maintenance_features::owner_feature_repo;
 
 const PROBE_MISS: &str = "steps.tools-restore.outputs.cache-hit != 'true'";
 pub(super) const POLICIES: [WorkflowPolicy; 2] = [
@@ -26,7 +26,7 @@ pub(super) const POLICIES: [WorkflowPolicy; 2] = [
 pub(super) fn finalized(
     policy: WorkflowPolicy,
 ) -> Result<(WorkflowIr, BTreeMap<String, Job>), Box<dyn Error>> {
-    let repo = mbx_repo_for(true, policy)?;
+    let repo = owner_feature_repo(policy, false, "default", "default")?;
     let prepared = prepare(repo.path())?;
     let jobs = finalized_jobs(&prepared)?;
     Ok((prepared.workflow.ir.clone(), jobs))
@@ -219,12 +219,12 @@ fn required_plan_and_crate_jobs_never_need_a_producer() -> Result<(), Box<dyn Er
 #[test]
 fn staged_tree_renders_producers_for_both_policies() -> Result<(), Box<dyn Error>> {
     for policy in POLICIES {
-        let repo = mbx_repo_for(true, policy)?;
+        let repo = owner_feature_repo(policy, false, "default", "default")?;
         let prepared = prepare(repo.path())?;
         let tree = render_staged_tree(&prepared)?;
         let workflow = tree
-            .get(velnor_actions_workflow_renderer::render::WORKFLOW_PATH)
-            .ok_or("rendered ci workflow is missing")?;
+            .get(velnor_actions_contract::workflow::state_seal::STATE_SEAL_WORKFLOW_PATH)
+            .ok_or("rendered state-seal workflow is missing")?;
         assert!(
             workflow.contains("  tools-producer-"),
             "{policy:?}: no producer job rendered"

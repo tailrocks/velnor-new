@@ -8,7 +8,6 @@ use velnor_actions_contract::JobTimeout;
 use super::ci_run_lookup;
 use super::features::{CHECKOUT_USES, base, finish};
 use super::generator_release;
-use super::rust_ci_gate;
 use super::{ProductReleasePins, ReleaseTarget};
 
 pub(super) const REPOSITORY: &str = "tailrocks/velnor-new";
@@ -16,7 +15,7 @@ pub(super) const WORKFLOW_PATH: &str = ".github/workflows/product-release.yml";
 const CI_WORKFLOW_PATH: &str = ".github/workflows/ci.yml";
 const CI_WORKFLOW_API_ID: &str = "ci.yml";
 
-pub(super) const LATEST_RUN_JQ: &str = r#"
+const LATEST_RUN_JQ: &str = r#"
   [ .[] | (.workflow_runs // [])[] |
     select(.path == $workflow_path
       and .event == "push"
@@ -121,8 +120,6 @@ fn render_function(require_checkout: bool, workflow_path: &str, event: &str) -> 
         .replace("@EVENT@", event)
         .replace("@CI_WORKFLOW_PATH@", CI_WORKFLOW_PATH)
         .replace("@CI_WORKFLOW_API_ID@", CI_WORKFLOW_API_ID)
-        .replace("@RUST_CI_GATE_FUNCTIONS@", &rust_ci_gate::bash_functions())
-        .replace("@RUST_CI_GATE_CALL@", &rust_ci_gate::call())
         .replace("@LATEST_RUN_JQ@", LATEST_RUN_JQ)
         .replace("@REQUIRED_JOB_JQ@", REQUIRED_JOB_JQ)
         .replace("@CI_RUN_LISTING_FUNCTION@", &ci_run_lookup::bash_function())
@@ -223,8 +220,6 @@ assert_required_job() {
   [[ "$actual_branch" == 'main' ]] || fail 'Required job is not on main'
 }
 
-@RUST_CI_GATE_FUNCTIONS@
-
 assert_current_tip
 run="$(latest_ci_run)" || fail 'latest CI run lookup failed'
 [[ "$run" != 'null' ]] || fail 'latest exact-source CI run is missing'
@@ -249,7 +244,6 @@ latest_conclusion="$(jq -er '.conclusion' <<<"$latest_again")" \
 [[ "$latest_attempt" == "$run_attempt" ]] || fail 'latest CI attempt changed during eligibility check'
 [[ "$latest_status" == 'completed' ]] || fail 'latest CI run restarted during eligibility check'
 [[ "$latest_conclusion" == 'success' ]] || fail 'latest CI run changed during eligibility check'
-@RUST_CI_GATE_CALL@
 assert_current_tip
 {
   printf 'source_sha=%s\n' "$source_sha"

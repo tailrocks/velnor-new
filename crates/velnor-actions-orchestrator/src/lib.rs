@@ -27,7 +27,7 @@ private_mods!(
     cover
 );
 private_mods!(crate_job_ids, crate_jobs);
-private_mods!(critical_path);
+private_mods!(critical_path, derive_groups);
 private_mods!(discover, discover_index);
 private_mods!(discover_tofu, error, evidence);
 private_mods!(extension_schemas);
@@ -79,7 +79,7 @@ private_mods!(select, select_affected);
 private_mods!(select_edges, select_reads);
 private_mods!(select_reads_lex, select_reads_scan);
 private_mods!(select_symlinks, select_tofu);
-private_mods!(source_cache, source_prep);
+private_mods!(source_cache, source_prep, state_roots);
 private_mods!(stable_release_emit, tap_history_relevance, tap_merge);
 private_mods!(
     tap_prepare,

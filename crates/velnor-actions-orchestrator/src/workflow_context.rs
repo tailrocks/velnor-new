@@ -2,16 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_actions_contract::{
-    ExecutionMode, ScaleSetSelector, ValidatorKind, VelnorConfig,
+    ExecutionMode, ScaleSetSelector, ValidatorKind, VelnorConfig, WorkflowPolicy,
 };
 use velnor_actions_mise::ToolCatalog;
 use velnor_actions_workflow_renderer::render::{
     CanonicalRuntimeInputs, RenderContext, ValidatorCommand,
 };
-use velnor_actions_workflow_renderer::steps::REQUEST_DIR_PREFIX;
+use velnor_actions_workflow_renderer::steps::{
+    DENY_STEP_NAME, MACHETE_STEP_NAME, REQUEST_DIR_PREFIX,
+};
 use velnor_actions_workflow_renderer::verification_jobs::WorkflowTaskPolicy;
 
 use crate::OrchestratorError;
+use crate::discover::Discovery;
+use crate::vectors::{deny_argv, machete_argv, machete_install_argv};
 
 use super::REQUEST_DIR;
 
@@ -25,6 +29,7 @@ pub(super) struct RenderContextInputs<'a> {
     pub(super) label: &'a str,
     pub(super) generator_version: &'a str,
     pub(super) catalog: &'a ToolCatalog,
+    pub(super) discovery: &'a Discovery,
     pub(super) workflow_tasks: Vec<WorkflowTaskPolicy>,
     pub(super) verify: &'a [ValidatorKind],
 }
@@ -53,6 +58,12 @@ pub(super) fn render_context(
         pull_request_cache_policy: input.config.workflow.pull_request_cache_policy,
         mise_quiet: input.config.workflow.mise_quiet,
         plan_consumer_env: runtime.plan_consumer_env().clone(),
+        standalone_tools_donors: crate::rust_suites_emit::standalone_suite_tools_donors(
+            input.config,
+            input.label,
+            input.discovery,
+            input.catalog,
+        )?,
         max_parallel_jobs: input.config.workflow.max_parallel_jobs,
         non_inputs: input
             .config
@@ -73,7 +84,35 @@ pub(super) fn render_context(
 fn validator_commands(
     input: &RenderContextInputs<'_>,
 ) -> Result<Vec<ValidatorCommand>, OrchestratorError> {
+    let velnor = input.config.workflow.policy == WorkflowPolicy::VelnorRepositoryV1;
     let mut validator_commands = Vec::new();
+    if velnor {
+        let workspaces = input
+            .discovery
+            .workspaces
+            .iter()
+            .map(|workspace| workspace.record.workspace_root.clone())
+            .collect::<Vec<_>>();
+        if !workspaces.is_empty() {
+            validator_commands.push(ValidatorCommand {
+                validator: ValidatorKind::CargoDeny,
+                name: DENY_STEP_NAME.to_owned(),
+                argv: deny_argv(
+                    &workspaces,
+                    velnor_actions_contract::workflow::scale_set_support_jobs(input.config)
+                        .contains(ValidatorKind::CargoDeny.job_id()),
+                )?,
+                prepare_argv: Vec::new(),
+            });
+        }
+        let machete_install = machete_install_argv()?;
+        validator_commands.push(ValidatorCommand {
+            validator: ValidatorKind::CargoMachete,
+            name: MACHETE_STEP_NAME.to_owned(),
+            argv: machete_argv()?,
+            prepare_argv: machete_install,
+        });
+    }
     crate::verify::push_verify_commands(
         &mut validator_commands,
         input.verify,

@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_actions_contract::{Step, WorkflowPolicy};
+use std::collections::BTreeMap;
+
+use velnor_actions_contract::{CompiledStateMode, RustCrateConfig, Step, WorkflowPolicy};
 use velnor_actions_mise::ToolCatalog;
 
 use crate::discover::Discovery;
@@ -16,5 +18,10 @@ pub(crate) struct CrateJobInputs<'a> {
     pub(crate) acquire: Option<&'a Step>,
     pub(crate) max_parallel_jobs: u32,
     pub(crate) timeout: velnor_actions_contract::JobTimeout,
+    pub(crate) preview: Option<&'a velnor_actions_contract::source_preview::SourcePreviewLock>,
     pub(crate) helper_version: &'a str,
+    pub(crate) generator_version: &'a str,
+    pub(crate) compiled_state: CompiledStateMode,
+    pub(crate) seed_parallel_targets: bool,
+    pub(crate) crates: &'a BTreeMap<String, RustCrateConfig>,
 }

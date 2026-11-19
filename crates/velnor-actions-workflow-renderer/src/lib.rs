@@ -91,6 +91,7 @@ pub mod release_spec;
 pub mod release_tree;
 pub mod render;
 mod render_cache_files;
+mod render_state_seal;
 mod required_gate;
 mod runner_family_sources;
 mod runs_on;
