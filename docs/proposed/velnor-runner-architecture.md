@@ -66,7 +66,10 @@ rejected.
 3. **C3. Selection is sound or wide.** The plan comes from a released helper, never from the change
    under test (`docs/goals.md` rule 12). A file the plan cannot place selects everything. Nothing is
    skipped relative to a merge group's predecessor; an obligation is skipped only when a receipt
-   with its exact key exists.
+   with its exact key exists. The expected test inventory, planned arguments and feature policy come
+   from the trusted planner, never from the candidate, and a head whose plan drops obligations or
+   tests that `main`'s plan has lists them as a reduction in the `Required` summary, so a change
+   cannot quietly weaken its own tests.
 4. **C4. Only what Velnor observed is evidence.** A receipt is minted only from processes the node
    agent started in a sandbox it created, running the released plan's command graph on the inputs it
    mounted, with every exit and the expected test inventory observed. A missing, skipped, cancelled,
@@ -277,12 +280,13 @@ pub enum Role { Production, Reference } // Reference: conformance, shadow, diff;
   and can never produce a false green.
 - **Reference role** (decision 19): the conformance gate, sampled shadow runs of real jobs, and
   on-demand "run this job both ways and diff". Reference runs write nothing anyone can consume.
-- **APIs** (decision 3): scale-set sessions, broker long-poll, JIT configuration, run-service
-  `acquirejob`, `renewjob`, `completejob`, Results twirp for logs, timeline and summaries, cache
-  service v2, artifacts v4, OIDC. Out: the AES-encrypted legacy session, legacy pipelines and
-  distributed task, the legacy expression evaluator, cache v1 and artifacts v3. The evaluator the
-  latest runner returns is itself pending ruling Q4; the harness decides it on evidence (section
-  5.7).
+- **APIs** (decision 3), as the latest release implements them, including its broker-session
+  ownership on deletion and its connectivity probe: scale-set sessions, broker long-poll, JIT
+  configuration, run-service `acquirejob`, `renewjob`, `completejob`, Results twirp for logs,
+  timeline and summaries, cache service v2, artifacts v4, OIDC. Out: the AES-encrypted legacy
+  session, legacy pipelines and distributed task, the legacy expression evaluator, cache v1 and
+  artifacts v3. The evaluator the latest runner returns is itself pending ruling Q4; the harness
+  decides it on evidence (section 5.7).
 
 **Speed per job type** [E, from the per-job set-up in §A T9b; the paired runs of section 5.7 replace
 these numbers with measured ones]. Both executors share the platform, so the difference is what the
@@ -462,7 +466,8 @@ one integration in the ruleset (N12).
   recovered by redeploying the previous immutable image digest, a deploy rather than a code path
   (D15, section 14). The cluster runs only released versions, never the change under test.
 - **Control plane:** k3s has one server today (§B.1.5); a whole-cluster dependency waits until
-  control-plane and site loss are qualified.
+  control-plane and site loss are qualified: three servers across failure domains, and a third-site
+  witness for any leader the sites share, such as the ledger's.
 
 ### 5.10 What is reused, after review
 
@@ -889,6 +894,6 @@ The official runner stays, as GitHub Official and as the reference executor (dec
 | Purchase | Buys | When |
 |---|---|---|
 | Two more k3s servers across failure domains | A control plane that survives one node or site | Before a whole-cluster dependency lands |
-| One high-clock node | 1.3–1.5× on the serial path [E] | Rented for the test-floor experiments |
+| One high-clock node | 1.3–1.5× on the serial path [E] | Only after the test-floor fixes (set-up and transfer cost first), then rented for a measured trial |
 | 10 Gbit/s between same-site workers | Faster cross-node fills and test fan-out | When a measurement shows the need |
 | More EPYC workers | +96 threads each | CPU above 70% at peak after dedupe, or eligible merge wait p90 above 10 s for two weeks |

@@ -305,6 +305,8 @@ in the design review. "Same as" marks a merged duplicate.
 | N84 | The first reused pass whose cold run fails revokes its class at once and transitively blocks open heads, queue entries and releases that relied on it. | GPT-6.2-Astra | — | Adopted (v3) | "Statistics discover defects. They never license a suspected false green." |
 | N85 | No credential-bearing step runs before the job lease's first renewal succeeds; `lockedUntil` becomes a conservative monotonic deadline. | GPT-6.2-Astra | — | Adopted (v3) | A lease lost before the first renewal cannot leave credentials in use by a job GitHub has reassigned. |
 | N86 | Idempotent publication with read-back; crates.io receives the exact packaged `.crate` bytes. | GPT-6.2-Astra, GPT-6.2-Sol | — | Adopted (v3) | A retried release cannot publish twice or publish bytes other than the verified ones. |
+| N87 | The candidate cannot weaken its own tests: the expected inventory, planned arguments and feature policy come from the trusted planner, and a plan that drops obligations or tests `main`'s plan has lists them as a reduction in the `Required` summary. | GPT-6.2-Sol (Rust-only round) | — | Adopted (v3) | Differential cases forge passing output and empty discovery; the controller rejects authority the candidate provides. Listing reductions makes a quietly deleted test visible to review. |
+| N88 | A third-site witness for any leader the two sites share (the ledger's), beside three k3s servers across failure domains. | GPT-6.2-Sol, GPT-6.2-Astra | — | Adopted (v3) | One k3s server cannot survive the loss of a node or site; two sites cannot elect a leader alone. |
 
 
 ## Load-bearing decisions
@@ -655,6 +657,20 @@ default, marked "pending ruling" in the design.
 | PR-scoped admission witness through the required-reviewer rule | Recorded: an alternative under pending ruling Q9 | The safe default keeps the check pending while a peer at the same SHA lacks the label |
 | Distinct required samples instead of repeated runs | Recorded under pending ruling Q12 | Two parallel executions are today's count |
 | Latest official runner v2.338.2, not the source checkout's v2.338.0 | Recorded under Q15; the harness tracks the release API | — |
+
+### Group 15: what v3 takes from GPT-6.2-Sol
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| A candidate cannot weaken its own tests: trusted inventory, arguments and policy; reductions listed | Adopted (N87) | A deleted or skipped test must be visible, not silent |
+| v2.338.2 adds broker-session ownership on deletion and a WebSocket connectivity probe | Adopted in the protocol scope (design §5.3) | Decision 3 means the latest release's behaviour |
+| A third failure-domain witness for shared leaders | Adopted (N88) | Two sites cannot elect a leader alone |
+| Exact `.crate` publication | Adopted (N86) | — |
+| Only 7 of 45 PR heads equalled their merge-group tree; v2's replays used integration trees | Adopted as the reason nothing counts on equal trees until a shadow measures it (pending ruling Q11) | — |
+| Fix test set-up and transfer cost before buying faster hardware | Adopted in the hardware table | The cheaper fix first |
+| App-owned commit status instead of a check run; managed topic refs and a ref-writer gateway for same-SHA aliasing | Recorded under pending rulings Q2 and Q9 | The safe defaults (App check; pending while a peer lacks the label) hold until the ruling |
+| Optimised Linux bytes built once on landed `main` | Recorded under pending ruling Q6 | The merge group is the safe default |
+| Pure sealed work starts on admission, before the job offer | Already in v3: work starts on the label or labelled push | — |
 
 ## Design review
 
