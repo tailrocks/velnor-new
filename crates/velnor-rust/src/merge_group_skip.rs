@@ -46,6 +46,24 @@ pub(crate) fn apply(jobs: &mut [Job], single: bool) {
         for step in job.steps.iter_mut().filter(|step| is_check(&step.kind)) {
             step.skip_after_merge_group = Some(from.clone());
         }
+        if !single && is_lint_job(job) {
+            skip_lint_job(job, &from);
+        }
+    }
+}
+
+fn is_lint_job(job: &Job) -> bool {
+    job.steps
+        .iter()
+        .any(|step| matches!(step.kind, StepKind::Lint(_)))
+}
+
+fn skip_lint_job(job: &mut Job, from: &PlanFrom) {
+    if !job.needs.contains(&PLAN_JOB) {
+        job.needs.push(PLAN_JOB);
+    }
+    for step in &mut job.steps {
+        step.skip_after_merge_group = Some(from.clone());
     }
 }
 
