@@ -106,6 +106,7 @@ pub struct RepoFacts {
     pub private_suggestion: Option<String>,
     pub unowned: BTreeMap<RepoPath, UnownedPackage>,
     pub policy: PolicyTools,
+    pub deny_configs: BTreeMap<RepoPath, RepoPath>,
     pub weakenings: Vec<Weakening>,
 }
 
