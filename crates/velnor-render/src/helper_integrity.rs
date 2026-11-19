@@ -37,6 +37,10 @@ pub(crate) fn secure_steps(job: &Job, steps: Vec<RenderedStep>) -> Vec<RenderedS
     }) else {
         return steps;
     };
+    secure_with(release, steps)
+}
+
+pub(crate) fn secure_with(release: &HelperRelease, steps: Vec<RenderedStep>) -> Vec<RenderedStep> {
     let mut secured = Vec::new();
     for mut step in steps {
         if step

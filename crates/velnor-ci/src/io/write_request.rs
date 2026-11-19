@@ -66,7 +66,7 @@ pub(super) fn run(args: &WriteRequestArgs) -> Result<String, CiError> {
         named_check_lanes: args.named_check_lanes.as_deref(),
         lane_inventory: args.lane_inventory.as_deref(),
     })?;
-    write_once(&anchor, &output, &bytes)?;
+    write_once(&anchor, &output, &bytes, "request")?;
     Ok(String::new())
 }
 
@@ -97,7 +97,12 @@ fn refuse_link(path: &Path) -> Result<(), CiError> {
     Ok(())
 }
 
-fn write_once(anchor: &Path, path: &Path, bytes: &[u8]) -> Result<(), CiError> {
+pub(super) fn write_once(
+    anchor: &Path,
+    path: &Path,
+    bytes: &[u8],
+    context: &str,
+) -> Result<(), CiError> {
     let parent = path.parent().unwrap_or_else(|| Path::new("."));
     let relative = parent
         .strip_prefix(anchor)
@@ -130,12 +135,15 @@ fn write_once(anchor: &Path, path: &Path, bytes: &[u8]) -> Result<(), CiError> {
         .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .map_err(|error| {
-            internal(if error.kind() == std::io::ErrorKind::AlreadyExists {
-                "request_exists"
-            } else {
-                "request_unwritable"
-            })
+            internal(&format!(
+                "{context}{}",
+                if error.kind() == std::io::ErrorKind::AlreadyExists {
+                    "_exists"
+                } else {
+                    "_unwritable"
+                }
+            ))
         })?;
     file.write_all(bytes)
-        .map_err(|_| internal("request_unwritable"))
+        .map_err(|_| internal(&format!("{context}_unwritable")))
 }

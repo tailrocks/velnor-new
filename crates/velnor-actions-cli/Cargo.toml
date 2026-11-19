@@ -155,7 +155,7 @@ serde-saphyr = "=2.1.1"
 velnor-actions-contract = { version = "=0.1.82", path = "../velnor-actions-contract" }
 velnor-actions-mise = { version = "=0.1.82", path = "../velnor-actions-mise" }
 proc-macro2 = "=1.0.107"
-flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+flate2 = { version = "=1.1.11", default-features = false, features = ["rust_backend"] }
 tar = { version = "=0.4.46", default-features = false }
 sha1-checked = { version = "=0.10.0", default-features = false }
 rustix = { version = "=1.1.6", features = ["fs", "process"] }

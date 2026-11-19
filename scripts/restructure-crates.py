@@ -22,7 +22,7 @@ RUNNER_CRATES = (
     "velnor-runner-image-manifest",
     "velnor-runner-qualification",
 )
-GENERATOR_CRATES = ("velnor-gen", "velnor-model", "velnor-release", "velnor-render", "velnor-rust")
+GENERATOR_CRATES = ("velnor-gen", "velnor-model", "velnor-release", "velnor-render", "velnor-rust", "velnor-workflows")
 MOVES = (
     ("ci-helper/crates/velnor-ci", "crates/velnor-ci", "ci-helper"),
     *((f"generator/crates/{name}", f"crates/{name}", "generator") for name in GENERATOR_CRATES),
@@ -67,6 +67,7 @@ PINS = {
     "serde-saphyr": ("2.1.0", "2.1.1"),
     "ureq": ("3.4.2", "3.5.2"),
     "syn": ("3.0.9", "3.0.10"),
+    "flate2": ("1.1.10", "1.1.11"),
 }
 KEEP_FEATURES = {
     "local/crates/velnor-local/Cargo.toml": (

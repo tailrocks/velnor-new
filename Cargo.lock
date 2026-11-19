@@ -1000,9 +1000,9 @@ checksum = "b7ac824320a75a52197e8f2d787f6a38b6718bb6897a35142d749af3c0e8f4fe"
 
 [[package]]
 name = "flate2"
-version = "1.1.10"
+version = "1.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e634e2e0ebac1ee034020da1ca582e17ffe4e0f5e985823721e168928136dcb"
+checksum = "626d4928326b646e70f65ed36fc7cf9f206bdb68a0019ee7c6b4709da4e084c4"
 dependencies = [
  "crc32fast",
  "miniz_oxide",
@@ -4456,9 +4456,10 @@ dependencies = [
 
 [[package]]
 name = "velnor-ci"
-version = "0.1.85"
+version = "0.1.87"
 dependencies = [
  "base64 0.23.1",
+ "blake3",
  "clap",
  "flate2",
  "libc",
@@ -4480,7 +4481,7 @@ dependencies = [
 
 [[package]]
 name = "velnor-gen"
-version = "0.1.85"
+version = "0.1.87"
 dependencies = [
  "clap",
  "serde-saphyr",
@@ -4491,6 +4492,7 @@ dependencies = [
  "velnor-release",
  "velnor-render",
  "velnor-rust",
+ "velnor-workflows",
 ]
 
 [[package]]
@@ -4536,6 +4538,7 @@ dependencies = [
  "serde_json",
  "velnor-model",
  "velnor-release",
+ "velnor-workflows",
 ]
 
 [[package]]
@@ -4677,6 +4680,15 @@ dependencies = [
  "sha2",
  "toml",
  "url",
+ "velnor-model",
+]
+
+[[package]]
+name = "velnor-workflows"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "toml",
  "velnor-model",
 ]
 
