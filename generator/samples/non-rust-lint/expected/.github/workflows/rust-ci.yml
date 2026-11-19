@@ -284,14 +284,14 @@ jobs:
         with:
           fetch-depth: 1
           persist-credentials: false
-      - name: Run alint
-        uses: asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3  # v0.22.1
+      - name: Install tools
+        uses: jdx/mise-action@236a21c3b91f5db6d4e174b348674a0f0caac06d
         with:
-          config: '.alint.yml'
-          fail-on-warning: true
-          format: github
-          path: '.'
-          version: v0.22.1
+          version: '2026.11.10'
+          cache: false
+          install_args: 'github:asamarts/alint'
+      - name: Run alint
+        run: alint --format github --config .alint.yml --fail-on-warning check .
       - name: Run scripts/alint-line-cap-probe.sh
         run: bash scripts/alint-line-cap-probe.sh
   lint-generator-samples:
@@ -314,7 +314,7 @@ jobs:
           cache: false
           install_args: jactionlint
       - name: Run the mise task lint-generator-samples
-        run: mise run --skip-tools lint-generator-samples
+        run: mise run --force --skip-tools lint-generator-samples
   # jactionlint ignore=shellcheck
   rust-trim:
     name: Cache maintenance

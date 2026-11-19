@@ -83,6 +83,7 @@ mod detect_private;
 mod job_shape;
 mod job_target_dir;
 mod job_trust_boundary;
+mod lint_checks;
 mod lint_gate;
 mod lint_lane;
 mod lock;

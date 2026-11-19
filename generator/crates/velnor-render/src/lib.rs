@@ -40,8 +40,8 @@ use velnor_model::{Access, PermissionScope, Permissions, RepoPath, WORKFLOW_PATH
 pub use crate::cache::{RenderedKey, render_key, render_key_with_mise};
 use crate::events::{concurrency, triggers};
 pub use crate::pinned_actions::{
-    ACTIONS_CACHE, ALINT, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
-    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
+    ACTIONS_CACHE, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN, DOCKER_SETUP_BUILDX,
+    GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
 };
 pub use crate::release::{RELEASE_HEADER, render_release};
 pub use crate::release_finalize::unfinalized_without_binary;
