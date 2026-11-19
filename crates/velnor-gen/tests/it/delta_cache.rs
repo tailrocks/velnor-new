@@ -14,9 +14,7 @@ fn source_repo(version: &str) -> Result<RepoView, Box<dyn std::error::Error>> {
         .get(&velnor_rust::LOCK_PATH)
         .ok_or("no lock")?
         .clone();
-    let mut repo = crate::golden::load(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/helper-source"),
-    )?;
+    let mut repo = crate::golden::load(&crate::golden::samples().join("helper-source"))?;
     repo.files.insert(velnor_rust::LOCK_PATH, lock);
     let config = repo
         .files
@@ -336,9 +334,7 @@ fn cleanup_uses_only_a_trusted_locked_helper_and_old_helpers_get_no_delta_flags(
 
 #[test]
 fn a_workspace_with_many_crates_stages_its_delta_through_one_package_variable() -> TestResult {
-    let repo = crate::golden::load(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/lab-150"),
-    )?;
+    let repo = crate::golden::load(&crate::golden::samples().join("lab-150"))?;
     let repo = with_helper(repo, "0.1.93", "0.1.95")?;
     let files = expected_files(&repo)?;
     let text = files
@@ -375,9 +371,7 @@ fn with_helper(
 
 #[test]
 fn a_workspace_locked_at_0_1_93_renders_no_delta_steps() -> TestResult {
-    let repo = crate::golden::load(
-        &std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../samples/lab-150"),
-    )?;
+    let repo = crate::golden::load(&crate::golden::samples().join("lab-150"))?;
     let files = expected_files(&repo)?;
     let text = files
         .get(&RepoPath::new(".github/workflows/rust-ci.yml")?)
