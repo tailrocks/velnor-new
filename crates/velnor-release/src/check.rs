@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 
 use serde::Deserialize;
-use velnor_model::Platform;
+use velnor_model::{Platform, token_permission_accesses, token_permission_accesses_prose};
 
 use crate::error::ReleaseError;
 use crate::plan::BinaryPlan;
@@ -13,26 +13,6 @@ use crate::velnor_config::refuse_expressions;
 
 const DEFAULT_CHECK_TIMEOUT_MINUTES: u16 = 30;
 const MAX_TIMEOUT_MINUTES: u16 = 360;
-const SCOPES: [&str; 18] = [
-    "actions",
-    "artifact-metadata",
-    "attestations",
-    "checks",
-    "code-quality",
-    "contents",
-    "copilot-requests",
-    "deployments",
-    "id-token",
-    "issues",
-    "models",
-    "packages",
-    "pages",
-    "pull-requests",
-    "security-events",
-    "statuses",
-    "discussions",
-    "vulnerability-alerts",
-];
 
 #[derive(Debug, Deserialize, Clone, Copy, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
@@ -114,12 +94,10 @@ fn permissions_of(
     let invalid = |problem| ReleaseError::InvalidCheck(name.to_owned(), problem);
     let mut all = declared;
     for (scope, access) in &all {
-        if !SCOPES.contains(&scope.as_str()) {
+        let Some(accesses) = token_permission_accesses(scope) else {
             return Err(invalid(CheckProblem::UnknownPermission(scope.clone())));
-        }
-        if !matches!(access.as_str(), "read" | "write" | "none")
-            || (scope == "id-token" && access == "read")
-        {
+        };
+        if !accesses.contains(&access.as_str()) {
             return Err(invalid(CheckProblem::InvalidAccess {
                 scope: scope.clone(),
                 access: access.clone(),
@@ -276,7 +254,8 @@ impl fmt::Display for CheckProblem {
             ),
             Self::InvalidAccess { scope, access } => write!(
                 f,
-                "permission {scope}: {access:?} is not valid; use read, write or none (id-token has no read)"
+                "permission {scope}: {access:?} is not valid; {}",
+                token_permission_accesses_prose(scope)
             ),
             Self::NeedsALaterStage(name) => write!(
                 f,

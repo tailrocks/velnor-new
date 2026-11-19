@@ -16,6 +16,7 @@ mod repo_config;
 mod selection;
 mod steps;
 mod test_group;
+mod token_permission;
 mod verdict;
 
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
@@ -58,6 +59,7 @@ pub use selection::{
     WORKFLOWS_CONFIG_PATH,
 };
 pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
+pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};
 pub use verdict::{JobCondition, VerdictJob, VerdictSpec};
 
 pub use steps::{
