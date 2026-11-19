@@ -235,6 +235,14 @@ pub(super) async fn has_unresolved_work(connection: &turso::Connection) -> Resul
     if has_charged_outside_sessions(connection, None, &sessions).await? {
         return Ok(true);
     }
+    let scale_set_deletes = scalar_count(
+        connection,
+        "SELECT COUNT(*) FROM connection_scale_set_deletes WHERE state IN ('requested', 'uncertain')",
+    )
+    .await?;
+    if scale_set_deletes != 0 {
+        return Ok(true);
+    }
     let operation_leases = scalar_count(
         connection,
         "SELECT COUNT(*) FROM host_operation_leases WHERE state != 'released'",

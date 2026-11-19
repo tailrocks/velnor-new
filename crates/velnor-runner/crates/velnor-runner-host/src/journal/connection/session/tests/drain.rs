@@ -186,6 +186,29 @@ async fn an_unsettled_session_delete_keeps_the_session_in_the_drain_count() -> T
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn a_pending_scale_set_delete_keeps_the_host_from_draining() -> TestResult {
+    let fx = fixture().await?;
+    bind_session(&fx.scope, NONCE, "session-1", 0).await?;
+    assert!(fx.journal.is_drained().await?);
+    for state in ["requested", "uncertain"] {
+        run(
+            &fx.journal,
+            &format!("INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, '{state}')"),
+        )
+        .await?;
+        assert!(!fx.journal.is_drained().await?, "{state}");
+        run(&fx.journal, "DELETE FROM connection_scale_set_deletes").await?;
+    }
+    run(
+        &fx.journal,
+        "INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, 'deleted')",
+    )
+    .await?;
+    assert!(fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn a_bound_session_plus_a_running_job_is_not_drained() -> TestResult {
     let fx = fixture().await?;
     bind_session(&fx.scope, NONCE, "session-1", 0).await?;
