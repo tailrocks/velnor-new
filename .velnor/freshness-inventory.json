@@ -103,12 +103,12 @@
       "checked_at": "2026-11-18T22:23:01.000Z",
       "key": "asamarts/alint",
       "latest": "v0.22.1",
-      "pinned_sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0",
-      "pinned_version": "v0.21.0",
-      "qualified_sha": "d61e4c802b02ac811224b35c59a62cfe5176f4d0",
-      "qualified_version": "v0.21.0",
+      "pinned_sha": "5054852d00d47affc9ea71440240147d9999f4d3",
+      "pinned_version": "v0.22.1",
+      "qualified_sha": "5054852d00d47affc9ea71440240147d9999f4d3",
+      "qualified_version": "v0.22.1",
       "source": "https://api.github.com/repos/asamarts/alint/releases/latest",
-      "status": "held"
+      "status": "current"
     },
     {
       "checked_at": "2026-11-18T22:23:01.000Z",
@@ -184,15 +184,6 @@
       "owner": "Alexey Zhokhov",
       "issue": "https://github.com/tailrocks/velnor-new/issues/531",
       "reason": "v2.6.0 published 2026-11-12T18:02:50Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
-      "granted": "2026-11-19",
-      "expires": "2026-12-03"
-    },
-    {
-      "key": "asamarts/alint",
-      "held_version": "v0.21.0",
-      "owner": "Alexey Zhokhov",
-      "issue": "https://github.com/tailrocks/velnor-new/issues/531",
-      "reason": "v0.22.1 published 2026-11-11T20:16:13Z has passed the 3-day default_cooldown_days window (.velnor/version-policy.toml) but is not yet qualified; the pinned update remains tracked under the existing qualification/toolchain work in https://github.com/tailrocks/velnor-new/issues/531 Extended 2026-11-19 for 14 days (previous window 2026-11-06..2026-11-20): the bump needs measured archives, controller pin updates, regenerated workflows and OpenTofu goldens as one qualified change.",
       "granted": "2026-11-19",
       "expires": "2026-12-03"
     },

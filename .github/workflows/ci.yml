@@ -55,13 +55,13 @@ jobs:
         with:
           persist-credentials: "false"
       - name: Run Alint
-        uses: asamarts/alint@d61e4c802b02ac811224b35c59a62cfe5176f4d0
+        uses: asamarts/alint@5054852d00d47affc9ea71440240147d9999f4d3
         with:
           config: .alint.yml
           fail-on-warning: "true"
           format: github
           path: .
-          version: v0.21.0
+          version: v0.22.1
       - name: Check the Rust line cap with probe files
         if: hashFiles('scripts/alint-line-cap-probe.sh') != ''
         run: env -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL -u ACTIONS_RUNTIME_TOKEN -u GITHUB_TOKEN -u MISE_GITHUB_TOKEN -u GH_TOKEN -u GH_HOST -u GH_CONFIG_DIR bash scripts/alint-line-cap-probe.sh
