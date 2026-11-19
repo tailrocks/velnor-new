@@ -24,6 +24,9 @@ pub(in crate::workflow) fn placement_for(
             "role_not_eligible",
         ));
     }
+    if class == LaneClass::Control {
+        return control_placement(execution, job_id);
+    }
     if class != LaneClass::Verification {
         return Ok(Placement::HostedOnly);
     }
@@ -77,12 +80,33 @@ pub(in crate::workflow) fn placement_for(
             ExecutionMode::Both => Placement::Both,
         });
     }
-    let key = execution
-        .overrides
-        .get(job_id)
-        .map_or(execution.default_profile.as_str(), |over| {
-            over.profile.as_str()
-        });
+    profile_placement(
+        execution,
+        job_id,
+        execution
+            .overrides
+            .get(job_id)
+            .map_or(execution.default_profile.as_str(), |over| {
+                over.profile.as_str()
+            }),
+    )
+}
+
+fn control_placement(
+    execution: &ExecutionConfig,
+    job_id: &str,
+) -> Result<Placement, ContractError> {
+    let Some(over) = execution.overrides.get(job_id) else {
+        return Ok(Placement::HostedOnly);
+    };
+    profile_placement(execution, job_id, &over.profile)
+}
+
+fn profile_placement(
+    execution: &ExecutionConfig,
+    job_id: &str,
+    key: &str,
+) -> Result<Placement, ContractError> {
     if key == execution.hosted_profile {
         Ok(Placement::HostedOnly)
     } else if key == execution.scale_set_profile {

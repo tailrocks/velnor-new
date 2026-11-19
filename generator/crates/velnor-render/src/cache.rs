@@ -3,6 +3,7 @@
 
 use velnor_model::{CacheKey, CacheKeySegment, CachePath, RepoPath};
 
+use crate::gate::SOURCES_LOCKS_STEP;
 use crate::steps::{MISE_VERSION, PREPARE_STEP};
 
 const HOST: &str = "${{ runner.os }}-${{ runner.arch }}";
@@ -31,7 +32,10 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
             CacheKeySegment::Host => HOST.to_owned(),
             CacheKeySegment::TargetOwner { job, root } => format!("{job}.{root}.{HOST}"),
             CacheKeySegment::Compat => format!("${{{{ steps.{PREPARE_STEP}.outputs.compat }}}}"),
-            CacheKeySegment::Lock(path) => hash_files(path),
+            CacheKeySegment::Lock(path) => hash_files(std::slice::from_ref(path)),
+            CacheKeySegment::SourcesLocks => {
+                format!("${{{{ steps.{SOURCES_LOCKS_STEP}.outputs.hash }}}}")
+            }
             CacheKeySegment::Mise => format!("mise{mise_version}"),
             CacheKeySegment::Commit => COMMIT.to_owned(),
             CacheKeySegment::RunId => RUN_ID.to_owned(),
@@ -48,11 +52,12 @@ pub fn render_key_with_mise(key: &CacheKey, mise_version: &str) -> RenderedKey {
     }
 }
 
-fn hash_files(path: &RepoPath) -> String {
-    format!(
-        "${{{{ hashFiles({}) }}}}",
-        string_expression(&glob_literal(path.as_str()))
-    )
+pub(crate) fn hash_files(paths: &[RepoPath]) -> String {
+    let patterns: Vec<String> = paths
+        .iter()
+        .map(|path| string_expression(&glob_literal(path.as_str())))
+        .collect();
+    format!("${{{{ hashFiles({}) }}}}", patterns.join(", "))
 }
 
 pub(crate) fn glob_literal(text: &str) -> String {

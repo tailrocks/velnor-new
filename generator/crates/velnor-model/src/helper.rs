@@ -56,6 +56,7 @@ pub enum Platform {
 
 impl Platform {
     pub const ALL: [Self; 3] = [Self::LinuxX64, Self::LinuxArm64, Self::MacosArm64];
+    pub const REQUIRED: [Self; 2] = [Self::LinuxX64, Self::LinuxArm64];
 
     #[must_use]
     pub const fn file_suffix(self) -> &'static str {
