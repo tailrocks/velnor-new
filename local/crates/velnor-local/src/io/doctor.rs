@@ -9,6 +9,7 @@ use super::supervisor::default_host;
 use crate::cli::DoctorArgs;
 use crate::doctor::{
     BUILD_FIX, PLAIN_IMAGES, Part, docker, healthy, host, pair_images, plain_images, render,
+    vm_memory,
 };
 use crate::images::TARGETS;
 
@@ -56,7 +57,11 @@ async fn host_part(explicit: Option<&Path>) -> Part {
     }
 }
 
-pub async fn inspect<E: Engine>(engine: &E, velnor_host: Option<&Path>) -> Vec<Part> {
+pub async fn inspect<E: Engine>(
+    engine: &E,
+    velnor_host: Option<&Path>,
+    runner_memory: u64,
+) -> Vec<Part> {
     let info = engine
         .docker(&["info", "--format", "{{.OperatingSystem}}|{{.Architecture}}"])
         .await;
@@ -68,6 +73,8 @@ pub async fn inspect<E: Engine>(engine: &E, velnor_host: Option<&Path>) -> Vec<P
             "{{.Endpoints.docker.Host}}",
         ])
         .await;
+    let memory = engine.docker(&["info", "--format", "{{.MemTotal}}"]).await;
+    let total = memory.ok().and_then(|text| text.trim().parse::<u64>().ok());
     let (plain, pair) = if info.is_ok() {
         (
             Some(missing(engine, PLAIN_IMAGES.iter().map(|(tag, _)| *tag)).await),
@@ -81,6 +88,7 @@ pub async fn inspect<E: Engine>(engine: &E, velnor_host: Option<&Path>) -> Vec<P
             info.as_deref().map_err(|_| ()),
             socket.as_deref().map_err(|_| ()),
         ),
+        vm_memory(total, runner_memory),
         plain_images(plain.as_deref()),
         pair_images(pair.as_deref()),
         host_part(velnor_host).await,
@@ -88,7 +96,7 @@ pub async fn inspect<E: Engine>(engine: &E, velnor_host: Option<&Path>) -> Vec<P
 }
 
 pub(super) async fn run(args: DoctorArgs) -> io::Result<()> {
-    let parts = inspect(&DockerCli, args.velnor_host.as_deref()).await;
+    let parts = inspect(&DockerCli, args.velnor_host.as_deref(), args.runner_memory).await;
     print!("{}", render(&parts));
     if healthy(&parts) {
         return Ok(());

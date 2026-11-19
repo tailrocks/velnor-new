@@ -57,6 +57,9 @@ impl Supervisor {
             runner_memory_bytes: self.plan.limits.runner_memory_bytes,
             dind_cpu_millicores: self.plan.limits.dind_cpu_millicores,
             dind_memory_bytes: self.plan.limits.dind_memory_bytes,
+            home_bytes: self.plan.storage.home,
+            work_bytes: self.plan.storage.work,
+            tmp_bytes: self.plan.storage.tmp,
         }
     }
 

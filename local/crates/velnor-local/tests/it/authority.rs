@@ -340,6 +340,11 @@ fn authority_has_no_address_option_and_run_takes_keep() {
         "policy",
         "repo",
         "label",
+        "runner_memory_bytes",
+        "runner_cpu_millicores",
+        "home_bytes",
+        "work_bytes",
+        "tmp_bytes",
     ]
     .map(str::to_owned);
     assert_eq!(supervise, Some((true, names.to_vec())));

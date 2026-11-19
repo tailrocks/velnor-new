@@ -5,6 +5,9 @@ use std::path::PathBuf;
 
 use clap::{Args, ValueEnum};
 
+use super::StorageArgs;
+use crate::pairs::{Limits, parse_cpus, parse_memory};
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
 pub enum RunnerMode {
     Pair,
@@ -66,6 +69,24 @@ pub struct EnvironmentArgs {
         help = "Start the API stub with --job-cache-admin: every job can list and delete the cache entries of every scope through the GitHub cache API, whatever its permissions and event. Off by default: a job then needs `actions: write` on an event that is not a pull request, as on GitHub, and gets 403 otherwise"
     )]
     pub job_cache_admin: bool,
+    #[arg(
+        long,
+        default_value = "6g",
+        value_name = "SIZE",
+        value_parser = parse_memory,
+        help = "Memory limit of each runner in pair mode (the dind keeps 2 GiB); a whole number with m or g, at least 512m. Plain mode sets no limits"
+    )]
+    pub runner_memory: u64,
+    #[arg(
+        long,
+        default_value = "4",
+        value_name = "N",
+        value_parser = parse_cpus,
+        help = "CPU limit of each runner in pair mode, decimals allowed (1.5); stored in millicores. Plain mode sets no limits"
+    )]
+    pub runner_cpus: u64,
+    #[command(flatten)]
+    pub storage: StorageArgs,
 }
 
 pub fn runner_label(text: &str) -> Result<String, String> {
@@ -94,11 +115,22 @@ impl Default for EnvironmentArgs {
             velnor_ci_binary: None,
             label: Vec::new(),
             job_cache_admin: false,
+            runner_memory: Limits::default().runner_memory_bytes,
+            runner_cpus: Limits::default().runner_cpu_millicores,
+            storage: StorageArgs::default(),
         }
     }
 }
 
 impl EnvironmentArgs {
+    #[must_use]
+    pub const fn limits(&self) -> Limits {
+        Limits {
+            runner_cpu_millicores: self.runner_cpus,
+            runner_memory_bytes: self.runner_memory,
+        }
+    }
+
     #[must_use]
     pub const fn containers(&self, runners: u16) -> u16 {
         match self.runner {

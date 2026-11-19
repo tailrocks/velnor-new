@@ -32,16 +32,17 @@ velnor-local doctor
 velnor-local run warm --repo "$LAB" --dir "$STATE" --workflow .github/workflows/mbx-default.yml --repository tailrocks/velnor-lab --keep
 ```
 
-`doctor` checks four parts and prints `ok` or `miss` for each (images read `n/a` when Docker is unreachable, because it cannot tell), with one `fix:` line for every part that is missing. It exits 1 when any part is `miss`, and 0 when all are `ok`:
+`doctor` checks five parts and prints `ok` or `miss` for each (images read `n/a` when Docker is unreachable, because it cannot tell), with one `fix:` line for every part that is missing. It exits 1 when any part is `miss`, and 0 when none is:
 
 | Part | `ok` when | `fix:` |
 |---|---|---|
 | docker | `docker info` answers and the daemon is linux/arm64; it names OrbStack or Docker and the socket | start OrbStack or Docker Desktop |
+| docker vm memory | `docker info` reports at least one pair's memory plus 1 GiB: the runner (`--runner-memory`, 6g by default) + the dind (2 GiB) + 1 GiB headroom, so 9 GiB by default; `n/a` when it cannot be read | raise OrbStack's Settings > System > Memory limit (it defaults to half the host's RAM, at most 8 GiB, which is just short of one default pair), or lower `--runner-memory` |
 | stand-in, cache server and plain runner images | `velnor-local/runner-server`, `velnor-local/runner` and `velnor-local/cache-server` exist | the `docker build` line of each missing image |
 | pair images | `velnor-local/pair-runner`, `velnor-local/pair-dind` and `velnor-local/pair-probe` exist | `velnor-local build` |
 | velnor-host with local mode | the `velnor-host` that `build` left in the checkout answers `local --help`, so it was built with `local-mode` | `velnor-local build` |
 
-`doctor --velnor-host <path>` checks another binary. The first `doctor` above prints `miss` for the pair images and for `velnor-host`; after `velnor-local build` the second prints `ok` four times. `velnor-ci` writes the metrics file of each run; `run` finds it on `PATH`, or `--velnor-ci <path>` names it. `--keep` leaves the environment up after the verdict, so `status` has something to show. `run` prints `success` for each run and, in pair mode, `pair trusted-N, admitted` under each job; the verdict ends with the executed, stood in and not exercised lines.
+`doctor --velnor-host <path>` checks another binary; `doctor --runner-memory <size>` checks the VM against the runner memory you will pass to `up` or `run`. The first `doctor` above prints `miss` for the pair images and for `velnor-host`; after `velnor-local build` the second prints `ok` five times. `velnor-ci` writes the metrics file of each run; `run` finds it on `PATH`, or `--velnor-ci <path>` names it. `--keep` leaves the environment up after the verdict, so `status` has something to show. `run` prints `success` for each run and, in pair mode, `pair trusted-N, admitted` under each job; the verdict ends with the executed, stood in and not exercised lines.
 
 To look at a running environment, ask for its status from another terminal while `run --keep` or `up` has it up:
 
@@ -78,6 +79,8 @@ The binary is unverified by design: this is for a developer's own machine, and t
 | Cleanup | GitHub | the journal, then GitHub's admin API | containers, volumes, networks and agents removed by label and by name; removals recorded in `cleanup.jsonl` |
 
 `pair` runs your jobs the way the self-hosted runner does, behind the same job-start check; `plain` runs the official runner image with no check and is for a machine that cannot build the pair images (`doctor` says when `pair` cannot run and which command fixes it). The verdict names the mode and says what ran for real, what was stood in and what was not exercised.
+
+In pair mode each runner container gets 4 CPUs and 6 GiB, and each dind 2 CPUs and 2 GiB. `up` and `run` take `--runner-cpus <N>` (decimals allowed, `1.5`) and `--runner-memory <SIZE>` (`512m`, `6g`, `6GiB`; at least 512m) to change the runner's share; the dind's is fixed. `plain` mode sets no limits, so the flags do nothing there. Give `doctor` the same `--runner-memory` to check that the Docker VM can hold one pair. `up` and `run` also take `--home-size` (the runner's `/home/runner` volume, 2g by default), `--work-size` (its `/home/runner/_work` volume, 16g) and `--tmp-size` (its `/tmp` tmpfs, 2g), each `1g` to `64g`; the dind's `/tmp` and data keep their sizes. The caps are tmpfs ceilings, not reservations: the pages count against the memory of the container that writes them, so a write past `--runner-memory` is OOM-killed before it reaches `--work-size`, and `doctor` needs no change. `plain` mode has no caps and refuses these flags.
 
 ## Safety rules
 

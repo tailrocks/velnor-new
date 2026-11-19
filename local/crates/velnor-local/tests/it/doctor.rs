@@ -13,11 +13,15 @@ use velnor_local::doctor::{Part, healthy, render};
 use velnor_local::images::TARGETS;
 use velnor_local::io::doctor::inspect;
 use velnor_local::io::env::Engine;
+use velnor_local::pairs::Limits;
 
 use crate::support::temp_dir;
 
+const GIB: u64 = 1 << 30;
+
 struct Docker {
     info: Option<&'static str>,
+    memory: Option<&'static str>,
     context: bool,
     images: BTreeSet<&'static str>,
 }
@@ -25,6 +29,7 @@ struct Docker {
 impl Engine for Docker {
     fn docker(&self, args: &[&str]) -> impl Future<Output = io::Result<String>> + Send {
         let answer = match args {
+            ["info", "--format", "{{.MemTotal}}"] => self.memory.map(str::to_owned),
             ["info", ..] => self.info.map(str::to_owned),
             ["context", "inspect", ..] => self
                 .context
@@ -54,6 +59,7 @@ const ALL: [&str; 6] = [
 fn docker(without: &[&str]) -> Docker {
     Docker {
         info: Some("OrbStack|aarch64"),
+        memory: Some("17179869184"),
         context: true,
         images: ALL
             .into_iter()
@@ -73,7 +79,11 @@ fn host(name: &str, local_mode: bool) -> PathBuf {
 }
 
 async fn report(docker: &Docker, host: &Path) -> (Vec<Part>, String) {
-    let parts = inspect(docker, Some(host)).await;
+    report_with(docker, host, Limits::default().runner_memory_bytes).await
+}
+
+async fn report_with(docker: &Docker, host: &Path, runner_memory: u64) -> (Vec<Part>, String) {
+    let parts = inspect(docker, Some(host), runner_memory).await;
     let text = render(&parts);
     (parts, text)
 }
@@ -82,7 +92,7 @@ async fn report(docker: &Docker, host: &Path) -> (Vec<Part>, String) {
 async fn everything_present_prints_ok_for_every_part_and_is_healthy() {
     let (parts, text) = report(&docker(&[]), &host("doctor-ok", true)).await;
     assert!(healthy(&parts), "{text}");
-    assert_eq!(text.lines().count(), 4, "{text}");
+    assert_eq!(text.lines().count(), 5, "{text}");
     assert!(text.lines().all(|line| line.starts_with("ok ")), "{text}");
     assert!(
         text.contains("docker: OrbStack, linux/arm64, unix:///Users/me/.orbstack/run/docker.sock"),
@@ -137,6 +147,7 @@ async fn a_host_without_local_mode_or_without_a_file_is_a_miss_with_the_build_fi
 async fn unreachable_docker_and_other_architectures_are_misses() {
     let down = Docker {
         info: None,
+        memory: None,
         context: true,
         images: BTreeSet::new(),
     };
@@ -223,4 +234,65 @@ async fn an_explicit_missing_host_names_that_path_in_the_fix() {
         "{text}"
     );
     assert!(!text.contains("fix: velnor-local build"), "{text}");
+}
+
+#[tokio::test]
+async fn a_vm_of_8_gib_cannot_hold_a_default_pair_and_the_fix_names_orbstack() {
+    let small = Docker {
+        memory: Some("8589934592"),
+        ..docker(&[])
+    };
+    let (parts, text) = report(&small, &host("doctor-vm-small", true)).await;
+    assert!(!healthy(&parts), "{text}");
+    let miss: Vec<&str> = text
+        .lines()
+        .filter(|line| line.starts_with("miss"))
+        .collect();
+    assert_eq!(miss.len(), 1, "{text}");
+    assert!(miss[0].contains("docker vm memory"), "{text}");
+    assert!(miss[0].contains("8 GiB"), "{text}");
+    assert!(miss[0].contains("9 GiB"), "{text}");
+    assert!(
+        miss[0].contains("OrbStack Settings > System > Memory limit"),
+        "{text}"
+    );
+    assert!(miss[0].contains("--runner-memory"), "{text}");
+}
+
+#[tokio::test]
+async fn a_vm_of_16_gib_is_ok_and_a_smaller_runner_memory_flips_the_8_gib_case() {
+    let (parts, text) = report(&docker(&[]), &host("doctor-vm-big", true)).await;
+    assert!(healthy(&parts), "{text}");
+    assert!(text.contains("ok    docker vm memory"), "{text}");
+    let small = Docker {
+        memory: Some("8589934592"),
+        ..docker(&[])
+    };
+    let (parts, text) = report_with(&small, &host("doctor-vm-flag", true), 2 * GIB).await;
+    assert!(healthy(&parts), "{text}");
+    assert!(text.contains("ok    docker vm memory"), "{text}");
+}
+
+#[tokio::test]
+async fn an_unreadable_vm_memory_is_unknown_and_not_a_miss() {
+    for memory in [None, Some("lots")] {
+        let blind = Docker {
+            memory,
+            ..docker(&[])
+        };
+        let (parts, text) = report(&blind, &host("doctor-vm-blind", true)).await;
+        assert!(healthy(&parts), "{text}");
+        assert!(text.contains("n/a   docker vm memory"), "{text}");
+        assert!(!text.contains("miss"), "{text}");
+    }
+}
+
+#[test]
+fn doctor_takes_a_runner_memory_that_must_be_a_valid_size() {
+    let parsed = Cli::try_parse_from(["velnor-local", "doctor", "--runner-memory", "2g"]);
+    assert!(matches!(
+        parsed.map(|cli| cli.command),
+        Ok(Command::Doctor(args)) if args.runner_memory == 2 * GIB
+    ));
+    assert!(Cli::try_parse_from(["velnor-local", "doctor", "--runner-memory", "0"]).is_err());
 }

@@ -5,13 +5,18 @@ use std::path::PathBuf;
 
 use clap::{Args, Parser, Subcommand};
 
+use crate::pairs::{
+    DEFAULT_RUNNER_CPU_MILLICORES, DEFAULT_RUNNER_MEMORY_BYTES, Limits, parse_memory,
+};
 use crate::side::Side;
 
 mod environment;
 mod servers;
+mod sizes;
 
 pub use environment::{EnvironmentArgs, RunnerMode, runner_label};
 pub use servers::{ApiStubArgs, CacheServerArgs, ControlArgs};
+pub use sizes::{StorageArgs, SuperviseSizes};
 
 #[derive(Debug, Parser)]
 #[command(name = "velnor-local", version, about = "The local GitHub environment")]
@@ -94,6 +99,22 @@ pub struct SuperviseArgs {
         help = "Extra runner label to register for every minted runner; `up` passes the --label values"
     )]
     pub label: Vec<String>,
+    #[arg(long, default_value_t = DEFAULT_RUNNER_MEMORY_BYTES, help = "Memory limit of each runner container, in bytes")]
+    pub runner_memory_bytes: u64,
+    #[arg(long, default_value_t = DEFAULT_RUNNER_CPU_MILLICORES, help = "CPU limit of each runner container, in millicores")]
+    pub runner_cpu_millicores: u64,
+    #[command(flatten)]
+    pub sizes: SuperviseSizes,
+}
+
+impl SuperviseArgs {
+    #[must_use]
+    pub const fn limits(&self) -> Limits {
+        Limits {
+            runner_cpu_millicores: self.runner_cpu_millicores,
+            runner_memory_bytes: self.runner_memory_bytes,
+        }
+    }
 }
 
 #[derive(Debug, Args)]
@@ -108,6 +129,14 @@ pub struct BuildArgs {
 
 #[derive(Debug, Args)]
 pub struct DoctorArgs {
+    #[arg(
+        long,
+        default_value = "6g",
+        value_name = "SIZE",
+        value_parser = parse_memory,
+        help = "Runner memory that the run will ask for (as `up --runner-memory`), so the Docker VM memory check matches it"
+    )]
+    pub runner_memory: u64,
     #[arg(
         long,
         help = "velnor-host to check instead of the one built in the checkout that holds this executable"

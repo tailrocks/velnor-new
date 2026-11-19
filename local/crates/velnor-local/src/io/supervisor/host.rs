@@ -15,7 +15,7 @@ use crate::cli::{EnvironmentArgs, RunnerMode};
 use crate::images::{DIND_TAG, HOST_BINARY, RUNNER_TAG};
 use crate::io::env::{DockerCli, Environment, program};
 use crate::io::pair::write_private;
-use crate::pairs::{MARKER, PlanInput, listening, plan, slots};
+use crate::pairs::{Limits, MARKER, PlanInput, Sizes, listening, plan, slots};
 use crate::side::Side;
 
 const LISTENING_TIMEOUT: Duration = Duration::from_secs(300);
@@ -30,6 +30,8 @@ pub struct Pairs {
     pub untrusted: u16,
     pub policy: Option<PathBuf>,
     pub labels: Vec<String>,
+    pub limits: Limits,
+    pub storage: Sizes,
 }
 
 pub(super) fn runner_dir(dir: &Path) -> PathBuf {
@@ -79,6 +81,13 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
                 "--policy needs --runner pair: plain containers have no job-start check",
             ));
         }
+        let given = args.storage.given();
+        if !given.is_empty() {
+            return Err(io::Error::other(format!(
+                "{} needs --runner pair: plain containers have no tmpfs caps",
+                given.join(", ")
+            )));
+        }
         return Ok(None);
     }
     let missing = |error: io::Error| {
@@ -105,6 +114,8 @@ pub(crate) async fn pairs(args: &EnvironmentArgs) -> io::Result<Option<Pairs>> {
         untrusted: args.fork_runners,
         policy,
         labels: args.label.clone(),
+        limits: args.limits(),
+        storage: args.storage.storage(),
     }))
 }
 
@@ -127,6 +138,16 @@ impl Pairs {
             self.trusted.to_string(),
             "--fork-pairs".to_owned(),
             self.untrusted.to_string(),
+            "--runner-memory-bytes".to_owned(),
+            self.limits.runner_memory_bytes.to_string(),
+            "--runner-cpu-millicores".to_owned(),
+            self.limits.runner_cpu_millicores.to_string(),
+            "--home-bytes".to_owned(),
+            self.storage.home_bytes.to_string(),
+            "--work-bytes".to_owned(),
+            self.storage.work_bytes.to_string(),
+            "--tmp-bytes".to_owned(),
+            self.storage.tmp_bytes.to_string(),
         ];
         if self.policy.is_some() {
             arguments.extend(["--policy".to_owned(), "--repo".to_owned()]);
@@ -191,7 +212,7 @@ pub(super) async fn spawn(
     authority: &str,
     token: &str,
     (trusted, untrusted): (u16, u16),
-    policy: bool,
+    (policy, limits, storage): (bool, Limits, Sizes),
 ) -> io::Result<Child> {
     let state = runner_dir(&env.dir);
     fs::create_dir_all(&state).await?;
@@ -221,6 +242,8 @@ pub(super) async fn spawn(
         dind_image: &dind_image,
         sides: &sides,
         policy: policy.then_some(POLICY),
+        limits,
+        storage,
     })
     .to_string();
     write_plan(&state, &planned).await?;

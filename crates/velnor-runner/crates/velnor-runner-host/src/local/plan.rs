@@ -10,6 +10,8 @@ use serde::Deserialize;
 
 use crate::error::HostError;
 
+use super::storage::Sizes;
+
 pub const MARKER: &str = "velnor-local";
 const MAX_PLAN_BYTES: u64 = 64 * 1024;
 const MAX_PAIRS_PER_SIDE: u32 = 64;
@@ -91,6 +93,8 @@ struct Raw {
     runner_image: String,
     dind_image: String,
     limits: Limits,
+    #[serde(default)]
+    storage: Option<Sizes>,
     sides: Vec<SidePlan>,
     #[serde(default)]
     policy: Option<String>,
@@ -105,6 +109,7 @@ pub struct Plan {
     pub runner_image: String,
     pub dind_image: String,
     pub limits: Limits,
+    pub storage: Sizes,
     pub sides: Vec<SidePlan>,
     pub policy: Option<String>,
 }
@@ -157,6 +162,7 @@ impl Plan {
             runner_image: raw.runner_image,
             dind_image: raw.dind_image,
             limits: raw.limits,
+            storage: raw.storage.unwrap_or_default().checked()?,
             sides: raw.sides,
             policy: raw.policy,
         })

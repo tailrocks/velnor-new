@@ -4,6 +4,7 @@
 use std::fmt::Write as _;
 
 use crate::images::TARGETS;
+use crate::pairs::Limits;
 
 pub const STANDIN_IMAGE: &str = "velnor-local/runner-server";
 pub const CACHE_IMAGE: &str = "velnor-local/cache-server";
@@ -55,7 +56,7 @@ impl Part {
 
 #[must_use]
 pub fn healthy(parts: &[Part]) -> bool {
-    parts.iter().all(|part| part.fix.is_none() && part.known)
+    parts.iter().all(|part| part.fix.is_none())
 }
 
 #[must_use]
@@ -139,5 +140,49 @@ pub fn host(found: Result<&str, &str>, fix: &str) -> Part {
     match found {
         Ok(path) => Part::ok(format!("velnor-host with local mode: {path}")),
         Err(reason) => Part::miss(format!("velnor-host with local mode: {reason}"), fix),
+    }
+}
+
+const HEADROOM_BYTES: u64 = 1 << 30;
+
+fn gib(bytes: u64) -> String {
+    let tenths = bytes * 10 / (1 << 30);
+    if tenths.is_multiple_of(10) {
+        format!("{} GiB", tenths / 10)
+    } else {
+        format!("{}.{} GiB", tenths / 10, tenths % 10)
+    }
+}
+
+/// Checks that the Docker VM can hold one pair (runner plus dind) and 1 GiB for the VM itself.
+/// `total` is the VM memory that `docker info` reports, or `None` when it could not be read.
+#[must_use]
+pub fn vm_memory(total: Option<u64>, runner_memory: u64) -> Part {
+    let limits = Limits {
+        runner_memory_bytes: runner_memory,
+        ..Limits::default()
+    };
+    let needed = limits.pair_memory_bytes() + HEADROOM_BYTES;
+    let Some(total) = total else {
+        return Part::unknown("docker vm memory: unknown (not reported by docker info)");
+    };
+    let what = format!(
+        "docker vm memory: {} of {} needed (one pair: runner {} + dind {} + {} headroom)",
+        gib(total),
+        gib(needed),
+        gib(runner_memory),
+        gib(limits.pair_memory_bytes() - runner_memory),
+        gib(HEADROOM_BYTES),
+    );
+    if total >= needed {
+        Part::ok(what)
+    } else {
+        Part::miss(
+            what,
+            format!(
+                "raise the VM memory to at least {}: OrbStack Settings > System > Memory limit (Docker Desktop: Settings > Resources), or lower --runner-memory",
+                gib(needed)
+            ),
+        )
     }
 }

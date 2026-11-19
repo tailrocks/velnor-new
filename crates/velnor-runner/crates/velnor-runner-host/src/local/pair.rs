@@ -15,13 +15,13 @@ use crate::error::HostError;
 use crate::journal::StorageRole;
 use crate::launch::BootstrapContainerRole;
 use crate::launch::bootstrap::containers::pair::{PairCreate, PairSpecContext, create_body};
-use crate::launch::bootstrap::containers::storage_object::tmpfs_options;
 use crate::worker::{WorkerContainerRole, WorkerVolumeRole};
 
 use super::io::{MetadataUpload, upload_to_metadata};
+use super::layout;
 use super::remove::{Removed, remove_labelled};
 use super::request::{LocalPairRequest, Validated, validate};
-use super::{layout, storage};
+use super::storage::{self, Sizes};
 
 pub const ENVIRONMENT_LABEL: &str = "velnor-local";
 pub(super) const PAIR_LABEL: &str = "velnor-local.pair";
@@ -129,11 +129,12 @@ async fn create_and_start(
             names.volume_name(role),
             role,
             labels(volume_role(role)),
+            &validated.sizes,
         )
         .await?;
     }
     prefill_metadata(docker, request, validated).await?;
-    let plan = storage::plan(request.sequence);
+    let plan = storage::plan(request.sequence, &validated.sizes);
     let context = PairSpecContext {
         plan: &plan,
         names,
@@ -194,23 +195,9 @@ async fn create_volume(
     name: String,
     role: WorkerVolumeRole,
     labels: HashMap<String, String>,
+    sizes: &Sizes,
 ) -> Result<(), HostError> {
-    let storage_role = storage_role(role);
-    let driver_opts = if storage::on_tmpfs(storage_role) {
-        let mut options = tmpfs_options(
-            storage::charge_bytes(storage_role),
-            storage::charge_inodes(storage_role),
-        )?;
-        if matches!(role, WorkerVolumeRole::Home | WorkerVolumeRole::Work) {
-            options
-                .get_mut("o")
-                .ok_or(HostError::Identity)?
-                .push_str(layout::RUNNER_OWNED_ROOT);
-        }
-        Some(options)
-    } else {
-        None
-    };
+    let driver_opts = storage::driver_opts(storage_role(role), sizes)?;
     docker_deadline(docker.create_volume(VolumeCreateRequest {
         name: Some(name),
         driver: Some("local".to_owned()),
