@@ -209,6 +209,32 @@ fn an_empty_page_before_the_advertised_count_is_refused() {
 }
 
 #[test]
+fn a_count_that_changes_between_pages_is_refused() {
+    let first = JOBS.replace("\"total_count\": 3", "\"total_count\": 4");
+    let second = r#"{"total_count": 3, "jobs": [{"id": 7, "name": "Late", "status": "completed",
+        "conclusion": "success", "created_at": "2026-11-12T08:50:00Z",
+        "started_at": "2026-11-12T08:50:10Z", "completed_at": "2026-11-12T08:50:40Z", "steps": []}]}"#;
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &first);
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 2), second);
+    fake.respond(job_log_path(&repo(), 7), "");
+    let message = error_text(collect(&fake, &repo(), RUN_ID, false));
+    assert!(message.contains("changed during pagination"), "{message}");
+}
+
+#[test]
+fn more_jobs_than_the_advertised_count_are_refused() {
+    let fewer = JOBS.replace("\"total_count\": 3", "\"total_count\": 2");
+    let mut fake = FakeGitHub::recorded();
+    fake.respond(jobs_path(&repo(), RUN_ID, 1, 1), &fewer);
+    let message = error_text(collect(&fake, &repo(), RUN_ID, false));
+    assert!(
+        message.contains("refusing incomplete jobs data"),
+        "{message}"
+    );
+}
+
+#[test]
 fn an_advertised_count_of_zero_is_complete() {
     let none = r#"{"total_count": 0, "jobs": []}"#;
     let mut fake = FakeGitHub::recorded();

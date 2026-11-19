@@ -9,6 +9,8 @@ use velnor_runner_core::{
 type TestResult<T> = Result<T, Box<dyn std::error::Error>>;
 
 const FULL_ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+const UPPER_ID: &str = "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF";
+const NON_HEX_ID: &str = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdeg";
 const SHORT_ID: &str = "0123456789ab";
 const WORKER_NAME: &str = "w0123456789abcdef0123456789abcdef-runner";
 
@@ -45,6 +47,8 @@ fn only_a_full_container_id_and_a_named_volume_release_capacity() -> TestResult<
         (SHORT_ID, "vol-work"),
         (FULL_ID, ""),
         (WORKER_NAME, "vol-work"),
+        (UPPER_ID, "vol-work"),
+        (NON_HEX_ID, "vol-work"),
     ] {
         let (owned, proof) = ids(container_id, volume);
         let (mut capacity, worker) = cleaning_capacity(&owned)?;

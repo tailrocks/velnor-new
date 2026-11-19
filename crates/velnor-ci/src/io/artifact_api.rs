@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, Read, Seek, SeekFrom};
+use std::path::Path;
+
 use ureq::http::Response;
 
 use super::http::DEFAULT_TIMEOUT;
@@ -30,7 +34,7 @@ impl ArtifactApi {
         Self { agent, api, token }
     }
 
-    fn fetch(&self, path: &str, limit: u64) -> Result<Vec<u8>, CiError> {
+    fn get(&self, path: &str) -> Result<Response<ureq::Body>, CiError> {
         let url = format!("{}{path}", self.api);
         let response: Result<Response<ureq::Body>, ureq::Error> = self
             .agent
@@ -40,29 +44,62 @@ impl ArtifactApi {
             .header("X-GitHub-Api-Version", "2022-11-28")
             .header("User-Agent", "velnor-ci")
             .call();
-        let mut response = response.map_err(|e| {
+        response.map_err(|e| {
             let message = format!("GET {path}: {e}");
-            if matches!(e, ureq::Error::StatusCode(404 | 410)) {
+            // A 404 can be a listed artifact that is not readable yet, so it is retried; a 410
+            // says the artifact has expired for good.
+            if matches!(e, ureq::Error::StatusCode(410)) {
                 CiError::missing(message)
             } else {
                 CiError::new(message)
             }
-        })?;
+        })
+    }
+
+    fn fetch(&self, path: &str, limit: u64) -> Result<Vec<u8>, CiError> {
+        let mut response = self.get(path)?;
         super::read_limited(response.body_mut().as_reader(), limit)
             .map_err(|e| e.context(&format!("GET {path}")))
     }
 
-    fn fetch_retrying(&self, path: &str, limit: u64) -> Result<Vec<u8>, CiError> {
+    fn fetch_to_file(&self, path: &str, limit: u64, scratch: &Path) -> Result<File, CiError> {
+        let mut response = self.get(path)?;
+        let context = |e: &dyn std::fmt::Display| CiError::new(format!("GET {path}: {e}"));
+        let mut file = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create_new(true)
+            .open(scratch)
+            .map_err(|e| context(&format!("cannot create {}: {e}", scratch.display())))?;
+        fs::remove_file(scratch)
+            .map_err(|e| context(&format!("cannot unlink {}: {e}", scratch.display())))?;
+        let copied = io::copy(
+            &mut response.body_mut().as_reader().take(limit + 1),
+            &mut file,
+        )
+        .map_err(|e| context(&e))?;
+        if copied > limit {
+            return Err(context(&format!("response is larger than {limit} bytes")));
+        }
+        file.seek(SeekFrom::Start(0)).map_err(|e| context(&e))?;
+        Ok(file)
+    }
+
+    fn retrying<T>(mut attempt_once: impl FnMut() -> Result<T, CiError>) -> Result<T, CiError> {
         let mut attempt = 1;
         loop {
-            match self.fetch(path, limit) {
-                Ok(bytes) => return Ok(bytes),
+            match attempt_once() {
+                Ok(value) => return Ok(value),
                 Err(error) if error.is_missing() || attempt == ATTEMPTS => {
                     return Err(error.context(&format!("failed after {attempt} attempts")));
                 }
                 Err(_) => attempt += 1,
             }
         }
+    }
+
+    fn fetch_retrying(&self, path: &str, limit: u64) -> Result<Vec<u8>, CiError> {
+        Self::retrying(|| self.fetch(path, limit))
     }
 
     pub(super) fn list(&self, repo: &Repo, run_id: u64) -> Result<Vec<Listed>, CiError> {
@@ -86,10 +123,9 @@ impl ArtifactApi {
         )))
     }
 
-    pub(super) fn download(&self, repo: &Repo, id: u64) -> Result<Vec<u8>, CiError> {
-        self.fetch_retrying(
-            &format!("/repos/{repo}/actions/artifacts/{id}/zip"),
-            ARCHIVE_LIMIT,
-        )
+    /// Streams the archive into `scratch`, an unlinked file, so no archive is held in memory.
+    pub(super) fn download(&self, repo: &Repo, id: u64, scratch: &Path) -> Result<File, CiError> {
+        let path = format!("/repos/{repo}/actions/artifacts/{id}/zip");
+        Self::retrying(|| self.fetch_to_file(&path, ARCHIVE_LIMIT, scratch))
     }
 }

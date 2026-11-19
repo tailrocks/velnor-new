@@ -46,6 +46,7 @@ mod declared_workflow;
 mod default_branch;
 mod delta_budget;
 mod delta_cache;
+mod delta_helper;
 mod detect;
 mod doc_steps;
 mod docs_run;
