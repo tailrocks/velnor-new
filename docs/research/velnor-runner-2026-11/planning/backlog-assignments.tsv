@@ -1,0 +1,10 @@
+group	streams	author	reviewer
+G1	V	opus-5.5	gemini-4-argon
+G2	L RV	fable-5.2	gpt-6.2-astra
+G3	X	gpt-6.2-sol	opus-5.5
+G4	H O	gpt-6.2-astra	fable-5.2
+G5	P F	muse-wonder-full-1.0	gemini-4-carbon
+G6	A	muse-wonder-1.0	gemini-4-neon
+G7	ST	gemini-4-neon	muse-wonder-full-1.0
+G8	C T S	gemini-4-carbon	muse-wonder-1.0
+G9	B G R	gemini-4-argon	gpt-6.2-sol

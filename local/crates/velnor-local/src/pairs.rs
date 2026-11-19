@@ -15,7 +15,7 @@ const RUNNER_MEMORY_BYTES: u64 = 6 << 30;
 const DIND_CPU_MILLICORES: u64 = 2000;
 const DIND_MEMORY_BYTES: u64 = 2 << 30;
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct PlanInput<'a> {
     pub environment: &'a str,
     pub authority: &'a str,

@@ -11,6 +11,10 @@ use velnor_runner_github::{
 };
 
 mod common;
+#[path = "poll_statistics/hook_event_ref.rs"]
+mod hook_event_ref;
+#[path = "poll_statistics/scale_set_group.rs"]
+mod scale_set_group;
 #[path = "poll_statistics/zero_request_id.rs"]
 mod zero_request_id;
 

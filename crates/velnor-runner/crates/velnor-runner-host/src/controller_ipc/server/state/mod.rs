@@ -18,6 +18,8 @@ use session_observation::{SessionObservationCoordinator, SessionObservationTicke
 mod setup_receipt;
 pub(crate) use setup_receipt::SetupReceiptInput;
 mod connection_census;
+mod scale_set_delete;
+use scale_set_delete::ScaleSetDeleteTickets;
 mod session_polls;
 pub(crate) use session_polls::SessionPollReceipt;
 use session_polls::binding_sha256;
@@ -35,6 +37,7 @@ pub(crate) struct ControlState {
     readiness_sample: Arc<RwLock<Option<ReadinessSample>>>,
     admission_ready: Arc<AtomicBool>,
     doctor_report: Arc<RwLock<Option<(String, serde_json::Value, Instant)>>>,
+    scale_set_deletes: Arc<Mutex<ScaleSetDeleteTickets>>,
 }
 
 struct ObservationStart<'a> {
@@ -60,6 +63,7 @@ impl ControlState {
             readiness_sample: Arc::new(RwLock::new(None)),
             admission_ready: Arc::new(AtomicBool::new(false)),
             doctor_report: Arc::new(RwLock::new(None)),
+            scale_set_deletes: Arc::new(Mutex::new(ScaleSetDeleteTickets::default())),
         }
     }
 
@@ -340,3 +344,5 @@ impl ControlState {
 
 #[cfg(test)]
 mod observation_start_tests;
+#[cfg(test)]
+mod session_poll_receipt_tests;

@@ -259,6 +259,21 @@ impl HeaderLedger {
     }
 
     #[must_use]
+    pub(crate) fn unsettled_allocations(&self) -> Vec<HeaderAllocation> {
+        self.records
+            .values()
+            .filter(|record| {
+                record.is_charged()
+                    && (record.in_flight_poll.is_some()
+                        || record.in_flight_delete.is_some()
+                        || record.delete_uncertain
+                        || record.state == GenerationState::Uncertain)
+            })
+            .map(HeaderRecord::allocation)
+            .collect()
+    }
+
+    #[must_use]
     pub(crate) fn fairness_cursor(&self) -> Option<ConnectionId> {
         self.records
             .values()

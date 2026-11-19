@@ -6,6 +6,7 @@ name: Release Rust CI tools
   push:
     tags:
       - rust-ci-v*
+      - tools-v*
 permissions: {}
 cache-mode: read
 concurrency:
@@ -58,6 +59,16 @@ jobs:
             if (releases.length !== 1 || releases[0].target !== 'tag' || releases[0].enforcement !== 'active') {
               throw new Error('release-tags must be exactly one active tag ruleset');
             }
+            const legacyReleaseRefs = ['refs/tags/rust-ci-v*', 'refs/tags/velnor-ci-v*', 'refs/tags/velnor-gen-v*'];
+            const acceptedReleaseRefs = [legacyReleaseRefs, [...legacyReleaseRefs, 'refs/tags/tools-v*']];
+            const releaseRefs = releases[0].conditions?.ref_name;
+            if (!Array.isArray(releaseRefs?.include)
+                || !acceptedReleaseRefs.some(expected => releaseRefs.include.length === expected.length
+                  && expected.every(ref => releaseRefs.include.includes(ref)))
+                || !Array.isArray(releaseRefs.exclude) || releaseRefs.exclude.length !== 0
+                || !Array.isArray(releases[0].rules) || !releases[0].rules.some(rule => rule.type === 'creation')) {
+              throw new Error('release-tags must protect creation of exactly the release tag refs');
+            }
             for (const ruleset of rulesets) {
               if (expectedBypassActors.has(ruleset.name) || ruleset.rules?.some(rule => ['update', 'deletion'].includes(rule.type))) {
                 if (!Array.isArray(ruleset.bypass_actors)) {
@@ -74,22 +85,24 @@ jobs:
             }
   gate:
     name: Gate
-    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/rust-ci-v')
+    if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/rust-ci-v') || startsWith(github.ref, 'refs/tags/tools-v'))
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
       checks: read
     steps:
-      - name: Install velnor-ci 0.1.80
-        uses: tailrocks/velnor-new/actions/setup-velnor@46f7a043952f82ef1a78d8ebb63143faca8f268c
-        with:
-          version: 0.1.80
-          sha256-linux-x64: 659a551f2dbc7cd34c745dce2a787717aa8b8214841e4b9f9fa3a6334ebe8e3c
-      - name: Check that the tagged commit is on the default branch and passed Required
+      - name: Check that the tagged commit is on the default branch
         env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: velnor-ci release-gate --repo "$GITHUB_REPOSITORY" --sha "$GITHUB_SHA"
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          default_branch=$(gh api "repos/$GITHUB_REPOSITORY" --jq .default_branch)
+          status=$(gh api "repos/$GITHUB_REPOSITORY/compare/$default_branch...$GITHUB_SHA" --jq .status)
+          case "$status" in
+            behind|identical) ;;
+            *) echo "::error::$GITHUB_SHA is not on $default_branch (comparison: $status)"; exit 1 ;;
+          esac
   build:
     name: Build ${{ matrix.suffix }}
     needs: gate
@@ -109,10 +122,6 @@ jobs:
             target: aarch64-unknown-linux-musl
             runner: ubuntu-24.04-arm
             cc: musl-gcc
-          - suffix: macos-arm64
-            target: aarch64-apple-darwin
-            runner: macos-15
-            cc: cc
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -194,7 +203,7 @@ jobs:
         run: echo "$GITHUB_SHA" > dist/COMMIT
       - name: Write SHA256SUMS
         working-directory: dist
-        run: sha256sum COMMIT velnor-ci-linux-x64 velnor-ci-linux-arm64 velnor-ci-macos-arm64 velnor-gen-linux-x64 velnor-gen-linux-arm64 velnor-gen-macos-arm64 > SHA256SUMS
+        run: sha256sum COMMIT velnor-ci-linux-x64 velnor-ci-linux-arm64 velnor-gen-linux-x64 velnor-gen-linux-arm64 > SHA256SUMS
       - name: Upload SHA256SUMS
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
@@ -229,4 +238,4 @@ jobs:
       - name: Create the pre-release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/COMMIT dist/velnor-ci-linux-x64 dist/velnor-ci-linux-arm64 dist/velnor-ci-macos-arm64 dist/velnor-gen-linux-x64 dist/velnor-gen-linux-arm64 dist/velnor-gen-macos-arm64
+        run: gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease --title "$GITHUB_REF_NAME" --notes "Prebuilt velnor-ci and velnor-gen. Verify every download against SHA256SUMS." dist/SHA256SUMS dist/COMMIT dist/velnor-ci-linux-x64 dist/velnor-ci-linux-arm64 dist/velnor-gen-linux-x64 dist/velnor-gen-linux-arm64

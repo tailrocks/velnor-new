@@ -11,7 +11,6 @@ autotests = false
 
 [lib]
 doctest = false
-test = false
 
 [features]
 test-render-capture = []
@@ -25,18 +24,18 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 toml = { version = "=1.1.8" }
 rustix = { version = "=1.1.6", features = ["fs"] }
-velnor-actions-actionlint = { version = "=0.1.80", path = "../velnor-actions-actionlint" }
-velnor-actions-bun = { version = "=0.1.80", path = "../velnor-actions-bun" }
-velnor-actions-dbt = { version = "=0.1.80", path = "../velnor-actions-dbt" }
-velnor-actions-contract = { version = "=0.1.80", path = "../velnor-actions-contract" }
-velnor-actions-mise = { version = "=0.1.80", path = "../velnor-actions-mise" }
-velnor-actions-rust = { version = "=0.1.80", path = "../velnor-actions-rust" }
-velnor-actions-tofu = { version = "=0.1.80", path = "../velnor-actions-tofu" }
+velnor-actions-actionlint = { version = "=0.1.82", path = "../velnor-actions-actionlint" }
+velnor-actions-bun = { version = "=0.1.82", path = "../velnor-actions-bun" }
+velnor-actions-dbt = { version = "=0.1.82", path = "../velnor-actions-dbt" }
+velnor-actions-contract = { version = "=0.1.82", path = "../velnor-actions-contract" }
+velnor-actions-mise = { version = "=0.1.82", path = "../velnor-actions-mise" }
+velnor-actions-rust = { version = "=0.1.82", path = "../velnor-actions-rust" }
+velnor-actions-tofu = { version = "=0.1.82", path = "../velnor-actions-tofu" }
 
 [dev-dependencies]
 serde-saphyr = "=2.1.0"
 tempfile = { version = "=3.27.0" }
-velnor-actions-mise = { version = "=0.1.80", path = "../velnor-actions-mise" }
+velnor-actions-mise = { version = "=0.1.82", path = "../velnor-actions-mise" }
 
 [[test]]
 name = "velnor_workflow_renderer"
@@ -51,16 +50,8 @@ name = "product_release_binary_public"
 path = "tests/product_release_binary_public.rs"
 
 [[test]]
-name = "prune_tools"
-path = "tests/prune_tools.rs"
-
-[[test]]
 name = "mbx_stats"
 path = "tests/mbx_stats.rs"
-
-[[test]]
-name = "prune_state"
-path = "tests/prune_state.rs"
 
 [[test]]
 name = "rust_tree_digest_pin"
@@ -94,9 +85,6 @@ path = "tests/source_preview_loader_public.rs"
 name = "cargo_source_handoff_public"
 path = "tests/cargo_source_handoff_public.rs"
 
-[[test]]
-name = "premerge_event_proof_public"
-path = "tests/premerge_event_proof_public.rs"
 [[test]]
 name = "runner_draft_publication_public"
 path = "tests/runner_draft_publication_public.rs"

@@ -18,7 +18,7 @@ mod mbx;
 #[path = "preseed_order.rs"]
 mod order;
 
-pub use digest::{source_bound_helper_digest, source_bound_helper_digest_input};
+pub use digest::source_bound_helper_digest;
 pub use order::check_preseed_step_order;
 
 pub const PRESEED_ARTIFACT_NAME: &str = "velnor-preseed-helper";

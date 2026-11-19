@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use std::fmt;
+use std::time::Duration;
 
 use serde::Deserialize;
 
@@ -12,6 +13,7 @@ pub trait GitHub {
 }
 
 pub trait GitHubWrite: GitHub {
+    fn wait(&self, duration: Duration);
     fn upload(&self, url: &str, bytes: &[u8]) -> Result<String, CiError>;
     fn patch(&self, path: &str, json: &str) -> Result<String, CiError>;
     fn delete(&self, path: &str) -> Result<(), CiError>;
@@ -166,6 +168,14 @@ pub struct ApiWorkflowRun {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ApiMergeGroupRun {
+    pub event: String,
+    pub status: String,
+    pub head_sha: String,
+    pub conclusion: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct ApiListedRun {
     pub id: u64,
     pub event: String,
@@ -256,6 +266,15 @@ pub fn statuses_path(repo: &Repo, sha: &str, page: u32) -> String {
 pub fn runs_path(repo: &Repo, sha: &str, page: u32) -> String {
     format!(
         "/repos/{repo}/actions/runs?head_sha={sha}&exclude_pull_requests=true&per_page=100&page={page}"
+    )
+}
+
+#[must_use]
+pub fn merge_group_runs_path(repo: &Repo, workflow_file: &str, sha: &str) -> String {
+    format!(
+        "/repos/{repo}/actions/workflows/{}/runs?head_sha={}&event=merge_group&status=success&per_page=100",
+        encode(workflow_file),
+        encode(sha)
     )
 }
 

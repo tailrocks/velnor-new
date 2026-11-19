@@ -55,6 +55,8 @@ struct Dependency {
     name: String,
     kind: Option<String>,
     target: Option<String>,
+    #[serde(default)]
+    optional: bool,
     path: Option<PathBuf>,
     #[serde(default)]
     features: Vec<String>,
@@ -118,6 +120,7 @@ fn dependency_of(
         name: PackageName::new(dependency.name).map_err(invalid)?,
         kind,
         platform: dependency.target,
+        optional: dependency.optional,
         manifest: dependency
             .path
             .map(|path| repo_path(repository, &path.join("Cargo.toml")))

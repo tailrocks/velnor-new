@@ -3,7 +3,7 @@
 
 use super::selected_mise::BIND_SELECTED_MISE_FUNCTION;
 
-pub const JACTIONLINT_VERSION: &str = "2.4.0";
+pub const JACTIONLINT_VERSION: &str = "2.6.0";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct JactionlintDigest {
@@ -20,32 +20,32 @@ pub struct JactionlintDigest {
 
 pub const JACTIONLINT_DIGESTS: &[JactionlintDigest] = &[
     JactionlintDigest {
-        version: "2.4.0",
+        version: "2.6.0",
         platform: "linux-arm64",
-        asset: "jactionlint_2.4.0_linux_arm64.tar.gz",
-        archive_sha256: "42413391c248f99ff4550d6c866ee717d5ea4ca2b966d9d54ad1503af955e22f",
-        executable_sha256: "5be2560b719b1764a7ff9a5983cd47dd0bd0f538cb35baed8d598c536e0cee35",
+        asset: "jactionlint_2.6.0_linux_arm64.tar.gz",
+        archive_sha256: "c726185a85f26d09aa94ea556509a19827979074b35d65f357f3a4947573e934",
+        executable_sha256: "57a5df96bc89edeb0aba733d2e6f853fabe51a9974e51eba1aeb5a057dd33b5e",
     },
     JactionlintDigest {
-        version: "2.4.0",
+        version: "2.6.0",
         platform: "linux-x64",
-        asset: "jactionlint_2.4.0_linux_amd64.tar.gz",
-        archive_sha256: "26ddba81db28fffc51163175c070ee1a9d1150260de4b5232f01d9b749f32d8e",
-        executable_sha256: "70e41eb37cdd89a305f9a433e230976732fe2ef5f674bbea8d68322ae583bdd0",
+        asset: "jactionlint_2.6.0_linux_amd64.tar.gz",
+        archive_sha256: "d5400967b8f0d3a5ae9a4cee21f56400a50eb3f05d0cbb4ef17184f17f0760c8",
+        executable_sha256: "0793a4bcfd85a1cdf89296038fa86222c7a630bac2e7f0c988cbf2eb55f368c9",
     },
     JactionlintDigest {
-        version: "2.4.0",
+        version: "2.6.0",
         platform: "macos-arm64",
-        asset: "jactionlint_2.4.0_darwin_arm64.tar.gz",
-        archive_sha256: "349a13dbffdd25376898a256d195806afda08ba97ccc6378cbf2dd11a77ef8e7",
-        executable_sha256: "4dff3e799bd47c5b19363c1c7d6f86d09cc2ce41112aede55fb1bfc982eb8643",
+        asset: "jactionlint_2.6.0_darwin_arm64.tar.gz",
+        archive_sha256: "c3f373c7eac668aacb390b9c802cf4b5e2ad1a11b0b0c0aea6b04ca0cfa0c018",
+        executable_sha256: "5dcd300c53abadb27c824d48d2d32a911e248344ce7f03f41d7d728fc0389db9",
     },
     JactionlintDigest {
-        version: "2.4.0",
+        version: "2.6.0",
         platform: "macos-x64",
-        asset: "jactionlint_2.4.0_darwin_amd64.tar.gz",
-        archive_sha256: "4c21fce834f8267b65a65b32a527aaa2ec1c321c8f066d44b42d7f038835aa90",
-        executable_sha256: "39bbd9e4bf6302fa92bc12cebf933b26fad58b6e76d8468c464ae3880f2ef453",
+        asset: "jactionlint_2.6.0_darwin_amd64.tar.gz",
+        archive_sha256: "aa89c49ad5c9530f2308f18333166050f97f14d420f478a8225d043bef1e2cab",
+        executable_sha256: "9977d023ce27b6a9943f2e5e2e9c575581a9f4240b54c014bd3fe487d3ebbdcc",
     },
 ];
 

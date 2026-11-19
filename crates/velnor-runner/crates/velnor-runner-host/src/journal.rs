@@ -47,6 +47,8 @@ pub(crate) use connection::ListenerDeliveryClaim;
 pub(crate) use connection::NativeCompletionReservation;
 pub(crate) use connection::PreJitCleanupSettlementResult;
 pub(crate) use connection::TerminalReplayBinding;
+#[cfg(test)]
+pub(crate) use connection::reservation_release_ready;
 pub(crate) use connection::{
     LocalWorkerExitDisposition, LocalWorkerExitKind, LocalWorkerExitObservation,
     LocalWorkerHealthCandidate,
@@ -57,6 +59,10 @@ pub(crate) use connection::{
 };
 pub(crate) use connection::{
     PostJitRetirementCandidate, PostJitRetirementClaim, PreparedRetirementRemoteAbsence,
+};
+pub(crate) use connection::{
+    ScaleSetDeleteClaim, ScaleSetDeleteGate, ScaleSetDeleteMode, ScaleSetDeleteRecord,
+    ScaleSetDeleteTarget, ScaleSetDeleted,
 };
 pub(crate) use connection::{
     UnboundInitializer, UnboundResourceKind, UnboundRetirementClaim, UnboundRetirementInventory,

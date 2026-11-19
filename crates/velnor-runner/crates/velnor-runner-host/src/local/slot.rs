@@ -128,7 +128,10 @@ impl Supervisor {
                     });
                     pause(&mut stop).await;
                 }
-                Err(failure) => return Err(failure.error),
+                Err(failure) => {
+                    eprintln!("pair {} failed: {}", slot.label, failure.error);
+                    return Err(failure.error);
+                }
                 Ok(()) => failed = 0,
             }
         }
@@ -347,16 +350,9 @@ impl Supervisor {
 async fn wait_exit(docker: &bollard::Docker, id: &str) -> Result<(), HostError> {
     let mut waiting = docker.wait_container(id, None::<WaitContainerOptions>);
     match waiting.next().await {
-        None
-        | Some(
-            Ok(_)
-            | Err(
-                DockerError::DockerContainerWaitError { .. }
-                | DockerError::DockerResponseServerError {
-                    status_code: 404, ..
-                },
-            ),
-        ) => Ok(()),
-        Some(Err(_)) => Err(HostError::Docker),
+        Some(Ok(response)) if response.status_code == 0 && response.error.is_none() => Ok(()),
+        Some(Ok(_)) => Err(HostError::RunnerExited),
+        Some(Err(DockerError::DockerContainerWaitError { .. })) => Err(HostError::RunnerExited),
+        Some(Err(_)) | None => Err(HostError::Docker),
     }
 }
