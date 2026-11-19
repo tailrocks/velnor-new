@@ -46,6 +46,7 @@ mod reusable;
 mod reusable_on;
 mod rule_messages;
 mod rules;
+mod selection_name;
 mod steps;
 mod tests;
 mod tools_steps;

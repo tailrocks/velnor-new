@@ -182,6 +182,7 @@ mod tests {
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
             reports_ignored: false,
+            selection_name: None,
             steps: kinds.into_iter().map(step).collect(),
         }
     }

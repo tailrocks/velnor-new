@@ -17,8 +17,8 @@ use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
 use crate::checkout_step::checkout_step;
 use crate::gate::{
-    PLAN_STEP, Setup, admission, all_conditions, check_name, condition, merge_group_skipped,
-    output, plan_read, plan_source, sources_step, verdict_step,
+    PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
+    plan_source, sources_step, verdict_step,
 };
 use crate::helper_steps::{inputs_step, restore_inputs_step, restored_targets_step};
 use crate::permission_pairs;
@@ -60,7 +60,7 @@ pub(crate) fn rendered_job(job: &Job, plan: &WorkflowPlan) -> RenderedJob {
     RenderedJob {
         id: job.id.to_string(),
         name: job.name.clone(),
-        check_name: check_name(job.name.as_ref(), job.pr),
+        check_name: crate::selection_name::title(job),
         comment: job.comment.clone(),
         env,
         needs: job.needs.iter().map(ToString::to_string).collect(),

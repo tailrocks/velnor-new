@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod budget_mode;
 mod cache;
 mod cache_layout;
 mod cache_outputs;
@@ -19,6 +20,7 @@ mod test_group;
 mod token_permission;
 mod verdict;
 
+pub use budget_mode::{BUDGET_JOB_NAME, BUDGET_MODES_HELPER, ModeBudget, Selection, SelectionName};
 pub use cache::{CacheKey, CachePath, CacheRoot, Host, LockIdentity};
 pub use cache_layout::{
     CACHE_COMPAT_LENGTH, CacheKeyLayout, CacheKeySegment, LOCK_OUTPUT_PREFIX,
@@ -55,8 +57,8 @@ pub use repo::{
 };
 pub use selection::{
     AllTrigger, CACHE_TRIM_WORKFLOW_PATH, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH,
-    RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SelectionReason, SkipReason, StepNeed,
-    WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
+    RELEASE_PLZ_FILE, RELEASE_WORKFLOW_PATH, RustSelection, SAMPLES, SelectionReason, SkipReason,
+    StepNeed, WORKFLOW_PATH, WORKFLOWS_CONFIG_PATH,
 };
 pub use test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
 pub use token_permission::{token_permission_accesses, token_permission_accesses_prose};

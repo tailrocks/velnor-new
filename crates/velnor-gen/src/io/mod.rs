@@ -11,7 +11,7 @@ use std::process::Command as Process;
 pub use std::process::ExitCode as Exit;
 
 use clap::{CommandFactory, FromArgMatches};
-use velnor_model::{RepoPath, RepoView};
+use velnor_model::{RepoPath, RepoView, SAMPLES};
 use velnor_rust::METADATA_PATH;
 
 mod check;
@@ -36,8 +36,8 @@ pub use read::{add_manifests, read_files, view_of};
 use read::{read_tracked, read_view, regular_file};
 pub use recorded::{read_recorded_checkout, write_metadata};
 pub use sample::{
-    Recording, SAMPLE_REPOSITORY, SAMPLES, SampleWriteOutcome, record_sample, recorded_files,
-    recording_of, relocate_metadata, write_sample,
+    Recording, SAMPLE_REPOSITORY, SampleWriteOutcome, record_sample, recorded_files, recording_of,
+    relocate_metadata, write_sample,
 };
 use tracked::tracked_sizes;
 use workflows::{ENGINE_CONFIG, workflow_paths};

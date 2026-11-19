@@ -1,7 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use velnor_model::SpeedBudget;
+use velnor_model::{Selection, SpeedBudget};
+
+pub use crate::budget_report::{budget_text, current_report, report};
 
 pub const RUNS_USED: usize = 10;
 pub const SLOWEST_JOBS: usize = 3;
@@ -29,9 +31,29 @@ impl Population {
     }
 }
 
+/// A kind of run measured against its own history: the event and, when the
+/// workflow records it, what the plan selected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Group {
+    pub population: Population,
+    pub mode: Option<Selection>,
+}
+
+impl Group {
+    #[must_use]
+    pub fn name(self) -> String {
+        match self.mode {
+            Some(mode) => format!("{} {} selection", self.population.name(), mode.name()),
+            None => self.population.name().to_owned(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Sample {
     pub run_id: u64,
+    /// What the plan of the run selected; `None` when the run does not say.
+    pub selection: Option<Selection>,
     pub wall_seconds: u64,
     pub runner_seconds: u64,
     pub setup_seconds: Option<u64>,
@@ -41,6 +63,7 @@ pub struct Sample {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct History {
     pub population: Population,
+    pub mode: Option<Selection>,
     pub samples: Vec<Sample>,
 }
 
@@ -81,6 +104,7 @@ impl Source {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Breach {
     pub population: Population,
+    pub mode: Option<Selection>,
     pub measure: Measure,
     pub source: Source,
     pub value: u64,
@@ -90,6 +114,7 @@ pub struct Breach {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Medians {
     pub population: Population,
+    pub mode: Option<Selection>,
     pub samples: usize,
     pub wall_seconds: u64,
     pub runner_seconds: u64,
@@ -99,6 +124,7 @@ pub struct Medians {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct JobDelta {
     pub population: Population,
+    pub mode: Option<Selection>,
     pub name: String,
     pub seconds: u64,
     pub median: u64,
@@ -110,6 +136,36 @@ pub struct Evaluation {
     pub missing: Vec<String>,
     pub medians: Vec<Medians>,
     pub slowest_jobs: Vec<JobDelta>,
+}
+
+impl Breach {
+    #[must_use]
+    pub fn group(&self) -> Group {
+        Group {
+            population: self.population,
+            mode: self.mode,
+        }
+    }
+}
+
+impl Medians {
+    #[must_use]
+    pub fn group(&self) -> Group {
+        Group {
+            population: self.population,
+            mode: self.mode,
+        }
+    }
+}
+
+impl JobDelta {
+    #[must_use]
+    pub fn group(&self) -> Group {
+        Group {
+            population: self.population,
+            mode: self.mode,
+        }
+    }
 }
 
 impl Evaluation {
@@ -160,12 +216,12 @@ fn measure_kinds(budget: &SpeedBudget, histories: &[History], evaluation: &mut E
             .push("the generated workflow has no successful run to measure".to_owned());
         return;
     }
-    if budget.pr_wall_seconds > 0 && pull_requests == 0 {
+    if budget.limits_pull_request_wall() && pull_requests == 0 {
         evaluation
             .missing
             .push("the pull request runs are not measured".to_owned());
     }
-    if budget.main_wall_seconds > 0 && default_branch == 0 {
+    if budget.limits_main_wall() && default_branch == 0 {
         evaluation
             .missing
             .push("the default branch runs are not measured".to_owned());
@@ -187,37 +243,42 @@ fn measure_population(budget: &SpeedBudget, history: &History, evaluation: &mut 
         .map(|sample| sample.setup_seconds)
         .collect::<Option<Vec<u64>>>()
         .and_then(median);
+    let group = Group {
+        population: history.population,
+        mode: history.mode,
+    };
+    let limits = budget.for_mode(history.mode);
     evaluation.medians.push(Medians {
         population: history.population,
+        mode: history.mode,
         samples: window,
         wall_seconds: wall.unwrap_or_default(),
         runner_seconds: runner.unwrap_or_default(),
         setup_seconds: setup,
     });
-    let wall_budget = budget.wall_seconds(history.population.is_pull_request());
     compare(
         evaluation,
-        history.population,
+        group,
         Measure::Wall,
-        wall_budget,
+        limits.wall_seconds(history.population.is_pull_request()),
         Some(latest.wall_seconds),
         wall,
         window > 1,
     );
     compare(
         evaluation,
-        history.population,
+        group,
         Measure::Runner,
-        budget.runner_seconds,
+        limits.runner_seconds,
         Some(latest.runner_seconds),
         runner,
         window > 1,
     );
     compare(
         evaluation,
-        history.population,
+        group,
         Measure::Setup,
-        budget.setup_seconds,
+        limits.setup_seconds,
         latest.setup_seconds,
         setup,
         window > 1,
@@ -227,7 +288,7 @@ fn measure_population(budget: &SpeedBudget, history: &History, evaluation: &mut 
 
 fn compare(
     evaluation: &mut Evaluation,
-    population: Population,
+    group: Group,
     measure: Measure,
     threshold: u64,
     latest: Option<u64>,
@@ -239,7 +300,8 @@ fn compare(
     }
     match latest {
         Some(latest) if latest > threshold => evaluation.breaches.push(Breach {
-            population,
+            population: group.population,
+            mode: group.mode,
             measure,
             source: Source::Latest,
             value: latest,
@@ -248,7 +310,7 @@ fn compare(
         Some(_) => {}
         None => evaluation.missing.push(format!(
             "the {} {} of the latest run is not measured",
-            population.name(),
+            group.name(),
             measure.name()
         )),
     }
@@ -257,7 +319,8 @@ fn compare(
     }
     match median {
         Some(median) if median > threshold => evaluation.breaches.push(Breach {
-            population,
+            population: group.population,
+            mode: group.mode,
             measure,
             source: Source::Median,
             value: median,
@@ -266,7 +329,7 @@ fn compare(
         Some(_) => {}
         None => evaluation.missing.push(format!(
             "the {} {} of the measured runs is not measured",
-            population.name(),
+            group.name(),
             measure.name()
         )),
     }
@@ -295,6 +358,7 @@ fn job_deltas(history: &History) -> Vec<JobDelta> {
         if *seconds > median {
             deltas.push(JobDelta {
                 population: history.population,
+                mode: history.mode,
                 name: name.clone(),
                 seconds: *seconds,
                 median,
@@ -316,83 +380,4 @@ pub fn median(values: impl IntoIterator<Item = u64>) -> Option<u64> {
         1 => values[middle],
         _ => values[middle - 1] + values[middle].abs_diff(values[middle - 1]).div_ceil(2),
     })
-}
-
-#[must_use]
-pub fn budget_text(budget: &SpeedBudget) -> String {
-    let mut parts = Vec::new();
-    for (name, seconds) in [
-        ("pull request wall seconds", budget.pr_wall_seconds),
-        ("default branch wall seconds", budget.main_wall_seconds),
-        ("runner seconds", budget.runner_seconds),
-        ("setup seconds", budget.setup_seconds),
-    ] {
-        parts.push(if seconds == 0 {
-            format!("{name} off")
-        } else {
-            format!("{name} {seconds}s")
-        });
-    }
-    parts.join(", ")
-}
-
-#[must_use]
-pub fn current_report(budget: &SpeedBudget, wall_seconds: u64, runner_seconds: u64) -> String {
-    let limit = |seconds: u64| {
-        if seconds == 0 {
-            "off".to_owned()
-        } else {
-            format!("{seconds}s")
-        }
-    };
-    format!(
-        "this run so far: wall {wall_seconds}s (default branch budget {}), runner {runner_seconds}s (budget {})\n",
-        limit(budget.main_wall_seconds),
-        limit(budget.runner_seconds)
-    )
-}
-
-#[must_use]
-pub fn report(budget: &SpeedBudget, evaluation: &Evaluation) -> String {
-    let mut lines = vec![format!("speed budget: {}", budget_text(budget))];
-    for medians in &evaluation.medians {
-        let setup = medians
-            .setup_seconds
-            .map_or_else(|| "unmeasured".to_owned(), |seconds| format!("{seconds}s"));
-        lines.push(format!(
-            "{}: {} runs, median wall {}s, runner {}s, setup {setup}",
-            medians.population.name(),
-            medians.samples,
-            medians.wall_seconds,
-            medians.runner_seconds
-        ));
-    }
-    for breach in &evaluation.breaches {
-        lines.push(format!(
-            "breach: the {} {} of the {} is {}s, above the budget {}s",
-            breach.population.name(),
-            breach.measure.name(),
-            breach.source.name(),
-            breach.value,
-            breach.threshold
-        ));
-    }
-    for missing in &evaluation.missing {
-        lines.push(format!("missing: {missing}"));
-    }
-    lines.push("slowest jobs:".to_owned());
-    for job in &evaluation.slowest_jobs {
-        lines.push(format!(
-            "  {} ({}): {}s, median {}s, +{}s",
-            job.name,
-            job.population.name(),
-            job.seconds,
-            job.median,
-            job.seconds.abs_diff(job.median)
-        ));
-    }
-    if evaluation.slowest_jobs.is_empty() {
-        lines.push("  none".to_owned());
-    }
-    lines.join("\n") + "\n"
 }

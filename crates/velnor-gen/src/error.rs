@@ -28,6 +28,7 @@ pub enum GenerateError {
     MbxStoreHelperTooOld(HelperVersion),
     PrOnlyChecksHelperTooOld(HelperVersion),
     BudgetHelperTooOld(HelperVersion),
+    BudgetModesHelperTooOld(HelperVersion),
     TestGroupsHelperTooOld(HelperVersion),
     MergeGroupHelperTooOld(HelperVersion),
     PrCiHelperTooOld(HelperVersion),
@@ -99,6 +100,7 @@ impl fmt::Display for GenerateError {
                 f,
                 "velnor-ci {version} cannot check the speed budget; pin velnor-ci 0.1.92 or later with `velnor-gen pin-helper 0.1.92`"
             ),
+            Self::BudgetModesHelperTooOld(v) => write!(f, "{}", modes_too_old(v)),
             Self::PrOnlyChecksHelperTooOld(version) => write!(
                 f,
                 "velnor-ci {version} cannot enforce pr_only_checks; pin velnor-ci 0.1.82 or later with `velnor-gen pin-helper 0.1.82`"
@@ -158,4 +160,10 @@ impl From<DetectError> for GenerateError {
     fn from(error: DetectError) -> Self {
         Self::Detect(error)
     }
+}
+
+fn modes_too_old(version: &HelperVersion) -> String {
+    format!(
+        "velnor-ci {version} cannot read the selection of a run, so it cannot apply [budget.full], [budget.affected] or [budget.none]; pin velnor-ci 0.1.104 or later with `velnor-gen pin-helper 0.1.104`"
+    )
 }

@@ -2,11 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use velnor_ci::budget::{History, Population, Sample, evaluate};
-use velnor_model::SpeedBudget;
+use velnor_model::{Selection, SpeedBudget};
 
 pub(crate) fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) -> Sample {
     Sample {
         run_id,
+        selection: None,
         wall_seconds: wall,
         runner_seconds: runner,
         setup_seconds: setup,
@@ -17,7 +18,15 @@ pub(crate) fn sample(run_id: u64, wall: u64, runner: u64, setup: Option<u64>) ->
 pub(crate) fn history(population: Population, samples: Vec<Sample>) -> History {
     History {
         population,
+        mode: None,
         samples,
+    }
+}
+
+pub(crate) fn history_of(population: Population, mode: Selection, samples: Vec<Sample>) -> History {
+    History {
+        mode: Some(mode),
+        ..history(population, samples)
     }
 }
 
@@ -27,6 +36,7 @@ pub(crate) fn budget(pr_wall: u64, main_wall: u64, runner: u64, setup: u64) -> S
         main_wall_seconds: main_wall,
         runner_seconds: runner,
         setup_seconds: setup,
+        ..SpeedBudget::default()
     }
 }
 
