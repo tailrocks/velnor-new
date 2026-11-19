@@ -9,7 +9,7 @@ use std::path::Path;
 use std::time::Duration;
 
 use crate::config::{HostConfig, KeychainReference};
-use crate::docker_client::{connect_unix, docker_deadline_after};
+use crate::docker_client::{bounded_info, docker_deadline_after};
 use crate::error::HostError;
 use crate::journal::IntentState;
 use crate::keychain::load_secret;
@@ -230,12 +230,9 @@ async fn engine_identity(
     if tokio::time::Instant::now() >= deadline {
         return None;
     }
-    let Ok(docker) = connect_unix(&config.docker.endpoint) else {
-        return None;
-    };
     let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
     let budget = ENGINE_BUDGET.min(remaining);
-    let info = docker_deadline_after(docker.info(), budget)
+    let info = docker_deadline_after(bounded_info(&config.docker.endpoint), budget)
         .await
         .ok()?
         .ok()?;

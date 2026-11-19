@@ -7,9 +7,11 @@ use std::process::Command;
 
 use std::time::Duration;
 
+use serde_json::Value;
+
 use toml::Value as TomlValue;
 
-use crate::context::FreshnessContext;
+use crate::context::{FreshnessContext, iso_date, parse_iso_date};
 
 use crate::process::run_bounded;
 
@@ -78,13 +80,79 @@ fn check_deny_policy(ctx: &mut FreshnessContext, relative: &str) {
     if ignored.is_empty() {
         ctx.pass_row("advisories", &format!("{path} ignore list"), "empty");
     } else {
+        let today = ctx.now.div_euclid(86_400);
         for advisory in ignored {
-            ctx.fail_row(
-                "advisories",
-                &format!("{path}:{advisory}"),
-                "ignored advisory must be a policy exception instead",
+            let subject = format!("{path}:{advisory}");
+            let verdict = advisory_id(advisory).map_or_else(
+                || Err("ignored advisory has no id".to_owned()),
+                |id| hold_verdict(&ctx.holds, id, today, ctx.max_days),
             );
+            match verdict {
+                Ok(expires) => ctx.pass_row(
+                    "advisories",
+                    &subject,
+                    &format!("ignored under a dated hold expiring {expires}"),
+                ),
+                Err(reason) => ctx.fail_row("advisories", &subject, &reason),
+            }
         }
+    }
+}
+
+pub(crate) fn advisory_id(entry: &TomlValue) -> Option<&str> {
+    entry
+        .as_str()
+        .or_else(|| entry.get("id").and_then(TomlValue::as_str))
+}
+
+pub(crate) fn ignored_advisory_ids(ctx: &FreshnessContext) -> Vec<String> {
+    let mut ids = Vec::new();
+    for (relative, _) in &ctx.workspace_roots {
+        let path = if relative.is_empty() {
+            "deny.toml".to_owned()
+        } else {
+            format!("{relative}/deny.toml")
+        };
+        let Some(deny) = fs::read_to_string(ctx.path(&path))
+            .ok()
+            .and_then(|text| toml::from_str::<TomlValue>(&text).ok())
+        else {
+            continue;
+        };
+        ids.extend(
+            deny.get("advisories")
+                .and_then(|advisories| advisories.get("ignore"))
+                .and_then(TomlValue::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(advisory_id)
+                .map(str::to_owned),
+        );
+    }
+    ids
+}
+
+fn hold_verdict(holds: &[Value], id: &str, today: i64, max_days: i64) -> Result<String, String> {
+    let missing =
+        || format!("ignored advisory {id} needs a dated temporary_holds exception (key {id})");
+    let hold = holds
+        .iter()
+        .find(|hold| hold.get("key").and_then(Value::as_str) == Some(id))
+        .ok_or_else(missing)?;
+    let date = |field: &str| {
+        hold.get(field)
+            .and_then(Value::as_str)
+            .and_then(parse_iso_date)
+    };
+    let (Some(granted), Some(expires)) = (date("granted"), date("expires")) else {
+        return Err(format!("hold for {id} lacks YYYY-MM-DD granted/expires"));
+    };
+    if expires - granted > max_days {
+        Err(format!("hold for {id} spans more than {max_days}d"))
+    } else if expires < today {
+        Err(format!("hold for {id} expired {}", iso_date(expires)))
+    } else {
+        Ok(iso_date(expires))
     }
 }
 
@@ -139,4 +207,35 @@ fn tail(value: &str, cap: usize) -> String {
     let bytes = value.as_bytes();
     let start = bytes.len().saturating_sub(cap);
     String::from_utf8_lossy(&bytes[start..]).into_owned()
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::hold_verdict;
+
+    fn holds() -> Vec<serde_json::Value> {
+        vec![json!({"key": "RUSTSEC-2026-0543", "granted": "2026-11-19", "expires": "2026-12-03"})]
+    }
+
+    const NOV_20: i64 = 20_777;
+
+    #[test]
+    fn held_ignore_passes() {
+        let today = crate::context::parse_iso_date("2026-11-20").unwrap_or(NOV_20);
+        assert!(hold_verdict(&holds(), "RUSTSEC-2026-0543", today, 14).is_ok());
+    }
+
+    #[test]
+    fn unheld_ignore_fails() {
+        let today = crate::context::parse_iso_date("2026-11-20").unwrap_or(NOV_20);
+        assert!(hold_verdict(&holds(), "RUSTSEC-2026-9999", today, 14).is_err());
+    }
+
+    #[test]
+    fn expired_hold_fails() {
+        let today = crate::context::parse_iso_date("2026-12-04").unwrap_or(NOV_20);
+        assert!(hold_verdict(&holds(), "RUSTSEC-2026-0543", today, 14).is_err());
+    }
 }
