@@ -59,6 +59,8 @@ pub enum WorkerState {
         epoch: Epoch,
 
         reason: OwnershipFailure,
+
+        owned: Option<OwnedIds>,
     },
 
     Released,
@@ -79,6 +81,15 @@ impl WorkerState {
             | Self::Cleaning { epoch, .. }
             | Self::Quarantined { epoch, .. } => Some(*epoch),
             Self::Released => None,
+        }
+    }
+
+    #[must_use]
+    pub const fn owned(&self) -> Option<&OwnedIds> {
+        match self {
+            Self::Cleaning { owned, .. } => Some(owned),
+            Self::Quarantined { owned, .. } => owned.as_ref(),
+            _ => None,
         }
     }
 
@@ -187,7 +198,11 @@ fn quarantine(
         return Err(StateError::IllegalTransition);
     }
     Ok(Transition {
-        next: WorkerState::Quarantined { epoch, reason },
+        next: WorkerState::Quarantined {
+            epoch,
+            reason,
+            owned: state.owned().cloned(),
+        },
         effect: Effect::KeepCapacity,
     })
 }

@@ -9,9 +9,12 @@ rust-version.workspace = true
 license.workspace = true
 autotests = false
 
+[[test]]
+name = "lifecycle_public"
+path = "tests/lifecycle_public.rs"
+
 [lib]
 doctest = false
-test = false
 
 [[test]]
 name = "lifecycle_acquire"
