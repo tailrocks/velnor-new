@@ -3,15 +3,23 @@
 
 use crate::rules::{RenderedStep, Rule, Value};
 
-/// An action that velnor-gen accepts at exactly one commit.
-///
-/// `tag` is the release the commit was resolved from; it appears in a trailing
-/// comment of the rendered `uses` line.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PinnedAction {
     pub action: &'static str,
     pub commit: &'static str,
     pub tag: &'static str,
+}
+
+impl PinnedAction {
+    #[must_use]
+    pub fn step(&self, name: String) -> RenderedStep {
+        RenderedStep {
+            name,
+            uses: Some(format!("{}@{}", self.action, self.commit)),
+            uses_comment: Some(self.tag.to_owned()),
+            ..RenderedStep::default()
+        }
+    }
 }
 
 pub const ATTEST_BUILD_PROVENANCE: PinnedAction = PinnedAction {
@@ -44,8 +52,6 @@ pub const MR_BOXINGTON: PinnedAction = PinnedAction {
     commit: "88acf2bb50552c7c508cbac13e5f8c576b95b1de",
     tag: "v1.7.3",
 };
-/// The combined cache action, at the same commit as `actions/cache/restore`
-/// and `actions/cache/save`.
 pub const ACTIONS_CACHE: PinnedAction = PinnedAction {
     action: "actions/cache",
     commit: "55cc8345863c7cc4c66a329aec7e433d2d1c52a9",
