@@ -29,6 +29,7 @@ pub const BUDGET_OUTPUTS: [&str; 6] = [
 pub enum StepKind {
     Checkout {
         depth: u32,
+        sparse: Option<Vec<String>>,
     },
     InstallTools {
         only: Option<String>,

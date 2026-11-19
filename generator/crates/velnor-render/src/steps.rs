@@ -15,6 +15,7 @@ use crate::base_steps::{
 };
 use crate::cache::{path_text, render_key};
 use crate::cargo::{CargoLane, cargo_step, reports_tests};
+use crate::checkout_step::checkout_step;
 use crate::gate::{
     PLAN_STEP, Setup, admission, all_conditions, condition, merge_group_skipped, output, plan_read,
     plan_source, sources_step, verdict_step,
@@ -233,15 +234,7 @@ fn step_body(
             needs_max_bytes,
             trusted_api,
         } => crate::report::check(*needs_max_bytes, *trusted_api),
-        StepKind::Checkout { depth } => RenderedStep {
-            name: "Check out".to_owned(),
-            uses: Some(CHECKOUT.to_owned()),
-            with: vec![
-                ("fetch-depth".to_owned(), Value::Int(u64::from(*depth))),
-                ("persist-credentials".to_owned(), Value::Bool(false)),
-            ],
-            ..RenderedStep::default()
-        },
+        StepKind::Checkout { depth, sparse } => checkout_step(*depth, sparse.as_deref()),
         StepKind::InstallTools { only } => install_tools(only.as_deref()),
         StepKind::InstallMise => install_mise(),
         StepKind::Lint(command) => crate::lint_steps::lint_step(command),

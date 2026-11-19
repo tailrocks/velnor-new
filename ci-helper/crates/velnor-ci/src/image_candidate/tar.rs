@@ -147,7 +147,8 @@ impl<R: Read> TarReader<R> {
         self.data_left = 0;
         self.padding = 0;
         self.discard(rest)?;
-        let mut override_name: Option<Vec<u8>> = None;
+        let mut gnu_name: Option<Vec<u8>> = None;
+        let mut pax_name: Option<Vec<u8>> = None;
         loop {
             let Some(block) = self.read_block()? else {
                 return Ok(None);
@@ -157,17 +158,17 @@ impl<R: Read> TarReader<R> {
             }
             let size = member_size(&block)?;
             check_sum(&block)?;
+            check_numeric_fields(&block)?;
             let kind = block[156];
             match kind {
                 b'x' | b'L' => {
                     let data = self.extension_data(size)?;
-                    let name = if kind == b'x' {
-                        pax_path(&data)?
+                    if kind == b'x' {
+                        if let Some(path) = pax_path(&data)? {
+                            pax_name = Some(path);
+                        }
                     } else {
-                        Some(cstr(&data).to_vec())
-                    };
-                    if override_name.is_none() {
-                        override_name = name;
+                        gnu_name = Some(cstr(&data).to_vec());
                     }
                 }
                 b'K' => {
@@ -181,7 +182,13 @@ impl<R: Read> TarReader<R> {
                 _ => {
                     self.data_left = size;
                     self.padding = pad(size);
-                    return Ok(Some(entry(&block, kind, size, override_name, self.pos)));
+                    return Ok(Some(entry(
+                        &block,
+                        kind,
+                        size,
+                        pax_name.or(gnu_name),
+                        self.pos,
+                    )));
                 }
             }
         }
@@ -257,8 +264,12 @@ fn check_sum(block: &[u8; BLOCK]) -> Result<(), TarError> {
 }
 
 fn parse_octal(field: &[u8]) -> Option<u64> {
-    let text = field.split(|byte| *byte == 0).next().unwrap_or_default();
-    let trimmed = text.trim_ascii();
+    let start = field.iter().position(|byte| !matches!(byte, b' ' | 0));
+    let end = field.iter().rposition(|byte| !matches!(byte, b' ' | 0));
+    let trimmed = match (start, end) {
+        (Some(start), Some(end)) => &field[start..=end],
+        _ => &[],
+    };
     if trimmed.is_empty() {
         return Some(0);
     }
@@ -276,9 +287,34 @@ fn member_size(block: &[u8; BLOCK]) -> Result<u64, TarError> {
             let part = if index == 0 { byte & 0x7f } else { *byte };
             value = (value << 8) | u128::from(part);
         }
-        return u64::try_from(value).map_err(|_| TarError::Format("member size"));
+        return i64::try_from(value)
+            .map(i64::unsigned_abs)
+            .map_err(|_| TarError::MemberSize);
     }
     parse_octal(field).ok_or(TarError::MemberSize)
+}
+
+fn check_numeric_fields(block: &[u8; BLOCK]) -> Result<(), TarError> {
+    let ustar = block[257..262] == *b"ustar";
+    let fields: &[(usize, usize)] = if ustar {
+        &[
+            (100, 108),
+            (108, 116),
+            (116, 124),
+            (136, 148),
+            (329, 337),
+            (337, 345),
+        ]
+    } else {
+        &[(100, 108), (108, 116), (116, 124), (136, 148)]
+    };
+    for &(from, to) in fields {
+        let field = &block[from..to];
+        if field[0] & 0x80 == 0 && parse_octal(field).is_none() {
+            return Err(TarError::Format("numeric header field"));
+        }
+    }
+    Ok(())
 }
 
 fn pax_path(data: &[u8]) -> Result<Option<Vec<u8>>, TarError> {
@@ -304,6 +340,9 @@ fn pax_path(data: &[u8]) -> Result<Option<Vec<u8>>, TarError> {
             .position(|byte| *byte == b'=')
             .ok_or(TarError::Format("pax record"))?;
         let (key, value) = (&record[..equals], &record[equals + 1..]);
+        if key.is_empty() {
+            return Err(TarError::Format("pax record"));
+        }
         if key == b"size" || key.starts_with(b"GNU.sparse") {
             return Err(TarError::Format("pax size or sparse record"));
         }

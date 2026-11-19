@@ -75,13 +75,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         jobs.push(policy_job(facts, &Lane::policy(single)));
     }
     jobs.extend(crate::lint_jobs::lint_jobs(facts));
-    let draft_guard = match facts.config.pr_ci {
-        PrCi::Label => Some(step(StepKind::DraftNotice)),
-        PrCi::Always => facts
-            .config
-            .skip_draft_pull_requests
-            .then(|| step(StepKind::FailOnDraftRun)),
-    };
+    let draft_guard = draft_guard(facts);
     let gate = has_gate(facts);
     if single {
         if gate {
@@ -111,9 +105,7 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
         crate::merge_group_skip::apply(&mut jobs, single);
     }
     crate::docs_post_merge::apply(facts, &mut jobs);
-    if facts.config.budget.is_some_and(|budget| budget.enabled()) {
-        jobs.push(budget_job(facts));
-    }
+    jobs.extend(budget_job(facts));
     crate::report::finish(facts, &mut jobs, single, draft_guard);
     WorkflowPlan {
         name: "Rust CI".to_owned(),
@@ -147,9 +139,23 @@ fn triggers(facts: &RepoFacts) -> Triggers {
     }
 }
 
-fn budget_job(facts: &RepoFacts) -> Job {
+fn draft_guard(facts: &RepoFacts) -> Option<Step> {
+    match facts.config.pr_ci {
+        PrCi::Label => Some(step(StepKind::DraftNotice)),
+        PrCi::Always => facts
+            .config
+            .skip_draft_pull_requests
+            .then(|| step(StepKind::FailOnDraftRun)),
+    }
+}
+
+fn budget_job(facts: &RepoFacts) -> Option<Job> {
+    if !facts.config.budget.is_some_and(|budget| budget.enabled()) {
+        return None;
+    }
     let mut steps = vec![step(StepKind::Checkout {
         depth: CHECKOUT_DEPTH,
+        sparse: None,
     })];
     steps.extend(
         facts
@@ -158,7 +164,7 @@ fn budget_job(facts: &RepoFacts) -> Job {
             .map(|release| step(StepKind::InstallHelper(release.clone()))),
     );
     steps.push(step(StepKind::Budget { last: BUDGET_RUNS }));
-    Job {
+    Some(Job {
         name: Some("Speed budget".to_owned()),
         when: if facts.config.full_run == FullRun::Off {
             When::DefaultBranchPush
@@ -172,7 +178,7 @@ fn budget_job(facts: &RepoFacts) -> Job {
         timeout_minutes: BUDGET_TIMEOUT_MINUTES,
         steps,
         ..job(facts, BUDGET_JOB)
-    }
+    })
 }
 
 fn helper_job(facts: &RepoFacts, root: &RustRoot) -> Job {
@@ -216,8 +222,8 @@ pub fn check_required_check(facts: &RepoFacts, plan: &WorkflowPlan) -> Result<()
     Ok(())
 }
 
-pub(crate) fn head(facts: &RepoFacts, depth: u32) -> Vec<Step> {
-    let mut steps = vec![step(StepKind::Checkout { depth })];
+pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -> Vec<Step> {
+    let mut steps = vec![step(StepKind::Checkout { depth, sparse })];
     steps.extend(
         facts
             .helper
@@ -290,6 +296,9 @@ pub(crate) fn setup_roots(
         } else {
             CHECKOUT_DEPTH
         },
+        lane.plan
+            .as_ref()
+            .and_then(|_| crate::sparse::paths(facts, roots)),
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));

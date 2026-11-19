@@ -244,6 +244,7 @@ pub struct ToolPin {
 }
 
 pub use crate::repo_config::{
-    CacheDebug, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule, MbxRemote, MbxStore,
-    OnMain, PrCi, PrivateSources, PushAfterMergeGroup, RustCiConfig, SpeedBudget, TestSetup,
+    CacheDebug, CheckoutScope, CiDebugInfo, CratesMirror, DocsRun, FullRun, InputRule, MbxRemote,
+    MbxStore, OnMain, PrCi, PrivateSources, PushAfterMergeGroup, RustCiConfig, SpeedBudget,
+    TestSetup,
 };

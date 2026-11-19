@@ -169,6 +169,40 @@ fn record(out: &mut Verdict, plan: &PlanOutput, job: &JobId, message: String) {
     }
 }
 
+fn judge(
+    out: &mut Verdict,
+    plan: &PlanOutput,
+    job: &JobId,
+    scheduled: bool,
+    result: Option<&JobResult>,
+) {
+    match (scheduled, result) {
+        (_, None) => out.problems.push(format!("{job} has no result in needs")),
+        (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
+        (true, Some(other)) => record(
+            out,
+            plan,
+            job,
+            format!(
+                "{job} was scheduled by the plan and its result is {}",
+                other.name()
+            ),
+        ),
+        (false, Some(JobResult::Success)) => out
+            .warnings
+            .push(format!("{job} ran although the plan did not schedule it")),
+        (false, Some(other)) => record(
+            out,
+            plan,
+            job,
+            format!(
+                "{job} was not scheduled by the plan and its result is {}",
+                other.name()
+            ),
+        ),
+    }
+}
+
 #[must_use]
 pub fn verdict(
     plan: &PlanOutput,
@@ -194,27 +228,7 @@ pub fn verdict(
             .to_owned(),
             shown.to_owned(),
         ));
-        match (scheduled, result) {
-            (_, None) => out.problems.push(format!("{job} has no result in needs")),
-            (true, Some(JobResult::Success)) | (false, Some(JobResult::Skipped)) => {}
-            (true, Some(other)) => {
-                let message = format!(
-                    "{job} was scheduled by the plan and its result is {}",
-                    other.name()
-                );
-                record(&mut out, plan, job, message);
-            }
-            (false, Some(JobResult::Success)) => out
-                .warnings
-                .push(format!("{job} ran although the plan did not schedule it")),
-            (false, Some(other)) => {
-                let message = format!(
-                    "{job} was not scheduled by the plan and its result is {}",
-                    other.name()
-                );
-                record(&mut out, plan, job, message);
-            }
-        }
+        judge(&mut out, plan, job, *scheduled, result);
     }
     for (slug, jobs) in &plan.test_lanes {
         let counts: Vec<Option<TestCounts>> = jobs

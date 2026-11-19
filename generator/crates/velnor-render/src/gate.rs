@@ -114,6 +114,16 @@ pub(crate) fn merge_group_skipped(from: &PlanFrom) -> String {
     }
 }
 
+fn event_gate(when: When) -> String {
+    match when {
+        When::Scheduled => format!("github.event_name == '{SCHEDULE}'"),
+        When::ScheduledOrPush => {
+            format!("(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')")
+        }
+        _ => format!("(github.event_name == '{PUSH}' && {ON_DEFAULT_BRANCH})"),
+    }
+}
+
 pub(crate) fn condition(
     when: When,
     gate: Option<&Gate>,
@@ -140,13 +150,9 @@ pub(crate) fn condition(
                 parts.push(SETUP_DONE.to_owned());
             }
         }
-        When::Scheduled => parts.push(format!("github.event_name == '{SCHEDULE}'")),
-        When::ScheduledOrPush => parts.push(format!(
-            "(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')"
-        )),
-        When::DefaultBranchPush => parts.push(format!(
-            "(github.event_name == '{PUSH}' && {ON_DEFAULT_BRANCH})"
-        )),
+        When::Scheduled | When::ScheduledOrPush | When::DefaultBranchPush => {
+            parts.push(event_gate(when));
+        }
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {
             parts.push(NOT_CANCELLED.to_owned());
             if setup != Setup::Before {
