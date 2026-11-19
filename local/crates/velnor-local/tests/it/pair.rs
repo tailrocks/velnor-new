@@ -332,3 +332,39 @@ async fn a_registration_that_cannot_be_packed_reports_the_runner_name_it_registe
     assert!(name.starts_with(&format!("{}-jit-", env.name)), "{name}");
     assert!(call.contains(&format!("--name {name}")), "{call}");
 }
+
+#[tokio::test]
+async fn a_minted_runner_registers_the_extra_labels_after_the_built_in_ones() {
+    let built_in = velnor_local::jit::labels(&[]);
+    let dir = temp_dir("pair-mint-labels");
+    let docker = Registration::new(&output(&ALL));
+    let env = Environment::at(&dir, &docker)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"))
+        .with_labels(&["ubuntu-26.04-scale-set".to_owned()]);
+    mint(&env, Side::Trusted)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let call = docker.calls().concat().join(" ");
+    assert!(
+        call.contains(&format!("--labels {built_in},ubuntu-26.04-scale-set >&2")),
+        "{call}"
+    );
+}
+
+#[tokio::test]
+async fn a_minted_runner_without_extra_labels_registers_the_built_in_ones_only() {
+    let built_in = velnor_local::jit::labels(&[]);
+    let dir = temp_dir("pair-mint-no-labels");
+    let docker = Registration::new(&output(&ALL));
+    let env = Environment::at(&dir, &docker)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    mint(&env, Side::Trusted)
+        .await
+        .unwrap_or_else(|e| unreachable!("{e}"));
+    let call = docker.calls().concat().join(" ");
+    assert!(call.contains(&format!("--labels {built_in} >&2")), "{call}");
+    assert!(built_in.starts_with("ubuntu-latest,"), "{built_in}");
+    assert!(built_in.ends_with(",ubuntu-26.04-arm"), "{built_in}");
+}

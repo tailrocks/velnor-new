@@ -378,7 +378,10 @@ fn scale_name(name: &str) -> String {
 
 #[path = "lanes_control.rs"]
 mod control;
-pub use control::{fork_fenced_condition, is_renderer_added_control_job, scale_set_support_jobs};
+pub use control::{
+    SCHEMA2_CONTROL_JOB_IDS, fork_fenced_condition, fork_fenced_condition_admitting_dispatch,
+    is_renderer_added_control_job, scale_set_control_jobs, scale_set_support_jobs,
+};
 
 #[path = "lanes_placement.rs"]
 mod placement;

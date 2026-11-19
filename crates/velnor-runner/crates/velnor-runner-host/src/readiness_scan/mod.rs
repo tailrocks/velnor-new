@@ -12,7 +12,6 @@ use crate::config::{HostConfig, KeychainReference};
 use crate::docker_client::{bounded_info, docker_deadline_after};
 use crate::error::HostError;
 use crate::journal::IntentState;
-use crate::keychain::load_secret;
 use crate::readiness::{Readiness, readiness_for_empty};
 use crate::reconcile::{IntentRow, occupies};
 
@@ -44,6 +43,9 @@ enum ConfigFact {
     },
     Invalid,
 }
+
+#[cfg(test)]
+mod live_intents_tests;
 
 #[must_use]
 pub fn controller_readiness(state: &Path) -> Readiness {
@@ -194,7 +196,7 @@ pub(crate) fn controller_config(state: &Path) -> Option<(HostConfig, String)> {
 }
 
 fn credential_present(reference: &KeychainReference) -> bool {
-    let Ok(secret) = load_secret(reference.service(), reference.account()) else {
+    let Ok(secret) = reference.load() else {
         return false;
     };
     let Ok(text) = std::str::from_utf8(secret.as_slice()) else {
@@ -301,31 +303,33 @@ async fn scan_rows(path: &Path, deadline: tokio::time::Instant) -> Result<bool, 
         .await
         .map_err(|_| HostError::Journal)?;
     let conn = db.connect().map_err(|_| HostError::Journal)?;
-    let mut query = conn
-        .query(
-            "SELECT kind, state, cleanup_proven FROM intents ORDER BY id",
-            (),
-        )
-        .await
-        .map_err(|_| HostError::Journal)?;
     let mut row_count = 0_usize;
     let mut occupied = false;
-    loop {
-        if tokio::time::Instant::now() >= deadline {
-            return Err(HostError::Journal);
-        }
-        let Some(row) = tokio::time::timeout_at(deadline, query.next())
+    for table in ["connection_intents", "intents"] {
+        let mut query = conn
+            .query(
+                &format!("SELECT kind, state, cleanup_proven FROM {table} ORDER BY id"),
+                (),
+            )
             .await
-            .map_err(|_| HostError::Journal)?
-            .map_err(|_| HostError::Journal)?
-        else {
-            break;
-        };
-        if row_count >= MAX_JOURNAL_ROWS {
-            return Err(HostError::Journal);
+            .map_err(|_| HostError::Journal)?;
+        loop {
+            if tokio::time::Instant::now() >= deadline {
+                return Err(HostError::Journal);
+            }
+            let Some(row) = tokio::time::timeout_at(deadline, query.next())
+                .await
+                .map_err(|_| HostError::Journal)?
+                .map_err(|_| HostError::Journal)?
+            else {
+                break;
+            };
+            if row_count >= MAX_JOURNAL_ROWS {
+                return Err(HostError::Journal);
+            }
+            row_count += 1;
+            occupied |= occupies(&marker_row(&row)?);
         }
-        row_count += 1;
-        occupied |= occupies(&marker_row(&row)?);
     }
     Ok(occupied)
 }

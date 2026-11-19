@@ -48,8 +48,11 @@ where
     R: Read,
     F: FnOnce(&str, &str, &velnor_runner_host::NormalizedSecret) -> Result<(), HostError>,
 {
+    let Some((service, account)) = credential_ref.keychain_parts() else {
+        return Err(ConnectError::Config);
+    };
     let secret = read_secret(input).map_err(ConnectError::Secret)?;
-    store(credential_ref.service(), credential_ref.account(), &secret).map_err(ConnectError::Secret)
+    store(service, account, &secret).map_err(ConnectError::Secret)
 }
 
 pub(super) fn persist_host(state: &Path, text: &str) -> Result<(), ConnectError> {

@@ -15,7 +15,7 @@ use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
 
 use super::authority::{Runners, mint_or_retire};
-use super::env::{DockerCli, Engine, Environment, RUNNER_LABELS, program, words};
+use super::env::{DockerCli, Engine, Environment, program, words};
 use crate::cli::{BuildArgs, JitArgs};
 use crate::images::{HOST_BINARY, HOST_BUILD, Lock, RELEASE_IDENTITY, TARGETS, plan, refuse_dirty};
 use crate::jit::{pack, register_script};
@@ -95,7 +95,7 @@ pub async fn mint_named<E: Engine>(
     };
     let label = format!("velnor-local={}", env.name);
     let network = env.network(side);
-    let script = register_script(&name, RUNNER_LABELS);
+    let script = register_script(&name, env.labels());
     let started = Instant::now();
     let output = env
         .engine()
