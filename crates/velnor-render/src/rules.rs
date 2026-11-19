@@ -109,6 +109,7 @@ pub struct RenderedJob {
     pub needs: Vec<String>,
     pub condition: Option<String>,
     pub environment: Option<String>,
+    pub environment_note: Option<String>,
     pub permissions: Vec<(String, String)>,
     pub no_permissions: bool,
     pub concurrency: Option<RenderedConcurrency>,
