@@ -39,8 +39,8 @@ const LATEST_RUN_JQ: &str = r#"
 "#;
 
 const REQUIRED_JOB_JQ: &str = r#"
-  [ .[].jobs[]? | select(.name == "Required") ] as $required
-  | if ($required | length) != 1 then error("expected one Required job")
+  [ .[].jobs[]? | select(.name == "Required" and .conclusion != "skipped") ] as $required
+  | if ($required | length) != 1 then error("expected one non-skipped Required job")
     else $required[0]
       | if .run_id == $run_id
           and .run_attempt == $run_attempt
@@ -285,4 +285,81 @@ fn check_step(pins: &ProductReleasePins) -> Result<Yaml, RenderError> {
         ("shell".to_owned(), Yaml::str("bash")),
         ("run".to_owned(), Yaml::str(script(pins)?)),
     ]))
+}
+
+#[cfg(test)]
+#[expect(clippy::unwrap_used, reason = "test code")]
+mod required_job_tests {
+    use super::REQUIRED_JOB_JQ;
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+
+    fn job(conclusion: &str) -> String {
+        format!(
+            r#"{{"name":"Required","conclusion":"{conclusion}","run_id":7,"run_attempt":1,"head_sha":"abc","head_branch":"main"}}"#
+        )
+    }
+
+    fn select(jobs: &[String]) -> Result<String, String> {
+        let pages = format!("[{{\"jobs\":[{}]}}]", jobs.join(","));
+        let mut child = Command::new("jq")
+            .args([
+                "-c",
+                "--argjson",
+                "run_id",
+                "7",
+                "--argjson",
+                "run_attempt",
+                "1",
+            ])
+            .args(["--arg", "source_sha", "abc", REQUIRED_JOB_JQ])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .expect("jq");
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(pages.as_bytes())
+            .unwrap();
+        let out = child.wait_with_output().unwrap();
+        if out.status.success() {
+            Ok(String::from_utf8(out.stdout).unwrap())
+        } else {
+            Err(String::from_utf8(out.stderr).unwrap())
+        }
+    }
+
+    #[test]
+    fn skipped_fork_required_job_is_ignored() {
+        let got = select(&[job("success"), job("skipped")]).unwrap();
+        assert!(got.contains(r#""conclusion":"success""#));
+        let got = select(&[job("skipped"), job("success")]).unwrap();
+        assert!(got.contains(r#""conclusion":"success""#));
+    }
+
+    #[test]
+    fn non_success_required_job_is_still_selected_for_the_success_check() {
+        let got = select(&[job("failure"), job("skipped")]).unwrap();
+        assert!(got.contains(r#""conclusion":"failure""#));
+    }
+
+    #[test]
+    fn zero_or_two_non_skipped_required_jobs_fail_closed() {
+        assert!(
+            select(&[job("skipped")])
+                .unwrap_err()
+                .contains("expected one")
+        );
+        assert!(select(&[job("success"), job("success")]).is_err());
+        assert!(select(&[job("success"), job("failure")]).is_err());
+    }
+
+    #[test]
+    fn identity_mismatch_fails_closed() {
+        let bad = job("success").replace("abc", "def");
+        assert!(select(&[bad, job("skipped")]).is_err());
+    }
 }

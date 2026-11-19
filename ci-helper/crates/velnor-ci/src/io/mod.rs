@@ -6,6 +6,7 @@ mod archive_witness;
 mod audit;
 mod build_inputs;
 mod cache;
+pub mod cache_api;
 mod cache_paths;
 mod cache_sources;
 mod cache_upload;
@@ -33,6 +34,7 @@ mod setup;
 mod timings;
 mod unit_platforms;
 mod units;
+mod write_request;
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -50,11 +52,12 @@ use crate::cli::{
     DecideArgs, InputsCommand, ReleaseCommand, ReleaseGateArgs,
 };
 use crate::collect::collect;
-use crate::compare::compare;
+use crate::compare::{compare, compare_across_populations};
 use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
+use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use clap::{CommandFactory, FromArgMatches};
 
@@ -104,6 +107,9 @@ pub fn main() -> ExitCode {
     };
     if let Command::Run(args) = &cli.command {
         return run::run(args);
+    }
+    if let Command::LaneGuard(args) = &cli.command {
+        return lane_guard::run(args);
     }
     match run(cli) {
         Ok(output) => {
@@ -173,11 +179,14 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Preflight(args)) => release::run_preflight(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
+        Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::WriteRequest(args) => write_request::run(&args),
         Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
+        Command::MbxStore => crate::mbx_store::setup(),
         Command::Prepare => setup::prepare(),
         Command::CheckMetadata => setup::check_metadata(),
         Command::CheckConfigurations(args) => configurations::check(&args),
@@ -185,6 +194,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Cache(CacheCommand::Verify(args)) => cache_upload::verify(&args.key),
         Command::Cache(CacheCommand::Check(args)) => cache_upload::check(&args.success),
         Command::Cache(CacheCommand::Trim(args)) => cache::run_trim(&args.prefix, args.keep),
+        Command::Cache(CacheCommand::Budget(args)) => cache_api::run_budget(&args),
         Command::Restored(args) => {
             let root = current_dir()?;
             let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
@@ -202,6 +212,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             Ok(expiry.report + &ties)
         }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
+        Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }
 }
 
@@ -294,7 +305,13 @@ pub fn write_metrics(path: &Path, metrics: &RunMetrics) -> Result<(), CiError> {
 }
 
 fn run_compare(args: &CompareArgs) -> Result<String, CiError> {
-    compare(&read_metrics(&args.a)?, &read_metrics(&args.b)?)
+    let a = read_metrics(&args.a)?;
+    let b = read_metrics(&args.b)?;
+    if args.allow_different_populations {
+        compare_across_populations(&a, &b)
+    } else {
+        compare(&a, &b)
+    }
 }
 
 pub fn read_metrics(path: &Path) -> Result<RunMetrics, CiError> {

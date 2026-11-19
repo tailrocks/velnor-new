@@ -21,7 +21,7 @@ pub use crate::config::{
     MAX_CHECK_SYSTEM_VERSION_BYTES, MAX_SUITE_PARTITIONS, MAX_SUITE_RETENTION_DAYS,
     MAX_SUITE_TEST_THREADS, MAX_SUITE_TIMEOUT_MINUTES, MiseCheck, MiseTaskSource, MiseTaskSuite,
     MiseTaskSuiteEvent, NON_INPUTS_FIELD, NativeImageCachePolicy, NativeImagePlatform,
-    NativeImageTask, NextestRunIgnored, NonInputs, OVERRIDABLE_TOOLS, ProfileKind,
+    NativeImageTask, NextestRunIgnored, NonInputs, OVERRIDABLE_TOOLS, PrCiMode, ProfileKind,
     PullRequestCachePolicy, QualifiedCargoInstallation, QualifiedTool, QualifiedToolArtifact,
     QualifiedToolBackend, QualifiedToolExecutable, QualifiedToolOptions, QualifiedToolPlatform,
     QualifiedToolProbe, RESERVED_SUITE_IDS, RESERVED_SUITE_WORKFLOW_SLUGS, ResourcesConfig,

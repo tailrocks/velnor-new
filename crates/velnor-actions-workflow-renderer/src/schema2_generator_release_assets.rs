@@ -153,7 +153,7 @@ pub(super) fn build_steps(
             fields.push(("continue-on-error".to_owned(), Yaml::Bool(true)));
         }
         steps.push(source_prepare);
-        steps.push(workflow_steps::source_identity_step());
+        steps.push(workflow_steps::source_identity_step(pins));
         steps.push(workflow_steps::source_upload_step(product));
     }
     steps.extend([
@@ -363,7 +363,7 @@ test "$(printf '%s\n' "$run" | jq -r .conclusion)" = success
 run_id="$(printf '%s\n' "$run" | jq -r .id)"
 attempt="$(printf '%s\n' "$run" | jq -r .run_attempt)"
 jobs="$(gh api --paginate --slurp "repos/{REPOSITORY}/actions/runs/$run_id/attempts/$attempt/jobs?per_page=100")"
-printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == "main" and .[0].status == "completed" and .[0].conclusion == "success"' >/dev/null
+printf '%s\n' "$jobs" | jq -e --arg sha "$GITHUB_SHA" '[.[] | (.jobs // [])[] | select(.name == "Required" and .conclusion != "skipped")] | length == 1 and .[0].head_sha == $sha and .[0].head_branch == "main" and .[0].status == "completed" and .[0].conclusion == "success"' >/dev/null
 test "$(gh api repos/{REPOSITORY}/commits/main --jq .sha)" = "$GITHUB_SHA""#
     )
 }

@@ -3,7 +3,9 @@
 
 mod audit;
 mod base_expiry;
+mod bench_compare;
 mod cache;
+mod cache_budget;
 mod cache_flow;
 mod cache_retention_flow;
 
@@ -39,7 +41,9 @@ mod io_required;
 mod io_restore;
 mod io_restore_symlinks;
 mod io_stderr;
+mod lane_guard;
 mod logscan;
+mod mbx_store;
 mod plan;
 mod plan_api;
 mod plan_git;
@@ -56,6 +60,7 @@ mod release_cargo_discovery;
 mod release_check_config;
 mod release_commit;
 mod release_fake;
+mod release_family;
 mod release_hyphen_values;
 mod release_manifests;
 mod release_preflight;
@@ -91,3 +96,4 @@ mod timings_runs;
 mod timings_setup;
 mod unowned;
 mod version;
+mod write_request;
