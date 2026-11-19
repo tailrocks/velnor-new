@@ -429,7 +429,7 @@ jobs:
         run: 'mise --no-config --no-env --no-hooks install aqua:sigstore/cosign@3.1.4'
       - name: Prepare pinned attestation verifier
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'
-        run: mise --no-config --no-env --no-hooks install gh@2.103.3
+        run: mise --no-config --no-env --no-hooks install gh@2.104.0
       - id: test
         name: Test
         if: '${{ !cancelled() && steps.restored.outcome == ''success'' && github.event.pull_request.draft != true && (github.event.action != ''labeled'' || github.event.label.name == ''ci:run'' || github.event.label.name == ''ci:auto'') && (github.event.action != ''edited'' || github.event.changes.base != null) && (github.event_name != ''pull_request'' || (github.event.pull_request.head.repo.full_name == github.repository && (contains(github.event.pull_request.labels.*.name, ''ci:run'') || contains(github.event.pull_request.labels.*.name, ''ci:auto'')))) }}'

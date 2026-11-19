@@ -272,8 +272,8 @@ pub fn publish_budget_minutes(roots: &[RootPlan]) -> u64 {
 fn plan_roots(
     configs: Vec<RootConfig>,
     metadata: Option<&BTreeMap<RepoPath, RustMetadata>>,
-) -> Result<Vec<RootPlan>, ReleaseError> {
-    let roots: Vec<RootPlan> = configs
+) -> Vec<RootPlan> {
+    configs
         .into_iter()
         .map(|config| {
             let inherited = inherited_packages(&config, metadata);
@@ -292,15 +292,16 @@ fn plan_roots(
                 workspace_tags: config.workspace_tags,
             }
         })
-        .collect();
-    if metadata.is_some() {
-        let minutes = publish_budget_minutes(&roots);
-        let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
-        if minutes > limit {
-            return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
-        }
+        .collect()
+}
+
+pub fn check_publish_budget(roots: &[RootPlan]) -> Result<(), ReleaseError> {
+    let minutes = publish_budget_minutes(roots);
+    let limit = TOKEN_LIFETIME_MINUTES - TOKEN_MARGIN_MINUTES;
+    if minutes > limit {
+        return Err(ReleaseError::PublishBudgetOutlivesToken { minutes, limit });
     }
-    Ok(roots)
+    Ok(())
 }
 
 impl ReleasePlan {
@@ -365,7 +366,7 @@ impl ReleasePlan {
             toolchain_path(file, text)?;
         }
         let (family, binaries) = plan_binaries_and_family(&config, &configs, files)?;
-        let roots = plan_roots(configs, files.rust_metadata.as_ref())?;
+        let roots = plan_roots(configs, files.rust_metadata.as_ref());
         Ok(ReleasePlan {
             roots,
             after: config.after,
