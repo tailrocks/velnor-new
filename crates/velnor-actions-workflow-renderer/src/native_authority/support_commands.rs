@@ -33,7 +33,12 @@ pub(super) fn build(
             commands.push(ValidatorCommand {
                 validator: ValidatorKind::CargoDeny,
                 name: crate::steps::DENY_STEP_NAME.to_owned(),
-                argv: vectors::deny_argv(&workspaces).map_err(NativeAuthorityError::Support)?,
+                argv: vectors::deny_argv(
+                    &workspaces,
+                    velnor_actions_contract::workflow::scale_set_support_jobs(input.config)
+                        .contains(ValidatorKind::CargoDeny.job_id()),
+                )
+                .map_err(NativeAuthorityError::Support)?,
                 prepare_argv: Vec::new(),
             });
         }
