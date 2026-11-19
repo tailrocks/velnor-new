@@ -39,7 +39,6 @@ mod manifests;
 mod merge_group;
 mod plan;
 mod plan_request;
-pub mod preview;
 mod private_check;
 pub mod pump;
 mod qualification;
@@ -267,10 +266,6 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::ValidateArtifactId => small::run_validate_artifact_id(),
         Command::InstallGh(args) => small::run_install_gh(&args),
         Command::StageBundle => small::run_stage_bundle(),
-        Command::VerifyRuntime(args) => preview::cli::verify_runtime(&args),
-        Command::VerifyMacProof => preview::cli::verify_mac_proof(),
-        Command::RunAuthority(args) => preview::cli::run_authority(&args),
-        Command::AdmitPreview => preview::admit::admit_preview(),
         Command::Run(_) | Command::Sources(_) => {
             Err(CiError::new("run and sources are handled before commands"))
         }

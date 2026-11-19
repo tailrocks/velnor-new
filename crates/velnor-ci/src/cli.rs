@@ -13,8 +13,8 @@ pub use fetch_reports::FetchReportsArgs;
 mod write_request;
 pub use crate::cli_args::{
     BaseFile, BenchCommand, BudgetArgs, CheckConfigurationsArgs, CollectArgs, CompareArgs,
-    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, PreviewGhArgs, QualificationCommand,
-    QualificationCompareArgs, RunAuthorityArgs, ToolsLocalArgs, VerifyCandidateArgs,
+    CratesMirrorArgs, ImageCommand, PlanArgs, PlanMode, QualificationCommand,
+    QualificationCompareArgs, ToolsLocalArgs, VerifyCandidateArgs,
 };
 pub use crate::cli_cache::{CacheCommand, DecideArgs, TrimArgs};
 pub use gate::GateArgs;
@@ -149,22 +149,6 @@ pub enum Command {
     Run(RunArgs),
     #[command(subcommand, about = "Work on the shared Sources cache")]
     Sources(SourcesCommand),
-    #[command(
-        about = "Verify the source preview runtime SDK that .velnor/generator.lock at PUBLIC_SOURCE pins (run PUBLIC_RUN_ID attempt PUBLIC_RUN_ATTEMPT of the image workflow): the lock change was approved by the parent commit, the preview's runs, jobs, annotated tag, immutable release, digests and Sigstore attestation (gh attestation verify with the pinned gh, signer pinned to the publication workflow commit) all match. Then install the SDK under $RUNNER_TEMP/source-preview-runtime (linux, darwin, receipt.json, bundle.json, identity.json) and write linux_sha256 and darwin_sha256 to $GITHUB_OUTPUT, which must be empty. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT; exits 1 on any failed check"
-    )]
-    VerifyRuntime(PreviewGhArgs),
-    #[command(
-        about = "Run the verified Linux SDK in $RUNNER_TEMP/source-preview-runtime: copy it into a sealed memory file, check its sha256 equals VERIFIED_LINUX_SHA256, and exec it as `image-maintenance verify-mac-attestation` with PRODUCER_RUN_ID, PRODUCER_RUN_ATTEMPT, PRODUCER_ARTIFACT_ID and PUBLISHER_ARTIFACT_ID and only an allowlist of the environment. Linux only; exits 1 when a check fails"
-    )]
-    VerifyMacProof,
-    #[command(
-        about = "Run one step of the source preview publication (draft, prepare or publish): check the admitted source metadata and payloads in the working directory against the run, the annotated tag and the GitHub release, and write the step outputs to $GITHUB_OUTPUT. Reads GH_TOKEN, the AUTHORITY_* variables, SOURCE_ARTIFACT_ID, LINUX_PAYLOAD_ARTIFACT_ID, DARWIN_PAYLOAD_ARTIFACT_ID and, for prepare and publish, SIGN, PAIR_ORIGIN, PAIR_ID, RECEIPT_SHA256 and BUNDLE_SHA256; exits 1 on any failed check"
-    )]
-    RunAuthority(RunAuthorityArgs),
-    #[command(
-        about = "Admit the source preview of the tag-push run: the run is the owner's push of the annotated tag sdk-preview-GITHUB_SHA under the protected tag rulesets, GITHUB_SHA is on main and its ci.yml and source qualification runs, and both producer payload runs, jobs and artifacts, succeeded and are the ones the tag annotation names. Then download both payloads, check them (ZIP, size, sha256, ELF or Mach-O header), link them as $RUNNER_TEMP/velnor-actions-<target>, write $RUNNER_TEMP/source-preview-metadata.json and source_sha to $GITHUB_OUTPUT. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT, RELEASE_OWNER_ID (required, no default: the numeric account id of the release owner, which GITHUB_ACTOR_ID, the triggering actor account and the creation ruleset must name; exits 1 before any request when it is missing, empty, not a number or 0), the GITHUB_* variables of the run and AUTHORITY_REPOSITORY, AUTHORITY_PATH, AUTHORITY_REF and AUTHORITY_SHA; exits 1 on any failed check"
-    )]
-    AdmitPreview,
     #[command(
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]

@@ -42,7 +42,7 @@ pub fn is_file_name(name: &str) -> bool {
 pub fn expected_artifacts(plan: &str) -> Result<Vec<String>, CiError> {
     serde_json::from_str::<serde_json::Value>(plan)
         .map_err(|e| CiError::new(format!("plan.json is not valid JSON: {e}")))?;
-    let plan = crate::preview::json::parse(plan.as_bytes(), plan.len())
+    let plan = crate::unique_json::parse(plan.as_bytes())
         .map_err(|_| CiError::new("plan.json repeats an object key"))?;
     let entries = plan
         .get("matrix")
