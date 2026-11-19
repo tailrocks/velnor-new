@@ -266,7 +266,9 @@ fn a_single_quote_in_the_filter_is_escaped_for_the_shell() -> TestResult {
 #[test]
 fn a_filtered_lane_needs_helper_0_1_86() -> TestResult {
     let off = format!("full_run = 'off'\n{LANE}");
-    for helper in ["0.1.79", "0.1.80", "0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85"] {
+    for helper in [
+        "0.1.79", "0.1.80", "0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85",
+    ] {
         let error = workflow(&lane_view(helper, &off)?)
             .err()
             .ok_or("an old helper was accepted")?;

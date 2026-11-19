@@ -103,14 +103,7 @@ fn cargo_command(
             filter,
             *ci_profile,
         ),
-        CargoCommand::NextestArchive { file } => (
-            BUILD_TESTS_STEP.into(),
-            format!(
-                "cargo-nextest nextest archive --workspace --locked{nextest} --archive-file '{}'",
-                file.as_str().replace('\'', "'\\''")
-            ),
-            vec![],
-        ),
+        CargoCommand::NextestArchive { file } => nextest_archive(nextest, file),
         CargoCommand::TestTarget {
             package,
             target,
@@ -262,6 +255,17 @@ fn nextest_features(
 
 fn quoted(text: &str) -> String {
     format!("'{}'", text.replace('\'', "'\\''"))
+}
+
+fn nextest_archive(nextest: &str, file: &RepoPath) -> (String, String, Vec<(String, Value)>) {
+    (
+        BUILD_TESTS_STEP.into(),
+        format!(
+            "cargo-nextest nextest archive --workspace --locked{nextest} --archive-file '{}'",
+            file.as_str().replace('\'', "'\\''")
+        ),
+        vec![],
+    )
 }
 
 fn lane_guard(
