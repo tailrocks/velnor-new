@@ -86,6 +86,7 @@ pub(crate) struct Setup {
     pub env: Vec<(&'static str, &'static str)>,
     pub os_release: OsRelease,
     pub cargo_home: Option<std::ffi::OsString>,
+    pub args: Vec<&'static str>,
 }
 
 impl Setup {
@@ -106,6 +107,7 @@ impl Setup {
             env: Vec::new(),
             os_release: OsRelease::Fixture,
             cargo_home: None,
+            args: Vec::new(),
         }
     }
 }
@@ -218,6 +220,7 @@ fn prepare_in(dir: &Path, setup: &Setup) -> Run {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .arg("prepare")
+        .args(&setup.args)
         .current_dir(&checkout)
         .env_clear()
         .env("PATH", format!("{}:/usr/bin:/bin", bin.display()))

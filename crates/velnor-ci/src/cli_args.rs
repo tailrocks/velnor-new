@@ -201,3 +201,19 @@ pub struct VerifyCandidateArgs {
     #[arg(long, help = "The candidate record JSON")]
     pub record: PathBuf,
 }
+
+#[derive(Debug, Args)]
+pub struct PrepareArgs {
+    #[arg(
+        long = "lock-root",
+        value_name = "ROOT",
+        conflicts_with = "no_locks",
+        help = "Write lock_<ROOT> for this Cargo root only (its directory as velnor-gen names it, root for the repository root); repeat for each root the job restores a Target cache for. Without --lock-root and --no-locks, every root recorded in .velnor/rust-metadata.json gets one. A ROOT that is not recorded is an error"
+    )]
+    pub lock_roots: Vec<String>,
+    #[arg(
+        long,
+        help = "Write no lock_<root> output, for a job that restores no Target cache"
+    )]
+    pub no_locks: bool,
+}
