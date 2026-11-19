@@ -250,11 +250,12 @@ pub enum When {
     Scheduled,
     ScheduledOrPush,
     DefaultBranchPush,
-    /// A scheduled job that runs once the jobs it needs succeeded, also when an
-    /// ancestor of those jobs was skipped, and never in a cancelled run.
-    ScheduledAfterNeeds,
-    /// Like `ScheduledAfterNeeds`, on a push to the default branch.
+    /// A job that runs on a push to the default branch once the jobs it needs
+    /// succeeded, also when an ancestor of those jobs was skipped, and never in
+    /// a cancelled run.
     DefaultBranchPushAfterNeeds,
+    /// Like `DefaultBranchPushAfterNeeds`, and on the schedule.
+    ScheduledOrDefaultBranchPushAfterNeeds,
     CacheDebug,
     SaveToolsOnDefaultBranch,
     RestoreToolsUnlessLocal,

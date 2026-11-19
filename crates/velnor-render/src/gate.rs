@@ -140,7 +140,12 @@ pub(crate) fn merge_group_skipped(from: &PlanFrom, setup: Setup) -> String {
 
 fn event_gate(when: When) -> String {
     match when {
-        When::Scheduled | When::ScheduledAfterNeeds => format!("github.event_name == '{SCHEDULE}'"),
+        When::Scheduled => format!("github.event_name == '{SCHEDULE}'"),
+        When::ScheduledOrDefaultBranchPushAfterNeeds => {
+            format!(
+                "(github.event_name == '{SCHEDULE}' || (github.event_name == '{PUSH}' && {ON_DEFAULT_BRANCH}))"
+            )
+        }
         When::ScheduledOrPush => {
             format!("(github.event_name == '{SCHEDULE}' || github.event_name == '{PUSH}')")
         }
@@ -177,7 +182,7 @@ pub(crate) fn condition(
         When::Scheduled | When::ScheduledOrPush | When::DefaultBranchPush => {
             parts.push(event_gate(when));
         }
-        When::ScheduledAfterNeeds | When::DefaultBranchPushAfterNeeds => {
+        When::ScheduledOrDefaultBranchPushAfterNeeds | When::DefaultBranchPushAfterNeeds => {
             parts.extend([NOT_CANCELLED.to_owned(), event_gate(when)]);
         }
         When::SaveBase | When::SaveBaseDecided | When::SaveSources => {

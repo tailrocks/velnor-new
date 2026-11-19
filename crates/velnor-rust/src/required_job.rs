@@ -51,8 +51,10 @@ fn conditions(job: &Job) -> Vec<JobCondition> {
     let when = match job.when {
         When::FullAudit => Some(JobCondition::ScheduleOrDispatch),
         When::FullAuditOrPush => Some(JobCondition::ScheduleOrPushOrDispatch),
-        When::Scheduled | When::ScheduledAfterNeeds => Some(JobCondition::Schedule),
-        When::ScheduledOrPush => Some(JobCondition::ScheduleOrPush),
+        When::Scheduled => Some(JobCondition::Schedule),
+        When::ScheduledOrPush | When::ScheduledOrDefaultBranchPushAfterNeeds => {
+            Some(JobCondition::ScheduleOrPush)
+        }
         When::DefaultBranchPush | When::DefaultBranchPushAfterNeeds => {
             Some(JobCondition::DefaultBranchPush)
         }

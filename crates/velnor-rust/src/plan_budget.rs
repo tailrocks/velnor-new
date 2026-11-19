@@ -98,7 +98,7 @@ pub(crate) fn budget_job(
         when: if facts.config.full_run == FullRun::Off {
             When::DefaultBranchPushAfterNeeds
         } else {
-            When::ScheduledAfterNeeds
+            When::ScheduledOrDefaultBranchPushAfterNeeds
         },
         permissions: Permissions(BTreeMap::from([
             (PermissionScope::Actions, Access::Read),
