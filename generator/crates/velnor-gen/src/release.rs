@@ -7,7 +7,9 @@ use crate::workflow_triggers::{WorkflowFacts, workflow_facts};
 use velnor_model::{
     HelperRelease, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE, RepoFacts, RepoPath, RepoView, TargetKind,
 };
-use velnor_release::{ReleaseFiles, ReleasePlan, ruleset_drift, ruleset_json};
+use velnor_release::{
+    ReleaseFiles, ReleasePlan, check_publish_budget, ruleset_drift, ruleset_json,
+};
 use velnor_render::{Owner, owner_of, render_release, unfinalized_without_binary};
 use velnor_rust::{MISE_CONFIGS, MISE_LOCK, reject_release_credential_hooks};
 
@@ -34,6 +36,7 @@ pub(crate) fn release_workflow(
     }
     let reality = Reality { facts, generated };
     let plan = read_plan(&release_files(view, Some(&reality))?)?;
+    check_publish_budget(&plan.roots).map_err(GenerateError::Release)?;
     if !plan.pr_only_checks.is_empty() && !helper.version().at_least((0, 1, 82)) {
         return Err(GenerateError::PrOnlyChecksHelperTooOld(
             helper.version().clone(),
@@ -239,7 +242,7 @@ fn release_files(
         cargo_configs,
         toolchain_files,
         symlinks: view.symlinks.iter().map(ToString::to_string).collect(),
-        rust_metadata: reality.map(|_| view.rust_metadata.clone()),
+        rust_metadata: (!view.rust_metadata.is_empty()).then(|| view.rust_metadata.clone()),
         bin_targets: reality.map(|known| bin_targets(known.facts)),
         cargo_manifest_texts,
         cargo_manifests: reality.map(|known| cargo_manifests(known.facts)),

@@ -285,7 +285,7 @@ pub struct TestSetup {
     pub run: String,
 }
 
-pub use crate::test_group::{GroupEvent, GroupRoot, TestGroup, TestNeed};
+use crate::test_group::TestGroup;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum OnMain {

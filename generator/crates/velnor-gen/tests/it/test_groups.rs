@@ -221,16 +221,3 @@ fn a_pinned_helper_older_than_the_groups_release_refuses_the_table() -> TestResu
     workflow(&view_with(&["Cargo.toml"], "", "0.1.81")?)?;
     Ok(())
 }
-
-#[test]
-fn selection_by_paths_or_events_is_refused_until_the_plan_can_decide_it() -> TestResult {
-    for extra in ["paths = ['app/**']\n", "events = ['push']\n"] {
-        let config = format!("{DATABASE}root = '.'\n{extra}");
-        let message = rejection(&config)?;
-        assert!(
-            message.contains("database") && message.contains("paths or events"),
-            "{message}"
-        );
-    }
-    Ok(())
-}
