@@ -16,10 +16,16 @@ impl Audit<'_> {
     pub(in crate::io) fn dep_info(
         &mut self,
         workspace: &Path,
+        index: usize,
         file: &Path,
         package: Option<&str>,
     ) -> Result<Option<(RepoPath, SystemTime)>, CiError> {
-        let text = read(file, &mut self.target_bytes, SOURCE_LIMIT, "dep-info file")?;
+        let text = read(
+            file,
+            &mut self.target_bytes[index],
+            SOURCE_LIMIT,
+            "dep-info file",
+        )?;
         let built = modified(file)?;
         let paths = dep_info_paths(&text);
         let Some(Located::Inside(source)) = paths
@@ -43,10 +49,14 @@ impl Audit<'_> {
 }
 
 impl Audit<'_> {
-    pub(in crate::io) fn build_output_text(&mut self, file: &Path) -> Result<String, CiError> {
+    pub(in crate::io) fn build_output_text(
+        &mut self,
+        index: usize,
+        file: &Path,
+    ) -> Result<String, CiError> {
         read(
             file,
-            &mut self.target_bytes,
+            &mut self.target_bytes[index],
             SOURCE_TOTAL_LIMIT,
             "build-script output",
         )
@@ -65,7 +75,7 @@ fn read(file: &Path, total: &mut u64, file_limit: u64, kind: &str) -> Result<Str
         .map_err(|e| CiError::new(format!("cannot read {}: {e}", file.display())))?;
     if bytes.len() as u64 > limit {
         let reason = if remaining < file_limit {
-            format!("aggregate target data exceeds {SOURCE_TOTAL_LIMIT} bytes")
+            format!("target data of one Cargo root exceeds {SOURCE_TOTAL_LIMIT} bytes")
         } else {
             format!("{kind} exceeds {file_limit} bytes")
         };

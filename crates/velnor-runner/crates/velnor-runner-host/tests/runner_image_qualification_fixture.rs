@@ -7,7 +7,7 @@ mod api;
 mod git;
 
 pub(crate) use api::{
-    ApiFault, ApiPlan, ContainerEvidence, ContainerRole, DockerApiFixture, ImageFault, ImageRole,
-    OuterMutation, Probe, Snapshot,
+    ApiFault, ApiPlan, ContainerEvidence, ContainerRole, DockerApiFixture, ExtraPrivilege,
+    ImageFault, ImageRole, OuterMutation, Probe, Snapshot,
 };
 pub(crate) use git::{GitFixture, invoke, invoke_with_timeout, invoke_with_timeout_timed};

@@ -20,6 +20,9 @@ permissions:
 concurrency:
   group: 'ci-${{ github.workflow_ref }}-${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' && github.event.pull_request.number || github.run_id }}'
   cancel-in-progress: '${{ github.event_name == ''pull_request'' && startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'' }}'
+env:
+  MISE_AUTO_INSTALL: 'false'
+  RUSTUP_AUTO_INSTALL: '0'
 defaults:
   run:
     shell: 'bash -p {0}'
@@ -74,7 +77,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -114,11 +117,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -132,7 +135,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -243,7 +246,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -286,11 +289,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -304,7 +307,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -355,6 +358,11 @@ jobs:
           retention-days: 7
           if-no-files-found: error
           overwrite: true
+      - name: Doctests
+        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
+        env:
+          DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
+        run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
       - name: velnor-ci inputs save
         if: '${{ !cancelled() && success() && steps.restored.outcome == ''success'' && steps.replan.outcome != ''failure'' && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'') }}'
         run: '. "$VELNOR_EXEC" inputs save --target-dir target'
@@ -397,11 +405,6 @@ jobs:
         env:
           CACHE_KEY: 'velnor-src-${{ runner.os }}-${{ runner.arch }}-root-${{ hashFiles(''Cargo.lock'') }}'
         run: 'echo "key=$CACHE_KEY" >> "$GITHUB_OUTPUT"'
-      - name: Doctests
-        if: '${{ !cancelled() && steps.restored.outcome == ''success'' && (steps.replan.outputs.rust_root_mode || needs.rust-plan.outputs.rust_root_mode) != ''none'' && (steps.replan.outputs.rust_root_doctests || needs.rust-plan.outputs.rust_root_doctests) == ''run'' && (steps.replan.outputs.rust_root_package_args || needs.rust-plan.outputs.rust_root_package_args) != '''' }}'
-        env:
-          DOCTESTS_KNOWN: '${{ steps.replan.outputs.rust_root_doctests_known || needs.rust-plan.outputs.rust_root_doctests_known }}'
-        run: '. "$VELNOR_EXEC" run --require-doctests=$DOCTESTS_KNOWN -- cargo test --doc --workspace --locked --message-format=json-render-diagnostics'
       - id: report_cache_metrics
         name: Report cache telemetry
         if: '${{ !cancelled() }}'
@@ -426,7 +429,7 @@ jobs:
       - rust-plan
       - rust-inputs-audit
       - rust-test-root
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
       actions: read
       contents: read
@@ -469,11 +472,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
           install_args: 'aqua:nextest-rs/nextest/cargo-nextest'
       - name: Download the tests
@@ -510,7 +513,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -550,11 +553,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         working-directory: lab
@@ -570,7 +573,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -676,7 +679,7 @@ jobs:
     needs:
       - rust-plan
       - rust-inputs-audit
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'') && (needs.rust-inputs-audit.result == ''success'' || needs.rust-inputs-audit.result == ''skipped'') }}'
     permissions:
       actions: read
       contents: read
@@ -719,11 +722,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         working-directory: lab
@@ -739,7 +742,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -860,7 +863,7 @@ jobs:
       - rust-plan
       - rust-inputs-audit
       - rust-test-lab
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_lab_mode != ''none'') }}'
     permissions:
       actions: read
       contents: read
@@ -903,11 +906,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
           install_args: 'aqua:nextest-rs/nextest/cargo-nextest'
       - name: Download the tests
@@ -979,11 +982,11 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - name: Install tools
         uses: jdx/mise-action@f5be966e4a917d54244728e6a5fdcd1d93a35e6c
         with:
-          version: '2026.11.1'
+          version: '2026.11.9'
           cache: false
       - name: Add Rust components
         run: rustup component add clippy rustfmt
@@ -997,7 +1000,7 @@ jobs:
           path: |
             ~/.local/share/mise
             ~/.rustup
-          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.1-${{ hashFiles(''mise.lock'') }}'
+          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'
       - id: prepare
         name: velnor-ci prepare
         run: '. "$VELNOR_EXEC" prepare'
@@ -1096,8 +1099,10 @@ jobs:
       - rust-test-root
       - rust-lint-lab
       - rust-test-lab
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) && (needs.rust-lint-root.outputs.base_save == ''true'' || needs.rust-test-root.outputs.base_save == ''true'' || (needs.rust-test-root.outputs.sources_saved == ''true'' || needs.rust-test-root.outputs.sources_key != '''') || needs.rust-lint-lab.outputs.base_save == ''true'' || needs.rust-test-lab.outputs.base_save == ''true'' || (needs.rust-test-lab.outputs.sources_saved == ''true'' || needs.rust-test-lab.outputs.sources_key != '''')) }}'
+      - rust-inputs-audit
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && (github.event_name == ''push'' || github.event_name == ''schedule'' || github.event_name == ''workflow_dispatch'')) }}'
     permissions:
+      pull-requests: read
       actions: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -1132,7 +1137,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-test-root sources entries
-        if: '${{ needs.rust-test-root.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-test-root.outputs.sources_prefix != '''' && (needs.rust-test-root.outputs.sources_saved == ''true'' || needs.rust-test-root.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-test-root.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1150,7 +1155,7 @@ jobs:
           GITHUB_TOKEN: '${{ github.token }}'
         run: '. "$VELNOR_EXEC" cache trim --prefix "$CACHE_PREFIX"'
       - name: Delete the older rust-test-lab sources entries
-        if: '${{ needs.rust-test-lab.outputs.sources_prefix != '''' }}'
+        if: '${{ needs.rust-test-lab.outputs.sources_prefix != '''' && (needs.rust-test-lab.outputs.sources_saved == ''true'' || needs.rust-test-lab.outputs.sources_key != '''') }}'
         env:
           CACHE_PREFIX: '${{ needs.rust-test-lab.outputs.sources_prefix }}'
           GITHUB_TOKEN: '${{ github.token }}'
@@ -1207,6 +1212,10 @@ jobs:
         env:
           CACHE_OK: '${{ steps.verify-rust-lint-root-target_key.outcome != ''failure'' && steps.verify-rust-test-root-target_key.outcome != ''failure'' && steps.verify-rust-test-root-sources_key.outcome != ''failure'' && steps.verify-rust-lint-lab-target_key.outcome != ''failure'' && steps.verify-rust-test-lab-target_key.outcome != ''failure'' && steps.verify-rust-test-lab-sources_key.outcome != ''failure'' }}'
         run: '. "$VELNOR_EXEC" cache check --success "$CACHE_OK"'
+      - name: Enforce the repository cache budget
+        env:
+          GITHUB_TOKEN: '${{ github.token }}'
+        run: '. "$VELNOR_EXEC" cache budget --budget-bytes 8000000000'
   required:
     name: Required
     needs:

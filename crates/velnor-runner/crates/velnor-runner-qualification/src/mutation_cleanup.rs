@@ -5,10 +5,11 @@ use std::time::{Duration, Instant};
 
 use bollard::Docker;
 use bollard::errors::Error as DockerError;
+use bollard::models::ContainerInspectResponse;
 use bollard::query_parameters::{RemoveContainerOptionsBuilder, RemoveVolumeOptionsBuilder};
 
 use crate::error::QualificationError as HostError;
-use crate::host_config::validate_ownership;
+use crate::host_config::{validate_owned_id, validate_ownership};
 
 use super::mutation_lifecycle::{
     MutationKind, MutationResult, MutationValue, MutationWait, PendingMutation, wait,
@@ -261,17 +262,14 @@ impl OwnedResources {
         docker: &Docker,
         container: &TrackedContainer,
     ) -> Result<(), HostError> {
-        let inspect = match deadline(
-            docker.inspect_container(&container.name, None),
-            Duration::from_secs(3),
-        )
-        .await?
-        {
-            Ok(inspect) => inspect,
-            Err(error) if missing(&error) => return Ok(()),
-            Err(_) => return Err(HostError::Docker),
+        let Some((inspect, renamed)) = self.inspect_tracked(docker, container).await? else {
+            return Ok(());
         };
-        let id = validate_ownership(&self.run_id, &inspect, container)?;
+        let id = if renamed {
+            validate_owned_id(&self.run_id, &inspect, container)?
+        } else {
+            validate_ownership(&self.run_id, &inspect, container)?
+        };
         let id = id.to_owned();
         let identity = format!("container:{id}");
         self.begin_delete(&identity)?;
@@ -297,14 +295,34 @@ impl OwnedResources {
             Err(_) => return Err(HostError::Cleanup),
         }
         self.finish_delete(&identity)?;
+        match deadline(docker.inspect_container(&id, None), Duration::from_secs(3)).await? {
+            Err(error) if missing(&error) => Ok(()),
+            _ => Err(HostError::Cleanup),
+        }
+    }
+
+    async fn inspect_tracked(
+        &self,
+        docker: &Docker,
+        container: &TrackedContainer,
+    ) -> Result<Option<(ContainerInspectResponse, bool)>, HostError> {
         match deadline(
             docker.inspect_container(&container.name, None),
             Duration::from_secs(3),
         )
         .await?
         {
-            Err(error) if missing(&error) => Ok(()),
-            _ => Err(HostError::Cleanup),
+            Ok(inspect) => return Ok(Some((inspect, false))),
+            Err(error) if missing(&error) => {}
+            Err(_) => return Err(HostError::Docker),
+        }
+        let Some(id) = &container.id else {
+            return Ok(None);
+        };
+        match deadline(docker.inspect_container(id, None), Duration::from_secs(3)).await? {
+            Ok(inspect) => Ok(Some((inspect, true))),
+            Err(error) if missing(&error) => Ok(None),
+            Err(_) => Err(HostError::Docker),
         }
     }
 
