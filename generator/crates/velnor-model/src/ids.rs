@@ -190,11 +190,23 @@ fn wildcard(pattern: &str, text: &str) -> bool {
     rest.ends_with(last)
 }
 
+const FIRST_TOOLS_TAG: (u64, u64, u64) = (0, 1, 85);
+
 impl HelperVersion {
     #[must_use]
     pub fn series(&self) -> Option<(u64, u64)> {
         let mut parts = self.0.split('.');
         Some((parts.next()?.parse().ok()?, parts.next()?.parse().ok()?))
+    }
+
+    #[must_use]
+    pub fn release_tag(&self) -> String {
+        let prefix = if self.at_least(FIRST_TOOLS_TAG) {
+            "tools-v"
+        } else {
+            "rust-ci-v"
+        };
+        format!("{prefix}{}", self.0)
     }
 
     #[must_use]
