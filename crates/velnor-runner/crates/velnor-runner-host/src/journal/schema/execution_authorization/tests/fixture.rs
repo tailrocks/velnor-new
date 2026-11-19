@@ -293,6 +293,7 @@ pub(super) async fn downgrade_guards_to_v52(journal: &Journal) -> TestResult<()>
 pub(super) async fn downgrade_to_v52(journal: &Journal) -> TestResult<()> {
     downgrade_guards_to_v52(journal).await?;
     let connection = journal.connection().await?;
+    crate::journal::schema::post_jit_effect_fences::downgrade_fences_to_v36(&connection).await?;
     connection.execute("PRAGMA user_version = 52", ()).await?;
     Ok(())
 }

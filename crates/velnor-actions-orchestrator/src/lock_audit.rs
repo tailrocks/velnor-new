@@ -276,6 +276,7 @@ fn audit_against_lock(
     }
 }
 
-#[cfg(test)]
+// Its fixture builds a release manifest for linux-x86_64 and macOS hosts only (tests/support/consumer_manifest.rs).
+#[cfg(all(test, not(all(target_os = "linux", target_arch = "aarch64"))))]
 #[path = "lock_audit_tests.rs"]
 mod tests;

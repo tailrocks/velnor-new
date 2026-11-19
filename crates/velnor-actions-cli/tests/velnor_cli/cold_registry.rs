@@ -47,6 +47,10 @@ const TRANSIENT_UNREACHABLE: &str = "error: network unreachable\n";
 const TRANSIENT_AFTER_WARNING: &str =
     "warning: unused manifest key: package.foo\nerror: operation timed out\n";
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn cold_registry_generate_names_the_warm_command() -> Result<(), Box<dyn Error>> {
     for stderr in [
@@ -76,6 +80,10 @@ fn cold_registry_generate_names_the_warm_command() -> Result<(), Box<dyn Error>>
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn cold_registry_warm_command_runs_from_a_nested_directory() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -96,6 +104,10 @@ fn cold_registry_warm_command_runs_from_a_nested_directory() -> Result<(), Box<d
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn cold_registry_warm_command_is_one_shell_word_for_a_hostile_path() -> Result<(), Box<dyn Error>> {
     for repo_dir in HOSTILE_REPO_DIRS {
@@ -175,6 +187,10 @@ fn assert_review_guidance(text: &str, manifest: &str, configs: &str) {
     assert!(!text.contains("run `"), "{text}");
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn cold_registry_names_repo_root_cargo_config_instead_of_a_command() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::new()?;
@@ -185,6 +201,10 @@ fn cold_registry_names_repo_root_cargo_config_instead_of_a_command() -> Result<(
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn cold_registry_names_cargo_config_in_a_parent_inside_the_repo() -> Result<(), Box<dyn Error>> {
     let fixture = fixture::Fixture::with_workspace_dir("tools/probe")?;
@@ -206,6 +226,10 @@ fn cold_registry_names_cargo_config_in_a_parent_inside_the_repo() -> Result<(), 
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn cold_registry_metadata_runs_in_the_workspace_not_the_caller_directory()
 -> Result<(), Box<dyn Error>> {
@@ -232,6 +256,10 @@ fn cold_registry_metadata_runs_in_the_workspace_not_the_caller_directory()
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn cold_registry_names_a_custom_path_toolchain_file_instead_of_a_command()
 -> Result<(), Box<dyn Error>> {
@@ -260,6 +288,10 @@ fn cold_registry_names_a_custom_path_toolchain_file_instead_of_a_command()
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn transient_metadata_failure_is_not_reported_as_cold_registry() -> Result<(), Box<dyn Error>> {
     for (stderr, cause) in [
@@ -292,6 +324,10 @@ fn transient_metadata_failure_is_not_reported_as_cold_registry() -> Result<(), B
     Ok(())
 }
 
+#[cfg_attr(
+    all(target_os = "linux", target_arch = "aarch64"),
+    ignore = "old-engine release binaries have no linux-arm64 target; P4 runs velnor-gen workflows (velnor-ci ships linux-arm64)"
+)]
 #[test]
 fn malformed_manifest_failure_is_not_reported_as_cold_registry() -> Result<(), Box<dyn Error>> {
     for (stderr, diagnostic) in [

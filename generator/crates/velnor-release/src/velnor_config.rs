@@ -7,11 +7,19 @@ use velnor_model::Platform;
 use crate::error::ReleaseError;
 use crate::release_plz::valid_package_name;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum BinaryFormat {
+    Archive,
+    Raw,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct Binary {
     pub(crate) package: String,
     pub(crate) bin: String,
     pub(crate) platforms: Vec<Platform>,
+    pub(crate) format: BinaryFormat,
     pub(crate) profile: Option<String>,
 }
 
@@ -30,6 +38,7 @@ struct RawBinary {
     package: String,
     bin: Option<String>,
     platforms: Option<Vec<String>>,
+    format: Option<BinaryFormat>,
     profile: Option<String>,
 }
 
@@ -203,6 +212,7 @@ fn binary(raw: RawBinary) -> Result<Binary, ReleaseError> {
         package: raw.package,
         bin,
         platforms,
+        format: raw.format.unwrap_or(BinaryFormat::Archive),
         profile,
     })
 }

@@ -44,7 +44,6 @@ jobs:
       rust_root_test_filter: '${{ steps.plan.outputs.rust_root_test_filter }}'
       rust_root_package_args: '${{ steps.plan.outputs.rust_root_package_args }}'
       rust_root_tests: '${{ steps.plan.outputs.rust_root_tests }}'
-      rust_root_group_database: '${{ steps.plan.outputs.rust_root_group_database }}'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -531,7 +530,7 @@ jobs:
       - rust-plan
       - rust-inputs-audit
       - rust-test-root
-    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'' && needs.rust-plan.outputs.rust_root_group_database == ''run'') }}'
+    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled() && needs.rust-plan.result == ''success'' && needs.rust-plan.outputs.rust_root_mode != ''none'') }}'
     permissions:
       actions: read
       contents: read
@@ -1548,7 +1547,7 @@ jobs:
       - name: velnor-ci gate
         env:
           NEEDS_JSON: '${{ toJSON(needs) }}'
-          GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-lint-root=lane:root --job rust-test-root=lane:root --job rust-test-default-root=lane:root --job rust-test-database-root=lane:root+group:root:database --job rust-test-shell-root=lane:root --job rust-lint-lab=lane:lab --job rust-test-lab=lane:lab --job rust-test-default-lab=lane:lab --job rust-test-slow-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-test-default-root=root --tests rust-test-database-root=root --tests rust-test-shell-root=root --tests rust-test-default-lab=lab --tests rust-test-slow-lab=lab'
+          GATE_SPEC: '--plan rust-plan --job rust-plan=always --job rust-lint-root=lane:root --job rust-test-root=lane:root --job rust-test-default-root=lane:root --job rust-test-database-root=lane:root --job rust-test-shell-root=lane:root --job rust-lint-lab=lane:lab --job rust-test-lab=lane:lab --job rust-test-default-lab=lane:lab --job rust-test-slow-lab=lane:lab --job rust-inputs-audit=schedule-or-dispatch --tests rust-test-default-root=root --tests rust-test-database-root=root --tests rust-test-shell-root=root --tests rust-test-default-lab=lab --tests rust-test-slow-lab=lab'
         run: '. "$VELNOR_EXEC" gate --spec-env GATE_SPEC'
   cache:
     name: Cache

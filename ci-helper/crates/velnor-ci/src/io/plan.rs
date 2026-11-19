@@ -35,6 +35,9 @@ fn ci(error: impl std::fmt::Display) -> CiError {
 }
 
 pub(super) fn run_plan(args: &PlanArgs) -> Result<String, CiError> {
+    if let (Some(mode), Some(request)) = (args.mode, &args.request) {
+        return super::plan_request::run(args, mode, request);
+    }
     let checkout = read_recorded_checkout(&current_dir()?).map_err(ci)?;
     let facts = detect(&checkout.view).map_err(ci)?;
     let event = read_event()?;
