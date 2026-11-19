@@ -21,7 +21,7 @@ use crate::setup::{
 const ENV_VARIABLE: &str = "GITHUB_ENV";
 const CARGO_DIRECTORY: &str = ".cargo";
 const CARGO_CONFIG: &str = "config.toml";
-const OWNED_MARKER: &str = "# velnor-ci owns this file and rewrites it on every prepare";
+pub(super) const OWNED_MARKER: &str = "# velnor-ci owns this file and rewrites it on every prepare";
 
 pub(super) fn prepare() -> Result<String, CiError> {
     let root = current_dir()?;
