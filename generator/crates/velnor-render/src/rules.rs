@@ -89,6 +89,15 @@ pub struct RenderedMatrix {
     pub max_parallel: Option<u16>,
 }
 
+/// A job `container:` or one service; `ports` is empty for a job container.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderedContainer {
+    pub image: String,
+    pub ports: Vec<String>,
+    pub options: Option<String>,
+    pub env: Vec<(String, String)>,
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct RenderedJob {
     pub id: String,
@@ -102,6 +111,8 @@ pub struct RenderedJob {
     pub concurrency: Option<RenderedConcurrency>,
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<RenderedMatrix>,
+    pub container: Option<RenderedContainer>,
+    pub services: Vec<(String, RenderedContainer)>,
     /// A job that calls a reusable workflow has `uses` and `with` and no runner or steps.
     pub uses: Option<String>,
     pub with: Vec<(String, Value)>,
