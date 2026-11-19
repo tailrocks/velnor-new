@@ -57,7 +57,7 @@ pub enum Reason {
     UnknownLockedPackage(String),
     UnknownRoot(RepoPath),
     UnknownTestSetupRoot(String),
-    LintToolUnpinned(String),
+    Lint(crate::lint_error::LintFault),
     LintDuplicate(String),
     LintKeyForeign {
         kind: String,
@@ -306,7 +306,7 @@ impl fmt::Display for Reason {
             | Self::BuildDirKey(_)
             | Self::RuntimeTargetDir { .. }
             | Self::CargoConfigInclude => self.fmt_cargo_config(f),
-            Self::LintToolUnpinned(_)
+            Self::Lint(_)
             | Self::LintDuplicate(_)
             | Self::LintKeyForeign { .. } => self.fmt_config(f),
             Self::InvalidPatch(key) => {

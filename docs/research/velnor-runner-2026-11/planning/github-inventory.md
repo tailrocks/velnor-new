@@ -929,7 +929,7 @@ CI = statusCheckRollup state of last commit. Roadmap-issue column marks closing 
 | #1330 | D | fast/host-org-scale-set |  |  | FAILURE | 2026-11-18 | feat(runner): org-level scale set with a named runner group |
 | #1331 |  | peer/1206-hold-admission |  |  | FAILURE | 2026-11-18 | fix(runner): admit work only when the legacy gate says Advertise (#1206) |
 | #1333 |  | fast/p3-linear-schema-validate |  |  | FAILURE | 2026-11-18 | runner: validate the journal schema once on open (linear, not quadratic) |
-| #1334 | D | fast/state-seal-ancestor |  |  | FAILURE | 2026-11-18 | fix(ci): seal state for any head that is an ancestor of main's tip |
+| #1334 | D | fast/state seal-ancestor |  |  | FAILURE | 2026-11-18 | fix(ci): seal state for any head that is an ancestor of main's tip |
 | #1335 |  | fast/1290-lane-guard-gen |  | 1290 | FAILURE | 2026-11-18 | [P1] velnor-gen: emit a lane-guard step after filtered feature lanes (#1290) |
 | #1336 |  | fast/1290-release-integration |  | 1290 | FAILURE | 2026-11-18 | [P1] velnor-gen release: multi-bin, raw multi-bin, pre-publish checks, asset nam |
 | #1337 |  | fast/1290-attest-later |  | 1290 | FAILURE | 2026-11-19 | velnor-gen release attest follow-up: verify job with attestations:read only, den |

@@ -223,4 +223,3 @@ A	scripts/test_owned_mbx_observation.py	PRIVATE-MBX-OBSERVER-REGRESSION-ONLY; Ob
 M	scripts/test_owned_tool_build.py	PRIVATE-OWNED-TOOL-BUILD-REGRESSION-ONLY; SourceTests/BuildTests check source admission and mocked recipe; fixture helper only
 A	scripts/test_qualify_mbx_observation.py	PRIVATE-MBX-QUALIFICATION-REGRESSION-ONLY; MbxDispatchTests bind real image metadata with mocked smoke; no tool/compiler execution
 M	scripts/test_qualify_owned_tool.py	PRIVATE-OWNED-TOOL-QUALIFIER-REGRESSION-ONLY; QualifierAdmissionTests bind synthetic builder receipts/source/artifacts; no builds
-M	velnor-actions-ci-performance-goal.md	PASSIVE-DOC-OR-EVIDENCE
