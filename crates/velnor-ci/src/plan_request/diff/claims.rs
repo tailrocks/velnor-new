@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Which packages a path belongs to: the package directories, the workspace-wide files, and the
-//! `stacks.rust.inputs` rules. A package is named by its directory.
-
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::config::InputRule;
@@ -25,7 +22,6 @@ pub(super) struct Ownership<'a> {
 }
 
 impl<'a> Ownership<'a> {
-    /// A rule that names a package no route covers is a configuration the plan cannot follow.
     pub(super) fn new(units: &[Unit], rules: &'a [InputRule]) -> Result<Self, String> {
         let mut owners = Vec::new();
         let mut roots: BTreeMap<String, Vec<String>> = BTreeMap::new();

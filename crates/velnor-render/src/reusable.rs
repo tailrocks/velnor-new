@@ -18,7 +18,7 @@ use crate::steps::{
     ATTEST_BUILD_PROVENANCE, CACHE_RESTORE, CACHE_SAVE, CHECKOUT, DOWNLOAD_ARTIFACT, MISE,
     UPLOAD_ARTIFACT, install_helper,
 };
-use crate::workflow::{SAME_REPOSITORY, yaml_concurrency, yaml_job};
+use crate::workflow::{SAME_REPOSITORY, ShellcheckMarks, yaml_concurrency, yaml_job};
 use crate::yaml::{Yaml, emit, entry, text};
 
 const SELF_REPOSITORY_IGNORE: &str = "zizmor: ignore[self-repository]";
@@ -69,7 +69,7 @@ fn render_one(
             rendered
                 .jobs
                 .iter()
-                .map(|job| (job.id.clone(), yaml_job(job)))
+                .map(|job| (job.id.clone(), yaml_job(job, ShellcheckMarks::Jobs)))
                 .collect(),
         ),
     ));

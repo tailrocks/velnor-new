@@ -14,7 +14,7 @@ use crate::reconcile::{IntentRow, Reconcile, before_advertise, occupies};
 use crate::scale_set::{EnsureError, observe_scale_set_runners};
 use bollard::Docker;
 
-use super::inspect::container_running;
+use super::inspect::{ContainerObservation, observe_container};
 
 #[must_use]
 pub(crate) fn gate_line(decision: &Reconcile) -> String {
@@ -82,14 +82,14 @@ async fn evaluate_rows<F>(
 where
     F: FnOnce(&[IntentRow]) -> GithubObservation + Send + 'static,
 {
-    let observed_docker = running_ids(&rows, docker).await?;
+    let (observed_docker, absent_docker) = running_ids(&rows, docker).await?;
     let for_github = rows.clone();
     let github = tokio::task::spawn_blocking(move || github(&for_github))
         .await
         .unwrap_or_else(|_| {
             GithubObservation::failed("GitHub observation aborted", &all_sets(&rows))
         });
-    let hold_lines = hold::hold_lines(&rows, &observed_docker, &github);
+    let hold_lines = hold::hold_lines(&rows, &observed_docker, &absent_docker, &github);
     let decision = decide(&rows, &observed_docker, github.runners);
     Ok(GateReport {
         decision,
@@ -238,17 +238,23 @@ fn owned_ids(rows: &[IntentRow]) -> Vec<&str> {
         .collect()
 }
 
-async fn running_ids(rows: &[IntentRow], docker: &Docker) -> Result<Vec<String>, EnsureError> {
+async fn running_ids(
+    rows: &[IntentRow],
+    docker: &Docker,
+) -> Result<(Vec<String>, Vec<String>), EnsureError> {
     let mut running = Vec::new();
+    let mut absent = Vec::new();
     for row in rows {
         let Some(id) = row.docker_id.as_deref().filter(|id| !id.is_empty()) else {
             continue;
         };
-        if container_running(docker, id).await? {
-            running.push(id.to_owned());
+        match observe_container(docker, id).await? {
+            ContainerObservation::Live => running.push(id.to_owned()),
+            ContainerObservation::Absent => absent.push(id.to_owned()),
+            ContainerObservation::Stopped => {}
         }
     }
-    Ok(running)
+    Ok((running, absent))
 }
 
 fn map_journal(error: HostError) -> EnsureError {

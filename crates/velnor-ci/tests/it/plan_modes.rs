@@ -14,7 +14,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use crate::support::fresh_dir;
+use std::time::Duration;
+
+use crate::support::{fresh_dir, make_fifo, output_within};
 
 const DEFAULT_BRANCH: &str = "main";
 
@@ -44,10 +46,17 @@ fn mode_of(request: &str) -> &'static str {
     }
 }
 
+fn head_of(request: &Path) -> String {
+    let value: serde_json::Value =
+        serde_json::from_str(&read(request)).unwrap_or(serde_json::Value::Null);
+    value["head"].as_str().unwrap_or_default().to_owned()
+}
+
 fn plan(request: &Path, mode: &str, outputs: &Path, extra: &[(&str, &str)]) -> Output {
     let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
     command
         .env_clear()
+        .env("GITHUB_SHA", head_of(request))
         .env("GITHUB_OUTPUT", outputs)
         .env("GITHUB_RUN_ID", "44491127982")
         .env("GITHUB_RUN_ATTEMPT", "1")
@@ -173,5 +182,67 @@ fn a_qualification_run_needs_the_default_branch() {
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stderr).contains("missing_default_branch"));
+    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_duplicate_request_key_is_refused_before_planning() {
+    let request = recorded("push-docs-only").replacen('{', "{\"event\":\"merge_group\",", 1);
+    let stderr = refusal(&request, "ci", &[]);
+    assert!(stderr.contains("duplicate_key:event"), "{stderr}");
+}
+
+#[test]
+fn every_accepted_request_field_is_type_checked() {
+    for (field, value) in [
+        ("root", serde_json::json!(42)),
+        ("named_check_lanes", serde_json::json!("bad")),
+        ("lane_inventory", serde_json::json!("bad")),
+        (
+            "lane_inventory",
+            serde_json::json!({"routes": [], "extra": 1}),
+        ),
+    ] {
+        let mut request: serde_json::Value = serde_json::from_str(&recorded("push-docs-only"))
+            .unwrap_or_else(|e| unreachable!("{e}"));
+        request[field] = value;
+        let request = request.to_string();
+        let stderr = refusal(&request, "ci", &[]);
+        assert!(stderr.contains("malformed_request"), "{field}: {stderr}");
+    }
+}
+
+#[test]
+fn a_qualification_head_must_be_the_sha_of_the_current_run() {
+    let other = "1".repeat(40);
+    for sha in [other.as_str(), ""] {
+        let stderr = refusal(
+            &recorded("qualification-cold"),
+            "qualification",
+            &[("GITHUB_SHA", sha)],
+        );
+        assert!(stderr.contains("source_sha_not_current_run"), "{stderr}");
+    }
+}
+
+#[test]
+fn a_request_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
+    let temp = fresh_dir("velnor-ci-plan-modes", "fifo");
+    let fifo = temp.join("request.json");
+    make_fifo(&fifo);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .env_clear()
+        .env("GITHUB_OUTPUT", temp.join("outputs"))
+        .args(["plan", "--mode", "ci", "--request"])
+        .arg(&fifo);
+    let output = output_within(&mut command, Duration::from_secs(20));
+    let stderr = output.map(|output| String::from_utf8_lossy(&output.stderr).into_owned());
+    assert!(
+        stderr
+            .as_deref()
+            .is_some_and(|text| text.contains("unreadable_request")),
+        "{stderr:?}"
+    );
     fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
 }
