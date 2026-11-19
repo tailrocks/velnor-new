@@ -35,6 +35,7 @@ mod restore;
 mod run_signal;
 mod runners;
 mod side;
+mod sparse_prune;
 mod standin;
 mod standin_image;
 mod status;

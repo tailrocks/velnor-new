@@ -98,6 +98,7 @@ pub enum ReleaseError {
     BinaryNotReleased {
         package: String,
     },
+    Shipped(crate::shipped::ShippedError),
     EmptyPrBranchPrefix {
         root: String,
     },
