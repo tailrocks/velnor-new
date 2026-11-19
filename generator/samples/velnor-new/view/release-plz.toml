@@ -1,0 +1,98 @@
+# SPDX-FileCopyrightText: 2026 Alexey Zhokhov
+# SPDX-License-Identifier: Apache-2.0
+
+# One root workspace (#1290, #731). Every release tag carries a group prefix and
+# there is no bare `v<version>` tag (owner decision, #1429):
+#
+#   tools-v<version>   velnor-ci and velnor-gen, always released together
+#   runner-v<version>  the runner
+#
+# The old engine (velnor-actions-*) was deleted in #1459. Every other package is
+# not released by release-plz.
+#
+# The tools group is released by .velnor/release.toml (family_tag, tag push),
+# whose generator refuses a root where release-plz still releases a package, so
+# every package here is `release = false`. A tools version bump is a change to
+# the two crate versions, and the release starts on the pushed `tools-v` tag.
+# The runner group keeps its tag name and version group for the day it is
+# released again.
+
+[workspace]
+release = false
+release_always = false
+semver_check = false
+git_only = true
+git_release_draft = true
+pr_branch_prefix = "release-plz-"
+
+# Group "tools". Lead: owns the tag and the GitHub release.
+[[package]]
+name = "velnor-ci"
+release = false
+
+[[package]]
+name = "velnor-gen"
+release = false
+
+# Group "runner". Lead: owns the tag and the GitHub release.
+[[package]]
+name = "velnor-runner-cli"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+
+[[package]]
+name = "velnor-resource-probe"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "velnor-runner-attestation"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "velnor-runner-core"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "velnor-runner-github"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "velnor-runner-host"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "velnor-runner-image-manifest"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+git_tag_enable = false
+git_release_enable = false
+
+[[package]]
+name = "velnor-runner-qualification"
+release = false
+git_tag_name = "runner-v{{ version }}"
+version_group = "runner"
+git_tag_enable = false
+git_release_enable = false
