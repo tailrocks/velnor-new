@@ -58,8 +58,8 @@ The prior source capture from 2026-10-25 remains in
 [`freshness-evidence-2026-10-25.md`](docs/implemented/freshness-evidence-2026-10-25.md).
 The selected stable compiler and workspace MSRV are both Rust 1.99.1 and
 1.99, respectively. `mise.toml` remains a read-only local developer input.
-The workflow pins `jdx/mise-action` v5.2.6 to reviewed commit
-`f5be966e4a917d54244728e6a5fdcd1d93a35e6c`; the action's
+The workflow pins `jdx/mise-action` v5.2.9 to reviewed commit
+`236a21c3b91f5db6d4e174b348674a0f0caac06d`; the action's
 `persist_github_token` default is false, and Velnor leaves it unset. This
 supersedes issue #6's earlier v5.0.1 target.
 
