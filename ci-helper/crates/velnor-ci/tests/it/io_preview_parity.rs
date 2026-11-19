@@ -16,8 +16,9 @@ use velnor_ci::io::preview::gh::GhAttestor;
 use velnor_ci::io::preview::install::install;
 use velnor_ci::preview::runtime::{Host, verify_runtime};
 
-use crate::preview_runtime::MUTATIONS;
-use crate::preview_world::{FakeNet, PUBLIC, PUBLIC_RUN, World, sha};
+use crate::preview_fakes::FakeNet;
+use crate::preview_mutations::MUTATIONS;
+use crate::preview_world::{PUBLIC, PUBLIC_RUN, World, sha};
 use crate::support::fresh_dir;
 
 fn legacy() -> PathBuf {
