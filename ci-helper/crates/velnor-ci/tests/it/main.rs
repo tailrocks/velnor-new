@@ -25,6 +25,7 @@ mod configuration_targets;
 mod crates_mirror;
 mod event;
 mod gate;
+mod image_candidate;
 mod inputs;
 mod io;
 mod io_cold;
