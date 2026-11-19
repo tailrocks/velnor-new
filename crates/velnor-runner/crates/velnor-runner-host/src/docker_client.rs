@@ -101,12 +101,16 @@ pub fn connect_unix(socket: &str) -> Result<bollard::Docker, HostError> {
         .map_err(|_| HostError::Docker)
 }
 
-fn unix_socket_path(socket: &str) -> Result<String, HostError> {
+pub(crate) fn unix_socket_path(socket: &str) -> Result<String, HostError> {
     if scheme_is(socket, "tcp") {
         return Err(HostError::Docker);
     }
     let path = socket.strip_prefix("unix://").unwrap_or(socket);
-    if path.starts_with('/') && path.len() > 1 && !path.chars().any(char::is_control) {
+    if path.starts_with('/')
+        && path.len() > 1
+        && !path.chars().any(char::is_control)
+        && !path.contains("unix://")
+    {
         Ok(path.to_owned())
     } else {
         Err(HostError::Docker)

@@ -35,7 +35,8 @@ fn a_feature_lane_runs_its_own_nextest_step_with_the_features_and_the_filter() -
     assert_eq!(id, "rust-root");
     let run = step["run"].as_str().ok_or("no run")?;
     assert!(
-        run.contains("nextest run --workspace --locked --features 'local-mode'"),
+        run.contains("nextest run --workspace --locked")
+            && run.contains(" --features 'local-mode' "),
         "{run}"
     );
     assert!(

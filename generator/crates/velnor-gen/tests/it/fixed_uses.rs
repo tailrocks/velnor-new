@@ -6,9 +6,9 @@ use std::fs;
 use std::path::Path;
 
 use velnor_render::{
-    ACTIONS_CACHE, ALINT, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH,
-    DOCKER_LOGIN, DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction,
-    RenderedJob, RenderedStep, RenderedWorkflow, Rule, Value, check_rules, render_workflow,
+    ACTIONS_CACHE, ALLOWED_ACTIONS, ATTEST_BUILD_PROVENANCE, DOCKER_BUILD_PUSH, DOCKER_LOGIN,
+    DOCKER_SETUP_BUILDX, GITHUB_SCRIPT, MR_BOXINGTON, PINNED_ACTIONS, PinnedAction, RenderedJob,
+    RenderedStep, RenderedWorkflow, Rule, Value, check_rules, render_workflow,
 };
 
 use crate::release_fixture::app;
@@ -55,9 +55,8 @@ fn at(pin: &PinnedAction, reference: &str) -> String {
     format!("{}@{reference}", pin.action)
 }
 
-const NEW_ACTIONS: [PinnedAction; 8] = [
+const NEW_ACTIONS: [PinnedAction; 7] = [
     ATTEST_BUILD_PROVENANCE,
-    ALINT,
     DOCKER_LOGIN,
     DOCKER_SETUP_BUILDX,
     DOCKER_BUILD_PUSH,
@@ -364,7 +363,7 @@ fn no_rendered_workflow_contains_the_non_github_cache_mode_key() -> TestResult {
     assert!(!without_github_mode(&release).contains("cache-mode"));
     let rust_ci = render_workflow(
         &plan(Vec::new())?,
-        &workflow(step(&at(&ALINT, ALINT.commit), Vec::new())),
+        &workflow(step(&at(&ACTIONS_CACHE, ACTIONS_CACHE.commit), Vec::new())),
     )
     .map_err(|found| format!("{found:?}"))?;
     for text in rust_ci.values() {
