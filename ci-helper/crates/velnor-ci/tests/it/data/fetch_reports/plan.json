@@ -1,0 +1,550 @@
+{
+ "matrix": {
+  "include": [
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-check-generator-samples",
+    "matrix_key": "m-51795cd3bfa07578"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-check-maintenance-helpers",
+    "matrix_key": "m-c135a76a6c75279a"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-ci",
+    "matrix_key": "m-29dc0ced9e3a8d54"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-ci",
+    "matrix_key": "m-9df8ba8692131b97"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-ci",
+    "matrix_key": "m-39e5cd1f5f8fa9aa"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-ci",
+    "matrix_key": "m-b89e44d4b3f55903"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-ci",
+    "matrix_key": "m-1f620c4a9e4563dd"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-actionlint",
+    "matrix_key": "m-8887de4a4a14f095"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-actionlint",
+    "matrix_key": "m-ecdec2e058a7da89"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-actionlint",
+    "matrix_key": "m-81305c234c22a275"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-actionlint",
+    "matrix_key": "m-93aa743354796b58"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-ansible",
+    "matrix_key": "m-d3fd98d3c37d62e2"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-ansible",
+    "matrix_key": "m-4f612deabfc9dcf9"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-ansible",
+    "matrix_key": "m-061ac9ebf5f77020"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-ansible",
+    "matrix_key": "m-88eb678cf63e361f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-bun",
+    "matrix_key": "m-dd308264bbd86bd3"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-bun",
+    "matrix_key": "m-b2f867bc9210c13f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-bun",
+    "matrix_key": "m-0e6e5f4b244bc2cb"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-bun",
+    "matrix_key": "m-732f9f4f1464d8ed"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-cli",
+    "matrix_key": "m-7453ab9ff0d4f64d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-cli",
+    "matrix_key": "m-167c225e22fadf7f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-cli",
+    "matrix_key": "m-93a4593c9a3c3085"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-cli",
+    "matrix_key": "m-7569343f915bb22f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-cli",
+    "matrix_key": "m-67ee20a34e48b6e3"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-contract",
+    "matrix_key": "m-9109428e72a8fcba"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-contract",
+    "matrix_key": "m-904a957ae01ca7bb"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-contract",
+    "matrix_key": "m-5bfa1ac4c56189d6"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-contract",
+    "matrix_key": "m-c8b6d171011e01a9"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-contract",
+    "matrix_key": "m-43550b2728a6bb47"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-dbt",
+    "matrix_key": "m-962d5de69868a4c7"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-dbt",
+    "matrix_key": "m-b8c08617edf25529"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-dbt",
+    "matrix_key": "m-af829331ce4cd698"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-dbt",
+    "matrix_key": "m-d2fb2c9710205117"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-gradle",
+    "matrix_key": "m-79830e0373764c62"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-gradle",
+    "matrix_key": "m-cb53401f5fc64ecf"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-gradle",
+    "matrix_key": "m-5c89873dc863851f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-gradle",
+    "matrix_key": "m-e58a52a2c7dd63e9"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-mise",
+    "matrix_key": "m-1490dead3dc125c0"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-mise",
+    "matrix_key": "m-e4f4c72dff4c3345"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-mise",
+    "matrix_key": "m-8265037fd459347e"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-mise",
+    "matrix_key": "m-163ef16efec7c4ef"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-mise",
+    "matrix_key": "m-dc52cf6a2a0c1601"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-orchestrator",
+    "matrix_key": "m-53482d622c7ec440"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-orchestrator",
+    "matrix_key": "m-fb610837e234df52"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-orchestrator",
+    "matrix_key": "m-f31fcb1a405715c5"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-orchestrator",
+    "matrix_key": "m-de621063b566a463"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-orchestrator",
+    "matrix_key": "m-8759f3cfd795025d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-rust",
+    "matrix_key": "m-98b1e6d8c684a9d6"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-rust",
+    "matrix_key": "m-af2807043d348ff9"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-rust",
+    "matrix_key": "m-b9195ee6ee4dd6e3"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-rust",
+    "matrix_key": "m-708e095ab9f500b4"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-rust",
+    "matrix_key": "m-cb59aaefe5dfc948"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-tofu",
+    "matrix_key": "m-25773bb32466089a"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-tofu",
+    "matrix_key": "m-e960c40109276ee0"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-tofu",
+    "matrix_key": "m-6aff2f670ddaa697"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-tofu",
+    "matrix_key": "m-bd60c8a0929d1a4f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-workflow-renderer",
+    "matrix_key": "m-db6a670047663c4c"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-workflow-renderer",
+    "matrix_key": "m-bbe589a41e95aa9d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-workflow-renderer",
+    "matrix_key": "m-d04b7f8f31103a5a"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-workflow-renderer",
+    "matrix_key": "m-5469534559a12d36"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-actions-workflow-renderer",
+    "matrix_key": "m-81f6e0cba54c2186"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-resource-probe",
+    "matrix_key": "m-8fb51f44c0f08321"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-resource-probe",
+    "matrix_key": "m-ef7925bd89944999"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-resource-probe",
+    "matrix_key": "m-2e688720f071f25c"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-resource-probe",
+    "matrix_key": "m-ec68c018d2ac9504"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-resource-probe",
+    "matrix_key": "m-37421428dfc6d0bc"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-attestation",
+    "matrix_key": "m-9fa11b19dc86299a"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-attestation",
+    "matrix_key": "m-96901687b8ab5c0e"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-attestation",
+    "matrix_key": "m-596f6fd6e4294274"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-attestation",
+    "matrix_key": "m-6a2ce02551edd13a"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-cli",
+    "matrix_key": "m-c25a6078a8f7d5eb"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-cli",
+    "matrix_key": "m-78b6ede3e488982b"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-cli",
+    "matrix_key": "m-b717b98bc29a9439"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-cli",
+    "matrix_key": "m-c76a13c0b8b3eb12"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-cli",
+    "matrix_key": "m-79bd9be4270b8945"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-core",
+    "matrix_key": "m-8a54150842ee7bf6"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-core",
+    "matrix_key": "m-c5523b46fce19a70"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-core",
+    "matrix_key": "m-11d2a2f5394bdff6"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-core",
+    "matrix_key": "m-e4d25084222c0611"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-github",
+    "matrix_key": "m-bcbc84ca75945c65"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-github",
+    "matrix_key": "m-0745c4f5cd520152"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-github",
+    "matrix_key": "m-25ea841b74e98709"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-github",
+    "matrix_key": "m-bd50ead8abc290b2"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-github",
+    "matrix_key": "m-e1b463721251430d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host",
+    "matrix_key": "m-bc2fa3aa4b165882"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host-local-mode",
+    "matrix_key": "m-80b4829c56234325"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host",
+    "matrix_key": "m-0738ac8105e5e469"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host-local-mode",
+    "matrix_key": "m-5522cfdcc948e3aa"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host",
+    "matrix_key": "m-a5dbb5f0a62733b2"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host-local-mode",
+    "matrix_key": "m-4be750afd2e89527"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host",
+    "matrix_key": "m-509e0d93a1b120dd"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host-local-mode",
+    "matrix_key": "m-38d2e7bc6b750bf8"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host",
+    "matrix_key": "m-f42e2f75a3efef36"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-host-local-mode",
+    "matrix_key": "m-5b94cf3e55ae1f14"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-image-manifest",
+    "matrix_key": "m-be949b9a14e6f603"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-image-manifest",
+    "matrix_key": "m-efcb4a13e6734a9e"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-image-manifest",
+    "matrix_key": "m-866833de9a94275e"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-image-manifest",
+    "matrix_key": "m-f7fd768782f4359d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-image-manifest",
+    "matrix_key": "m-2424de4673167a47"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-qualification",
+    "matrix_key": "m-0b1af8b8826cf7e7"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-qualification",
+    "matrix_key": "m-0e13a836ad495697"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-qualification",
+    "matrix_key": "m-a659cf8dfd25b58a"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-qualification",
+    "matrix_key": "m-cb401867a0d965bb"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-runner-qualification",
+    "matrix_key": "m-d719c19f04ef97ad"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-gen",
+    "matrix_key": "m-9888b75d6ab5cfcc"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-gen",
+    "matrix_key": "m-6b8bc134cab8205f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-gen",
+    "matrix_key": "m-8b543ab28617ac0e"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-gen",
+    "matrix_key": "m-a9a425e1b19afa21"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-gen",
+    "matrix_key": "m-94824a31ea5067b8"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-model",
+    "matrix_key": "m-8a5513285cdfb7bc"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-model",
+    "matrix_key": "m-fa15fdf5dc0899ea"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-model",
+    "matrix_key": "m-95c9bba3158e3b6d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-model",
+    "matrix_key": "m-c23a990fa02c0b5d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-release",
+    "matrix_key": "m-98ff6fe81c5c4954"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-release",
+    "matrix_key": "m-2c635aac784978f8"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-release",
+    "matrix_key": "m-cc3f1d2fae07de5b"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-release",
+    "matrix_key": "m-b44dc05fe3468d3f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-release",
+    "matrix_key": "m-8238b2cd289547d9"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-render",
+    "matrix_key": "m-673c17c9ab18ead3"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-render",
+    "matrix_key": "m-816db14c086e2525"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-render",
+    "matrix_key": "m-ed7a6fb9f9389554"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-render",
+    "matrix_key": "m-f5ce8a58bffff583"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-rust",
+    "matrix_key": "m-1d4bb12ec06abcb2"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-rust",
+    "matrix_key": "m-91bbf3a99c839041"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-rust",
+    "matrix_key": "m-322ba4cdbced9695"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-rust",
+    "matrix_key": "m-e46d87d8dfebfe61"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-cache-rules",
+    "matrix_key": "m-903fd8d46aaa736e"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-cache-rules",
+    "matrix_key": "m-1f84f8f8a4848f0d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-cache-rules",
+    "matrix_key": "m-8899a18d5090694d"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-cache-rules",
+    "matrix_key": "m-6ed2a75fdcb0bbf9"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-cache-rules",
+    "matrix_key": "m-9d9e0d332d4f6f0b"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-local",
+    "matrix_key": "m-3745e50537c0aa73"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-local",
+    "matrix_key": "m-a63e42cab529f760"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-local",
+    "matrix_key": "m-e85c6fc5434c8f28"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-local",
+    "matrix_key": "m-e5f6401214ba1d0f"
+   },
+   {
+    "artifact_id": "velnor-crate-r44491127982-a1-rust-velnor-local",
+    "matrix_key": "m-490d0faf7e19d8d1"
+   }
+  ]
+ }
+}

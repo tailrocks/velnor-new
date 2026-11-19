@@ -61,6 +61,7 @@ pub enum Reason {
     TestGroupWithoutNextest(String),
     TestGroupFilter(String),
     TestGroupSelection(String),
+    PrCiWithSkipDraft,
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
@@ -74,6 +75,7 @@ pub enum Reason {
     UnpinnedTool(&'static str),
     HelperBox(RepoPath),
     HelperSourceRelease,
+    MbxRemotePrivate(String),
     CargoCredentialProvider(String),
     TargetDirOutside(String),
     TargetDirOverlap(String),
@@ -144,8 +146,15 @@ impl Reason {
                 f,
                 "helper.path is {path}, which is not a Cargo root with the package velnor-ci"
             ),
+            Self::PrCiWithSkipDraft => f.write_str(
+                "pr_ci = \"label\" and skip_draft_pull_requests = true both decide what a draft pull request runs; remove skip_draft_pull_requests, because pr_ci = \"label\" already runs nothing on a draft",
+            ),
             Self::HelperSourceRelease => f.write_str(
                 "helper.path requires velnor-ci 0.1.81 or newer for input restoration and cache tie-breaking; run `velnor-gen pin-helper 0.1.81`",
+            ),
+            Self::MbxRemotePrivate(cause) => write!(
+                f,
+                "cache.mbx_remote is refused: fork pull requests can restore that cache and this repository has private dependencies ({cause}); remove cache.mbx_remote"
             ),
             _ => Ok(()),
         }
@@ -175,6 +184,9 @@ impl Reason {
             Self::BuildDirKey(key) => write!(
                 f,
                 "{key} is not supported: the target cache cannot model a separate build directory, so remove it"
+            ),
+            Self::RustdocflagsString => f.write_str(
+                "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
             Self::CargoConfigInclude => f.write_str(
                 "include is not supported: velnor-gen must see every cargo setting that reaches the generated steps, so move the included settings into this file",
@@ -263,7 +275,11 @@ impl fmt::Display for Reason {
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
             ),
-            Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperSourceRelease => self.fmt_setup(f),
+            Self::UnpinnedTool(_)
+            | Self::HelperBox(_)
+            | Self::HelperSourceRelease
+            | Self::MbxRemotePrivate(_)
+            | Self::PrCiWithSkipDraft => self.fmt_setup(f),
             Self::BuildExecutable
             | Self::CargoCredentialProvider(_)
             | Self::CapLints
