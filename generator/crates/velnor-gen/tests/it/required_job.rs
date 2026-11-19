@@ -125,6 +125,17 @@ fn one_job_exports_its_own_plan_flag_and_the_gate_reads_it_from_that_job() -> Te
 }
 
 #[test]
+fn the_test_job_exports_the_ignored_count_only_for_a_helper_that_reports_it() -> TestResult {
+    let output = "tests_ignored: '${{ steps.test.outputs.tests_ignored }}'\n";
+    let older = released("0.1.85", &["Cargo.toml"])?;
+    assert!(older.contains("tests_listed: "), "{older}");
+    assert!(!older.contains("tests_ignored"), "{older}");
+    let newer = released("0.1.86", &["Cargo.toml"])?;
+    assert!(newer.contains(output), "{newer}");
+    Ok(())
+}
+
+#[test]
 fn the_gate_names_every_job_the_verdict_job_needs() -> TestResult {
     let text = released(
         "0.1.81",

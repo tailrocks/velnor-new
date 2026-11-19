@@ -96,10 +96,6 @@ fn the_host_tuple_target_requires_rust_191_or_newer() -> TestResult {
                 "[tools]\nrust = \"1.91.0\"\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
                 Some("1.91.0\n"),
             ),
-            (
-                "[tools]\n\"aqua:nextest-rs/nextest/cargo-nextest\" = \"0.9.151\"\n",
-                Some("1.91.0\n"),
-            ),
         ] {
             let mut configs = vec![(".cargo/config.toml", target), ("mise.toml", mise)];
             if let Some(channel) = toolchain {

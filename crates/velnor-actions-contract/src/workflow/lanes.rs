@@ -184,8 +184,16 @@ fn bun_asset_producers(
 }
 
 fn check_override_keys(ir: &WorkflowIr, execution: &ExecutionConfig) -> Result<(), ContractError> {
-    for key in execution.overrides.keys() {
-        if !ir.jobs.contains_key(key) {
+    for (key, over) in &execution.overrides {
+        if control::is_renderer_added_control_job(key) {
+            if over.role != ExecutionRole::Control {
+                return Err(ContractError::config(
+                    "config.toml",
+                    format!("execution.overrides.{key}.role"),
+                    "role_not_eligible",
+                ));
+            }
+        } else if !ir.jobs.contains_key(key) {
             return Err(ContractError::config(
                 "config.toml",
                 format!("execution.overrides.{key}"),
@@ -319,7 +327,9 @@ fn emit_job_variants(
         Placement::ScaleSetOnly => {
             let token = scale_token.ok_or_else(missing_scale_selector)?;
             let mut next = retarget(job, Some(token), id, id, class, EmitLane::Single, map)?;
-            next.display_name = scale_name(&job.display_name);
+            if class != LaneClass::Control {
+                next.display_name = scale_name(&job.display_name);
+            }
             Ok(vec![(id.to_owned(), next)])
         }
         Placement::Both => {
@@ -365,6 +375,13 @@ fn hosted_name(name: &str) -> String {
 fn scale_name(name: &str) -> String {
     format!("{name} / Velnor Scale Set / Linux x64")
 }
+
+#[path = "lanes_control.rs"]
+mod control;
+pub use control::{
+    SCHEMA2_CONTROL_JOB_IDS, fork_fenced_condition, fork_fenced_condition_admitting_dispatch,
+    is_renderer_added_control_job, scale_set_control_jobs, scale_set_support_jobs,
+};
 
 #[path = "lanes_placement.rs"]
 mod placement;
