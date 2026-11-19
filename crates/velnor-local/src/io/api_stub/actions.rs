@@ -59,7 +59,7 @@ impl ApiStub {
         self.config.standin.as_ref()?.get(path).await
     }
 
-    async fn standin<T: DeserializeOwned>(&self, path: &str) -> Option<T> {
+    pub(super) async fn standin<T: DeserializeOwned>(&self, path: &str) -> Option<T> {
         serde_json::from_slice(&self.standin_bytes(path).await?).ok()
     }
 

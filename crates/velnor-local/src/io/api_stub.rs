@@ -83,7 +83,9 @@ impl ApiStub {
             _ => None,
         };
         if let Some(level) = needed
-            && !self.job_may_administer(&request, level)
+            && !self
+                .job_may_administer(request.headers(), request.uri().path(), level)
+                .await
         {
             return super::json_response(
                 403,
