@@ -227,6 +227,9 @@ pub fn group_output_name(slug: &RootSlug, group: &JobId) -> String {
 pub enum PlanFrom {
     ThisJob,
     Job(JobId),
+    /// The plan outputs of a job that also builds and tests, so a job that
+    /// needs it must not wait for that job to succeed.
+    WorkJob(JobId),
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]

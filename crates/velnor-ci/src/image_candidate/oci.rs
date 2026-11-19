@@ -11,7 +11,7 @@ use serde_json::{Value, json};
 use super::archive::{Blob, Scanned};
 use super::hashing::sha256_hex;
 use super::json::{is_digest, parse, uint};
-use super::layer::{Layer, scan as scan_layer};
+use super::layer::{Budget, Layer, scan_shared};
 use crate::error::CiError;
 
 const MAX_UNCOMPRESSED: u64 = 4 << 30;
@@ -316,9 +316,8 @@ fn check_layers(
     entries: &[Descriptor],
     diff_ids: &[String],
 ) -> Result<(), CiError> {
-    let results = run_layers(scan, source, entries);
-    let mut bytes: u64 = 0;
-    let mut members: usize = 0;
+    let budget = Budget::new(MAX_UNCOMPRESSED, MAX_LAYER_MEMBERS);
+    let results = run_layers(scan, source, entries, &budget);
     for ((entry, expected), result) in entries.iter().zip(diff_ids).zip(results) {
         let layer = result?;
         if format!("sha256:{}", layer.diff_id) != *expected {
@@ -331,14 +330,6 @@ fn check_layers(
                 "OCI blob bytes are not the same as the bytes identified by their descriptor.",
             );
         }
-        if members + layer.members > MAX_LAYER_MEMBERS {
-            return fail("OCI image has too many layer paths.");
-        }
-        if bytes + layer.size > MAX_UNCOMPRESSED {
-            return fail("OCI image layers exceed their uncompressed size limit.");
-        }
-        bytes += layer.size;
-        members += layer.members;
     }
     Ok(())
 }
@@ -347,6 +338,7 @@ fn run_layers(
     scan: &Scanned,
     source: &dyn BlobSource,
     entries: &[Descriptor],
+    budget: &Budget,
 ) -> Vec<Result<Layer, CiError>> {
     let slots: Vec<Mutex<Option<Result<Layer, CiError>>>> =
         entries.iter().map(|_| Mutex::new(None)).collect();
@@ -363,7 +355,7 @@ fn run_layers(
                     let Some(entry) = entries.get(index) else {
                         break;
                     };
-                    let outcome = one_layer(scan, source, entry);
+                    let outcome = one_layer(scan, source, entry, budget);
                     if let Ok(mut slot) = slots[index].lock() {
                         *slot = Some(outcome);
                     }
@@ -386,15 +378,11 @@ fn one_layer(
     scan: &Scanned,
     source: &dyn BlobSource,
     entry: &Descriptor,
+    budget: &Budget,
 ) -> Result<Layer, CiError> {
     let blob = &scan.blobs[&entry.hex];
     let stream = source
         .open(blob)
         .map_err(|_| CiError::new("Cannot read OCI archive."))?;
-    scan_layer(
-        stream,
-        entry.media_type.ends_with("+gzip"),
-        MAX_UNCOMPRESSED,
-        MAX_LAYER_MEMBERS,
-    )
+    scan_shared(stream, entry.media_type.ends_with("+gzip"), budget)
 }

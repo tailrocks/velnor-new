@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+pub mod bounded;
 pub mod budget;
 pub mod budget_history;
 pub mod cache;

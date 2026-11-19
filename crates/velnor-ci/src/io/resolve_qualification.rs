@@ -1,9 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::OpenOptions;
 use std::io::Read;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
@@ -11,6 +9,7 @@ use std::time::Duration;
 use serde_json::Value;
 
 use super::http::HttpGitHub;
+use super::open_regular;
 use super::write_request::write_once;
 use crate::cli::ResolveQualificationArgs;
 use crate::error::CiError;
@@ -41,14 +40,7 @@ fn non_empty(name: &str) -> Option<String> {
 /// The file the legacy op reads: not a symlink, a regular file, within the limit, UTF-8.
 fn read_event_file(path: &Path) -> Result<String, CiError> {
     let unreadable = || internal("unreadable_event_payload");
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(|_| unreadable())?;
-    if !file.metadata().map_err(|_| unreadable())?.is_file() {
-        return Err(unreadable());
-    }
+    let file = open_regular(path).ok_or_else(unreadable)?;
     let mut bytes = Vec::new();
     Read::take(file, FILE_LIMIT + 1)
         .read_to_end(&mut bytes)

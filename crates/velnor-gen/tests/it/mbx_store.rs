@@ -80,7 +80,8 @@ fn a_helper_that_cannot_select_the_store_is_refused() -> TestResult {
 const SEED: &str = "\"$VELNOR_EXEC\" mbx-seed";
 
 #[test]
-fn the_pr_seed_follows_the_store_selection_on_pull_requests_and_merge_groups_only() -> TestResult {
+fn the_pr_seed_runs_after_the_plan_and_only_for_a_selection_and_never_in_the_planning_job()
+-> TestResult {
     let text = workflow(&repo("mbx_shared_store = true\n", "0.1.86")?)?;
     let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
     let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
@@ -92,16 +93,34 @@ fn the_pr_seed_follows_the_store_selection_on_pull_requests_and_merge_groups_onl
                 .iter()
                 .position(|s| s["run"].as_str().is_some_and(|run| run.contains(needle)))
         };
+        if id == "rust-plan" {
+            assert!(
+                at(EXEC).is_none() && at(SEED).is_none(),
+                "{id}: the planning job seeds nothing"
+            );
+            continue;
+        }
         let Some(store) = at(EXEC) else { continue };
         let seed = at(SEED).ok_or_else(|| format!("{id}: no mbx-seed"))?;
         assert_eq!(seed, store + 1, "{id}");
-        assert_eq!(
-            steps[seed]["if"].as_str(),
-            Some(
-                "${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}"
+        let condition = steps[seed]["if"].as_str().ok_or("seed has no if")?;
+        assert!(
+            condition.contains(
+                "github.event_name == 'pull_request' || github.event_name == 'merge_group'"
             ),
-            "{id}"
+            "{id}: {condition}"
         );
+        if let Some(plan) = steps.iter().position(|s| s["id"].as_str() == Some("plan")) {
+            assert!(
+                plan < store,
+                "{id}: the plan runs before the store and the seed"
+            );
+            assert!(
+                condition.contains("steps.plan.outputs.rust_"),
+                "{id}: {condition}"
+            );
+            assert!(condition.contains("_mode != 'none'"), "{id}: {condition}");
+        }
         seeded += 1;
     }
     assert!(seeded > 0);

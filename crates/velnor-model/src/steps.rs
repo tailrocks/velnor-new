@@ -128,6 +128,9 @@ pub enum StepKind {
     Budget {
         last: usize,
     },
+    MergeGroupPassed {
+        required: String,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -162,5 +165,4 @@ pub enum HelperCommand {
     CheckMetadata,
     Restored(BaseExpiry),
     InputsAudit,
-    MergeGroupPassed,
 }

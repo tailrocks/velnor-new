@@ -13,7 +13,7 @@ use crate::lane::PLAN_JOB;
 use crate::plan::{RUST_JOB, job, step};
 use crate::required_size::needs_max_bytes;
 
-const VERDICT_JOB: JobId = JobId::from_static("required");
+pub(crate) const VERDICT_JOB: JobId = JobId::from_static("required");
 
 fn tests_lane(job: &Job) -> Vec<RootSlug> {
     job.steps

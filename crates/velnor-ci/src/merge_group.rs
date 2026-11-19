@@ -1,7 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use crate::github::{ApiMergeGroupRun, ApiPage, GitHub, Repo, merge_group_runs_path, parse};
+use crate::github::{
+    ApiJobs, ApiMergeGroupRun, ApiPage, GitHub, Repo, merge_group_runs_path, parse, run_jobs_path,
+};
+
+const JOB_PAGES: u32 = 5;
 
 #[derive(Debug)]
 pub struct Context {
@@ -9,6 +13,7 @@ pub struct Context {
     pub repository: String,
     pub sha: String,
     pub workflow_ref: String,
+    pub required: Option<String>,
 }
 
 #[derive(Debug)]
@@ -29,8 +34,8 @@ fn workflow_file(context: &Context) -> Option<&str> {
         .workflow_ref
         .strip_prefix(&context.repository)?
         .strip_prefix('/')?
-        .split('@')
-        .next()?;
+        .split_once("@refs/")?
+        .0;
     let file = path.strip_prefix(".github/workflows/")?;
     (!file.is_empty() && !file.contains('/')).then_some(file)
 }
@@ -63,12 +68,20 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
         Ok(page) => page,
         Err(error) => return run_everything(error.to_string()),
     };
-    let passed = page.items.iter().any(|run| {
-        run.event == "merge_group"
-            && run.head_sha == context.sha
-            && run.status == "completed"
-            && run.conclusion.as_deref() == Some("success")
-    });
+    let passed = page
+        .items
+        .iter()
+        .filter(|run| run.event == "merge_group" && run.head_sha == context.sha)
+        .any(|run| {
+            if run.status == "completed" {
+                run.conclusion.as_deref() == Some("success")
+            } else {
+                context
+                    .required
+                    .as_deref()
+                    .is_some_and(|name| required_job_passed(github, &repo, run.id, name))
+            }
+        });
     if passed {
         SkipPush {
             skip: true,
@@ -83,4 +96,26 @@ pub fn skip_push(github: &impl GitHub, context: &Context) -> SkipPush {
             context.sha
         ))
     }
+}
+
+fn required_job_passed(github: &impl GitHub, repo: &Repo, run: u64, name: &str) -> bool {
+    for page in 1..=JOB_PAGES {
+        let Ok(body) = github.get(&run_jobs_path(repo, run, page)) else {
+            return false;
+        };
+        let Ok(jobs) = parse::<ApiJobs>(&body, "jobs") else {
+            return false;
+        };
+        if jobs
+            .jobs
+            .iter()
+            .any(|job| job.name == name && job.conclusion.as_deref() == Some("success"))
+        {
+            return true;
+        }
+        if jobs.jobs.len() < 100 {
+            return false;
+        }
+    }
+    false
 }
