@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::collections::BTreeMap;
 use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::process::CommandExt;
@@ -22,7 +21,7 @@ use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::separate_group;
 use crate::tests_run::{
-    TestCounts, apply_runnable, list_argv, output_lines, runnable_matches, runs_nextest,
+    Listing, TestCounts, apply_runnable, list_argv, output_lines, runnable_matches, runs_nextest,
 };
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
@@ -244,7 +243,7 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     });
 }
 
-fn list_matches(argv: &[String]) -> Option<BTreeMap<String, u64>> {
+fn list_matches(argv: &[String]) -> Option<Listing> {
     let argv = list_argv(argv)?;
     let mut command = Command::new(&argv[0]);
     command

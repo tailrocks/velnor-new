@@ -10,7 +10,7 @@ use crate::events::DENY_MISE;
 use crate::facts::{TestResult, lock_pinned_tools};
 use crate::pipeline::{view, workflow};
 
-const KEY: &str = "          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.9-${{ hashFiles(''mise.lock'') }}'\n";
+const KEY: &str = "          key: 'velnor-tools-${{ runner.os }}-${{ runner.arch }}-mise2026.11.10-${{ hashFiles(''mise.lock'') }}'\n";
 const SAVE_IF: &str = "        if: '${{ github.ref == format(''refs/heads/{0}'', github.event.repository.default_branch) && steps.tools.outputs.cache-hit != ''true'' }}'\n";
 
 fn names(job: &str) -> Vec<&str> {

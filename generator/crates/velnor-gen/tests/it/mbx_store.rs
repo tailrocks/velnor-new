@@ -22,7 +22,7 @@ fn the_shared_store_is_selected_once_per_job_before_any_cargo_or_tool_step() -> 
     for shape in ["", "shape = 'groups'\n"] {
         let text = workflow(&repo(
             &format!("{shape}mbx_shared_store = true\n"),
-            "0.1.84",
+            "0.1.85",
         )?)?;
         let yaml: serde_json::Value = crate::yaml_tree::document(&text)?;
         let jobs = yaml["jobs"].as_object().ok_or("jobs missing")?;
@@ -71,8 +71,8 @@ fn the_shared_store_is_off_unless_configured() -> TestResult {
 #[test]
 fn a_helper_that_cannot_select_the_store_is_refused() -> TestResult {
     assert!(
-        workflow(&repo("mbx_shared_store = true\n", "0.1.83")?)
-            .is_err_and(|error| error.to_string().contains("0.1.84"))
+        workflow(&repo("mbx_shared_store = true\n", "0.1.84")?)
+            .is_err_and(|error| error.to_string().contains("0.1.85"))
     );
     Ok(())
 }

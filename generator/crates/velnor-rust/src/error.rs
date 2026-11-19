@@ -60,6 +60,7 @@ pub enum Reason {
     RustdocflagsString,
     CargoConfigInclude,
     MiseOverridesFlags(String),
+    MiseTemplate,
     OtherMiseConfig,
     CapLints,
     CargoEnv(String),
@@ -151,6 +152,22 @@ impl Reason {
             _ => Ok(()),
         }
     }
+
+    fn fmt_mise(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MiseOverridesFlags(name) => write!(
+                f,
+                "{name} is not supported: mise-action installs tools and exports this configuration's environment to every step, where plugins or variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
+            ),
+            Self::MiseTemplate => f.write_str(
+                "templates are not supported: mise evaluates them while installing tools and can execute commands that replace or weaken a check; use literal configuration values"
+            ),
+            Self::OtherMiseConfig => f.write_str(
+                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
+            ),
+            _ => Ok(()),
+        }
+    }
 }
 
 impl fmt::Display for Reason {
@@ -207,17 +224,13 @@ impl fmt::Display for Reason {
             Self::RustdocflagsString => f.write_str(
                 "rustdoc flags must be set as an array in build.rustdocflags, not as a string and not per target: the generated documentation step adds -D warnings there with --config",
             ),
-            Self::MiseOverridesFlags(name) => write!(
-                f,
-                "{name} is not supported: mise-action exports this configuration's environment to every step, where variables can replace or weaken a check; set cargo and rustup settings in the cargo configuration or the toolchain file"
-            ),
+            Self::MiseOverridesFlags(_) | Self::MiseTemplate | Self::OtherMiseConfig => {
+                self.fmt_mise(f)
+            }
             Self::UndeclaredTarget(_) | Self::HostTupleVersion(_) => self.fmt_build_target(f),
             Self::CargoEnv(name) => write!(
                 f,
                 "[env] sets {name}: cargo passes it to the compilers and clippy the checks run, and with force = true it replaces what the step sets, so a check could pass without checking; remove it, or set it without force and with a name that does not start with CLIPPY, RUST or CARGO"
-            ),
-            Self::OtherMiseConfig => f.write_str(
-                "is a mise configuration that mise-action loads too; velnor-gen checks only mise.toml and .mise.toml, so move its settings there",
             ),
             Self::UnpinnedTool(_) | Self::HelperBox(_) | Self::HelperSourceRelease => self.fmt_setup(f),
             Self::BuildExecutable

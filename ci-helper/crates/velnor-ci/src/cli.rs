@@ -8,8 +8,10 @@ use velnor_model::{InvalidId, RepoPath};
 
 mod gate;
 mod report;
+mod write_request;
 pub use gate::GateArgs;
 pub use report::ReportArgs;
+pub use write_request::WriteRequestArgs;
 
 #[derive(Debug, Parser)]
 #[command(
@@ -56,6 +58,10 @@ pub enum Command {
     )]
     Plan(PlanArgs),
     #[command(
+        about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
+    )]
+    WriteRequest(WriteRequestArgs),
+    #[command(
         about = "Run after the tools are installed: exit 1 naming each tool that mise does not report at its pinned version, append RUSTUP_AUTO_INSTALL=0 and the CI build profile to $GITHUB_ENV, and write the step output compat to $GITHUB_OUTPUT; run in the checkout"
     )]
     Prepare,
@@ -76,6 +82,10 @@ pub enum Command {
     )]
     CheckConfigurations(CheckConfigurationsArgs),
     #[command(
+        about = "Run in the directory of a Cargo root after the feature test lane: exit 1 unless the lane filter selects every test that exists only with the features, as cargo-nextest lists them. Lists the workspace three times (default features, the features, and the features under the filter) with cargo-nextest, so the build is the lane's own; ignored tests are exempt, and a listing error fails the guard"
+    )]
+    LaneGuard(LaneGuardArgs),
+    #[command(
         about = "Run after every cache and after velnor-ci inputs restore: every action that must follow the restores. Gives each tracked file that shares its modification time with another tracked file a distinct time, one microsecond below the time it had and ordered by path, so that cargo, which picks the newest file of a package by time alone, names the same file after every restore. When VELNOR_BASE_MAX_AGE_DAYS is a positive number, first removes every restored target directory whose target/.velnor/born date is more than that many days old, so the run builds cold. Writes the step output expired=true when it removed one (an unreadable born date counts as expired) and expired=false otherwise, so a later step can plan a full run"
     )]
     Restored(crate::cli_cache::RestoredArgs),
@@ -91,9 +101,41 @@ pub enum Command {
     #[command(subcommand, about = "Work on the shared Sources cache")]
     Sources(SourcesCommand),
     #[command(
+        about = "Verify the source preview runtime SDK that .velnor/generator.lock at PUBLIC_SOURCE pins (run PUBLIC_RUN_ID attempt PUBLIC_RUN_ATTEMPT of the image workflow): the lock change was approved by the parent commit, the preview's runs, jobs, annotated tag, immutable release, digests and Sigstore attestation (gh attestation verify with the pinned gh, signer pinned to the publication workflow commit) all match. Then install the SDK under $RUNNER_TEMP/source-preview-runtime (linux, darwin, receipt.json, bundle.json, identity.json) and write linux_sha256 and darwin_sha256 to $GITHUB_OUTPUT, which must be empty. Reads GH_TOKEN, RUNNER_TEMP, GITHUB_OUTPUT; exits 1 on any failed check"
+    )]
+    VerifyRuntime(PreviewGhArgs),
+    #[command(
+        about = "Run the verified Linux SDK in $RUNNER_TEMP/source-preview-runtime: copy it into a sealed memory file, check its sha256 equals VERIFIED_LINUX_SHA256, and exec it as `image-maintenance verify-mac-attestation` with PRODUCER_RUN_ID, PRODUCER_RUN_ATTEMPT, PRODUCER_ARTIFACT_ID and PUBLISHER_ARTIFACT_ID and only an allowlist of the environment. Linux only; exits 1 when a check fails"
+    )]
+    VerifyMacProof,
+    #[command(
+        about = "Run one step of the source preview publication (draft, prepare or publish): check the admitted source metadata and payloads in the working directory against the run, the annotated tag and the GitHub release, and write the step outputs to $GITHUB_OUTPUT. Reads GH_TOKEN, the AUTHORITY_* variables, SOURCE_ARTIFACT_ID, LINUX_PAYLOAD_ARTIFACT_ID, DARWIN_PAYLOAD_ARTIFACT_ID and, for prepare and publish, SIGN, PAIR_ORIGIN, PAIR_ID, RECEIPT_SHA256 and BUNDLE_SHA256; exits 1 on any failed check"
+    )]
+    RunAuthority(RunAuthorityArgs),
+    #[command(
         about = "Write .velnor/rust-ci-timings.json from the last successful runs of the generated workflow on the default branch: the median of at least three ordinary runs, one entry per Cargo root, counting only jobs that ran on the runner in .velnor/rust-ci.toml (default ubuntu-latest); writes nothing with fewer; reads GITHUB_TOKEN; run in the checkout"
     )]
     Timings(TimingsArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct PreviewGhArgs {
+    #[arg(
+        long,
+        help = "Absolute path of the pinned gh; defaults to the PREVIEW_GH variable"
+    )]
+    pub gh: Option<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct RunAuthorityArgs {
+    #[arg(long, help = "draft, prepare or publish")]
+    pub mode: String,
+    #[arg(
+        long,
+        help = "Absolute path of the pinned gh; defaults to the PREVIEW_GH variable"
+    )]
+    pub gh: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -129,6 +171,28 @@ pub struct SourcesFetchArgs {
         help = "Cargo root directories, relative to the working directory or absolute, fetched in the order given"
     )]
     pub roots: Vec<PathBuf>,
+}
+
+#[derive(Debug, Args)]
+pub struct LaneGuardArgs {
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Comma-separated features the lane step passes to cargo"
+    )]
+    pub features: String,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "The lane's own nextest filter expression"
+    )]
+    pub filter: String,
+    #[arg(
+        long,
+        value_parser = clap::builder::NonEmptyStringValueParser::new(),
+        help = "Nextest binary id the lane never lists; repeatable"
+    )]
+    pub except_binary: Vec<String>,
 }
 
 #[derive(Debug, Args)]
@@ -215,7 +279,8 @@ pub struct CheckTagArgs {
 }
 
 pub use crate::cli_release::{
-    CheckConfigArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand, ReleaseGateArgs,
+    CheckConfigArgs, FamilyTagArgs, PreflightArgs, PublishArgs, RecordArgs, ReleaseCommand,
+    ReleaseGateArgs,
 };
 
 #[derive(Debug, Args)]
