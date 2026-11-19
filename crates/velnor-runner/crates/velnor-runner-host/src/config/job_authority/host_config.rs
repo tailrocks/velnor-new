@@ -19,10 +19,6 @@ impl super::super::HostConfig {
                 .connections
                 .iter()
                 .any(|item| &item.connection_id == connection_id)
-            || self
-                .job_authority_policies
-                .iter()
-                .any(|policy| policy.connection_id() == connection_id)
         {
             return Err(HostError::Config);
         }
@@ -32,6 +28,17 @@ impl super::super::HostConfig {
         policy.canonicalize();
         if policy.connection_id() != connection_id {
             return Err(HostError::Config);
+        }
+        if let Some(stored) = self
+            .job_authority_policies
+            .iter()
+            .find(|stored| stored.connection_id() == connection_id)
+        {
+            return if *stored == policy {
+                Ok(self.clone())
+            } else {
+                Err(HostError::Config)
+            };
         }
         let mut candidate = self.clone();
         candidate.job_authority_policies.push(policy);
