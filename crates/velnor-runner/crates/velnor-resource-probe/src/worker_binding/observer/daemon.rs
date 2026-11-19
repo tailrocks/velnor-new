@@ -133,8 +133,12 @@ fn daemon_executable_identity(pid: u32) -> Result<Option<ExecutableIdentity>, Pr
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(ProbeError::Read("proc_executable", error)),
     };
-    if executable.file_name().and_then(|name| name.to_str()) != Some("dockerd")
-        || executable.to_string_lossy().contains(" (deleted)")
+    let executable = executable.to_string_lossy();
+    let executable = executable.strip_suffix(" (deleted)").unwrap_or(&executable);
+    if Path::new(executable)
+        .file_name()
+        .and_then(|name| name.to_str())
+        != Some("dockerd")
     {
         return Ok(None);
     }

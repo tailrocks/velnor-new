@@ -34,6 +34,7 @@ mod setup;
 mod timings;
 mod unit_platforms;
 mod units;
+mod write_request;
 
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -56,6 +57,7 @@ use crate::error::CiError;
 use crate::escape::stderr_line;
 use crate::gate::{check_tag, release_gate};
 use crate::github::Repo;
+use crate::lane_guard;
 use crate::metrics::{METRICS_SCHEMA_VERSION, RunMetrics};
 use clap::{CommandFactory, FromArgMatches};
 
@@ -105,6 +107,9 @@ pub fn main() -> ExitCode {
     };
     if let Command::Run(args) = &cli.command {
         return run::run(args);
+    }
+    if let Command::LaneGuard(args) = &cli.command {
+        return lane_guard::run(args);
     }
     match run(cli) {
         Ok(output) => {
@@ -174,8 +179,10 @@ fn run(cli: Cli) -> Result<String, CiError> {
         Command::Release(ReleaseCommand::Record(args)) => release::run_record(&args),
         Command::Release(ReleaseCommand::Preflight(args)) => release::run_preflight(&args),
         Command::Release(ReleaseCommand::Publish(args)) => release::run_publish(&args),
+        Command::Release(ReleaseCommand::FamilyTag(args)) => release::run_family_tag(&args),
         Command::Release(ReleaseCommand::CheckConfig(args)) => release::run_check_config(&args),
         Command::Plan(args) => plan::run_plan(&args),
+        Command::WriteRequest(args) => write_request::run(&args),
         Command::Gate(args) => required::run_gate(&args),
         Command::Timings(args) => timings::run_timings(&args),
         Command::CratesMirror(args) => crates_mirror::setup(&args),
@@ -205,6 +212,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             Ok(expiry.report + &ties)
         }
         Command::Run(_) => Err(CiError::new("run is handled before commands")),
+        Command::LaneGuard(_) => Err(CiError::new("lane-guard is handled before commands")),
     }
 }
 
