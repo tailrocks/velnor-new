@@ -12,7 +12,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 use velnor_ci::error::CiError;
 use velnor_ci::preview::authority::Client;
-use velnor_ci::preview::json::{Res, canonical, hex};
+use velnor_ci::preview::json::{Res, canonical};
 use velnor_ci::preview::net::Net;
 
 use crate::admit_zip::zip_of;
@@ -342,14 +342,4 @@ impl Client for FakeClient {
             .cloned()
             .ok_or_else(|| CiError::new("fake: no artifact"))
     }
-}
-
-/// The world for the legacy harness: the API (with its sequences) and the ZIPs in hex.
-pub(crate) fn world_json(world: &AdmitWorld) -> Value {
-    let zips: BTreeMap<String, String> = world
-        .zips
-        .iter()
-        .map(|(id, zip)| (id.to_string(), hex(zip)))
-        .collect();
-    json!({"api": world.api, "zips": zips, "owner_login": world.owner})
 }

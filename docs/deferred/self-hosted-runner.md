@@ -4,7 +4,7 @@
 
 ## 1. Entry condition
 
-Velnor Actions V1 provides a stack-generic workflow generator (`crates/velnor-actions-*`). The Runner Scale Set implementation is delivered in nested `crates/velnor-runner-*` under `docs/proposed/macos-scaleset-runner.md`. The self-hosted runner roadmap documented below is historical. All V1 entry gates have passed and dogfooding is active.
+Velnor provides a workflow generator (`velnor-gen`, `crates/velnor-gen`; it replaced the old `velnor-actions` engine, deleted in #1459). The Runner Scale Set implementation is delivered in nested `crates/velnor-runner-*` under `docs/proposed/macos-scaleset-runner.md`. The self-hosted runner roadmap documented below is historical. All V1 entry gates have passed and dogfooding is active.
 
 V2/V3 versions follow the [Velnor version policy](../proposed/version-policy.md).
 `.velnor/runner.lock` has been created, pinned, and committed in the repository root.

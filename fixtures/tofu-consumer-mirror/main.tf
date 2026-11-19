@@ -1,3 +1,0 @@
-locals {
-  mirror = true
-}

@@ -288,14 +288,6 @@ reference. The matrix contains only `execute` obligations. `not_affected` is val
 local plans (`not_affected_on_full_event` otherwise). The final job validates every obligation
 against its required evidence.
 
-The final job writes `$RUNNER_TEMP/velnor/<run-key>/final-report.json` with report ID `final-<run-key>` and
-uploads `velnor-final-<run-key>`. It MUST record the `plan_id`, every expected matrix `report_id`, every
-downloaded artifact ID, each required job ID and conclusion (including `alint` when emitted), the
-computed final result, and selected/reused/executed/empty-partition/covered/not-affected/failed/cancelled/blocked/not-run
-counts. Its `status` MUST use the final result enum below. `required_job_results` MUST include every
-non-matrix required job's ID and conclusion, including `alint` when emitted. The final report is an
-aggregate and is not a task-cache input.
-
 Generated workflows do not emit a generic Candidate job or candidate report. Schema-1 merge requests retain
 the optional `candidate_attestation` field and the `candidate` required-job identifier for wire compatibility
 with previously emitted requests; when that identifier is present, merge checks the attested commit against

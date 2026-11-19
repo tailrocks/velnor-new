@@ -120,7 +120,7 @@ mod pr_ci_labels;
 mod pr_ci_sim;
 mod private_sources;
 mod private_sources_phase;
-mod qualification_engine;
+mod qualification;
 mod release_assets_setup_action;
 mod release_branch_prefix;
 mod release_cargo_include;

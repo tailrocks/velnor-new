@@ -7,7 +7,7 @@
 )]
 use std::env;
 use std::ffi::OsString;
-use std::io::{self, Write};
+use std::io;
 use std::process::ExitCode;
 
 use velnor_archive_guard::owned_archive_guard;
@@ -102,24 +102,6 @@ fn qualification_mode(
     arguments: &mut impl Iterator<Item = OsString>,
 ) -> Option<Result<(), String>> {
     let result = match mode {
-        "tree-identity" | "link-identity" => {
-            let Some(root) = arguments.next() else {
-                return Some(Err("tree path is required".into()));
-            };
-            if arguments.next().is_some() {
-                return Some(Err("unexpected archive guard argument".into()));
-            }
-            velnor_archive_guard::golden_collector::tree_identity(
-                std::path::Path::new(&root),
-                mode == "link-identity",
-            )
-            .and_then(|identity| {
-                io::stdout()
-                    .lock()
-                    .write_all(&identity)
-                    .map_err(|error| error.to_string())
-            })
-        }
         "qualification-manifest" => {
             let Some(path) = arguments.next() else {
                 return Some(Err("candidate manifest path is required".into()));

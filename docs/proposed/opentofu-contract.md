@@ -306,21 +306,7 @@ scaling) are adopted as stated.
 
 ### 4.5 Workflow/report adoption (WS5)
 
-One job per validation root (`tofu-<root>`, display `OpenTofu — <root>`);
-fmt/init/validate as same-job ordered steps (init→validate `Data` edge);
-tofu fmt once per scope, init once per root per attempt;
-`MatrixEntry::derive("tofu", …)`;
-`required.needs` ⊇ {plan, tofu jobs, lint}. Reports flow through
-`write-task-report-v1` → exact-name fetch → `merge-v1` unchanged; reuse
-disabled for tofu (`ReusedFromTaskCache` already fails closed); docs-only =
-explicit `covered`/no-obligation disposition, never `Executed`; `NoWork`
-never passes. No second verdict path. Validators: staged jactionlint
-(with ShellCheck over `run:` bodies); tofu steps as single-line
-scalars; no `setup-opentofu` (Mise only). Read-only `plan`/`generate`
-proven by before/after snapshots (no `.terraform`/lock/tool/source mutation,
-no init/network during discovery). Verification detail is owned by
-`rust-verification-contract.md`; per-root jobs and tofu step order are the
-adoption delta.
+Reports of the retired `velnor-actions` engine (`write-task-report-v1`, exact-name fetch, `merge-v1`) were removed in #1459 with the engine.
 
 ### 4.6 E2E qualification (WS7 Q0–Q7)
 

@@ -28,13 +28,13 @@ Shared working agreement: keep this section byte-identical across projects. Proj
 
 - Read [`docs/goals.md`](docs/goals.md) first. It names the rule book for each part of the code, and it is the rule book for new work (`crates/velnor-gen`, `crates/velnor-model`, `crates/velnor-release`, `crates/velnor-render`, `crates/velnor-rust`, `crates/velnor-ci`, `crates/velnor-local`, `crates/velnor-cache-rules`, `crates/velnor-runner-*`, `crates/velnor-resource-probe`): vision, promises, targets and design rules.
 - Roadmap work (the issues under #574): follow [`docs/roadmap.md`](docs/roadmap.md). It says where to start, how one issue is done and when to ask the owner.
-- The existing engine (`crates/velnor-actions-*`, `crates/velnor-archive-guard`, `.velnor/`, the workflows it generates and what supports it) is maintained, not developed. Read [`docs/hard-decisions.md`](docs/hard-decisions.md) before you change it.
+- The old engine (`velnor-actions`) is deleted (#1459): `velnor-gen` writes every generated workflow. What is left of the old code (`crates/velnor-archive-guard`, `.velnor/`, the qualification scripts under `qualification/` and `scripts/`) is maintained, not developed. Read [`docs/hard-decisions.md`](docs/hard-decisions.md) before you change it.
 - Never silently change `docs/goals.md` or a hard decision; changing one requires the human owner's explicit approval.
 - Sources of truth for GitHub Actions: [actions/runner](https://github.com/actions/runner), [actions/scaleset](https://github.com/actions/scaleset), [actions/runner-images](https://github.com/actions/runner-images). Check the original source for compatibility and record it in [`docs/proposed/github-actions-reference.md`](docs/proposed/github-actions-reference.md). Never guess protocol contracts or operational semantics.
 - Quality: enforced by CI and compiler gates; see `docs/proposed/ci-maintenance/rust-quality-contract.md`.
 - Verification gates: exact commands, purposes, and usage: `docs/implemented/ci-maintenance/repo-verification.md`.
-- Read these only when you change the existing engine:
-  - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml` and `.velnor/freshness-inventory.json`.
+- Read these only when you change the old code that is left:
+  - Requirements and adopted contracts: read `docs/reviews/pr-1.md`, `docs/reviews/pr-1-adoption.md`, and `docs/reviews/pr-1-disposition.md`. Specifications live in `docs/proposed/*` (OpenTofu: `docs/proposed/opentofu-contract.md`); procedures live in `docs/implemented/*`. Pins and exceptions: `.velnor/version-policy.toml`.
   - Cache: read `docs/proposed/cache-decisions.md` and `docs/proposed/cache-contract.md` before touching cache keys, families, saves, or pruning.
 
 ### Review guidelines

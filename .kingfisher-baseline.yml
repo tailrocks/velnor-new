@@ -54,42 +54,6 @@ repositories:
     line: 488
     first_seen_at: 2026-10-22T00:00:00+00:00
     last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-actions-cli/src/dispatch_cache_transfer_tests.rs
-    fingerprint: '15553855787233172094'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 265
-    first_seen_at: 2026-10-22T00:00:00+00:00
-    last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-actions-cli/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '15412528421502453484'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 265
-    first_seen_at: 2026-10-22T00:00:00+00:00
-    last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '249851791336491913'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 271
-    first_seen_at: 2026-10-22T00:00:00+00:00
-    last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '14012431181956290570'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 302
-    first_seen_at: 2026-10-22T00:00:00+00:00
-    last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '2238494316586704290'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 302
-    first_seen_at: 2026-10-22T00:00:00+00:00
-    last_updated_at: 2026-10-22T00:00:00+00:00
-  - path: crates/velnor-actions-orchestrator/src/qualification_cache_payload/tests/dispatch_cache_transfer_tests.rs
-    fingerprint: '8665750521513737175'
-    rule_id: betterleaks.ibm-cloud-user-api-key
-    line: 302
-    first_seen_at: 2026-10-22T00:00:00+00:00
-    last_updated_at: 2026-10-22T00:00:00+00:00
   - path: crates/velnor-runner-attestation/tests/fixtures/tough/snakeoil.pem
     fingerprint: '17024251161024570094'
     rule_id: betterleaks.private-key

@@ -5,8 +5,8 @@ PR authoring rules:
 - Keep Summary and What ships. Add Related pull requests only for coordinated changes spanning repositories.
 - Add Behavior changes only for changed defaults, validation, errors, or generated workflow behavior.
 - Add What this addresses only for a documented gap. Add Not included only for a concrete deferred item.
-- Add Migration notes only when `.velnor/` compatibility or schemas/contracts under `crates/velnor-actions-contract/` change.
-- Run `./scripts/verify-local.sh` for Rust, policy, or generated-workflow changes; it runs the repository's offline CI subset.
+- Add Migration notes only when `.velnor/` compatibility or a velnor-gen contract changes.
+- For generated-workflow changes run `velnor-gen check` and the generator's tests (`generator/TESTING.md`).
 -->
 
 ## Related pull requests
@@ -44,14 +44,10 @@ PR authoring rules:
 
 ## Verify locally
 
-<For Rust, policy, or generated-workflow changes, run the complete local verification command.>
-
-```sh
-./scripts/verify-local.sh
-```
+<For generated-workflow changes, run `velnor-gen check` and the affected generator tests.>
 
 ## Migration notes
 
-<Include this section only when `.velnor/` compatibility or a contract/schema change requires operator action.>
+<Include this section only when `.velnor/` compatibility or a velnor-gen contract change requires operator action.>
 
 <Describe the required action, or state that no migration is needed.>
