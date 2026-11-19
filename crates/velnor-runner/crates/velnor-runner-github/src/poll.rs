@@ -283,13 +283,8 @@ fn assign_time_of(value: &Value) -> Result<Option<String>, WireError> {
     let scale_set_time = optional_string(value, "scaleSetAssignTime")?;
     let request_time = optional_string(value, "requestAssignedTime")?;
     Ok(scale_set_time
-        .filter(|time| !is_empty_assign_time(time))
-        .or_else(|| request_time.filter(|time| !is_empty_assign_time(time))))
-}
-
-fn is_empty_assign_time(value: &str) -> bool {
-    let trimmed = value.trim();
-    trimmed.is_empty() || trimmed == "0001-01-01T00:00:00Z"
+        .filter(|time| !crate::assign_time::is_empty(time))
+        .or_else(|| request_time.filter(|time| !crate::assign_time::is_empty(time))))
 }
 
 fn derive_request_id(job_id: &str, assign_time: Option<&str>) -> i64 {

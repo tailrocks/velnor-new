@@ -279,6 +279,38 @@ name = "ubuntu-26.04-scale-set"
 labels = ["velnor", "ubuntu-26.04-scale-set"]
 platform = "linux/amd64"
 
+[execution.overrides.plan]
+profile = "local"
+role = "control"
+
+[execution.overrides.alint]
+profile = "local"
+role = "control"
+
+[execution.overrides.cargo-deny]
+profile = "local"
+role = "control"
+
+[execution.overrides.cargo-machete]
+profile = "local"
+role = "control"
+
+[execution.overrides.jactionlint]
+profile = "local"
+role = "control"
+
+[execution.overrides.ledger-cli]
+profile = "local"
+role = "control"
+
+[execution.overrides.required-gate]
+profile = "local"
+role = "control"
+
+[execution.overrides.required]
+profile = "local"
+role = "control"
+
 [[checks]]
 id = "maintenance-helpers"
 task = "test-maintenance-helpers"
@@ -973,6 +1005,8 @@ inputs = [
   "generator/samples/lab/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-bin/expected/.github/workflows/release.yml",
   "generator/samples/release-bin/expected/.github/workflows/rust-ci.yml",
+  "generator/samples/release-bin-family/expected/.github/workflows/release.yml",
+  "generator/samples/release-bin-family/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/release.yml",
   "generator/samples/release-bin-merge-commit/expected/.github/workflows/rust-ci.yml",
   "generator/samples/release-two-roots/expected/.github/workflows/release.yml",
@@ -1014,21 +1048,21 @@ probe = { kind = "version", expected = "1.4.4" }
 [[qualified_tools]]
 id = "cargo-nextest"
 backend = { kind = "aqua", package = "nextest-rs/nextest/cargo-nextest" }
-version = "0.9.151"
+version = "0.9.152"
 options = { kind = "default" }
 depends_on = ["rust"]
 [[qualified_tools.platforms]]
 platform = "linux_x64"
 artifacts = [
-  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.151/cargo-nextest-0.9.151-x86_64-unknown-linux-gnu.tar.gz", sha256 = "1d4ce302b820c41f4b89c5fb9bce45f0f0c94882c1cf08fc360caf08be6e7df4" },
+  { url = "https://github.com/nextest-rs/nextest/releases/download/cargo-nextest-0.9.152/cargo-nextest-0.9.152-x86_64-unknown-linux-gnu.tar.gz", sha256 = "d039b43c3e0958441b6ad0a39c8884d018b3d2e8fb9928f209074b1100b5e17a" },
 ]
 dependency_artifacts = []
-install_tree_sha256 = "95db46f8610586abf450013b4f4afd869e86f4bf4fcf713fc3e85eabeab1bedc"
+install_tree_sha256 = "de02d1607c6947ae0f8fbb11d48f97ade7151f7d9dabe7040176fc75a4a7b967"
 [[qualified_tools.platforms.executables]]
 name = "cargo-nextest"
 path = "cargo-nextest"
-sha256 = "f746a548e01a5ec9f50d209ff3188fbf934a4969bddb1cd84a17af087912219b"
-probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.151 (6b3f99457 2026-11-02)" }
+sha256 = "eae075c1f810a15aa3ffa31d774d2a9e3dbbbab3d0a1b8c3abad4f2cdb64c2b3"
+probe = { kind = "cargo_nextest_version", expected = "cargo-nextest 0.9.152 (26ebeda79 2026-11-13)" }
 
 [[qualified_tools]]
 id = "jactionlint-linux-x64"

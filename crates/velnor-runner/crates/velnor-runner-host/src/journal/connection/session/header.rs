@@ -7,7 +7,8 @@ use crate::journal::capacity_header::{
     HeaderAllocation, HeaderDeleteAttempt, HeaderLedger, HeaderPollAttempt, PollOutcome, load, save,
 };
 use crate::journal::connection::storage::{
-    has_ambiguous_legacy_work, in_transaction, read_transaction,
+    bound_sessions, has_ambiguous_legacy_work, has_charged_outside_sessions, has_connection_work,
+    in_transaction, read_transaction,
 };
 use crate::launch::{CompletedHeaderPoll, DeletedSession204};
 
@@ -299,4 +300,43 @@ async fn has_other_session_work(
         .get::<i64>(0)
         .map_err(|_| HostError::Journal)?;
     Ok(active != 0)
+}
+
+/// Drain predicate for one connection: any work except its own live session.
+///
+/// The session, its `bound` create row and its header charge are the
+/// connection's standing presence, not work. They are deleted only after the
+/// connection leaves `host.toml`, so counting them would make a drain wait
+/// that runs before the removal never finish. Everything else, including a
+/// scale-set create in flight, still counts, as in `has_other_session_work`.
+/// With no single bound session this is plain `has_connection_work`.
+pub(in crate::journal::connection) async fn has_work_besides_bound_session(
+    connection: &turso::Connection,
+    connection_id: &str,
+) -> Result<bool, HostError> {
+    let sessions = bound_sessions(connection, Some(connection_id)).await?;
+    let [own] = sessions.as_slice() else {
+        return has_connection_work(connection, connection_id).await;
+    };
+    if has_other_session_work(connection, connection_id, own.intent_id).await? {
+        return Ok(true);
+    }
+    let mut rows = connection
+        .query(
+            "SELECT EXISTS (SELECT 1 FROM connection_scale_set_intents WHERE connection_id = ?1 AND state IN ('prepared', 'requested', 'uncertain'))",
+            [connection_id],
+        )
+        .await
+        .map_err(|_| HostError::Journal)?;
+    let scale_set_work = rows
+        .next()
+        .await
+        .map_err(|_| HostError::Journal)?
+        .ok_or(HostError::Journal)?
+        .get::<i64>(0)
+        .map_err(|_| HostError::Journal)?;
+    if scale_set_work != 0 {
+        return Ok(true);
+    }
+    has_charged_outside_sessions(connection, Some(connection_id), &sessions).await
 }
