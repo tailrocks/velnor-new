@@ -71,9 +71,6 @@ allow_attributes = "warn"
 broken_intra_doc_links = "deny"
 private_intra_doc_links = "deny"
 
-# The journal is a SQL database whose schema holds hundreds of triggers and
-# partial indexes; every statement is planned against it. Unoptimised planning
-# with debug assertions made the runner-host journal tests CPU-bound for minutes.
 [profile.dev.package.turso_core]
 opt-level = 3
 debug-assertions = false

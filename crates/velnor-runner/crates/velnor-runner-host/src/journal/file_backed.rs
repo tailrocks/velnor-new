@@ -80,7 +80,9 @@ impl Journal {
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        if !seeded.was_copied() {
+        if seeded.was_copied() {
+            journal.renew_identity_for_test().await?;
+        } else {
             schema::bootstrap_historical_v48(&journal.connection().await?).await?;
         }
         journal.file.reset_after_bootstrap()?;
@@ -96,7 +98,9 @@ impl Journal {
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        if !seeded.was_copied() {
+        if seeded.was_copied() {
+            journal.renew_identity_for_test().await?;
+        } else {
             schema::bootstrap_historical_v47(&journal.connection().await?).await?;
         }
         journal.file.reset_after_bootstrap()?;
@@ -112,7 +116,9 @@ impl Journal {
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        if !seeded.was_copied() {
+        if seeded.was_copied() {
+            journal.renew_identity_for_test().await?;
+        } else {
             schema::bootstrap_historical_v46(&journal.connection().await?).await?;
         }
         journal.file.reset_after_bootstrap()?;
@@ -128,7 +134,9 @@ impl Journal {
         let journal = Self {
             file: JournalFile::open(path).await?,
         };
-        if !seeded.was_copied() {
+        if seeded.was_copied() {
+            journal.renew_identity_for_test().await?;
+        } else {
             schema::bootstrap_historical_v45(&journal.connection().await?).await?;
         }
         journal.file.reset_after_bootstrap()?;
@@ -143,6 +151,10 @@ impl Journal {
         let seeded = test_template::seed(path, "current");
         let journal = Self::open_bootstrapped(path).await?;
         #[cfg(test)]
+        if seeded.was_copied() {
+            journal.renew_identity_for_test().await?;
+        }
+        #[cfg(test)]
         if seeded.is_pristine() {
             test_template::publish(path, "current");
         }
@@ -156,6 +168,21 @@ impl Journal {
         journal.bootstrap().await?;
         journal.file.reset_after_bootstrap()?;
         Ok(journal)
+    }
+
+    #[cfg(test)]
+    async fn renew_identity_for_test(&self) -> Result<(), HostError> {
+        let connection = self.connection().await?;
+        let instance_id = uuid::Uuid::new_v4().simple().to_string();
+        connection
+            .execute("UPDATE journal_meta SET instance_id = ?1", [instance_id])
+            .await
+            .map_err(|_| HostError::Journal)?;
+        connection
+            .execute("UPDATE journal_meta SET revision = revision - 1", ())
+            .await
+            .map_err(|_| HostError::Journal)?;
+        Ok(())
     }
 
     #[cfg(test)]

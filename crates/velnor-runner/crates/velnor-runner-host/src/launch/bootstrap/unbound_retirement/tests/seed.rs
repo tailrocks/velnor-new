@@ -228,14 +228,6 @@ async fn trigger_sql(journal: &Journal, names: &[&str]) -> TestResult<Vec<String
     Ok(saved)
 }
 
-/// Runs `statements` with the triggers that could fire for them removed.
-///
-/// A trigger fires only when a statement writes its table, and a trigger on
-/// another table can only fire from the body of one that fired. So dropping
-/// every trigger on a table the statements mention leaves no trigger able to
-/// fire, and the rest need not be dropped. Dropping and re-creating all of
-/// them (each `CREATE TRIGGER` costs tens of milliseconds in a debug build)
-/// made seeding the slowest part of many tests.
 pub(crate) async fn unguarded(journal: &Journal, statements: &[String]) -> TestResult<()> {
     let words: std::collections::BTreeSet<String> = statements
         .iter()
