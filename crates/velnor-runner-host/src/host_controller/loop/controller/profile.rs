@@ -17,7 +17,6 @@ impl ControllerLoop<'_> {
             &self.journal,
             &self.docker,
             &self.current,
-            &self.state,
             &mut self.hold_log,
         )
         .await
