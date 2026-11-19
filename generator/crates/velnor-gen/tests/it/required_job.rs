@@ -71,11 +71,31 @@ fn a_helper_without_gate_keeps_the_old_verdict_step() -> TestResult {
     let text = released("0.1.80", &["Cargo.toml", "lab/Cargo.toml"])?;
     let job = required(&text)?;
     assert!(job.contains(
-        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (!cancelled()) }}'\n"
+        "    if: '${{ (github.event_name != ''pull_request'' || (startsWith(github.ref, ''refs/pull/'') && github.event.pull_request.state != ''closed'')) && (always()) }}'\n"
     ));
     assert!(job.contains("Fail when a Rust job failed or was cancelled"));
     assert!(!job.contains("velnor-ci gate"));
     assert!(!text.contains("_tests"));
+    Ok(())
+}
+
+#[test]
+fn the_required_job_cannot_be_skipped_when_the_run_is_cancelled() -> TestResult {
+    for version in ["0.1.80", "0.1.81"] {
+        let text = released(version, &["Cargo.toml", "lab/Cargo.toml"])?;
+        let job = required(&text)?;
+        let condition = job
+            .lines()
+            .find_map(|line| line.strip_prefix("    if: "))
+            .ok_or("no job condition")?;
+        assert!(condition.contains("always()"), "{version}: {condition}");
+        assert!(!condition.contains("cancelled()"), "{version}: {condition}");
+        assert!(
+            job.contains("velnor-ci gate")
+                || job.contains("contains(needs.*.result, ''cancelled'')"),
+            "{version}: the job must fail when a needed job was cancelled"
+        );
+    }
     Ok(())
 }
 
