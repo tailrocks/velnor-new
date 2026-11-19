@@ -127,3 +127,43 @@ fn run_lists_the_archive_scope_without_run_only_flags() {
         &["--locked", "--workspace"],
     );
 }
+
+#[test]
+fn run_starts_listing_while_the_tests_are_still_running() {
+    let script = "echo '    Starting 1 tests across 1 binary' >&2\n\
+i=0\n\
+while [ ! -f \"$RUNNER_TEMP/list-argv\" ] && [ $i -lt 20 ]; do sleep 0.05; i=$((i+1)); done\n\
+if [ -f \"$RUNNER_TEMP/list-argv\" ]; then : > \"$RUNNER_TEMP/overlapped\"; fi\n\
+echo '        PASS [   0.012s] (1/1) kept alpha' >&2\n\
+echo '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2";
+    let one = listed(&[("kept", &["alpha"])]);
+    let (output, written, temp) = run_with_output(
+        "tests-run-list-overlap",
+        script,
+        &one,
+        &["cargo-nextest", "nextest", "run", "--workspace"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(
+        temp.join("overlapped").exists(),
+        "listing did not start before the run ended"
+    );
+    assert_eq!(
+        written,
+        "existing=1\ntests_run=1\ntests_listed=1\ntests_ignored=0\ntests_by_package=kept=1/1\n"
+    );
+}
+
+#[test]
+fn run_without_a_starting_line_still_lists_after_the_run() {
+    let script = "echo '        PASS [   0.012s] (1/1) kept alpha' >&2\necho '     Summary [   0.012s] 1 test run: 1 passed, 0 skipped' >&2";
+    let one = listed(&[("kept", &["alpha"])]);
+    let (output, written, _temp) = run_with_output(
+        "tests-run-list-no-starting",
+        script,
+        &one,
+        &["cargo-nextest", "nextest", "run", "--workspace"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    assert!(written.contains("tests_listed=1\n"), "{written}");
+}

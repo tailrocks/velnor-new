@@ -1,5 +1,7 @@
 # Affected selection: pull requests test only what they affect
 
+Note: crate paths below that name `crates/velnor-actions-*` and the `plan-v1`/`merge-v1` operations describe the retired engine (deleted in #1459). `velnor-ci` implements the selection now; the policy is unchanged.
+
 Hard decision: [3. Pull requests test only what they affect](../hard-decisions.md#3-pull-requests-test-only-what-they-affect).
 
 A pull request runs only the crate jobs its change can affect. The other crate
@@ -362,7 +364,7 @@ superseded) satisfied protection. The gate fails within one runner start
 instead; with `cancel-in-progress`, a superseding run in the same concurrency
 group starts only after that and reports its own gate later.
 
-`merge-v1` compares each crate job's plan disposition with its observed result
+The required verdict compares each crate job's plan disposition with its observed result
 (`needs.<job>.result`):
 
 | Plan | Observed job | Verdict |
@@ -396,78 +398,4 @@ only the artifacts of matrix entries, which exist only for `run` jobs.
 
 ## Tests
 
-Public-API tests under
-`crates/velnor-actions-orchestrator/tests/workflow_configuration_public/`:
-
-- `scoped_workspace.rs`: the shared fixture (a scoped Rust workspace with real
-  Git commits, plan and `merge-v1` helpers) the other files build on.
-- `non_inputs_selection.rs`, `non_inputs_forcing.rs`: a change confined to
-  `non_inputs` plans no Rust job, an empty diff forces no package, a tool-file
-  edit still forces them, a `*` segment skips only what the checkout drops, and
-  other stacks still see the path.
-- `non_inputs_config.rs`: config load rejects each
-  `non_input_overlaps_claim:<kind>:<glob>` kind and each
-  `non_inputs_unsupported:<reason>`.
-- `non_inputs_grammar.rs`: the accepted and rejected glob table.
-- `non_inputs_differential.rs`, `non_inputs_overlap_git.rs`: the planner, the
-  sparse checkout and the guard agree with real `git` over generated globs;
-  case conflation matches a `core.ignorecase=true` checkout; accepted globs
-  never drop a claimed path.
-- `non_inputs_checkout.rs`, `non_inputs_guard.rs`, `non_inputs_release.rs`:
-  generated Rust jobs and the release producer jobs carry the sparse exclusion
-  and the `non_input_present:<path>` guard on every event, the guard fails when
-  Git fails, and the plan, actionlint and `Required` jobs keep the full tree.
-- `non_inputs_replay.rs`: replays the change sets of real pull requests (for
-  example #473, docs only) against the recorded package topology and checks the
-  planned jobs.
-- `topology_e797385c74.rs`: the recorded package topology (names, directories,
-  dependency edges, forcing kind) that the replay builds a workspace from.
-
-Other tests:
-
-- `crates/velnor-actions-orchestrator/src/select_matrix_tests.rs`: a real Cargo
-  workspace (two libraries, eight apps, a vendored crate behind a registry crate
-  served from a directory source) with real Git commits: library used by one
-  app selects exactly two packages; one app selects one; lockfile change,
-  unowned file, and root Cargo config select everything; declared proto input;
-  cross-crate declared input selects owner and reader; vendored patch crate
-  selects its registry dependents; symlinked fixture; scoped `clippy.toml`.
-- `crates/velnor-actions-orchestrator/src/select_affected_tests.rs` and
-  `src/select_symlinks.rs`: ownership rules, chained/escaping/dangling links.
-- `crates/velnor-actions-orchestrator/tests/impl_select_affected_jobs.rs`:
-  end-to-end `plan-v1` crate-job dispositions for the owner's examples, push
-  full runs, and the job `if:` gate.
-- `crates/velnor-actions-orchestrator/src/plan_dispositions_tests.rs`: whole-job
-  skipping, mixed jobs, transitive `needed_by_running_job` promotion, and
-  non-crate jobs that always run.
-- `crates/velnor-actions-orchestrator/src/required_dispositions_tests.rs`: every
-  row of the Required verdict table at the fold level;
-  `tests/impl_merge_plan.rs` (`empty_diff_skips_every_crate_job`,
-  `planned_run_job_skipped_fails_required`) proves the same rows through
-  `merge-v1`.
-- `crates/velnor-actions-orchestrator/tests/impl_select_fail_safe.rs` and
-  `tests/impl_select_read_scan.rs`: the
-  false negatives of review 2 as plan-level regressions. A repository-root
-  Tofu project neither hides a library change nor an unowned file; a Tofu
-  root inside a crate still selects the crate; an undeclared `include_str!`
-  and a manifest-dir fixture read into a sibling run the reader; a declared
-  include narrows again; an unbounded manifest-dir read runs until inputs are
-  declared (`complete = true`); a read of an unowned path never forces, but a
-  read of a directory above packages does; anchor and escape split across
-  files, included support files and fragments, and another package's
-  declared module all count for the includer; a build-script library's
-  dependents run on a Rust-visible or tool-file change, not on an empty diff;
-  `merge_group` and `workflow_dispatch` run everything; fork pull requests
-  select affected work; a dirty worktree and a stale merge ref run everything.
-- `crates/velnor-actions-orchestrator/src/select_reads_scan_tests.rs` and
-  `src/select_reads_lex.rs`: every scanned read form, comments, raw strings,
-  and literals that are not reads.
-- `crates/velnor-actions-orchestrator/tests/impl_merge_full_event.rs`:
-  `Plan::validate` and `merge-v1` reject `not_affected` work on full-run
-  events.
-- `crates/velnor-actions-workflow-renderer/src/required_gate_tests.rs`: the
-  `Required` gate always runs, fails unless the verdict succeeded, and cannot
-  be altered or duplicated.
-- `crates/velnor-actions-cli/tests/impl_cli_rerun_attempt.rs`: an attempt-2
-  `write-request-v1` plus `merge-v1` with `VELNOR_RUN_KEY_ATTEMPT=1` passes the
-  attempt-1 plan's skipped jobs; without the binding it fails closed.
+The selection is implemented by `velnor-ci` (`crates/velnor-ci/src/plan_request/diff*`, reading the `stacks.rust` rules of `.velnor/config.toml`) and tested in `crates/velnor-ci/tests/it/` (the `plan_diff` recordings under `tests/it/data/plan_diff/`: one case per event, with the changed files, the plan request and the expected `not_affected` jobs). The old `velnor-actions` engine, its `plan-v1`/`merge-v1` operations and their tests were deleted in #1459; the policy above is unchanged.

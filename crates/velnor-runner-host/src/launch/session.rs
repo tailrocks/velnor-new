@@ -15,7 +15,7 @@ mod refresh;
 pub(crate) use authority::{
     ReturnedSessionRefreshTransportError, SessionRefreshStartupAuthority, VerifiedSessionRefresh,
 };
-pub(crate) use delete::delete_removed_connection_session;
+pub(crate) use delete::{delete_removed_connection_session, retire_session_of_deleted_set};
 pub(crate) use open::open_connection_session;
 pub(crate) use proof::{CompletedHeaderPoll, DeletedSession204, SessionDeleteOutcome};
 pub(crate) use refresh::refresh_bound_connection_session;

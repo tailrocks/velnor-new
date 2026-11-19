@@ -22,18 +22,9 @@ name = "velnor-archive-guard"
 path = "src/bin/velnor_archive_guard.rs"
 test = false
 
-[[bin]]
-name = "velnor-golden-collector"
-path = "src/bin/velnor_golden_collector.rs"
-test = false
-
 [[test]]
 name = "oci_candidate_configuration_public"
 path = "tests/oci_candidate_configuration_public.rs"
-
-[[test]]
-name = "golden_collector_public"
-path = "tests/golden_collector_public.rs"
 
 [[test]]
 name = "attested_projection_public"
@@ -56,7 +47,6 @@ flate2 = { version = "=1.1.11", default-features = false, features = ["rust_back
 serde = { workspace = true }
 rustix = { version = "=1.1.6", default-features = false, features = ["fs", "process", "std"] }
 serde_json = { workspace = true }
-velnor-actions-mise = { version = "=0.1.82", path = "../velnor-actions-mise" }
 velnor-runner-image-manifest = { version = "=0.1.0", path = "../velnor-runner-image-manifest" }
 sha2 = { version = "=0.11.1", default-features = false }
 tar = { version = "=0.4.46", default-features = false }

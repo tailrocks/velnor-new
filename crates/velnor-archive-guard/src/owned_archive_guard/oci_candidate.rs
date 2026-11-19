@@ -10,7 +10,7 @@ mod materialize;
 
 use std::path::{Path, PathBuf};
 
-use velnor_actions_mise::CheckDeadline;
+use crate::CheckDeadline;
 
 use archive::{load_archive, load_archive_file};
 use graph::inspect_graph;

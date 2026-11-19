@@ -16,13 +16,12 @@ use signal_hook::consts::{SIGINT, SIGTERM};
 use signal_hook::iterator::Signals;
 
 use super::append_outputs;
+use super::early_list::EarlyList;
 use super::pump::{Capture, pump_counted};
 use crate::cli::RunArgs;
 use crate::setup::DoctestCount;
 use crate::stream::separate_group;
-use crate::tests_run::{
-    Listing, TestCounts, apply_runnable, list_argv, output_lines, runnable_matches, runs_nextest,
-};
+use crate::tests_run::{TestCounts, apply_runnable, output_lines, runs_nextest};
 
 const TEMP_VARIABLE: &str = "RUNNER_TEMP";
 const LOG_FILE: &str = "velnor-run.log";
@@ -110,7 +109,14 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
     let pid = i32::try_from(child.id()).map(Pid::from_raw).ok();
     let log = Arc::new(Mutex::new(log));
     let doctests = Arc::new(Mutex::new(DoctestCount::default()));
-    let Pumps { receiver, slots } = start_pumps(&mut child, &log, &doctests, args.require_doctests);
+    let early = runs_nextest(&args.command).then(|| Arc::new(EarlyList::new(&args.command)));
+    let Pumps { receiver, slots } = start_pumps(
+        &mut child,
+        &log,
+        &doctests,
+        args.require_doctests,
+        early.as_ref(),
+    );
     let handle = signals.handle();
     forward(signals, pid, own_group);
     let status = child.wait();
@@ -123,11 +129,13 @@ pub(super) fn execute(args: &RunArgs) -> Result<u8, (u8, String)> {
             "velnor-ci: output capture incomplete; a stream did not reach EOF before the deadline"
         );
     }
-    if invocation.capture_complete
-        && runs_nextest(&args.command)
+    let wanted = invocation.capture_complete && counts.is_some();
+    let listing = early.map(|early| early.finish(wanted));
+    if wanted
+        && let Some(listing) = listing
         && let Some(counts) = counts
     {
-        let counts = apply_runnable(counts, list_matches(&args.command));
+        let counts = apply_runnable(counts, listing);
         append_outputs(&output_lines(counts))
             .map_err(|e| (2, format!("cannot write the step output: {e}")))?;
     }
@@ -243,24 +251,6 @@ fn forward(mut signals: Signals, pid: Option<Pid>, own_group: bool) {
     });
 }
 
-fn list_matches(argv: &[String]) -> Option<Listing> {
-    let argv = list_argv(argv)?;
-    let mut command = Command::new(&argv[0]);
-    command
-        .args(&argv[1..])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    for name in STEP_FILE_VARIABLES {
-        command.env_remove(name);
-    }
-    let output = command.output().ok()?;
-    if !output.status.success() {
-        drop(std::io::stderr().write_all(&output.stderr));
-        return None;
-    }
-    runnable_matches(&output.stdout)
-}
-
 fn collect(
     receiver: &mpsc::Receiver<(usize, bool)>,
     slots: &[Arc<Mutex<Capture>>],
@@ -322,6 +312,7 @@ fn watch_stream(
     to: impl Write + Send + 'static,
     log: &Arc<Mutex<std::fs::File>>,
     count: Option<Arc<Mutex<DoctestCount>>>,
+    early: Option<Arc<EarlyList>>,
     done: &mpsc::Sender<(usize, bool)>,
 ) {
     let capture = Arc::new(Mutex::new(Capture::default()));
@@ -330,7 +321,7 @@ fn watch_stream(
     let log = Arc::clone(log);
     let done = done.clone();
     thread::spawn(move || {
-        let complete = pump_counted(from, to, &log, count.as_deref(), &capture);
+        let complete = pump_counted(from, to, &log, count.as_deref(), early.as_deref(), &capture);
         done.send((index, complete)).ok();
     });
 }
@@ -340,15 +331,32 @@ fn start_pumps(
     log: &Arc<Mutex<std::fs::File>>,
     doctests: &Arc<Mutex<DoctestCount>>,
     require_doctests: bool,
+    early: Option<&Arc<EarlyList>>,
 ) -> Pumps {
     let (sender, receiver) = mpsc::channel();
     let mut slots = Vec::new();
     if let Some(from) = child.stdout.take() {
         let counted = require_doctests.then(|| Arc::clone(doctests));
-        watch_stream(&mut slots, from, std::io::stdout(), log, counted, &sender);
+        watch_stream(
+            &mut slots,
+            from,
+            std::io::stdout(),
+            log,
+            counted,
+            early.cloned(),
+            &sender,
+        );
     }
     if let Some(from) = child.stderr.take() {
-        watch_stream(&mut slots, from, std::io::stderr(), log, None, &sender);
+        watch_stream(
+            &mut slots,
+            from,
+            std::io::stderr(),
+            log,
+            None,
+            early.cloned(),
+            &sender,
+        );
     }
     drop(sender);
     Pumps { receiver, slots }

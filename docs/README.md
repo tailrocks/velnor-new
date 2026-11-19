@@ -4,6 +4,8 @@ Start with the [vision, promises and rules](goals.md). They name the rule book f
 
 To adopt the Rust generator, read [how Velnor keeps Rust CI fast](rust-ci.md).
 
+The old `velnor-actions` engine was deleted in #1459. Pages under `implemented/`, `proposed/`, `reviews/` and `research/` that describe it (`crates/velnor-actions-*`, `velnor-actions generate`) are historical records, kept for their evidence.
+
 This documentation separates work by delivery state:
 
 | State | Meaning | Document |

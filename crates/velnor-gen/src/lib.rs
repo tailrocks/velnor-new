@@ -23,7 +23,6 @@ use std::collections::BTreeMap;
 use std::io::Write;
 
 use velnor_model::{CacheKey, FullRun, OnMain, RepoPath, RepoView, StepKind};
-use velnor_render::render;
 use velnor_rust::{
     METADATA_PATH, check_tools, detect, metadata_file, silent_build_scripts,
     source_roots_over_limit, suggest_groups as suggested_groups,

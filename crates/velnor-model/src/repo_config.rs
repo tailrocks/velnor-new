@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use crate::cron::CronExpr;
-use crate::ids::{PackageName, PathGlob, RepoPath, RunnerLabel, TargetName};
+use crate::ids::{PackageName, PathGlob, RepoPath, RootSlug, RunnerLabel, TargetName};
 use crate::lint::LintJob;
 use crate::plan::Shape;
 use crate::test_group::TestGroup;
@@ -42,6 +42,23 @@ pub struct RustCiConfig {
     pub lint: Vec<LintJob>,
     pub test_groups: Vec<TestGroup>,
     pub checkout: CheckoutScope,
+    pub workspace_groups: Vec<WorkspaceGroup>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceGroup {
+    pub name: String,
+    pub slug: RootSlug,
+    pub gate: RootSlug,
+    pub roots: Vec<RepoPath>,
+}
+
+impl WorkspaceGroup {
+    #[must_use]
+    pub fn target_dir(&self) -> RepoPath {
+        RepoPath::new(format!("target-velnor/{}", self.name))
+            .unwrap_or_else(|_| RepoPath::from_static("target"))
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -210,6 +227,7 @@ impl Default for RustCiConfig {
             lint: Vec::new(),
             test_groups: Vec::new(),
             checkout: CheckoutScope::Full,
+            workspace_groups: Vec::new(),
         }
     }
 }

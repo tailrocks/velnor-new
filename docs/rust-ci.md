@@ -121,6 +121,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 |---|---|---|
 | `shape` | `"auto"` | `one-job`, `lint-test`, `groups` or `auto` |
 | `test_groups` | none | `[[test_groups]]` entries, see above |
+| `test_lane` | none | `[[test_lane]]` feature test lanes; a lane with `filter` also gets a `Test lane guard` step, see `generator/CONFIG.md` |
 | `on_main` | `"affected"` | what a push or merge queue run selects: `affected` or `everything` |
 | `full_run` | `"nightly"` | `off`, `hourly`, `nightly`, `weekly` or a cron expression |
 | `pr_ci` | `"always"` | `always` or `label` |
@@ -133,6 +134,7 @@ Every key of `.velnor/rust-ci.toml`, with its default. `generator/CONFIG.md` has
 | `default_ignores` | `true` | documentation and licence files select nothing |
 | `nextest_harnesses` | none | `package:target` entries for `harness = false` test targets that nextest can run; the others run in a direct step |
 | `test_setup` | none | `[[test_setup]]` fixture steps that run before tests |
+| `workspace_groups` | none | `[[workspace_groups]]` entries: Cargo workspaces that share one job set and one build folder, see `generator/CONFIG.md` |
 | `lint` | none | `[[lint]]` jobs for checks that are not cargo |
 | `cache` | none | table; `mbx_remote = "github-actions"` |
 | `mbx_shared_store` | `false` | use the node's MBX store, see above |

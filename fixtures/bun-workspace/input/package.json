@@ -1,1 +1,0 @@
-{"name":"bun-fixture","private":true,"packageManager":"bun@1.4.3","workspaces":["apps/*","packages/*"]}

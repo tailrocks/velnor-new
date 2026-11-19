@@ -1,8 +1,0 @@
-Cargo.toml
-Cargo.lock
-deny.toml
-rustfmt.toml
-CODEOWNERS
-.alint.yml
-.config/nextest.toml
-AGENTS.md

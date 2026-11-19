@@ -31,7 +31,6 @@ checks passing; those checks were green at `bdfffb9` (dogfood CI run
 - [Gate 5: trusted baseline coverage](gate-5-trusted-baseline.md) (removed; historical)
 - [Gate 6: task-result reuse](gate-6-task-result-reuse.md)
 - [Gate 7: parallel test fan-out](gate-7-parallel-fanout.md)
-- [Gate 8: Velnor dogfooding](gate-8-dogfooding.md)
 
 Renderer run-scalar sharing was merged to main by PR #112 at
 `82a3b5931d431b85579435a99cf981bc6f248a65`. Exact-main CI run

@@ -173,7 +173,7 @@ fn split(stem: &str) -> Option<(&str, &str)> {
     .then_some((name, hash))
 }
 
-pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
+pub(super) fn apart(workspaces: &[Workspace], shared: &[Vec<usize>]) -> Result<(), CiError> {
     let directories: Vec<PathBuf> = workspaces
         .iter()
         .map(|w| {
@@ -182,7 +182,14 @@ pub(super) fn apart(workspaces: &[Workspace]) -> Result<(), CiError> {
         .collect();
     for (outer, holder) in directories.iter().enumerate() {
         for (inner, held) in directories.iter().enumerate() {
-            if outer != inner && held.starts_with(holder) {
+            if outer == inner || !held.starts_with(holder) {
+                continue;
+            }
+            let grouped = held == holder
+                && shared
+                    .iter()
+                    .any(|group| group.contains(&outer) && group.contains(&inner));
+            if !grouped {
                 return Err(CiError::new(format!(
                     "the target directory {} of the Cargo root {} holds the target directory {} of the Cargo root {}, so their units cannot be told apart; give each Cargo root its own target directory, outside the others",
                     holder.display(),
@@ -206,6 +213,21 @@ pub(super) fn workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
 ) -> Result<Workspace, CiError> {
+    metadata(manifest, invocation, false)
+}
+
+pub(super) fn own_workspace(
+    manifest: &Path,
+    invocation: Option<&MetadataInvocation<'_>>,
+) -> Result<Workspace, CiError> {
+    metadata(manifest, invocation, true)
+}
+
+fn metadata(
+    manifest: &Path,
+    invocation: Option<&MetadataInvocation<'_>>,
+    own_target: bool,
+) -> Result<Workspace, CiError> {
     let mut command = Command::new(invocation.map_or("cargo", |invocation| invocation.executable));
     if let Some(invocation) = invocation {
         command
@@ -213,6 +235,9 @@ pub(super) fn workspace(
             .current_dir(invocation.directory);
     } else {
         command.current_dir(manifest.parent().unwrap_or(manifest));
+    }
+    if own_target {
+        command.env_remove("CARGO_TARGET_DIR");
     }
     let output = command
         .args([
@@ -280,21 +305,25 @@ impl Audit<'_> {
     pub(super) fn script(
         &mut self,
         workspace: &Path,
-        index: usize,
+        indices: &[usize],
         file: &Path,
-        profile: String,
-        package: String,
+        profile: &str,
+        package: &str,
     ) -> Result<(), CiError> {
-        if let Some((source, built)) = self.dep_info(workspace, index, file, Some(&package))? {
+        let Some((source, built)) = self.dep_info(workspace, indices[0], file, Some(package))?
+        else {
+            return Ok(());
+        };
+        for index in indices {
             if profile == HOST {
-                self.built[index]
+                self.built[*index]
                     .scripts
-                    .insert((package.clone(), source.clone()));
+                    .insert((package.to_owned(), source.clone()));
             }
             self.scripts
-                .entry((index, profile, package))
+                .entry((*index, profile.to_owned(), package.to_owned()))
                 .or_default()
-                .entry(source)
+                .entry(source.clone())
                 .and_modify(|compiled| *compiled = (*compiled).min(built))
                 .or_insert(built);
         }

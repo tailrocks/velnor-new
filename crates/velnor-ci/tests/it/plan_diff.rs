@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! `velnor-ci plan --mode ci --request` for pull_request, fork and local requests against what
+//! `velnor-ci plan --mode ci --request` for `pull_request`, fork and local requests against what
 //! the legacy `plan-v1` op did for the same change. `data/plan_diff/<case>/` holds the request,
 //! `expected_outputs` recorded from the engine on a real commit pair (or a real commit with an
 //! uncommitted change), and `snapshot/`, the reduced repository the helper plans here: files
@@ -75,7 +75,7 @@ fn collect_files(dir: &Path, root: &Path, found: &mut Vec<PathBuf>) {
     }
 }
 
-/// The case's repository: a base commit and a head commit for a pull_request or fork,
+/// The case's repository: a base commit and a head commit for a `pull_request` or fork,
 /// one commit for a local run. Returns the repository and the commits' ids.
 fn repository(case: &Path, event: &str, name: &str) -> (PathBuf, String, String) {
     let repo = fresh_dir("velnor-ci-plan-diff", name);

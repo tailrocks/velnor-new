@@ -24,8 +24,6 @@ copy_checkout() {
   mkdir -p -- "$destination/.velnor" "$destination/scripts" \
     "$destination/crates/velnor-archive-guard/src" \
     "$destination/crates/velnor-archive-guard/build_support" \
-    "$destination/crates/velnor-actions-contract/src" \
-    "$destination/crates/velnor-actions-mise/src" \
     "$destination/crates/velnor-runner-image-manifest/src"
   cp -- "$repository/Cargo.toml" "$repository/Cargo.lock" "$repository/.mise-version" \
     "$destination/"
@@ -44,14 +42,6 @@ copy_checkout() {
   cp -- "$repository/crates/velnor-archive-guard/Cargo.toml" \
     "$repository/crates/velnor-archive-guard/build.rs" \
     "$destination/crates/velnor-archive-guard/"
-  cp -- "$repository/crates/velnor-actions-contract/Cargo.toml" \
-    "$destination/crates/velnor-actions-contract/"
-  cp -R -- "$repository/crates/velnor-actions-contract/src/." \
-    "$destination/crates/velnor-actions-contract/src/"
-  cp -- "$repository/crates/velnor-actions-mise/Cargo.toml" \
-    "$destination/crates/velnor-actions-mise/"
-  cp -R -- "$repository/crates/velnor-actions-mise/src/." \
-    "$destination/crates/velnor-actions-mise/src/"
   cp -- "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs.rs" \
     "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem.rs" \
     "$repository/crates/velnor-archive-guard/build_support/archive_guard_inputs_filesystem_tests.rs" \
@@ -148,12 +138,8 @@ case "$command_name" in
             checkout="$(dirname -- "$manifest")"
             printf 'velnor-archive-guard v0.1.0 (%s/crates/velnor-archive-guard)\n' \
               "$checkout"
-            printf 'velnor-actions-mise v0.1.0 (%s/crates/velnor-actions-mise)\n' \
-              "$checkout"
-            printf 'velnor-actions-contract v0.1.0 (%s/crates/velnor-actions-contract)\n' \
-              "$checkout"
             if [[ -e "$tool_state/unexpected-local-root" ]]; then
-              printf 'velnor-actions-tofu v0.1.0 (%s/crates/velnor-actions-tofu)\n' \
+              printf 'velnor-unexpected-root v0.1.0 (%s/crates/velnor-unexpected-root)\n' \
                 "$checkout"
             fi
             printf 'velnor-runner-image-manifest v0.1.0 (%s/crates/velnor-runner-image-manifest)\n' \
@@ -211,7 +197,7 @@ if run_builder "$case_root/checkout-a" >"$tool_bin/unexpected-root.stdout" \
   exit 1
 fi
 grep -F -- \
-  "archive guard build: local Cargo dependency is outside the source closure: $case_root/checkout-a/crates/velnor-actions-tofu" \
+  "archive guard build: local Cargo dependency is outside the source closure: $case_root/checkout-a/crates/velnor-unexpected-root" \
   "$tool_bin/unexpected-root.stderr" >/dev/null \
   || { printf 'unexpected local Cargo root rejection was not reported\n' >&2; exit 1; }
 [[ ! -e "$tool_bin/build-targets" ]] \

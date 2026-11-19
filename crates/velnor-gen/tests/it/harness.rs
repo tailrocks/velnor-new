@@ -230,10 +230,12 @@ fn a_recorded_sample_keeps_the_member_manifests_detection_reads() -> TestResult 
 fn a_feature_lane_excludes_the_harness_binaries_that_nextest_cannot_run() -> TestResult {
     let lane =
         "[[test_lane]]\nroot = '.'\nfeatures = ['x']\npackages = ['a']\nfilter = 'test(~a)'\n";
-    let text = workflow(&view(Some(lane))?)?;
+    let mut repo = view(Some(lane))?;
+    crate::pipeline::pin_helper(&mut repo, "0.1.86")?;
+    let text = workflow(&repo)?;
     let step = text
         .lines()
-        .find(|line| line.contains("--features ''x''"))
+        .find(|line| line.contains("--features ''x''") && line.contains("nextest"))
         .ok_or("no feature lane step")?;
     for excluded in ["a::custom", "a::defaulted", "a::bin/tool"] {
         assert!(

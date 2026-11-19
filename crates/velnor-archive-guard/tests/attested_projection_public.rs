@@ -15,7 +15,7 @@ use std::{
 
 use sha2::{Digest, Sha256};
 use tempfile::tempdir;
-use velnor_actions_mise::CheckDeadline;
+use velnor_archive_guard::CheckDeadline;
 use velnor_archive_guard::owned_archive_guard::oci_candidate::{
     inspect_oci_candidate_file_with_config, project_attested_oci_file,
 };

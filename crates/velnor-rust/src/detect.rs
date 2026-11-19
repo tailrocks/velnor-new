@@ -135,6 +135,8 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
     check_nextest_harnesses(&config, &rust_roots)?;
     check_helper_box(&config, &rust_roots)?;
     crate::config_test_groups::check_tests(&config, &rust_roots)?;
+    crate::groups::check(view, &config, &rust_roots)?;
+    crate::groups::check_shape(&config)?;
     crate::config_test_lane::check(&config, &rust_roots)?;
     let toolchain = toolchain(&view.files)?;
     let tools = crate::config_lint::pinned_tools(view, &config)?;
@@ -148,6 +150,7 @@ pub fn detect(view: &RepoView) -> Result<RepoFacts, DetectError> {
                 .map_err(|error| DetectError::invalid(&LOCK_PATH, Reason::HelperLock(error)))
         })
         .transpose()?;
+    crate::groups::check_helper(&config, helper.as_ref())?;
     refuse_locked_credentials(view, &config, &rust_roots)?;
     let (timings, timings_notes) = usable_timings(view.files.get(&TIMINGS_PATH), &rust_roots);
     let deny_configs = deny_configs(view, &rust_roots);

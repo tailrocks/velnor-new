@@ -2,15 +2,20 @@
 // SPDX-License-Identifier: Apache-2.0
 
 use super::{
-    Need, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
-    TestCounts, parse_package_counts,
+    Need, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, TestCounts, parse_package_counts,
 };
 
-pub(super) fn counts(need: Option<&Need>) -> Option<TestCounts> {
+pub(super) fn counts(need: Option<&Need>, slug: &RootSlug) -> Option<TestCounts> {
     let need = need?;
-    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
+    let named = |name: &str| {
+        need.outputs
+            .get(&format!("{name}_{slug}"))
+            .or_else(|| need.outputs.get(name))
+    };
+    let packages = parse_package_counts(named(TESTS_BY_PACKAGE_OUTPUT)?)?;
+    let run = number(named(TESTS_RUN_OUTPUT)?)?;
+    let listed = number(named(TESTS_LISTED_OUTPUT)?)?;
     let summed_run = packages
         .values()
         .try_fold(0u64, |total, package| total.checked_add(package.run))?;
@@ -20,7 +25,7 @@ pub(super) fn counts(need: Option<&Need>) -> Option<TestCounts> {
     if run != summed_run || listed != summed_listed {
         return None;
     }
-    let ignored = match need.outputs.get(TESTS_IGNORED_OUTPUT).map(String::as_str) {
+    let ignored = match named(TESTS_IGNORED_OUTPUT).map(String::as_str) {
         None | Some("") => None,
         Some(text) => Some(number(text)?),
     };
