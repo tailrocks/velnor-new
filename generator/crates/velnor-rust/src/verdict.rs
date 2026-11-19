@@ -8,6 +8,10 @@ use velnor_model::{
     TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
+#[path = "verdict_counts.rs"]
+mod verdict_counts;
+use verdict_counts::{counts, number};
+
 const SCHEDULE: &str = "schedule";
 const PUSH: &str = "push";
 
@@ -364,42 +368,6 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     }
     out.passed = out.problems.is_empty();
     out
-}
-
-fn counts(need: Option<&Need>) -> Option<TestCounts> {
-    let need = need?;
-    let packages = parse_package_counts(need.outputs.get(TESTS_BY_PACKAGE_OUTPUT)?)?;
-    let run = number(need.outputs.get(TESTS_RUN_OUTPUT)?)?;
-    let listed = number(need.outputs.get(TESTS_LISTED_OUTPUT)?)?;
-    let summed_run = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.run))?;
-    let summed_listed = packages
-        .values()
-        .try_fold(0u64, |total, package| total.checked_add(package.listed))?;
-    if run != summed_run || listed != summed_listed {
-        return None;
-    }
-    let ignored = match need.outputs.get(TESTS_IGNORED_OUTPUT).map(String::as_str) {
-        None | Some("") => None,
-        Some(text) => Some(number(text)?),
-    };
-    Some(TestCounts {
-        run,
-        listed,
-        ignored,
-        packages,
-    })
-}
-
-fn number(text: &str) -> Option<u64> {
-    if text.is_empty()
-        || (text.len() > 1 && text.starts_with('0'))
-        || !text.bytes().all(|byte| byte.is_ascii_digit())
-    {
-        return None;
-    }
-    text.parse().ok()
 }
 
 #[cfg(test)]
