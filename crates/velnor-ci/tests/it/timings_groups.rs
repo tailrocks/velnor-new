@@ -95,6 +95,7 @@ fn archived_test_jobs() -> FakeGitHub {
                 .push(job);
             fake.respond(job_log_path(&repo, job_id), &log);
         }
+        jobs["total_count"] = jobs["jobs"].as_array().map_or(0, Vec::len).into();
         fake.respond(path, &jobs.to_string());
     }
     fake
@@ -165,6 +166,7 @@ fn lint_measurement_fake(invalid: &str) -> FakeGitHub {
             }
             _ => {}
         }
+        jobs["total_count"] = jobs["jobs"].as_array().map_or(0, Vec::len).into();
         fake.respond(path, &jobs.to_string());
     }
     fake
