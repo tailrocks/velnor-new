@@ -77,12 +77,17 @@ impl Invocation {
         let compiler = compilation && !words.contains(&"--open")
             || (nextest || test && !doctest) && words.contains(&"--no-run");
         let preflight = ((nextest || test && !doctest) && !compiler).then(|| {
-            let mut preflight = command.to_vec();
-            let end = preflight
+            let end = command
                 .iter()
                 .position(|word| word == "--")
-                .unwrap_or(preflight.len());
-            preflight.insert(end, "--no-run".to_owned());
+                .unwrap_or(command.len());
+            let mut preflight: Vec<String> = command[..end]
+                .iter()
+                .filter(|word| !matches!(word.as_str(), "--no-fail-fast" | "--fail-fast"))
+                .cloned()
+                .collect();
+            preflight.push("--no-run".to_owned());
+            preflight.extend(command[end..].iter().cloned());
             preflight
         });
         let mut globals = if program == "cargo" {
@@ -216,3 +221,7 @@ fn subcommand(words: &[&str]) -> Option<usize> {
     }
     None
 }
+
+#[cfg(test)]
+#[path = "invocation/preflight.rs"]
+mod preflight;
