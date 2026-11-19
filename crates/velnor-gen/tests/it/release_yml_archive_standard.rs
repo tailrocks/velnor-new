@@ -81,7 +81,11 @@ fn archives_are_named_after_the_binary_and_the_rust_target_triple() -> TestResul
             pack,
             format!(
                 "tar {}-czf {} -C target/{triple}/release app",
-                if platform.starts_with("linux") { REPRODUCIBLE } else { "" },
+                if platform.starts_with("linux") {
+                    REPRODUCIBLE
+                } else {
+                    ""
+                },
                 archive(triple)
             )
         );

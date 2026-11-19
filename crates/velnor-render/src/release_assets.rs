@@ -132,7 +132,10 @@ pub(crate) fn pack(
     if versioned(binary) {
         format!("tar {flags}-czf \"{STAGE_SHELL}/{file}\" -C {release_dir}{members}")
     } else {
-        format!("tar {flags}-czf {} -C {release_dir}{members}", shell_word(file))
+        format!(
+            "tar {flags}-czf {} -C {release_dir}{members}",
+            shell_word(file)
+        )
     }
 }
 
