@@ -186,7 +186,7 @@ keep deliberately.
 | 7 | Plan job, Ledger CLI build and 31 downloads, `Required` aggregation | every run | yes | Plan 0.9 min plus 5.5 min hosted queue; Ledger CLI 22 s + 31 × 3.2 s; `Required verdict` 49 s | E | Released planner and helper in the tool store; App check |
 | 8 | Checkout, toolchain, mise, action downloads | every job (31–39 per run) | yes | 14–18 s per job; 7.5–8 min per run | E | Node mirror, read-only stores, native actions |
 | 9 | Crate fetch | every Rust job | yes | 4–5 s per job | R once per lockfile | Offline crate store |
-| 10 | Third-party crate compile | every Rust job | yes | 2,106 builds of 475 crates per run (4.4×); 6.3–21.7 GB written per job and discarded | R once per lockfile, toolchain and profile | Warm snapshot |
+| 10 | Third-party crate compile | every Rust job | yes | 2,106 builds of 475 crates per run (4.4×; another count gives 2,260 of 463, 4.9×); 6.3–21.7 GB written per job and discarded | R once per lockfile, toolchain and profile | Warm snapshot |
 | 11 | Workspace crates in several configurations | runner-host default and `local-mode` | partly | 404–407 crates twice | R once per closure key | Crate split; `velnor-runner-local` extracted |
 | 12 | Clippy, doc, check-alone | every run | different outputs | clippy 36–75 s, doc 30–65 s per job | K as parallel lanes; R per key | One target lane per check kind |
 | 13 | `-j2` caps, the 89 s image-publication fixture, the CLI built ≥ 9 times per event | several jobs | yes | caps cost 4.5 of 8.5 min | E / R once | Caps removed; fixture in the warm build |
@@ -413,9 +413,10 @@ compares; velnor-new's `qualification.yml` is its seed.
   case unless an owner-signed allow-list entry covers it. The gate is 100% per backend, and the
   harness must catch every planted mutant before its green counts.
 - **When.** On every change to an executor, a native action or the protocol code, as a blocking
-  check; nightly; within hours of each official release (Velnor reports the runner version it last
-  passed, so GitHub's 63-day version window becomes a conformance deadline); and as sampled shadow
-  runs of real velnor-new jobs.
+  check; nightly; within hours of each official release (Velnor reports as its runner version the
+  newest official release it has passed, so GitHub's 63-day version window becomes a conformance
+  deadline); and as sampled shadow runs of real velnor-new jobs. Every release binary is also
+  scanned for the banned legacy endpoint paths, so a legacy API cannot ship by accident.
 - **Per-job-type gate** (decision 16): a job type moves only after its cases pass at 100% on the
   Kubernetes backend, its replayed real-commit pairs show no unexplained difference, and every step
   made to fail is red exactly as on the oracle (section 11).
@@ -549,9 +550,9 @@ not, how that is detected, and the automatic fallback.
   the epoch: older verdicts are re-checked, queue entries pause, and landed commits that relied on
   them are listed.
 - **Audit A1.** Every landed commit is rebuilt cold at batch priority and its changed obligations
-  re-run, comparing results and test-binary digests with the warm path; a stale generation can
-  therefore serve only the merges inside A1's window. Then 2% sampled re-execution once a class has
-  about 3,000 clean comparisons.
+  re-run, comparing results and test-binary digests with the warm path, within 2 h of landing at P90
+  [T]; a stale generation can therefore serve only the merges inside that window. Then 2% sampled
+  re-execution once a class has about 3,000 clean comparisons.
 - **Degraded mode.** With the ledger unreachable nothing is satisfied by lookup: obligations run
   fresh. Slow, never wrong.
 
@@ -710,11 +711,13 @@ control job execution], so no Actions job carries the gate.
 | push | present | The new head gets a new check; old-head work the new head does not need is cancelled at once; shared work is joined | the old SHA's check: cancelled |
 | unlabeled | — | Cancels in-flight work; nothing further runs; a completed verdict stays true for its head | in progress → queued, "Not requested" |
 | edited | any | Nothing; a base change re-plans | unchanged |
+| `check_run` re-requested | present | Re-runs only the failed obligations, charged to the flake budget | in progress |
 | `merge_group` checks requested / destroyed | — | Verifies the group's tree / cancels it | on the group's head SHA |
 
 - **The ruleset** requires `Required` bound to the App's `integration_id` on PRs and in the merge
-  queue, with no bypass actors; any push makes the head's check pending again, so only a green
-  latest commit can merge or enter the queue.
+  queue, with no bypass actors: break-glass means the owner edits the ruleset, which is
+  audit-logged. Any push makes the head's check pending again, so only a green latest commit can
+  merge or enter the queue, and only the App can satisfy a queued check.
 - **Label events made with `GITHUB_TOKEN`** may not trigger workflows; whether App webhooks still
   arrive is pending ruling Q3. The safe default: agents label with the App's token or the UI, and a
   reconciler lists open PRs every 30 s, so a missed delivery delays and never verifies the wrong
@@ -777,7 +780,8 @@ under user-mode qemu.
 - **Reserved merge path.** Each site keeps one 16-CPU build slot and 2 gate CPUs for merge and gate
   work, about 7.7% of allocatable CPU: at 95% utilisation waiting grows to about 19 times the
   service time. Priorities: merge > gate > PR = other organisations' CI > batch (builder,
-  speculation, audits); only batch is preempted.
+  speculation, audits); only batch is preempted. Batch work runs in `cpu.idle` cgroups and is frozen
+  with `cgroup.freeze` under memory pressure instead of being killed.
 - **Sites.** Each site has its own control, dispatcher, ledger and RustFS cluster; a request stays
   in one site; DE to FI is 35 ms over WireGuard.
 - **Other organisations.** ChainArgos and jackin keep their own ARC scale sets, which are not

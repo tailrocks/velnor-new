@@ -292,6 +292,10 @@ in the design review. "Same as" marks a merged duplicate.
 | N71 | Node-local bare mirrors of each repository, updated by push webhooks plus a catch-up; native checkout verifies the exact commit and tree, reflink-clones a pre-materialised `main` tree and rewrites only changed files; the same pattern for the crates.io index and crates, toolchains, mise tools and container images. | Owner (decision 24) | — | Adopted (v3) | Times follow the warm-snapshot rule, mirrors are read-only to jobs, new nodes seed from a site bundle, and the feature is configurable per platform. Estimated saving at today's volume: about 5 s (checkout), 4.5 s (crates) and 14 s (toolchain and tools) per job, about 62 runner-hours a day (design section 7.4). |
 | N72 | Per-job-type migration: a job type moves when it passes conformance for that type, its old route is deleted in the same change, nothing moves back; every step lists its deletions. | Owner (decisions 16, 18) | — | Adopted (v3) | Order relieves the critical path first. ARC's velnor-new scale set and the ARC path that ran production jobs on the official runner are deleted after the last move; the official runner itself stays as GitHub Official and the reference executor (decisions 19, 20). |
 | N73 | Review before reuse: every component of velnor-legacy and of velnor-new is reviewed, with a verdict (port as-is, port and refactor, redesign) and its reason. | Owner (decisions 14, 17) | — | Adopted (v3) | The verdicts are in design section 5.10; the delivery plan's review items confirm the ones that depend on unchecked facts. |
+| N74 | `Required` as an App-owned check bound to the App's `integration_id`, created queued as "Not requested" on every unlabelled head; no bypass actors; `check_run` re-requests re-run only failed obligations. | Claude Opus 5.5 (Rust-only round) | Gemini 4 Neon and Claude Fable 5.2 (reusable-workflow caller); Gemini 4 Argon and Muse Wonder (fail-closed Actions job); GPT-6.2-Astra and GPT-6.2-Sol (App commit status) | Adopted (v3) | Pending ruling Q1, Q2 and Q8; this is the safe default. A job skipped by `if:` reports success and does not block a required check [docs: using conditions to control job execution], and only the App can satisfy its queued check. The release gate (`gate.rs`) and `product-release.yml` migrate to the App check in the same change. |
+| N75 | A syscall read audit per sandbox (path syscalls including `ENOENT` results) as the check that a key is complete; a read outside the key's paths demotes the receipt to exact-tree scope. | Claude Opus 5.5 | GPT-6.2-Astra and GPT-6.2-Sol: observed reads cannot prove completeness | Adopted (v3) | Used as detection, never as the argument for skipping: keys stay input-addressed over the full tree (Q5's safe default), and the audit only demotes. Astra and Sol's objection is why it detects rather than licenses. |
+| N76 | Release binaries are scanned for banned legacy endpoint paths; Velnor reports as its runner version the newest official release it has passed. | Claude Opus 5.5 | — | Adopted (v3) | Turns decision 3 into a check, and GitHub's 63-day version window into a conformance deadline. |
+| N77 | Batch work (builder, speculation, audits) in `cpu.idle` cgroups, frozen with `cgroup.freeze` under memory pressure instead of killed. | Claude Opus 5.5 | — | Adopted (v3) | Keeps the reserved merge path's latency while batch work uses idle CPU. |
 
 
 ## Load-bearing decisions
@@ -594,6 +598,23 @@ default, marked "pending ruling" in the design.
   component (N73, design section 5.10).
 - Contested facts that could change a verdict run on their safe default (the table above), so no
   group depends on a ruling to stay correct.
+
+### Group 12: what v3 takes from Claude Opus 5.5
+
+| Idea or finding | Decision | Why |
+|---|---|---|
+| `Required` as an App-owned check, queued "Not requested" on unlabelled heads, bound by `integration_id`, no bypass actors | Adopted as the safe default (N74), pending ruling Q1, Q2, Q8 | A skipped job reports success; only the App can satisfy its queued check |
+| Measured: cargo 1.99.1 refuses `cargo build -p a` when another member's sources are missing | Adopted: the full tree in every sandbox (N01), pending ruling Q5 | v2's sparse sandbox could not load the workspace |
+| Syscall read audit including `ENOENT` | Adopted as detection (N75) | Demotes, never licenses a skip |
+| 11 test files read the wall clock; no test manifest declares proptest, quickcheck or rand | Adopted: wall-clock receipts expire in 24 h | Time and randomness are inputs (decision 11) |
+| `check_run.rerequested` re-runs only failed obligations; `merge_group.destroyed` cancels | Adopted | Label-flow state machine (design §8.2) |
+| Release built once in the merge group, so its SHA becomes `main`'s; smoke on the shipped musl bytes under qemu | Adopted as the safe default for Q6 | No rebuild at the tag |
+| Binary scan for banned legacy endpoints; newest certified version as `runnerVersion` | Adopted (N76) | Decision 3 as a check; the version window as a deadline |
+| `cpu.idle` batch class with `cgroup.freeze` | Adopted (N77) | Batch never delays the merge path |
+| Cold tip audit within 2 h | Adopted as A1's P90 window | A stale generation serves only merges inside that window |
+| Third-party compiles counted at 2,260 of 463 crates (4.9×) | Recorded in the audit (design §4) | A second count beside 2,106 of 475 |
+| Incremental compilation on from phase 2 | Not adopted yet: pending ruling Q17 | Needs a non-incremental audit of equality |
+| Twin execution of changed obligations on two nodes | Adopted (N20 as amended) | Today's two pre-merge runs |
 
 ## Design review
 
