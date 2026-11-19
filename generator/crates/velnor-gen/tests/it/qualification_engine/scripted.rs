@@ -25,7 +25,6 @@ const SCRIPT_KEEPS: [(&str, &[&str]); 3] = [
     (
         "qualification/ports.sh",
         &[
-            "alpine:3.24.2@sha256:d56c381f961d307a21b3ca004cf1e3910f106644aefb1f43e654c8a56c4fd395",
             "docker run -d --name g4-hold -p 8080:",
             "docker port g4-hold 80 | grep -q 8080",
             "echo port-held",
@@ -215,6 +214,14 @@ fn scripted_step(
         .map_or(&[][..], |(_, fragments)| *fragments);
     if let Some(missing) = keeps.iter().find(|fragment| !script.contains(**fragment)) {
         differ(&format!("the script lost {missing}"));
+    }
+    // The image is whatever the engine runs now, so a bump of the engine's digest fails here.
+    let image = engine_run.as_deref().and_then(|run| {
+        run.split_whitespace()
+            .find(|word| word.starts_with("alpine:"))
+    });
+    if image.is_some_and(|image| !script.contains(image)) {
+        differ("the script runs another image than the engine");
     }
     verbatim_body(name, engine_run.as_deref().unwrap_or_default(), &mut differ);
 }

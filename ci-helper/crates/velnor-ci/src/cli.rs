@@ -514,6 +514,22 @@ pub enum BenchCommand {
     Collect(CollectArgs),
     #[command(about = "Print a markdown table comparing two metrics files")]
     Compare(CompareArgs),
+    #[command(
+        about = "Compare the speed budget of .velnor/rust-ci.toml with the last successful runs of the generated workflow: read the budget, collect the last --last successful attempt-1 runs of each event, compare their medians and their latest run with the budget, print the three jobs whose duration is furthest above their median, and exit 1 on a breach or on a measurement the budget needs but the runs do not have. Reads GITHUB_TOKEN, which needs actions: read; run in the checkout"
+    )]
+    Budget(BudgetArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct BudgetArgs {
+    #[arg(
+        long,
+        default_value_t = 10,
+        help = "How many successful runs of each event to measure"
+    )]
+    pub last: usize,
+    #[arg(long, help = "Repository as owner/name")]
+    pub repo: Option<String>,
 }
 
 #[derive(Debug, Args)]
