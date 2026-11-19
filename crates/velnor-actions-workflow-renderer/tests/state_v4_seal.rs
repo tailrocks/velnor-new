@@ -128,7 +128,12 @@ fn inputs_of(step: &Step) -> Result<&BTreeMap<String, String>, Box<dyn Error>> {
 }
 
 fn on_runner(scene: &Scene, expression: &str) -> String {
-    expression.replace("${{ runner.temp }}", &scene.runner.display().to_string())
+    expression
+        .replace("${{ runner.temp }}", &scene.runner.display().to_string())
+        .replace(
+            "/home/runner/work/_temp",
+            &scene.runner.display().to_string(),
+        )
 }
 
 fn run_subject(scene: &Scene, job: &Job) -> Result<String, Box<dyn Error>> {

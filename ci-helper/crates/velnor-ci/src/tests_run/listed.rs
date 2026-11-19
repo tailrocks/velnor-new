@@ -34,10 +34,17 @@ pub(super) struct FilterMatch {
     pub(super) reason: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Listing {
+    pub(crate) packages: BTreeMap<String, u64>,
+    pub(crate) ignored: u64,
+}
+
 #[must_use]
-pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
+pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<Listing> {
     let listed: Listed = serde_json::from_slice(bytes).ok()?;
     let mut packages = BTreeMap::new();
+    let mut ignored = 0u64;
     for suite in listed.rust_suites.into_values() {
         if !package_token(&suite.package_name) {
             return None;
@@ -49,6 +56,9 @@ pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
             match filter.status.as_str() {
                 "matches" => runnable = runnable.checked_add(1)?,
                 "mismatch" => {
+                    if filter.reason.as_deref() == Some("ignored") {
+                        ignored = ignored.checked_add(1)?;
+                    }
                     if !filter
                         .reason
                         .as_deref()
@@ -63,7 +73,7 @@ pub(crate) fn runnable_matches(bytes: &[u8]) -> Option<BTreeMap<String, u64>> {
         add(&mut packages, &suite.package_name, runnable)?;
         add(&mut packages, &suite.package_name, excluded)?;
     }
-    Some(packages)
+    Some(Listing { packages, ignored })
 }
 
 fn add(into: &mut BTreeMap<String, u64>, name: &str, count: u64) -> Option<()> {

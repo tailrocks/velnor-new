@@ -6,6 +6,7 @@ use std::fs;
 use std::io;
 use std::path::Path;
 use std::process::{Command, Output};
+use velnor_actions_contract::workflow::cache_family::STATE_RUNNER_TEMP;
 
 use velnor_actions_contract::ids::run_key_for_ci;
 use velnor_actions_contract::{Job, Step, StepKind, StepRole};
@@ -112,8 +113,9 @@ fn run_restore(
     };
     let (program, args) = run.split_first().ok_or("restore step has no command")?;
     let mut command = Command::new(program);
+    let temp = runner_temp.to_string_lossy().into_owned();
     command
-        .args(args)
+        .args(args.iter().map(|arg| arg.replace(STATE_RUNNER_TEMP, &temp)))
         .current_dir(workspace)
         .env("RUNNER_TEMP", runner_temp)
         .env("GITHUB_WORKSPACE", workspace)
