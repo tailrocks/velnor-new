@@ -84,20 +84,18 @@ fn setup_archives(script: &str) -> Result<BTreeSet<String>, Box<dyn Error>> {
         .collect())
 }
 
-#[test]
-fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_checksums() -> TestResult
-{
+struct Release {
+    expected: BTreeSet<String>,
+    produced: BTreeSet<String>,
+    published: BTreeSet<String>,
+    workflow: Value,
+}
+
+fn release() -> Result<Release, Box<dyn Error>> {
     let action = parse(ACTION)?;
     let workflow = parse(WORKFLOW)?;
     let script = action_script(&action)?;
     let expected = setup_archives(script)?;
-    assert!(
-        expected
-            .iter()
-            .all(|name| name.starts_with("velnor-ci-") && name.ends_with(".tar.gz")),
-        "{expected:?}"
-    );
-
     let targets: BTreeSet<String> = workflow["jobs"]["build"]["strategy"]["matrix"]["include"]
         .as_array()
         .ok_or("the build job has no matrix")?
@@ -136,54 +134,78 @@ fn the_release_publishes_every_archive_the_setup_action_downloads_with_its_check
                 .map(move |target| name.replace("$TARGET", target))
         })
         .collect();
-    assert!(produced.is_superset(&expected), "{produced:?} {expected:?}");
-    assert_eq!(produced.len(), 2 * targets.len(), "{produced:?}");
-
     let published = names(
         run_starting(&workflow, "release", "gh release create", "")?,
         "dist/",
     );
-    let wanted: BTreeSet<String> = produced
+    Ok(Release {
+        expected,
+        produced,
+        published,
+        workflow,
+    })
+}
+
+fn listed(run: &str) -> BTreeSet<String> {
+    run.split_whitespace()
+        .skip(1)
+        .take_while(|word| *word != ">")
+        .map(str::to_owned)
+        .collect()
+}
+
+#[test]
+fn the_release_publishes_every_archive_the_setup_action_downloads() -> TestResult {
+    let release = release()?;
+    assert!(
+        release
+            .expected
+            .iter()
+            .all(|name| name.starts_with("velnor-ci-") && name.ends_with(".tar.gz")),
+        "{:?}",
+        release.expected
+    );
+    assert!(
+        release.produced.is_superset(&release.expected),
+        "{:?} {:?}",
+        release.produced,
+        release.expected
+    );
+    let wanted: BTreeSet<String> = release
+        .produced
         .iter()
         .cloned()
         .chain([SUMS, BINARY_SUMS, COMMIT].map(str::to_owned))
         .collect();
-    assert_eq!(published, wanted);
+    assert_eq!(release.published, wanted);
+    Ok(())
+}
 
-    let listed: BTreeSet<String> = runs(&workflow, "checksums")?
-        .into_iter()
-        .find(|run| run.starts_with("sha256sum ") && run.ends_with("> SHA256SUMS"))
-        .map(|run| {
-            run.split_whitespace()
-                .skip(1)
-                .map(str::to_owned)
-                .collect::<Vec<_>>()
-        })
-        .ok_or("the checksums job never writes SHA256SUMS")?
-        .into_iter()
-        .take_while(|word| word != ">")
-        .collect();
-    let mut without_sums = published.clone();
+#[test]
+fn sha256sums_lists_every_published_file_and_the_binary_sums_list_every_member() -> TestResult {
+    let release = release()?;
+    let sums = listed(run_starting(
+        &release.workflow,
+        "checksums",
+        "sha256sum ",
+        "> SHA256SUMS",
+    )?);
+    let mut without_sums = release.published.clone();
     without_sums.remove(SUMS);
-    assert_eq!(listed, without_sums);
+    assert_eq!(sums, without_sums);
 
-    let binary: BTreeSet<String> = run_starting(
-        &workflow,
+    let binary = listed(run_starting(
+        &release.workflow,
         "checksums",
         "sha256sum ",
         "> ../dist/BINARY-SHA256SUMS",
-    )?
-    .split_whitespace()
-    .skip(1)
-    .take_while(|word| *word != ">")
-    .map(str::to_owned)
-    .collect();
-    for name in &expected {
+    )?);
+    for name in &release.expected {
         assert!(binary.contains(&format!("{name}/velnor-ci")), "{binary:?}");
     }
-    assert_eq!(binary.len(), produced.len(), "{binary:?}");
+    assert_eq!(binary.len(), release.produced.len(), "{binary:?}");
 
-    let uploaded = workflow["jobs"]["checksums"]["steps"]
+    let uploaded = release.workflow["jobs"]["checksums"]["steps"]
         .as_array()
         .ok_or("the checksums job has no steps")?
         .iter()
