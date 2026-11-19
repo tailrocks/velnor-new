@@ -8,7 +8,7 @@ use crate::release::{FROM_A_PASSED_PUSH, GATE_IS_READY, HOSTED_RUNNER, VERIFIED_
 use crate::release_assets::{
     STAGE, asset, assets, bind_version, pack, quoted, read_version, selection, uploaded, versioned,
 };
-use crate::release_attest::{attest, verifications};
+use crate::release_attest::{attest, verify};
 use crate::release_checks::publish_needs;
 use crate::release_outputs::commit_output;
 use crate::release_raw::raw_packaging;
@@ -39,6 +39,9 @@ pub(crate) fn binary_jobs(plan: &ReleasePlan, helper: &HelperRelease) -> Vec<Ren
                 .map(|platform| build(binary, *platform, helper))
                 .collect();
             jobs.push(sums(binary));
+            if binary.attest {
+                jobs.push(verify(binary));
+            }
             jobs.push(publish(plan, binary, helper));
             jobs
         })
@@ -73,7 +76,7 @@ pub(crate) fn build_id(package: &str, platform: Platform) -> String {
     format!("build-{package}-{}", platform.file_suffix())
 }
 
-fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
+pub(crate) fn behind_the_gate(id: String, binary: &BinaryPlan, needs: Vec<String>) -> RenderedJob {
     let mut all = vec!["gate".to_owned(), "tag".to_owned()];
     all.extend(needs);
     RenderedJob {
@@ -262,9 +265,6 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
     );
     steps.push(download(format!("{}-sums", binary.package)));
     steps.extend(read_version(binary));
-    if binary.attest {
-        steps.extend(verifications(binary));
-    }
     steps.push(RenderedStep {
         name: format!("Publish the release of {}", binary.package),
         env: variables(&[
@@ -283,18 +283,18 @@ fn publish(plan: &ReleasePlan, binary: &BinaryPlan, helper: &HelperRelease) -> R
     });
     bind_version(&mut steps);
     RenderedJob {
-        permissions: if binary.attest {
-            permissions(&[("attestations", "read"), ("contents", "write")])
-        } else {
-            permissions(&[("contents", "write")])
-        },
+        permissions: permissions(&[("contents", "write")]),
         runs_on: HOSTED_RUNNER.to_owned(),
         timeout_minutes: PUBLISH_TIMEOUT_MINUTES,
         steps,
         ..behind_the_gate(
             format!("publish-{}", binary.package),
             binary,
-            [format!("sums-{}", binary.package)]
+            [format!(
+                "{}-{}",
+                if binary.attest { "verify" } else { "sums" },
+                binary.package
+            )]
                 .into_iter()
                 .chain(publish_needs(plan, binary))
                 .collect(),

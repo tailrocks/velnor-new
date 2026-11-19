@@ -3,11 +3,7 @@
 
 use velnor_model::LintCommand;
 
-use crate::rules::{RenderedStep, Value};
-
-pub(crate) const ALINT_ACTION: &str = "asamarts/alint";
-const ALINT_COMMIT: &str = "5054852d00d47affc9ea71440240147d9999f4d3";
-const ALINT_TAG: &str = "v0.22.1";
+use crate::rules::RenderedStep;
 
 pub(crate) fn lint_step(command: &LintCommand) -> RenderedStep {
     match command {
@@ -40,15 +36,9 @@ pub(crate) fn lint_step(command: &LintCommand) -> RenderedStep {
         }
         LintCommand::Alint { config } => RenderedStep {
             name: "Run alint".to_owned(),
-            uses: Some(format!("{ALINT_ACTION}@{ALINT_COMMIT}")),
-            uses_comment: Some(ALINT_TAG.to_owned()),
-            with: vec![
-                ("config".to_owned(), Value::Text(config.to_string())),
-                ("fail-on-warning".to_owned(), Value::Bool(true)),
-                ("format".to_owned(), Value::Text("github".to_owned())),
-                ("path".to_owned(), Value::Text(".".to_owned())),
-                ("version".to_owned(), Value::Text(ALINT_TAG.to_owned())),
-            ],
+            run: Some(format!(
+                "alint --format github --config {config} --fail-on-warning check ."
+            )),
             ..RenderedStep::default()
         },
         LintCommand::Probe(script) => RenderedStep {
@@ -58,7 +48,7 @@ pub(crate) fn lint_step(command: &LintCommand) -> RenderedStep {
         },
         LintCommand::MiseTask(task) => RenderedStep {
             name: format!("Run the mise task {task}"),
-            run: Some(format!("mise run --skip-tools {task}")),
+            run: Some(format!("mise run --force --skip-tools {task}")),
             ..RenderedStep::default()
         },
     }
