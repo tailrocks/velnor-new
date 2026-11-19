@@ -9,7 +9,7 @@ use velnor_model::{
 use super::{ARCHIVE_FILE, ARCHIVE_ID, RootJobs};
 use crate::members::Member;
 use crate::mise::nextest_tool;
-use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, rust_additions};
+use crate::plan::{CHECKOUT_DEPTH, DEFAULT_GROUP_JOB, TEST_JOB, head, mbx, rust_additions};
 use crate::plan_tools::{mirror_step_on, tools_restore};
 
 impl RootJobs<'_> {
@@ -120,6 +120,7 @@ impl RootJobs<'_> {
             CHECKOUT_DEPTH,
             crate::sparse::paths(self.facts, std::slice::from_ref(&self.member().root)),
         );
+        steps.extend(mbx(self.facts, self.lane.steps()));
         steps.extend(mirror());
         steps.extend(tools_restore(self.facts).into_iter().map(|restore| Step {
             gate: self.lane.steps(),

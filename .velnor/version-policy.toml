@@ -37,8 +37,8 @@ supported = ["ubuntu-26.04"]
 
 [[actions]]
 name = "jdx/mise-action"
-version = "v5.2.9"
-sha = "236a21c3b91f5db6d4e174b348674a0f0caac06d"
+version = "v5.2.10"
+sha = "90f833d396d0cc3674b631d2d225e306476c303a"
 reviewed = "2026-11-19"
 
 [[actions]]

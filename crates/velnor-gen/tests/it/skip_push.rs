@@ -58,13 +58,15 @@ fn knob_off_or_false_leaves_the_workflow_byte_identical() -> TestResult {
 
 #[test]
 fn knob_needs_a_helper_that_knows_the_command() -> TestResult {
-    let old = repo(&["Cargo.toml"], Some(KNOB), "0.1.81")?;
-    let error = expected_with_notes(&old)
-        .err()
-        .ok_or("accepted")?
-        .to_string();
-    assert!(error.contains("pin-helper 0.1.82"), "{error}");
-    workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.82")?)?;
+    for older in ["0.1.81", "0.1.82", "0.1.83", "0.1.84", "0.1.85", "0.1.87"] {
+        let old = repo(&["Cargo.toml"], Some(KNOB), older)?;
+        let error = expected_with_notes(&old)
+            .err()
+            .ok_or(format!("{older} accepted"))?
+            .to_string();
+        assert!(error.contains("pin-helper 0.1.88"), "{older}: {error}");
+    }
+    workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.88")?)?;
     Ok(())
 }
 
@@ -73,7 +75,7 @@ fn unknown_ci_key_is_refused() -> TestResult {
     let bad = repo(
         &["Cargo.toml"],
         Some(b"[ci]\nskip_everything = true\n"),
-        "0.1.82",
+        "0.1.88",
     )?;
     assert!(expected_with_notes(&bad).is_err());
     Ok(())
@@ -81,7 +83,7 @@ fn unknown_ci_key_is_refused() -> TestResult {
 
 #[test]
 fn single_job_asks_the_helper_after_the_plan_and_skips_only_checks() -> TestResult {
-    let text = workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.82")?)?;
+    let text = workflow(&repo(&["Cargo.toml"], Some(KNOB), "0.1.88")?)?;
     let all = jobs(&text)?;
     let job = &all["rust"];
     let names: Vec<&str> = job["steps"]
@@ -128,7 +130,7 @@ fn planned_lanes_read_the_plan_job_flag_and_cache_jobs_keep_running() -> TestRes
     let text = workflow(&repo(
         &["Cargo.toml", "lab/Cargo.toml"],
         Some(KNOB),
-        "0.1.82",
+        "0.1.88",
     )?)?;
     let all = jobs(&text)?;
     let plan = &all["rust-plan"];
@@ -165,9 +167,9 @@ fn the_plan_job_holds_actions_read_only_and_nothing_gains_actions_write() -> Tes
     let text = workflow(&repo(
         &["Cargo.toml", "lab/Cargo.toml"],
         Some(KNOB),
-        "0.1.82",
+        "0.1.88",
     )?)?;
-    let base = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], None, "0.1.82")?)?;
+    let base = workflow(&repo(&["Cargo.toml", "lab/Cargo.toml"], None, "0.1.88")?)?;
     let (all, before) = (jobs(&text)?, jobs(&base)?);
     assert_eq!(
         all["rust-plan"]["permissions"]

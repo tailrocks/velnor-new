@@ -97,17 +97,32 @@ fn compat_follows_the_distro_in_os_release() {
 }
 
 #[test]
-fn an_unreadable_os_release_fails_prepare_instead_of_sharing_a_digest() {
+fn an_unreadable_os_release_degrades_to_a_cold_run_with_a_warning() {
     let missing = scratch_root("os-release-missing").join("no-such-os-release");
     let missing: &'static str = Box::leak(missing.display().to_string().into_boxed_str());
-    let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
-    setup.env.push(("ImageOS", "ubuntu24"));
-    setup.env.push(("VELNOR_OS_RELEASE", missing));
-    let run = prepare("compat-no-os-release", &setup);
-    assert!(!run.output.status.success(), "{:?}", run.output);
-    let stderr = String::from_utf8_lossy(&run.output.stderr);
-    assert!(stderr.contains("os-release"), "{stderr}");
-    assert!(run.outputs.is_empty(), "{}", run.outputs);
+    let cold = || {
+        let mut setup = Setup::new(reported("1.99.1", Some("0.9.151")));
+        setup.env.push(("ImageOS", "ubuntu24"));
+        setup.env.push(("VELNOR_OS_RELEASE", missing));
+        prepare("compat-no-os-release", &setup)
+    };
+    let (first, second) = (cold(), cold());
+    assert!(first.output.status.success(), "{:?}", first.output);
+    let stdout = String::from_utf8_lossy(&first.output.stdout);
+    assert!(
+        stdout.contains("::warning::") && stdout.contains("os-release"),
+        "{stdout}"
+    );
+    assert_ne!(digest(&first), "");
+    assert_ne!(
+        digest(&first),
+        digest(&second),
+        "a cold run must share no key"
+    );
+    let readable = compat_with("compat-no-os-release", |setup| {
+        setup.env.push(("ImageOS", "ubuntu24"));
+    });
+    assert_ne!(digest(&first), readable);
 }
 
 #[cfg(not(target_os = "linux"))]

@@ -128,7 +128,7 @@ fn the_run_that_started_with_ci_run_still_runs_the_full_suite_and_a_following_pu
             "{id} waits for the label removal"
         );
     }
-    assert!(jobs["ci-run-label"].get("needs").is_none());
+    assert_eq!(strings(jobs["ci-run-label"].get("needs")), ["required"]);
     let (started, verdict) = outcome(&tree, &pull(false, &["ci:run"]), &[])?;
     assert_eq!(state(&started, "ci-run-label"), "success");
     assert_eq!(state(&started, "rust-test"), "success");
@@ -138,6 +138,17 @@ fn the_run_that_started_with_ci_run_still_runs_the_full_suite_and_a_following_pu
     assert_eq!(state(&next, "rust-lint"), "success");
     assert_eq!(state(&next, "rust-test"), "skipped");
     assert!(!verdict.steps.iter().any(|step| step == "velnor-ci gate"));
+    Ok(())
+}
+
+#[test]
+fn the_label_stays_until_the_required_check_of_the_full_run_has_succeeded() -> TestResult {
+    let tree = label_workflow()?;
+    let (failed, _) = outcome(&tree, &pull(false, &["ci:run"]), &["required"])?;
+    assert_eq!(state(&failed, "required"), "failure");
+    assert_eq!(state(&failed, "ci-run-label"), "skipped");
+    let (passed, _) = outcome(&tree, &pull(false, &["ci:run"]), &[])?;
+    assert_eq!(state(&passed, "ci-run-label"), "success");
     Ok(())
 }
 

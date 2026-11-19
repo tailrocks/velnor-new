@@ -5,7 +5,7 @@ use std::collections::VecDeque;
 
 use crate::expression::is_identifier;
 
-pub const HELPER_COMMANDS: [&str; 34] = [
+pub const HELPER_COMMANDS: [&str; 32] = [
     "report",
     "bench",
     "inputs",
@@ -37,8 +37,6 @@ pub const HELPER_COMMANDS: [&str; 34] = [
     "sources",
     "timings",
     "validate-artifact-id",
-    "install-gh",
-    "stage-bundle",
     "qualification",
 ];
 

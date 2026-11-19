@@ -14,7 +14,8 @@ use crate::github::Repo;
 use crate::publish::{Request, SUMS, publish};
 use crate::release::{
     CargoPathEntry, PlainName, check_branch_prefixes, check_cargo_discovery, check_config,
-    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded, tag_lines,
+    check_manifests, check_tag_patterns, publishes_to_crates_io, recorded_in_groups, tag_lines,
+    version_groups,
 };
 use crate::release_commit::tagged_commits;
 use crate::release_family::{family_tag, lines, tag_of, version_of};
@@ -70,7 +71,7 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
                 .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
         })
         .collect::<Result<Vec<_>, CiError>>()?;
-    let mut tags = recorded(&outputs)?;
+    let mut tags = recorded_in_groups(&outputs, &read_version_groups(&args.version_groups)?)?;
     let mut lines = String::new();
     if let (Some(repo), Some(verified)) = (&args.repo, &args.verified_commit) {
         let github = HttpGitHub::new(super::api_url(), super::token()?, DEFAULT_TIMEOUT);
@@ -94,6 +95,22 @@ pub(super) fn run_record(args: &RecordArgs) -> Result<String, CiError> {
     }
     super::append_outputs(&lines)?;
     Ok(lines)
+}
+
+fn read_version_groups(
+    configs: &[std::path::PathBuf],
+) -> Result<BTreeMap<String, String>, CiError> {
+    let top = std::env::current_dir()
+        .map_err(|e| CiError::new(format!("cannot read the working folder: {e}")))?;
+    let files = configs
+        .iter()
+        .map(|path| {
+            fs::read_to_string(path)
+                .map(|text| (root_of(&top, path), text))
+                .map_err(|e| CiError::new(format!("cannot read {}: {e}", path.display())))
+        })
+        .collect::<Result<Vec<_>, CiError>>()?;
+    version_groups(&files)
 }
 
 fn expected_tags(configs: &[std::path::PathBuf]) -> Result<BTreeMap<String, String>, CiError> {

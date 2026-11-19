@@ -1,9 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-//! Packages a change always selects: those with a build script, and those whose sources read a
-//! file no input rule or package directory covers.
-
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
 

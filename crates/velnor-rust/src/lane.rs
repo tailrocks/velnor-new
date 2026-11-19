@@ -8,7 +8,7 @@ use velnor_model::{
     PrRun, RepoFacts, RootSlug, RustRoot, Step, StepKind, When,
 };
 
-use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, step};
+use crate::plan::{CHECKOUT_DEPTH, PLAN_DEPTH, RUST_JOB, head, job, mbx, step};
 use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 
 pub(crate) const PLAN_JOB: JobId = JobId::from_static("rust-plan");
@@ -50,7 +50,11 @@ impl Lane {
     }
 
     fn from(&self) -> PlanFrom {
-        self.plan.clone().map_or(PlanFrom::ThisJob, PlanFrom::Job)
+        match self.plan.clone() {
+            None => PlanFrom::ThisJob,
+            Some(job) if job == RUST_JOB => PlanFrom::WorkJob(job),
+            Some(job) => PlanFrom::Job(job),
+        }
     }
 
     fn gate(&self, need: GateNeed) -> Gate {
@@ -187,7 +191,7 @@ pub(crate) fn expose_read_outputs(jobs: &mut [Job], source: &JobId) {
                 .iter()
                 .chain(job.steps.iter().filter_map(|step| step.gate.as_ref()))
         })
-        .filter(|gate| matches!(&gate.from, PlanFrom::Job(job) if job == source))
+        .filter(|gate| matches!(&gate.from, PlanFrom::Job(job) | PlanFrom::WorkJob(job) if job == source))
         .flat_map(Gate::outputs)
         .collect();
     for job in jobs.iter_mut().filter(|job| &job.id == source) {
@@ -227,6 +231,7 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
     }
     let policy_gate = lane.plan.is_none().then(|| lane.gate(GateNeed::Policy));
+    steps.extend(mbx(facts, policy_gate.clone()));
     steps.extend(mirror_step(facts).map(|step| Step {
         gate: policy_gate.clone(),
         ..step

@@ -4,11 +4,13 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use serde_json::{Map, Value, json};
-use velnor_model::{StepKind, WorkflowPlan};
+use velnor_model::{PushAfterMergeGroup, StepKind, WorkflowPlan};
 use velnor_render::{MAX_ENV_CHARACTERS, RenderedJob, RenderedWorkflow, Rule, rendered_workflow};
 
 use crate::facts::TestResult;
-use crate::needs_size_plan::{Packages, saving_plan, test_packages, worst_package_counts};
+use crate::needs_size_plan::{
+    Packages, saving_facts, saving_plan, test_packages, worst_package_counts,
+};
 
 fn required_bound(plan: &WorkflowPlan) -> Result<usize, &'static str> {
     plan.jobs
@@ -133,6 +135,31 @@ fn blocking_cache_adds_its_outputless_context_to_required_without_changing_the_c
     Ok(())
 }
 
+#[test]
+fn the_skip_push_output_of_the_plan_job_is_inside_the_required_bound() -> TestResult {
+    let mut facts = saving_facts(2, false)?;
+    let without = velnor_rust::plan(&facts);
+    facts.config.push_after_merge_group = PushAfterMergeGroup::SkipWhenQueueRunPassed;
+    let with = velnor_rust::plan(&facts);
+    let before = realized_needs(
+        &rendered_workflow(&without),
+        "required",
+        &test_packages(2, false)?,
+    )?;
+    let after = realized_needs(
+        &rendered_workflow(&with),
+        "required",
+        &test_packages(2, false)?,
+    )?;
+    let growth = after - before;
+    assert!(growth > 0, "the plan job reports nothing more");
+    assert!(
+        required_bound(&with)? - required_bound(&without)? >= growth,
+        "growth={growth}"
+    );
+    Ok(())
+}
+
 fn realized_output(
     name: &str,
     text: &str,
@@ -188,6 +215,10 @@ fn realized_output(
     if name == "tests_by_package" {
         assert_eq!(expression, "steps.test.outputs.tests_by_package");
         return worst_package_counts(packages.get(&job.id).ok_or("test packages")?);
+    }
+    if name == "skip_push" {
+        assert_eq!(expression, "steps.merge_group.outputs.skip");
+        return Ok("false".to_owned());
     }
     if matches!(name, "base_save" | "sources_saved") {
         check_cache_expression(name, expression)?;

@@ -186,11 +186,7 @@ pub(crate) fn helper_step(command: HelperCommand) -> RenderedStep {
         HelperCommand::CheckMetadata => "check-metadata",
         HelperCommand::Restored(..) => "restored",
         HelperCommand::InputsAudit => "inputs audit",
-        HelperCommand::MergeGroupPassed => "merge-group-passed",
     };
-    if command == HelperCommand::MergeGroupPassed {
-        return merge_group_step();
-    }
     let (id, env) = match command {
         HelperCommand::Plan => (Some(PLAN_STEP), Vec::new()),
         HelperCommand::PlanFull => (Some(REPLAN_STEP), Vec::new()),
@@ -318,16 +314,22 @@ pub(crate) fn mbx_remote_step() -> RenderedStep {
     }
 }
 
-fn merge_group_step() -> RenderedStep {
+pub(crate) fn merge_group_step(required: &str) -> RenderedStep {
     RenderedStep {
         name: "velnor-ci merge-group-passed".to_owned(),
         id: Some(MERGE_GROUP_STEP.to_owned()),
         condition: Some(format!("${{{{ {MERGE_GROUP_ASKED_ON} }}}}")),
         continue_on_error: true,
-        env: vec![(
-            "GITHUB_TOKEN".to_owned(),
-            crate::rules::Value::Expr("${{ github.token }}".to_owned()),
-        )],
+        env: vec![
+            (
+                "GITHUB_TOKEN".to_owned(),
+                crate::rules::Value::Expr("${{ github.token }}".to_owned()),
+            ),
+            (
+                "VELNOR_REQUIRED_CHECK".to_owned(),
+                crate::rules::Value::Text(required.to_owned()),
+            ),
+        ],
         run: Some("velnor-ci merge-group-passed".to_owned()),
         ..RenderedStep::default()
     }
