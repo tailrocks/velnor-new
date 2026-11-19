@@ -41,9 +41,9 @@ pub use plan::{
     When, WorkflowPlan, group_output_name,
 };
 pub use repo::{
-    CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, DocsRun,
-    FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency,
-    PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
+    CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
+    DependencyKind, DocsRun, FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
+    PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
     RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, Target,
     TargetKind, TestLane, TestSetup, Timings, ToolPin, ToolPins, Toolchain, UnownedPackage, Unread,
     Weakening,

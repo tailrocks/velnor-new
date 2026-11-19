@@ -38,7 +38,7 @@ impl fmt::Display for Drift {
             Self::Stale(path) => write!(f, "{path} is no longer generated"),
             Self::Foreign(path) => write!(
                 f,
-                "{path} was not written by velnor-gen; move it away to let velnor-gen own it"
+                "{path} was not written by velnor-gen (no marker, or its content digest does not verify); move it away to let velnor-gen own it"
             ),
             Self::Unmarked(path) => write!(
                 f,
@@ -64,12 +64,13 @@ pub fn drift(
             (None, Some(_)) if *path == METADATA_PATH => Some(Drift::Stale(path.clone())),
             (Some(want), Some(have)) => match owner_of(have) {
                 Owner::VelnorGen if want.as_bytes() == have.as_slice() => None,
-                Owner::VelnorGen => Some(Drift::Changed(path.clone())),
+                Owner::VelnorGen | Owner::Forged => Some(Drift::Changed(path.clone())),
                 Owner::Engine | Owner::Nobody => Some(Drift::Foreign(path.clone())),
             },
             (Some(_), None) => Some(Drift::Missing(path.clone())),
             (None, Some(have)) => match owner_of(have) {
                 Owner::VelnorGen => Some(Drift::Stale(path.clone())),
+                Owner::Forged => Some(Drift::Foreign(path.clone())),
                 Owner::Engine => None,
                 Owner::Nobody => (!engine_configured).then(|| Drift::Unmarked(path.clone())),
             },
