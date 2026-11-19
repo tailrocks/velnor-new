@@ -310,7 +310,13 @@ pub fn view_of(
 ) -> Result<Recorded, Error> {
     let mut view = view_from(root, tracked_paths, symlinks)?;
     let mut recorded = BTreeMap::new();
-    for manifest in metadata_roots(&view).map_err(Error::Detect)? {
+    // Manifests under the samples folder are recorded data, never roots of the checkout.
+    let sample_prefix = format!("{SAMPLES}/");
+    let roots = metadata_roots(&view).map_err(Error::Detect)?;
+    for manifest in roots
+        .into_iter()
+        .filter(|manifest| !manifest.as_str().starts_with(&sample_prefix))
+    {
         let known = view.rust_metadata.iter().any(|(workspace, metadata)| {
             *workspace == manifest || metadata.members.iter().any(|m| m.manifest == manifest)
         });
