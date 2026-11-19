@@ -3,9 +3,10 @@
 
 use std::collections::BTreeMap;
 
+use crate::cache_mode::CacheMode;
 use crate::error::{WorkflowsError, refuse};
 use crate::expression::{ENV_INTERPOLATIONS, check_interpolated, is_identifier};
-use crate::plan::{CacheMode, Env};
+use crate::plan::Env;
 
 const WRITER_GATE: &str =
     "github.ref != format('refs/heads/{0}', github.event.repository.default_branch)";

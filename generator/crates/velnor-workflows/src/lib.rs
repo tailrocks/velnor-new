@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
+mod cache_mode;
 mod call;
 mod cases;
 mod check;
@@ -16,9 +17,10 @@ mod plan;
 mod raw;
 mod triggers;
 
+pub use cache_mode::CacheMode;
 pub use error::WorkflowsError;
 pub use plan::{
-    Action, Body, CacheMode, Call, CallTarget, CallValue, Concurrency, Container, Env, Input,
-    InputKind, Job, LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step,
-    Triggers, Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
+    Action, Body, Call, CallTarget, CallValue, Concurrency, Container, Env, Input, InputKind, Job,
+    LocalAction, Matrix, MatrixSource, Output, PullRequest, Push, Service, Step, Triggers,
+    Workflow, WorkflowCall, WorkflowRun, WorkflowsPlan,
 };
