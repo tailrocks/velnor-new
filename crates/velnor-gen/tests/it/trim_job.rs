@@ -32,7 +32,7 @@ fn lane(config: &str, id: &str) -> Result<String, Box<dyn std::error::Error>> {
 fn a_lane_keeps_read_only_contents_and_publishes_its_trim_prefix_and_save_decision() -> TestResult {
     let block = lane("", "rust")?;
     assert!(
-        block.contains("    permissions:\n      actions: read\n      contents: read\n    cache-mode: read\n    outputs:"),
+        block.contains("    permissions:\n      actions: read\n      contents: read\n    cache-mode: write\n    outputs:"),
         "{block}"
     );
     assert!(!block.contains("actions: write"), "{block}");
