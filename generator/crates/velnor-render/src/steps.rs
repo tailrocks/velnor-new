@@ -3,8 +3,8 @@
 
 use velnor_model::{
     CacheKey, CargoCommand, GateNeed, HelperCommand, HelperRelease, Job, RepoPath, RunnerLabel,
-    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT, github_hosted,
-    group_output_name,
+    Step, StepKind, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, github_hosted, group_output_name,
 };
 
 use crate::artifact_steps::{download_step, upload_cargo_log, upload_step};
@@ -90,26 +90,7 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
                 let value = format!("${{{{ steps.{PLAN_STEP}.outputs.{key} }}}}");
                 (key, value)
             }))
-            .chain(
-                job.steps
-                    .iter()
-                    .any(|step| {
-                        matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command))
-                    })
-                    .then_some([
-                        TESTS_RUN_OUTPUT,
-                        TESTS_LISTED_OUTPUT,
-                        TESTS_BY_PACKAGE_OUTPUT,
-                    ])
-                    .into_iter()
-                    .flatten()
-                    .map(|name| {
-                        (
-                            name.to_owned(),
-                            format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
-                        )
-                    }),
-            )
+            .chain(test_outputs(job))
             .chain(lane_outputs(&job.steps))
             .collect(),
         steps: crate::helper_integrity::secure_steps(
@@ -118,6 +99,29 @@ pub(crate) fn rendered_job(job: &Job, fork_runner: &RunnerLabel) -> RenderedJob 
         ),
         ..RenderedJob::default()
     }
+}
+
+fn test_outputs(job: &Job) -> impl Iterator<Item = (String, String)> + '_ {
+    job.steps
+        .iter()
+        .any(|step| matches!(&step.kind, StepKind::Cargo(command) if reports_tests(command)))
+        .then(|| {
+            [
+                Some(TESTS_RUN_OUTPUT),
+                Some(TESTS_LISTED_OUTPUT),
+                job.reports_ignored.then_some(TESTS_IGNORED_OUTPUT),
+                Some(TESTS_BY_PACKAGE_OUTPUT),
+            ]
+        })
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|name| {
+            (
+                name.to_owned(),
+                format!("${{{{ steps.{TEST_STEP_ID}.outputs.{name} }}}}"),
+            )
+        })
 }
 
 fn job_steps(

@@ -13,6 +13,7 @@ pub const TEST_STEP: &str = "Test";
 pub const BUILD_TESTS_STEP: &str = "Build the tests";
 pub const TESTS_RUN_OUTPUT: &str = "tests_run";
 pub const TESTS_LISTED_OUTPUT: &str = "tests_listed";
+pub const TESTS_IGNORED_OUTPUT: &str = "tests_ignored";
 pub const TESTS_BY_PACKAGE_OUTPUT: &str = "tests_by_package";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -90,6 +91,7 @@ pub struct Job {
     pub gate: Option<Gate>,
     pub plan_outputs: Vec<(RootSlug, GateNeed)>,
     pub group_outputs: Vec<(RootSlug, JobId)>,
+    pub reports_ignored: bool,
     pub steps: Vec<Step>,
 }
 

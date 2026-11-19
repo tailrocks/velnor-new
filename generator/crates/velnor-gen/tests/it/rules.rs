@@ -94,6 +94,7 @@ pub(crate) fn plan(kinds: Vec<StepKind>) -> Result<WorkflowPlan, Box<dyn Error>>
             gate: None,
             plan_outputs: Vec::new(),
             group_outputs: Vec::new(),
+            reports_ignored: false,
             steps: kinds
                 .into_iter()
                 .map(|kind| Step {
