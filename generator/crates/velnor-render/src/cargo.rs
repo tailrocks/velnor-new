@@ -81,6 +81,11 @@ fn cargo_command(
             filter,
             *ci_profile,
         ),
+        CargoCommand::NextestFeatures {
+            features,
+            filter,
+            ci_profile,
+        } => nextest_features(nextest, features, filter, *ci_profile),
         CargoCommand::NextestRunArchive {
             file,
             filter,
@@ -136,7 +141,11 @@ fn cargo_command(
             format!("cargo build --workspace --all-targets --locked{cargo}"),
             vec![],
         ),
-        CargoCommand::Deny { manifest } => deny(manifest),
+        CargoCommand::Deny {
+            manifest,
+            locked,
+            config,
+        } => deny(manifest, *locked, config.as_ref()),
         CargoCommand::Machete => ("Unused dependencies".into(), "cargo-machete".into(), vec![]),
     }
 }
@@ -214,7 +223,35 @@ fn nextest_filter(filter: &FilterRef) -> String {
             .fold("($TEST_FILTER)".to_owned(), |text, id| {
                 format!("{text} - binary_id(={id})")
             }),
+        FilterRef::Expr { expr, except } => {
+            let both = format!("($TEST_FILTER) and ({expr})");
+            if except.is_empty() {
+                both
+            } else {
+                except.iter().fold(format!("({both})"), |text, id| {
+                    format!("{text} - binary_id(={id})")
+                })
+            }
+        }
     }
+}
+
+fn nextest_features(
+    nextest: &str,
+    features: &[String],
+    filter: &FilterRef,
+    ci_profile: bool,
+) -> (String, String, Vec<(String, Value)>) {
+    let (_, run, env) = nextest_run(
+        &format!("--workspace --locked{nextest}{}", feature_flag(features)),
+        filter,
+        ci_profile,
+    );
+    (
+        format!("{TEST_STEP} (features: {})", features.join(",")),
+        run,
+        env,
+    )
 }
 
 fn feature_flag(features: &[String]) -> String {
@@ -238,18 +275,25 @@ fn test_selector(kind: TargetKind, target: &TargetName) -> String {
     }
 }
 
-fn deny(manifest: &RepoPath) -> (String, String, Vec<(String, Value)>) {
+fn deny(
+    manifest: &RepoPath,
+    locked: bool,
+    config: Option<&RepoPath>,
+) -> (String, String, Vec<(String, Value)>) {
+    let quoted = |path: &RepoPath| path.as_str().replace('\'', "'\\''");
+    let locked = if locked { " --locked" } else { "" };
+    let config = config.map_or_else(String::new, |path| format!(" --config '{}'", quoted(path)));
     match manifest.parent() {
         None => (
             "Dependency policy".into(),
-            "cargo-deny check".into(),
+            format!("cargo-deny{locked}{config} check"),
             vec![],
         ),
         Some(directory) => (
             format!("Dependency policy ({directory})"),
             format!(
-                "cargo-deny --manifest-path '{}' check",
-                manifest.as_str().replace('\'', "'\\''")
+                "cargo-deny{locked} --manifest-path '{}'{config} check",
+                quoted(manifest)
             ),
             vec![],
         ),

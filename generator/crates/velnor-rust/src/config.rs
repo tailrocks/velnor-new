@@ -4,7 +4,7 @@
 use serde::Deserialize;
 use velnor_model::{
     CiDebugInfo, CronExpr, FullRun, InputRule, OnMain, PackageName, PathGlob, RepoPath,
-    RunnerLabel, RustCiConfig, Shape, TargetName,
+    RunnerLabel, RustCiConfig, Shape,
 };
 
 use crate::error::{DetectError, Reason};
@@ -12,7 +12,7 @@ use crate::toml_file::table;
 
 pub const CONFIG_PATH: RepoPath = RepoPath::from_static(".velnor/rust-ci.toml");
 
-const KEYS: [&str; 21] = [
+const KEYS: [&str; 23] = [
     "cache_check_blocks",
     "cache_debug",
     "runner",
@@ -34,6 +34,8 @@ const KEYS: [&str; 21] = [
     "ci_debuginfo",
     "cache_budget_bytes",
     "test_setup",
+    "test_lane",
+    "deny",
 ];
 const TIMEOUT_RANGE: std::ops::RangeInclusive<u16> = 1..=360;
 
@@ -65,6 +67,9 @@ struct RawConfig {
     cache_budget_bytes: Option<u64>,
     #[serde(default)]
     test_setup: Vec<crate::config_test_setup::RawTestSetup>,
+    #[serde(default)]
+    test_lane: Vec<crate::config_test_lane::RawTestLane>,
+    deny: Option<crate::config_deny::RawDeny>,
 }
 
 #[derive(Deserialize)]
@@ -95,16 +100,9 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     }
     let (non_inputs, inputs) = rules(raw.non_inputs, raw.inputs).map_err(invalid)?;
     let shape = parse_shape(raw.shape.as_deref()).map_err(invalid)?;
-    let required_check = match raw.required_check {
-        None => defaults.required_check,
-        Some(name) if !name.trim().is_empty() && !name.chars().any(char::is_control) => name,
-        Some(name) => {
-            return Err(invalid(Reason::InvalidValue {
-                key: "required_check",
-                value: name,
-            }));
-        }
-    };
+    let required_check =
+        crate::config_values::required_check(raw.required_check, defaults.required_check)
+            .map_err(invalid)?;
     let default_branch =
         default_branch(raw.default_branch, defaults.default_branch).map_err(invalid)?;
     let on_main = on_main(raw.on_main.as_deref(), defaults.on_main).map_err(invalid)?;
@@ -115,13 +113,16 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
     let helper = crate::config_helper::path(raw.helper).map_err(invalid)?;
     let ci_debuginfo =
         debuginfo(raw.ci_debuginfo.as_deref(), defaults.ci_debuginfo).map_err(invalid)?;
-    let test_setup = crate::config_test_setup::parse(raw.test_setup).map_err(invalid)?;
+    let tests =
+        crate::config_roots::parse(raw.test_setup, raw.test_lane, raw.deny).map_err(invalid)?;
     let runner = runner(raw.runner, defaults.runner).map_err(invalid)?;
     let fork_runner = crate::config_fork::fork_runner(raw.fork_runner, &runner).map_err(invalid)?;
     Ok(RustCiConfig {
         cache_budget_bytes: crate::cache_budget::configured_budget(raw.cache_budget_bytes)
             .map_err(invalid)?,
-        test_setup,
+        test_setup: tests.0,
+        test_lanes: tests.1,
+        deny: tests.2,
         cache_check_blocks: raw.cache_check_blocks.unwrap_or(false),
         cache_debug: raw.cache_debug.unwrap_or(false).into(),
         crates_mirror: raw
@@ -129,7 +130,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
             .map(crate::config_mirror::mirror)
             .transpose()
             .map_err(invalid)?,
-        nextest_harnesses: harnesses(raw.nextest_harnesses).map_err(invalid)?,
+        nextest_harnesses: crate::config_values::harnesses(raw.nextest_harnesses)
+            .map_err(invalid)?,
         default_branch,
         skip_draft_pull_requests: raw
             .skip_draft_pull_requests
@@ -146,36 +148,8 @@ pub(crate) fn parse(bytes: &[u8]) -> Result<RustCiConfig, DetectError> {
         runner,
         fork_runner,
         timeout_minutes,
-        exclude: excludes(raw.exclude).map_err(invalid)?,
+        exclude: crate::config_values::excludes(raw.exclude).map_err(invalid)?,
     })
-}
-
-fn excludes(entries: Vec<String>) -> Result<Vec<PathGlob>, Reason> {
-    let invalid = |value| Reason::InvalidValue {
-        key: "exclude",
-        value,
-    };
-    entries
-        .into_iter()
-        .map(|entry| PathGlob::new(entry.trim_end_matches('/')).map_err(|_| invalid(entry)))
-        .collect()
-}
-
-fn harnesses(entries: Vec<String>) -> Result<Vec<(PackageName, TargetName)>, Reason> {
-    entries
-        .into_iter()
-        .map(|entry| {
-            let invalid = || Reason::InvalidValue {
-                key: "nextest_harnesses",
-                value: entry.clone(),
-            };
-            let (package, target) = entry.split_once(':').ok_or_else(invalid)?;
-            Ok((
-                PackageName::new(package).map_err(|_| invalid())?,
-                TargetName::new(target).map_err(|_| invalid())?,
-            ))
-        })
-        .collect()
 }
 
 fn parse_shape(configured: Option<&str>) -> Result<Option<Shape>, Reason> {

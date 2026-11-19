@@ -189,8 +189,9 @@ impl RootJobs<'_> {
     }
 
     fn built_without_nextest(&self) -> Vec<CargoCommand> {
-        self.direct_harnesses()
+        crate::config_test_lane::commands(&self.facts.config, self.root, self.filter())
             .into_iter()
+            .chain(self.direct_harnesses())
             .chain(self.doctests())
             .collect()
     }
@@ -211,6 +212,7 @@ impl RootJobs<'_> {
                     StepKind::Cargo(
                         CargoCommand::NextestBuild
                             | CargoCommand::NextestRun { .. }
+                            | CargoCommand::NextestFeatures { .. }
                             | CargoCommand::TestTarget { .. }
                             | CargoCommand::Doctest
                     )

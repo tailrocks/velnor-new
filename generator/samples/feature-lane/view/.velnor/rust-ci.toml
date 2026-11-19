@@ -1,0 +1,8 @@
+[[test_lane]]
+root = "."
+features = ["local-mode"]
+filter = "test(~local::) or binary(local_host_public) or binary(local_pair_public)"
+
+[deny]
+locked = true
+config = "deny.toml"

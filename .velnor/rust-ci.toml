@@ -15,3 +15,8 @@ cainfo = "/opt/velnor/crates-mirror/ca-bundle.pem"
 root = "."
 name = "Prepare test fixtures"
 run = "bash scripts/ci-fixtures.sh"
+
+[[test_lane]]
+root = "crates/velnor-runner"
+features = ["local-mode"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"

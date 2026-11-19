@@ -164,6 +164,13 @@ pub(crate) fn policy_job(facts: &RepoFacts, lane: &Lane) -> Job {
             lane.cargo(
                 CargoCommand::Deny {
                     manifest: root.manifest.clone(),
+                    locked: facts.config.deny.locked,
+                    config: facts
+                        .config
+                        .deny
+                        .config
+                        .as_ref()
+                        .map(|file| root.manifest.sibling(file)),
                 },
                 None,
             )

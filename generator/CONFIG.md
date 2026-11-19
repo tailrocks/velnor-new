@@ -54,3 +54,36 @@ run = "bash scripts/ci-fixtures.sh"
 ```
 
 `root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root, and it must name a root of this repository. The step runs in that folder. It follows the same gate as the test steps, so a run that selects no tests skips it. A job that runs no tests has none. With `shape = "groups"` the test group job installs only cargo-nextest, so a step there must not need Rust. A `run` value with an expression, a line break or any shell syntax is refused.
+
+## Feature test lanes
+
+A package may have tests that exist only under a Cargo feature. A `[[test_lane]]` entry adds one nextest step to the root's test job. The step runs the selected tests again with the features on.
+
+```toml
+[[test_lane]]
+root = "crates/velnor-runner"
+features = ["local-mode"]
+filter = "package(velnor-runner-host) and (test(~local::) or binary(local_host_public) or binary(local_pair_public))"
+```
+
+`root` is the folder of the Cargo root's `Cargo.toml`, or `.` for the repository root. It must name a root of this repository that runs nextest tests. `features` is a non-empty list of distinct feature names, and each name uses letters, digits and `_-+./`. The step is named `Test (features: local-mode)` and runs `cargo-nextest nextest run --workspace --locked --features 'local-mode'` with the same selection as the root's default test step, narrowed by `filter`. It runs after the default test step and reports no test counts, so the default step stays the single source of the job's test counts. With `shape = "groups"` the step runs in the build job, which has Rust, because the archive holds only the default-feature build.
+
+`filter` is optional. It is a nextest filterset that the generator joins to the plan's selection with `and`, so a lane never runs a test the plan did not select. Without it the lane re-runs the whole selected set with the features. Every generated `run:` value is one command with no shell syntax, so the filterset is one quoted argument and must not contain `|`, `&`, `;`, `<`, a quote, `$`, a backtick, a backslash, a line break or one of the words `if`, `for`, `while`, `case` and `coproc`. Write the nextest operators as words: `or` for `|`, `and` for `&` and `not` for `!`. Binaries that run with `cargo test` because their harness is off stay out of the lane, as they stay out of the default step.
+
+The generator does not check that `filter` selects every test that exists only under the features. A new feature-only test whose name falls outside the filter is skipped without an error. Keep the filter to a naming rule that new feature-only tests follow.
+
+## Dependency policy flags
+
+`[deny]` sets two flags of the generated `cargo-deny` step. It changes nothing when the table is absent.
+
+```toml
+[deny]
+locked = true
+config = "deny.toml"
+```
+
+`locked = true` adds `--locked`. `config` is the name of a file in each Cargo root's folder, and each root's step runs with `--config <root folder>/<name>`. Every Cargo root must track the file, or generation fails and names the missing path. The name is a relative path inside the repository, with no `..`, quote, `$`, backtick or backslash.
+
+## Unused dependencies
+
+The policy lane runs `cargo-machete` once from the repository root when the repository's `mise.toml` pins `cargo-machete`. It needs no `rust-ci.toml` entry. The pin is the opt-in, so the lane installs the tool through the same pinned mise path as every other tool.

@@ -17,6 +17,7 @@ pub(crate) fn inserted(
             step.kind,
             StepKind::Cargo(
                 CargoCommand::NextestRun { .. }
+                    | CargoCommand::NextestFeatures { .. }
                     | CargoCommand::NextestRunArchive { .. }
                     | CargoCommand::TestTarget { .. }
                     | CargoCommand::Doctest
