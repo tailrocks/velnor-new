@@ -83,10 +83,11 @@ fn required<'f>(
     reached: &BTreeMap<&'f RepoPath, &'f UnownedPackage>,
     platforms: &Platforms,
 ) -> BTreeSet<&'f str> {
+    // A dependency that holds only for a cross-built target (for example
+    // `cfg(windows)` on a Linux host) is still compiled for that target, so it
+    // is required too.
     let firm = |dependency: &MemberDependency| {
-        !dependency.optional
-            && applies_to_target_build(dependency, platforms)
-            && applies_to_host_build(dependency, platforms)
+        !dependency.optional && applies_to_target_build(dependency, platforms)
     };
     let mut walk: Vec<&RepoPath> = root
         .members
