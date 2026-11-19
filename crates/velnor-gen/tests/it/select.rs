@@ -14,6 +14,10 @@ pub(crate) fn path(text: &str) -> RepoPath {
     RepoPath::new(text).unwrap_or_else(|e| unreachable!("{e}"))
 }
 
+pub(crate) fn named(text: &str) -> velnor_model::InputOwner {
+    velnor_model::InputOwner::named(name(text))
+}
+
 pub(crate) fn name(text: &str) -> PackageName {
     PackageName::new(text).unwrap_or_else(|e| unreachable!("{e}"))
 }
@@ -76,6 +80,7 @@ pub(crate) fn facts(roots: Vec<(&str, Vec<RustMember>)>) -> RepoFacts {
         config: RustCiConfig::default(),
         helper: None,
         compile_inputs: BTreeMap::new(),
+        inputs_lock_identified: false,
         timings: BTreeMap::new(),
         timings_notes: Vec::new(),
         private_sources: None,

@@ -46,11 +46,11 @@ pub use plan::{
 };
 pub use repo::{
     CacheDebug, CheckoutScope, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness,
-    DependencyKind, DocsRun, FullRun, InputRule, MbxRemote, MbxStore, MemberDependency, OnMain,
-    PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts, RepoView,
-    RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot, SpeedBudget,
-    Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins, ToolRequest,
-    Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
+    DependencyKind, DocsRun, FullRun, InputOwner, InputRule, MbxRemote, MbxStore, MemberDependency,
+    OnMain, PackageDependency, PolicyTools, PrCi, PrivateSources, PushAfterMergeGroup, RepoFacts,
+    RepoView, RepositoryIdentity, RustCiConfig, RustMember, RustMetadata, RustPackage, RustRoot,
+    SpeedBudget, Target, TargetKind, TestLane, TestSetup, Timings, ToolLock, ToolPin, ToolPins,
+    ToolRequest, Toolchain, UnownedPackage, Unread, Weakening, WorkspaceGroup,
 };
 pub use selection::{
     AllTrigger, ChangeSet, EventKind, OptionalSteps, RELEASE_CONFIG_PATH, RELEASE_PLZ_FILE,

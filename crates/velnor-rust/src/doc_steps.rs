@@ -52,11 +52,16 @@ fn sources_of(
         .iter()
         .map(|member| member.directory.clone())
         .collect();
-    let names: BTreeSet<_> = root.members.iter().map(|member| &member.name).collect();
     let read: Vec<&Option<RepoPath>> = facts
         .compile_inputs
         .iter()
-        .filter(|(_, packages)| packages.iter().any(|package| names.contains(package)))
+        .filter(|(_, owners)| {
+            owners.iter().any(|owner| {
+                root.members
+                    .iter()
+                    .any(|member| owner.is(&member.name, &member.manifest))
+            })
+        })
         .map(|(path, _)| path)
         .collect();
     if read.iter().any(|input| input.is_none()) {

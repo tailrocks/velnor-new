@@ -97,6 +97,9 @@ pub struct RepoFacts {
     pub config: RustCiConfig,
     pub helper: Option<HelperRelease>,
     pub compile_inputs: CompileInputs,
+    /// The inputs lock names packages by manifest, which only a velnor-ci that knows the third
+    /// column can read.
+    pub inputs_lock_identified: bool,
     pub timings: BTreeMap<RepoPath, Timings>,
     pub timings_notes: Vec<String>,
     pub private_sources: Option<String>,
@@ -174,7 +177,52 @@ impl fmt::Display for Unread {
     }
 }
 
-pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<PackageName>>;
+pub type CompileInputs = BTreeMap<Option<RepoPath>, BTreeSet<InputOwner>>;
+
+/// The package a compile input belongs to. `manifest` is the repository-relative path of the
+/// package's `Cargo.toml`, which tells apart packages that share a name across Cargo roots; a
+/// `None` manifest is a name-only line from a lock written before identities existed, and stands
+/// for every package of that name.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub struct InputOwner {
+    pub name: PackageName,
+    pub manifest: Option<RepoPath>,
+}
+
+impl InputOwner {
+    #[must_use]
+    pub fn named(name: PackageName) -> Self {
+        Self {
+            name,
+            manifest: None,
+        }
+    }
+
+    #[must_use]
+    pub fn at(name: PackageName, manifest: RepoPath) -> Self {
+        Self {
+            name,
+            manifest: Some(manifest),
+        }
+    }
+
+    /// Whether this entry names the package `name` whose manifest is `manifest`.
+    #[must_use]
+    pub fn is(&self, name: &PackageName, manifest: &RepoPath) -> bool {
+        self.name == *name && self.manifest.as_ref().is_none_or(|own| own == manifest)
+    }
+
+    /// Whether two entries can name the same package: the names match and the manifests are equal
+    /// or one of them is unknown.
+    #[must_use]
+    pub fn same_package(&self, other: &Self) -> bool {
+        self.name == other.name
+            && match (&self.manifest, &other.manifest) {
+                (Some(a), Some(b)) => a == b,
+                _ => true,
+            }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RustRoot {

@@ -23,6 +23,7 @@ mod cargo_lock;
 mod classify;
 mod combined_cache;
 mod compile_inputs;
+mod compile_inputs_identity;
 mod concurrency;
 mod crates_mirror;
 mod credential_hooks;
