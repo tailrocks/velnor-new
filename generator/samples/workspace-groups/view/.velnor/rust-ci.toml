@@ -1,0 +1,3 @@
+[[workspace_groups]]
+name = "tools"
+roots = ["tools/a", "tools/b", "tools/c"]

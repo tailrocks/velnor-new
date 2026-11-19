@@ -4,10 +4,10 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_ci::plan::Steps;
-use velnor_ci::plan::{explain, outputs, warnings, weakened};
+use velnor_ci::plan::{explain, outputs, warnings, weakened, workspace_group_outputs};
 use velnor_model::{
-    AllTrigger, OptionalSteps, PackageName, RepoPath, RustSelection, SelectionReason, SkipReason,
-    StepNeed, Weakening,
+    AllTrigger, OptionalSteps, PackageName, RepoPath, RootSlug, RustSelection, SelectionReason,
+    SkipReason, StepNeed, Weakening, WorkspaceGroup,
 };
 use velnor_rust::PolicyRuns;
 
@@ -285,4 +285,39 @@ fn a_percent_in_an_unknown_path_is_kept_in_the_suggested_glob() {
     );
     assert!(text.contains("glob = \"docs/100%.md\"\n"), "{text}");
     assert!(text.contains("\n    \"docs/100%.md\",\n"), "{text}");
+}
+
+#[test]
+fn a_group_runs_when_any_of_its_roots_is_selected() {
+    let group = WorkspaceGroup {
+        name: "tools".to_owned(),
+        slug: RootSlug::new("tools").unwrap_or_else(|e| unreachable!("{e}")),
+        gate: RootSlug::new("group_tools").unwrap_or_else(|e| unreachable!("{e}")),
+        roots: vec![path("tools/a/Cargo.toml"), path("tools/b/Cargo.toml")],
+    };
+    let groups = vec![group];
+    let none = BTreeMap::from([(path("tools/a/Cargo.toml"), RustSelection::None)]);
+    assert_eq!(
+        workspace_group_outputs(&groups, &none),
+        "rust_group_tools_mode=none\n"
+    );
+    let some = BTreeMap::from([(
+        path("tools/b/Cargo.toml"),
+        RustSelection::Some(BTreeMap::from([(
+            name("a"),
+            SelectionReason::Changed(path("a/src/lib.rs")),
+        )])),
+    )]);
+    assert_eq!(
+        workspace_group_outputs(&groups, &some),
+        "rust_group_tools_mode=some\n"
+    );
+    let all = BTreeMap::from([(
+        path("tools/a/Cargo.toml"),
+        RustSelection::All(AllTrigger::UnknownPath(path("docs/goals.md"))),
+    )]);
+    assert_eq!(
+        workspace_group_outputs(&groups, &all),
+        "rust_group_tools_mode=all\n"
+    );
 }

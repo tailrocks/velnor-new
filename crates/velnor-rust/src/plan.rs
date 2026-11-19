@@ -11,7 +11,7 @@ use velnor_model::{
 };
 
 use crate::audit_job::audit_job;
-use crate::base_cache::{cache_root, restored, sources_locks};
+use crate::base_cache::{restored, sources_locks};
 use crate::config::CONFIG_PATH;
 use crate::detect::HELPER_PACKAGE;
 use crate::error::{DetectError, Reason};
@@ -23,6 +23,7 @@ use crate::plan_tools::{mirror_step, tools_install, tools_restore, tools_save};
 use crate::required_job::{expose_in_single, gate_outputs};
 use crate::root_jobs::root_jobs;
 use crate::shape::decide_shape;
+use crate::units::{Unit, units};
 
 pub(crate) const RUST_JOB: JobId = JobId::from_static("rust");
 pub(crate) const LINT_JOB: JobId = JobId::from_static("rust-lint");
@@ -47,16 +48,20 @@ pub fn plan_without_deltas(facts: &RepoFacts) -> WorkflowPlan {
 }
 
 fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
-    let suffixed = facts.rust_roots.len() > 1;
-    let decisions: Vec<ShapeDecision> = facts
-        .rust_roots
+    let units = units(facts);
+    let suffixed = units.len() > 1;
+    let decisions: Vec<ShapeDecision> = units
         .iter()
-        .map(|root| {
-            crate::config_test_groups::archive_shape(
-                facts,
-                root,
-                decide_shape(facts.config.shape, facts.timings.get(&root.manifest)),
-            )
+        .map(|unit| {
+            let decision = decide_shape(
+                facts.config.shape,
+                crate::units::timings(facts, unit).as_ref(),
+            );
+            if unit.grouped {
+                decision
+            } else {
+                crate::config_test_groups::archive_shape(facts, &unit.roots[0], decision)
+            }
         })
         .collect();
     let helper_root = facts.config.helper.as_ref().and_then(|path| {
@@ -65,18 +70,19 @@ fn plan_with(facts: &RepoFacts, deltas: bool) -> WorkflowPlan {
             .iter()
             .find(|root| root.manifest.parent().as_ref() == Some(path))
     });
-    let single =
-        facts.rust_roots.len() == 1 && decisions[0].shape == Shape::OneJob && helper_root.is_none();
-    let mut jobs: Vec<Job> = facts
-        .rust_roots
+    let single = units.len() == 1
+        && !units[0].grouped
+        && decisions[0].shape == Shape::OneJob
+        && helper_root.is_none();
+    let mut jobs: Vec<Job> = units
         .iter()
         .zip(decisions)
-        .flat_map(|(root, decision)| {
-            let lane = Lane::root(RootSlug::of(&root.manifest), single, deltas);
-            root_jobs(facts, root, decision, suffixed, &lane)
+        .flat_map(|(unit, decision)| {
+            let lane = Lane::root(unit.gate.clone(), single, deltas);
+            root_jobs(facts, unit, decision, suffixed, &lane)
         })
         .collect();
-    jobs.extend(audit_job(facts, &jobs));
+    jobs.extend(audit_job(facts, &units, &jobs));
     if facts.policy.any() {
         jobs.push(policy_job(facts, &Lane::policy(single, deltas)));
     }
@@ -129,9 +135,16 @@ fn helper_job(facts: &RepoFacts, root: &RustRoot, deltas: bool) -> Job {
     let lane = Lane {
         slug: RootSlug::of(&root.manifest),
         plan: Some(PLAN_JOB),
+        per_root: false,
         deltas,
     };
-    let mut steps = setup(facts, root, &lane, &HELPER_JOB);
+    let unit = Unit::single(root);
+    let mut steps = setup_units(
+        facts,
+        std::slice::from_ref(&unit),
+        &lane,
+        std::slice::from_ref(&HELPER_JOB),
+    );
     steps.push(Step {
         directory: root.manifest.parent(),
         target_dir: Some(root.target_dir.clone()),
@@ -188,15 +201,6 @@ pub(crate) fn head(facts: &RepoFacts, depth: u32, sparse: Option<Vec<String>>) -
     steps
 }
 
-pub(crate) fn setup(facts: &RepoFacts, root: &RustRoot, lane: &Lane, job: &JobId) -> Vec<Step> {
-    setup_roots(
-        facts,
-        std::slice::from_ref(root),
-        lane,
-        std::slice::from_ref(job),
-    )
-}
-
 pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> Vec<Step> {
     let mut steps = Vec::new();
     if declared.is_none_or(|toolchain| toolchain.path.is_none()) {
@@ -227,13 +231,14 @@ pub(crate) fn rust_additions(declared: Option<&Toolchain>, root: &RustRoot) -> V
     steps
 }
 
-pub(crate) fn setup_roots(
+pub(crate) fn setup_units(
     facts: &RepoFacts,
-    roots: &[RustRoot],
+    units: &[Unit],
     lane: &Lane,
     families: &[JobId],
 ) -> Vec<Step> {
-    let root = &roots[0];
+    let root = &units[0].roots[0];
+    let roots: Vec<RustRoot> = units.iter().flat_map(|unit| unit.roots.clone()).collect();
     let mut steps = head(
         facts,
         if lane.plan.is_none() {
@@ -243,7 +248,7 @@ pub(crate) fn setup_roots(
         },
         lane.plan
             .as_ref()
-            .and_then(|_| crate::sparse::paths(facts, roots)),
+            .and_then(|_| crate::sparse::paths(facts, &roots)),
     );
     if lane.plan.is_none() {
         steps.push(step(StepKind::Helper(HelperCommand::Plan)));
@@ -266,12 +271,14 @@ pub(crate) fn setup_roots(
         toolchain.extend(tools_save(facts));
         toolchain.push(prepare);
     }
-    for (index, (root, family)) in roots.iter().zip(families).enumerate() {
-        let cache_root = cache_root(facts, root);
-        toolchain.push(Step {
-            directory: root.manifest.parent(),
-            ..step(StepKind::Helper(HelperCommand::CheckMetadata))
-        });
+    for (index, (unit, family)) in units.iter().zip(families).enumerate() {
+        for member in &unit.roots {
+            toolchain.push(Step {
+                directory: member.manifest.parent(),
+                ..step(StepKind::Helper(HelperCommand::CheckMetadata))
+            });
+        }
+        let cache_root = unit.cache_root(facts);
         if index == 0 {
             toolchain.push(sources_locks(facts));
             toolchain.push(step(StepKind::CacheRestore(CacheKey::Sources {
@@ -284,9 +291,9 @@ pub(crate) fn setup_roots(
             root: cache_root,
             host: Host,
         })));
-        toolchain.extend(crate::delta_cache::restore(facts, root, family, lane));
+        toolchain.extend(crate::delta_cache::restore(facts, unit, family, lane));
     }
-    toolchain.extend(restore_file_times(roots));
+    toolchain.extend(crate::units::restore_file_times(units));
     toolchain.extend(restored(facts));
     steps.extend(toolchain.into_iter().map(|step| Step {
         gate: lane.steps(),
@@ -318,13 +325,6 @@ fn add_mbx_remote(jobs: &mut [Job]) {
             job.steps.insert(at + 1, cache);
         }
     }
-}
-
-fn restore_file_times(roots: &[RustRoot]) -> impl Iterator<Item = Step> {
-    roots.iter().map(|root| Step {
-        directory: root.manifest.parent(),
-        ..step(StepKind::InputsRestore(root.target_dir.clone()))
-    })
 }
 
 pub(crate) fn quick(facts: &RepoFacts) -> PrRun {
@@ -368,6 +368,7 @@ pub(crate) fn step(kind: StepKind) -> Step {
     Step {
         kind,
         directory: None,
+        manifest: None,
         target_dir: None,
         when: When::Success,
         skip_on_draft: false,

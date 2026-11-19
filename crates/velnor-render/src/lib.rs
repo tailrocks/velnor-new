@@ -8,6 +8,7 @@ mod cache;
 mod cache_upload;
 mod cargo;
 mod cargo_features;
+mod cargo_path;
 mod cargo_target;
 mod checkout_step;
 mod combined_cache;
@@ -39,6 +40,7 @@ mod reusable;
 mod reusable_on;
 mod rules;
 mod steps;
+mod tests;
 mod workflow;
 mod yaml;
 

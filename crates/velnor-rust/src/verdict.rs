@@ -4,8 +4,8 @@
 use std::collections::BTreeMap;
 
 use velnor_model::{
-    JobId, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT,
-    VerdictSpec,
+    JobId, RootSlug, TESTS_BY_PACKAGE_OUTPUT, TESTS_IGNORED_OUTPUT, TESTS_LISTED_OUTPUT,
+    TESTS_RUN_OUTPUT, VerdictSpec,
 };
 
 use crate::verdict_plan::{Need, PlanOutput};
@@ -207,7 +207,7 @@ fn judge(
 pub fn verdict(
     plan: &PlanOutput,
     results: &BTreeMap<JobId, JobResult>,
-    tests: &BTreeMap<JobId, Option<TestCounts>>,
+    tests: &BTreeMap<(JobId, RootSlug), Option<TestCounts>>,
 ) -> Verdict {
     let mut out = Verdict {
         passed: true,
@@ -234,7 +234,7 @@ pub fn verdict(
         let counts: Vec<Option<TestCounts>> = jobs
             .iter()
             .filter(|job| plan.planned.get(*job).copied().unwrap_or(false))
-            .map(|job| tests.get(job).cloned().flatten())
+            .map(|job| tests.get(&(job.clone(), slug.clone())).cloned().flatten())
             .collect();
         if counts.is_empty() {
             out.problems.push(format!(
@@ -297,8 +297,15 @@ pub fn decide(spec: &VerdictSpec, needs: &BTreeMap<JobId, Need>, event: Option<&
     let tests = spec
         .jobs
         .iter()
-        .filter(|job| job.tests.is_some())
-        .map(|job| (job.id.clone(), counts(needs.get(&job.id))))
+        .filter(|job| !job.tests.is_empty())
+        .flat_map(|job| {
+            job.tests.iter().map(|slug| {
+                (
+                    (job.id.clone(), slug.clone()),
+                    counts(needs.get(&job.id), slug),
+                )
+            })
+        })
         .collect();
     let mut out = verdict(&plan, &results, &tests);
     for id in needs.keys().filter(|id| !plan.planned.contains_key(*id)) {

@@ -3,12 +3,14 @@
 
 use crate::lane::Lane;
 use crate::plan::step;
+use crate::units::Unit;
 use velnor_model::{CacheKey, CacheRoot, Host, JobId, RepoFacts, RustRoot, Step, StepKind, When};
 
 const DELTA_HELPER: (u64, u64, u64) = (0, 1, 95);
 
-pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId, lane: &Lane) -> Vec<Step> {
-    if !supported(facts, root, lane.deltas) {
+pub(crate) fn restore(facts: &RepoFacts, unit: &Unit, job: &JobId, lane: &Lane) -> Vec<Step> {
+    let root = &unit.roots[0];
+    if unit.grouped || !supported(facts, root, lane.deltas) {
         return Vec::new();
     }
     let root = CacheRoot::new(&root.manifest, root.target_dir.clone());
@@ -32,15 +34,18 @@ pub(crate) fn restore(facts: &RepoFacts, root: &RustRoot, job: &JobId, lane: &La
 pub(crate) fn append(
     steps: &mut Vec<Step>,
     facts: &RepoFacts,
-    root: &RustRoot,
+    unit: &Unit,
     lane: &Lane,
     job: &JobId,
 ) {
+    if unit.grouped {
+        return;
+    }
     if steps
         .iter()
         .any(|step| matches!(step.kind, StepKind::CacheDecide { .. }))
     {
-        steps.extend(save(facts, root, lane, job));
+        steps.extend(save(facts, &unit.roots[0], lane, job));
     }
 }
 
