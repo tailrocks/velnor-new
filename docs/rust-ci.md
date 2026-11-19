@@ -40,7 +40,7 @@ filter = "package(app) and test(/^db_/)"
 needs = ["docker"]
 ```
 
-The tests are built once and handed on as a nextest archive. `rust-test-default` runs everything that no group takes. With two or more groups in a root, `velnor-ci test-groups check` fails the build job when one test falls in two groups. `velnor-gen suggest-groups` reads the timings file and prints a group for every test binary that takes more than a third of its root's test time. Nothing creates groups on its own. The other keys of a group are `test_threads`, `timeout_minutes`, `runner`, `root`, `paths` and `events`.
+The tests are built once and handed on as a nextest archive. `rust-test-default` runs everything that no group takes. With two or more groups in a root, `velnor-ci test-groups check` fails the build job when one test falls in two groups. `velnor-gen suggest-groups` reads the timings file and prints a group for every test binary that takes more than a third of its root's test time. Nothing creates groups on its own. The other keys of a group are `needs`, `test_threads`, `timeout_minutes`, `runner`, `hosted` (with a `runner`, needs `velnor-ci` 0.1.99), `root`, `paths` and `events`.
 
 ### Always present
 
