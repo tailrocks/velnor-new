@@ -55,6 +55,19 @@ pub struct Journal {
 
 impl Journal {
     #[cfg(test)]
+    pub(crate) async fn open_unvalidated_historical_for_test(
+        path: &Path,
+        version: i64,
+    ) -> Result<Self, HostError> {
+        let journal = Self {
+            file: JournalFile::open(path).await?,
+        };
+        schema::migrate_historical_to(&journal.connection().await?, version).await?;
+        journal.file.reset_after_bootstrap()?;
+        Ok(journal)
+    }
+
+    #[cfg(test)]
     pub(crate) async fn validate_historical_v48_for_test(&self) -> Result<(), HostError> {
         schema::validate_historical_v48_for_test(&self.connection().await?).await
     }

@@ -147,3 +147,23 @@ async fn a_jit_that_fails_to_pack_leaves_no_agent_registered() {
     assert!(minted.is_err());
     assert_eq!(left, 0);
 }
+
+#[tokio::test]
+async fn authority_does_not_report_cleanup_when_the_verification_inventory_is_malformed() {
+    let runners = FakeRunners {
+        mint_fails: true,
+        listing_after_delete: Some(b"{"),
+        ..FakeRunners::default()
+    };
+    let authority = authority("authority-mint-garbled", &runners).await;
+    let (status, reply) = ask(
+        &authority,
+        "POST",
+        "/jit",
+        Some(TOKEN),
+        json!({"side": "trusted", "name": "velnor-x-jit-1"}),
+    )
+    .await;
+    assert_eq!(status, 502);
+    assert_ne!(reply["cleaned_up"], json!(true), "{reply}");
+}

@@ -109,6 +109,7 @@ fn package(
                             name,
                             kind,
                             platform: platform.clone(),
+                            optional: optional(entry),
                             manifest,
                         }));
                 }
@@ -154,6 +155,10 @@ fn sections(own: &Table) -> Vec<Section<'_>> {
                 .collect(),
         })
         .collect()
+}
+
+fn optional(entry: &Value) -> bool {
+    entry.get("optional").and_then(Value::as_bool) == Some(true)
 }
 
 fn edges(
