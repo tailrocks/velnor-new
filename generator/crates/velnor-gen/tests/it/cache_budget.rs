@@ -286,7 +286,7 @@ fn renderer_target_keys_keep_two_versions_for_every_job_and_root() {
 }
 
 #[test]
-fn shared_sources_entries_are_trimmed_apart_from_retired_per_root_entries() {
+fn retired_per_root_sources_entries_are_deleted_within_any_budget() {
     let shared = |id: u64| entry(id, "src", 10 * DAY);
     let retired = |id: u64| {
         let mut old = entry(id, "src", 10 * DAY);
@@ -302,5 +302,6 @@ fn shared_sources_entries_are_trimmed_apart_from_retired_per_root_entries() {
         retired(12),
         retired(13),
     ];
-    assert_eq!(plan(&entries, 0), [1, 11]);
+    assert_eq!(plan(&entries, 0), [11, 12, 13, 1]);
+    assert_eq!(plan(&entries, 1_000), [11, 12, 13]);
 }

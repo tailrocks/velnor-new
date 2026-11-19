@@ -302,7 +302,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":null,"save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -532,7 +532,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_lab","root":"lab","save_step":"sources_save_lab"},{"family":"target","restore_step":"target_lab","root":"lab","save_step":"save_target_lab"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_lab","root":null,"save_step":"sources_save_lab"},{"family":"target","restore_step":"target_lab","root":"lab","save_step":"save_target_lab"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
           VELNOR_TESTS_RUN: '${{ steps.test.outputs.tests_run }}'
@@ -680,7 +680,7 @@ jobs:
         if: '${{ !cancelled() }}'
         continue-on-error: true
         env:
-          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":".","save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"},{"family":"target","restore_step":"target_lab","root":"lab","save_step":"save_target_lab"}]'
+          VELNOR_REPORT_CACHES: '[{"family":"tools","restore_step":"tools","root":null,"save_step":"save_tools"},{"family":"sources","restore_step":"sources_root","root":null,"save_step":"sources_save_root"},{"family":"target","restore_step":"target_root","root":".","save_step":"save_target_root"},{"family":"target","restore_step":"target_lab","root":"lab","save_step":"save_target_lab"}]'
           VELNOR_REPORT_STEPS: '${{ toJSON(steps) }}'
           VELNOR_REPORT_DEFAULT_BRANCH: '${{ github.event.repository.default_branch }}'
         run: '. "$VELNOR_EXEC" report'
