@@ -14,7 +14,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use crate::support::fresh_dir;
+use std::time::Duration;
+
+use crate::support::{fresh_dir, make_fifo, output_within};
 
 const DEFAULT_BRANCH: &str = "main";
 
@@ -221,4 +223,26 @@ fn a_qualification_head_must_be_the_sha_of_the_current_run() {
         );
         assert!(stderr.contains("source_sha_not_current_run"), "{stderr}");
     }
+}
+
+#[test]
+fn a_request_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
+    let temp = fresh_dir("velnor-ci-plan-modes", "fifo");
+    let fifo = temp.join("request.json");
+    make_fifo(&fifo);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .env_clear()
+        .env("GITHUB_OUTPUT", temp.join("outputs"))
+        .args(["plan", "--mode", "ci", "--request"])
+        .arg(&fifo);
+    let output = output_within(&mut command, Duration::from_secs(20));
+    let stderr = output.map(|output| String::from_utf8_lossy(&output.stderr).into_owned());
+    assert!(
+        stderr
+            .as_deref()
+            .is_some_and(|text| text.contains("unreadable_request")),
+        "{stderr:?}"
+    );
+    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
 }

@@ -63,8 +63,9 @@ mod unit_platforms;
 mod units;
 mod write_request;
 
-use std::fs::{self, OpenOptions};
+use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
+use std::os::unix::fs::OpenOptionsExt;
 use std::{path::Path, process::ExitCode};
 
 pub use self::audit::{AuditOptions, audit_inputs};
@@ -351,6 +352,15 @@ fn append_to(variable: &str, outputs: &str) -> Result<(), CiError> {
             .map_err(|e| CiError::new(format!("cannot write {}: {e}", file.display())))?;
     }
     Ok(())
+}
+
+pub(super) fn open_regular(path: &Path) -> Option<File> {
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(path)
+        .ok()?;
+    file.metadata().ok()?.is_file().then_some(file)
 }
 
 pub fn read_limited(reader: impl Read, limit: u64) -> Result<Vec<u8>, CiError> {

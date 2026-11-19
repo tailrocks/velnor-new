@@ -9,7 +9,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use crate::support::fresh_dir;
+use std::time::Duration;
+
+use crate::support::{fresh_dir, make_fifo, output_within};
 
 fn cases() -> Vec<PathBuf> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/it/data/write_request");
@@ -202,6 +204,29 @@ fn a_payload_that_is_a_symlink_is_refused() {
         .output()
         .unwrap_or_else(|e| unreachable!("{e}"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("unreadable_event_payload"));
+    fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
+}
+
+#[test]
+fn a_payload_that_is_a_fifo_is_refused_instead_of_waiting_for_a_writer() {
+    let temp = fresh_dir("velnor-ci-write-request", "payload-fifo");
+    let fifo = temp.join("event.json");
+    make_fifo(&fifo);
+    let mut command = Command::new(env!("CARGO_BIN_EXE_velnor-ci"));
+    command
+        .env_clear()
+        .env("RUNNER_TEMP", &temp)
+        .env("GITHUB_EVENT_NAME", "push")
+        .env("GITHUB_EVENT_PATH", &fifo)
+        .arg("write-request");
+    let output = output_within(&mut command, Duration::from_secs(20));
+    let stderr = output.map(|output| String::from_utf8_lossy(&output.stderr).into_owned());
+    assert!(
+        stderr
+            .as_deref()
+            .is_some_and(|text| text.contains("unreadable_event_payload")),
+        "{stderr:?}"
+    );
     fs::remove_dir_all(&temp).unwrap_or_else(|e| unreachable!("{e}"));
 }
 

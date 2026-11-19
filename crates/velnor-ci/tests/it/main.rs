@@ -9,6 +9,7 @@ mod admit_zip;
 mod audit;
 mod base_expiry;
 mod bench_compare;
+mod bounded;
 mod budget;
 mod cache;
 mod cache_budget;

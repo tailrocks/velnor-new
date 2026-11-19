@@ -1,11 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Alexey Zhokhov
 // SPDX-License-Identifier: Apache-2.0
 
-use std::fs::OpenOptions;
-use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 
-use super::{append_outputs, read_limited};
+use super::{append_outputs, open_regular, read_limited};
 use crate::cli::{PlanArgs, PlanMode};
 use crate::error::CiError;
 use crate::plan_request::{Mode, RunSource, outputs};
@@ -43,14 +41,7 @@ pub(super) fn run(args: &PlanArgs, mode: PlanMode, request: &Path) -> Result<Str
 
 fn read_request(path: &Path) -> Result<String, CiError> {
     let unreadable = || internal("unreadable_request");
-    let file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(path)
-        .map_err(|_| unreadable())?;
-    if !file.metadata().map_err(|_| unreadable())?.is_file() {
-        return Err(unreadable());
-    }
+    let file = open_regular(path).ok_or_else(unreadable)?;
     let bytes = read_limited(file, REQUEST_LIMIT).map_err(|_| unreadable())?;
     String::from_utf8(bytes).map_err(|_| unreadable())
 }
