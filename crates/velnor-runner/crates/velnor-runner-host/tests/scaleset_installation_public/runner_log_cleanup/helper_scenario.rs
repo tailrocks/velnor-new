@@ -104,6 +104,63 @@ fn scenario_done(stub: &super::LocalDockerStub, expect_success: bool) -> TestRes
     })
 }
 
+async fn prove_storage(journal_path: &Path) -> TestResult<()> {
+    let db = turso::Builder::new_local(journal_path.to_str().ok_or("journal path utf8")?)
+        .build()
+        .await?;
+    let conn = db.connect()?;
+    let mut guards = Vec::new();
+    let mut rows = conn
+        .query(
+            "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND sql LIKE '%NEW.storage_cleanup_proven = 1%'",
+            (),
+        )
+        .await?;
+    while let Some(row) = rows.next().await? {
+        guards.push(row.get::<String>(0)?);
+    }
+    drop(rows);
+    for guard in guards {
+        conn.execute(&format!("DROP TRIGGER {guard}"), ()).await?;
+    }
+    conn.execute(
+        "UPDATE capacity_reservation_provisioning_state SET storage_cleanup_proven = 1 WHERE reservation_id = 2",
+        (),
+    )
+    .await?;
+    Ok(())
+}
+
+async fn wait_terminal(
+    stub: &super::LocalDockerStub,
+    journal_path: &Path,
+    state_dir: &Path,
+    storage_proven: bool,
+    expect_success: bool,
+) -> TestResult<bool> {
+    let mut observer = None;
+    for _ in 0..3000 {
+        let done = if storage_proven {
+            journal_state(journal_path).await?[4] == "created/removed"
+        } else {
+            scenario_done(stub, expect_success)?
+                && if expect_success {
+                    matches!(
+                        journal_state(journal_path).await?[3].as_str(),
+                        "-" | "removed/not_requested"
+                    )
+                } else {
+                    seed::retry_committed(state_dir, &mut observer).await?
+                }
+        };
+        if done {
+            return Ok(true);
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    Ok(false)
+}
+
 pub(crate) fn run_cancelled_before_start_scenario(
     specs: &[HelperSpec],
     expect_success: bool,
@@ -132,29 +189,7 @@ pub(crate) fn run_cancelled_before_start_scenario(
         )
         .await?;
         if storage_proven {
-            let db = turso::Builder::new_local(journal_path.to_str().ok_or("journal path utf8")?)
-                .build()
-                .await?;
-            let conn = db.connect()?;
-            let mut guards = Vec::new();
-            let mut rows = conn
-                .query(
-                    "SELECT name FROM sqlite_schema WHERE type = 'trigger' AND sql LIKE '%NEW.storage_cleanup_proven = 1%'",
-                    (),
-                )
-                .await?;
-            while let Some(row) = rows.next().await? {
-                guards.push(row.get::<String>(0)?);
-            }
-            drop(rows);
-            for guard in guards {
-                conn.execute(&format!("DROP TRIGGER {guard}"), ()).await?;
-            }
-            conn.execute(
-                "UPDATE capacity_reservation_provisioning_state SET storage_cleanup_proven = 1 WHERE reservation_id = 2",
-                (),
-            )
-            .await?;
+            prove_storage(&journal_path).await?;
         }
         stub.state
             .lock()
@@ -171,28 +206,14 @@ pub(crate) fn run_cancelled_before_start_scenario(
             &state_dir,
         )
         .await?;
-        let mut observer = None;
-        let mut reached = false;
-        for _ in 0..3000 {
-            let done = if storage_proven {
-                journal_state(&journal_path).await?[4] == "created/removed"
-            } else {
-                scenario_done(&stub, expect_success)?
-                && if expect_success {
-                    matches!(
-                        journal_state(&journal_path).await?[3].as_str(),
-                        "-" | "removed/not_requested"
-                    )
-                } else {
-                    seed::retry_committed(&state_dir, &mut observer).await?
-                }
-            };
-            if done {
-                reached = true;
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
+        let reached = wait_terminal(
+            &stub,
+            &journal_path,
+            &state_dir,
+            storage_proven,
+            expect_success,
+        )
+        .await?;
         if !reached {
             let _outcome = worker.shutdown().await;
             return Err("cancelled-run scenario did not reach its terminal condition".into());
@@ -214,11 +235,11 @@ pub(crate) fn run_cancelled_before_start_scenario(
         volumes_left,
         present_left,
         network_left,
+        network,
         phase,
         lease,
         initializer,
         reservation,
-        network,
     })
 }
 
