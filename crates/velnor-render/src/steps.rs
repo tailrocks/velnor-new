@@ -275,6 +275,7 @@ fn step_body(step: &Step, audit: bool, tests: &Tests, lane: CargoLane) -> Render
         ),
         StepKind::Helper(command) => crate::helper_steps::helper_step(*command),
         StepKind::MergeGroupPassed { required } => crate::helper_steps::merge_group_step(required),
+        StepKind::MergeQueueCheck => crate::helper_steps::merge_queue_step(),
         StepKind::TestGroupsCheck(groups) => crate::helper_steps::test_groups_step(groups),
         StepKind::InputsSave { target, cli } => inputs_step("save", target, directory, *cli),
         StepKind::InputsRestore { roots, cli } => restore_inputs_step(roots, directory, *cli),

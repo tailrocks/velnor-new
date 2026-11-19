@@ -84,6 +84,10 @@ pub enum Command {
     )]
     MergeGroupPassed,
     #[command(
+        about = "On a pull_request run, print a ::warning:: when no active ruleset of the base branch (GITHUB_BASE_REF) has a merge_queue rule, because pr_ci = \"label\" is safe only with a merge queue (one GET /repos/$GITHUB_REPOSITORY/rules/branches/<base>, five pages of 100 rules at most). A failed lookup (403, 404, a bad response) prints a warning that says so. Prints nothing when a queue is required or on any other event, and always exits 0. Reads GITHUB_TOKEN, which needs only the default read access"
+    )]
+    MergeQueueCheck,
+    #[command(
         about = "Write the plan request file the planner reads, from the run's context: the event name and payload, the commit, the repository and, on a workflow_dispatch run, the qualification inputs and the runner's GITHUB_* values. Each context value is an argument that defaults to its GITHUB_* variable. Needs no VELNOR_REQUEST_FILE. The file is written once, under $RUNNER_TEMP, and an existing file is an error"
     )]
     WriteRequest(WriteRequestArgs),

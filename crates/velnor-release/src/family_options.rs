@@ -20,6 +20,7 @@ pub(crate) struct FamilyOptions {
     pub(crate) checksums_file: Option<String>,
     pub(crate) commit_file: bool,
     pub(crate) attest: bool,
+    pub(crate) required_checks: bool,
 }
 
 pub(crate) fn family_options(
@@ -28,6 +29,7 @@ pub(crate) fn family_options(
     checksums_file: Option<String>,
     commit_file: bool,
     attest: bool,
+    required_checks: Option<bool>,
 ) -> Result<FamilyOptions, ReleaseError> {
     if !has_family_tag {
         let key = if trigger.is_some() {
@@ -38,6 +40,8 @@ pub(crate) fn family_options(
             Some("commit_file")
         } else if attest {
             Some("attest")
+        } else if required_checks.is_some() {
+            Some("family_required_checks")
         } else {
             None
         };
@@ -51,11 +55,15 @@ pub(crate) fn family_options(
             return Err(FamilyError::InvalidChecksumsFile { name: name.clone() }.into());
         }
     }
+    if required_checks.is_some() && trigger != Some(FamilyTrigger::TagPush) {
+        return Err(FamilyError::RequiredChecksNeedTagPush.into());
+    }
     Ok(FamilyOptions {
         trigger,
         checksums_file,
         commit_file,
         attest,
+        required_checks: required_checks.unwrap_or(true),
     })
 }
 

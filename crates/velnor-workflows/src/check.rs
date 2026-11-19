@@ -3,7 +3,9 @@
 
 use std::collections::BTreeMap;
 
-use velnor_model::looks_github_hosted;
+use velnor_model::{
+    looks_github_hosted, token_permission_accesses, token_permission_accesses_prose,
+};
 
 use crate::call::{call, rank, refuse_step_keys};
 use crate::cases::cases;
@@ -24,21 +26,6 @@ use crate::secret_events::untrusted;
 use crate::triggers::triggers;
 
 const RESERVED_FILES: [&str; 2] = ["rust-ci", "release"];
-const PERMISSION_SCOPES: [&str; 13] = [
-    "actions",
-    "artifact-metadata",
-    "attestations",
-    "checks",
-    "contents",
-    "deployments",
-    "id-token",
-    "issues",
-    "packages",
-    "pages",
-    "pull-requests",
-    "security-events",
-    "statuses",
-];
 const MAX_TIMEOUT_MINUTES: u16 = 360;
 
 pub(crate) struct Context<'a> {
@@ -206,23 +193,19 @@ fn needed_outputs<'a>(needs: &[String], earlier: &'a [Job]) -> Vec<(&'a str, &'a
         .collect()
 }
 
-fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
+fn job(mut raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, WorkflowsError> {
     let id = raw.id.clone();
     let timeout_minutes = job_shape(&raw, earlier)?;
     declared_access(&id, &raw.permissions, raw.environment.as_deref())?;
+    let matrix = raw
+        .matrix
+        .take()
+        .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
+        .transpose()?;
+    let chosen = crate::hosting::of_job(ctx, &id, &raw, matrix.as_ref())?;
     let job_concurrency = raw
         .concurrency
         .map(|raw| concurrency(&format!("job {id}"), raw))
-        .transpose()?;
-    let runner = raw
-        .runner
-        .as_deref()
-        .map(|label| runner_label_of(ctx.file, label))
-        .transpose()?;
-    let hosted = crate::hosting::of_job(ctx, &id, runner.as_deref(), raw.hosted)?;
-    let matrix = raw
-        .matrix
-        .map(|matrix| self::matrix(&id, matrix, &raw.needs, earlier))
         .transpose()?;
     let needed_outputs = needed_outputs(&raw.needs, earlier);
     let axes = matrix.as_ref().and_then(crate::matrix::axis_names);
@@ -249,8 +232,9 @@ fn job(raw: RawJob, ctx: &Context<'_>, earlier: &[Job]) -> Result<Job, Workflows
         needs: raw.needs.clone(),
         condition,
         helper: raw.helper,
-        runner,
-        hosted,
+        runner: chosen.runner,
+        matrix_runner: chosen.matrix_runner,
+        hosted: chosen.hosted,
         environment: raw.environment.clone(),
         timeout_minutes,
         concurrency: job_concurrency,
@@ -368,12 +352,15 @@ fn declared_access(
     environment: Option<&str>,
 ) -> Result<(), WorkflowsError> {
     for (scope, access) in permissions {
-        let level = matches!(access.as_str(), "read" | "write" | "none")
-            && !(scope == "id-token" && access == "read");
-        if !PERMISSION_SCOPES.contains(&scope.as_str()) || !level {
-            return refuse(format!(
-                "job {id} permission {scope} = {access:?} is not a known scope with read, write or none (id-token has no read)"
-            ));
+        let allowed = token_permission_accesses(scope);
+        if !allowed.is_some_and(|accesses| accesses.contains(&access.as_str())) {
+            return refuse(match allowed {
+                Some(_) => format!(
+                    "job {id} permission {scope} = {access:?} is not valid; {scope} takes {}",
+                    token_permission_accesses_prose(scope)
+                ),
+                None => format!("job {id} permission {scope} is not a GitHub token scope"),
+            });
         }
     }
     job_limits::environment(id, environment)
