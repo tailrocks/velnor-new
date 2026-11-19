@@ -9,6 +9,8 @@ use velnor_model::{RepoFacts, RustRoot, Timings};
 use crate::config_test_groups::{DEFAULT_NAME, NAME_MAX_LENGTH};
 
 const GROUP_SHARE_DIVISOR: u64 = 3;
+/// A group name must be an identifier: it cannot be empty or start with a digit.
+const FALLBACK_SLUG: &str = "binary";
 
 #[must_use]
 pub fn suggest_groups(facts: &RepoFacts) -> String {
@@ -43,7 +45,9 @@ fn root_blocks(
             .iter()
             .filter(|group| group.belongs_to(root, facts.rust_roots.len()))
     };
-    let mut taken: BTreeSet<String> = own().map(|group| group.name.to_string()).collect();
+    let mut taken: BTreeSet<String> = own()
+        .map(|group| group.name.as_str().to_ascii_lowercase())
+        .collect();
     taken.insert(DEFAULT_NAME.to_owned());
     slow.into_iter()
         .filter_map(|(id, seconds)| {
@@ -52,7 +56,7 @@ fn root_blocks(
                 return None;
             }
             let name = unused(&slug(id), &taken);
-            taken.insert(name.clone());
+            taken.insert(name.to_ascii_lowercase());
             let mut block = format!(
                 "# {id} takes {seconds} of {total} s of the tests in {}\n[[test_groups]]\nname = \"{name}\"\nfilter = \"{filter}\"\n",
                 root.manifest
@@ -78,13 +82,19 @@ fn slug(id: &str) -> String {
             slug.push('-');
         }
     }
-    slug.trim_matches('-').to_owned()
+    let slug = slug.trim_matches('-');
+    if slug.is_empty() || slug.starts_with(|c: char| c.is_ascii_digit()) {
+        format!("{FALLBACK_SLUG}-{slug}").trim_end_matches('-').to_owned()
+    } else {
+        slug.to_owned()
+    }
 }
 
+/// Names compare without regard to case, as `test_groups.name` validation does.
 fn unused(slug: &str, taken: &BTreeSet<String>) -> String {
     let fits = |text: &str| text.chars().take(NAME_MAX_LENGTH).collect::<String>();
     let base = fits(slug);
-    if !taken.contains(&base) {
+    if !taken.contains(&base.to_ascii_lowercase()) {
         return base;
     }
     (2_u32..=u32::MAX)
@@ -93,6 +103,6 @@ fn unused(slug: &str, taken: &BTreeSet<String>) -> String {
             let room = NAME_MAX_LENGTH - suffix.len();
             format!("{}{suffix}", slug.chars().take(room).collect::<String>())
         })
-        .find(|name| !taken.contains(name))
+        .find(|name| !taken.contains(&name.to_ascii_lowercase()))
         .unwrap_or_default()
 }

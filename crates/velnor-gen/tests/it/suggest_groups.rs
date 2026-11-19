@@ -152,6 +152,39 @@ fn names_that_collide_or_are_reserved_get_a_number_and_every_name_is_a_valid_gro
 }
 
 #[test]
+fn names_collide_without_regard_to_case_and_ids_without_a_usable_slug_still_get_a_valid_name()
+-> TestResult {
+    for (config, binaries, expected) in [
+        (
+            "[[test_groups]]\nname = \"App-DB\"\nfilter = \"binary_id(=other)\"\n",
+            &[("app::db", 50), ("x", 10)][..],
+            &["name = \"app-db-2\""][..],
+        ),
+        (
+            "",
+            &[("App", 40), ("app", 40), ("x", 10)][..],
+            &["name = \"App\"", "name = \"app-2\""][..],
+        ),
+        (
+            "",
+            &[("\u{65e5}\u{672c}", 40), ("\u{4e2d}\u{6587}", 40), ("x", 10)][..],
+            &["name = \"binary\"", "name = \"binary-2\""][..],
+        ),
+        ("", &[("2fa", 50), ("x", 10)][..], &["name = \"binary-2fa\""][..]),
+    ] {
+        let (text, _) = suggested(&["Cargo.toml"], config, &timings(&[("Cargo.toml", binaries)]))?;
+        let names: Vec<&str> = text.lines().filter(|l| l.starts_with("name")).collect();
+        assert_eq!(names, expected, "{text}");
+        let facts = detect(&timed(&["Cargo.toml"], &format!("{config}{text}"), "")?)?;
+        assert_eq!(
+            facts.config.test_groups.len(),
+            expected.len() + usize::from(!config.is_empty())
+        );
+    }
+    Ok(())
+}
+
+#[test]
 fn a_suggestion_is_valid_config_and_is_not_suggested_again_once_it_is_in_the_config() -> TestResult
 {
     let measured = timings(&[(
