@@ -5,6 +5,8 @@ use crate::rules::{RenderedJob, RenderedMatrix, RenderedStep, Value};
 use crate::yaml::{Yaml, entry, text};
 use velnor_model::{TESTS_BY_PACKAGE_OUTPUT, TESTS_LISTED_OUTPUT, TESTS_RUN_OUTPUT};
 
+const SAME_REPOSITORY: &str = "(!startsWith(github.event_name, 'pull_request') || github.event.pull_request.head.repo.full_name == github.repository)";
+
 pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
     let mut items = Vec::new();
     if let Some(name) = &job.name {
@@ -63,7 +65,7 @@ pub(crate) fn yaml_job(job: &RenderedJob) -> Yaml {
             ),
         ));
     }
-    items.push(entry("runs-on", text(&job.runs_on)));
+    items.push(entry("runs-on", runs_on(job)));
     if let Some(matrix) = &job.matrix {
         items.push(entry("strategy", yaml_matrix(matrix)));
     }
@@ -94,6 +96,21 @@ fn yaml_matrix(matrix: &RenderedMatrix) -> Yaml {
         Yaml::Expr(format!("${{{{ fromJSON({}) }}}}", matrix.from_output)),
     ));
     Yaml::Map(items)
+}
+
+fn runs_on(job: &RenderedJob) -> Yaml {
+    match &job.fork_runner {
+        Some(fork) => Yaml::Expr(format!(
+            "${{{{ {SAME_REPOSITORY} && {} || {} }}}}",
+            literal(&job.runs_on),
+            literal(fork)
+        )),
+        None => text(&job.runs_on),
+    }
+}
+
+fn literal(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "''"))
 }
 
 fn yaml_step(step: &RenderedStep) -> Yaml {

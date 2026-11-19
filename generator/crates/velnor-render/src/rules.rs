@@ -81,6 +81,7 @@ pub struct RenderedJob {
     pub outputs: Vec<(String, String)>,
     pub matrix: Option<RenderedMatrix>,
     pub runs_on: String,
+    pub fork_runner: Option<String>,
     pub timeout_minutes: u16,
     pub steps: Vec<RenderedStep>,
 }
