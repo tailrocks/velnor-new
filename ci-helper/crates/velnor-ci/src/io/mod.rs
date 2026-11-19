@@ -191,7 +191,7 @@ fn run(cli: Cli) -> Result<String, CiError> {
             let root = current_dir()?;
             let configured = cache_paths::list("VELNOR_CACHE_TARGETS")?.unwrap_or(args.target_dir);
             let targets = if configured.is_empty() {
-                every_root_target(&root)
+                every_root_target(&root)?
             } else {
                 configured
                     .iter()
