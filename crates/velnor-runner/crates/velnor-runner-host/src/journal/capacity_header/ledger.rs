@@ -265,6 +265,8 @@ impl HeaderLedger {
             .filter(|record| {
                 record.is_charged()
                     && (record.in_flight_poll.is_some()
+                        || record.in_flight_delete.is_some()
+                        || record.delete_uncertain
                         || record.state == GenerationState::Uncertain)
             })
             .map(HeaderRecord::allocation)

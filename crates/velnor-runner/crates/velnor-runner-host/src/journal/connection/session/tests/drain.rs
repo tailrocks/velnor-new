@@ -5,6 +5,7 @@ use tempfile::TempDir;
 
 use crate::config::HostConfig;
 use crate::journal::{CapacityLimits, ConnectionJournal, Journal, OperationalCapacityLimits};
+use crate::launch::CompletedHeaderPoll;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -160,6 +161,50 @@ async fn an_unsettled_header_poll_keeps_the_session_in_the_drain_count() -> Test
         .await?;
     assert!(!fx.scope.is_drained().await?);
     assert!(!fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unsettled_session_delete_keeps_the_session_in_the_drain_count() -> TestResult {
+    let fx = fixture().await?;
+    let intent = bind_session(&fx.scope, NONCE, "session-1", 1).await?;
+    let allocation = fx.scope.session_header_allocation(intent).await?;
+    let poll = fx.scope.begin_zero_header_poll(intent, &allocation).await?;
+    fx.scope
+        .settle_session_poll(intent, CompletedHeaderPoll::for_test(poll))
+        .await?;
+    assert!(fx.scope.is_drained().await?);
+    let attempt = fx.scope.begin_session_delete(intent, &allocation).await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    fx.scope
+        .mark_session_delete_uncertain(intent, attempt)
+        .await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_pending_scale_set_delete_keeps_the_host_from_draining() -> TestResult {
+    let fx = fixture().await?;
+    bind_session(&fx.scope, NONCE, "session-1", 0).await?;
+    assert!(fx.journal.is_drained().await?);
+    for state in ["requested", "uncertain"] {
+        run(
+            &fx.journal,
+            &format!("INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, '{state}')"),
+        )
+        .await?;
+        assert!(!fx.journal.is_drained().await?, "{state}");
+        run(&fx.journal, "DELETE FROM connection_scale_set_deletes").await?;
+    }
+    run(
+        &fx.journal,
+        "INSERT INTO connection_scale_set_deletes (connection_id, scale_set_id, runner_group_id, state) VALUES ('conn-test-1', 7, 1, 'deleted')",
+    )
+    .await?;
+    assert!(fx.journal.is_drained().await?);
     Ok(())
 }
 
