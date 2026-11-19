@@ -56,6 +56,7 @@ pub enum StepKind {
     InputsSave(RepoPath),
     InputsRestore(RepoPath),
     CratesMirror(crate::repo::CratesMirror),
+    MbxRemote,
     MbxStore,
     MbxSeed,
     TestSetup {

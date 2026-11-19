@@ -12,6 +12,8 @@ mod cargo_lock;
 mod classify;
 mod compat;
 mod config;
+mod config_cache;
+
 mod config_ci;
 mod config_events;
 mod config_exclude;

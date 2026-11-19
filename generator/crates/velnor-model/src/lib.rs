@@ -38,7 +38,7 @@ pub use plan::{
 };
 pub use repo::{
     CacheDebug, CiDebugInfo, CompileInputs, CratesMirror, CustomHarness, DependencyKind, FullRun,
-    InputRule, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools, PrCi,
+    InputRule, MbxRemote, MbxStore, MemberDependency, OnMain, PackageDependency, PolicyTools, PrCi,
     PushAfterMergeGroup, RepoFacts, RepoView, RepositoryIdentity, RustCiConfig, RustMember,
     RustMetadata, RustPackage, RustRoot, Target, TargetKind, TestSetup, Timings, ToolPin, ToolPins,
     Toolchain, UnownedPackage, Unread, Weakening,

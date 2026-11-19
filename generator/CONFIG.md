@@ -19,6 +19,10 @@ fork_runner = "ubuntu-24.04"
 
 `cache_debug = true` in `.velnor/rust-ci.toml` makes every generated cargo step set `CARGO_LOG` from the repository variable `VELNOR_CACHE_DEBUG` and adds a step that uploads the log when that variable is `1`. It is `false` by default, and then the generated workflow reads no repository variable. A repository that sets it also declares `VELNOR_CACHE_DEBUG` to its workflow linter. The key needs a helper release that knows it (`0.1.82` or later), because older helpers reject unknown keys.
 
+## Optional mbx remote cache
+
+`[cache] mbx_remote = "github-actions"` in `.velnor/rust-ci.toml` adds `jdx/mr-boxington-action` (pinned by full SHA) to every generated job that runs Cargo, right after the tools install and before any repository code runs. It uses the action's `github` backend in `objects` mode, keyed per job (`cache-key-suffix: github.job`). The action saves only after a successful push to the default branch; the generator also sets every `save-on-*` input to `"false"`, so a pull request or manual run only restores. The jobs get no write permission, no `id-token` and no secret, and the workflow sets no `MBX_REMOTE_*` variable. The action's post step still runs after the job's Cargo steps. It uses the runner's cache credential, not a repository token, and publishes nothing outside a push to the default branch. The table is off by default, and then the output is unchanged. Allowed values: `"github-actions"`. The key needs a helper release that knows it, because older helpers reject unknown keys.
+
 ## Skip the push run after a merge queue run
 
 `[ci] skip_push_after_merge_group = true` in `.velnor/rust-ci.toml` stops a push to the default branch from repeating checks that the merge queue already ran on the same commit. It is off by default, and then the generated workflow is byte-for-byte what it was without the key. It needs `velnor-ci` 0.1.82 or later.

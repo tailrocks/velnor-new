@@ -285,6 +285,7 @@ fn step_body(
         StepKind::InputsRestore(target) => {
             crate::helper_steps::inputs_step("restore", target, directory)
         }
+        StepKind::MbxRemote => crate::helper_steps::mbx_remote_step(),
         StepKind::CratesMirror(mirror) => crate::helper_steps::mirror_step(mirror),
         StepKind::MbxStore => crate::helper_steps::mbx_store_step(),
         StepKind::MbxSeed => crate::helper_steps::mbx_seed_step(),

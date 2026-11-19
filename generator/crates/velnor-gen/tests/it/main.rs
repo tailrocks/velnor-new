@@ -80,6 +80,7 @@ mod lock;
 mod lock_affected;
 mod lock_consistency;
 mod main_and_scheduled;
+mod mbx_remote;
 mod metadata_file;
 mod mise_install;
 mod mise_names;

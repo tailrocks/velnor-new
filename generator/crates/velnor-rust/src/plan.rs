@@ -5,9 +5,9 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use velnor_model::{
     Access, CacheDebug, CacheKey, CargoCommand, Concurrency, HelperCommand, Host, Job, JobId,
-    MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType, RepoFacts,
-    RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind, TargetName, Toolchain, Triggers,
-    PushAfterMergeGroup, When, WorkflowPlan,
+    MbxRemote, MbxStore, PackageName, PermissionScope, Permissions, PrCi, PrRun, PullRequestType,
+    PushAfterMergeGroup, RepoFacts, RootSlug, RustRoot, Shape, ShapeDecision, Step, StepKind,
+    TargetName, Toolchain, Triggers, When, WorkflowPlan,
 };
 
 use crate::audit_job::audit_job;
@@ -85,6 +85,9 @@ pub fn plan(facts: &RepoFacts) -> WorkflowPlan {
     }
     if facts.config.cache_debug == CacheDebug::On {
         upload_cargo_logs(&mut jobs);
+    }
+    if facts.config.mbx_remote == MbxRemote::GithubActions && facts.private_sources.is_none() {
+        add_mbx_remote(&mut jobs);
     }
     if facts.config.push_after_merge_group == PushAfterMergeGroup::SkipWhenQueueRunPassed {
         crate::merge_group_skip::apply(&mut jobs, single);
@@ -314,6 +317,31 @@ pub(crate) fn setup_roots(
         ..step
     }));
     steps
+}
+
+fn add_mbx_remote(jobs: &mut [Job]) {
+    for job in jobs {
+        if !job
+            .steps
+            .iter()
+            .any(|step| matches!(step.kind, StepKind::Cargo(_)))
+        {
+            continue;
+        }
+        if let Some(at) = job
+            .steps
+            .iter()
+            .position(|step| matches!(step.kind, StepKind::InstallTools { .. }))
+        {
+            let installed = &job.steps[at];
+            let cache = Step {
+                gate: installed.gate.clone(),
+                pr: installed.pr,
+                ..step(StepKind::MbxRemote)
+            };
+            job.steps.insert(at + 1, cache);
+        }
+    }
 }
 
 fn upload_cargo_logs(jobs: &mut [Job]) {
