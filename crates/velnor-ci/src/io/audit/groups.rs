@@ -8,6 +8,7 @@ use velnor_model::RepoFacts;
 use velnor_rust::normalize;
 
 use super::super::units::{MetadataInvocation, Workspace, own_workspace, workspace};
+use super::options::AuditOptions;
 use crate::error::CiError;
 
 pub(super) fn shared_groups(facts: &RepoFacts) -> Vec<Vec<usize>> {
@@ -84,9 +85,13 @@ fn resolved(path: &Path) -> PathBuf {
 pub(super) fn root_workspace(
     manifest: &Path,
     invocation: Option<&MetadataInvocation<'_>>,
+    inherit: bool,
     alone: bool,
     groups: &[PathBuf],
 ) -> Result<Workspace, CiError> {
+    if !inherit {
+        return own_workspace(manifest, invocation);
+    }
     let found = workspace(manifest, invocation)?;
     let target = resolved(&found.target_directory);
     if alone && groups.iter().any(|group| resolved(group) == target) {
@@ -95,62 +100,75 @@ pub(super) fn root_workspace(
     Ok(found)
 }
 
-/// Which Cargo roots take the build's inherited `CARGO_TARGET_DIR`.
-///
-/// A build runs in one Cargo root, so the variable names that root's target
-/// directory and says nothing about a standalone root the build does not touch.
-/// Every grouped root keeps inheriting it because a group shares one directory.
+/// Which Cargo roots read the ambient `CARGO_TARGET_DIR`, for a command or
+/// audit that runs at `location`. Every grouped root reads it, since its group
+/// shares one target directory. A standalone root reads it only when it holds
+/// `location`: the environment belongs to the step that runs there, and a
+/// second standalone root reading it would report the same target as the first
+/// and be refused by `apart`. With no holder, every standalone root reads it.
 pub(super) fn inheriting(
     facts: &RepoFacts,
     repository: &Path,
     location: Option<&Path>,
 ) -> Vec<bool> {
-    let location = location.map(resolved);
-    let depth = |root: &velnor_model::RustRoot| {
-        let directory = root
-            .manifest
-            .as_str()
-            .rsplit_once('/')
-            .map_or("", |(parent, _)| parent);
-        let directory = resolved(&repository.join(directory));
-        location
-            .as_ref()
-            .filter(|location| location.starts_with(&directory))
-            .map(|_| directory.components().count())
+    let standalone = standalone(facts);
+    let Some(location) = location.map(resolved) else {
+        return vec![false; standalone.len()];
     };
-    let building = facts
+    let holder = facts
         .rust_roots
         .iter()
-        .zip(standalone(facts))
-        .filter(|(_, alone)| *alone)
-        .filter_map(|(root, _)| depth(root))
-        .max();
-    facts
-        .rust_roots
-        .iter()
-        .zip(standalone(facts))
-        .map(|(root, alone)| !alone || building.is_none() || depth(root) == building)
+        .enumerate()
+        .filter_map(|(index, root)| {
+            let directory = resolved(&repository.join(root.manifest.as_str()))
+                .parent()?
+                .to_path_buf();
+            location
+                .starts_with(&directory)
+                .then(|| (directory.components().count(), index))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, index)| index);
+    standalone
+        .into_iter()
+        .enumerate()
+        .map(|(index, alone)| !alone || holder.is_none_or(|holder| holder == index))
         .collect()
+}
+
+/// `inputs audit` reads the target of the root `--root` names, or of the
+/// directory it runs in when no root is named.
+pub(super) fn audit_inheriting(
+    facts: &RepoFacts,
+    repository: &Path,
+    directory: &Path,
+    options: &AuditOptions,
+) -> Vec<bool> {
+    let owner = options
+        .root
+        .as_deref()
+        .map_or_else(|| directory.to_path_buf(), |root| repository.join(root));
+    inheriting(
+        facts,
+        repository,
+        options.inherit_target_dir.then_some(owner.as_path()),
+    )
 }
 
 pub(super) fn workspaces(
     facts: &RepoFacts,
     repository: &Path,
-    inherit_target_dir: bool,
-    inheriting: &[bool],
+    inherit: &[bool],
 ) -> Result<Vec<Workspace>, CiError> {
     let groups = group_dirs(facts, repository);
     facts
         .rust_roots
         .iter()
         .zip(standalone(facts))
-        .zip(inheriting)
-        .map(|((root, alone), inherits)| {
+        .zip(inherit)
+        .map(|((root, alone), inherit)| {
             let manifest = repository.join(root.manifest.as_str());
-            if !inherit_target_dir || !inherits {
-                return own_workspace(&manifest, None);
-            }
-            root_workspace(&manifest, None, alone, &groups)
+            root_workspace(&manifest, None, *inherit, alone, &groups)
         })
         .collect()
 }

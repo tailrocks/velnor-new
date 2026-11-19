@@ -46,15 +46,15 @@ pub(crate) fn build(directory: &Path, args: &InputsBuildArgs) -> Result<String, 
     let invocation = Invocation::new(&args.command);
     let location = fs::canonicalize(invocation.location(directory))
         .map_err(|e| CiError::new(e.to_string()))?;
-    let inheriting = inheriting(&facts, &checkout.root, Some(&location));
-    let workspaces = workspaces(&facts, &checkout.root, true, &inheriting)?;
+    let inherit = inheriting(&facts, &checkout.root, Some(&location));
+    let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
     apart(&workspaces, &shared_groups(&facts))?;
     let directories = scan_dirs(&workspaces);
     invocation.validate_targets(
         directory,
         &workspaces,
         &standalone,
-        &inheriting,
+        &inherit,
         &group_dirs(&facts, &checkout.root),
     )?;
     let mut roots = BTreeSet::from([checkout.root.clone()]);

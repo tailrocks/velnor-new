@@ -29,7 +29,7 @@ use super::units::{UnitFile, apart, profile};
 use crate::coverage::{Built, Fingerprint, Unit, UnitKind};
 use crate::error::CiError;
 use crate::platform::Platforms;
-use groups::{group_dirs, inheriting, shared_groups, workspaces};
+use groups::{audit_inheriting, group_dirs, shared_groups, workspaces};
 use selection::{selected, within};
 
 mod dep_info;
@@ -69,13 +69,8 @@ pub fn audit_inputs(directory: &Path, options: &AuditOptions) -> Result<String, 
         .map_err(|e| failed(&e))?
         .unwrap_or_default();
     let facts = detect(&checkout.view).map_err(|e| failed(&e))?;
-    let inheriting = inheriting(&facts, &checkout.root, None);
-    let workspaces = workspaces(
-        &facts,
-        &checkout.root,
-        options.inherit_target_dir,
-        &inheriting,
-    )?;
+    let inherit = audit_inheriting(&facts, &checkout.root, directory, options);
+    let workspaces = workspaces(&facts, &checkout.root, &inherit)?;
     let shared = shared_groups(&facts);
     apart(&workspaces, &shared)?;
     let chosen = selected(&facts, &shared, options.root.as_deref())?;
