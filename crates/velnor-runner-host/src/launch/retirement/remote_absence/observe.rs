@@ -35,7 +35,8 @@ pub(crate) async fn observe_retirement_runner_absence(
         .map_err(RetirementRemoteAbsenceError::Host)?;
     let credential = binding
         .credential_ref
-        .load()
+        .load_until(tokio::time::Instant::from_std(deadline))
+        .await
         .map_err(RetirementRemoteAbsenceError::Host)?;
     let pat = connection_pat(&credential).map_err(RetirementRemoteAbsenceError::Host)?;
     let pat = Secret::new(pat);
