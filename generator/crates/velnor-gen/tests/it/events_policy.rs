@@ -207,18 +207,18 @@ fn each_cargo_root_uses_its_nearest_deny_config_with_stable_precedence() -> Test
         .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
     let text = workflow(&repo)?;
     assert!(
-        text.contains("cargo-deny --config ''deny.toml'' check"),
+        text.contains("cargo-deny --config ''deny.toml'' --locked check"),
         "{text}"
     );
     assert!(
         text.contains(
-            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.deny.toml'' check"
+            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.deny.toml'' --locked check"
         ),
         "{text}"
     );
     assert!(
         text.contains(
-            "cargo-deny --manifest-path ''other/Cargo.toml'' --config ''deny.toml'' check"
+            "cargo-deny --manifest-path ''other/Cargo.toml'' --config ''deny.toml'' --locked check"
         ),
         "{text}"
     );
@@ -227,7 +227,7 @@ fn each_cargo_root_uses_its_nearest_deny_config_with_stable_precedence() -> Test
     let text = workflow(&repo)?;
     assert!(
         text.contains(
-            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.config/deny.toml'' check"
+            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.config/deny.toml'' --locked check"
         ),
         "{text}"
     );
@@ -243,12 +243,12 @@ fn a_cargo_root_without_a_config_keeps_the_default_command() -> TestResult {
         .insert(RepoPath::new("mise.toml")?, DENY_MISE.as_bytes().to_vec());
     let text = workflow(&repo)?;
     assert!(
-        text.contains("cargo-deny --manifest-path ''other/Cargo.toml'' check"),
+        text.contains("cargo-deny --manifest-path ''other/Cargo.toml'' --locked check"),
         "{text}"
     );
     assert!(
         text.contains(
-            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.config/deny.toml'' check"
+            "cargo-deny --manifest-path ''lab/Cargo.toml'' --config ''lab/.config/deny.toml'' --locked check"
         ),
         "{text}"
     );
@@ -272,6 +272,6 @@ fn a_deny_config_with_a_quote_is_passed_as_one_checkout_relative_argument() -> T
             .iter()
             .all(|step| step.get("working-directory").is_none())
     );
-    assert!(steps.iter().any(|step| step["run"].as_str() == Some(r#". "$VELNOR_EXEC" run -- cargo-deny --manifest-path 'lab'\''s/Cargo.toml' --config 'lab'\''s/.config/deny.toml' check"#)));
+    assert!(steps.iter().any(|step| step["run"].as_str() == Some(r#". "$VELNOR_EXEC" run -- cargo-deny --manifest-path 'lab'\''s/Cargo.toml' --config 'lab'\''s/.config/deny.toml' --locked check"#)));
     Ok(())
 }
