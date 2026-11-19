@@ -3,7 +3,7 @@
 
 use velnor_runner_github::{QueueSession, SessionClose, Transport, delete_session};
 
-use crate::journal::{ConnectionJournal, HeaderAllocation, ScaleSetDeleteGate};
+use crate::journal::{ConnectionJournal, HeaderAllocation};
 use crate::listen::{Link, Secret};
 
 use super::{DeletedSession204, SessionDeleteOutcome};
@@ -54,7 +54,9 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
         admin_token,
     ) {
         Ok(SessionClose::Closed) => true,
-        Ok(SessionClose::Gone) => created_set_deleted_by_us(scoped).await,
+        Ok(SessionClose::Gone) => {
+            created_set_deleted_by_us(scoped, allocation.scale_set_id()).await
+        }
         Err(_) => false,
     };
     if !closed {
@@ -82,11 +84,11 @@ pub(super) async fn delete_removed_connection_session_with<T: Transport + ?Sized
     }
 }
 
-async fn created_set_deleted_by_us(scoped: &ConnectionJournal) -> bool {
-    matches!(
-        scoped.scale_set_delete_gate().await,
-        Ok(ScaleSetDeleteGate::Deleted)
-    )
+async fn created_set_deleted_by_us(scoped: &ConnectionJournal, scale_set_id: i64) -> bool {
+    scoped
+        .scale_set_recorded_deleted(scale_set_id)
+        .await
+        .unwrap_or(false)
 }
 
 #[cfg(test)]

@@ -117,6 +117,21 @@ impl ConnectionJournal {
         .await
     }
 
+    pub(crate) async fn scale_set_recorded_deleted(
+        &self,
+        scale_set_id: i64,
+    ) -> Result<bool, HostError> {
+        read_transaction(&self.journal, async |connection| {
+            self.validate_scope(connection).await?;
+            let id = self.connection_id.as_str();
+            Ok(
+                stored_state(connection, id).await? == Some(ScaleSetDeleteState::Deleted)
+                    && stored_scale_set_id(connection, id).await? == Some(scale_set_id),
+            )
+        })
+        .await
+    }
+
     pub(crate) async fn claim_scale_set_delete(
         &self,
         target: &ScaleSetDeleteTarget,

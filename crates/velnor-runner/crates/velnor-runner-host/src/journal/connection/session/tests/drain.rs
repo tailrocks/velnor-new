@@ -5,6 +5,7 @@ use tempfile::TempDir;
 
 use crate::config::HostConfig;
 use crate::journal::{CapacityLimits, ConnectionJournal, Journal, OperationalCapacityLimits};
+use crate::launch::CompletedHeaderPoll;
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -157,6 +158,27 @@ async fn an_unsettled_header_poll_keeps_the_session_in_the_drain_count() -> Test
     assert!(!fx.journal.is_drained().await?);
     fx.scope
         .mark_session_poll_uncertain(intent, attempt)
+        .await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn an_unsettled_session_delete_keeps_the_session_in_the_drain_count() -> TestResult {
+    let fx = fixture().await?;
+    let intent = bind_session(&fx.scope, NONCE, "session-1", 1).await?;
+    let allocation = fx.scope.session_header_allocation(intent).await?;
+    let poll = fx.scope.begin_zero_header_poll(intent, &allocation).await?;
+    fx.scope
+        .settle_session_poll(intent, CompletedHeaderPoll::for_test(poll))
+        .await?;
+    assert!(fx.scope.is_drained().await?);
+    let attempt = fx.scope.begin_session_delete(intent, &allocation).await?;
+    assert!(!fx.scope.is_drained().await?);
+    assert!(!fx.journal.is_drained().await?);
+    fx.scope
+        .mark_session_delete_uncertain(intent, attempt)
         .await?;
     assert!(!fx.scope.is_drained().await?);
     assert!(!fx.journal.is_drained().await?);
