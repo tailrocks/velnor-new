@@ -132,6 +132,7 @@ mod release_recover;
 mod release_tag_patterns;
 mod report;
 mod report_accounting;
+mod report_split_host_units;
 mod required_lane;
 mod resolve_cases;
 mod resolve_cases_receipts;
